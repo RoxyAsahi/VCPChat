@@ -800,6 +800,29 @@ try {
         await page.keyboard.press('Tab');
         await page.waitForFunction(selector => document.activeElement?.matches(selector) === true, { timeout }, optionSelector);
         trustedKeyboardNavigation.steps.push(await describeActive('tab-model-option'));
+        trustedKeyboardNavigation.optionStyle = await page.$eval(optionSelector, element => {
+            const style = getComputedStyle(element);
+            return {
+                pseudo: { focus: element.matches(':focus'), focusVisible: element.matches(':focus-visible') },
+                computed: {
+                    backgroundColor: style.backgroundColor,
+                    color: style.color,
+                    outline: style.outline,
+                    outlineOffset: style.outlineOffset,
+                    boxShadow: style.boxShadow,
+                    borderColor: style.borderColor,
+                },
+            };
+        });
+        const keyboardFocusRect = await page.$eval('.vcp-harness-popup-select-card', element => {
+            const rect = element.getBoundingClientRect();
+            return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        });
+        await page.screenshot({
+            path: path.join(root, 'reports', `${scenarioOutputStem}-keyboard-focus.png`),
+            clip: keyboardFocusRect,
+        });
+        trustedKeyboardNavigation.keyboardFocusRect = keyboardFocusRect;
         trustedKeyboardNavigation.modelPath = {
             root: trustedKeyboardNavigation.steps[1],
             modelRow: trustedKeyboardNavigation.steps[2],
@@ -842,6 +865,56 @@ try {
                 terminalState: 'closed-trigger-focus-restored',
                 visualComparison: 'not-evaluated: keyboard-path is interaction evidence, not an open-menu pixel baseline',
             };
+
+            // Chromium's computed `outline` serialization is the remaining
+            // question in the keyboard-focus contract.  Evaluate the actual
+            // Harness source CSS in *this Electron renderer*, then reach its
+            // first option through a real Tab key.  This is deliberately a
+            // static source fixture (not a Harness production consumer and
+            // not a visual/pixel gate): it can only tell us whether Electron
+            // serializes `outline: none` differently from the Playwright
+            // production capture.
+            const keyboardSourceReference = await page.evaluate(({ css, baseCss, classes, rect }) => {
+                const style = document.createElement('style');
+                style.dataset.vcpHarnessModelSelectKeyboardSourceReference = 'true';
+                style.textContent = `${baseCss}\n${css}`;
+                const root = document.createElement('div');
+                root.className = classes.root;
+                root.dataset.vcpHarnessModelSelectKeyboardSourceReference = 'true';
+                root.style.cssText = '--dsw-alias-border-inverted:rgba(0,0,0,0);--dsw-alias-label-primary:rgb(15,17,21);--dsw-alias-label-tertiary:rgb(129,133,140);--dsw-specific-menu:rgb(255,255,255);--dsw-shadow-lv3:0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08);--dsw-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Helvetica,Arial,sans-serif;';
+                root.innerHTML = `<button type="button" data-vcp-harness-keyboard-source-sentinel="true">Fixture focus start</button><div class="${classes.menu}" role="menu"><div class="${classes.groups}"><section role="group" class="${classes.group}"><div class="${classes.groupTitle}">DeepSeek</div><button type="button" role="menuitemradio" aria-checked="false" class="${classes.option}" data-vcp-harness-keyboard-source-option="true"><span class="${classes.optionCopy}"><span class="${classes.modelName}">DeepSeek-V4-Flash</span></span><span class="${classes.check}"></span></button></section><section role="group" class="${classes.group}"><div class="${classes.groupTitle}">Acme Gateway</div><button type="button" role="menuitemradio" aria-checked="true" class="${classes.option} ${classes.selected}"><span class="${classes.optionCopy}"><span class="${classes.modelName}">Acme Think</span></span><span class="${classes.check}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z" fill="currentColor"></path></svg></span></button></section></div></div>`;
+                document.head.append(style);
+                document.body.append(root);
+                const menu = root.querySelector(`.${classes.menu}`);
+                // The Candidate was closed by the owner before this source
+                // fixture mounts. Reuse only its already-recorded menu box so
+                // the opaque ROI compares identical source CSS/DOM geometry.
+                menu.style.cssText = `position:fixed;left:${rect.x}px;top:${rect.y}px;right:auto;bottom:auto;z-index:2001;box-sizing:content-box;`;
+                const menuRect = menu.getBoundingClientRect();
+                return { source: 'Harness ModelSelect.module.css mounted in VCP Electron', sourcePath: 'packages/client/ui-model-selection/src/client/ModelSelect.module.css', referenceKind: 'same-engine-static-source-reference; keyboard CSSOM and ROI probe only; not a Harness production consumer', sentinel: '[data-vcp-harness-keyboard-source-sentinel="true"]', option: '[data-vcp-harness-keyboard-source-option="true"]', menuRect: { x: menuRect.x, y: menuRect.y, width: menuRect.width, height: menuRect.height } };
+            }, { css: harnessModelSelectElectronCss, baseCss: harnessModelSelectElectronBaseCss, classes: harnessReferenceClasses, rect: keyboardFocusRect });
+            await page.focus(keyboardSourceReference.sentinel);
+            await page.keyboard.press('Tab');
+            keyboardSourceReference.optionStyle = await page.$eval(keyboardSourceReference.option, element => {
+                const style = getComputedStyle(element);
+                return {
+                    pseudo: { focus: element.matches(':focus'), focusVisible: element.matches(':focus-visible') },
+                    computed: { backgroundColor: style.backgroundColor, color: style.color, outline: style.outline, outlineOffset: style.outlineOffset, boxShadow: style.boxShadow, borderColor: style.borderColor },
+                };
+            });
+            assert.equal(keyboardSourceReference.optionStyle.pseudo.focus, true);
+            assert.equal(keyboardSourceReference.optionStyle.pseudo.focusVisible, true);
+            await page.screenshot({
+                path: path.join(root, 'reports', 'harness-agent-model-picker-electron-reference-keyboard-focus.png'),
+                clip: keyboardSourceReference.menuRect,
+            });
+            keyboardSourceReference.screenshot = 'harness-agent-model-picker-electron-reference-keyboard-focus.png';
+            evidence.sameEngineKeyboardFocusReference = keyboardSourceReference;
+            await page.evaluate(() => {
+                document.querySelector('[data-vcp-harness-model-select-keyboard-source-reference]')?.remove();
+                document.querySelector('[data-vcp-harness-model-select-keyboard-source-reference="true"]')?.remove();
+                document.querySelector('style[data-vcp-harness-model-select-keyboard-source-reference="true"]')?.remove();
+            });
         } else {
             // Restore the fixture's baseline visual pane after the trusted
             // path. This leaves hover/focus snapshots comparable with the
@@ -858,6 +931,10 @@ try {
             await page.waitForFunction(selector => document.querySelectorAll(selector).length > 0, { timeout }, optionSelector);
             const rowSelector = '[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-viewport [role="menuitemradio"]';
             await page.hover(rowSelector);
+            // Computed style updates synchronously, but screenshot compositing
+            // can otherwise still contain the pre-hover paint. Wait for two
+            // renderer frames before capturing an opaque pixel baseline.
+            await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
             const hovered = await page.$eval(rowSelector, element => {
                 const style = getComputedStyle(element);
                 return {
@@ -865,7 +942,16 @@ try {
                     computed: { backgroundColor: style.backgroundColor, color: style.color, outline: style.outline, outlineOffset: style.outlineOffset, boxShadow: style.boxShadow, borderColor: style.borderColor },
                 };
             });
-            await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-hover.png`) });
+            const hoverFocusRect = await page.$eval('.vcp-harness-popup-select-card', element => {
+                const rect = element.getBoundingClientRect();
+                return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+            });
+            hovered.roi = hoverFocusRect;
+            hovered.screenshot = `${scenarioOutputStem}-hover.png`;
+            await page.screenshot({
+                path: path.join(root, 'reports', hovered.screenshot),
+                clip: hoverFocusRect,
+            });
             await page.mouse.move(4, 4);
             const programmaticFocused = await page.$eval(rowSelector, element => {
                 (element instanceof HTMLElement ? element : null)?.focus();
@@ -875,7 +961,12 @@ try {
                     computed: { backgroundColor: style.backgroundColor, color: style.color, outline: style.outline, outlineOffset: style.outlineOffset, boxShadow: style.boxShadow, borderColor: style.borderColor },
                 };
             });
-            await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-focus.png`) });
+            programmaticFocused.roi = hoverFocusRect;
+            programmaticFocused.screenshot = `${scenarioOutputStem}-focus.png`;
+            await page.screenshot({
+                path: path.join(root, 'reports', programmaticFocused.screenshot),
+                clip: hoverFocusRect,
+            });
             evidence.hoverFocus = {
                 evidenceKind: 'VCP Electron generated-artifact pseudo-class capture; trusted keyboard evidence is stored separately in trustedKeyboardNavigation',
                 optionRole: 'menuitemradio',
@@ -916,6 +1007,13 @@ try {
         const referenceRoot = document.createElement('div');
         referenceRoot.className = classes.root;
         referenceRoot.dataset.vcpHarnessModelSelectElectronReference = 'true';
+        // This source-only fixture is mounted after the Candidate journey has
+        // completed. It must form the topmost pointer plane while its hover
+        // ROI is captured; a merely click-through parent can still leave the
+        // Candidate card as the CDP pointer target in Electron. The root is
+        // removed before the production fixture is disposed, so this has no
+        // product overlay effect.
+        referenceRoot.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:auto;background:transparent;';
         referenceRoot.innerHTML = `<div class="${classes.menu}" role="menu" aria-label="Model and reasoning effort" aria-busy="false">
             <div class="${classes.groups}">
                 <section role="group" class="${classes.group}"><div class="${classes.groupTitle}">DeepSeek</div><button type="button" role="menuitemradio" aria-checked="false" class="${classes.option}"><span class="${classes.optionCopy}"><span class="${classes.modelName}">DeepSeek-V4-Flash</span></span><span class="${classes.check}"></span></button></section>
@@ -929,6 +1027,7 @@ try {
         menu.style.right = 'auto';
         menu.style.bottom = 'auto';
         menu.style.zIndex = '2001';
+        menu.style.pointerEvents = 'auto';
         // ModelSelect source CSS intentionally relies on the Harness theme
         // rather than carrying fallbacks.  Inject the values captured from
         // the same light production fixture so Electron evaluates source CSS
@@ -1090,6 +1189,62 @@ try {
             `same-engine Harness source reference must match the candidate ROI width: ${JSON.stringify(sameEngineReference.menu)}`);
         assert.equal(sameEngineReference.menu.rect.height, menuRect.height,
             `same-engine Harness source reference must match the candidate ROI height: ${JSON.stringify(sameEngineReference.menu)}`);
+    } else if (captureScenario === 'hover-focus') {
+        // This follows the Candidate's recorded pointer hover, but applies it
+        // to the actual Harness ModelSelect source CSS/Light-DOM in the same
+        // renderer. It is deliberately not the production Harness React
+        // consumer; it only provides a reproducible source-style ROI baseline.
+        const referenceOptionSelector = '[data-vcp-harness-model-select-electron-reference="true"] [role="menuitemradio"]';
+        // This source fixture sits above a just-closed Candidate popup. In
+        // Electron, a pointer reconciliation from that closed owner can race
+        // the first CDP hover dispatch. Re-dispatch a real pointer hover at
+        // the source option and inspect the actual pseudo-class immediately;
+        // this is bounded retry, not a synthetic class/state override.
+        let hover = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            await page.hover(referenceOptionSelector);
+            hover = await page.$eval(referenceOptionSelector, (element, { roi, screenshot }) => {
+            const style = getComputedStyle(element);
+            return {
+                pseudo: {
+                    hover: element.matches(':hover'),
+                    focus: element.matches(':focus'),
+                    focusVisible: element.matches(':focus-visible'),
+                },
+                computed: {
+                    backgroundColor: style.backgroundColor,
+                    color: style.color,
+                    outline: style.outline,
+                    outlineOffset: style.outlineOffset,
+                    boxShadow: style.boxShadow,
+                    borderColor: style.borderColor,
+                },
+                roi,
+                screenshot,
+            };
+            }, { roi: sameEngineReference.menu.rect, screenshot: `${sameEngineReferenceStem}-hover.png` });
+            if (hover.pseudo.hover) break;
+        }
+        const hitTarget = await page.$eval(referenceOptionSelector, element => {
+            const rect = element.getBoundingClientRect();
+            const target = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+            const option = target?.closest?.('[role="menuitemradio"]');
+            return {
+                tag: target?.tagName?.toLowerCase() ?? null,
+                role: option?.getAttribute?.('role') ?? null,
+                source: target?.closest?.('[data-vcp-harness-model-select-electron-reference="true"]') !== null,
+            };
+        });
+        assert.equal(hitTarget.source, true, `same-engine source pointer hit-test escaped the reference plane: ${JSON.stringify(hitTarget)}`);
+        assert.equal(hitTarget.role, 'menuitemradio', `same-engine source pointer hit-test did not land on an option: ${JSON.stringify(hitTarget)}`);
+        assert.equal(hover.pseudo.hover, true, `same-engine source reference did not receive pointer hover: ${JSON.stringify(hover)}`);
+        assert.equal(hover.pseudo.focus, false, `same-engine source reference unexpectedly retained focus: ${JSON.stringify(hover)}`);
+        sameEngineReference.hover = hover;
+        sameEngineReference.comparison = 'same-engine static-source hover ROI; not a Harness production-consumer comparison';
+        await page.screenshot({
+            path: path.join(root, 'reports', hover.screenshot),
+            clip: sameEngineReference.menu.rect,
+        });
     } else {
         // The load/retry journey retains the real primitive's transient
         // status/error layout in its transition.  Its source reference is
