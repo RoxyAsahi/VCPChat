@@ -808,22 +808,34 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             const target = headers.find(header => header.closest('[data-section-key]')?.dataset.sectionKey === 'identity');
             const container = target?.closest('.agent-settings-section');
             const content = container?.querySelector('.agent-settings-section-content');
-            if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement) || !(content instanceof HTMLElement)) return { available: false };
-            const before = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
+            const toggle = target?.querySelector('.agent-settings-toggle-btn');
+            if (!(target instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement) || !(container instanceof HTMLElement) || !(content instanceof HTMLElement)) return { available: false };
+            const snapshot = () => ({ expanded: toggle.getAttribute('aria-expanded'), headerRole: target.getAttribute('role'), headerTabIndex: target.getAttribute('tabindex'), headerExpanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height });
+            // Each stress cycle may restore the previous persisted section
+            // state. Normalize this probe to the closed baseline without
+            // routing through another presentation click owner.
+            container.classList.add('collapsed');
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const before = snapshot();
             target.click();
             await new Promise(resolve => setTimeout(resolve, 0));
-            const opened = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
-            target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            const openedByHeader = snapshot();
+            toggle.click();
             await new Promise(resolve => setTimeout(resolve, 0));
-            const closed = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
-            return { available: true, count: headers.length, before, opened, closed };
+            const closedByToggle = snapshot();
+            toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const openedByKeyboard = snapshot();
+            return { available: true, count: headers.length, before, openedByHeader, closedByToggle, openedByKeyboard };
         });
         assert.equal(agentDisclosureInteractionEvidence.available, true, `${label}: Agent disclosure production owner is missing`);
         assert.equal(agentDisclosureInteractionEvidence.count, 6, `${label}: Agent disclosure owner count drifted`);
-        assert.equal(agentDisclosureInteractionEvidence.opened.expanded, 'true', `${label}: disclosure click did not open canonical section`);
-        assert.equal(agentDisclosureInteractionEvidence.opened.collapsed, false, `${label}: disclosure click did not clear canonical collapsed state`);
-        assert.equal(agentDisclosureInteractionEvidence.closed.expanded, 'false', `${label}: disclosure keyboard Enter did not close canonical section`);
-        assert.equal(agentDisclosureInteractionEvidence.closed.collapsed, true, `${label}: disclosure keyboard Enter did not restore canonical collapsed state`);
+        assert.equal(agentDisclosureInteractionEvidence.openedByHeader.expanded, 'true', `${label}: disclosure header pointer did not open canonical section`);
+        assert.equal(agentDisclosureInteractionEvidence.openedByHeader.collapsed, false, `${label}: disclosure header pointer did not clear canonical collapsed state`);
+        assert.equal(agentDisclosureInteractionEvidence.closedByToggle.expanded, 'false', `${label}: native disclosure toggle pointer did not close exactly once`);
+        assert.equal(agentDisclosureInteractionEvidence.closedByToggle.collapsed, true, `${label}: native disclosure toggle pointer did not restore canonical collapsed state`);
+        assert.equal(agentDisclosureInteractionEvidence.openedByKeyboard.expanded, 'true', `${label}: native disclosure toggle keyboard Enter did not open canonical section`);
+        assert.equal(agentDisclosureInteractionEvidence.openedByKeyboard.collapsed, false, `${label}: native disclosure toggle keyboard Enter did not clear canonical collapsed state`);
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
