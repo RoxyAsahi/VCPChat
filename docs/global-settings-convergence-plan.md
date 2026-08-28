@@ -188,6 +188,13 @@ cycle）：节点 5856、监听器 571、active scopes 41、active resources 501
 瞬态 scope 或 DOM。该证据支持“当前 picker owner 无增长/泄漏”，但仍不等同于
 legacy `modelSelectModal` 已具备删除资格。
 
+随后 `test:electron-agent-settings-interaction` 的 Agent Select 交互回归也通过：
+选择、关闭、重开、Escape 和触发器焦点恢复路径在真实 Electron 中完成，且周期前后
+监听器 570、active scopes 41、active resources 501、detached roots/options 仍保持
+稳定。ModelPicker 的生产交互证据因此已覆盖目录能力、键盘关闭、焦点恢复和 lifecycle
+stress；剩余删除阻断主要是 `topicSummaryModel` 共享 legacy caller 与完整默认数据
+源 parity，而不是 Agent picker 本身的 owner 稳定性。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
