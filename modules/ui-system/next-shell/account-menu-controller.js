@@ -69,7 +69,7 @@
             listen(elements.appearanceButton, 'click', () => { this.setOpen(false); this.openAppearance(elements.appearanceButton); });
             listen(elements.themeStoreButton, 'click', () => { this.setOpen(false); this.openThemes(); });
             listen(elements.themeToggleButton, 'click', () => {
-                const nextTheme = this.document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+                const nextTheme = this.effectiveTheme() === 'dark' ? 'light' : 'dark';
                 this.setOpen(false);
                 if (!this.setThemeMode(nextTheme)) this.toggleTheme();
             });
@@ -118,10 +118,7 @@
             const avatar = settings.userAvatarUrl || 'assets/default_user_avatar.png';
             if (e.avatar.getAttribute('src') !== avatar) e.avatar.src = avatar;
             this.syncAppearance();
-            const themeSnapshot = this.getThemeSnapshot?.();
-            const effectiveTheme = themeSnapshot?.value?.effective;
-            const isDark = effectiveTheme === 'dark'
-                || (effectiveTheme !== 'light' && this.document.body.classList.contains('dark-theme'));
+            const isDark = this.effectiveTheme() === 'dark';
             const label = isDark ? '切换为浅色模式' : '切换为深色模式';
             const icon = isDark ? 'dark_mode' : 'light_mode';
             if (e.themeIcon) this.setIcon ? this.setIcon(e.themeIcon, icon) : e.themeIcon.textContent = icon;
@@ -131,6 +128,11 @@
             if (e.topbarThemeIcon) this.setIcon ? this.setIcon(e.topbarThemeIcon, icon) : e.topbarThemeIcon.textContent = icon;
             e.topbarThemeButton?.setAttribute('aria-label', label);
             e.topbarThemeButton?.setAttribute('title', label);
+        }
+
+        effectiveTheme() {
+            const effective = this.getThemeSnapshot?.()?.value?.effective;
+            return effective === 'dark' ? 'dark' : 'light';
         }
 
         setOpen(open) {
