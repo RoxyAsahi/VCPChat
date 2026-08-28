@@ -1124,7 +1124,9 @@ function mountHarnessDisclosures(form) {
         const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
         observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
         sync();
-        const state = { container, header, observer, cleanup: () => {
+        const state = { container, header, observer, cleaned: false, cleanup: () => {
+            if (state.cleaned) return;
+            state.cleaned = true;
             observer?.disconnect();
             header.removeAttribute('aria-controls');
             header.removeAttribute('aria-expanded');
