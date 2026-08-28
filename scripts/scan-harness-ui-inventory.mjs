@@ -22,6 +22,12 @@ const referenceNames = new Set(fs.existsSync(referenceDir)
 const contractAliases = new Map([
     ['ModelSelect', 'model-picker'],
 ]);
+const contractKeyFor = (name, relative) => {
+    // The Harness icon barrel exports many named SVGs, while the reference
+    // contract intentionally covers the shared semantic-icon adapter boundary.
+    if (/ui-primitives[\\/]src[\\/]icons[\\/]index\.tsx$/.test(relative) && /^Icon[A-Z]/.test(name)) return 'semantic-icon';
+    return contractAliases.get(name) ?? name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+};
 const inventory = files.flatMap(file => {
     const source = fs.readFileSync(file, 'utf8');
     const discovered = [...source.matchAll(componentPattern)].map(match => match[1]);
@@ -36,7 +42,7 @@ const inventory = files.flatMap(file => {
         source: file,
         relative,
         category: frozen ? 'frozen-domain-surface' : /ui-primitives/.test(relative) ? 'portable-primitive' : 'composite-surface',
-        contractKey: contractAliases.get(name) ?? name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase(),
+        contractKey: contractKeyFor(name, relative),
     }));
 });
 const entries = inventory.map(item => ({
