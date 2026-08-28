@@ -2,7 +2,7 @@
   "source": "packages/client/ui-primitives/src/icons/index.tsx",
   "styleSource": "packages/client/ui-primitives/src/icons/index.tsx",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; VCP adapter fixture only and paired same-semantic pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; real-source and Candidate pixel capture measured as non-comparable due glyph geometry",
   "selectors": {
     "svg": { "fill": "none", "paint": "paths fill=currentColor", "sizes": "14px, 16px, 18px" },
     "path": { "fill": "currentColor" }
@@ -10,5 +10,5 @@
   "tokens": ["currentColor"],
   "sizes": { "warning": "18px", "close": "16px", "check": "16px", "chevron-down": "14px or 16px by consumer" },
   "color": "currentColor",
-  "vcpCandidateEvidence": { "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 }, "engine": "Electron Chromium", "screenshot": "fixtures/vcp/semantic-icons.candidate.png", "report": "fixtures/vcp/semantic-icons.candidate.json", "status": "candidate-interaction-active", "pixelDiff": "pending-same-semantic-harness-fixture" }
+  "vcpCandidateEvidence": { "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 }, "engine": "Electron Chromium", "screenshot": "fixtures/vcp/semantic-icons.candidate.png", "report": "fixtures/vcp/semantic-icons.candidate.json", "sourceDiff": "reports/harness-vcp-semantic-icon-source-diff.json", "pixelReport": "reports/harness-vcp-semantic-icon-roi-pixel-diff.json", "status": "candidate-interaction-active", "pixelDiff": "measured-not-comparable-geometry" }
 }
