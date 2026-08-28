@@ -4,7 +4,10 @@ import path from 'node:path';
 const root = process.cwd();
 const vcp = JSON.parse(fs.readFileSync(path.join(root, 'reports', 'vcp-agent-settings-production.json'), 'utf8'));
 const harness = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/button.geometry.json'), 'utf8'));
-const buttons = [ ...(vcp.actions ?? []), ...(vcp.promptButtons ?? []) ];
+// The model trigger is owned by AgentModelPicker, not the generic Button
+// primitive. Exclude it from this Button-only contract report so its distinct
+// 28px/24px picker geometry is not reported as a false Button mismatch.
+const buttons = [ ...(vcp.actions ?? []).filter(button => button.controlId !== 'openModelSelectBtn'), ...(vcp.promptButtons ?? []) ];
 const expected = button => button.class?.includes('sm') ? harness.sizes.sm : harness.sizes.md;
 const normalize = (property, value) => property === 'padding' && typeof value === 'string'
     ? value.replace(/(^|\s)0px(?=\s|$)/g, '$10')
