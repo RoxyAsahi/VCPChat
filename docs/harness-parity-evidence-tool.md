@@ -57,8 +57,10 @@ DOM contracts with visual cases in `fixture-matrix.json`. Its report separates
 literal contract names from declared semantic-fixture aliases, VCP-local
 contracts, source-only boundaries, and actionable Candidate fixture gaps.
 An alias preserves its named Candidate/pixel boundary; it is not a parity
-promotion. `--strict` is reserved for a gate that intentionally requires every
-contract to have a case.
+promotion. When no actionable Candidate fixture remains, the report uses
+`coverage-scoped-complete` while retaining `pass: false` for its VCP-local and
+source-only boundaries; it is never a global parity claim. `--strict` is
+reserved for a gate that intentionally requires every contract to have a case.
 
 The source-only lifecycle gates can be replayed directly when their Harness
 files are available:

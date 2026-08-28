@@ -31,11 +31,12 @@ const classifyUncovered = name => {
 const uncoveredByBoundary = uncoveredContracts.map(classifyUncovered);
 const candidateFixtureGaps = uncoveredByBoundary.filter(item => item.category === 'candidate-fixture-pending').map(item => item.name);
 const aliasCovered = uncoveredByBoundary.filter(item => item.category === 'covered-by-semantic-fixture-alias');
+const scopeBlocked = uncoveredByBoundary.filter(item => ['vcp-local-contract', 'source-only-boundary'].includes(item.category));
 const fixtureOnlyCandidates = fixtureNames.filter(name => !contractSet.has(name));
 const report = {
   generatedAt: new Date().toISOString(),
   viewport: matrix.viewport ?? null,
-  status: uncoveredContracts.length ? 'coverage-gaps-present' : 'coverage-complete',
+  status: candidateFixtureGaps.length ? 'coverage-gaps-present' : scopeBlocked.length ? 'coverage-scoped-complete' : 'coverage-complete',
   pass: uncoveredContracts.length === 0,
   counts: {
     contracts: contracts.length,
@@ -43,6 +44,7 @@ const report = {
     uncoveredContracts: uncoveredContracts.length,
     effectiveContractsWithFixtures: contracts.length - uncoveredContracts.length + aliasCovered.length,
     candidateFixtureGaps: candidateFixtureGaps.length,
+    scopeBlockedContracts: scopeBlocked.length,
     fixturePrimitives: fixtureNames.length,
     fixtureOnlyCandidates: fixtureOnlyCandidates.length,
   },
