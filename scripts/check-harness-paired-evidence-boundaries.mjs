@@ -18,6 +18,7 @@ const candidateContracts = [
   ['pill', 'reports/vcp-pill-candidate.json', 'pill.dom.json', report => report.static?.tag === 'span' && report.interactive?.tag === 'button' && report.active?.tag === 'button' && report.clicks > 0],
   ['tooltip', 'reports/vcp-tooltip-candidate.json', 'tooltip.dom.json', report => report.beforeDelay === 0 && report.hover?.role === 'tooltip' && report.focusImmediate === true && report.flipped?.side === 'top' && report.disabled?.bubbleCount === 0 && report.disposed?.bubbles === 0 && report.reloaded?.bubbles === 0],
   ['hover-card', 'reports/vcp-hover-card-candidate.json', 'hover-card.dom.json', report => report.beforeDelay === 0 && report.open?.role === 'button' && report.graceOpen === true && report.graceClosed === true && report.copied?.status === 'Copied' && report.disabled === true && report.disposed?.cards === 0 && report.reloaded?.cards === 0],
+  ['state-dot', 'reports/vcp-state-dot-candidate.json', 'state-dot.dom.json', report => report.states?.done?.tag === 'span' && report.states?.ongoing?.tag === 'svg' && report.states?.ongoing?.cells === 8 && new Set(report.states.ongoing.delays ?? []).size === 8 && report.resized?.rect?.width === 14 && report.restored === true && report.registrations === 0],
 ];
 const candidateCaptures = candidateContracts.map(([name, file, contractFile, validate]) => {
   const capture = read(file);

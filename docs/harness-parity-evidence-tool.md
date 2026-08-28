@@ -56,6 +56,8 @@ Each listed Candidate capture is now checked against its matching reference
 contract and its indispensable interaction/teardown fields. A missing or
 truncated report makes the ledger `paired-evidence-incomplete`; passing that
 schema only proves the isolated Candidate baseline, never a Harness/VCP pair.
+StateDot's four-state, phase, resize, and disposal capture participates in the
+same guard; it cannot be silently dropped from the Candidate inventory.
 
 `node scripts/check-harness-candidate-source-provenance.mjs` is a source-drift
 guard for Tooltip and HoverCard. It records the current Harness source/style

@@ -142,9 +142,9 @@ test('Paired evidence ledger keeps Candidate captures and blocked boundaries exp
     assert.equal(report.status, 'paired-evidence-scoped');
     assert.equal(report.pass, false);
     assert.equal(report.counts.pairedRoiPasses, 1);
-    assert.equal(report.counts.vcpCandidateCaptures, 6);
+    assert.equal(report.counts.vcpCandidateCaptures, 7);
     assert.equal(report.counts.candidateCaptureMissing, 0);
-    assert.equal(report.counts.candidateContractPasses, 6);
+    assert.equal(report.counts.candidateContractPasses, 7);
     assert.equal(report.counts.candidateContractMissing, 0);
     assert.equal(report.pairedSelect.state, 'paired-roi-pass');
     assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
