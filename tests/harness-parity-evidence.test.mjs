@@ -198,3 +198,12 @@ test('ImageGallery reference audit preserves aggregation and alignment provenanc
     assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
 });
+
+test('PlanChip reference audit preserves projection and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-plan-chip-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-plan-chip-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '18/18');
+    assert.equal(report.candidateStatus, 'source-only frozen Composer plan slot; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP Composer consumer'));
+});
