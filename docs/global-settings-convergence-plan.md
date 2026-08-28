@@ -115,6 +115,9 @@ owner 生命周期与事件绑定；字段字面量仍保留在 helper 中，sou
 consumer 绑定并销毁即时响应监听；旧 `event-listeners.js` 监听仅在 typed
 service 不可用的 Classic/早期 bootstrap 路径启用，避免生产 Settings 双写。
 
+同时，颜色镜像的旧 binder 现在仅在 UIUX artifact 不存在时启用；生成的
+ColorPair 可用时，生产 Settings 不再注册第二套颜色同步监听。
+
 ### G5：旧债净删除
 
 按 section 删除：
