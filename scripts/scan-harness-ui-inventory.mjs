@@ -35,6 +35,7 @@ const scopeBoundaryFor = relative => {
     if (/ui-subagent/.test(relative)) return 'composer-subagent-surface-frozen';
     if (/ui-user-questions/.test(relative)) return 'composer-question-surface-frozen';
     if (/ui-theme/.test(relative)) return 'settings-theme-surface-owned-by-main-thread';
+    if (/ui-workspace/.test(relative)) return 'workspace-persistence-and-chat-entry-frozen';
     if (/ui-settings-/.test(relative)) return 'settings-surface-owned-by-main-thread';
     return null;
 };
