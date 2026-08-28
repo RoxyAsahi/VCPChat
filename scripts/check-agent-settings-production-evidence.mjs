@@ -130,6 +130,20 @@ if (report.agentRangeInteraction !== null && report.agentRangeInteraction !== un
     assert.deepEqual(report.agentRangeInteraction.restored, report.agentRangeInteraction.before,
         'Agent TTS Range interaction capture must restore the canonical test value');
 }
+if (report.agentColorPairInteraction !== null && report.agentColorPairInteraction !== undefined) {
+    assert.equal(report.agentColorPairInteraction.available, true, 'Agent ColorPair interaction evidence is unavailable');
+    assert.equal(report.agentColorPairInteraction.native, true, 'Agent ColorPair must retain native controls');
+    assert.equal(report.agentColorPairInteraction.wrappersOwnControls, true, 'Agent ColorPair wrappers must retain canonical controls');
+    assert.deepEqual(report.agentColorPairInteraction.pickerProjection, {
+        borderColor: '#112233', borderText: '#112233', previewBorderColor: 'rgb(17, 34, 51)',
+    }, 'Agent border ColorPair must sync picker, text and avatar preview');
+    assert.deepEqual(report.agentColorPairInteraction.textProjection, { nameColor: '#445566', nameText: '#445566' },
+        'Agent name ColorPair must sync valid text into the native color input');
+    assert.deepEqual(report.agentColorPairInteraction.invalidRollback, { borderColor: '#112233', borderText: '#112233' },
+        'Agent ColorPair must roll invalid text back to the native color value');
+    assert.deepEqual(report.agentColorPairInteraction.restored, report.agentColorPairInteraction.before,
+        'Agent ColorPair interaction capture must restore canonical controls');
+}
 if (report.agentModelPickerInteraction !== null && report.agentModelPickerInteraction !== undefined) {
     const { refreshRows, ...interaction } = report.agentModelPickerInteraction;
     assert.deepEqual(interaction, {
@@ -196,6 +210,7 @@ console.log(JSON.stringify({
     modelTriggerButton: 'openModelSelectBtn',
     agentSelectInteraction: report.agentSelectInteraction ?? null,
     agentRangeInteraction: report.agentRangeInteraction ?? null,
+    agentColorPairInteraction: report.agentColorPairInteraction ?? null,
     agentModelPickerInteraction: report.agentModelPickerInteraction ?? null,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',

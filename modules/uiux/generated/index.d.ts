@@ -42,6 +42,7 @@ export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
+export type { ColorPairProps } from './primitives/color-pair.js';
 export { mountOnboardingSurface } from './primitives/onboarding-surface.js';
 export type { OnboardingSurfaceController, OnboardingSurfaceProps } from './primitives/onboarding-surface.js';
 /** Candidate-only frozen-domain diff fixture; no VCP tool/chat consumer. */

@@ -147,6 +147,24 @@ test('Agent TTS Range has one presentation output owner and no manager-side list
         'the typed Range wrapper, not an Agent-id selector, must own flexible row geometry');
 });
 
+test('Agent ColorPairs have one generated synchronization owner and preserve canonical color controls', () => {
+    const entry = read(bridgeEntry);
+    const manager = read(path.join(root, 'modules', 'settingsManager.js'));
+    const owner = entry.match(/function mountTypedAgentColorPairs\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+    assert.match(owner, /api\.mountColorPair\(color, text, scope, \{/, 'Agent ColorPairs must inject the generated presentation contract');
+    assert.match(owner, /onValueChange: value =>/, 'avatar border preview must be an injected presentation reaction');
+    assert.match(owner, /onInvalid: \(\) => window\.uiHelperFunctions\?\.showToastNotification/, 'invalid hex feedback must remain on the owned presentation path');
+    assert.doesNotMatch(manager, /function setupColorPickerSync\(/,
+        'SettingsManager must not retain duplicate color/text synchronization listeners');
+    assert.doesNotMatch(manager, /function updateAvatarPreviewStyle\(/,
+        'avatar border preview updates must not retain a manager-side presentation helper');
+    assert.doesNotMatch(manager, /setupColorPickerSync\(\)/,
+        'SettingsManager init must not remount the retired ColorPair listener bundle');
+    for (const id of ['agentAvatarBorderColor', 'agentAvatarBorderColorText', 'agentNameTextColor', 'agentNameTextColorText']) {
+        assert.match(manager, new RegExp(id), `canonical Agent color control ${id} must remain available to persistence/reset commands`);
+    }
+});
+
 test('global voice mode adopts generated Choice without extending the frozen chat radio surface', () => {
     const entry = read(bridgeEntry);
     const css = read(path.join(root, 'styles', 'ui-system', 'settings-overrides.css'));

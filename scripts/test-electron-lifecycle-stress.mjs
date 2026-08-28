@@ -40,6 +40,7 @@ const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTI
 const agentModelPickerInteraction = process.env.VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION === '1';
 const agentPromptInteraction = process.env.VCPCHAT_STRESS_AGENT_PROMPT_INTERACTION === '1';
 const agentRangeInteraction = process.env.VCPCHAT_STRESS_AGENT_RANGE_INTERACTION === '1';
+const agentColorPairInteraction = process.env.VCPCHAT_STRESS_AGENT_COLOR_PAIR_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -700,6 +701,80 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 restored: agentRangeInteractionEvidence.before,
             }, `${label}: Agent TTS Range must project native input through one generated owner: ${JSON.stringify(agentRangeInteractionEvidence)}`);
         }
+        let agentColorPairInteractionEvidence = null;
+        if (agentColorPairInteraction) {
+            agentColorPairInteractionEvidence = await page.evaluate(() => {
+                const borderColor = document.querySelector('#agentSettingsForm #agentAvatarBorderColor');
+                const borderText = document.querySelector('#agentSettingsForm #agentAvatarBorderColorText');
+                const nameColor = document.querySelector('#agentSettingsForm #agentNameTextColor');
+                const nameText = document.querySelector('#agentSettingsForm #agentNameTextColorText');
+                const preview = document.querySelector('#agentSettingsForm #agentAvatarPreview');
+                const wrappers = [borderColor, nameColor].map(input => input?.closest('.vcp-uiux-color-pair'));
+                if (!(borderColor instanceof HTMLInputElement) || !(borderText instanceof HTMLInputElement)
+                    || !(nameColor instanceof HTMLInputElement) || !(nameText instanceof HTMLInputElement)
+                    || !(preview instanceof HTMLElement) || wrappers.some(wrapper => !(wrapper instanceof HTMLElement))) {
+                    return { available: false };
+                }
+                const before = {
+                    borderColor: borderColor.value, borderText: borderText.value,
+                    nameColor: nameColor.value, nameText: nameText.value,
+                    previewBorderColor: preview.style.borderColor,
+                };
+                const previewStyleAttribute = preview.getAttribute('style');
+                borderColor.value = '#112233';
+                borderColor.dispatchEvent(new Event('input', { bubbles: true }));
+                const pickerProjection = {
+                    borderColor: borderColor.value, borderText: borderText.value,
+                    previewBorderColor: preview.style.borderColor,
+                };
+                nameText.value = '#445566';
+                nameText.dispatchEvent(new Event('input', { bubbles: true }));
+                const textProjection = { nameColor: nameColor.value, nameText: nameText.value };
+                borderText.value = 'invalid';
+                borderText.dispatchEvent(new Event('blur', { bubbles: true }));
+                const invalidRollback = { borderColor: borderColor.value, borderText: borderText.value };
+                borderColor.value = before.borderColor;
+                borderColor.dispatchEvent(new Event('input', { bubbles: true }));
+                nameColor.value = before.nameColor;
+                nameColor.dispatchEvent(new Event('input', { bubbles: true }));
+                // The probe must leave the production surface exactly as it
+                // found it. ColorPair's change callback can add a declaration
+                // to a previously attribute-free preview, so restoring just
+                // one parsed CSS property is not equivalent to restoring the
+                // original DOM. Restore the whole style attribute instead.
+                if (previewStyleAttribute === null) preview.removeAttribute('style');
+                else preview.setAttribute('style', previewStyleAttribute);
+                return {
+                    available: true,
+                    native: [borderColor, borderText, nameColor, nameText].every(input => input.matches('input')),
+                    wrappersOwnControls: wrappers.every(wrapper => wrapper.contains(borderColor) || wrapper.contains(nameColor)),
+                    before,
+                    pickerProjection,
+                    textProjection,
+                    invalidRollback,
+                    restored: {
+                        borderColor: borderColor.value, borderText: borderText.value,
+                        nameColor: nameColor.value, nameText: nameText.value,
+                        previewBorderColor: preview.style.borderColor,
+                    },
+                };
+            });
+            assert.equal(agentColorPairInteractionEvidence.available, true,
+                `${label}: Agent ColorPair production owner is unavailable: ${JSON.stringify(agentColorPairInteractionEvidence)}`);
+            assert.equal(agentColorPairInteractionEvidence.native, true,
+                `${label}: Agent ColorPair must retain native controls`);
+            assert.equal(agentColorPairInteractionEvidence.wrappersOwnControls, true,
+                `${label}: Agent ColorPair wrappers must own both canonical pairs`);
+            assert.deepEqual(agentColorPairInteractionEvidence.pickerProjection, {
+                borderColor: '#112233', borderText: '#112233', previewBorderColor: 'rgb(17, 34, 51)',
+            }, `${label}: Agent ColorPair picker projection drifted: ${JSON.stringify(agentColorPairInteractionEvidence)}`);
+            assert.deepEqual(agentColorPairInteractionEvidence.textProjection, { nameColor: '#445566', nameText: '#445566' },
+                `${label}: Agent ColorPair text projection drifted: ${JSON.stringify(agentColorPairInteractionEvidence)}`);
+            assert.deepEqual(agentColorPairInteractionEvidence.invalidRollback, { borderColor: '#112233', borderText: '#112233' },
+                `${label}: Agent ColorPair invalid rollback drifted: ${JSON.stringify(agentColorPairInteractionEvidence)}`);
+            assert.deepEqual(agentColorPairInteractionEvidence.restored, agentColorPairInteractionEvidence.before,
+                `${label}: Agent ColorPair test interaction did not restore canonical controls`);
+        }
         let agentModelPickerInteractionEvidence = null;
         if (agentModelPickerInteraction) {
             const interaction = await page.evaluate(async () => {
@@ -1015,6 +1090,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
             evidence.agentRangeInteraction = agentRangeInteractionEvidence;
+            evidence.agentColorPairInteraction = agentColorPairInteractionEvidence;
             evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             evidence.agentDisclosureInteraction = agentDisclosureInteractionEvidence;
