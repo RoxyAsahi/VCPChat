@@ -243,3 +243,12 @@ test('TerminalBlock reference audit preserves command-state and geometry provena
     assert.equal(report.candidateStatus, 'source-only frozen tool detail; no VCP consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP tool-detail consumer'));
 });
+
+test('WebBlock reference audit preserves retrieval-shape and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-web-block-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-web-block-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '24/24');
+    assert.equal(report.candidateStatus, 'source-only frozen tool detail; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP tool-detail consumer'));
+});
