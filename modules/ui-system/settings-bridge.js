@@ -959,6 +959,8 @@ function mountTypedForumFieldOwner(root, form) {
     if (!service?.save?.execute) return;
     const controls = ['adminUsername', 'adminPassword'].map(id => form.querySelector(`#${id}`)).filter(Boolean);
     if (controls.length !== 2) return;
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
     const state = { form, timer: null, pending: false, inFlight: null, disposed: false, failed: false };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const run = async () => {
@@ -1012,18 +1014,19 @@ function mountTypedForumFieldOwner(root, form) {
     const ownsError = () => state.failed && status()?.dataset.state === 'error';
     const onStatusClick = () => { if (ownsError()) schedule(); };
     state.run = run;
-    controls.forEach(control => control.addEventListener('input', onInput));
-    controls.forEach(control => control.addEventListener('change', onInput));
+    ownerScope.listen(controls[0], 'input', onInput);
+    ownerScope.listen(controls[1], 'input', onInput);
+    ownerScope.listen(controls[0], 'change', onInput);
+    ownerScope.listen(controls[1], 'change', onInput);
     const statusNode = status();
-    statusNode?.addEventListener('click', onStatusClick);
+    if (statusNode) ownerScope.listen(statusNode, 'click', onStatusClick);
     controls.forEach(control => { control.dataset.vcpTypedForumFieldOwner = 'true'; });
     form.dataset.vcpTypedForumFieldOwnerMounted = 'true';
     typedForumFieldStates.add(state);
-    ensurePresentationScope()?.own(() => {
+    ownerScope.own(() => {
         state.disposed = true;
         if (state.timer) clearTimeout(state.timer);
-        controls.forEach(control => { control.removeEventListener('input', onInput); control.removeEventListener('change', onInput); delete control.dataset.vcpTypedForumFieldOwner; });
-        statusNode?.removeEventListener('click', onStatusClick);
+        controls.forEach(control => { delete control.dataset.vcpTypedForumFieldOwner; });
         typedForumFieldStates.delete(state);
         delete form.dataset.vcpTypedForumFieldOwnerMounted;
     }, 'typed-forum-field-owner', 'ui-presentation');
@@ -1094,6 +1097,8 @@ function mountHarnessInputs(form) {
 }
 
 function mountHarnessDisclosures(form) {
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
     form.querySelectorAll('.agent-style-collapsible-container').forEach(container => {
         // disclosureStates stores state records, not raw containers.  Using
         // Set.has(container) here silently missed the existing record and
@@ -1114,21 +1119,21 @@ function mountHarnessDisclosures(form) {
             container.classList.toggle('collapsed');
             sync();
         };
-        header.addEventListener('click', toggle);
-        header.addEventListener('keydown', toggle);
+        ownerScope.listen(header, 'click', toggle);
+        ownerScope.listen(header, 'keydown', toggle);
         const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
         observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
         sync();
-        disclosureStates.add({ container, header, observer, cleanup: () => {
+        const state = { container, header, observer, cleanup: () => {
             observer?.disconnect();
-            header.removeEventListener('click', toggle);
-            header.removeEventListener('keydown', toggle);
             header.removeAttribute('aria-controls');
             header.removeAttribute('aria-expanded');
             header.removeAttribute('role');
             header.removeAttribute('tabindex');
-            disclosureStates.delete([...disclosureStates].find(state => state.container === container));
-        }});
+            disclosureStates.delete(state);
+        }};
+        disclosureStates.add(state);
+        ownerScope.own(state.cleanup, `harness-disclosure-${container.id || uniqueSettingsKey()}`, 'ui-presentation');
     });
 }
 
