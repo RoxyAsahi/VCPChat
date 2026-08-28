@@ -20,6 +20,7 @@ import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 import { mountHomeTaglineInput } from './settings/home-controls.js';
 import { mountIdentityColorPairs } from './settings/identity-controls.js';
 import { mountChoiceControls } from './settings/choice-controls.js';
+import { mountForumCredentialInputs } from './settings/forum-controls.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1062,7 +1063,7 @@ function enhanceGlobalSettings(root, form) {
     mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
     mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
-    mountTypedForumInputs(root, form);
+    mountForumCredentialInputs(form, window.VCPUIUX, ensurePresentationScope());
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     mountHarnessSwitches(form);
@@ -1089,19 +1090,6 @@ function enhanceGlobalSettings(root, form) {
 // ForumConfigUiService/global submit path remains the command owner until its
 // dirty/autosave seam is migrated; this primitive only establishes the
 // Harness Light-DOM geometry and scope-owned teardown contract.
-function mountTypedForumInputs(root, form) {
-    const api = window.VCPUIUX;
-    if (!api?.mountInput) return;
-    const scope = ensurePresentationScope();
-    if (!scope) return;
-    ['adminUsername', 'adminPassword'].forEach(id => {
-        const input = form?.querySelector?.(`#${id}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountInput(input, {}, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
 function mountTypedForumFieldOwner(root, form) {
     if (!root || !form || form.dataset.vcpTypedForumFieldOwnerMounted === 'true') return;

@@ -153,6 +153,10 @@ Appearance 圆角 Choice 与 Voice Mode Choice 的 generated mount 已合并抽�
 `modules/ui-system/settings/choice-controls.js`；仅负责两个高频 Choice 的
 展示装配和 marker cleanup，不接管冻结的聊天布局 radio。
 
+Forum credential 的两个 generated Input mount 已抽为
+`modules/ui-system/settings/forum-controls.js`；ForumConfigUiService 的保存、
+dirty、retry 和 capability 语义仍由原 field owner 管理。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
