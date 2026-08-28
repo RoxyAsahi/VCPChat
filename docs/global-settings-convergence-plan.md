@@ -149,9 +149,25 @@ owner 负责，helper 仅建立 Light-DOM primitive 和销毁标记。
 `modules/ui-system/settings/identity-controls.js`；头像预览与错误提示通过
 注入回调保持，颜色持久化和业务同步仍由原有 owner 负责。
 
+Agent 六个 section 的 DisclosureRow presentation owner 已抽为
+`modules/ui-system/settings/agent-disclosures.js`；该模块通过注入的
+`settingsManager.toggleAgentSettingsSection` 保持业务命令归属，并观察
+canonical collapsed class，不复制折叠状态。
+
 Appearance 圆角 Choice 与 Voice Mode Choice 的 generated mount 已合并抽为
 `modules/ui-system/settings/choice-controls.js`；仅负责两个高频 Choice 的
 展示装配和 marker cleanup，不接管冻结的聊天布局 radio。
+
+Forum credential 的两个 generated Input mount 已抽为
+`modules/ui-system/settings/forum-controls.js`；ForumConfigUiService 的保存、
+dirty、retry 和 capability 语义仍由原 field owner 管理。
+
+拆分复核（2026-08-28）：bridge 已从约 2111 行降至约 2019 行，Appearance、
+Identity、Forum 的纯 primitive 装配已有独立归属。剩余约 2k 行主要集中在
+Agent section disclosure/model picker、service 装配和全局 shell 生命周期；这些
+包含真实业务调用方，不再继续做机械小 helper 拆分。下一阶段优先处理 Agent
+section controller 的 mount/sync/dispose 边界，并以真实 consumer 与 Electron
+回归作为拆分依据。
 
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
@@ -163,6 +179,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 显示/隐藏时发布 `data-motion="enter|exit"`，但现有 Tooltip 源码尚未写入该
 状态；Theme Presenter 单测通过，问题限定在动效合同实现。Tooltip 文件属于
 并行未提交改动，本线不覆盖，待其补齐后再复跑动效与 UIUX 全套门禁。
+
+2026-08-28 最新复测：Settings Electron gate 的全部 Settings 交互断言仍通过，
+但最终 light/dark 背景差异断言仍失败（两者均为 `rgb(255, 255, 255)`），并伴随
+一个资源 `ERR_FILE_NOT_FOUND`。该失败来自并行主题/资源改动；本线程不修改其
+文件，待主题线程稳定后重跑最终 gate。
 
 ### G5：旧债净删除
 
@@ -178,6 +199,17 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 校验语义由 typed owner 保持；该 section 的直接 presentation 债务已收口。
 
 ## 不作为阻塞条件
+
+## 当前完成度快照（2026-08-28）
+
+| 区域 | 状态 | 说明 |
+| --- | --- | --- |
+| G1 服务器连接 | stable-adoption | Input/Field 已接入，URL 归一化保留业务边界 |
+| G2 身份/论坛 | owner-converged | ColorPair、Forum Input 装配与重复 listener 已收口 |
+| G3 语音/高级 | owner-converged | Rust/Voice projection 与条件显隐已归 typed owner |
+| G4 内部拆分 | in-progress | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure |
+| G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
+| Electron 视觉最终验收 | blocked-by-parallel-theme | Settings 交互通过，dark/light 背景断言等待主题线程修复 |
 
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；

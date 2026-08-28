@@ -54,6 +54,8 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof identity.mountIdentityColorPairs, 'function');
     const choices = await import(pathToFileURL(path.join(settingsDir, 'choice-controls.js')).href);
     assert.equal(typeof choices.mountChoiceControls, 'function');
+    const forum = await import(pathToFileURL(path.join(settingsDir, 'forum-controls.js')).href);
+    assert.equal(typeof forum.mountForumCredentialInputs, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -181,11 +183,9 @@ test('global network-path add action uses the generated Button owner', () => {
 
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
+    const disclosureModule = read(path.join(settingsDir, 'agent-disclosures.js'));
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
-    const owner = entry.slice(
-        entry.indexOf('function mountTypedAgentSectionDisclosures(form)'),
-        entry.indexOf('// The Agent inputs differ', entry.indexOf('function mountTypedAgentSectionDisclosures(form)')),
-    );
+    const owner = disclosureModule;
     assert.match(owner, /api\?\.mountDisclosureRowController/, 'Agent headers must use the generated Light-DOM DisclosureRow controller');
     assert.match(owner, /manager\.toggleAgentSettingsSection\(key\)/, 'presentation must call the manager command, not mutate DOM/config itself');
     assert.match(owner, /new window\.MutationObserver\(sync\)/, 'selection restore must project canonical collapsed DOM state into ARIA');
@@ -324,10 +324,11 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
     const home = read(path.join(settingsDir, 'home-controls.js'));
     const identity = read(path.join(settingsDir, 'identity-controls.js'));
     const choices = read(path.join(settingsDir, 'choice-controls.js'));
+    const forum = read(path.join(settingsDir, 'forum-controls.js'));
     const globalTypedOwners = entry.slice(
         entry.indexOf('function mountTypedRadiusChoice'),
         entry.indexOf('// Single-line text inputs are projected'),
-    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles + '\n' + home + '\n' + identity + '\n' + choices;
+    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles + '\n' + home + '\n' + identity + '\n' + choices + '\n' + forum;
     // Each generated primitive calls scope.own() internally.  The bridge can
     // own its DOM marker, but must not register the returned release again:
     // that adds a second resource to every Settings-open cycle and asks the
