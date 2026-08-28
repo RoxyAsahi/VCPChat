@@ -75,7 +75,13 @@ test('Harness UI inventory separates frozen surfaces from contract candidates', 
     assert.ok(report.counts.missingContracts > 0);
     assert.ok(report.entries.some(item => item.name === 'ModelSelect' && item.category === 'composite-surface'));
     assert.ok(report.entries.some(item => item.category === 'frozen-domain-surface'));
+    assert.ok(report.counts.scopeBlockedSurfaces > 0);
+    assert.ok(report.entries.some(item => item.scopeBoundary === 'composer-goal-surface-frozen'));
+    assert.ok(report.entries.some(item => item.scopeBoundary === 'chat-feedback-surface-frozen'));
+    assert.equal(report.nextCandidates.some(item => ['ui-goal', 'ui-message-feedback'].includes(item.package)), false);
     assert.ok(report.nextCandidates.length > 0);
+    assert.ok(report.entries.filter(item => item.relative.includes('ui-primitives/src/icons/index.tsx')).every(item => item.referenceContract === true));
+    assert.equal(report.missingContracts.some(item => item.relative.includes('ui-primitives/src/icons/index.tsx')), false);
     assert.ok(report.surfacePatterns.some(item => item.pattern === 'ui-permission-presets' && item.composites > 0));
     assert.ok(report.surfacePatterns.some(item => item.frozenDomainSurfaces > 0));
 });
