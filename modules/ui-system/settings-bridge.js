@@ -541,12 +541,13 @@ function mountTypedAgentButtons(form) {
         const marker = `vcpTyped${key.replace(/(^|-)(\w)/g, (_, __, value) => value.toUpperCase())}`;
         if (!button || button.dataset[marker] === 'true') return;
         try {
-            api.mountButton(button, { variant, size: key.includes('trigger') || key.includes('refresh') ? 'sm' : 'md' }, scope);
+            const size = key.includes('refresh') ? 'sm' : 'md';
+            api.mountButton(button, { variant, size }, scope);
             // Legacy action-bar rules still carry a 37px min-height. Once the
             // typed Button owns this node, that minimum becomes a geometry
             // override (md contract is 36px). Keep the correction owner-bound
             // and restore the exact declaration during teardown.
-            const minHeight = key.includes('trigger') || key.includes('refresh') ? '28px' : '36px';
+            const minHeight = size === 'sm' ? '28px' : '36px';
             const originalMinHeight = [button.style.getPropertyValue('min-height'), button.style.getPropertyPriority('min-height')];
             button.style.setProperty('min-height', minHeight, 'important');
             scope.own(() => {
