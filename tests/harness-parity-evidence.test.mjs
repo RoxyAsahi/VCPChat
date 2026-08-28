@@ -376,6 +376,18 @@ test('Pill Candidate capture records native states, hover, click, and teardown',
     assert.equal(report.ownerRegistrations, 4);
 });
 
+test('Real Harness Pill source capture records native state and lifecycle boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-pill-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-pill-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-pill-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-pill-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.structuralPass, false);
+    assert.equal(report.computedStylePass, false);
+    assert.equal(Object.values(report.interaction).every(item => item.pass), true);
+    assert.equal(report.pass, false);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));

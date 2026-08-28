@@ -63,8 +63,6 @@ try {
     assert.deepEqual(Object.fromEntries(['display', 'alignItems', 'gap', 'height', 'padding', 'borderRadius', 'fontSize', 'lineHeight'].map(key => [key, evidence.static.style[key]])), { display: 'inline-flex', alignItems: 'center', gap: '4px', height: '24px', padding: '0px 8px', borderRadius: '12px', fontSize: '12px', lineHeight: '18px' });
     assert.equal(evidence.hover.interactive.style.backgroundColor, 'rgba(0, 0, 0, 0.06)');
     assert.equal(evidence.clicks, 1);
-    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await fs.writeFile(path.join(root, 'reports/vcp-pill-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`);
     await page.locator('.fixture').screenshot({ path: path.join(root, 'reports/vcp-pill-candidate.png') });
     const disposed = await page.evaluate(async () => {
         const fixture = globalThis.__pillFixture;
@@ -74,6 +72,8 @@ try {
         return { count: fixture.releases.length, restored: staticPill?.className === 'original-static' && interactivePill?.className === 'original-button' && interactivePill?.getAttribute('type') === null && activePill?.className === '' && activePill?.getAttribute('type') === null };
     });
     assert.deepEqual(disposed, { count: 4, restored: true });
+    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
+    await fs.writeFile(path.join(root, 'reports/vcp-pill-candidate.json'), `${JSON.stringify({ ...evidence, disposed }, null, 2)}\n`);
     console.log('VCP Pill Candidate fixture captured (static/interactive-hover/active/click/dispose; 800x600 @1x).');
 } finally {
     await browser.close();

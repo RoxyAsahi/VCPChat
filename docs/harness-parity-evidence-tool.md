@@ -114,6 +114,12 @@ whether each of `done`, `warning`, `ongoing`, and `error` is dimensionally
 comparable and pixel-identical; the current baseline remains a non-passing
 visual result when any state differs.
 
+The Pill source fixture now runs the real Harness `Pill.tsx` with native static,
+interactive, active, hover, click, and unmount states. Its interaction/lifecycle
+checks align with the Candidate, while the active native-tag and display-style
+differences remain explicit; strict Pill pixel evidence and a production
+consumer are still open.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
