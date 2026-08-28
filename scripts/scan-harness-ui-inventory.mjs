@@ -33,6 +33,8 @@ const scopeBoundaryFor = relative => {
     if (/ui-message-feedback/.test(relative)) return 'chat-feedback-surface-frozen';
     if (/ui-skill|ui-trajectory/.test(relative)) return 'chat-toolview-surface-frozen';
     if (/ui-subagent/.test(relative)) return 'composer-subagent-surface-frozen';
+    if (/ui-user-questions/.test(relative)) return 'composer-question-surface-frozen';
+    if (/ui-theme/.test(relative)) return 'settings-theme-surface-owned-by-main-thread';
     if (/ui-settings-/.test(relative)) return 'settings-surface-owned-by-main-thread';
     return null;
 };
