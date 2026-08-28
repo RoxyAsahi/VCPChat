@@ -57,6 +57,11 @@ const candidate = JSON.parse(read(path.join(root, 'reports/vcp-harness-agent-pre
 const sectionE2ePath = path.join(harnessRoot, 'apps/web/tests/agent-preset-authoring.e2e.ts');
 const sectionE2e = fs.existsSync(sectionE2ePath) ? read(sectionE2ePath) : '';
 const sectionE2eBoundary = sectionE2e.includes('Agent 预设') && !sectionE2e.includes('AgentPresetRow');
+const directCaptureAttempt = {
+  attempted: true,
+  status: 'blocked-complete-harness-composition-required',
+  evidence: 'isolated Vite dependency resolution succeeded, but direct AgentPresetRow render produced no trigger within 30s; the component requires the full Harness slot/runtime composition',
+};
 const referencePass = dom.sourceKind === 'harness-composite-source-only'
   && dom.provenance?.sources?.length === 3
   && geometry.styleSource === 'packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css';
@@ -73,10 +78,10 @@ const report = {
   source: dom.provenance.sources, files: entries,
   reference: { dom: referencePass, geometry: referencePass },
   candidate: { capture: 'reports/vcp-harness-agent-preset-row-candidate.json', present: true, shape: candidatePass, status: dom.candidateStatus },
-  browserEvidence: { source: 'apps/web/tests/agent-preset-authoring.e2e.ts', present: Boolean(sectionE2e), rendersDirectRow: !sectionE2eBoundary, note: sectionE2eBoundary ? 'This E2E renders AgentPresetSection/card authoring, not the AgentPresetRow composite; it cannot be promoted as Row capture.' : 'Direct Row browser evidence unavailable.' },
+  browserEvidence: { source: 'apps/web/tests/agent-preset-authoring.e2e.ts', present: Boolean(sectionE2e), rendersDirectRow: !sectionE2eBoundary, directCaptureAttempt, note: sectionE2eBoundary ? 'This E2E renders AgentPresetSection/card authoring, not the AgentPresetRow composite; it cannot be promoted as Row capture.' : 'Direct Row browser evidence unavailable.' },
   contract: dom.harnessContract, pass: false,
   missingEvidence: [
-    'dedicated real Harness AgentPresetRow browser capture (existing authoring E2E renders AgentPresetSection, not this Row)',
+    'dedicated real Harness AgentPresetRow browser capture through the full slot/runtime composition (isolated direct render is blocked)',
     'same-semantic Harness/VCP DOM/ARIA and computed-style diff',
     'same-semantic Harness/VCP pixel diff',
     'VCP production consumer (no equivalent non-frozen preset preference capability)',

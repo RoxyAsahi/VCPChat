@@ -261,6 +261,10 @@ The existing Harness `agent-preset-authoring.e2e.ts` is recorded as a scope
 boundary: it renders the higher-level AgentPresetSection/card authoring flow,
 not the `AgentPresetRow` composite, so its snapshot cannot be relabeled as a
 Row browser capture.
+An isolated Vite direct-render attempt also resolved the workspace modules but
+never produced the Row trigger within 30 seconds; the component needs the full
+Harness slot/runtime composition. That blocker is recorded as evidence, not as
+an excuse to synthesize an HTML imitation or relabel the Section snapshot.
 
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
 Harness DisclosureRow controlled interaction contract (row versus leading
