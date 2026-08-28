@@ -1,5 +1,15 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx",
+  "source": "packages/client/ui-primitives/src/Menu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Menu.tsx",
+      "packages/client/ui-primitives/src/Menu.module.css"
+    ],
+    "selectionRule": "Use the Harness Menu implementation and CSS as the shared dropdown contract; paired VCP capture remains candidate-only."
+  },
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
     "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
