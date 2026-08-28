@@ -145,6 +145,12 @@ body portal/dialog ARIA, Escape and mask closing, reopen, and root unmount.
 This source-side evidence does not yet pair a VCP Candidate capture, DOM/style
 diff, or strict ROI pixel comparison.
 
+Modal's standard branch now also has a paired Candidate capture. Portal/dialog
+ARIA, standard chrome, measured 382×221 geometry, close/reopen/dispose, and
+selected computed-style fields align. Its strict decoded-RGB ROI is comparable
+but non-passing; the Harness headless branch remains source-captured only until
+a matching Candidate headless replay is recorded.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept

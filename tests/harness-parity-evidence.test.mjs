@@ -398,6 +398,25 @@ test('Real Harness Modal source capture preserves standard, headless, close, reo
     assert.deepEqual(report.unmounted, { rootEmpty: true, dialogs: 0 });
 });
 
+test('Modal source/Candidate diff records standard parity evidence and headless gap', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-modal-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-modal-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-modal-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-modal-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-modal-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.domAria.pass, true);
+    assert.equal(report.standardTree.pass, true);
+    assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.geometry.pass, true);
+    assert.equal(Object.values(report.interaction).every(Boolean), true);
+    assert.equal(report.pixel.status, 'strict-standard-roi-measured');
+    assert.equal(report.pixel.comparable, true);
+    assert.equal(report.pixel.pass, false);
+    assert.equal(report.headless.harnessRecorded, true);
+    assert.equal(report.pass, false);
+});
+
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });
