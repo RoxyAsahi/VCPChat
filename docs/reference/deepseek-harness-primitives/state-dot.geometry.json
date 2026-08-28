@@ -1,5 +1,16 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/StateDot.module.css",
+  "source": "packages/client/ui-primitives/src/StateDot.module.css",
+  "styleSource": "packages/client/ui-primitives/src/StateDot.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
+  "selectors": {
+    ".dot": { "position": "relative", "display": "inline-block", "flex": "none" },
+    ".dot::before": { "inset": "0", "opacity": "0.1", "borderRadius": "50%" },
+    ".dot::after": { "inset": "20%", "borderRadius": "50%" },
+    ".matrix": { "flex": "none", "color": "var(--dsh-state-ongoing)" },
+    ".cell": { "fill": "currentColor", "opacity": "0.15", "animation": "dsh-state-dot-chase 1s infinite" }
+  },
+  "tokens": ["--dsh-state-ongoing", "--dsw-static-deepseek-450", "--dsw-alias-state-success-primary", "--dsw-alias-state-warn-primary", "--dsw-alias-state-error-primary"],
   "defaultSize": "10px",
   "solid": { "outer": "10px", "core": "6px", "coreInset": "20%", "haloOpacity": "0.1", "borderRadius": "50%" },
   "ongoing": { "viewBox": "0 0 10 10", "cells": 8, "cellSize": "2x2", "animation": "1s infinite discrete chase", "baseOpacity": "0.15" },

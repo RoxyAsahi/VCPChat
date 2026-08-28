@@ -18,7 +18,17 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.ok(report.counts.provenanceGaps > 0);
     assert.ok(report.primitives.some(item => item.name === 'model-picker'));
     assert.equal(report.primitives.find(item => item.name === 'model-picker')?.provenancePass, true);
-    assert.ok(report.primitives.some(item => item.name === 'field' && item.provenance.some(source => source.declared.endsWith('ModelsSection.tsx'))));
+    assert.ok(report.primitives.some(item => item.name === 'field' && item.provenance.some(source => source.declared.endsWith('fields.tsx'))));
+    assert.equal(report.primitives.find(item => item.name === 'field')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'input')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'settings-root')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'button')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'menu')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'modal')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'tooltip')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'hover-card')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'disclosure-row')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'state-dot')?.provenancePass, true);
     assert.ok(report.missingEvidence.includes('select/busy-trigger-disabled: blocked-vcp-consumer'));
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
     assert.equal(report.nextCandidate, 'select/busy-trigger-disabled');

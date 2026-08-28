@@ -1,7 +1,9 @@
 {
   "primitive": "Button",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Button.tsx",
-  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Button.module.css",
+  "source": "packages/client/ui-primitives/src/Button.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Button.module.css",
+  "candidateStatus": "candidate-reference; WelcomeNotice ROI capture exists, but no VCP production consumer or full-state paired pixel closure",
   "root": { "tag": "button", "class": "button", "native": true, "type": "button" },
   "children": [
     { "tag": "span", "class": "icon", "optional": true, "ariaHidden": true },

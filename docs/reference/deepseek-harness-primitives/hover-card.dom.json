@@ -1,5 +1,15 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/HoverCard.tsx",
+  "source": "packages/client/ui-primitives/src/HoverCard.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/HoverCard.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/HoverCard.tsx",
+      "packages/client/ui-primitives/src/HoverCard.module.css"
+    ],
+    "selectionRule": "Use the Harness HoverCard pointer-grace/copy lifecycle and module CSS; Candidate evidence is not production parity."
+  },
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/rows/Rows.tsx"
   ],

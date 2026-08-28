@@ -11,8 +11,17 @@ const harnessCandidates = [
 const harnessRoot = harnessCandidates.find(candidate => fs.existsSync(candidate)) || harnessCandidates[0];
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const bridge = read('modules/ui-system/settings-bridge.js');
-const css = read('styles/ui-system/settings.css');
+const readCssEntry = file => {
+    const entry = read(file);
+    const imports = [...entry.matchAll(/@import\s+url\(['"]([^'"]+)['"]\)\s*;/g)]
+        .map(match => path.posix.normalize(path.posix.join(path.posix.dirname(file.replaceAll(path.sep, '/')), match[1])));
+    return [entry, ...imports.map(read)].join('\n');
+};
+const css = readCssEntry('styles/ui-system/settings.css');
 const html = read('main.html');
+const selectProjection = read('modules/ui-system/settings/select-projection.js');
+const canonicalRows = read('modules/ui-system/settings/canonical-rows.js');
+const settingsModules = `${bridge}\n${selectProjection}\n${canonicalRows}`;
 const settingsEntry = read('styles/settings.css');
 const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
@@ -188,10 +197,10 @@ assert.match(css, /vcp-harness-general-row[\s\S]*?border-radius:\s*8px[\s\S]*?fo
 // Select presentation is owned by the real library Select primitive
 // (window.VCPUIUX.mountSelect): the bridge must mount it for every non-typed
 // select and must not retain the retired local Harness Menu projection.
-assert.match(bridge, /api\.mountSelect\(select, \{ label: labelText, portal: true \}, scope\)/, 'Select presentation must come from the library primitive');
-assert.match(bridge, /primitiveSelectStates/, 'primitive select projections must be tracked for dispose/remount');
-assert.match(bridge, /mountSelectKeyboardGlue/, 'select keyboard projection must keep a11y parity');
-assert.doesNotMatch(bridge, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
+assert.match(settingsModules, /api\.mountSelect\(select, \{ label: labelText, portal: true \}, scope\)/, 'Select presentation must come from the library primitive');
+assert.match(settingsModules, /primitiveSelectStates/, 'primitive select projections must be tracked for dispose/remount');
+assert.match(settingsModules, /mountSelectKeyboardGlue/, 'select keyboard projection must keep a11y parity');
+assert.doesNotMatch(settingsModules, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
 assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
 
 // Single-line text input presentation is owned by the real library Input
@@ -229,26 +238,59 @@ for (const marker of [
     'mountTypedAgentModelInput(form)',
     'mountTypedAgentTemperatureInput(form)',
     'mountTypedAgentNumericInputs(form)',
+    'mountTypedAgentRegexInputs(form)',
     'mountTypedAgentStreamChoice(form)',
+    'mountTypedAgentTtsSpeedRange(form)',
+    'mountTypedAgentColorPairs(form)',
+    'mountTypedAgentButtons(form)',
+    'mountTypedAgentModelPicker(form)',
+    'mountTypedAgentPromptModeButtons(form)',
 ]) {
     assert.ok(bridge.includes(marker), `Agent control owner missing: ${marker}`);
 }
 assert.match(bridge, /mountChoice\(group, scope\)/, 'Agent stream output must use the Choice primitive');
 assert.ok(html.includes('agentStreamOutputTrue') && html.includes('agentStreamOutputFalse'), 'Agent stream radio pair contract must remain explicit');
 assert.match(bridge, /agentNameInput.*agentModel.*agentTemperature.*agentContextTokenLimit.*agentMaxOutputTokens.*agentTopP.*agentTopK/s, 'Agent Input exclusions must cover the complete high-frequency cluster');
-assert.match(bridge, /vcp-harness-row-copy/);
+
+// AgentModelPicker owns the model trigger as a distinct composite. Keep it
+// out of the generic Button batch so a refresh can never install two
+// presentation/lifecycle owners on #openModelSelectBtn again.
+const agentButtonOwner = bridge.match(/function mountTypedAgentButtons\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+assert.doesNotMatch(agentButtonOwner, /openModelSelectBtn/, 'ModelPicker trigger must not re-enter the generic Agent Button owner');
+assert.match(bridge, /api\.mountAgentModelPicker\(host,/, 'Agent ModelPicker must have one explicit composite owner');
+
+// Primitive mount APIs already bind their disposer to the injected UiScope.
+// Bridge-level Agent mounts may own marker/style restoration, but must not
+// register a primitive return value a second time (the source of the retired
+// duplicate lifecycle resources).
+for (const functionName of [
+    'mountTypedAgentRegexInputs',
+    'mountTypedAgentButtons',
+    'mountTypedAgentPromptModeButtons',
+    'mountTypedAgentIdentityInput',
+    'mountTypedAgentModelInput',
+    'mountTypedAgentTemperatureInput',
+    'mountTypedAgentNumericInputs',
+    'mountTypedAgentStreamChoice',
+    'mountTypedAgentTtsSpeedRange',
+    'mountTypedAgentColorPairs',
+]) {
+    const body = bridge.match(new RegExp(`function ${functionName}\\(form\\)\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] || '';
+    assert.doesNotMatch(body, /scope\.own\(release/, `${functionName} must not double-register a primitive disposer`);
+}
+assert.match(settingsModules, /vcp-harness-row-copy/);
 assert.match(bridge, /vcp-harness-active-section/);
 assert.match(bridge, /vcp-harness-section-bank/);
 assert.match(bridge, /vcp-harness-settings-close-icon/);
 assert.match(bridge, /vcp-harness-settings-close-label/);
-assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'appearance-row'/);
+assert.match(settingsModules, /dataset\.settingPrimitive\s*=\s*'appearance-row'/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'disclosure'/);
 assert.match(css, /vcp-harness-appearance-row[\s\S]*?gap:\s*8px[\s\S]*?padding:\s*16px\s+0/);
 // Menu semantics (role=menu, aria-haspopup, check marker) are owned inside the
 // generated primitive; the bridge surfaces them through the mount contract.
 assert.match(bridge, /aria-controls/, 'Menu trigger/disclosure must expose controlled content');
-assert.match(bridge, /item\.append\(\.\.\.\[\.\.\.row\.childNodes\]\)/, 'legacy row wrapper must be physically removed');
-assert.doesNotMatch(bridge, /item\.append\(row\)/, 'canonical row must not wrap legacy row');
+assert.match(settingsModules, /item\.append\(\.\.\.\[\.\.\.row\.childNodes\]\)/, 'legacy row wrapper must be physically removed');
+assert.doesNotMatch(settingsModules, /item\.append\(row\)/, 'canonical row must not wrap legacy row');
 assert.match(css, /vcp-harness-disclosure-row[\s\S]*?border-top:\s*1px\s+solid/);
 assert.doesNotMatch(settingsEntry, /settings-global-modal\.css/, 'legacy global modal stylesheet must not be loaded');
 assert.equal(fs.existsSync(path.join(root, 'styles/setting/settings-global-modal.css')), false, 'legacy global modal stylesheet must be deleted');
