@@ -10,6 +10,7 @@ const specs = [
   { name: 'tooltip', diff: 'reports/harness-vcp-tooltip-source-diff.json', pixel: 'reports/harness-vcp-tooltip-roi-pixel-diff.json' },
   { name: 'hover-card', diff: 'reports/harness-vcp-hover-card-source-diff.json', pixel: 'reports/harness-vcp-hover-card-roi-pixel-diff.json' },
   { name: 'state-dot', diff: 'reports/harness-vcp-state-dot-source-diff.json', pixel: 'reports/harness-vcp-state-dot-roi-pixel-diff.json' },
+  { name: 'semantic-icon', diff: 'reports/harness-vcp-semantic-icon-source-diff.json', pixel: 'reports/harness-vcp-semantic-icon-roi-pixel-diff.json' },
 ];
 const entries = specs.map(spec => {
   const report = load(spec.diff);

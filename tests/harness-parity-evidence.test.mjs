@@ -312,10 +312,10 @@ test('Real-source diff ledger records cross-component boundaries without promoti
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-real-source-diff-boundaries.json'), 'utf8'));
     assert.equal(report.status, 'real-source-diff-boundaries-recorded');
     assert.equal(report.pass, false);
-    assert.equal(report.counts.realSourceDiffs, 3);
-    assert.equal(report.counts.semanticFixtureMatches, 3);
+    assert.equal(report.counts.realSourceDiffs, 4);
+    assert.equal(report.counts.semanticFixtureMatches, 4);
     assert.equal(report.counts.parityPasses, 0);
-    assert.equal(report.counts.pixelMeasured, 3);
+    assert.equal(report.counts.pixelMeasured, 4);
     assert.ok(report.counts.pixelPasses <= report.counts.pixelMeasured);
     assert.equal(report.counts.pendingPixelDiffs, 0);
 });
