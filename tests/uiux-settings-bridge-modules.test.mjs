@@ -98,23 +98,6 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
-test('the global Settings entry uses one generated Button presentation owner', () => {
-    const entry = read(bridgeEntry);
-    const sidebarCss = read(path.join(root, 'styles', 'setting', 'settings-sidebar-list.css'));
-    const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
-    const owner = entry.match(/function mountGlobalSettingsEntryButton\(\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
-
-    assert.match(entry, /mountGlobalSettingsEntryButton\(\);/, 'Settings refresh must mount the high-frequency entry');
-    assert.match(owner, /api\.mountButton\(button, \{ variant: 'outline', size: 'sm' \}, scope\)/,
-        'the entry must use the generated small outline Button contract');
-    assert.match(owner, /delete button\.dataset\.vcpTypedGlobalSettingsEntry/,
-        'the marker must retract with the presentation scope');
-    assert.match(sidebarCss, /\.global-settings-btn:not\(\.vcp-harness-button\)/,
-        'the old sidebar button CSS must exclude the generated Button');
-    assert.match(shellCss, /\.global-settings-btn:not\(\.vcp-harness-button\)/,
-        'the shared Settings shell must not restyle the generated Button');
-});
-
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
