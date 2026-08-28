@@ -836,6 +836,49 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
         assert.equal(agentDisclosureInteractionEvidence.closedByToggle.collapsed, true, `${label}: native disclosure toggle pointer did not restore canonical collapsed state`);
         assert.equal(agentDisclosureInteractionEvidence.openedByKeyboard.expanded, 'true', `${label}: native disclosure toggle keyboard Enter did not open canonical section`);
         assert.equal(agentDisclosureInteractionEvidence.openedByKeyboard.collapsed, false, `${label}: native disclosure toggle keyboard Enter did not clear canonical collapsed state`);
+        const agentDisclosureReloadEvidence = await page.evaluate(async () => {
+            // Header/toggle activation deliberately publishes the collapse
+            // command without blocking its pointer/keyboard event.  Wait for
+            // the canonical Agent config to confirm that IPC persistence has
+            // committed before testing the independent reload path.
+            let persisted = false;
+            let persistedConfig = null;
+            for (let attempt = 0; attempt < 20; attempt += 1) {
+                const config = await window.chatAPI?.getAgentConfig?.('StressAgent');
+                persistedConfig = config;
+                if (config?.uiCollapseStates?.identityCollapsed === false) {
+                    persisted = true;
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            // The first Agent presentation in a renderer session intentionally
+            // uses the historical all-collapsed defaults and records the agent
+            // as initialized.  Perform that one-time warmup reload, then use a
+            // second reload to prove the persisted state is restored by the
+            // generated disclosure owner.
+            const warmupReload = await window.settingsManager.reloadAgentSettings('StressAgent');
+            const result = await window.settingsManager.reloadAgentSettings('StressAgent');
+            await new Promise(resolve => setTimeout(resolve, 125));
+            const headers = [...document.querySelectorAll('#agentSettingsForm .agent-settings-section-header[data-vcp-typed-agent-disclosure="true"]')];
+            const identity = headers.find(header => header.closest('[data-section-key]')?.dataset.sectionKey === 'identity');
+            const container = identity?.closest('.agent-settings-section');
+            const toggle = identity?.querySelector('.agent-settings-toggle-btn');
+            return {
+                success: result?.success === true,
+                warmupSuccess: warmupReload?.success === true,
+                persisted,
+                persistedIdentity: persistedConfig?.uiCollapseStates?.identityCollapsed ?? null,
+                owners: headers.length,
+                expanded: toggle?.getAttribute('aria-expanded') || null,
+                collapsed: container?.classList.contains('collapsed') ?? null,
+                headerRole: identity?.getAttribute('role') || null,
+            };
+        });
+        assert.deepEqual(agentDisclosureReloadEvidence, {
+            success: true, warmupSuccess: true, persisted: true, persistedIdentity: false,
+            owners: 6, expanded: 'true', collapsed: false, headerRole: null,
+        }, `${label}: disclosure canonical state or single-owner ARIA did not survive Agent Settings reload: ${JSON.stringify(agentDisclosureReloadEvidence)}`);
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
@@ -934,6 +977,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             evidence.agentDisclosureInteraction = agentDisclosureInteractionEvidence;
+            evidence.agentDisclosureReload = agentDisclosureReloadEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
             await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });
