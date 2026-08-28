@@ -411,6 +411,85 @@ test('Harness AgentModelPicker keeps injected directory actions transient and re
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('AgentModelPicker preserves ordered hot/favorite/all groups without selecting favorites', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-ordered-groups-test'));
+        const host = document.getElementById('host');
+        const toggles = [];
+        const selected = [];
+        const controller = mountAgentModelPicker(host, {
+            grouped: true,
+            searchEnabled: false,
+            selectedId: 'hot-model',
+            options: async () => [
+                { id: 'hot-model', label: 'Hot model', group: 'Hot models', favorite: false, active: true },
+                { id: 'favorite-model', label: 'Favorite model', group: 'Favorites', favorite: true },
+                { id: 'all-model', label: 'All model', group: 'All models' },
+            ],
+            directory: {
+                toggleFavorite: async id => { toggles.push(id); },
+            },
+            onSelect: option => { selected.push(option.id); },
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        const groups = [...card.querySelectorAll('.vcp-harness-popup-select-group')];
+        assert.deepEqual(groups.map(group => group.querySelector('.vcp-harness-popup-select-group-title')?.textContent),
+            ['Hot models', 'Favorites', 'All models']);
+        assert.deepEqual([...card.querySelectorAll('[data-option-id]')].map(row => row.dataset.optionId),
+            ['hot-model', 'favorite-model', 'all-model']);
+        controller.popup.setSearch('favorite');
+        assert.ok([...card.querySelectorAll('.vcp-harness-popup-select-group-title')].every(title => title.hidden),
+            'search keeps the ordered rows but retracts group headings like the legacy model modal');
+        controller.popup.setSearch('');
+        const favorite = card.querySelector('[data-option-id="favorite-model"]')?.parentElement?.querySelector('[data-option-action="favorite"]');
+        assert.ok(favorite, 'grouped rows expose a sibling favorite action');
+        favorite.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.deepEqual(toggles, ['favorite-model']);
+        assert.deepEqual(selected, [], 'favorite mutation must not select or write the model');
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-ordered-groups-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('AgentModelPicker reports a failed directory operation through its popup owner', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-directory-error-test'));
+        const host = document.getElementById('host');
+        const selected = [];
+        const controller = mountAgentModelPicker(host, {
+            grouped: true,
+            options: async () => [{ id: 'model-a', label: 'Model A', group: 'All models', favorite: false }],
+            directory: { refresh: async () => { throw new Error('directory unavailable'); } },
+            onSelect: option => { selected.push(option.id); },
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const refresh = controller.root.querySelector('.vcp-harness-agent-model-picker-directory-refresh');
+        assert.ok(refresh, 'a directory refresh capability exposes the explicit action');
+        refresh.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.match(document.querySelector('.vcp-harness-toast[role="alert"]')?.textContent || '', /Could not refresh model list: directory unavailable/);
+        assert.equal(controller.popup.getSnapshot().open, true, 'a failed refresh keeps the current model pane available');
+        assert.deepEqual(selected, [], 'a failed directory action must not select a model');
+        controller.close();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(document.querySelector('.vcp-harness-toast'), null, 'closing the picker retracts its owned error feedback');
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-directory-error-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness AgentModelPicker locks its native trigger and routes rejected selections to an owned Toast', async () => {
     const dom = new JSDOM('<!doctype html><main><div id="locked"></div><div id="candidate"></div></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;

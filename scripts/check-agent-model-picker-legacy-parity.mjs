@@ -35,22 +35,28 @@ assert.match(bridge, /refreshModels/, 'typed picker must retain refresh capabili
 assert.match(bridge, /getHotModels/, 'typed picker must retain hot-model metadata capability while parity is incomplete');
 assert.match(bridge, /getFavoriteModels/, 'typed picker must retain favorite-model metadata capability while parity is incomplete');
 assert.match(bridge, /toggleFavoriteModel/, 'typed picker must retain favorite mutation capability while parity is incomplete');
+assert.match(bridge, /inOrder\(hotIds, '热门模型'\)/, 'typed picker must project the legacy ordered hot-model section');
+assert.match(bridge, /inOrder\(favoriteIds, '收藏模型'\)/, 'typed picker must project the legacy ordered favorite-model section');
+assert.match(bridge, /grouped:\s*true/, 'typed picker must render the explicit ordered directory sections');
 assert.match(bridge, /input\.dispatchEvent\(new Event\('input'/, 'typed picker must preserve canonical input event semantics');
 assert.match(bridge, /input\.dispatchEvent\(new Event\('change'/, 'typed picker must preserve canonical change event semantics');
-assert.match(bridge, /modelSelectModal.*parity|Hot\/favorite sections.*legacy/s,
+assert.match(bridge, /modelSelectModal.*parity|Hot\/favorite sections.*legacy|legacy modal remains.*topicSummaryModel/is,
     'bridge must document the deliberate legacy parity boundary');
 
 // The primitive remains transport-agnostic: directory operations are injected
 // and no primitive or generated artifact may import chatAPI directly.
 assert.match(primitive, /interface\s+AgentModelDirectoryCapability/, 'directory capability must remain explicit');
 assert.match(primitive, /directory\?/, 'picker must accept an injected directory capability');
+assert.match(primitive, /subscribeUpdated/, 'models-updated must remain an explicit popup-local capability');
+assert.match(primitive, /agent-model-picker-directory-updates/, 'directory update release must remain owned by the picker');
 assert.doesNotMatch(primitive, /(?:\bimport\s+[^\n]*chatAPI|\bwindow\.chatAPI\s*[.?])/i,
     'primitive must not import or access chatAPI directly');
 assert.doesNotMatch(artifact, /(?:\bimport\s+[^\n]*chatAPI|\bwindow\.chatAPI\s*[.?])/i,
     'generated primitive must not import or access chatAPI directly');
 
-// Keep the audit itself honest: the three missing parity groups are explicit
-// blockers, so a future deletion must update the audit and this gate together.
+// Keep the audit itself honest: these three capability groups are implemented,
+// but their production Electron parity is still a deletion blocker. A future
+// retirement must update the audit and this gate together.
 for (const blocker of ['热门模型', '收藏模型分区', '显式刷新']) {
     assert.match(audit, new RegExp(blocker), `legacy parity audit must retain blocker: ${blocker}`);
 }
