@@ -128,8 +128,10 @@ Before any Stable or pixel-equivalent claim:
 
 1. Keep the dedicated three-viewport, two-theme manifests fresh when the
    ModelPicker source/artifact changes.
-2. Add strict same-engine ROI pixel comparison; the existing approximately
-   `6.19%` mismatch remains pending.
+2. Capture a strict same-engine ROI pair for the production consumer. The
+   current static Harness source-reference pair passes at `150/35500`
+   (`0.4225%`) under its 1%/2 policy, but cannot establish production
+   pixel-equivalence.
 3. Retire the legacy model modal only after hot/favorite/explicit-refresh
    parity has production evidence.
 
