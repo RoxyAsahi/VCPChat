@@ -97,6 +97,31 @@ new screenshot fixture cannot exist without non-blank image validation. These
 are rendering-evidence improvements only; they do not claim same-engine pixel
 equivalence or authorize retirement of the legacy model modal.
 
+## Paired-run provenance checkpoint
+
+Shared `reports/visual-forensics-qa/light` and `dark` locations are convenient
+for inspection but are not safe proof of one paired Electron run while other QA
+workers are writing them. Commit `486eebbc` adds:
+
+```sh
+npm run test:visual-forensics-isolated-themes
+```
+
+The command writes a fresh, exclusive `reports/visual-forensics-qa/run-*/`
+directory, captures both themes serially, and runs the semantic evidence gate,
+computed light/dark token contrast, and pixel/geometry baseline only against
+that exact pair. The verifier accepts explicit paired directories and rejects a
+pair that does not contain both themes; it no longer falls back to shared
+canonical reports for the token assertion.
+
+Commit `40607358` additionally requires production ModelPicker reports to
+contain a viewport-visible `role="option"` hover sample with an active
+`:hover` state, card-contained hit test, finite in-viewport geometry, and the
+matching `*-model-hover.png` capture. Existing real Electron light/dark
+manifests passed that strengthened gate. A fresh isolated ModelPicker pair
+should be created before treating this as current evidence after any related
+surface change.
+
 ## Required Next Probe
 
 Before any Stable or pixel-equivalent claim:
