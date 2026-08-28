@@ -1,5 +1,9 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "source": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer and paired pixel diff pending",
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-quaternary", "--dsw-alias-label-caption"],
   "selectors": {
     ".seat": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "maxWidth": "min(100%, 240px)", "minHeight": "28px", "padding": "0 8px", "borderRadius": "16px", "fontSize": "13px", "lineHeight": "20px", "fontWeight": "500" },
     ".seat:hover, .seat[aria-expanded=true]": { "background": "var(--dsw-alias-interactive-bg-hover)" },
