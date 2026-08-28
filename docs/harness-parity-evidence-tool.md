@@ -120,6 +120,11 @@ checks align with the Candidate, while the active native-tag and display-style
 differences remain explicit; strict Pill pixel evidence and a production
 consumer are still open.
 
+ConnectionBanner now has a real-source capture for hidden, reconnecting, label
+update, and unmount. The fixed-layout computed styles align with the Candidate,
+while its Candidate-only `role=status` and `aria-live=polite` addition is kept
+as an explicit DOM/ARIA non-pass; no connection transport consumer is wired.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
