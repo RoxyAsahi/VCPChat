@@ -1,5 +1,15 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Modal.tsx",
+  "source": "packages/client/ui-primitives/src/Modal.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Modal.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Modal.tsx",
+      "packages/client/ui-primitives/src/Modal.module.css"
+    ],
+    "selectionRule": "Use the standard and headless Modal branches from the Harness source; VCP evidence remains Candidate Lab only."
+  },
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/WorkspacePicker.tsx",
     "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",

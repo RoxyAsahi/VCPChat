@@ -1,5 +1,8 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Modal.module.css",
+  "source": "packages/client/ui-primitives/src/Modal.module.css",
+  "styleSource": "packages/client/ui-primitives/src/Modal.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
   "selectors": {
     ".root": { "position": "fixed", "inset": "0", "zIndex": "1000", "padding": "24px" },
     ".mask": { "background": "var(--dsw-alias-bg-mask-1)", "backdropFilter": "var(--dsw-mask-blur)" },
@@ -8,6 +11,7 @@
     ".title": { "fontSize": "16px", "lineHeight": "24px", "fontWeight": "500" },
     ".footer": { "padding": "0 24px", "gap": "8px", "justifyContent": "flex-end" }
   },
+  "tokens": ["--dsw-alias-bg-mask-1", "--dsw-mask-blur", "--dsw-alias-border-inverted", "--dsw-alias-bg-layer-2", "--dsw-shadow-lv3", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-interactive-bg-hover"],
   "states": ["closed", "standard-open", "headless-open", "mask-close", "escape-close", "close-button", "reopen", "dispose"],
   "vcpCandidateEvidence": {
     "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
