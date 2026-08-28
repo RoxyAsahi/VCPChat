@@ -52,6 +52,18 @@ and the active shared ModelPicker boundary. Its `paired-evidence-scoped` status
 is deliberately non-promoting: `pass` remains false until every authorized
 paired state and production boundary is closed.
 
+Each listed Candidate capture is now checked against its matching reference
+contract and its indispensable interaction/teardown fields. A missing or
+truncated report makes the ledger `paired-evidence-incomplete`; passing that
+schema only proves the isolated Candidate baseline, never a Harness/VCP pair.
+
+`node scripts/check-harness-candidate-source-provenance.mjs` is a source-drift
+guard for Tooltip and HoverCard. It records the current Harness source/style
+SHA-256 values and verifies critical source anchors (portal, trigger, copy and
+dispose semantics) against the reference contract and replayable Candidate
+capture. A pass is provenance evidence only, not a visual or consumer parity
+promotion.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
@@ -60,6 +72,12 @@ computed-style/DOM diff, pixel diff, and any production consumer remain missing.
 The replay also reloads the isolated page after disposal and requires a clean
 two-anchor/no-tooltip baseline, so it does not substitute a live browser page
 for close/flush evidence.
+
+The HoverCard Candidate replay adds the composite's pointer-grace and copy
+contract: delayed portal open, crossing the anchor/card gap without closing,
+grace expiry, copy feedback/status, disabled suppression, owner disposal, and
+post-dispose reload. It remains VCP-only evidence; Harness capture and all
+cross-engine DOM/style/pixel and production-consumer evidence are still absent.
 
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:

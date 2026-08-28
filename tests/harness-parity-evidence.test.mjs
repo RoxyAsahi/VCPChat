@@ -142,13 +142,30 @@ test('Paired evidence ledger keeps Candidate captures and blocked boundaries exp
     assert.equal(report.status, 'paired-evidence-scoped');
     assert.equal(report.pass, false);
     assert.equal(report.counts.pairedRoiPasses, 1);
-    assert.equal(report.counts.vcpCandidateCaptures, 5);
+    assert.equal(report.counts.vcpCandidateCaptures, 6);
     assert.equal(report.counts.candidateCaptureMissing, 0);
+    assert.equal(report.counts.candidateContractPasses, 6);
+    assert.equal(report.counts.candidateContractMissing, 0);
     assert.equal(report.pairedSelect.state, 'paired-roi-pass');
     assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
-    assert.equal(report.candidateCaptures.every(item => item.state === 'vcp-candidate-capture-only' && item.captured), true);
+    assert.equal(report.candidateCaptures.every(item => item.state === 'vcp-candidate-capture-only' && item.captured && item.sourceContractPresent && item.contractPass), true);
     assert.ok(report.sourceOrConsumerBoundaries.some(item => item.state === 'consumer-boundary'));
     assert.equal(report.activeExternalBoundary.name, 'model-picker');
+});
+
+test('HoverCard Candidate capture preserves portal grace copy disabled disposal and reload boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-hover-card-candidate.json'), 'utf8'));
+    assert.equal(report.semanticFixture, 'hover-card/portal-grace-copy-disabled-dispose');
+    assert.equal(report.beforeDelay, 0);
+    assert.equal(report.open.role, 'button');
+    assert.equal(report.open.parent, 'body');
+    assert.equal(report.graceOpen, true);
+    assert.equal(report.graceClosed, true);
+    assert.equal(report.copied.text, 'Copied');
+    assert.equal(report.copied.clipboard, 'copy');
+    assert.equal(report.disabled, true);
+    assert.deepEqual(report.reloaded, { cards: 0, anchors: 2 });
 });
 
 test('Tooltip Candidate capture preserves delayed hover, immediate focus, flip, disabled, and disposal boundaries', () => {
@@ -164,6 +181,16 @@ test('Tooltip Candidate capture preserves delayed hover, immediate focus, flip, 
     assert.equal(report.disabled.bubbleCount, 0);
     assert.equal(report.disposed.bubbles, 0);
     assert.deepEqual(report.reloaded, { bubbles: 0, anchors: 2 });
+});
+
+test('Tooltip and HoverCard Candidate baselines remain anchored to real Harness source semantics', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-candidate-source-provenance.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-candidate-source-provenance.json'), 'utf8'));
+    assert.equal(report.status, 'candidate-source-provenance-complete');
+    assert.equal(report.pass, true);
+    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card']);
+    assert.equal(report.entries.every(item => item.referencePass && item.capturePass && item.pass), true);
+    assert.equal(report.entries.every(item => item.source.sha256 && item.style.sha256), true);
 });
 
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {

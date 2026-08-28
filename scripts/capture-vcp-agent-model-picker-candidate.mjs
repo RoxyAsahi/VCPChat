@@ -19,7 +19,7 @@ const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ?
 // but no reproducible production-page failure injection yet, so this report
 // must remain test-derived evidence rather than a production visual baseline.
 const requestedScenario = process.env.VCP_MODEL_PICKER_SCENARIO;
-const captureScenario = requestedScenario === 'load-error-retry' || requestedScenario === 'selection-error-toast'
+const captureScenario = requestedScenario === 'load-error-retry' || requestedScenario === 'selection-error-toast' || requestedScenario === 'locked'
     ? requestedScenario
     : 'ready-selected';
 const outputStem = captureMode === 'harness-equivalent'
@@ -33,6 +33,8 @@ const sameEngineReferenceStem = captureScenario === 'ready-selected'
     : `harness-agent-model-picker-electron-reference-${captureScenario}`;
 const harnessModelSelectCssPath = '/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.module.css';
 const harnessModelSelectCss = await fs.readFile(harnessModelSelectCssPath, 'utf8');
+const harnessToastCssPath = '/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Toast.module.css';
+const harnessToastCss = await fs.readFile(harnessToastCssPath, 'utf8');
 const harnessReferenceClasses = Object.freeze({
     root: 'vcp-harness-reference-model-root', menu: 'vcp-harness-reference-model-menu',
     groups: 'vcp-harness-reference-model-groups', group: 'vcp-harness-reference-model-group',
@@ -43,6 +45,15 @@ const harnessReferenceClasses = Object.freeze({
 const harnessModelSelectElectronCss = Object.entries(harnessReferenceClasses).reduce(
     (css, [source, target]) => css.replace(new RegExp(`\\.${source}\\b`, 'g'), `.${target}`),
     harnessModelSelectCss,
+);
+const harnessToastReferenceClasses = Object.freeze({
+    toast: 'vcp-harness-reference-toast',
+    icon: 'vcp-harness-reference-toast-icon',
+    text: 'vcp-harness-reference-toast-text',
+});
+const harnessToastElectronCss = Object.entries(harnessToastReferenceClasses).reduce(
+    (css, [source, target]) => css.replace(new RegExp(`\\.${source}\\b`, 'g'), `.${target}`),
+    harnessToastCss,
 );
 // ModelSelect relies on the Harness web shell's scoped form-control reset.
 // Keep that production prerequisite in this Electron source reference; without
@@ -117,6 +128,7 @@ try {
             label: 'Agent model', selectedId: mode === 'harness-equivalent' ? 'acme-think' : 'gpt-4o', selectedEffort: mode === 'harness-equivalent' ? 'high' : 'balanced',
             searchEnabled: mode !== 'harness-equivalent',
             harnessEquivalent: mode === 'harness-equivalent',
+            locked: scenario === 'locked',
             efforts: mode === 'harness-equivalent' ? [
                 { id: 'off', label: 'Off' },
                 { id: 'high', label: 'High' },
@@ -149,6 +161,61 @@ try {
             },
             onEffortSelect: option => efforts.push(option.id),
         }, scope);
+        if (scenario === 'locked') {
+            // Harness supplies locked directly to its native trigger. Exercise
+            // both the DOM path and VCP's public controller entries: none may
+            // start a catalog request or create an overlay while disabled.
+            picker.trigger.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            picker.open();
+            picker.refresh();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const triggerStyle = getComputedStyle(picker.trigger);
+            const screenshot = {
+                source: mode === 'harness-equivalent'
+                    ? 'VCP generated AgentModelPicker Harness-equivalent Electron capture'
+                    : 'VCP generated AgentModelPicker Candidate Electron capture',
+                fixtureMode: mode,
+                provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
+                viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+                scenario,
+                locked: {
+                    evidenceKind: 'VCP Electron generated-artifact state capture; Harness source DOM reference only',
+                    harnessSource: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx:230: native trigger disabled={locked}',
+                    triggerDisabled: picker.trigger.disabled,
+                    ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
+                    popupOpen: picker.popup.getSnapshot().open,
+                    cardPresent: Boolean(host.querySelector('.vcp-harness-popup-select-card')),
+                    loadAttempts,
+                },
+                dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
+                trigger: {
+                    tag: picker.trigger.tagName.toLowerCase(),
+                    role: picker.trigger.getAttribute('role'),
+                    ariaHaspopup: picker.trigger.getAttribute('aria-haspopup'),
+                    ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
+                    ariaControls: picker.trigger.getAttribute('aria-controls'),
+                    disabled: picker.trigger.disabled,
+                    height: triggerStyle.height,
+                    maxWidth: triggerStyle.maxWidth,
+                    borderRadius: triggerStyle.borderRadius,
+                    padding: triggerStyle.padding,
+                    gap: triggerStyle.gap,
+                    fontSize: triggerStyle.fontSize,
+                    lineHeight: triggerStyle.lineHeight,
+                },
+                menu: null,
+                productionConsumer: false,
+                status: mode === 'harness-equivalent' ? 'harness-equivalent-fixture-active' : 'candidate-interaction-active',
+            };
+            window.__vcpAgentModelPickerCleanup = async () => {
+                await picker.dispose();
+                await scope.dispose('candidate-agent-model-picker-locked-complete');
+                const disposed = host.querySelector('.vcp-harness-agent-model-picker') === null;
+                host.remove();
+                return disposed;
+            };
+            return screenshot;
+        }
         picker.open();
         await new Promise(resolve => setTimeout(resolve, 0));
         const rootPane = {
@@ -552,21 +619,29 @@ try {
         return screenshot;
     }, { mode: captureMode, scenario: captureScenario });
     assert.deepEqual(evidence.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
-    assert.equal(evidence.rootPane.expanded, 'true');
-    assert.equal(evidence.rootPane.cardPresent, true);
-    assert.equal(evidence.rootPane.modelRowVisible, true);
-    assert.equal(evidence.rootPane.effortRowVisible, true);
-    assert.equal(evidence.modelPane.searchVisible, captureMode !== 'harness-equivalent');
-    assert.equal(evidence.modelPane.optionCount, captureMode === 'harness-equivalent' ? 2 : 3);
-    assert.equal(evidence.effortPane.optionCount, captureMode === 'harness-equivalent' ? 3 : 2);
-    assert.equal(evidence.modelEscape.returnedToRoot, true);
-    assert.equal(evidence.modelEscape.searchHidden, true);
-    assert.equal(evidence.effortEscape.returnedToRoot, true);
-    assert.equal(evidence.effortEscape.effortHidden, true);
-    if (captureMode === 'harness-equivalent') assert.equal(evidence.keyboardNavigation.focusedOption, 'acme-think',
-        'Harness parity keyboard navigation must move real DOM focus to the active model row');
-    assert.equal(evidence.focusRestored, true);
-    assert.equal(evidence.menu?.rect?.width > 0, true);
+    if (captureScenario === 'locked') {
+        assert.equal(evidence.locked?.triggerDisabled, true);
+        assert.equal(evidence.locked?.ariaExpanded, 'false');
+        assert.equal(evidence.locked?.popupOpen, false);
+        assert.equal(evidence.locked?.cardPresent, false);
+        assert.equal(evidence.locked?.loadAttempts, 0);
+    } else {
+        assert.equal(evidence.rootPane.expanded, 'true');
+        assert.equal(evidence.rootPane.cardPresent, true);
+        assert.equal(evidence.rootPane.modelRowVisible, true);
+        assert.equal(evidence.rootPane.effortRowVisible, true);
+        assert.equal(evidence.modelPane.searchVisible, captureMode !== 'harness-equivalent');
+        assert.equal(evidence.modelPane.optionCount, captureMode === 'harness-equivalent' ? 2 : 3);
+        assert.equal(evidence.effortPane.optionCount, captureMode === 'harness-equivalent' ? 3 : 2);
+        assert.equal(evidence.modelEscape.returnedToRoot, true);
+        assert.equal(evidence.modelEscape.searchHidden, true);
+        assert.equal(evidence.effortEscape.returnedToRoot, true);
+        assert.equal(evidence.effortEscape.effortHidden, true);
+        if (captureMode === 'harness-equivalent') assert.equal(evidence.keyboardNavigation.focusedOption, 'acme-think',
+            'Harness parity keyboard navigation must move real DOM focus to the active model row');
+        assert.equal(evidence.focusRestored, true);
+        assert.equal(evidence.menu?.rect?.width > 0, true);
+    }
     if (captureScenario === 'load-error-retry') {
         assert.equal(evidence.loadErrorRetry?.pending.status, 'pending');
         assert.equal(evidence.loadErrorRetry?.pending.ariaBusy, 'true');
@@ -593,6 +668,7 @@ try {
     }
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-full.png`) });
+    if (captureScenario !== 'locked') {
     await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
     await page.waitForFunction(({ mode }) => {
         const root = document.querySelector('[data-vcp-candidate-agent-model-picker="true"]');
@@ -617,10 +693,10 @@ try {
     // It is intentionally labelled a static source reference (not a Harness
     // production consumer): its only purpose is to distinguish VCP DOM/CSS
     // drift from browser-engine raster variance without loosening the policy.
-    const sameEngineReference = await page.evaluate(({ css, baseCss, classes, rect }) => {
+    const sameEngineReference = await page.evaluate(({ css, baseCss, classes, toastCss, toastClasses, rect, scenario }) => {
         const style = document.createElement('style');
         style.dataset.vcpHarnessModelSelectElectronReference = 'true';
-        style.textContent = `${baseCss}\n${css}`;
+        style.textContent = `${baseCss}\n${css}\n${toastCss}`;
         const referenceRoot = document.createElement('div');
         referenceRoot.className = classes.root;
         referenceRoot.dataset.vcpHarnessModelSelectElectronReference = 'true';
@@ -658,6 +734,41 @@ try {
         menu.style.boxSizing = 'content-box';
         document.head.append(style);
         document.body.append(referenceRoot);
+        let toast = null;
+        let toastAnchorPlacement = null;
+        if (scenario === 'selection-error-toast') {
+            // Toast's actual React owner measures its optional anchor and
+            // supplies a one-off `left` value.  This static source fixture
+            // mirrors that placement contract from the active VCP candidate
+            // toast, while retaining Toast.tsx's body portal and CSS DOM.
+            const candidateToast = document.body.querySelector('.vcp-harness-toast');
+            const candidateRect = candidateToast?.getBoundingClientRect();
+            const anchorCenterX = candidateRect ? candidateRect.left + candidateRect.width / 2 : innerWidth / 2;
+            toast = document.createElement('div');
+            toast.className = toastClasses.toast;
+            toast.setAttribute('role', 'alert');
+            toast.style.left = `${anchorCenterX}px`;
+            toast.innerHTML = `<span class="${toastClasses.icon}" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6.3002 3.32843L7.69986 3.32843L7.69986 7.79657H6.3002L6.3002 3.32843Z" fill="currentColor"></path><path d="M6.3002 9.01935H7.69986V10.6711H6.3002V9.01935Z" fill="currentColor"></path><path d="M12.6328 6.99976C12.6328 3.88874 10.111 1.36694 7 1.36694C3.88899 1.36695 1.3672 3.88875 1.36719 6.99976C1.36719 10.1108 3.88899 12.6326 7 12.6326C10.111 12.6326 12.6328 10.1108 12.6328 6.99976ZM13.8582 6.99976C13.8582 10.7873 10.7876 13.8579 7 13.8579C3.21244 13.8579 0.141846 10.7873 0.141846 6.99976C0.141857 3.2122 3.21245 0.141612 7 0.141602C10.7876 0.141602 13.8581 3.21219 13.8582 6.99976Z" fill="currentColor"></path></svg></span><span class="${toastClasses.text}">Model operation failed: session already contains images</span>`;
+            // These are source-token fixture values, resolved from Harness'
+            // light design-platform aliases.  Toast itself deliberately
+            // inherits its font family from the global Harness shell.
+            const toastTokens = {
+                '--dsw-alias-button-contrast-fill': 'rgb(97, 102, 107)',
+                '--dsw-alias-label-primary-inverted': 'rgb(255, 255, 255)',
+                '--dsw-alias-state-warn-label': 'rgb(221, 134, 41)',
+                '--dsw-shadow-lv3': '0 0 1px rgba(0,0,0,.2), 0 0 4px rgba(0,0,0,.02), 0 12px 32px rgba(0,0,0,.08)',
+                '--dsw-font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif',
+            };
+            for (const [name, value] of Object.entries(toastTokens)) toast.style.setProperty(name, value);
+            toast.style.fontFamily = 'var(--dsw-font-family)';
+            document.body.append(toast);
+            toastAnchorPlacement = {
+                strategy: candidateRect ? 'candidate-toast-center mirrors Toast anchor-derived inline left' : 'viewport-center fallback (candidate toast unavailable)',
+                anchorCenterX,
+                candidateToastRect: candidateRect ? { x: candidateRect.x, y: candidateRect.y, width: candidateRect.width, height: candidateRect.height } : null,
+                tokenProvenance: 'ui-theme/src/styles/design-platform.css light aliases + explicit Harness shell font inheritance fixture',
+            };
+        }
         const menuRect = menu.getBoundingClientRect();
         const computed = getComputedStyle(menu);
         const textStyle = node => {
@@ -666,9 +777,51 @@ try {
             return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, fontKerning: style.fontKerning, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings, textRendering: style.textRendering, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
         };
         window.__vcpHarnessModelSelectElectronReferenceCleanup = () => {
+            toast?.remove();
             referenceRoot.remove();
             style.remove();
         };
+        const toastSnapshot = toast ? (() => {
+            const computed = getComputedStyle(toast);
+            const icon = toast.querySelector(`.${toastClasses.icon}`);
+            const text = toast.querySelector(`.${toastClasses.text}`);
+            const nodeSnapshot = node => {
+                if (!(node instanceof HTMLElement)) return null;
+                const style = getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                return {
+                    tag: node.tagName.toLowerCase(),
+                    className: node.className,
+                    rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                    display: style.display,
+                    color: style.color,
+                    fontSize: style.fontSize,
+                    lineHeight: style.lineHeight,
+                };
+            };
+            const rect = toast.getBoundingClientRect();
+            return {
+                sourcePath: 'packages/client/ui-primitives/src/Toast.tsx + Toast.module.css; icons/index.tsx#IconWarningOutline16',
+                referenceKind: 'same-engine-static-source-reference; not a Harness production consumer; not a pixel-equivalence pass',
+                productionConsumer: false,
+                dom: toast.outerHTML,
+                parent: toast.parentElement?.tagName.toLowerCase() ?? null,
+                role: toast.getAttribute('role'),
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                computed: {
+                    position: computed.position, top: computed.top, left: computed.left, zIndex: computed.zIndex,
+                    pointerEvents: computed.pointerEvents, display: computed.display, alignItems: computed.alignItems,
+                    gap: computed.gap, maxWidth: computed.maxWidth, padding: computed.padding,
+                    borderRadius: computed.borderRadius, backgroundColor: computed.backgroundColor, color: computed.color,
+                    fontFamily: computed.fontFamily, fontSize: computed.fontSize, fontWeight: computed.fontWeight,
+                    lineHeight: computed.lineHeight, boxShadow: computed.boxShadow, transform: computed.transform,
+                    animation: computed.animation,
+                },
+                icon: nodeSnapshot(icon),
+                text: nodeSnapshot(text),
+                anchorPlacement: toastAnchorPlacement,
+            };
+        })() : null;
         return {
             source: 'Harness ModelSelect source DOM/CSS mounted in VCP Electron',
             sourcePath: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx + ModelSelect.module.css',
@@ -690,12 +843,32 @@ try {
             },
             effortPane: { options: [{ text: 'Off' }, { text: 'High' }, { text: 'Max' }] },
             interaction: { searchVisible: false },
+            toast: toastSnapshot,
         };
-    }, { css: harnessModelSelectElectronCss, baseCss: harnessModelSelectElectronBaseCss, classes: harnessReferenceClasses, rect: menuRect });
+    }, { css: harnessModelSelectElectronCss, baseCss: harnessModelSelectElectronBaseCss, classes: harnessReferenceClasses, toastCss: harnessToastElectronCss, toastClasses: harnessToastReferenceClasses, rect: menuRect, scenario: captureScenario });
     assert.deepEqual(sameEngineReference.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
     assert.equal(sameEngineReference.modelPane.groupCount, 2);
     assert.equal(sameEngineReference.modelPane.options.length, 2);
     assert.deepEqual(sameEngineReference.effortPane.options.map(option => option.text), ['Off', 'High', 'Max']);
+    if (captureScenario === 'selection-error-toast') {
+        // Capture after Toast's source 160ms slide-in has settled, but well
+        // before its 3000ms hold finishes.  The CSS animation itself remains
+        // part of the contract; this just makes the evidence screenshot and
+        // geometry reproducible instead of catching a fractional first frame.
+        await sleep(200);
+        sameEngineReference.toast.settledComputed = await page.evaluate(selector => {
+            const toast = document.querySelector(selector);
+            if (!(toast instanceof HTMLElement)) return null;
+            const style = getComputedStyle(toast);
+            const rect = toast.getBoundingClientRect();
+            return {
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                opacity: style.opacity,
+                transform: style.transform,
+                animation: style.animation,
+            };
+        }, `.${harnessToastReferenceClasses.toast}`);
+    }
     if (captureScenario === 'ready-selected') {
         assert.equal(sameEngineReference.menu.rect.width, menuRect.width,
             `same-engine Harness source reference must match the candidate ROI width: ${JSON.stringify(sameEngineReference.menu)}`);
@@ -706,14 +879,32 @@ try {
         // status/error layout in its transition.  Its source reference is
         // intentionally retained only as provenance and is never a pixel
         // baseline until an actual Harness failure fixture is available.
-        sameEngineReference.comparison = 'not-evaluated: load-error-retry lacks a Harness production visual fixture';
+        sameEngineReference.comparison = captureScenario === 'selection-error-toast'
+            ? 'not-a-pixel-comparison: selection-error Toast has a static Harness source reference only; no Harness production failure-page capture'
+            : 'not-evaluated: load-error-retry lacks a Harness production visual fixture';
+    }
+    if (captureScenario === 'selection-error-toast') {
+        assert.equal(sameEngineReference.toast?.parent, 'body');
+        assert.equal(sameEngineReference.toast?.role, 'alert');
+        assert.equal(sameEngineReference.toast?.computed.position, 'fixed');
+        assert.equal(sameEngineReference.toast?.computed.top, '120px');
+        assert.equal(sameEngineReference.toast?.computed.zIndex, '1100');
+        assert.equal(sameEngineReference.toast?.computed.pointerEvents, 'none');
+        assert.equal(sameEngineReference.toast?.computed.display, 'flex');
+        assert.equal(sameEngineReference.toast?.computed.gap, '10px');
+        assert.equal(sameEngineReference.toast?.computed.padding, '12px 16px');
+        assert.equal(sameEngineReference.toast?.computed.borderRadius, '14px');
+        assert.equal(sameEngineReference.toast?.computed.fontSize, '14px');
+        assert.equal(sameEngineReference.toast?.computed.lineHeight, '22px');
+        assert.equal(sameEngineReference.toast?.settledComputed?.opacity, '1');
     }
     await page.screenshot({
         path: path.join(root, 'reports', `${sameEngineReferenceStem}.png`),
-        clip: sameEngineReference.menu.rect,
+        clip: captureScenario === 'selection-error-toast' ? sameEngineReference.toast.rect : sameEngineReference.menu.rect,
     });
     await page.evaluate(() => window.__vcpHarnessModelSelectElectronReferenceCleanup?.());
     await fs.writeFile(path.join(root, 'reports', `${sameEngineReferenceStem}.json`), `${JSON.stringify(sameEngineReference, null, 2)}\n`, 'utf8');
+    }
     evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
     assert.equal(evidence.disposed, true);
     await fs.writeFile(path.join(root, 'reports', `${scenarioOutputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
