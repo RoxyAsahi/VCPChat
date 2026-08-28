@@ -80,7 +80,11 @@
         background: var(--vcp-ui-fill-1);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea {
+    /* Generated primitives own the inner native control's geometry and focus
+       surface.  These legacy fallbacks remain for unadopted controls only;
+       applying them inside a typed wrapper creates an inner border/halo in
+       addition to the primitive's wrapper contract. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:is(.vcp-uiux-input-wrap > input, .vcp-uiux-color-pair > input, .vcp-uiux-range > input)), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select:not(.vcp-harness-select-native), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea {
         min-height: var(--vcp-ui-control-md);
         border: 1px solid var(--vcp-ui-control-border);
         border-radius: var(--vcp-ui-radius-sm);
@@ -96,7 +100,7 @@
         line-height: var(--vcp-ui-line-body);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select:focus, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea:focus {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:is(.vcp-uiux-input-wrap > input, .vcp-uiux-color-pair > input, .vcp-uiux-range > input)):focus, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select:not(.vcp-harness-select-native):focus, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea:focus {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
         outline: none;
@@ -153,12 +157,12 @@
         background: var(--vcp-ui-accent-hover);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea, button):focus-visible {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-uiux-input-wrap > *, .vcp-uiux-color-pair > *, .vcp-uiux-range > *, .vcp-harness-select > *)) {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus-visible {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):is(:focus, :focus-visible):not(:is(.vcp-uiux-input-wrap > *, .vcp-uiux-color-pair > *, .vcp-uiux-range > *, .vcp-harness-select > *)) {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
         outline: none;

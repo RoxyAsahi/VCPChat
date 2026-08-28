@@ -144,6 +144,15 @@ if (report.agentColorPairInteraction !== null && report.agentColorPairInteractio
     assert.deepEqual(report.agentColorPairInteraction.restored, report.agentColorPairInteraction.before,
         'Agent ColorPair interaction capture must restore canonical controls');
 }
+if (report.agentInputFocusInteraction !== null && report.agentInputFocusInteraction !== undefined) {
+    assert.equal(report.agentInputFocusInteraction.available, true, 'Agent typed Input focus evidence is unavailable');
+    assert.equal(report.agentInputFocusInteraction.native, true, 'Agent typed Input must retain the native business node');
+    assert.equal(report.agentInputFocusInteraction.wrapperOwnsInput, true, 'Agent typed Input wrapper must own the native node');
+    assert.equal(report.agentInputFocusInteraction.focusWithin, true, 'Agent typed Input focus must activate the wrapper owner');
+    assert.equal(report.agentInputFocusInteraction.innerBorderWidth, '0px', 'Agent typed Input must not regain a legacy inner border');
+    assert.equal(report.agentInputFocusInteraction.innerBoxShadow, 'none', 'Agent typed Input must not regain a legacy inner focus halo');
+    assert.equal(report.agentInputFocusInteraction.innerOutlineStyle, 'none', 'Agent typed Input must defer focus outline to its wrapper');
+}
 if (report.agentModelPickerInteraction !== null && report.agentModelPickerInteraction !== undefined) {
     const { refreshRows, ...interaction } = report.agentModelPickerInteraction;
     assert.deepEqual(interaction, {
@@ -211,6 +220,7 @@ console.log(JSON.stringify({
     agentSelectInteraction: report.agentSelectInteraction ?? null,
     agentRangeInteraction: report.agentRangeInteraction ?? null,
     agentColorPairInteraction: report.agentColorPairInteraction ?? null,
+    agentInputFocusInteraction: report.agentInputFocusInteraction ?? null,
     agentModelPickerInteraction: report.agentModelPickerInteraction ?? null,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',

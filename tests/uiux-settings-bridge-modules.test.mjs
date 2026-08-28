@@ -183,6 +183,28 @@ test('Agent TTS Voice Select keeps business option loading while one typed proje
     }
 });
 
+test('Agent shell CSS leaves typed primitive inner controls to their own presentation owner', () => {
+    const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
+    const cardCss = read(path.join(root, 'styles', 'setting', 'settings-agent-card-shell.css'));
+    const legacyControlsCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));
+    for (const selector of [
+        '.vcp-uiux-input-wrap > input',
+        '.vcp-uiux-color-pair > input',
+        '.vcp-uiux-range > input',
+        '.vcp-harness-select-native',
+    ]) {
+        assert.ok(shellCss.includes(selector), `legacy Agent shell selectors must exclude typed primitive internals: ${selector}`);
+    }
+    assert.match(shellCss, /Generated primitives own the inner native control's geometry and focus/,
+        'the ownership boundary must remain explicit rather than relying on cascade order');
+    assert.match(cardCss, /input\[type="text"\][\s\S]*?:not\(\.input\):not\(:is\(\.vcp-uiux-color-pair > input\)\)/,
+        'legacy Agent card text rules must exclude generated Input and ColorPair inner nodes');
+    assert.match(legacyControlsCss, /input\[type="text"\][\s\S]*?:not\(\.input\):not\(:is\(\.vcp-uiux-color-pair > input\)\)/,
+        'the still-loaded Agent control fallback must also exclude generated Input and ColorPair inner nodes');
+    assert.match(legacyControlsCss, /select:not\(\.vcp-harness-select-native\)/,
+        'the still-loaded Agent control fallback must not style a typed Select native node');
+});
+
 test('Agent ColorPairs have one generated synchronization owner and preserve canonical color controls', () => {
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));

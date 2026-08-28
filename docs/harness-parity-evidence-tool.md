@@ -256,6 +256,14 @@ shape. The report remains `pass=false`: no same-semantic Harness browser or
 DOM/style/pixel pair exists, and VCP has no equivalent non-frozen preset
 preference consumer.
 
+`node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
+Harness DisclosureRow controlled interaction contract (row versus leading
+button, keyboard activation, forced-open and content projection) and its 24px
+CSS geometry against the replayable VCP Candidate capture. It remains
+`pass=false`: the candidate has no real-source paired browser/DOM/style/pixel
+evidence, and chat/message integration stays frozen. This guard does not
+authorize a consumer or alter existing production call sites.
+
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
