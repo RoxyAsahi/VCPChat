@@ -1130,28 +1130,6 @@ export function setupEventListeners(deps) {
     }
     */
 
-    {
-        const enableMiddleClickCheckbox = document.getElementById('enableMiddleClickQuickAction');
-        const middleClickAdvancedDelayInput = document.getElementById('middleClickAdvancedDelay');
-        if (middleClickAdvancedDelayInput) {
-            middleClickAdvancedDelayInput.addEventListener('input', (e) => {
-                const value = parseInt(e.target.value, 10);
-                if (value < 1000) {
-                    e.target.value = 1000;
-                    uiHelperFunctions.showToastNotification('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
-                }
-            });
-            middleClickAdvancedDelayInput.addEventListener('blur', (e) => {
-                const value = parseInt(e.target.value, 10);
-                if (isNaN(value) || value < 1000) {
-                    e.target.value = 1000;
-                    uiHelperFunctions.showToastNotification('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
-                }
-            });
-        }
-
-    }
-
     if (openTranslatorBtn) {
         openTranslatorBtn.addEventListener('click', async () => {
             if (chatAPI?.openTranslatorWindow) {

@@ -87,8 +87,8 @@ G2 身份颜色镜像的 6 个 ambient listener 已在提交 `2a69fb01` 删除�
 advanced action 与 regenerate confirmation 的即时显隐现在由同一个 typed
 field owner 统一处理，并随 Settings presentation scope 销毁；
 `event-listeners.js` 中对应的 5 个重复绑定已删除。`middleClickAdvancedDelay`
-的 1000ms 归一化仍保留在兼容监听中，因为 message/renderer 业务读取依赖该
-边界，待后续把校验迁入字段 owner 后再退役。
+的 1000ms 归一化已迁入同一 owner（input/blur 均覆盖），message/renderer 的
+业务读取边界保持不变。
 
 ### G4：section controller 拆分
 
@@ -115,8 +115,8 @@ settings-bridge-entry
 - 无调用方 helper 与死 projection；
 - 只为旧 bridge 保留的 fallback。
 
-2026-08-28 增量：高级区条件显示的旧 ambient listeners 已净删除；延迟值校验
-明确记录为业务边界债务，暂不为视觉收口而改动。
+2026-08-28 增量：高级区条件显示与延迟值校验的旧 ambient listeners 已净删除，
+校验语义由 typed owner 保持；该 section 的直接 presentation 债务已收口。
 
 ## 不作为阻塞条件
 

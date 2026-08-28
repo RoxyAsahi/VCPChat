@@ -1633,9 +1633,18 @@ function mountTypedFieldOwner(root, form) {
         status()?.setAttribute('data-state', 'dirty');
         if (status()) status().textContent = '未保存';
     };
+    const normalizeMiddleClickDelay = control => {
+        if (!control) return false;
+        const value = Number.parseInt(control.value, 10);
+        if (Number.isFinite(value) && value >= 1000) return false;
+        control.value = '1000';
+        window.uiHelperFunctions?.showToastNotification?.('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
+        return true;
+    };
     const onInput = event => {
         const control = event.target;
         if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
+        if (control.id === 'middleClickAdvancedDelay') normalizeMiddleClickDelay(control);
         const patch = readTypedFieldPatch(control, service, state.pendingPatch) || {};
         if (patch.appearanceProfile) {
             state.pendingPatch = {
@@ -1661,6 +1670,16 @@ function mountTypedFieldOwner(root, form) {
             delete control.dataset.vcpTypedFieldOwner;
         });
     });
+    const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
+    if (middleClickAdvancedDelay) {
+        const onBlur = () => {
+            if (normalizeMiddleClickDelay(middleClickAdvancedDelay)) {
+                middleClickAdvancedDelay.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
+        middleClickAdvancedDelay.addEventListener('blur', onBlur);
+        state.cleanups.push(() => middleClickAdvancedDelay.removeEventListener('blur', onBlur));
+    }
     if (pathsContainer) {
         const onRowsDirty = () => {
             // Row removal, row addition and typing all reduce to "recollect
