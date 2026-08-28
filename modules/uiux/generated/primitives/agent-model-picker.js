@@ -368,6 +368,14 @@ export function mountAgentModelPicker(host, props, scope) {
         syncDirectoryActions();
         renderEfforts();
         placeExternalCard();
+        // Pane content can grow from the short root menu to the directory
+        // list after this synchronous pass. Re-measure on the next frame so
+        // the body portal is not left under the application chrome at narrow
+        // production Settings heights.
+        requestAnimationFrame(() => {
+            if (pickerScope.active)
+                placeExternalCard();
+        });
     };
     pickerScope.listen(trigger, 'click', event => {
         // Agent Settings already has a legacy listener on this canonical
