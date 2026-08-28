@@ -29,7 +29,7 @@ if (interaction['agent-preset-seat/open-selected-busy-roster-dispose']?.status !
 if (interaction['agent-preset-row/trust-error-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetRow lifecycle must remain explicitly Candidate');
 if (interaction['popup-select/load-filter-keyboard-risk-dismiss-dispose']?.status !== 'candidate-interaction-active') fail('PopupSelect lifecycle must remain explicitly Candidate');
 if (interaction['permission-row/load-menu-risk-confirmation-dispose']?.status !== 'candidate-source-only') fail('PermissionRow must retain its source-only boundary');
-if (interaction['job-list-action/live-sort-tick-dismiss-focus-dispose']?.status !== 'inventoried') fail('JobListAction must retain its inventoried boundary');
+if (interaction['job-list-action/live-sort-tick-dismiss-focus-dispose']?.status !== 'candidate-source-only') fail('JobListAction must retain its source-only Candidate boundary');
 const directoryBrowserEntries = Object.entries(interaction).filter(([key]) => key.startsWith('directory-browser/'));
 if (directoryBrowserEntries.length !== 1) fail(`DirectoryBrowser interaction ledger must contain exactly one entry (found ${directoryBrowserEntries.length})`);
 const directoryBrowserInteraction = directoryBrowserEntries[0]?.[1];

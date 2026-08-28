@@ -24,6 +24,8 @@ try {
 for (const dir of targets) {
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
+    const generatedAtMs = Date.parse(manifest.generatedAt);
+    assert.ok(Number.isFinite(generatedAtMs), 'manifest generatedAt is invalid');
     assert.deepEqual(manifest.viewports, requiredViewports);
     assert.equal(manifest.gate?.pass, true);
     assert.equal(manifest.lifecycle?.removedOnClose, true);
@@ -32,6 +34,7 @@ for (const dir of targets) {
     assert.ok(manifest.settingsContext?.contextSample?.showcase?.ancestry?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.settings?.ancestry?.length > 0);
     assert.ok(manifest.settingsCascade?.length > 0);
+    assert.ok(manifest.settingsCascade.every(rule => Array.isArray(rule.specificity) && rule.specificity.length === 3 && Number.isInteger(rule.cascadeOrder)));
     assert.equal(manifest.settingsContext?.sections?.length, 8);
     assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
     assert.equal(manifest.settingsContext?.settingsCleanup?.active, false);
@@ -43,13 +46,19 @@ for (const dir of targets) {
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
       for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
-        await fs.access(path.join(dir, `${name}-${suffix}.png`));
+        const screenshotPath = path.join(dir, `${name}-${suffix}.png`);
+        await fs.access(screenshotPath);
+        const stat = await fs.stat(screenshotPath);
+        assert.ok(stat.mtimeMs >= generatedAtMs - 120_000, `${name}-${suffix}: screenshot is stale relative to manifest`);
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
       assert.equal(observation?.reopen?.removedOnClose, true);
       assert.equal(observation?.reopen?.reopened, true);
       assert.equal(observation?.reopen?.newRootIdentity, true);
       assert.equal(observation?.reopen?.bodyAfterClose?.bodyInlineStyle, '');
+      const expectedThemeClass = `${path.basename(dir)}-theme`;
+      assert.ok(observation?.reopen?.bodyAfterClose?.bodyClasses?.includes(expectedThemeClass));
+      assert.ok(!observation?.reopen?.bodyAfterClose?.bodyClasses?.includes('next-ui-internal-app-open'));
       assert.equal(observation?.overlayViewport?.menu?.open, true);
       assert.ok(observation?.overlayViewport?.menu?.rect);
       assert.equal(observation?.overlayViewport?.modal?.open, true);
@@ -61,6 +70,7 @@ for (const dir of targets) {
       assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
+      assert.ok(observation.initial.cdpCascade.every(rule => Array.isArray(rule.specificity) && Number.isInteger(rule.cascadeOrder)));
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));

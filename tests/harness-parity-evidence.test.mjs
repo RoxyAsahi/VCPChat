@@ -113,6 +113,15 @@ test('JobListAction source audit preserves lifecycle and ordering evidence', () 
     assert.ok(report.note.includes('does not create a VCP jobs consumer'));
 });
 
+test('JobListAction reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-job-list-action-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-job-list-action-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '21/21');
+    assert.equal(report.candidateStatus, 'source-only; no VCP jobs consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP jobs consumer or runtime registry'));
+});
+
 test('PermissionRow source audit preserves settings capability boundaries', () => {
     execFileSync(process.execPath, ['scripts/check-harness-permission-row-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-permission-row-source.json'), 'utf8'));
@@ -144,6 +153,15 @@ test('ProducedFiles source audit preserves frozen-domain measurement boundaries'
     assert.ok(report.note.includes('does not create a VCP turn-tail consumer'));
 });
 
+test('ProducedFiles reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-produced-files-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-produced-files-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '23/23');
+    assert.equal(report.candidateStatus, 'source-only frozen chat deliverables; no VCP production consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP turn-tail consumer'));
+});
+
 test('Harness fixture coverage reports contracts without replayable cases', () => {
     execFileSync(process.execPath, ['scripts/check-harness-fixture-coverage.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-fixture-coverage.json'), 'utf8'));
@@ -161,4 +179,40 @@ test('MessageImage source audit preserves frozen attachment lifecycle evidence',
     assert.equal(report.pass, true);
     assert.equal(report.checks.length, 10);
     assert.ok(report.note.includes('does not create a VCP chat attachment consumer'));
+});
+
+test('MessageImage reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-message-image-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-message-image-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '30/30');
+    assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
+});
+
+test('ImageGallery reference audit preserves aggregation and alignment provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-image-gallery-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-image-gallery-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '12/12');
+    assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
+});
+
+test('PlanChip reference audit preserves projection and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-plan-chip-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-plan-chip-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '18/18');
+    assert.equal(report.candidateStatus, 'source-only frozen Composer plan slot; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP Composer consumer'));
+});
+
+test('JsonTree reference audit preserves tree semantics and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-json-tree-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-json-tree-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '33/33');
+    assert.equal(report.candidateStatus, 'source-only frozen trajectory/tool inspection; no VCP structured-message consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP structured-message consumer'));
 });
