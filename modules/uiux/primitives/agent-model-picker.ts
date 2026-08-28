@@ -236,8 +236,11 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         }
         if (error) {
             error.hidden = !(open && pane === 'model');
-            const errorText = error.querySelector('.vcp-harness-popup-select-error-text')?.textContent ?? '';
-            error.style.display = open && pane === 'model' && errorText !== '' ? '' : 'none';
+            // PopupSelectView owns the error text.  DOM text can outlive a
+            // successful retry, so it must never become an independent
+            // visibility source here: only the controller snapshot decides
+            // whether the in-menu load strip is visible.
+            error.style.display = open && pane === 'model' && popup.getSnapshot().error !== null ? '' : 'none';
         }
         renderEfforts();
         placeExternalCard();

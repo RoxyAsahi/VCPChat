@@ -13,9 +13,23 @@ const electron = process.platform === 'darwin'
     : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const timeout = 45_000;
 const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ? 'harness-equivalent' : 'vcp-enhanced';
+// A state scenario is deliberately orthogonal to the visual fixture mode.
+// `load-error-retry` records the real generated primitive's asynchronous
+// catalog transition.  Harness has a source-level client test for this state,
+// but no reproducible production-page failure injection yet, so this report
+// must remain test-derived evidence rather than a production visual baseline.
+const captureScenario = process.env.VCP_MODEL_PICKER_SCENARIO === 'load-error-retry'
+    ? 'load-error-retry'
+    : 'ready-selected';
 const outputStem = captureMode === 'harness-equivalent'
     ? 'vcp-agent-model-picker-harness-equivalent'
     : 'vcp-agent-model-picker-candidate';
+const scenarioOutputStem = captureScenario === 'ready-selected'
+    ? outputStem
+    : `${outputStem}-${captureScenario}`;
+const sameEngineReferenceStem = captureScenario === 'ready-selected'
+    ? 'harness-agent-model-picker-electron-reference'
+    : `harness-agent-model-picker-electron-reference-${captureScenario}`;
 const harnessModelSelectCssPath = '/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.module.css';
 const harnessModelSelectCss = await fs.readFile(harnessModelSelectCssPath, 'utf8');
 const harnessReferenceClasses = Object.freeze({
@@ -79,7 +93,7 @@ try {
     const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
     assert.ok(page, `Agent Model Picker renderer missing: ${stderr}`);
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
-    const evidence = await page.evaluate(async (mode) => {
+    const evidence = await page.evaluate(async ({ mode, scenario }) => {
         const host = document.createElement('div');
         // Candidate captures run in the same UI scope as production so the
         // existing Lucide icon adapter can resolve semantic icons synchronously.
@@ -96,6 +110,8 @@ try {
         const scope = new window.VCPLifecycle.LifecycleScope('test:candidate-agent-model-picker');
         const selected = [];
         const efforts = [];
+        let loadAttempts = 0;
+        let rejectFirstLoad = null;
         const picker = window.VCPUIUX.mountAgentModelPicker(host, {
             label: 'Agent model', selectedId: mode === 'harness-equivalent' ? 'acme-think' : 'gpt-4o', selectedEffort: mode === 'harness-equivalent' ? 'high' : 'balanced',
             searchEnabled: mode !== 'harness-equivalent',
@@ -109,6 +125,13 @@ try {
                 { id: 'deep', label: 'Deep reasoning', description: 'More reasoning effort' },
             ],
             options: async signal => {
+                loadAttempts += 1;
+                if (scenario === 'load-error-retry' && loadAttempts === 1) {
+                    return await new Promise((resolve, reject) => {
+                        rejectFirstLoad = () => reject(new Error('catalog unavailable'));
+                        signal.addEventListener('abort', () => resolve([]), { once: true });
+                    });
+                }
                 if (signal.aborted) return [];
                 return mode === 'harness-equivalent' ? [
                     { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash', provider: 'DeepSeek' },
@@ -134,6 +157,50 @@ try {
         const modelRow = host.querySelector('.vcp-harness-agent-model-picker-cell');
         modelRow?.click();
         await new Promise(resolve => setTimeout(resolve, 0));
+        let loadErrorRetry = null;
+        if (scenario === 'load-error-retry') {
+            const card = host.querySelector('.vcp-harness-popup-select-card');
+            const status = card?.querySelector('.vcp-harness-popup-select-status');
+            const pending = {
+                status: picker.popup.getSnapshot().status,
+                ariaBusy: card?.getAttribute('aria-busy') ?? null,
+                text: status?.textContent ?? '',
+            };
+            if (typeof rejectFirstLoad !== 'function') throw new Error('load-error-retry fixture did not start its first catalog load');
+            rejectFirstLoad();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const alert = card?.querySelector('[role="alert"]');
+            const retry = card?.querySelector('.vcp-harness-popup-select-retry');
+            const failed = {
+                status: picker.popup.getSnapshot().status,
+                ariaBusy: card?.getAttribute('aria-busy') ?? null,
+                alertRole: alert?.getAttribute('role') ?? null,
+                alertText: alert?.textContent ?? '',
+                retryVisible: retry instanceof HTMLElement && getComputedStyle(retry).display !== 'none',
+                retryTag: retry?.tagName.toLowerCase() ?? null,
+                retryClass: retry?.className ?? null,
+                errorOuterHtml: alert?.outerHTML ?? '',
+            };
+            retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            const retryPending = {
+                status: picker.popup.getSnapshot().status,
+                ariaBusy: card?.getAttribute('aria-busy') ?? null,
+            };
+            await new Promise(resolve => setTimeout(resolve, 0));
+            loadErrorRetry = {
+                evidenceKind: 'VCP Electron generated-artifact capture; Harness source-test-derived state reference only',
+                harnessSource: 'packages/client/ui-model-selection/tests/model-select.client.spec.tsx: rejected catalog loads retain the in-menu Retry strip; rejected selections use Toast instead',
+                pending,
+                failed,
+                retryPending,
+                settled: {
+                    status: picker.popup.getSnapshot().status,
+                    optionCount: card?.querySelector('.vcp-harness-popup-select-viewport')?.querySelectorAll('[role="menuitemradio"]').length ?? 0,
+                    ariaBusy: card?.getAttribute('aria-busy') ?? null,
+                    loadAttempts,
+                },
+            };
+        }
         const optionSelector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
         const optionRoot = '.vcp-harness-popup-select-viewport';
         const selectedSelector = `${optionRoot} ${mode === 'harness-equivalent' ? `${optionSelector}[aria-checked="true"]` : `${optionSelector}[aria-selected="true"]`}`;
@@ -344,6 +411,7 @@ try {
         await new Promise(resolve => setTimeout(resolve, 0));
         const keyboardNavigation = {
             activeOption: host.querySelector(selectedSelector)?.textContent?.trim() || null,
+            focusedOption: document.activeElement?.getAttribute?.('data-option-id') || null,
         };
         card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -385,7 +453,8 @@ try {
             fixtureMode: mode,
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
-            rootPane, modelPane, keyboardNavigation, modelEscape, effortPane, effortEscape, focusRestored,
+            scenario, rootPane, modelPane, keyboardNavigation, modelEscape, effortPane, effortEscape, focusRestored,
+            loadErrorRetry,
             dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
             trigger: {
                 tag: picker.trigger.tagName.toLowerCase(),
@@ -447,7 +516,7 @@ try {
             picker.setPane('model');
         };
         return screenshot;
-    }, captureMode);
+    }, { mode: captureMode, scenario: captureScenario });
     assert.deepEqual(evidence.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
     assert.equal(evidence.rootPane.expanded, 'true');
     assert.equal(evidence.rootPane.cardPresent, true);
@@ -460,10 +529,25 @@ try {
     assert.equal(evidence.modelEscape.searchHidden, true);
     assert.equal(evidence.effortEscape.returnedToRoot, true);
     assert.equal(evidence.effortEscape.effortHidden, true);
+    if (captureMode === 'harness-equivalent') assert.equal(evidence.keyboardNavigation.focusedOption, 'acme-think',
+        'Harness parity keyboard navigation must move real DOM focus to the active model row');
     assert.equal(evidence.focusRestored, true);
     assert.equal(evidence.menu?.rect?.width > 0, true);
+    if (captureScenario === 'load-error-retry') {
+        assert.equal(evidence.loadErrorRetry?.pending.status, 'pending');
+        assert.equal(evidence.loadErrorRetry?.pending.ariaBusy, 'true');
+        assert.equal(evidence.loadErrorRetry?.failed.status, 'failed');
+        assert.equal(evidence.loadErrorRetry?.failed.ariaBusy, null);
+        assert.equal(evidence.loadErrorRetry?.failed.alertRole, 'alert');
+        assert.match(evidence.loadErrorRetry?.failed.alertText ?? '', /catalog unavailable/);
+        assert.equal(evidence.loadErrorRetry?.failed.retryVisible, true);
+        assert.equal(evidence.loadErrorRetry?.retryPending.status, 'pending');
+        assert.equal(evidence.loadErrorRetry?.settled.status, 'ready');
+        assert.equal(evidence.loadErrorRetry?.settled.optionCount, captureMode === 'harness-equivalent' ? 2 : 3);
+        assert.equal(evidence.loadErrorRetry?.settled.loadAttempts, 2);
+    }
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await page.screenshot({ path: path.join(root, 'reports', `${outputStem}-full.png`) });
+    await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-full.png`) });
     await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
     await page.waitForFunction(({ mode }) => {
         const root = document.querySelector('[data-vcp-candidate-agent-model-picker="true"]');
@@ -471,14 +555,14 @@ try {
         const selector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
         return viewport && viewport.hidden === false && viewport.querySelectorAll(selector).length > 0;
     }, { timeout }, { mode: captureMode });
-    await page.screenshot({ path: path.join(root, 'reports', `${outputStem}-open-full.png`) });
+    await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-open-full.png`) });
     const menuRect = await page.$eval('[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-card', element => {
         const rect = element.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     });
     evidence.menuCaptureRect = menuRect;
     await page.screenshot({
-        path: path.join(root, 'reports', `${outputStem}.png`),
+        path: path.join(root, 'reports', `${scenarioOutputStem}.png`),
         clip: menuRect,
     });
     // Cross-engine pixels are useful as a coarse signal, but text raster and
@@ -567,19 +651,27 @@ try {
     assert.equal(sameEngineReference.modelPane.groupCount, 2);
     assert.equal(sameEngineReference.modelPane.options.length, 2);
     assert.deepEqual(sameEngineReference.effortPane.options.map(option => option.text), ['Off', 'High', 'Max']);
-    assert.equal(sameEngineReference.menu.rect.width, menuRect.width,
-        `same-engine Harness source reference must match the candidate ROI width: ${JSON.stringify(sameEngineReference.menu)}`);
-    assert.equal(sameEngineReference.menu.rect.height, menuRect.height,
-        `same-engine Harness source reference must match the candidate ROI height: ${JSON.stringify(sameEngineReference.menu)}`);
+    if (captureScenario === 'ready-selected') {
+        assert.equal(sameEngineReference.menu.rect.width, menuRect.width,
+            `same-engine Harness source reference must match the candidate ROI width: ${JSON.stringify(sameEngineReference.menu)}`);
+        assert.equal(sameEngineReference.menu.rect.height, menuRect.height,
+            `same-engine Harness source reference must match the candidate ROI height: ${JSON.stringify(sameEngineReference.menu)}`);
+    } else {
+        // The load/retry journey retains the real primitive's transient
+        // status/error layout in its transition.  Its source reference is
+        // intentionally retained only as provenance and is never a pixel
+        // baseline until an actual Harness failure fixture is available.
+        sameEngineReference.comparison = 'not-evaluated: load-error-retry lacks a Harness production visual fixture';
+    }
     await page.screenshot({
-        path: path.join(root, 'reports', 'harness-agent-model-picker-electron-reference.png'),
+        path: path.join(root, 'reports', `${sameEngineReferenceStem}.png`),
         clip: sameEngineReference.menu.rect,
     });
     await page.evaluate(() => window.__vcpHarnessModelSelectElectronReferenceCleanup?.());
-    await fs.writeFile(path.join(root, 'reports', 'harness-agent-model-picker-electron-reference.json'), `${JSON.stringify(sameEngineReference, null, 2)}\n`, 'utf8');
+    await fs.writeFile(path.join(root, 'reports', `${sameEngineReferenceStem}.json`), `${JSON.stringify(sameEngineReference, null, 2)}\n`, 'utf8');
     evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
     assert.equal(evidence.disposed, true);
-    await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+    await fs.writeFile(path.join(root, 'reports', `${scenarioOutputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
     console.log(JSON.stringify(evidence, null, 2));
 } finally {
     // Disconnect without waiting for DevTools target shutdown; Electron is

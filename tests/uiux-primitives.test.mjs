@@ -283,6 +283,8 @@ test('Harness AgentModelPicker projects loading, load failure and retry through 
         await new Promise(resolve => setTimeout(resolve, 0));
         assert.equal(calls, 2);
         assert.equal(controller.popup.getSnapshot().status, 'ready');
+        assert.equal(card?.querySelector('[role="alert"]')?.style.display, 'none',
+            'a successful retry must retract the former load-error strip rather than retaining stale DOM text');
         assert.equal(card?.querySelectorAll('[role="menuitemradio"]').length, 1);
         await controller.dispose();
         await scope.dispose('agent-model-picker-load-retry-complete');
