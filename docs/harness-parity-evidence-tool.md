@@ -76,6 +76,11 @@ matches separately from parity passes and intentionally keeps its own `pass`
 false while structural, geometry, computed-style, pixel, or consumer evidence
 remains open.
 
+Tooltip also has a strict fixed-ROI PNG comparator. It records SHA-256 and
+byte equality for the real-source and Candidate tooltip screenshots. Its result
+is deliberately separate from structural parity: an exact pixel pass cannot
+erase the `main` versus `body` ownership mismatch.
+
 `capture-harness-tooltip-source-fixture.mjs` executes the real Harness
 `Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
 the VCP Candidate deliberately reports a structural mismatch: Harness keeps
