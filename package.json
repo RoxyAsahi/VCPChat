@@ -48,6 +48,7 @@
     "check:harness-plan-chip-reference": "node scripts/check-harness-plan-chip-reference.mjs",
     "check:harness-json-tree-reference": "node scripts/check-harness-json-tree-reference.mjs",
     "check:harness-read-block-reference": "node scripts/check-harness-read-block-reference.mjs",
+    "check:harness-search-block-reference": "node scripts/check-harness-search-block-reference.mjs",
     "check:harness-fixture-readiness": "node scripts/check-harness-fixture-readiness.mjs",
     "capture:vcp-dom-fixtures": "node scripts/capture-vcp-dom-fixtures.mjs",
     "diff:harness-vcp-dom": "node scripts/diff-harness-vcp-dom.mjs",
