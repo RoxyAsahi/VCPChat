@@ -264,6 +264,8 @@ test('Real Harness StateDot source capture retains the Candidate display and pix
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
     assert.equal(report.domAriaPass, true);
+    assert.equal(report.structuralPass, true);
+    assert.equal(report.structural.length, 4);
     assert.equal(report.colorPass, true);
     assert.equal(report.computedStylePass, false);
     assert.equal(report.computedStyle.states.length, 4);
