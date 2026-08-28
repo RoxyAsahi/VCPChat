@@ -93,6 +93,13 @@ test('legacy Rust visibility listeners are fallback-only when typed consumer is 
         'legacy Rust binder must exit when the typed section owner is available');
 });
 
+test('legacy ColorPair binder is artifact-fallback-only', () => {
+    const source = read(eventListeners);
+    const bind = source.slice(source.indexOf('if (!modal.dataset.globalSettingsControlsBound)'), source.indexOf('const openGlobalSettings'));
+    assert.match(bind, /if \(!window\.VCPUIUX\?\.mountColorPair\) setupColorSyncListeners\(\);/,
+        'legacy color mirror listeners must not run beside generated ColorPair');
+});
+
 test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
     const entry = read(bridgeEntry);
     const helper = entry.match(/function mountTypedAgentInput\(form, \{ id, marker, ownerKey, placeholder = false, restoreClass = false \}\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
