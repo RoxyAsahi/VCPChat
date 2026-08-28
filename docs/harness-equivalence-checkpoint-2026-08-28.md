@@ -24,3 +24,18 @@ No chat rendering, streaming, protocol, persistence, Plugin Loader, chat manifes
 2. Resolve the remaining Button computed-style sampling discrepancy without guessing at legacy CSS.
 3. Continue field-level Settings single-owner migration only when the corresponding Harness DOM, geometry, interaction, reload, teardown, and legacy-deletion evidence is available.
 4. Keep Theme legacy reads and artifact-only Electron smoke as explicit open gates.
+
+## Follow-up Verification
+
+The subsequent production overlay closure (`f2c97861`) confirms the external
+Model Picker portal is positioned from the live trigger, remains topmost at the
+required viewport sizes, restores trigger focus on Escape, and removes its body
+portal on teardown. The stress runner now resolves that portal through the
+trigger's `aria-controls` relationship rather than assuming it is inside the
+Settings form.
+
+The paired Select menu pixel report remains passing, while the Model Picker
+itself remains pending because its full Harness semantic/group contract and
+legacy hot/favorite/refresh parity are separate requirements. This distinction
+is intentional: a passing menu ROI must not promote an enhanced picker or
+silently retire the legacy modal.
