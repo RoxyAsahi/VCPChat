@@ -133,6 +133,10 @@ artifact 时的 ColorPair fallback 均直接承载业务或 bootstrap 语义，�
 其四个 preset select 现在由同一 owner 绑定即时 change 响应，切换后无需等待
 autosave 回写即可显示/隐藏 custom 行，监听随 owner teardown 撤销。
 
+Appearance 的三个 Range mount 也已抽为
+`modules/ui-system/settings/appearance-ranges.js`，native range 与输出节点
+仍由原有 typed snapshot/field owner 管理，helper 仅负责生成 primitive 装配。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
