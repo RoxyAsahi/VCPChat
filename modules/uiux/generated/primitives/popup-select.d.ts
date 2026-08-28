@@ -15,6 +15,8 @@ export interface PopupSelectOption {
     readonly active?: boolean;
     readonly disabled?: boolean;
     readonly group?: string;
+    /** Optional row-level favorite state. Its action is injected by the owning surface. */
+    readonly favorite?: boolean;
     readonly confirmation?: PopupSelectConfirmation;
 }
 /** Command token segment snapshotted at shell-open time (popup.ts contract). */
@@ -107,6 +109,8 @@ export interface PopupSelectViewProps {
     readonly listboxAria?: string;
     /** Return true when the owner consumed Escape without dismissing. */
     readonly onEscape?: () => boolean;
+    /** Optional row action; used by the Agent model directory's favorite mutation. */
+    readonly onFavoriteToggle?: (option: PopupSelectOption) => void;
 }
 export interface PopupSelectViewController {
     readonly card: HTMLDivElement;

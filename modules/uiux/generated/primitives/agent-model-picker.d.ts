@@ -13,6 +13,16 @@ export interface AgentModelEffortOption {
     readonly label: string;
     readonly description?: string;
 }
+/**
+ * Ephemeral model-directory operations injected by the real Settings Surface.
+ * The primitive never imports chatAPI; the bridge remains the only boundary
+ * that maps IPC results into presentation options.
+ */
+export interface AgentModelDirectoryCapability {
+    refresh?(signal: AbortSignal): Promise<void>;
+    toggleFavorite?(id: string, signal: AbortSignal): Promise<void>;
+    subscribeUpdated?(listener: () => void): UiDisposer | void;
+}
 export interface AgentModelPickerProps {
     readonly label?: string;
     /** Harness ModelSelect disables the native trigger while its owner is locked. */
@@ -20,6 +30,7 @@ export interface AgentModelPickerProps {
     /** Reuse an existing surface trigger while keeping its identity intact. */
     readonly trigger?: HTMLButtonElement;
     readonly options: (signal: AbortSignal) => Promise<readonly AgentModelOption[]>;
+    readonly directory?: AgentModelDirectoryCapability;
     /** `false` rejects the selection; Harness parity keeps the menu open and shows a Toast. */
     readonly onSelect: (option: AgentModelOption) => void | boolean | Promise<void | boolean>;
     readonly efforts?: readonly AgentModelEffortOption[];

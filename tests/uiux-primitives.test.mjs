@@ -292,6 +292,97 @@ test('Harness AgentModelPicker projects loading, load failure and retry through 
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentModelPicker keeps injected directory actions transient and releases popup-only updates', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-directory-capability-test'));
+        const host = document.getElementById('host');
+        let loads = 0;
+        let refreshes = 0;
+        let refreshAborted = false;
+        const pendingRefreshes = [];
+        let toggleCalls = 0;
+        let subscribeCalls = 0;
+        let releaseCalls = 0;
+        let onUpdated = null;
+        const selected = [];
+        const controller = mountAgentModelPicker(host, {
+            options: async () => {
+                loads += 1;
+                return [{ id: 'flash', label: 'Flash', provider: 'DeepSeek', favorite: toggleCalls > 0 }];
+            },
+            directory: {
+                refresh: signal => new Promise(resolve => {
+                    refreshes += 1;
+                    pendingRefreshes.push(resolve);
+                    signal.addEventListener('abort', () => { refreshAborted = true; resolve(); }, { once: true });
+                }),
+                toggleFavorite: async id => { assert.equal(id, 'flash'); toggleCalls += 1; },
+                subscribeUpdated: listener => {
+                    subscribeCalls += 1;
+                    onUpdated = listener;
+                    return () => { releaseCalls += 1; };
+                },
+            },
+            onSelect: option => { selected.push(option.id); },
+        }, scope);
+
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        assert.equal(subscribeCalls, 1, 'models-updated subscribes only after this popup opens');
+        assert.equal(card?.querySelectorAll('[data-option-action="favorite"]').length, 1);
+        card?.querySelector('[data-option-action="favorite"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(toggleCalls, 1, 'favorite action routes through the injected directory capability');
+        assert.deepEqual(selected, [], 'favorite action must never select or write the canonical model input');
+        assert.equal(loads, 2, 'successful favorite mutation reloads only the currently-open popup projection');
+
+        card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(refreshes, 1);
+        assert.equal(card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh')?.disabled, true);
+        const loadsBeforeSuccessfulRefresh = loads;
+        pendingRefreshes.shift()?.();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(loads, loadsBeforeSuccessfulRefresh + 1,
+            'a settled refresh reloads the same currently-open popup projection');
+        assert.equal(card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh')?.disabled, false);
+
+        card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(refreshes, 2);
+        const loadsBeforeClosedRefresh = loads;
+        controller.close();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(refreshAborted, true, 'closing aborts the in-flight directory refresh rather than allowing a late projection');
+        assert.equal(controller.popup.getSnapshot().open, false);
+        assert.equal(loads, loadsBeforeClosedRefresh,
+            'a refresh that settles after close loses its right to reload the former popup');
+        assert.equal(releaseCalls, 1, 'closing releases the models-updated subscription instead of retaining it for the whole Settings surface');
+
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(subscribeCalls, 2, 'reopen acquires one fresh popup-local models-updated subscription');
+        const loadsBeforeUpdate = loads;
+        onUpdated?.();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(loads, loadsBeforeUpdate + 1, 'an update reloads the open picker only');
+        controller.close();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(releaseCalls, 2);
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-directory-capability-complete');
+        assert.equal(releaseCalls, 2,
+            'a popup-local release is retracted from the parent scope and never disposed a second time');
+        assert.equal(host.querySelector('.vcp-harness-agent-model-picker'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness AgentModelPicker locks its native trigger and routes rejected selections to an owned Toast', async () => {
     const dom = new JSDOM('<!doctype html><main><div id="locked"></div><div id="candidate"></div></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
