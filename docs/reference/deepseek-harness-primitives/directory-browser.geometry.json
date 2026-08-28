@@ -1,5 +1,9 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.module.css",
+  "source": "packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.module.css",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "foundation-electron-active; source geometry documented, paired Harness/VCP computed-style and pixel diff pending",
   "selectors": {
     ".dialog": { "width": "min(680px, 100%)", "height": "min(500px, calc(100dvh - 32px))", "padding": "0" },
     ".header": { "gap": "8px", "padding": "16px 14px 8px 24px" },
@@ -7,6 +11,13 @@
     ".column": { "minWidth": "256px", "gap": "2px", "paddingRight": "8px" },
     ".row": { "height": "28px", "gap": "4px", "padding": "4px", "borderRadius": "6px" },
     ".footerBar": { "padding": "12px 24px", "gap": "8px" }
+  },
+  "tokens": ["--dsw-alias-border-l2", "--dsw-alias-border-l3", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-interactive-bg-active", "--dsw-alias-bg-layer-2", "--dsw-alias-state-error-primary"],
+  "states": ["closed", "initial-loading", "single-pane", "two-pane-selected", "hidden-files", "listing-error", "busy", "create-folder", "close-reopen", "dispose"],
+  "evidence": {
+    "lifecycle": "tests/uiux-primitives.test.mjs DirectoryBrowser foundation case",
+    "electron": "reports/vcp-harness-directory-browser-foundation.json",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
   },
   "vcpCandidateEvidence": {
     "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
