@@ -2,7 +2,7 @@
   "source": "packages/client/ui-primitives/src/Modal.module.css",
   "styleSource": "packages/client/ui-primitives/src/Modal.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; real Harness source geometry capture records fixed 800x600 standard/headless branches; paired VCP computed-style/pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; standard same-engine source/Candidate geometry and strict RGB ROI comparison recorded (382x221 comparable, non-passing); Candidate headless replay remains pending",
   "selectors": {
     ".root": { "position": "fixed", "inset": "0", "zIndex": "1000", "padding": "24px" },
     ".mask": { "background": "var(--dsw-alias-bg-mask-1)", "backdropFilter": "var(--dsw-mask-blur)" },
