@@ -274,6 +274,9 @@ test('Unified contract provenance gate reports every reference boundary', () => 
     execFileSync(process.execPath, ['scripts/check-harness-contract-provenance.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-contract-provenance.json'), 'utf8'));
     assert.equal(report.counts.contracts, 49);
+    assert.equal(report.counts.sourceKindDeclared > 0, true);
+    assert.ok(report.counts.sourceKinds['vcp-local-contract'] >= 2);
+    assert.equal(report.entries.find(item => item.name === 'range')?.sourceKind, 'vcp-local-contract');
     assert.equal(report.status, 'provenance-gaps-present');
     assert.equal(report.pass, false);
     assert.ok(report.counts.gaps > 0);
