@@ -7,6 +7,7 @@
     ["connection-banner", "connected-hidden"], ["connection-banner", "reconnecting-visible"], ["connection-banner", "label-update"],
     ["menu", "dense-portal-selected-submenu"],
     ["onboarding-surface", "closed"], ["onboarding-surface", "open-inert"], ["onboarding-surface", "close-reopen"],
+    ["pill", "static"], ["pill", "interactive-hover"], ["pill", "active"],
     ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
     ["field", "description"], ["field", "error"],
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
@@ -158,7 +159,8 @@
     "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
     "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
     "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending",
-    "onboardingSurfaceCandidate": "independent generated-artifact portal/inert DOM/ARIA/computed-style/screenshot and close/reopen/dispose capture active at 800x600 @1x; same-semantic Harness visual capture and pixel diff pending"
+    "onboardingSurfaceCandidate": "independent generated-artifact portal/inert DOM/ARIA/computed-style/screenshot and close/reopen/dispose capture active at 800x600 @1x; same-semantic Harness visual capture and pixel diff pending",
+    "pillCandidate": "independent generated-artifact static/interactive hover/active DOM/computed-style/screenshot, click and class/type/listener teardown capture active at 800x600 @1x; same-semantic Harness visual capture and pixel diff pending"
     , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown, generated artifact smoke, fixed 800x600 screenshot/geometry and generated Electron SVG rendering active; same-semantic Harness pixel diff pending"
     , "agentPresetSeatCandidate": "start-aligned hero chip candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
     , "agentPresetRowCandidate": "end-aligned settings-row candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
