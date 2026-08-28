@@ -232,6 +232,22 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('HoverCard fixed ROI comparator rejects mismatched dimensions instead of inferring a pixel pass', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-hover-card-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-roi-pixels.mjs'], {
+        cwd: root,
+        stdio: 'pipe',
+        env: { ...process.env, VCP_PIXEL_COMPONENT: 'hover-card' },
+    });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-hover-card-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(report.component, 'hover-card');
+    assert.equal(report.comparable, false);
+    assert.equal(report.exactPixelPass, false);
+    assert.equal(report.pass, false);
+    assert.equal(report.pixelRatio, null);
+});
+
 test('Real Harness StateDot source capture retains the Candidate display and pixel boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });

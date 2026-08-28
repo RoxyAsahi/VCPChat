@@ -83,6 +83,11 @@ byte equality for the real-source and Candidate tooltip screenshots. Its result
 is deliberately separate from structural parity: an exact pixel pass cannot
 erase the `main` versus `body` ownership mismatch.
 
+The same decoder can target HoverCard with `VCP_PIXEL_COMPONENT=hover-card`.
+Its current 245x245 versus 244x244 ROI mismatch is reported as
+`comparable=false`, `exactPixelPass=false`; zero compared pixels is never
+treated as a pass when dimensions do not match.
+
 `capture-harness-tooltip-source-fixture.mjs` executes the real Harness
 `Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
 the VCP Candidate deliberately reports a structural mismatch: Harness keeps

@@ -43,7 +43,7 @@ try {
     const beforeDelay = await page.locator('.vcp-harness-hover-card').count();
     await page.waitForTimeout(40);
     const open = await page.locator('.vcp-harness-hover-card').evaluate(element => { const style = getComputedStyle(element); const box = element.getBoundingClientRect(); return { dom: element.outerHTML, role: element.getAttribute('role'), ariaLabel: element.getAttribute('aria-label'), parent: element.parentElement?.tagName.toLowerCase(), rect: { x: box.x, y: box.y, width: box.width, height: box.height }, style: { position: style.position, zIndex: style.zIndex, width: style.width, padding: style.padding, borderRadius: style.borderRadius, boxSizing: style.boxSizing } }; });
-    await page.screenshot({ path: path.join(root, 'reports', 'vcp-hover-card-candidate.png') });
+    await page.locator('.vcp-harness-hover-card').screenshot({ path: path.join(root, 'reports', 'vcp-hover-card-candidate.png') });
     const card = page.locator('.vcp-harness-hover-card');
     await card.dispatchEvent('pointerenter');
     await page.locator('.vcp-harness-hover-card-root').first().dispatchEvent('pointerleave');
