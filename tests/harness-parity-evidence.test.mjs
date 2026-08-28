@@ -116,6 +116,19 @@ test('Model picker pixel diff remains pending or records a real mismatch', () =>
     }
 });
 
+test('Model picker B1 state matrix stays a reproducible Candidate-Lab gate', () => {
+    execFileSync(process.execPath, ['scripts/test-vcp-model-picker-b1-state-matrix.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-model-picker-b1-state-matrix.json'), 'utf8'));
+    assert.equal(report.status, 'candidate-lab-state-matrix-complete');
+    assert.equal(report.candidateLabPass, true);
+    assert.equal(report.productionEquivalent, false);
+    assert.deepEqual(report.states, ['ready-selected', 'hover', 'keyboard-focus', 'load-error-retry', 'selecting', 'locked', 'selection-error-toast']);
+    assert.equal(report.visualBaselines.hover.pass, true);
+    assert.equal(report.visualBaselines.keyboardFocus.pass, true);
+    assert.ok(report.missingEvidence.includes('Harness production failure/Toast visual capture'));
+    assert.ok(report.missingEvidence.includes('complete modelSelectModal parity and legacy deletion'));
+});
+
 test('Harness capture freshness gate reports paired artifacts without promoting them', () => {
     execFileSync(process.execPath, ['scripts/check-harness-capture-freshness.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-freshness.json'), 'utf8'));
@@ -344,6 +357,20 @@ test('Real Harness Toast source capture records portal, resize, teardown, and st
     assert.equal(report.pixel.comparable, true);
     assert.equal(report.pixel.pass, true);
     assert.equal(report.pass, false, 'Candidate evidence does not create a production consumer');
+});
+
+test('Real Harness RiskConfirmation source capture preserves controlled gate and teardown evidence', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-risk-confirmation-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-risk-confirmation-source.json'), 'utf8'));
+    assert.equal(report.unacknowledged.aria.role, 'dialog');
+    assert.equal(report.unacknowledged.aria.modal, 'true');
+    assert.equal(report.unacknowledged.checkbox.autoFocused, true);
+    assert.equal(report.unacknowledged.confirm.disabled, true);
+    assert.equal(report.acknowledged.checkbox.checked, true);
+    assert.equal(report.acknowledged.confirm.disabled, false);
+    assert.equal(report.disabled.checkbox.disabled, true);
+    assert.equal(report.disabled.confirm.disabled, true);
+    assert.deepEqual(report.unmounted, { rootEmpty: true, dialogs: 0 });
 });
 
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {

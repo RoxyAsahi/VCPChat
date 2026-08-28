@@ -127,6 +127,13 @@ unmount/dispose boundary. Its computed-style fields and strict decoded-RGB ROI
 currently match exactly; that component-scoped result does not promote the
 Candidate Lab primitive to production because no VCP Toast consumer is wired.
 
+RiskConfirmation now has a real Harness source capture through its actual
+RiskConfirmation, Modal, Button, icon, and CSS-module dependency closure. It
+records unacknowledged, acknowledged, disabled, autofocus, dialog ARIA, and
+unmount states. This is source-side evidence only: a matching VCP Candidate
+capture, computed-style/structural diff, strict pixel comparison, and any
+production consumer remain open.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept

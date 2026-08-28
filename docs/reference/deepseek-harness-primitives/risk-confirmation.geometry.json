@@ -2,7 +2,7 @@
   "source": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
   "styleSource": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; no equivalent VCP production consumer and paired pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; real Harness source geometry capture records the 440px controlled dialog at fixed 800x600; no equivalent VCP production consumer or paired VCP computed-style/pixel capture",
   "selectors": {
     ".confirmation": { "width": "min(440px, 100%)", "maxHeight": "calc(100vh - 48px)", "overflow": "hidden" },
     ".confirmationContent": { "minHeight": "0", "overflowY": "auto", "overscrollBehavior": "contain" },
