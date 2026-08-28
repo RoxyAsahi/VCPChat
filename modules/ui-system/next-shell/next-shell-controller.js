@@ -22,11 +22,29 @@
     let chatCapabilities = null;
     let releaseWindowState = null;
     let typedThemeConsumerMounted = false;
+    let themePresenterScope = null;
     let tabOperationId = 0;
     let tabOperationRevision = 0;
     const pendingTabOperations = new Map();
     const tabOperationListeners = new Set();
     const suppressedTabClicks = new Set();
+
+    function createThemePresenterScope() {
+        const disposers = new Set();
+        let active = true;
+        const scope = {
+            label: 'next:theme-presenter-fallback',
+            get active() { return active; },
+            own(disposer) { disposers.add(disposer); return disposer; },
+            listen(target, type, handler, options) { target.addEventListener(type, handler, options); return scope.own(() => target.removeEventListener(type, handler, options)); },
+            subscribe(register) { return scope.own(register?.() || (() => {})); },
+            child() { return scope; },
+            track(task) { return Promise.resolve(task); },
+            snapshot() { return Object.freeze({ label: scope.label, active, resourceCount: disposers.size }); },
+            async dispose() { if (!active) return; active = false; await Promise.allSettled([...disposers].reverse().map(disposer => typeof disposer === 'function' ? disposer() : disposer?.dispose?.())); disposers.clear(); },
+        };
+        return scope;
+    }
 
     function getTabSettlementSnapshot() {
         return Object.freeze({
@@ -783,8 +801,19 @@
             escapeDispatcher,
         });
         accountMenuController.mount(mountScope);
+        const scheduleTypedThemeRetry = (label = 'typed-theme-presenter-retry') => {
+            if (mountScope?.active) return mountScope.timeout(mountTypedThemeConsumer, 50, label);
+            return window.setTimeout(mountTypedThemeConsumer, 50);
+        };
         const mountTypedThemeConsumer = () => {
-            if (typedThemeConsumerMounted || !mountScope || !window.VCPUIUX?.mountThemePresenterFromScope) return;
+            if (window.__vcpDocumentThemePresenterMounted) {
+                typedThemeConsumerMounted = true;
+                return;
+            }
+            if (typedThemeConsumerMounted || !window.VCPUIUX?.mountThemePresenterFromScope) {
+                if (!typedThemeConsumerMounted) scheduleTypedThemeRetry();
+                return;
+            }
             const root = document.querySelector('.next-ui-account-dock');
             const theme = window.uiManager?.getThemeSnapshot
                 ? {
@@ -793,9 +822,13 @@
                     subscribe: (listener, options) => window.uiManager.subscribeTheme(listener, options),
                 }
                 : null;
-            if (!root || !theme) return;
+            if (!root || !theme) {
+                scheduleTypedThemeRetry('typed-theme-presenter-readiness-retry');
+                return;
+            }
             try {
-                window.VCPUIUX.mountThemePresenterFromScope(root, theme, mountScope);
+                themePresenterScope ||= mountScope || createThemePresenterScope();
+                window.VCPUIUX.mountThemePresenterFromScope(root, theme, themePresenterScope);
                 typedThemeConsumerMounted = true;
             } catch (error) {
                 console.warn('[NextUI] Typed theme presenter unavailable; legacy account presenter remains active:', error);
@@ -804,6 +837,10 @@
         mountTypedThemeConsumer();
         if (!typedThemeConsumerMounted && mountScope) {
             mountScope.listen(window, 'vcp-uiux-ready', mountTypedThemeConsumer, undefined, 'typed-theme-presenter-ready');
+            // The generated module may already have dispatched its ready event
+            // before the account dock is inserted into the shell. Retry once at
+            // the next task boundary so the document presenter gets a real root.
+            mountScope.timeout(mountTypedThemeConsumer, 0, 'typed-theme-presenter-late-mount');
         }
         notificationMenuController = new NotificationMenuController({
             window,
@@ -909,10 +946,13 @@
         overlayCoordinator = null;
         coordinatorToDispose?.dispose();
         const scopeToDispose = mountScope;
+        const themeScopeToDispose = themePresenterScope;
         mountScope = null;
+        themePresenterScope = null;
         const pending = Promise.allSettled([
             closeAllInternalApps({ preserveSession: true }),
             scopeToDispose?.dispose('leave-next') || Promise.resolve(),
+            themeScopeToDispose && themeScopeToDispose !== scopeToDispose ? themeScopeToDispose.dispose('leave-next') : Promise.resolve(),
         ]).then(results => {
             results.forEach(result => {
                 if (result.status === 'rejected') {
