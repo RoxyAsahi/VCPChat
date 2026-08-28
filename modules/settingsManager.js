@@ -59,7 +59,7 @@ const settingsManager = (() => {
     let promptManager = null; // PromptManager instance
     let openModelSelectBtn, modelSelectModal, modelList, modelSearchInput, refreshModelsBtn;
     let topicSummaryModelInput, openTopicSummaryModelSelectBtn; // New elements for topic summary model
-    let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider, ttsSpeedValueSpan;
+    let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider;
     let stripRegexListContainer;
 
     // --- New Regex Modal Elements ---
@@ -83,15 +83,6 @@ const settingsManager = (() => {
         modular: '模块',
         preset: '预置'
     };
-
-    function syncRangeProgress(rangeInput) {
-        if (!rangeInput) return;
-        const min = Number(rangeInput.min || 0);
-        const max = Number(rangeInput.max || 100);
-        const value = Number(rangeInput.value || min);
-        const progress = max > min ? ((value - min) / (max - min)) * 100 : 0;
-        rangeInput.style.setProperty('--vcp-ui-range-progress', `${Math.max(0, Math.min(100, progress))}%`);
-    }
 
     function reportSettingsSaveResult(form, success, error = '') {
         form?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
@@ -279,8 +270,6 @@ const settingsManager = (() => {
         agentTtsRegexSecondaryInput.value = agentConfig.ttsRegexSecondary || '';
 
         agentTtsSpeedSlider.value = agentConfig.ttsSpeed !== undefined ? agentConfig.ttsSpeed : 1.0;
-        ttsSpeedValueSpan.textContent = parseFloat(agentTtsSpeedSlider.value).toFixed(1);
-        syncRangeProgress(agentTtsSpeedSlider);
 
         // Load and render regex rules
         currentAgentRegexes = JSON.parse(JSON.stringify(agentConfig.stripRegexes || [])); // Deep copy
@@ -807,7 +796,6 @@ const settingsManager = (() => {
             agentTtsRegexSecondaryInput = document.getElementById('agentTtsRegexSecondary');
             refreshTtsModelsBtn = document.getElementById('refreshTtsModelsBtn');
             agentTtsSpeedSlider = options.elements.agentTtsSpeedSlider;
-            ttsSpeedValueSpan = options.elements.ttsSpeedValueSpan;
 
             // 🟢 监听模态框就绪事件，动态绑定延迟加载的元素
             document.addEventListener('modal-ready', (e) => {
@@ -966,14 +954,6 @@ const settingsManager = (() => {
                 promptManager?.destroy?.();
                 promptManager = null;
             }, { once: true });
-
-            if (agentTtsSpeedSlider && ttsSpeedValueSpan) {
-                agentTtsSpeedSlider.addEventListener('input', () => {
-                    ttsSpeedValueSpan.textContent = parseFloat(agentTtsSpeedSlider.value).toFixed(1);
-                    syncRangeProgress(agentTtsSpeedSlider);
-                });
-                syncRangeProgress(agentTtsSpeedSlider);
-            }
 
             if (refreshTtsModelsBtn) {
                 refreshTtsModelsBtn.addEventListener('click', async () => {

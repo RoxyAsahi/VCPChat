@@ -120,6 +120,16 @@ if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== 
         opened: true, menuOwner: true, role: 'menu', closed: true, focusRestored: true,
     }, 'voice Select interaction evidence must prove portal open, Escape close, and focus restore');
 }
+if (report.agentRangeInteraction !== null && report.agentRangeInteraction !== undefined) {
+    assert.equal(report.agentRangeInteraction.available, true, 'Agent TTS Range interaction evidence is unavailable');
+    assert.equal(report.agentRangeInteraction.native, true, 'Agent TTS Range must retain the native range input');
+    assert.equal(report.agentRangeInteraction.wrapperOwnsInput, true, 'Agent TTS Range wrapper must retain the native range');
+    assert.equal(report.agentRangeInteraction.wrapperOwnsOutput, true, 'Agent TTS Range wrapper must own the canonical value text');
+    assert.deepEqual(report.agentRangeInteraction.projected, { value: '1.4', output: '1.4' },
+        'Agent TTS Range must project the native input into the one-decimal value text');
+    assert.deepEqual(report.agentRangeInteraction.restored, report.agentRangeInteraction.before,
+        'Agent TTS Range interaction capture must restore the canonical test value');
+}
 if (report.agentModelPickerInteraction !== null && report.agentModelPickerInteraction !== undefined) {
     const { refreshRows, ...interaction } = report.agentModelPickerInteraction;
     assert.deepEqual(interaction, {
@@ -185,6 +195,7 @@ console.log(JSON.stringify({
     selects: report.selects.length,
     modelTriggerButton: 'openModelSelectBtn',
     agentSelectInteraction: report.agentSelectInteraction ?? null,
+    agentRangeInteraction: report.agentRangeInteraction ?? null,
     agentModelPickerInteraction: report.agentModelPickerInteraction ?? null,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',

@@ -4,11 +4,17 @@ const STYLE_ID = 'vcp-harness-uiux-range';
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style'); style.id = STYLE_ID;
-    style.textContent = `.vcp-uiux-range{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.vcp-uiux-range input[type=range]{width:100%;height:20px;margin:0;accent-color:var(--vcp-color-brand,#1677ff)}.vcp-uiux-range output{min-width:3.5em;color:var(--vcp-color-muted,#68707d);font-size:12px;line-height:18px;text-align:right}`;
+    // The wrapper is the presentation owner.  It keeps the legacy
+    // `.slider-container` row flexible without retaining an Agent-id-specific
+    // width rule, so the canonical native range can move independently.
+    style.textContent = `.vcp-uiux-range{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;flex:1 1 auto;min-width:0}.vcp-uiux-range input[type=range]{width:100%;height:20px;margin:0;accent-color:var(--vcp-color-brand,#1677ff)}.vcp-uiux-range output{min-width:3.5em;color:var(--vcp-color-muted,#68707d);font-size:12px;line-height:18px;text-align:right}`;
     (document.head || document.documentElement).append(style);
 }
 
-export interface RangeProps { readonly output?: HTMLOutputElement | null; readonly format?: (value: string) => string; }
+// Existing VCP surfaces use both <output> and a canonical text <span> for
+// range values.  The primitive only owns text projection, so do not falsely
+// require an <output> element and force a business-DOM rewrite.
+export interface RangeProps { readonly output?: HTMLElement | null; readonly format?: (value: string) => string; }
 
 /** Harness range contract over a native range and optional output. */
 export function mountRange(input: HTMLInputElement, props: RangeProps = {}, scope: UiScope): UiDisposer {

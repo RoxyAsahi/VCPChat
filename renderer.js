@@ -844,7 +844,6 @@ mainChatSettingsPresentationOwner.configureStartup({
                 agentTtsVoiceSelect: document.getElementById('agentTtsVoice'),
                 refreshTtsModelsBtn: document.getElementById('refreshTtsModelsBtn'),
                 agentTtsSpeedSlider: document.getElementById('agentTtsSpeed'),
-                ttsSpeedValueSpan: document.getElementById('ttsSpeedValue'),
             },
             mainRendererFunctions: {
                 setCroppedFile: uiHelperFunctions.setCroppedFile,

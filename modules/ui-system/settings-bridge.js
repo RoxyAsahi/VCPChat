@@ -946,7 +946,10 @@ function mountTypedAgentTtsSpeedRange(form) {
     const scope = ensurePresentationScope();
     if (!input || !output || !api?.mountRange || !scope || input.dataset.vcpTypedAgentTtsSpeed === 'true') return;
     try {
-        api.mountRange(input, { output, format: value => value }, scope);
+        // Keep the existing persisted-number display contract ("1.0") while
+        // making the generated Range the sole owner of user-driven output
+        // synchronization.  The native input remains the canonical save node.
+        api.mountRange(input, { output, format: value => Number.parseFloat(value).toFixed(1) }, scope);
         input.dataset.vcpTypedAgentTtsSpeed = 'true';
         scope.own(() => { delete input.dataset.vcpTypedAgentTtsSpeed; }, 'agent-tts-speed-range-marker', 'ui-presentation');
     } catch (error) {
