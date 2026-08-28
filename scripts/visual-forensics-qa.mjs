@@ -498,8 +498,8 @@ try {
       await stateTarget.hover().catch(() => {});
       const box = await stateTarget.boundingBox().catch(() => null);
       if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
-      await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: true });
-      const hoverState = await stateTarget.evaluate(el => { const s = getComputedStyle(el); return { active: el.matches(':hover'), className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; }).catch(() => null);
+      await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: false });
+      const hoverState = await stateTarget.evaluate(el => { const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return { active: el.matches(':hover'), className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; }).catch(() => null);
       await stateTarget.focus().catch(() => {});
       // Establish real keyboard modality so :focus-visible rules are applied
       // in Electron, rather than treating programmatic focus as visual proof.
@@ -507,8 +507,8 @@ try {
       await page.keyboard.down('Shift').catch(() => {});
       await page.keyboard.press('Tab').catch(() => {});
       await page.keyboard.up('Shift').catch(() => {});
-      await page.screenshot({ path: path.join(output, `${name}-focus.png`), fullPage: true });
-      const focusState = await page.evaluate(() => { const el = document.activeElement; if (!el?.closest('.vcp-harness-primitive-lab')) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      await page.screenshot({ path: path.join(output, `${name}-focus.png`), fullPage: false });
+      const focusState = await page.evaluate(() => { const el = document.activeElement; if (!el?.closest('.vcp-harness-primitive-lab')) return null; const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return { className: el.className, focusVisible: el.matches(':focus-visible'), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
       initial.interactionStates = { hover: hoverState, focus: focusState };
     } else {
       initial.interactionStates = { hover: null, focus: null };

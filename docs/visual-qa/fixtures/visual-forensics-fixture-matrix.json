@@ -111,13 +111,13 @@
     },
     {
       "id": "showcase-hover",
-      "trigger": "hover(real element handle)",
+      "trigger": "hover(real element handle); capture viewport-visible :hover state",
       "screenshotSuffix": "hover",
       "selectors": [".vcp-harness-primitive-lab button"]
     },
     {
       "id": "showcase-focus-visible",
-      "trigger": "keyboard Tab/Shift+Tab focus",
+      "trigger": "keyboard Tab/Shift+Tab focus; capture viewport-visible :focus-visible state",
       "screenshotSuffix": "focus",
       "selectors": [".vcp-harness-primitive-lab button", ":focus-visible"]
     }
