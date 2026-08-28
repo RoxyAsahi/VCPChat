@@ -527,6 +527,27 @@ try {
     await page.setViewport({ width: Math.max(320, width - 240), height });
     await sleep(150);
     const resized = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
+    const tooltipHandle = await (async () => {
+      for (const button of await page.$$(`${lab} button`)) {
+        if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
+      }
+      return null;
+    })();
+    if (tooltipHandle) {
+      await tooltipHandle.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await sleep(80);
+      await tooltipHandle.hover().catch(() => {});
+      await sleep(160);
+      resized.tooltip = await page.evaluate(() => {
+        const node = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
+        const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
+        if (!node || !anchor) return { open: false, rect: null };
+        const r = node.getBoundingClientRect(); const ar = anchor.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+      }).catch(() => ({ open: false, rect: null }));
+      await page.screenshot({ path: path.join(output, `${name}-narrow-tooltip.png`), fullPage: false });
+      await page.mouse.move(2, 2).catch(() => {});
+    } else resized.tooltip = { open: false, rect: null };
     await page.screenshot({ path: path.join(output, `${name}-narrow.png`), fullPage: false });
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await sleep(150);
