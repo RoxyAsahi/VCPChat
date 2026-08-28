@@ -6,7 +6,55 @@ const primitiveSelectStates = new Map();
 const selectObserverStates = new Map();
 
 export function createSelectProjection({ ensurePresentationScope }) {
-    function mountSelectKeyboardGlue(select, cleanups) {
+    // Mutation-driven option rebuilds cross more than one task turn: the old
+    // primitive first restores its native select, then the next turn mounts a
+    // fresh projection.  Keep every observer and deferred continuation in a
+    // single scope-owned record so a surface close cannot leave the second
+    // turn running against a detached/replaced form.
+    function releaseObserverState(state, { preserveRebuilding = false } = {}) {
+        if (!state || !state.active) return;
+        state.active = false;
+        state.observer.disconnect();
+        for (const key of ['rebuild', 'reset']) {
+            const pending = state[key];
+            state[key] = null;
+            if (pending) void pending.release();
+        }
+        if (selectObserverStates.get(state.form) === state) {
+            selectObserverStates.delete(state.form);
+        }
+        if (!preserveRebuilding) delete state.form.dataset.vcpSelectRebuilding;
+    }
+
+    function scheduleOwned(state, key, label, callback) {
+        const previous = state[key];
+        if (previous) void previous.release();
+        let release;
+        const timer = setTimeout(() => {
+            state[key] = null;
+            void release?.();
+            if (!state.active || !state.scope.active || selectObserverStates.get(state.form) !== state) return;
+            callback();
+        }, 0);
+        release = state.scope.own(() => clearTimeout(timer), label, 'timeout');
+        state[key] = { release };
+    }
+
+    // A child-list rebuild explicitly tears down the current observer before
+    // it remounts.  Its two continuation turns therefore cannot live in the
+    // retired observer record; attach them directly to the still-live surface
+    // scope so close/dispose cancels them deterministically.
+    function scheduleScopeContinuation(scope, label, callback) {
+        let release;
+        const timer = setTimeout(() => {
+            void release?.();
+            if (!scope.active) return;
+            callback();
+        }, 0);
+        release = scope.own(() => clearTimeout(timer), label, 'timeout');
+    }
+
+    function mountSelectKeyboardGlue(select, cleanups, scope) {
         const trigger = select.parentElement?.querySelector(':scope > .vcp-harness-select-trigger');
         if (!trigger) return;
         const openMenuItems = () => {
@@ -26,12 +74,38 @@ export function createSelectProjection({ ensurePresentationScope }) {
             if (!count) return;
             items[((next % count) + count) % count].focus();
         };
+        let focusFrame = null;
+        let focusFrameRelease = null;
+        const requestFrame = globalThis.requestAnimationFrame || (callback => setTimeout(callback, 16));
+        const cancelFrame = globalThis.cancelAnimationFrame || clearTimeout;
+        const cancelFocusFrame = () => {
+            if (focusFrame !== null) cancelFrame(focusFrame);
+            focusFrame = null;
+            const release = focusFrameRelease;
+            focusFrameRelease = null;
+            if (release) void release();
+        };
+        const scheduleFocusFrame = () => {
+            cancelFocusFrame();
+            let release;
+            focusFrame = requestFrame(() => {
+                focusFrame = null;
+                focusFrameRelease = null;
+                void release?.();
+                if (scope.active) focusSelectedItem();
+            });
+            release = scope.own(() => {
+                if (focusFrame !== null) cancelFrame(focusFrame);
+                focusFrame = null;
+            }, 'select-focus-frame', 'animation-frame');
+            focusFrameRelease = release;
+        };
         const onTriggerKey = event => {
             if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
             event.preventDefault();
             if (trigger.getAttribute('aria-expanded') !== 'true') {
                 trigger.click();
-                requestAnimationFrame(focusSelectedItem);
+                scheduleFocusFrame();
                 return;
             }
             const items = openMenuItems();
@@ -61,6 +135,7 @@ export function createSelectProjection({ ensurePresentationScope }) {
         document.addEventListener('keydown', onDocumentKey, true);
         window.addEventListener('global-settings-updated', onGlobalUpdate);
         cleanups.push(() => {
+            cancelFocusFrame();
             trigger.removeEventListener('keydown', onTriggerKey);
             document.removeEventListener('keydown', onDocumentKey, true);
             window.removeEventListener('global-settings-updated', onGlobalUpdate);
@@ -74,8 +149,8 @@ export function createSelectProjection({ ensurePresentationScope }) {
         // replacement; otherwise the stale entry makes the surface believe an
         // observer is still listening while none is.
         if (previousObserver) {
-            previousObserver.disconnect();
-            selectObserverStates.delete(form);
+            releaseObserverState(previousObserver);
+            void previousObserver.release();
         }
         const api = window.VCPUIUX;
         const scope = ensurePresentationScope();
@@ -97,25 +172,48 @@ export function createSelectProjection({ ensurePresentationScope }) {
             }
             const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
             const labelText = fieldLabel?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
-            const release = api?.mountSelect && scope
-                ? api.mountSelect(select, { label: labelText, portal: true }, scope)
-                : null;
-            if (!release) return; // No primitive runtime: leave the native select in place.
+            if (!api?.mountSelect) return; // No primitive runtime: leave the native select in place.
+            // Select owns document listeners, a portal, native sync handlers and
+            // (via the bridge) keyboard glue.  Give every projection a child
+            // owner so an option-list rebuild disposes the complete bundle;
+            // mounting it directly in the long-lived presentation scope would
+            // retain those listeners until the entire Settings surface closes.
+            const selectScope = scope.child(`select-projection:${select.id || 'anonymous'}`);
+            let release;
+            try {
+                release = api.mountSelect(select, { label: labelText, portal: true }, selectScope);
+            } catch (error) {
+                void selectScope.dispose('select-projection-mount-failed');
+                throw error;
+            }
+            if (!release) {
+                void selectScope.dispose('select-projection-unavailable');
+                return;
+            }
             select.classList.remove('vcp-settings-bare-select');
             select.dataset.vcpTypedPrimitiveMounted = 'true';
-            scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'select-primitive-marker', 'ui-primitive');
             const cleanups = [];
-            mountSelectKeyboardGlue(select, cleanups);
+            mountSelectKeyboardGlue(select, cleanups, selectScope);
             const stateRelease = () => {
+                return selectScope.dispose('select-projection-rebuilt');
+            };
+            selectScope.own(() => {
                 cleanups.splice(0).forEach(cleanup => cleanup());
-                release();
                 delete select.dataset.vcpTypedPrimitiveMounted;
                 primitiveSelectStates.delete(select);
-            };
-            scope.own(stateRelease, 'select-primitive', 'ui-primitive');
+            }, 'select-projection-state', 'ui-primitive');
             primitiveSelectStates.set(select, { release: stateRelease });
         });
         if (window.MutationObserver && !selectObserverStates.has(form)) {
+            const state = {
+                form,
+                scope,
+                observer: null,
+                active: true,
+                rebuild: null,
+                reset: null,
+                release: null,
+            };
             const observer = new window.MutationObserver(mutations => {
                 const relevant = mutations.some(record => {
                     if (record.type === 'attributes') return record.target.matches?.('select, option');
@@ -128,8 +226,7 @@ export function createSelectProjection({ ensurePresentationScope }) {
                 });
                 if (!relevant) return;
                 if (form.dataset.vcpSelectRebuilding === 'true') return;
-                clearTimeout(form.__vcpSelectRebuildTimer);
-                form.__vcpSelectRebuildTimer = setTimeout(() => {
+                scheduleOwned(state, 'rebuild', 'select-projection-rebuild', () => {
                     // The rebuild's own DOM churn (dispose restores the business
                     // node, the primitive re-inserts its wrap) is delivered back to
                     // this observer as a microtask; keep the guard raised until
@@ -142,36 +239,44 @@ export function createSelectProjection({ ensurePresentationScope }) {
                     // (programmatic value/selected writes) re-sync the live
                     // projection through the primitive's vcp-uiux-sync hook.
                     if (mutations.some(record => record.type === 'childList')) {
-                        teardownHarnessSelects();
+                        teardownHarnessSelects({ preserveForm: form });
                         // LifecycleScope releases settle their dispose in a
                         // microtask: the old projection must have fully restored
                         // the business DOM before the remount runs, otherwise the
                         // deferred disposer strips the freshly inserted wraps.
                         // The handle is tracked so a teardown landing between the
                         // two ticks cannot leave an orphan mount behind.
-                        form.__vcpSelectMountTimer = setTimeout(() => mountHarnessSelects(form), 0);
+                        scheduleScopeContinuation(scope, 'select-projection-remount', () => mountHarnessSelects(form));
+                        // Keep the guard raised through the MutationObserver
+                        // delivery from the fresh primitive insertion, then
+                        // release it as a separately scope-owned turn.
+                        scheduleScopeContinuation(scope, 'select-projection-rebuild-reset', () => {
+                            delete form.dataset.vcpSelectRebuilding;
+                        });
                     } else {
                         form.querySelectorAll('select[data-vcp-typed-primitive-mounted="true"]').forEach(select => {
                             select.dispatchEvent(new Event('vcp-uiux-sync'));
                         });
                     }
-                    setTimeout(() => { delete form.dataset.vcpSelectRebuilding; }, 0);
-                }, 0);
+                    if (!mutations.some(record => record.type === 'childList')) {
+                        scheduleOwned(state, 'reset', 'select-projection-rebuild-reset', () => {
+                            delete form.dataset.vcpSelectRebuilding;
+                        });
+                    }
+                });
             });
+            state.observer = observer;
             observer.observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'value', 'selected'] });
-            selectObserverStates.set(form, observer);
+            state.release = scope.own(() => releaseObserverState(state), 'select-projection-observer', 'observer');
+            selectObserverStates.set(form, state);
         }
     }
 
-    function teardownHarnessSelects() {
-        selectObserverStates.forEach((observer, form) => {
-            observer.disconnect();
-            clearTimeout(form.__vcpSelectRebuildTimer);
-            delete form.__vcpSelectRebuildTimer;
-            clearTimeout(form.__vcpSelectMountTimer);
-            delete form.__vcpSelectMountTimer;
+    function teardownHarnessSelects({ preserveForm = null } = {}) {
+        [...selectObserverStates.values()].forEach(state => {
+            releaseObserverState(state, { preserveRebuilding: state.form === preserveForm });
+            void state.release?.();
         });
-        selectObserverStates.clear();
         [...primitiveSelectStates.keys()].forEach(select => {
             // stateRelease retracts the keyboard glue, runs the primitive disposer
             // (which restores the original business DOM) and clears the marker.

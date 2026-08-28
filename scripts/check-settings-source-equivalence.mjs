@@ -197,9 +197,17 @@ assert.match(css, /vcp-harness-general-row[\s\S]*?border-radius:\s*8px[\s\S]*?fo
 // Select presentation is owned by the real library Select primitive
 // (window.VCPUIUX.mountSelect): the bridge must mount it for every non-typed
 // select and must not retain the retired local Harness Menu projection.
-assert.match(settingsModules, /api\.mountSelect\(select, \{ label: labelText, portal: true \}, scope\)/, 'Select presentation must come from the library primitive');
+assert.match(settingsModules, /api\.mountSelect\(select, \{ label: labelText, portal: true \}, selectScope\)/, 'Select presentation must come from the library primitive');
+assert.match(selectProjection, /scope\.child\(`select-projection:\$\{select\.id \|\| 'anonymous'\}`\)/,
+    'every projected Select must have a disposable child owner');
 assert.match(settingsModules, /primitiveSelectStates/, 'primitive select projections must be tracked for dispose/remount');
 assert.match(settingsModules, /mountSelectKeyboardGlue/, 'select keyboard projection must keep a11y parity');
+assert.match(selectProjection, /scope\.own\(\(\) => releaseObserverState\(state\), 'select-projection-observer', 'observer'\)/,
+    'option-change observer must be owned by the presentation scope');
+assert.match(selectProjection, /scheduleScopeContinuation\(scope, 'select-projection-remount'/,
+    'option-list remount continuation must be owned by the presentation scope');
+assert.doesNotMatch(selectProjection, /__vcpSelectRebuildTimer|__vcpSelectMountTimer/,
+    'select rebuild timers must not escape through ad-hoc form properties');
 assert.doesNotMatch(settingsModules, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
 assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
 

@@ -1,0 +1,30 @@
+{
+  "primitive": "WorkspaceBrowser",
+  "source": "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-workspace/src/client/WorkspaceBrowser.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+      "packages/client/ui-workspace/src/client/WorkspaceBrowser.module.css",
+      "packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx",
+      "packages/client/ui-workspace/tests/browser-styles.client.spec.ts"
+    ],
+    "selectionRule": "Use the Harness sidebar-workspace source and tests as the contract; VCP must not connect this reference to Workspace persistence, directory IPC, or session actions."
+  },
+  "candidateStatus": "source-only; complex injected workspace/session state is documented, no VCP consumer, capture, computed-style diff, or pixel parity claim",
+  "tree": "div.root[wide|rail] > sectionHeader(search + options + add) + listArea(tree/search results) + browser-owned rename/delete dialogs + WorkspacePickFlow",
+  "aria": {
+    "search": "button aria-expanded controls wide-only search input; Escape/clear collapses empty query",
+    "workspaceActions": "localized add/view-options controls; Menu and Modal delegate their own ARIA",
+    "rows": "row components own session/workspace/menu semantics and native drag targets"
+  },
+  "ownership": {
+    "business": "injected workspace/session actions own create, rename, delete, archive, reorder, fork, open and remote search",
+    "search": "browser owns sanitized draft, 250ms debounce and AbortController; unmount aborts in-flight search",
+    "dialogs": "browser owns rename/delete transient state so row unmounts cannot settle stale dialogs",
+    "rail": "sidebar owner supplies wide/expandSidebar; browser delays focus until the owner slide completes"
+  },
+  "states": ["wide-tree", "rail-controls", "search-open", "search-loading", "search-ready", "search-error", "remote-search-abort", "grouped-flat-order", "drag-reorder", "workspace-picker", "rename-pending", "delete-await-projection", "collapse-unmount"],
+  "vcpBoundary": "Reference only; no VCP Workspace persistence, directory IPC, session navigation, drag/reorder, or sidebar consumer integration."
+}
