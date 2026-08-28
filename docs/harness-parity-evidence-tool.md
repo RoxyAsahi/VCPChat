@@ -108,6 +108,11 @@ compared; the report records the observed `block` (Harness fixture) versus
 `inline-block` (Candidate) display difference and retains pixel evidence as
 pending.
 
+StateDot also has a per-state strict decoded-RGB ROI comparator. It records
+whether each of `done`, `warning`, `ongoing`, and `error` is dimensionally
+comparable and pixel-identical; the current baseline remains a non-passing
+visual result when any state differs.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only

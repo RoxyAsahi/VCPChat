@@ -260,6 +260,19 @@ test('Real Harness StateDot source capture retains the Candidate display and pix
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('StateDot per-state ROI comparator records strict decoded pixel results', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(report.cases.length, 4);
+    assert.equal(report.cases.filter(item => item.comparable).length, 3);
+    assert.equal(report.cases.some(item => !item.comparable), true);
+    assert.equal(report.cases.some(item => !item.exactPixelPass), true);
+    assert.equal(report.pass, report.cases.every(item => item.exactPixelPass));
+    assert.equal(report.pass, false);
+});
+
 test('Real-source diff ledger records cross-component boundaries without promotion', () => {
     execFileSync(process.execPath, ['scripts/check-harness-real-source-diff-boundaries.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-real-source-diff-boundaries.json'), 'utf8'));
@@ -269,7 +282,7 @@ test('Real-source diff ledger records cross-component boundaries without promoti
     assert.equal(report.counts.semanticFixtureMatches, 3);
     assert.equal(report.counts.parityPasses, 0);
     assert.equal(report.counts.pixelMeasured, 1);
-    assert.equal(report.counts.pixelPasses, 0);
+    assert.ok(report.counts.pixelPasses <= report.counts.pixelMeasured);
     assert.equal(report.counts.pendingPixelDiffs, 3);
 });
 

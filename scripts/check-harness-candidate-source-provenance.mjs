@@ -59,7 +59,10 @@ const entries = candidates.map(candidate => {
     && geometry?.source === candidate.style && geometry?.styleSource === candidate.style;
   const capturePass = capture?.semanticFixture === candidate.semanticFixture
     && typeof capture?.candidateStatus === 'string'
-    && capture.candidateStatus.includes('no same-semantic Harness');
+    && (capture.candidateStatus.includes('no same-semantic Harness')
+      || (candidate.name === 'state-dot'
+        && capture.candidateStatus.includes('paired real-source capture')
+        && capture.candidateStatus.includes('strict per-state pixel diff')));
   const pass = sourceExists && styleExists && referencePass && capturePass
     && sourceAnchorPasses.every(item => item.pass) && styleAnchorPasses.every(item => item.pass);
   return {
