@@ -23,6 +23,8 @@ const selectProjection = read('modules/ui-system/settings/select-projection.js')
 const canonicalRows = read('modules/ui-system/settings/canonical-rows.js');
 const settingsModules = `${bridge}\n${selectProjection}\n${canonicalRows}`;
 const settingsEntry = read('styles/settings.css');
+const agentFormCss = read('styles/setting/settings-agent-form.css');
+const agentIdentityCss = read('styles/setting/settings-agent-identity.css');
 const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
 const presentationOwner = read('modules/renderer/mainChatSettingsPresentationOwner.js');
@@ -210,6 +212,21 @@ assert.doesNotMatch(selectProjection, /__vcpSelectRebuildTimer|__vcpSelectMountT
     'select rebuild timers must not escape through ad-hoc form properties');
 assert.doesNotMatch(settingsModules, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
 assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
+
+// The Agent ColorPair is a real typed production consumer. Its historic
+// 37px/pill selectors remain available only to unwrapped native fallbacks;
+// they must never penetrate the typed wrapper and override its documented
+// 32px/8px candidate contract.
+assert.match(agentIdentityCss, /\.color-input-group > input\[type="color"\]/,
+    'legacy ColorPair color styling must be limited to direct native controls');
+assert.match(agentIdentityCss, /\.color-input-group > input\[type="text"\]/,
+    'legacy ColorPair text styling must be limited to direct native controls');
+assert.doesNotMatch(agentIdentityCss, /\.color-input-group input\[type=/,
+    'legacy ColorPair selectors must not penetrate the typed wrapper');
+assert.match(agentFormCss, /input\[type="text"\]:not\(\.input\)/,
+    'typed Harness Inputs must be excluded from the generic Agent input rule');
+assert.match(agentFormCss, /select:not\(\.vcp-harness-select-native\)/,
+    'typed Harness Select business nodes must be excluded from the generic Agent select rule');
 
 // Single-line text input presentation is owned by the real library Input
 // primitive (window.VCPUIUX.mountInput): the bridge mounts it per control
