@@ -275,6 +275,11 @@ const trayManager = (function () {
             btn.classList.add('active');
             btn.setAttribute('aria-expanded', 'true');
 
+            // A closed drawer disposes its body-portal tooltips. Rebuild the
+            // presentation-owned rows on reopen so their listeners and
+            // generated primitives are mounted against a fresh scope.
+            if (!drawerScope) renderDrawerGrid();
+
             // 防止重复打开时叠加全局点击监听
             if (!outsideClickListenerBound) {
                 outsideClickListenerBound = true;
@@ -298,6 +303,11 @@ const trayManager = (function () {
             drawer.inert = true;
             btn.classList.remove('active');
             btn.setAttribute('aria-expanded', 'false');
+            // Tooltip bubbles are body portals and outlive the drawer DOM
+            // during its exit transition unless the drawer owner is disposed.
+            // Tear down that scope immediately; the rows are remounted on the
+            // next open, while canonical launcher behavior remains unchanged.
+            void disposeDrawerScope('app-tray-drawer-closed');
             if (outsideClickListenerBound) {
                 if (outsideClickBindTimer) {
                     clearTimeout(outsideClickBindTimer);
