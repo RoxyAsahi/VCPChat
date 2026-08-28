@@ -19,6 +19,7 @@ import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 import { mountHomeTaglineInput } from './settings/home-controls.js';
 import { mountIdentityColorPairs } from './settings/identity-controls.js';
+import { mountChoiceControls } from './settings/choice-controls.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1057,8 +1058,7 @@ function enhanceGlobalSettings(root, form) {
     mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
     mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
-    mountTypedRadiusChoice(root, form);
-    mountTypedGlobalChoiceGroups(root, form);
+    mountChoiceControls(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
     mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
@@ -1080,47 +1080,6 @@ function enhanceGlobalSettings(root, form) {
     normalizeFormIcons(root);
 }
 
-function mountTypedRadiusChoice(root, form) {
-    const group = form?.querySelector?.('.appearance-radius-choice-grid');
-    const api = window.VCPUIUX;
-    if (!group || !api?.mountChoice || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
-    const scope = ensurePresentationScope();
-    if (!scope) return;
-    // Generated primitives register their own release with `scope`.  The
-    // bridge owns only its marker; re-owning the returned release creates a
-    // second record which can only invoke the same disposer a second time.
-    api.mountChoice(group, scope);
-    group.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
-}
-
-// Global Settings still has a native radio group that is routinely used but
-// was previously styled exclusively by a page-local CSS segment. Keep the
-// radios as the canonical form/business nodes and let the generated
-// Choice primitive own only the visible segmented-control contract.  Chat
-// presentation controls deliberately do not enter this batch: their visual
-// surface is frozen while the chat kernel work is protected.
-function mountTypedGlobalChoiceGroups(root, form) {
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!api?.mountChoice || !scope) return;
-    const groups = [
-        ['voiceModeLocal', 'voice-mode-choice'],
-    ];
-    groups.forEach(([inputId, ownerKey]) => {
-        const group = form?.querySelector?.(`#${inputId}`)?.closest('.vcp-settings-control-row');
-        if (!group || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        try {
-            api.mountChoice(group, scope);
-            group.dataset.vcpTypedPrimitiveMounted = 'true';
-            scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, `typed-${ownerKey}-marker`, 'ui-primitive');
-        } catch (error) {
-            // The native radio group remains fully usable if the optional
-            // presentation artifact is unavailable.
-            console.warn(`[VCPUI SettingsBridge] Could not mount typed ${ownerKey} Choice:`, error);
-        }
-    });
-}
 
 
 
