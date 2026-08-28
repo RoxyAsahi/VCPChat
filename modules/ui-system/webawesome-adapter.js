@@ -179,19 +179,37 @@ function applyTokens(scopeRoot) {
     if (!isNextUi() || !scopeRoot) return () => {};
     const hadLightClass = scopeRoot.classList.contains('wa-light');
     const hadDarkClass = scopeRoot.classList.contains('wa-dark');
-    const syncTheme = () => {
-        const isLight = document.body.classList.contains('light-theme');
+    const syncTheme = snapshot => {
+        const isLight = snapshot?.value?.effective === 'light';
         scopeRoot.classList.toggle('wa-light', isLight);
         scopeRoot.classList.toggle('wa-dark', !isLight);
     };
     scopeRoot.dataset.waScope = 'true';
-    syncTheme();
-    const observer = typeof MutationObserver === 'function'
-        ? new MutationObserver(syncTheme)
-        : null;
-    observer?.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    const themeService = window.uiManager;
+    const canSubscribeToTheme = typeof themeService?.getThemeSnapshot === 'function'
+        && typeof themeService?.subscribeTheme === 'function';
+    let observer = null;
+    let releaseTheme = null;
+    if (canSubscribeToTheme) {
+        syncTheme(themeService.getThemeSnapshot());
+        releaseTheme = themeService.subscribeTheme((_value, snapshot) => {
+            syncTheme(snapshot || themeService.getThemeSnapshot());
+        }, { immediate: false });
+    } else {
+        // Classic/boot fallback only. Next UI should provide uiManager's typed
+        // snapshot channel so presentation scopes do not infer theme from DOM.
+        const syncLegacyTheme = () => syncTheme({ value: {
+            effective: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+        } });
+        syncLegacyTheme();
+        observer = typeof MutationObserver === 'function'
+            ? new MutationObserver(syncLegacyTheme)
+            : null;
+        observer?.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
     return () => {
         observer?.disconnect();
+        releaseTheme?.();
         scopeRoot.removeAttribute('data-wa-scope');
         scopeRoot.classList.toggle('wa-light', hadLightClass);
         scopeRoot.classList.toggle('wa-dark', hadDarkClass);
