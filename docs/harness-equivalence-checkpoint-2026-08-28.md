@@ -54,3 +54,22 @@ Visual Forensics remains green for both themes at 800x600, 1280x800, and
 `16` gaps; these are explicit evidence gaps, not a basis for promotion. The
 remaining work therefore stays evidence-first: close provenance and full
 state coverage before retiring any legacy presentation path.
+
+## Inventory and Provenance Recheck (2026-08-28)
+
+The contract provenance gate now reports `51/51` declared boundaries complete
+(`0` metadata gaps). This closes only source-provenance bookkeeping; it does
+not close Candidate interaction, production-consumer, semantic-fixture, or
+pixel evidence.
+
+The Harness client export inventory reports `227` exports: `91` portable
+primitives, `21` composites, `59` frozen domain surfaces, and `56`
+scope-blocked runtime surfaces. With no uncovered in-scope export, its status
+is `inventory-scoped-complete`. `web/**` remains explicitly frozen as the
+Plugin Loader runtime shell and `web-react/**` as the chat-session Provider
+runtime; neither classification authorizes a port or a production integration.
+
+This is not a global Harness-parity or VCP production-completion claim. The
+Model Picker still has a pending same-semantic pixel diff, and frozen-domain
+or scope-blocked surfaces remain outside this checkpoint's implementation
+authority.
