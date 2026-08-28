@@ -1,8 +1,19 @@
 {
   "source": [
-    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-commands/src/client/popup.ts",
-    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-commands/src/client/PopupSelectView.tsx"
+    "packages/client/ui-commands/src/client/popup.ts",
+    "packages/client/ui-commands/src/client/PopupSelectView.tsx"
   ],
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-commands/src/client/PopupSelectView.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-commands/src/client/popup.ts",
+      "packages/client/ui-commands/src/client/PopupSelectView.tsx",
+      "packages/client/ui-commands/src/client/PopupSelectView.module.css"
+    ],
+    "selectionRule": "Use PopupSelectController/View and its CSS as the Harness command-overlay contract; VCP remains Candidate because input-overlay and Composer consumers are frozen."
+  },
+  "candidateStatus": "candidate-interaction-active; controller lifecycle and DOM/ARIA contract documented, paired same-semantic Harness/VCP capture pending",
   "productionConsumers": [
     "packages/client/ui-commands/src/client/index.ts",
     "packages/client/ui-conversation/src/client/skeleton/InputOverlay.tsx"
