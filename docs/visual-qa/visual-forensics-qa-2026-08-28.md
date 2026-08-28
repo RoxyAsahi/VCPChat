@@ -58,9 +58,11 @@ that fix exits 0 with stable lifecycle counts (`listeners=472`,
 
 No new same-Surface overlap, horizontal overflow, theme-token, portal
 positioning, focus-ring, reopen/dispose, or CSS cascade failure was observed in
-this pass. Model Picker pixel equivalence remains an independent pending
-condition (the paired ROI diff is still approximately 6.19% differing pixels),
-so this evidence does not promote the primitive to Stable or pixel-equivalent.
+this pass. The latest same-engine *static Harness source-reference* ROI reports
+`150/35500` differing pixels (`0.4225%`) and passes its 1%/2 policy, but it is
+explicitly not a Harness production consumer. Production ModelPicker pixel
+equivalence therefore remains pending; this evidence does not promote the
+primitive to Stable or pixel-equivalent.
 
 ## Finding (resolved): production Model Picker overlay anchor
 

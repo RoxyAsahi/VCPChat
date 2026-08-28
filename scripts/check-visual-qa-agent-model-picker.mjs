@@ -9,6 +9,7 @@ const requested = process.argv.slice(2);
 const targets = requested.length ? requested : ['light', 'dark'].map(theme => path.join(root, 'reports/visual-forensics-qa/agent-model-picker', theme));
 const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const failures = [];
+const finite = value => Number.isFinite(value);
 
 for (const dir of targets) {
   try {
@@ -21,7 +22,7 @@ for (const dir of targets) {
       const name = `${width}x${height}`;
       const capture = manifest.captures.find(item => item.viewport?.width === width && item.viewport?.height === height);
       assert.ok(capture, `${name}: capture missing`);
-      for (const suffix of ['open', 'narrow-open', 'restored-open']) {
+      for (const suffix of ['open', 'model-hover', 'narrow-open', 'restored-open']) {
         const screenshot = path.join(dir, `${name}-${suffix}.png`);
         const stat = await fs.stat(screenshot);
         assert.ok(stat.size > 1_000, `${name}-${suffix}: screenshot is unexpectedly small`);
@@ -30,6 +31,19 @@ for (const dir of targets) {
         assert.equal(info.width, expectedWidth, `${name}-${suffix}: width mismatch`);
         assert.equal(info.height, height, `${name}-${suffix}: height mismatch`);
       }
+      const hover = capture.modelPaneHover;
+      assert.equal(hover?.role, 'option', `${name}: production model-row role is not option`);
+      assert.equal(hover?.hovered, true, `${name}: production model-row hover state was not captured`);
+      assert.equal(hover?.topmostInsideCard, true, `${name}: production model-row hover is occluded outside the card`);
+      const hoverRect = hover?.rect;
+      assert.ok(
+        [hoverRect?.x, hoverRect?.y, hoverRect?.width, hoverRect?.height].every(finite)
+          && hoverRect.width > 0 && hoverRect.height > 0
+          && hoverRect.x >= -2 && hoverRect.y >= -2
+          && hoverRect.x + hoverRect.width <= width + 2
+          && hoverRect.y + hoverRect.height <= height + 2,
+        `${name}: production model-row hover geometry exceeds viewport`,
+      );
       for (const [phase, expectedWidth] of [['narrow', Math.max(320, width - 240)], ['restored', width]]) {
         const snapshot = capture[phase];
         const card = snapshot?.card;

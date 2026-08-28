@@ -103,6 +103,7 @@
     "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
     "test:visual-forensics-qa": "node scripts/visual-forensics-qa.mjs",
     "test:visual-forensics-themes": "node scripts/run-visual-forensics-themes.mjs",
+    "test:visual-forensics-isolated-themes": "node scripts/run-visual-forensics-isolated-themes.mjs",
     "check:visual-forensics": "node scripts/check-visual-forensics-evidence.mjs && node scripts/check-visual-forensics-baseline.mjs",
     "test:electron-uiux:artifacts": "node scripts/test-electron-uiux-theme.mjs",
     "test:electron-agent-settings-interaction": "VCPCHAT_STRESS_SKIP_PREFLIGHT=1 VCPCHAT_STRESS_STAGES=agent-settings VCPCHAT_STRESS_CYCLES=1 VCPCHAT_STRESS_WARMUP_CYCLES=0 VCPCHAT_STRESS_AGENT_SELECT_INTERACTION=1 VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS=1 node scripts/test-electron-lifecycle-stress.mjs",

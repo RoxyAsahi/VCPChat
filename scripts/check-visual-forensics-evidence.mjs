@@ -7,6 +7,7 @@ const dirs = process.argv.slice(2).filter(Boolean);
 const targets = dirs.length ? dirs : [path.join(root, 'reports/visual-forensics-qa/light'), path.join(root, 'reports/visual-forensics-qa/dark')];
 const requiredViewports = [[800, 600], [1280, 800], [1680, 1000]];
 const failures = [];
+const manifests = [];
 try {
   const fixturePath = path.join(root, 'docs/visual-qa/fixtures/visual-forensics-fixture-matrix.json');
   const fixtureMatrix = JSON.parse(await fs.readFile(fixturePath, 'utf8'));
@@ -24,6 +25,7 @@ try {
 for (const dir of targets) {
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
+    manifests.push({ dir, manifest });
     const generatedAtMs = Date.parse(manifest.generatedAt);
     assert.ok(Number.isFinite(generatedAtMs), 'manifest generatedAt is invalid');
     assert.deepEqual(manifest.viewports, requiredViewports);
@@ -140,10 +142,15 @@ for (const dir of targets) {
     failures.push(`${dir}: ${error.message}`);
   }
 }
-if (!dirs.length) {
+if (!dirs.length || manifests.length === 2) {
   try {
-    const light = JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/light/manifest.json'), 'utf8'));
-    const dark = JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/dark/manifest.json'), 'utf8'));
+    const selected = manifests.length === 2 ? manifests : [
+      { dir: path.join(root, 'reports/visual-forensics-qa/light'), manifest: JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/light/manifest.json'), 'utf8')) },
+      { dir: path.join(root, 'reports/visual-forensics-qa/dark'), manifest: JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/dark/manifest.json'), 'utf8')) },
+    ];
+    const light = selected.find(({ dir, manifest }) => manifest.theme === 'light' || path.basename(dir) === 'light')?.manifest;
+    const dark = selected.find(({ dir, manifest }) => manifest.theme === 'dark' || path.basename(dir) === 'dark')?.manifest;
+    assert.ok(light && dark, 'a paired run must include both light and dark manifests');
     const lightTokens = light.observations?.[0]?.initial?.themeTokens || {};
     const darkTokens = dark.observations?.[0]?.initial?.themeTokens || {};
     const comparable = ['accent', 'surface', 'inputBackground', 'textPrimary', 'bodyBackground', 'bodyColor'];

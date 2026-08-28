@@ -42,4 +42,4 @@ The default Agent Settings npm command does not enable the model-picker interact
 
 ## Verification
 
-`npm run check:uiux` passes. Candidate-only model picker evidence passes. Agent Settings production evidence and the explicit model-picker interaction run pass. Strict Harness pixel diff remains pending (the latest equivalent capture is approximately 6.19% differing pixels), so the control is still `production-consumer-active / visual-equivalence-pending`, not Stable.
+`npm run check:uiux` passes. Candidate-only model picker evidence passes. Agent Settings production evidence and the explicit model-picker interaction run pass. The current same-engine static Harness source-reference ROI passes at `150/35500` (`0.4225%`) under its 1%/2 policy, but is not a Harness production consumer. The control therefore remains `production-consumer-active / visual-equivalence-pending`, not Stable.
