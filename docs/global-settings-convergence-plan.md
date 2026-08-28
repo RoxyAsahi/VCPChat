@@ -237,6 +237,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 | G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
 | Electron 视觉最终验收 | blocked-by-parallel-theme | Settings 交互通过，dark/light 背景断言等待主题线程修复 |
 
+补充证据：`test:electron-global-settings-entry` 已通过，确认 generated Settings
+入口 Button 的 mount、click、modal close 和 teardown 在真实 Electron 中保持可用。
+该 journey 只证明入口和 shell 生命周期，不替代 light/dark 视觉最终验收，也不改变
+并行主题线程的阻断记录。
+
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
 - Windows/packaged artifact-only 证据；
