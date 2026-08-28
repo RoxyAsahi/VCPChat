@@ -161,6 +161,22 @@ test('Menu Candidate capture records portal, interaction states, and teardown', 
     assert.equal(report.escapeClosed, true);
 });
 
+test('OnboardingSurface Candidate capture records portal, inert lifecycle, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-onboarding-surface-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-onboarding-surface-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP first-run consumer'), true);
+    assert.deepEqual(report.closed, { present: false, rootInert: false, contentInRoot: true });
+    assert.equal(report.open.present, true);
+    assert.equal(report.open.rootInert, true);
+    assert.equal(report.open.contentInRoot, false);
+    assert.deepEqual(report.open.aria, { overlayRole: 'presentation', maskHidden: 'true' });
+    assert.equal(report.open.style.overlay.position, 'fixed');
+    assert.equal(report.open.style.mask.top, '80px');
+    assert.equal(report.open.style.stage.justifyContent, 'center');
+    assert.deepEqual(report.close, { present: false, rootInert: false, contentInRoot: true });
+    assert.equal(report.reopen.present, true);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
@@ -235,7 +251,7 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
     assert.ok(report.uncoveredContracts.includes('settings-root'));
     assert.equal(report.counts.effectiveContractsWithFixtures, report.counts.contractsWithFixtures + 2);
-    assert.deepEqual(report.candidateFixtureGaps, ['onboarding-surface', 'pill']);
+    assert.deepEqual(report.candidateFixtureGaps, ['pill']);
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.category, 'covered-by-semantic-fixture-alias');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.fixture, 'agent-model-picker');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'settings-root')?.category, 'source-only-boundary');
