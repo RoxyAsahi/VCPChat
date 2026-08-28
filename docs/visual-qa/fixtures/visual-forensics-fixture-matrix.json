@@ -110,6 +110,12 @@
       "selectors": [".vcp-ui-showcase-shell"]
     },
     {
+      "id": "showcase-narrow-tooltip-portal",
+      "trigger": "resize(width - 240); scroll tooltip trigger into viewport; hover('Hover for details')",
+      "screenshotSuffix": "narrow-tooltip",
+      "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
+    },
+    {
       "id": "showcase-hover",
       "trigger": "hover(real element handle); capture viewport-visible :hover state",
       "screenshotSuffix": "hover",
