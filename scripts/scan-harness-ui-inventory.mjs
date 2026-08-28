@@ -36,6 +36,8 @@ const scopeBoundaryFor = relative => {
     if (/ui-user-questions/.test(relative)) return 'composer-question-surface-frozen';
     if (/ui-theme/.test(relative)) return 'settings-theme-surface-owned-by-main-thread';
     if (/ui-workspace/.test(relative)) return 'workspace-persistence-and-chat-entry-frozen';
+    if (/^web[\\/]/.test(relative)) return 'plugin-loader-runtime-shell-frozen';
+    if (/^web-react[\\/]/.test(relative)) return 'chat-session-provider-runtime-frozen';
     if (/ui-settings-/.test(relative)) return 'settings-surface-owned-by-main-thread';
     return null;
 };
@@ -72,6 +74,7 @@ const ignoredExports = files.flatMap(file => {
     }));
 });
 const missingContracts = entries.filter(item => !item.referenceContract && !['frozen-domain-surface', 'scope-blocked-surface'].includes(item.category));
+const scopeBlocked = entries.filter(item => item.category === 'scope-blocked-surface');
 const surfacePatterns = [...new Set(entries.map(item => item.package))].sort().map(packageName => {
     const members = entries.filter(item => item.package === packageName);
     return {
@@ -90,7 +93,7 @@ const report = {
     generatedAt: new Date().toISOString(),
     harnessRoot,
     clientRoot,
-    status: missingContracts.length ? 'inventory-gaps-present' : 'inventory-covered',
+    status: missingContracts.length ? 'inventory-gaps-present' : scopeBlocked.length ? 'inventory-scoped-complete' : 'inventory-covered',
     counts: {
         sourceFiles: files.length,
         ignoredExports: ignoredExports.length,
@@ -109,4 +112,4 @@ const report = {
 };
 fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-console.log(`Harness UI inventory written (status=${report.status}; exports=${entries.length}; missingContracts=${missingContracts.length}).`);
+console.log(`Harness UI inventory written (status=${report.status}; exports=${entries.length}; missingContracts=${missingContracts.length}; scopeBlocked=${scopeBlocked.length}).`);
