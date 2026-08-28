@@ -358,7 +358,7 @@ body:not(.light-theme) .color-input-group > input[type="text"]:focus-visible {
 }
 
 /* 重置颜色按钮 */
-.reset-colors-btn {
+.reset-colors-btn:not(.vcp-harness-button) {
     position: relative;
     isolation: isolate;
     overflow: hidden;
@@ -386,7 +386,7 @@ body:not(.light-theme) .color-input-group > input[type="text"]:focus-visible {
         transform 0.2s ease;
 }
 
-.reset-colors-btn:hover {
+.reset-colors-btn:not(.vcp-harness-button):hover {
     background: var(--highlight-text);
     border-color: var(--highlight-text);
     backdrop-filter: none;
@@ -394,12 +394,12 @@ body:not(.light-theme) .color-input-group > input[type="text"]:focus-visible {
     box-shadow: none;
 }
 
-.reset-colors-btn svg {
+.reset-colors-btn:not(.vcp-harness-button) svg {
     flex-shrink: 0;
     stroke: currentColor;
 }
 
-body.light-theme .reset-colors-btn {
+body.light-theme .reset-colors-btn:not(.vcp-harness-button) {
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--highlight-text) 10%, rgba(255, 255, 255, 0.82)),
@@ -415,13 +415,13 @@ body.light-theme .reset-colors-btn {
         inset 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-body.light-theme .reset-colors-btn:hover {
+body.light-theme .reset-colors-btn:not(.vcp-harness-button):hover {
     background: var(--highlight-text);
     border-color: var(--highlight-text);
     color: #ffffff;
 }
 
-body:not(.light-theme) .reset-colors-btn {
+body:not(.light-theme) .reset-colors-btn:not(.vcp-harness-button) {
     background: linear-gradient(
         180deg,
         rgba(255, 255, 255, 0.08),
@@ -437,7 +437,7 @@ body:not(.light-theme) .reset-colors-btn {
         inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-body:not(.light-theme) .reset-colors-btn:hover {
+body:not(.light-theme) .reset-colors-btn:not(.vcp-harness-button):hover {
     background: var(--highlight-text);
     border-color: var(--highlight-text);
     color: #000000;
@@ -492,12 +492,15 @@ body:not(.light-theme) .reset-colors-btn:hover {
     margin-bottom: 10px;
 }
 
-#agentSettingsForm .form-actions button.error-feedback {
+/* Error feedback is a live SettingsActionBar state, not a legacy baseline.
+   Keep it explicit on the typed Button so a failed save still has a visible
+   terminal state after the generic action rules retire. */
+#agentSettingsForm .form-actions button.vcp-harness-button.error-feedback {
     background-color: var(--danger-color) !important;
     color: white !important;
 }
 
-#agentSettingsForm .form-actions button.error-feedback:hover {
+#agentSettingsForm .form-actions button.vcp-harness-button.error-feedback:hover {
     background-color: var(--danger-hover-bg) !important;
 }
 

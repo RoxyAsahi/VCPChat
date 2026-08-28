@@ -29,7 +29,7 @@
     background: transparent;
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button) {
     position: relative;
     flex: 0 0 auto;
     min-width: 0;
@@ -55,7 +55,7 @@
     transition: color 0.2s ease, font-weight 0.2s ease;
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button::after {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button)::after {
     content: "";
     position: absolute;
     left: 50%;
@@ -68,19 +68,19 @@
     transition: width 0.2s ease, background-color 0.2s ease;
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button:hover {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover {
     color: color-mix(in srgb, var(--highlight-text) 88%, var(--primary-text) 12%);
     border: none;
     background: transparent;
     box-shadow: none;
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button:hover::after {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover::after {
     width: 16px;
     background-color: color-mix(in srgb, var(--highlight-text) 42%, transparent);
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button.active {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active {
     color: var(--highlight-text);
     font-weight: 600;
     border: none;
@@ -89,18 +89,18 @@
     transition: color 0.2s ease, font-weight 0.2s ease;
 }
 
-#agentSettingsContainer .system-prompt-container .prompt-mode-button.active::after,
-#agentSettingsContainer .system-prompt-container .prompt-mode-button.active:hover::after {
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active::after,
+#agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active:hover::after {
     width: 30px;
     background-color: var(--highlight-text);
 }
 
-body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button,
-body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:hover,
-body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button.active,
-body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button,
-body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:hover,
-body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button.active {
+body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button),
+body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover,
+body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active,
+body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button),
+body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover,
+body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active {
     border: none;
     background: transparent;
     box-shadow: none;
@@ -108,14 +108,14 @@ body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-
     -webkit-backdrop-filter: none;
 }
 
-body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button.active,
-body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button.active {
+body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active,
+body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button).active {
     color: var(--highlight-text);
     font-weight: 600;
 }
 
-body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:hover,
-body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:hover {
+body.light-theme #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover,
+body:not(.light-theme) #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button):hover {
     color: color-mix(in srgb, var(--highlight-text) 88%, var(--primary-text) 12%);
 }
 

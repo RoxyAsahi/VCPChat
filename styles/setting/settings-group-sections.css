@@ -755,7 +755,7 @@ body:not(.light-theme) #groupSettingsForm .form-actions .danger-button {
 }
 
 
-#agentSettingsForm .form-actions button,
+#agentSettingsForm .form-actions button:not(.vcp-harness-button),
 #groupSettingsForm .form-actions button {
     position: relative;
     isolation: isolate;
@@ -788,12 +788,12 @@ body:not(.light-theme) #groupSettingsForm .form-actions .danger-button {
         transform 0.2s ease;
 }
 
-#agentSettingsForm .form-actions button[type="submit"],
+#agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button),
 #groupSettingsForm .form-actions button[type="submit"] {
     color: var(--highlight-text);
 }
 
-#agentSettingsForm .form-actions button[type="submit"]:hover,
+#agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button):hover,
 #groupSettingsForm .form-actions button[type="submit"]:hover {
     background: var(--highlight-text);
     border-color: var(--highlight-text);
@@ -803,7 +803,7 @@ body:not(.light-theme) #groupSettingsForm .form-actions .danger-button {
     box-shadow: none;
 }
 
-body.light-theme #agentSettingsForm .form-actions button[type="submit"],
+body.light-theme #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button),
 body.light-theme #groupSettingsForm .form-actions button[type="submit"] {
     background: linear-gradient(
         180deg,
@@ -819,14 +819,14 @@ body.light-theme #groupSettingsForm .form-actions button[type="submit"] {
         inset 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-body.light-theme #agentSettingsForm .form-actions button[type="submit"]:hover,
+body.light-theme #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button):hover,
 body.light-theme #groupSettingsForm .form-actions button[type="submit"]:hover {
     background: var(--highlight-text);
     border-color: var(--highlight-text);
     color: #ffffff;
 }
 
-body:not(.light-theme) #agentSettingsForm .form-actions button[type="submit"],
+body:not(.light-theme) #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button),
 body:not(.light-theme) #groupSettingsForm .form-actions button[type="submit"] {
     border-color: rgba(255, 255, 255, 0.08);
     background: linear-gradient(
@@ -842,7 +842,7 @@ body:not(.light-theme) #groupSettingsForm .form-actions button[type="submit"] {
         inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-body:not(.light-theme) #agentSettingsForm .form-actions button[type="submit"]:hover,
+body:not(.light-theme) #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button):hover,
 body:not(.light-theme) #groupSettingsForm .form-actions button[type="submit"]:hover {
     background: var(--highlight-text);
     background-image: none;
@@ -854,16 +854,16 @@ body:not(.light-theme) #groupSettingsForm .form-actions button[type="submit"]:ho
     filter: none;
 }
 
-#agentSettingsForm .form-actions .danger-button,
+#agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button),
 #groupSettingsForm .form-actions .danger-button,
-#agentSettingsForm .form-actions #deleteAgentBtn,
+#agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button),
 #groupSettingsForm .form-actions #deleteGroupBtn {
     color: color-mix(in srgb, var(--danger-color) 88%, #ffffff 12%);
 }
 
-#agentSettingsForm .form-actions .danger-button:hover,
+#agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button):hover,
 #groupSettingsForm .form-actions .danger-button:hover,
-#agentSettingsForm .form-actions #deleteAgentBtn:hover,
+#agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button):hover,
 #groupSettingsForm .form-actions #deleteGroupBtn:hover {
     background: var(--danger-color);
     border-color: var(--danger-color);
@@ -873,9 +873,9 @@ body:not(.light-theme) #groupSettingsForm .form-actions button[type="submit"]:ho
     box-shadow: none;
 }
 
-body.light-theme #agentSettingsForm .form-actions .danger-button,
+body.light-theme #agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button),
 body.light-theme #groupSettingsForm .form-actions .danger-button,
-body.light-theme #agentSettingsForm .form-actions #deleteAgentBtn,
+body.light-theme #agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button),
 body.light-theme #groupSettingsForm .form-actions #deleteGroupBtn {
     background: linear-gradient(
         180deg,
@@ -892,18 +892,18 @@ body.light-theme #groupSettingsForm .form-actions #deleteGroupBtn {
         inset 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-body.light-theme #agentSettingsForm .form-actions .danger-button:hover,
+body.light-theme #agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button):hover,
 body.light-theme #groupSettingsForm .form-actions .danger-button:hover,
-body.light-theme #agentSettingsForm .form-actions #deleteAgentBtn:hover,
+body.light-theme #agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button):hover,
 body.light-theme #groupSettingsForm .form-actions #deleteGroupBtn:hover {
     background: var(--danger-color);
     border-color: var(--danger-color);
     color: #ffffff;
 }
 
-body:not(.light-theme) #agentSettingsForm .form-actions .danger-button,
+body:not(.light-theme) #agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button),
 body:not(.light-theme) #groupSettingsForm .form-actions .danger-button,
-body:not(.light-theme) #agentSettingsForm .form-actions #deleteAgentBtn,
+body:not(.light-theme) #agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button),
 body:not(.light-theme) #groupSettingsForm .form-actions #deleteGroupBtn {
     border-color: rgba(255, 255, 255, 0.08);
     background: linear-gradient(
@@ -920,9 +920,9 @@ body:not(.light-theme) #groupSettingsForm .form-actions #deleteGroupBtn {
         inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-body:not(.light-theme) #agentSettingsForm .form-actions .danger-button:hover,
+body:not(.light-theme) #agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button):hover,
 body:not(.light-theme) #groupSettingsForm .form-actions .danger-button:hover,
-body:not(.light-theme) #agentSettingsForm .form-actions #deleteAgentBtn:hover,
+body:not(.light-theme) #agentSettingsForm .form-actions #deleteAgentBtn:not(.vcp-harness-button):hover,
 body:not(.light-theme) #groupSettingsForm .form-actions #deleteGroupBtn:hover {
     background: var(--danger-color);
     border-color: var(--danger-color);

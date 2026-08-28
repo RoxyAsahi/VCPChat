@@ -19,7 +19,7 @@
     background-color: var(--secondary-bg);
 }
 
-.prompt-mode-button {
+.prompt-mode-button:not(.vcp-harness-button) {
     flex: 1;
     padding: 10px 8px;
     background-color: var(--secondary-bg);
@@ -35,16 +35,16 @@
     gap: 4px;
 }
 
-.prompt-mode-button:last-child {
+.prompt-mode-button:not(.vcp-harness-button):last-child {
     border-right: none;
 }
 
-.prompt-mode-button:hover {
+.prompt-mode-button:not(.vcp-harness-button):hover {
     background-color: var(--accent-bg);
     color: var(--highlight-text);
 }
 
-.prompt-mode-button.active {
+.prompt-mode-button:not(.vcp-harness-button).active {
     background-color: var(--user-bubble-bg);
     color: white;
     font-weight: 500;
@@ -830,12 +830,12 @@
         flex-direction: column;
     }
 
-    .prompt-mode-button {
+    .prompt-mode-button:not(.vcp-harness-button) {
         border-right: none;
         border-bottom: 1px solid var(--border-color);
     }
 
-    .prompt-mode-button:last-child {
+    .prompt-mode-button:not(.vcp-harness-button):last-child {
         border-bottom: none;
     }
 
@@ -889,7 +889,7 @@
 }
 
 /* 亮色主题适配 */
-body.light-theme .prompt-mode-button.active {
+body.light-theme .prompt-mode-button:not(.vcp-harness-button).active {
     background-color: var(--user-bubble-bg);
     color: white;
 }

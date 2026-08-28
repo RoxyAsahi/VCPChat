@@ -243,10 +243,12 @@ priority ranking and does not authorize production wiring.
 the three-file Harness AgentPresetSeat boundary (`AgentPresetSeat.tsx`,
 `PresetMenu.tsx`, and its stylesheet), including current SHA-256 values and
 owner/ARIA/portal/style anchors. It also validates only the shape of the fixed
-VCP Candidate capture. It deliberately remains `pass: false`: a real Harness
-browser capture, same-semantic DOM/computed-style/pixel diffs, and a legal VCP
-production consumer remain absent while assistant-agent/chat switching is
-frozen.
+VCP Candidate capture. It also validates the existing official Harness
+production open-menu replay; that replay currently has a different roster/copy
+from the Candidate and is therefore not a pair. It deliberately remains
+`pass: false`: a same-roster fixture, same-semantic DOM/computed-style/pixel
+diffs, and a legal VCP production consumer remain absent while
+assistant-agent/chat switching is frozen.
 
 `node scripts/check-harness-agent-preset-row-source-provenance.mjs` applies the
 same source-drift boundary to the settings AgentPresetRow composite. It pins
