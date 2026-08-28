@@ -23,8 +23,9 @@ key 均不在本审计的可变范围内。
   section summary。
 
 新路径由 `modules/ui-system/settings-bridge.js#mountTypedAgentModelPicker()`
-挂载生成的 `AgentModelPicker`。它已直接消费相同的缓存、热门、收藏 capability 并只
-写回 `#agentModel`，但尚未接管所有 presentation 能力。
+挂载生成的 `AgentModelPicker`。它直接消费相同的缓存、热门、收藏 capability，只写回
+`#agentModel`，并在当前 popup owner 内投影有序分区、收藏和显式刷新；它仍未取得 legacy
+modal 的删除资格。
 
 ## parity 账本
 
@@ -33,10 +34,10 @@ key 均不在本审计的可变范围内。
 | Canonical model 写入 | `currentModelSelectCallback()`：`#agentModel` + `input/change` | 已有：`onSelect` 写同一 native input | 生产 Electron：选择、重开、reload 后值和 section summary 一致 |
 | 缓存为空自动刷新 | `handleOpenModelSelect()` | 已有：`modelOptions()` 在空缓存时 await refresh 后重读 | 断言一次 refresh、abort/close 后晚到结果无写权 |
 | 搜索 | `filterModels()` 过滤 DOM rows | 已有 VCP-enhanced PopupSelect 搜索；Harness parity 模式正确关闭搜索 | 真实 Surface 搜索、清空、Escape/reopen 的结果与焦点证据 |
-| 热门模型 | 按 `getHotModels()` 顺序独立分区 | 仅 metadata（`热门` detail），**无独立有序分区** | capability 注入后能保留排序、重复展示政策和搜索时的分区收起语义 |
-| 收藏模型分区 | 按 `getFavoriteModels()` 顺序独立分区 | 仅 `favorite` 标记，**无独立分区** | capability 注入后能保留排序、重复展示政策和搜索时的分区收起语义 |
-| 收藏切换 | 行内星标 → `toggleFavoriteModel()` → 保留原 target 重开 | **缺失** | toggle 成功/失败/close-race；新菜单保持唯一 owner，canonical input 不被误写 |
-| 显式刷新 | 按钮 → refresh → 重新取模型/热门/收藏 + 开始/成功/空/失败通知 | **缺失**（仅空缓存自动刷新） | refresh loading、成功、空、失败、close/reopen、generation cancellation 的 Electron 证据 |
+| 热门模型 | 按 `getHotModels()` 顺序独立分区 | 已实现：以 API 原顺序投影“热门模型”，同一模型仍可在“全部模型”重复出现 | production Electron 用 capability 注入验证排序、重复政策和搜索时标题收起 |
+| 收藏模型分区 | 按 `getFavoriteModels()` 顺序独立分区 | 已实现：以 API 原顺序投影“收藏模型”，搜索只收起标题、不改变匹配 rows | production Electron 用 capability 注入验证排序、重复政策和搜索时标题收起 |
+| 收藏切换 | 行内星标 → `toggleFavoriteModel()` → 保留原 target 重开 | 已实现：相邻 action button 调 injected capability；成功后仅重投影当前 popup，失败为 owner-bound Toast | toggle 成功/失败/close-race 的 production Electron 证据；canonical input 不被误写 |
+| 显式刷新 | 按钮 → refresh → 重新取模型/热门/收藏 + 开始/成功/空/失败通知 | 已实现：popup-local Refresh action；busy/generation/abort 归当前 owner，失败为 owner-bound Toast | refresh 成功、空、失败、close/reopen、generation cancellation 的 production Electron 证据 |
 | 选择失败提示 | legacy 通知 | Harness-equivalent 路径已有 owner-bound Toast；production enhanced 路径保持现有 canonical 写入 | 保持“catalog load Retry”和“selection failure Toast”分流；不得增加 durable UI state |
 | modal close / focus | legacy modal helper | picker 有 Escape / trigger focus restore / dispose | parity consumer 下 close、重开、surface refresh、3-cycle stress 全部通过 |
 
@@ -56,7 +57,7 @@ key 均不在本审计的可变范围内。
 ## 当前结论
 
 `AgentModelPicker` 是 `production-consumer-active`，但不是 legacy modal 的完整替代，
-更不是 Stable。缺少热门/收藏分区、收藏 mutation 和显式刷新这三组能力，因此当前仅允许
-继续使用双轨路径；任何删除 `modelSelectModal` 或其 `settingsManager` 行为的改动都应被
-视为 P0 边界违规。
-
+更不是 Stable。热门/收藏分区、收藏 mutation 和显式刷新已经有 source/generated focused
+evidence；它们缺的是 capability-injected production Electron 成功/失败/close-race 证据，且
+`topicSummaryModel` 仍使用 legacy modal。因此当前继续双轨；任何删除 `modelSelectModal`
+或其 `settingsManager` 行为的改动都应被视为 P0 边界违规。

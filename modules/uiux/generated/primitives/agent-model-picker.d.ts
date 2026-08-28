@@ -4,6 +4,8 @@ export interface AgentModelOption {
     readonly id: string;
     readonly label: string;
     readonly provider?: string;
+    /** Optional presentation group (for example Hot/Favorites/All). */
+    readonly group?: string;
     readonly favorite?: boolean;
     readonly active?: boolean;
     readonly disabled?: boolean;
@@ -39,6 +41,8 @@ export interface AgentModelPickerProps {
     readonly selectedId?: string;
     /** Keep the product extension searchable by default; disable for parity fixtures. */
     readonly searchEnabled?: boolean;
+    /** Render explicit ordered groups for the production directory projection. */
+    readonly grouped?: boolean;
     /** Opt into Harness provider-grouped menuitemradio DOM for equivalence fixtures. */
     readonly harnessEquivalent?: boolean;
     readonly open?: boolean;

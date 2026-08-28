@@ -17,6 +17,8 @@ export interface AgentModelOption {
     readonly id: string;
     readonly label: string;
     readonly provider?: string;
+    /** Optional presentation group (for example Hot/Favorites/All). */
+    readonly group?: string;
     readonly favorite?: boolean;
     readonly active?: boolean;
     readonly disabled?: boolean;
@@ -55,6 +57,8 @@ export interface AgentModelPickerProps {
     readonly selectedId?: string;
     /** Keep the product extension searchable by default; disable for parity fixtures. */
     readonly searchEnabled?: boolean;
+    /** Render explicit ordered groups for the production directory projection. */
+    readonly grouped?: boolean;
     /** Opt into Harness provider-grouped menuitemradio DOM for equivalence fixtures. */
     readonly harnessEquivalent?: boolean;
     readonly open?: boolean;
@@ -115,35 +119,44 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     let selectedId = props.selectedId;
     let lastOptions: readonly AgentModelOption[] = [];
     let selectionFailure = false;
-    let selectionToastGeneration = 0;
-    let activeSelectionToast: { readonly generation: number; readonly scope: UiScope } | null = null;
+    let toastGeneration = 0;
+    let activeToast: { readonly generation: number; readonly scope: UiScope } | null = null;
+    const dismissActiveToast = (reason: string) => {
+        toastGeneration += 1;
+        const previous = activeToast;
+        activeToast = null;
+        if (previous) void previous.scope.dispose(reason);
+    };
     const selectionErrorText = (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         return `Model operation failed: ${message || 'selection was rejected'}`;
     };
-    const showSelectionToast = (error: unknown) => {
-        if (props.harnessEquivalent !== true || !pickerScope.active) return;
-        const previous = activeSelectionToast;
-        activeSelectionToast = null;
-        if (previous) void previous.scope.dispose('agent-model-picker-selection-toast-replaced');
+    const directoryActionErrorText = (label: string, error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const action = label === 'favorite' ? 'update model favorite' : 'refresh model list';
+        return `Could not ${action}: ${message || 'operation failed'}`;
+    };
+    const showOwnedToast = (text: string) => {
+        if (!pickerScope.active) return;
+        dismissActiveToast('agent-model-picker-selection-toast-replaced');
         const toastScope = pickerScope.child('harness-agent-model-picker-selection-toast');
-        const generation = ++selectionToastGeneration;
+        const generation = ++toastGeneration;
         const icon = document.createElement('span');
         mountSemanticIcon(icon, { name: 'warning', size: 16 }, toastScope);
-        activeSelectionToast = { generation, scope: toastScope };
+        activeToast = { generation, scope: toastScope };
         try {
             mountToast({
-                text: selectionErrorText(error),
+                text,
                 icon,
                 anchor: trigger,
                 onDone: () => {
-                    if (activeSelectionToast?.generation !== generation) return;
-                    activeSelectionToast = null;
+                    if (activeToast?.generation !== generation) return;
+                    activeToast = null;
                     void toastScope.dispose('agent-model-picker-selection-toast-expired');
                 },
             }, toastScope);
         } catch (mountError) {
-            if (activeSelectionToast?.generation === generation) activeSelectionToast = null;
+            if (activeToast?.generation === generation) activeToast = null;
             void toastScope.dispose('agent-model-picker-selection-toast-mount-failed');
             throw mountError;
         }
@@ -157,7 +170,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             detail: props.harnessEquivalent === true
                 ? undefined
                 : [option.provider, option.favorite ? 'Favorite' : undefined].filter(Boolean).join(' · ') || undefined,
-            group: option.provider,
+            group: option.group ?? option.provider,
             favorite: option.favorite,
             active: option.active === true || option.id === selectedId,
             disabled: option.disabled === true,
@@ -194,6 +207,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         } catch (error) {
             if (pickerScope.active && generation === directoryActionGeneration && !abort.signal.aborted) {
                 console.warn(`[VCPUI AgentModelPicker] ${label} directory action failed:`, error);
+                showOwnedToast(directoryActionErrorText(label, error));
             }
             return false;
         } finally {
@@ -218,7 +232,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
                 triggerLabel.textContent = selected.label;
             } catch (error) {
                 selectionFailure = props.harnessEquivalent === true;
-                showSelectionToast(error);
+                if (props.harnessEquivalent === true) showOwnedToast(selectionErrorText(error));
                 throw error;
             }
         },
@@ -240,7 +254,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         overlayAria: `${props.label ?? 'Model'} picker`,
         searchAria: 'Search models',
         searchEnabled: props.searchEnabled,
-        grouped: props.harnessEquivalent === true,
+        grouped: props.harnessEquivalent === true || props.grouped === true,
         optionRole: props.harnessEquivalent === true ? 'menuitemradio' : 'option',
         onEscape: () => {
             if (pane === 'root') return false;
@@ -385,6 +399,11 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             // whether the in-menu load strip is visible.
             error.style.display = open && pane === 'model' && popup.getSnapshot().error !== null ? '' : 'none';
         }
+        const filtering = popup.getSnapshot().search.trim() !== '';
+        view.card.querySelectorAll<HTMLElement>('.vcp-harness-popup-select-group-title').forEach(title => {
+            title.hidden = filtering;
+            title.setAttribute('aria-hidden', String(filtering));
+        });
         syncDirectoryActions();
         renderEfforts();
         placeExternalCard();
@@ -420,7 +439,12 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         }
     };
     const unsubscribe = popup.subscribe(() => {
-        if (!popup.getSnapshot().open) cancelDirectoryAction();
+        if (!popup.getSnapshot().open) {
+            cancelDirectoryAction();
+            // Directory-action feedback is popup-local rather than a global
+            // notification queue: closing this surface also retracts it.
+            dismissActiveToast('agent-model-picker-popup-closed');
+        }
         syncDirectoryUpdates();
         syncTrigger();
         syncPane();
@@ -449,8 +473,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         restoreAttribute('aria-expanded', originalTriggerAria.expanded);
         restoreAttribute('aria-label', originalTriggerAria.label);
         restoreAttribute('aria-controls', originalTriggerAria.controls);
-        selectionToastGeneration += 1;
-        activeSelectionToast = null;
+        dismissActiveToast('agent-model-picker-disposed');
         cancelDirectoryAction();
     }, 'agent-model-picker', 'ui-primitive');
     return {
