@@ -1623,6 +1623,9 @@ test('Harness Button preserves native semantics and retracts candidate styling',
         assert.equal(button.style.getPropertyValue('height'), '28px');
         assert.equal(button.style.getPropertyPriority('height'), 'important');
         assert.equal(button.querySelector(':scope > .icon')?.textContent, '+');
+        const stylesheet = document.getElementById('vcp-harness-uiux-button')?.textContent || '';
+        assert.match(stylesheet, /\.vcp-harness-button\.button:focus-visible\{/,
+            'Harness Button must expose a keyboard focus-visible contract');
         await release?.(); await scope.dispose('button-complete');
         assert.equal(button.getAttribute('class'), 'existing');
         assert.equal(button.style.getPropertyValue('display'), '');
