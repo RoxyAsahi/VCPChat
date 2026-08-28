@@ -21,7 +21,7 @@ Harness 当前没有通用 Switch、Range、ColorPair 或完整表单 schema pri
 | 字段组 | 字段/节点 | 目标组件模式 | 当前状态 | 收口动作 |
 |---|---|---|---|---|
 | 用户身份 | `userName`、avatar/name color、`resetUserAvatarColorsBtn` | Field + Input / ColorPair / Button | 已有 typed owner | 清理字段组直接竞争 CSS/legacy projection；不改头像文件业务。 |
-| 论坛与连接 | `adminUsername`、`adminPassword`、`vcpServerUrl`、各类 key/url | Field + Input（password/url/text） | Forum 已 typed；连接字段仍 legacy | **首批**：把连接凭据作为同一 Field/Input 切片；保留现有 save/complete URL 语义。 |
+| 论坛与连接 | `adminUsername`、`adminPassword`、`vcpServerUrl`、各类 key/url | Field + Input（password/url/text） | Forum 与连接字段均已由 generated Input/Field presentation 覆盖；保存语义仍由既有 global owner 保持 | **首批收口**：验证并清理连接字段直接竞争的旧 CSS/重复 listener；不重复包装、不改 save/complete URL 语义。 |
 | 网络路径 | path 行 + `addNetworkPathBtn` | repeatable Field + Input + Button(outline/sm) | 已有 typed dynamic rows/Button | 只清理该行旧样式/重复 listener，不重写 list persistence。 |
 | 外观首页 | home visual toggles/tagline、density/radius/typography selects | Toggle、Input、Select | 已有 typed owner | 作为视觉回归基线，不扩大到聊天字体。 |
 | 外观几何 | sidebar ranges/radius radios | Range + Choice | 已有 typed owner | 维持；补 Field 描述与 CSS 清债时按单组处理。 |
@@ -33,11 +33,11 @@ Harness 当前没有通用 Switch、Range、ColorPair 或完整表单 schema pri
 
 ## 第一批：连接字段收口合同
 
-范围限定为 `vcpServerUrl`、`vcpApiKey`、`vcpLogUrl`、`fileKey`、`vcpLogKey`。
+范围限定为 `vcpServerUrl`、`vcpApiKey`、`vcpLogUrl`、`fileKey`、`vcpLogKey` 的现有 Input/Field presentation 收口，而不是首次接入。
 
 - canonical business nodes 和 persisted keys 不变；
 - 继续走现有 global settings 保存/错误/重试链路，不新建 durable state；
-- 统一使用 generated Input 和 Field layout，password 不改为 text；
+- 保持现有 generated Input 和 Field layout，password 不改为 text；
 - 一个 Settings presentation scope 拥有所有 decoration/listener/disposer；
 - 删除该字段组直接竞争的旧 input/field CSS 或 listener；
 - 验收：light/dark、open/reopen/reload、保存失败恢复和 scope teardown。

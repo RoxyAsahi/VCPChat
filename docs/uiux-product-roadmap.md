@@ -52,7 +52,7 @@
 
 ## 当前两批
 
-1. **Settings 收口**：继续将 Agent/Global Settings 的常用控件替换为现有 Button/Input/Select/Toggle/Range/Field，并在每个字段组删除直接竞争的旧样式和双 owner。
+1. **Settings 收口**：现有 Agent/Global Settings 已大量使用 Button/Input/Select/Toggle/Range/Field；后续是验证视觉与清理直接竞争的旧样式、listener 和双 owner，不重新接一套组件，也不回退到旧控件。
 2. **Shell 收口**：统一 Sidebar、Account、Notification、App Tray 的普通 action/menu/tooltip；保留 destructive、筛选和窗口控件的 bespoke 合同。
 
 ## 进度记录规则
