@@ -81,6 +81,10 @@ for (const dir of targets) {
       assert.ok(observation.initial.cdpCascade.every(rule => Array.isArray(rule.specificity) && Number.isInteger(rule.cascadeOrder)));
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
+      assert.equal(observation.initial.interactionStates.hover.active, true, `${name}: hover state was not active`);
+      assert.equal(observation.initial.interactionStates.hover.inViewport, true, `${name}: hover target is outside the viewport`);
+      assert.equal(observation.initial.interactionStates.focus.inViewport, true, `${name}: focus target is outside the viewport`);
+      assert.equal(observation.initial.interactionStates.focus.focusVisible, true, `${name}: keyboard focus is not focus-visible`);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
       assert.ok(observation?.initial?.stateTargets?.disabled?.rect);
       assert.ok(observation?.initial?.stateTargets?.selected?.rect);
