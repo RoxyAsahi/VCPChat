@@ -803,7 +803,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             assert.deepEqual(agentPromptInteractionEvidence, { available: true, switched: true, restored: true },
                 `${label}: prompt mode Button interaction contract drifted: ${JSON.stringify(agentPromptInteractionEvidence)}`);
         }
-        const agentDisclosureInteractionEvidence = await page.evaluate(() => {
+        const agentDisclosureInteractionEvidence = await page.evaluate(async () => {
             const headers = [...document.querySelectorAll('#agentSettingsForm .agent-settings-section-header[data-vcp-typed-agent-disclosure="true"]')];
             const target = headers.find(header => header.closest('[data-section-key]')?.dataset.sectionKey === 'identity');
             const container = target?.closest('.agent-settings-section');
@@ -811,8 +811,10 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement) || !(content instanceof HTMLElement)) return { available: false };
             const before = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
             target.click();
+            await new Promise(resolve => setTimeout(resolve, 0));
             const opened = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
             target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            await new Promise(resolve => setTimeout(resolve, 0));
             const closed = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
             return { available: true, count: headers.length, before, opened, closed };
         });
