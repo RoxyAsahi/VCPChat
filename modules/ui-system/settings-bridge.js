@@ -1195,6 +1195,9 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
+    // The model-selection button still uses the shared legacy modal, but the
+    // canonical text value can already use the single typed save owner.
+    topicSummaryModel: { path: 'topicSummaryModel', kind: 'string' },
     'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
     'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
     'appearanceSidebarRadiusChoice-square': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'square' },
