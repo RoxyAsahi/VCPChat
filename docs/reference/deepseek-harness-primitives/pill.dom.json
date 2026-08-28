@@ -1,6 +1,13 @@
 {
   "primitive": "Pill",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Pill.tsx",
+  "source": "packages/client/ui-primitives/src/Pill.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Pill.module.css",
+  "provenance": {
+    "sources": ["packages/client/ui-primitives/src/Pill.tsx", "packages/client/ui-primitives/tests/atoms.client.spec.tsx"],
+    "selectionRule": "Use the native span/button Pill implementation and atom tests as the Harness source; VCP remains Candidate Lab-only."
+  },
+  "candidateStatus": "candidate-interaction-active; source and native teardown behavior covered, no VCP production consumer or paired visual capture",
   "root": { "staticTag": "span", "interactiveTag": "button", "native": true, "type": "button" },
   "classes": ["pill", "interactive", "active"],
   "states": ["static", "interactive", "hover", "active", "dispose"],
