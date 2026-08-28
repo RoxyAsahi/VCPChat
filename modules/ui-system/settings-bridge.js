@@ -1542,6 +1542,7 @@ function restoreFormIcons(root) {
 function mountSettingsShell(root) {
     if (root.querySelector('.vcp-harness-settings-panel')) return;
     mountTypedSettingsConsumer(root);
+    const shellScope = ensurePresentationScope();
     const panel = root.querySelector('.vcp-settings-source-panel');
     const layout = root.querySelector('.vcp-settings-source-layout');
     const nav = root.querySelector('.vcp-settings-source-nav');
@@ -1699,15 +1700,22 @@ function mountSettingsShell(root) {
         label.textContent = item.label;
         copy.append(label);
         row.append(icon, copy);
-        row.addEventListener('click', () => activateSection(item.value));
-        row.addEventListener('keydown', event => {
+        const onClick = () => activateSection(item.value);
+        const onKeydown = event => {
             if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
             const current = rows.indexOf(row);
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
             rows[next]?.focus();
             if (rows[next]) activateSection(rows[next].dataset.section);
-        });
+        };
+        if (shellScope) {
+            shellScope.listen(row, 'click', onClick);
+            shellScope.listen(row, 'keydown', onKeydown);
+        } else {
+            row.addEventListener('click', onClick);
+            row.addEventListener('keydown', onKeydown);
+        }
         state.listHost.append(row);
         return row;
     });

@@ -383,6 +383,13 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
     }
 });
 
+test('settings shell navigation binds through the presentation scope', () => {
+    const entry = read(bridgeEntry);
+    const shell = entry.slice(entry.indexOf('function mountSettingsShell'), entry.indexOf('function cleanupDisconnectedControllers'));
+    assert.match(shell, /shellScope\.listen\(row, 'click', onClick\)/);
+    assert.match(shell, /shellScope\.listen\(row, 'keydown', onKeydown\)/);
+});
+
 test('legacy disclosure fast teardown is explicitly idempotent', () => {
     const entry = read(bridgeEntry);
     const helper = entry.slice(entry.indexOf('function mountHarnessDisclosures'), entry.indexOf('// R2-02C:'));
