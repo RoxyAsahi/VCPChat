@@ -251,6 +251,85 @@ test('Harness AgentModelPicker drops late effort settlements after close and reo
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentModelPicker projects loading, load failure and retry through one popup owner', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-load-retry-test'));
+        const host = document.getElementById('host');
+        let calls = 0;
+        const controller = mountAgentModelPicker(host, {
+            harnessEquivalent: true,
+            searchEnabled: false,
+            options: async () => {
+                calls += 1;
+                if (calls === 1) throw new Error('catalog unavailable');
+                return [{ id: 'ready', label: 'Ready', provider: 'DeepSeek' }];
+            },
+            onSelect: () => {},
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        assert.equal(card?.getAttribute('aria-busy'), 'true', 'the model pane announces its pending directory load');
+        assert.match(card?.querySelector('.vcp-harness-popup-select-status')?.textContent || '', /Loading options/);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.popup.getSnapshot().status, 'failed');
+        assert.equal(card?.getAttribute('aria-busy'), null, 'a failed load must settle busy state');
+        assert.match(card?.querySelector('[role="alert"]')?.textContent || '', /catalog unavailable/);
+        card?.querySelector('.vcp-harness-popup-select-retry')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        assert.equal(controller.popup.getSnapshot().status, 'pending', 'Retry reuses the one popup controller, rather than mounting a second owner');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(calls, 2);
+        assert.equal(controller.popup.getSnapshot().status, 'ready');
+        assert.equal(card?.querySelectorAll('[role="menuitemradio"]').length, 1);
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-load-retry-complete');
+        assert.equal(host.querySelector('.vcp-harness-agent-model-picker'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness AgentModelPicker projects selecting as busy native rows and restores trigger focus', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-selecting-test'));
+        const host = document.getElementById('host');
+        let resolveSelection;
+        const selection = new Promise(resolve => { resolveSelection = resolve; });
+        const controller = mountAgentModelPicker(host, {
+            harnessEquivalent: true,
+            searchEnabled: false,
+            options: async () => [
+                { id: 'flash', label: 'Flash', provider: 'DeepSeek' },
+                { id: 'think', label: 'Think', provider: 'DeepSeek' },
+            ],
+            onSelect: async () => selection,
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        const choice = card?.querySelector('[data-option-id="think"]');
+        choice?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.popup.getSnapshot().submitting, true);
+        assert.equal(card?.getAttribute('aria-busy'), 'true');
+        const liveChoice = card?.querySelector('[data-option-id="think"]');
+        assert.equal(choice?.isConnected, false, 'selecting replaces the prior row owner instead of retaining stale interactive DOM');
+        assert.equal(liveChoice?.disabled, true, 'selecting must lock the live native Harness option row');
+        assert.equal(liveChoice?.getAttribute('aria-disabled'), 'true');
+        resolveSelection();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.popup.getSnapshot().open, false, 'accepted selection closes the popup owner');
+        assert.equal(document.activeElement, controller.trigger, 'accepted selection restores focus to the canonical trigger');
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-selecting-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness Pill preserves static and native interactive semantics and retracts cleanly', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="static">Static</span><button id="interactive">Active</button></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;

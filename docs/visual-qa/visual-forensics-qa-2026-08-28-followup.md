@@ -74,6 +74,29 @@ form. After commit `3b812b0e`, the command passes with stable lifecycle counts
 test now resolves the owned portaled card via the trigger's `aria-controls`
 contract.
 
+## 2026-08-28 Resize and provenance checkpoint
+
+The production ModelPicker probe now keeps its card open through a narrow
+resize (`width - 240`) and a restore to the original viewport. In both light
+and dark Electron runs, at `800x600`, `1280x800`, and `1680x1000`, each narrow
+and restored capture proves that the card is open, `position: fixed`, a direct
+`body` portal, fully within the viewport, and topmost at its center. Escape
+after the restored capture still removes the card and restores focus to
+`#openModelSelectBtn` without body inline-style residue.
+
+The shared Showcase probe also now records viewport-visible screenshots for
+disabled/selected, loading/error/async-loading, hover/focus, and narrow
+Menu/Modal/Tooltip states. A real QA-provenance defect was found during this
+work: a broad `[role=tooltip]` fallback could select an unrelated product
+tooltip at light `1680x1000` after a resize. Harness Tooltip fixtures now
+require `.vcp-harness-tooltip-bubble`; subsequent real Electron scans resolve
+the expected fixed `body` portal in both themes and all required viewports.
+
+Pixel/geometry baseline coverage is derived from the fixture matrix so that a
+new screenshot fixture cannot exist without non-blank image validation. These
+are rendering-evidence improvements only; they do not claim same-engine pixel
+equivalence or authorize retirement of the legacy model modal.
+
 ## Required Next Probe
 
 Before any Stable or pixel-equivalent claim:
