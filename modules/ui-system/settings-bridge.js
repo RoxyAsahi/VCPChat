@@ -514,17 +514,38 @@ function enhanceForm(form) {
     });
 }
 
-function mountTypedAgentRegexInputs(form) {
+// The Agent inputs differ in business semantics (identity, free-form model,
+// numeric limits and TTS regexes), but their presentation lifecycle is the
+// same: a generated Input owns the Light-DOM wrap while the native input
+// stays canonical.  Keep that small contract in one private helper instead
+// of growing nine independent marker/restore paths.
+function mountTypedAgentInput(form, { id, marker, ownerKey, placeholder = false, restoreClass = false }) {
+    const input = form?.querySelector?.(`#${id}`);
     const api = window.VCPUIUX;
-    if (!api?.mountInput) return;
     const scope = ensurePresentationScope();
-    if (!scope) return;
+    if (!input || !api?.mountInput || !scope || input.dataset[marker] === 'true') return;
+
+    const originalClass = restoreClass ? input.className : null;
+    const props = placeholder ? { placeholder: input.getAttribute('placeholder') || undefined } : {};
+    try {
+        api.mountInput(input, props, scope);
+        input.dataset[marker] = 'true';
+        scope.own(() => {
+            delete input.dataset[marker];
+            if (restoreClass && input.isConnected && input.className !== originalClass) input.className = originalClass;
+        }, ownerKey, 'ui-presentation');
+    } catch (error) {
+        console.warn(`[VCPUI SettingsBridge] Could not mount typed ${id} Input:`, error);
+    }
+}
+
+function mountTypedAgentRegexInputs(form) {
     ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'].forEach(id => {
-        const input = form?.querySelector?.(`#${id}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountInput(input, {}, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        mountTypedAgentInput(form, {
+            id,
+            marker: 'vcpTypedPrimitiveMounted',
+            ownerKey: `typed-${id}-marker`,
+        });
     });
 }
 
@@ -728,90 +749,51 @@ function mountTypedAgentPromptModeButtons(form) {
 // narrow migration slice and deliberately excludes chat-side assistant
 // switching and the remaining agent fields.
 function mountTypedAgentIdentityInput(form) {
-    const input = form?.querySelector?.('#agentNameInput');
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentIdentity === 'true') return;
-    const originalClass = input.className;
-    const originalPlaceholder = input.getAttribute('placeholder');
-    try {
-        api.mountInput(input, { placeholder: originalPlaceholder || undefined }, scope);
-        input.dataset.vcpTypedAgentIdentity = 'true';
-        scope.own(() => {
-            delete input.dataset.vcpTypedAgentIdentity;
-            if (input.isConnected && input.className !== originalClass) input.className = originalClass;
-        }, 'agent-name-input-marker', 'ui-presentation');
-    } catch (error) {
-        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent name Input:', error);
-    }
+    mountTypedAgentInput(form, {
+        id: 'agentNameInput',
+        marker: 'vcpTypedAgentIdentity',
+        ownerKey: 'agent-name-input-marker',
+        placeholder: true,
+        restoreClass: true,
+    });
 }
 
 // Agent model remains a free-form native value with a separate legacy model
 // picker button/modal. Upgrade only the input presentation; the picker and
 // persistence semantics stay owned by the existing Agent settings flow.
 function mountTypedAgentModelInput(form) {
-    const input = form?.querySelector?.('#agentModel');
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentModel === 'true') return;
-    const originalPlaceholder = input.getAttribute('placeholder');
-    try {
-        api.mountInput(input, { placeholder: originalPlaceholder || undefined }, scope);
-        input.dataset.vcpTypedAgentModel = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedAgentModel; }, 'agent-model-input-marker', 'ui-presentation');
-    } catch (error) {
-        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model Input:', error);
-    }
+    mountTypedAgentInput(form, {
+        id: 'agentModel',
+        marker: 'vcpTypedAgentModel',
+        ownerKey: 'agent-model-input-marker',
+        placeholder: true,
+    });
 }
 
 // Temperature remains a native number input because min/max/step and the
 // settings manager's numeric parsing are part of the canonical business
 // contract. Only its presentation is upgraded to the typed Harness Input.
 function mountTypedAgentTemperatureInput(form) {
-    const input = form?.querySelector?.('#agentTemperature');
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentTemperature === 'true') return;
-    const originalClass = input.className;
-    try {
-        api.mountInput(input, {}, scope);
-        input.dataset.vcpTypedAgentTemperature = 'true';
-        scope.own(() => {
-            delete input.dataset.vcpTypedAgentTemperature;
-            if (input.isConnected && input.className !== originalClass) input.className = originalClass;
-        }, 'agent-temperature-input-marker', 'ui-presentation');
-    } catch (error) {
-        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent temperature Input:', error);
-    }
+    mountTypedAgentInput(form, {
+        id: 'agentTemperature',
+        marker: 'vcpTypedAgentTemperature',
+        ownerKey: 'agent-temperature-input-marker',
+        restoreClass: true,
+    });
 }
 
 // These fields are all canonical numeric settings. Keep their native number
 // semantics and constraints while sharing the same typed Input presentation
 // owner used by the identity/model/temperature slices.
 function mountTypedAgentNumericInputs(form) {
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!api?.mountInput || !scope) return;
     const fields = [
-        ['agentContextTokenLimit', 'vcpTypedAgentContextLimit'],
-        ['agentMaxOutputTokens', 'vcpTypedAgentMaxOutput'],
-        ['agentTopP', 'vcpTypedAgentTopP'],
-        ['agentTopK', 'vcpTypedAgentTopK'],
+        ['agentContextTokenLimit', 'vcpTypedAgentContextLimit', 'agentContextTokenLimit-input-marker'],
+        ['agentMaxOutputTokens', 'vcpTypedAgentMaxOutput', 'agentMaxOutputTokens-input-marker'],
+        ['agentTopP', 'vcpTypedAgentTopP', 'agentTopP-input-marker'],
+        ['agentTopK', 'vcpTypedAgentTopK', 'agentTopK-input-marker'],
     ];
-    fields.forEach(([id, marker]) => {
-        const input = form?.querySelector?.(`#${id}`);
-        if (!input || input.dataset[marker] === 'true') return;
-        const originalClass = input.className;
-        try {
-            api.mountInput(input, {}, scope);
-            input.dataset[marker] = 'true';
-            scope.own(() => {
-                delete input.dataset[marker];
-                if (input.isConnected && input.className !== originalClass) input.className = originalClass;
-            }, `${id}-input-marker`, 'ui-presentation');
-        } catch (error) {
-            console.warn(`[VCPUI SettingsBridge] Could not mount typed ${id} Input:`, error);
-        }
+    fields.forEach(([id, marker, ownerKey]) => {
+        mountTypedAgentInput(form, { id, marker, ownerKey, restoreClass: true });
     });
 }
 

@@ -278,6 +278,19 @@ for (const marker of [
 assert.match(bridge, /mountChoice\(group, scope\)/, 'Agent stream output must use the Choice primitive');
 assert.ok(html.includes('agentStreamOutputTrue') && html.includes('agentStreamOutputFalse'), 'Agent stream radio pair contract must remain explicit');
 assert.match(bridge, /agentNameInput.*agentModel.*agentTemperature.*agentContextTokenLimit.*agentMaxOutputTokens.*agentTopP.*agentTopK/s, 'Agent Input exclusions must cover the complete high-frequency cluster');
+const typedAgentInputHelper = bridge.match(/function mountTypedAgentInput\(form, \{ id, marker, ownerKey, placeholder = false, restoreClass = false \}\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(typedAgentInputHelper, /api\.mountInput\(input, props, scope\)/,
+    'the private Agent Input owner must keep the primitive mount on the injected presentation scope');
+assert.match(typedAgentInputHelper, /delete input\.dataset\[marker\]/,
+    'the private Agent Input owner must retract its marker with the scope');
+assert.match(typedAgentInputHelper, /restoreClass && input\.isConnected/,
+    'the private Agent Input owner must restore original native classes only for fields that previously required it');
+const typedAgentInputConsumers = bridge.slice(
+    bridge.indexOf('function mountTypedAgentRegexInputs'),
+    bridge.indexOf('function mountTypedAgentStreamChoice'),
+);
+assert.doesNotMatch(typedAgentInputConsumers, /api\.mountInput\(/,
+    'Agent Input callers must delegate lifecycle work to the one private helper');
 
 // AgentModelPicker owns the model trigger as a distinct composite. Keep it
 // out of the generic Button batch so a refresh can never install two
