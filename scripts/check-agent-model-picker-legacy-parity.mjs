@@ -11,6 +11,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const html = read('main.html');
 const manager = read('modules/settingsManager.js');
 const bridge = read('modules/ui-system/settings-bridge.js');
+const directory = read('modules/ui-system/settings/agent-model-picker-directory.js');
 const primitive = read('modules/uiux/primitives/agent-model-picker.ts');
 const artifact = read('modules/uiux/generated/primitives/agent-model-picker.js');
 const audit = read('docs/agent-model-picker-legacy-parity-audit.md');
@@ -30,13 +31,16 @@ assert.match(manager, /topicSummaryModel/, 'topic summary model must retain an a
 // must write the existing native input contract rather than a second store.
 assert.match(bridge, /function\s+mountTypedAgentModelPicker\s*\(/, 'typed AgentModelPicker production owner is missing');
 assert.match(bridge, /api\.mountAgentModelPicker\(host,/, 'typed AgentModelPicker must be mounted by the Settings bridge');
-assert.match(bridge, /getCachedModels/, 'typed picker must consume cached model capability');
-assert.match(bridge, /refreshModels/, 'typed picker must retain refresh capability while parity is incomplete');
-assert.match(bridge, /getHotModels/, 'typed picker must retain hot-model metadata capability while parity is incomplete');
-assert.match(bridge, /getFavoriteModels/, 'typed picker must retain favorite-model metadata capability while parity is incomplete');
-assert.match(bridge, /toggleFavoriteModel/, 'typed picker must retain favorite mutation capability while parity is incomplete');
-assert.match(bridge, /inOrder\(hotIds, '热门模型'\)/, 'typed picker must project the legacy ordered hot-model section');
-assert.match(bridge, /inOrder\(favoriteIds, '收藏模型'\)/, 'typed picker must project the legacy ordered favorite-model section');
+assert.match(bridge, /createAgentModelPickerDirectory/, 'typed picker must receive the isolated directory capability');
+assert.doesNotMatch(bridge, /getCachedModels|getHotModels|getFavoriteModels|toggleFavoriteModel/,
+    'Settings bridge must not re-embed the model directory capability after extraction');
+assert.match(directory, /getCachedModels/, 'typed picker must consume cached model capability');
+assert.match(directory, /refreshModels/, 'typed picker must retain refresh capability while parity is incomplete');
+assert.match(directory, /getHotModels/, 'typed picker must retain hot-model metadata capability while parity is incomplete');
+assert.match(directory, /getFavoriteModels/, 'typed picker must retain favorite-model metadata capability while parity is incomplete');
+assert.match(directory, /toggleFavoriteModel/, 'typed picker must retain favorite mutation capability while parity is incomplete');
+assert.match(directory, /inOrder\(hotIds, '热门模型'\)/, 'typed picker must project the legacy ordered hot-model section');
+assert.match(directory, /inOrder\(favoriteIds, '收藏模型'\)/, 'typed picker must project the legacy ordered favorite-model section');
 assert.match(bridge, /grouped:\s*true/, 'typed picker must render the explicit ordered directory sections');
 assert.match(bridge, /input\.dispatchEvent\(new Event\('input'/, 'typed picker must preserve canonical input event semantics');
 assert.match(bridge, /input\.dispatchEvent\(new Event\('change'/, 'typed picker must preserve canonical change event semantics');

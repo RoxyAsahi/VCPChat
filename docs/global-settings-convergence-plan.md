@@ -188,6 +188,13 @@ cycle）：节点 5856、监听器 571、active scopes 41、active resources 501
 瞬态 scope 或 DOM。该证据支持“当前 picker owner 无增长/泄漏”，但仍不等同于
 legacy `modelSelectModal` 已具备删除资格。
 
+随后 `test:electron-agent-settings-interaction` 的 Agent Select 交互回归也通过：
+选择、关闭、重开、Escape 和触发器焦点恢复路径在真实 Electron 中完成，且周期前后
+监听器 570、active scopes 41、active resources 501、detached roots/options 仍保持
+稳定。ModelPicker 的生产交互证据因此已覆盖目录能力、键盘关闭、焦点恢复和 lifecycle
+stress；剩余删除阻断主要是 `topicSummaryModel` 共享 legacy caller 与完整默认数据
+源 parity，而不是 Agent picker 本身的 owner 稳定性。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
@@ -229,6 +236,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 | G4 内部拆分 | in-progress | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure |
 | G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
 | Electron 视觉最终验收 | blocked-by-parallel-theme | Settings 交互通过，dark/light 背景断言等待主题线程修复 |
+
+补充证据：`test:electron-global-settings-entry` 已通过，确认 generated Settings
+入口 Button 的 mount、click、modal close 和 teardown 在真实 Electron 中保持可用。
+该 journey 只证明入口和 shell 生命周期，不替代 light/dark 视觉最终验收，也不改变
+并行主题线程的阻断记录。
 
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
