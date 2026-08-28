@@ -198,12 +198,12 @@ test('Tooltip Candidate capture preserves delayed hover, immediate focus, flip, 
     assert.deepEqual(report.reloaded, { bubbles: 0, anchors: 2 });
 });
 
-test('Tooltip and HoverCard Candidate baselines remain anchored to real Harness source semantics', () => {
+test('Candidate baselines remain anchored to real Harness source semantics', () => {
     execFileSync(process.execPath, ['scripts/check-harness-candidate-source-provenance.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-candidate-source-provenance.json'), 'utf8'));
     assert.equal(report.status, 'candidate-source-provenance-complete');
     assert.equal(report.pass, true);
-    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card', 'state-dot']);
+    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card', 'state-dot', 'semantic-icon']);
     assert.equal(report.entries.every(item => item.referencePass && item.capturePass && item.pass), true);
     assert.equal(report.entries.every(item => item.source.sha256 && item.style.sha256), true);
 });
