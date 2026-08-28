@@ -127,6 +127,10 @@ artifact 时的 ColorPair fallback 均直接承载业务或 bootstrap 语义，�
 它们不是与 typed primitive 竞争的生产 presentation owner。后续只有在对应
 业务命令拥有独立 owner 且有 Electron 回归证据后才迁移。
 
+`render-settings` 的四组字体 preset/custom 行显隐也已抽为
+`modules/ui-system/settings/render-visibility.js`；该 helper 只投影 DOM
+显示状态，不读取或写入聊天状态，作为 G4 的第三个无状态 section helper。
+
 ### G5：旧债净删除
 
 按 section 删除：
