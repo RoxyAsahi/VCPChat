@@ -149,6 +149,10 @@ owner 负责，helper 仅建立 Light-DOM primitive 和销毁标记。
 `modules/ui-system/settings/identity-controls.js`；头像预览与错误提示通过
 注入回调保持，颜色持久化和业务同步仍由原有 owner 负责。
 
+Appearance 圆角 Choice 与 Voice Mode Choice 的 generated mount 已合并抽为
+`modules/ui-system/settings/choice-controls.js`；仅负责两个高频 Choice 的
+展示装配和 marker cleanup，不接管冻结的聊天布局 radio。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
