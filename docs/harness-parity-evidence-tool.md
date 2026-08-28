@@ -257,6 +257,10 @@ trust-label contract, stylesheet geometry, and the fixed Candidate capture
 shape. The report remains `pass=false`: no same-semantic Harness browser or
 DOM/style/pixel pair exists, and VCP has no equivalent non-frozen preset
 preference consumer.
+The existing Harness `agent-preset-authoring.e2e.ts` is recorded as a scope
+boundary: it renders the higher-level AgentPresetSection/card authoring flow,
+not the `AgentPresetRow` composite, so its snapshot cannot be relabeled as a
+Row browser capture.
 
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
 Harness DisclosureRow controlled interaction contract (row versus leading
