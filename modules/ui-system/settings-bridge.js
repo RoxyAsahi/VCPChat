@@ -923,6 +923,7 @@ function enhanceGlobalSettings(root, form) {
     selectProjection.mount(form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
+    mountTypedGlobalChoiceGroups(root, form);
     mountTypedAppearanceRanges(root, form);
     mountTypedHomeVisualToggles(root, form);
     mountTypedAvatarColorPair(root, form);
@@ -954,6 +955,35 @@ function mountTypedRadiusChoice(root, form) {
     group.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
     if (release) scope.own(release, 'typed-radius-choice', 'ui-primitive');
+}
+
+// Global Settings still has a native radio group that is routinely used but
+// was previously styled exclusively by a page-local CSS segment. Keep the
+// radios as the canonical form/business nodes and let the generated
+// Choice primitive own only the visible segmented-control contract.  Chat
+// presentation controls deliberately do not enter this batch: their visual
+// surface is frozen while the chat kernel work is protected.
+function mountTypedGlobalChoiceGroups(root, form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountChoice || !scope) return;
+    const groups = [
+        ['voiceModeLocal', 'voice-mode-choice'],
+    ];
+    groups.forEach(([inputId, ownerKey]) => {
+        const group = form?.querySelector?.(`#${inputId}`)?.closest('.vcp-settings-control-row');
+        if (!group || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        try {
+            const release = api.mountChoice(group, scope);
+            group.dataset.vcpTypedPrimitiveMounted = 'true';
+            scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, `typed-${ownerKey}-marker`, 'ui-primitive');
+            if (release) scope.own(release, `typed-${ownerKey}`, 'ui-primitive');
+        } catch (error) {
+            // The native radio group remains fully usable if the optional
+            // presentation artifact is unavailable.
+            console.warn(`[VCPUI SettingsBridge] Could not mount typed ${ownerKey} Choice:`, error);
+        }
+    });
 }
 
 function mountTypedAppearanceRanges(root, form) {

@@ -456,16 +456,15 @@
     line-height: 24px;
 }
 
-/* Content-width and voice-mode radios use the same compact segmented
-   primitive as Harness instead of leaking the browser's blue radio glyph. */
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal),
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) {
+/* Content-width radios remain a frozen chat-surface presentation concern.
+   Voice mode now uses the generated Choice primitive; do not let this legacy
+   page-local segment override its Light-DOM classes. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) {
     display: grid;
     gap: 8px;
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row,
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) > .vcp-settings-control-row {
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row {
     display: inline-flex;
     align-items: center;
     width: fit-content;
@@ -476,8 +475,7 @@
     background: var(--vcp-ui-fill-1);
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row > label,
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) > .vcp-settings-control-row > label {
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row > label {
     display: inline-flex;
     align-items: center;
     min-height: 30px;
@@ -489,15 +487,13 @@
     cursor: pointer;
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row > label:has(input:checked),
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) > .vcp-settings-control-row > label:has(input:checked) {
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row > label:has(input:checked) {
     color: var(--vcp-ui-text-0);
     background: var(--vcp-ui-bg-1);
     box-shadow: var(--vcp-ui-shadow-elevation-hairline);
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row input[type="radio"],
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) > .vcp-settings-control-row input[type="radio"] {
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row input[type="radio"] {
     position: absolute;
     width: 1px;
     height: 1px;
