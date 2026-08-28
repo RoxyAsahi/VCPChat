@@ -980,9 +980,6 @@ const settingsManager = (() => {
             // 设置鼠标快捷键
             setupMouseShortcuts();
 
-            // Setup color picker synchronization
-            setupColorPickerSync();
-
             // Setup unified collapsible sections
             setupAgentSettingsSections();
 
@@ -1776,68 +1773,6 @@ function createStripRegexUI() {
     }
 
 
-
-    /**
-     * 设置颜色选择器与文本输入框的同步
-     */
-    function setupColorPickerSync() {
-        // 头像边框颜色同步
-        if (agentAvatarBorderColorInput && agentAvatarBorderColorTextInput) {
-            agentAvatarBorderColorInput.addEventListener('input', (e) => {
-                agentAvatarBorderColorTextInput.value = e.target.value;
-                updateAvatarPreviewStyle();
-            });
-
-            agentAvatarBorderColorTextInput.addEventListener('input', (e) => {
-                const color = e.target.value.trim();
-                if (/^#[0-9A-F]{6}$/i.test(color)) {
-                    agentAvatarBorderColorInput.value = color;
-                    updateAvatarPreviewStyle();
-                }
-            });
-
-            agentAvatarBorderColorTextInput.addEventListener('blur', (e) => {
-                const color = e.target.value.trim();
-                if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                    e.target.value = agentAvatarBorderColorInput.value;
-                    uiHelper.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-                }
-            });
-        }
-
-        // 名称文字颜色同步
-        if (agentNameTextColorInput && agentNameTextColorTextInput) {
-            agentNameTextColorInput.addEventListener('input', (e) => {
-                agentNameTextColorTextInput.value = e.target.value;
-            });
-
-            agentNameTextColorTextInput.addEventListener('input', (e) => {
-                const color = e.target.value.trim();
-                if (/^#[0-9A-F]{6}$/i.test(color)) {
-                    agentNameTextColorInput.value = color;
-                }
-            });
-
-            agentNameTextColorTextInput.addEventListener('blur', (e) => {
-                const color = e.target.value.trim();
-                if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                    e.target.value = agentNameTextColorInput.value;
-                    uiHelper.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-                }
-            });
-        }
-
-        console.log('[SettingsManager] Color picker synchronization setup complete.');
-    }
-
-    /**
-     * 更新头像预览的样式
-     */
-    function updateAvatarPreviewStyle() {
-        if (agentAvatarPreview && agentAvatarBorderColorInput) {
-            agentAvatarPreview.style.borderColor = agentAvatarBorderColorInput.value;
-        }
-    }
 
     /**
      * 设置参数容器的折叠功能

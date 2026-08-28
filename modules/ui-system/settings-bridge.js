@@ -963,13 +963,20 @@ function mountTypedAgentColorPairs(form) {
     const scope = ensurePresentationScope();
     if (!scope) return;
     [
-        ['#agentAvatarBorderColor', '#agentAvatarBorderColorText', 'agent-avatar-border-color'],
-        ['#agentNameTextColor', '#agentNameTextColorText', 'agent-name-text-color'],
-    ].forEach(([colorSelector, textSelector, key]) => {
+        ['#agentAvatarBorderColor', '#agentAvatarBorderColorText', 'agent-avatar-border-color', true],
+        ['#agentNameTextColor', '#agentNameTextColorText', 'agent-name-text-color', false],
+    ].forEach(([colorSelector, textSelector, key, updatesAvatarPreview]) => {
         const color = form?.querySelector?.(colorSelector);
         const text = form?.querySelector?.(textSelector);
         if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountColorPair(color, text, scope);
+        api.mountColorPair(color, text, scope, {
+            onValueChange: value => {
+                if (!updatesAvatarPreview) return;
+                const preview = form.querySelector('#agentAvatarPreview');
+                if (preview) preview.style.borderColor = value;
+            },
+            onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
+        });
         color.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${key}-marker`, 'ui-primitive');
     });

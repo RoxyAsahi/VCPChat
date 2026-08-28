@@ -80,7 +80,16 @@
                 button.className = 'next-ui-app-item';
                 button.dataset.openMode = app.embed ? 'embedded' : 'window';
                 button.title = app.embed ? `${app.name}（在标签页中打开）` : `${app.name}（在独立窗口中打开）`;
-                button.innerHTML = `<span class="next-ui-app-icon" data-tone="${this.tones[index % this.tones.length]}">${this.getIcon(app.icon)}</span><span>${app.name}</span>`;
+                // App metadata is contributed at runtime. Keep the icon markup
+                // in its explicit icon slot and insert the display name as text
+                // so a catalog entry cannot become launchpad HTML.
+                const icon = this.document.createElement('span');
+                icon.className = 'next-ui-app-icon';
+                icon.dataset.tone = this.tones[index % this.tones.length];
+                icon.innerHTML = this.getIcon(app.icon);
+                const label = this.document.createElement('span');
+                label.textContent = app.name;
+                button.append(icon, label);
                 listen(button, () => app.embed ? this.openEmbedded(app) : this.openExternal(app));
                 grid.append(button);
             });
