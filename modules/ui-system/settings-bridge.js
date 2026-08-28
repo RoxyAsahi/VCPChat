@@ -1097,6 +1097,8 @@ function mountHarnessInputs(form) {
 }
 
 function mountHarnessDisclosures(form) {
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
     form.querySelectorAll('.agent-style-collapsible-container').forEach(container => {
         // disclosureStates stores state records, not raw containers.  Using
         // Set.has(container) here silently missed the existing record and
@@ -1117,21 +1119,21 @@ function mountHarnessDisclosures(form) {
             container.classList.toggle('collapsed');
             sync();
         };
-        header.addEventListener('click', toggle);
-        header.addEventListener('keydown', toggle);
+        ownerScope.listen(header, 'click', toggle);
+        ownerScope.listen(header, 'keydown', toggle);
         const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
         observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
         sync();
-        disclosureStates.add({ container, header, observer, cleanup: () => {
+        const state = { container, header, observer, cleanup: () => {
             observer?.disconnect();
-            header.removeEventListener('click', toggle);
-            header.removeEventListener('keydown', toggle);
             header.removeAttribute('aria-controls');
             header.removeAttribute('aria-expanded');
             header.removeAttribute('role');
             header.removeAttribute('tabindex');
-            disclosureStates.delete([...disclosureStates].find(state => state.container === container));
-        }});
+            disclosureStates.delete(state);
+        }};
+        disclosureStates.add(state);
+        ownerScope.own(state.cleanup, `harness-disclosure-${container.id || uniqueSettingsKey()}`, 'ui-presentation');
     });
 }
 

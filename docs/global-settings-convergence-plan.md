@@ -229,6 +229,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 scope cleanup。dispose 仍保留 timer 取消、dirty marker 清理和 pending save 的
 业务语义；本切片只减少 presentation lifecycle 的重复清理路径。
 
+同一原则已应用到 Agent 风格折叠行：generated DisclosureRow 之前已接管视觉与
+ARIA，现在其 click/keydown 监听也直接归属 presentation scope；状态观察器和
+属性恢复仍由记录对象负责。这样重复 mount/refresh 不会重新绑定同一 header，且
+dispose 的监听器清理与其它 generated primitive 使用同一 owner 机制。
+
 ## 不作为阻塞条件
 
 ## 当前完成度快照（2026-08-28）
