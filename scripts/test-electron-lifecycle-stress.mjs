@@ -41,6 +41,7 @@ const agentModelPickerInteraction = process.env.VCPCHAT_STRESS_AGENT_MODEL_PICKE
 const agentPromptInteraction = process.env.VCPCHAT_STRESS_AGENT_PROMPT_INTERACTION === '1';
 const agentRangeInteraction = process.env.VCPCHAT_STRESS_AGENT_RANGE_INTERACTION === '1';
 const agentColorPairInteraction = process.env.VCPCHAT_STRESS_AGENT_COLOR_PAIR_INTERACTION === '1';
+const agentInputFocusInteraction = process.env.VCPCHAT_STRESS_AGENT_INPUT_FOCUS_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -775,6 +776,41 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             assert.deepEqual(agentColorPairInteractionEvidence.restored, agentColorPairInteractionEvidence.before,
                 `${label}: Agent ColorPair test interaction did not restore canonical controls`);
         }
+        let agentInputFocusInteractionEvidence = null;
+        if (agentInputFocusInteraction) {
+            agentInputFocusInteractionEvidence = await page.evaluate(() => {
+                const input = document.querySelector('#agentSettingsForm #agentTtsRegexPrimary');
+                const wrapper = input?.closest('.vcp-uiux-input-wrap');
+                if (!(input instanceof HTMLInputElement) || !(wrapper instanceof HTMLElement)) return { available: false };
+                input.focus();
+                const inputStyle = getComputedStyle(input);
+                const wrapperStyle = getComputedStyle(wrapper);
+                return {
+                    available: true,
+                    native: input.matches('input'),
+                    wrapperOwnsInput: wrapper.querySelector('input') === input,
+                    focusWithin: wrapper.matches(':focus-within'),
+                    innerBorderWidth: inputStyle.borderTopWidth,
+                    innerBoxShadow: inputStyle.boxShadow,
+                    innerOutlineStyle: inputStyle.outlineStyle,
+                    wrapperBorderColor: wrapperStyle.borderTopColor,
+                };
+            });
+            assert.equal(agentInputFocusInteractionEvidence.available, true,
+                `${label}: Agent typed Input focus evidence is unavailable: ${JSON.stringify(agentInputFocusInteractionEvidence)}`);
+            assert.equal(agentInputFocusInteractionEvidence.native, true,
+                `${label}: Agent typed Input must retain its native business node`);
+            assert.equal(agentInputFocusInteractionEvidence.wrapperOwnsInput, true,
+                `${label}: Agent typed Input wrapper must own its native node`);
+            assert.equal(agentInputFocusInteractionEvidence.focusWithin, true,
+                `${label}: Agent typed Input focus must activate the wrapper owner`);
+            assert.equal(agentInputFocusInteractionEvidence.innerBorderWidth, '0px',
+                `${label}: Agent typed Input regained a legacy inner border`);
+            assert.equal(agentInputFocusInteractionEvidence.innerBoxShadow, 'none',
+                `${label}: Agent typed Input regained a legacy inner focus halo: ${JSON.stringify(agentInputFocusInteractionEvidence)}`);
+            assert.equal(agentInputFocusInteractionEvidence.innerOutlineStyle, 'none',
+                `${label}: Agent typed Input must defer the outline to its wrapper`);
+        }
         let agentModelPickerInteractionEvidence = null;
         if (agentModelPickerInteraction) {
             const interaction = await page.evaluate(async () => {
@@ -1091,6 +1127,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
             evidence.agentRangeInteraction = agentRangeInteractionEvidence;
             evidence.agentColorPairInteraction = agentColorPairInteractionEvidence;
+            evidence.agentInputFocusInteraction = agentInputFocusInteractionEvidence;
             evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             evidence.agentDisclosureInteraction = agentDisclosureInteractionEvidence;

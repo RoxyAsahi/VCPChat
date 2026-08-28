@@ -8,11 +8,11 @@
 
 /* Base input and select styles */
 [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input),
-[id="agentSettingsContainer"] input[type="url"],
-[id="agentSettingsContainer"] input[type="password"],
-[id="agentSettingsContainer"] input[type="number"],
-[id="agentSettingsContainer"] select {
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)),
+[id="agentSettingsContainer"] input[type="url"]:not(.input),
+[id="agentSettingsContainer"] input[type="password"]:not(.input),
+[id="agentSettingsContainer"] input[type="number"]:not(.input),
+[id="agentSettingsContainer"] select:not(.vcp-harness-select-native) {
   width: 100%;
   height: 34px;
   min-height: 34px;
@@ -31,7 +31,7 @@
 }
 
 /* Select dropdown styling */
-[id="agentSettingsContainer"] select {
+[id="agentSettingsContainer"] select:not(.vcp-harness-select-native) {
   padding-right: 34px;
   appearance: none;
   -webkit-appearance: none;
@@ -48,11 +48,11 @@
 /* Light theme - input styles */
 body.light-theme
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input),
-body.light-theme [id="agentSettingsContainer"] input[type="url"],
-body.light-theme [id="agentSettingsContainer"] input[type="password"],
-body.light-theme [id="agentSettingsContainer"] input[type="number"],
-body.light-theme [id="agentSettingsContainer"] select {
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)),
+body.light-theme [id="agentSettingsContainer"] input[type="url"]:not(.input),
+body.light-theme [id="agentSettingsContainer"] input[type="password"]:not(.input),
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input),
+body.light-theme [id="agentSettingsContainer"] select:not(.vcp-harness-select-native) {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 18%, rgba(255, 255, 255, 0.52)),
@@ -70,11 +70,11 @@ body.light-theme [id="agentSettingsContainer"] select {
 
 body.light-theme
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):hover,
-body.light-theme [id="agentSettingsContainer"] input[type="url"]:hover,
-body.light-theme [id="agentSettingsContainer"] input[type="password"]:hover,
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:hover,
-body.light-theme [id="agentSettingsContainer"] select:hover {
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)):hover,
+body.light-theme [id="agentSettingsContainer"] input[type="url"]:not(.input):hover,
+body.light-theme [id="agentSettingsContainer"] input[type="password"]:not(.input):hover,
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):hover,
+body.light-theme [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):hover {
   border-color: color-mix(
     in srgb,
     var(--highlight-text) 72%,
@@ -88,20 +88,20 @@ body.light-theme [id="agentSettingsContainer"] select:hover {
 
 body.light-theme
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):focus,
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)):focus,
 body.light-theme
   [id="agentSettingsContainer"]
   input[type="text"]:not(.prompt-textarea):not(
     .strip-regex-input
-  ):focus-visible,
-body.light-theme [id="agentSettingsContainer"] input[type="url"]:focus,
-body.light-theme [id="agentSettingsContainer"] input[type="url"]:focus-visible,
-body.light-theme [id="agentSettingsContainer"] input[type="password"]:focus,
-body.light-theme [id="agentSettingsContainer"] input[type="password"]:focus-visible,
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:focus,
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:focus-visible,
-body.light-theme [id="agentSettingsContainer"] select:focus,
-body.light-theme [id="agentSettingsContainer"] select:focus-visible {
+  ):not(.input):not(:is(.vcp-uiux-color-pair > input)):focus-visible,
+body.light-theme [id="agentSettingsContainer"] input[type="url"]:not(.input):focus,
+body.light-theme [id="agentSettingsContainer"] input[type="url"]:not(.input):focus-visible,
+body.light-theme [id="agentSettingsContainer"] input[type="password"]:not(.input):focus,
+body.light-theme [id="agentSettingsContainer"] input[type="password"]:not(.input):focus-visible,
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):focus,
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):focus-visible,
+body.light-theme [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):focus,
+body.light-theme [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):focus-visible {
   outline: none;
   border-color: var(--highlight-text);
   box-shadow: inset 2px -2px 1px -1px rgba(255, 255, 255, 0.82),
@@ -113,11 +113,11 @@ body.light-theme [id="agentSettingsContainer"] select:focus-visible {
 /* Dark theme - input styles */
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input),
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"],
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"],
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"],
-body:not(.light-theme) [id="agentSettingsContainer"] select {
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)),
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:not(.input),
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"]:not(.input),
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:not(.input),
+body:not(.light-theme) [id="agentSettingsContainer"] select:not(.vcp-harness-select-native) {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 58%, rgba(255, 255, 255, 0.08)),
@@ -134,11 +134,11 @@ body:not(.light-theme) [id="agentSettingsContainer"] select {
 
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):hover,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"]:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] select:hover {
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)):hover,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:not(.input):hover,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"]:not(.input):hover,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:not(.input):hover,
+body:not(.light-theme) [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):hover {
   border-color: color-mix(
     in srgb,
     var(--highlight-text) 68%,
@@ -152,24 +152,24 @@ body:not(.light-theme) [id="agentSettingsContainer"] select:hover {
 
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):focus,
+  input[type="text"]:not(.prompt-textarea):not(.strip-regex-input):not(.input):not(:is(.vcp-uiux-color-pair > input)):focus,
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   input[type="text"]:not(.prompt-textarea):not(
     .strip-regex-input
-  ):focus-visible,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:focus,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:focus-visible,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"]:focus,
+  ):not(.input):not(:is(.vcp-uiux-color-pair > input)):focus-visible,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:not(.input):focus,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="url"]:not(.input):focus-visible,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="password"]:not(.input):focus,
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="password"]:focus-visible,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:focus,
+  input[type="password"]:not(.input):focus-visible,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:not(.input):focus,
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="number"]:focus-visible,
-body:not(.light-theme) [id="agentSettingsContainer"] select:focus,
-body:not(.light-theme) [id="agentSettingsContainer"] select:focus-visible {
+  input[type="number"]:not(.input):focus-visible,
+body:not(.light-theme) [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):focus,
+body:not(.light-theme) [id="agentSettingsContainer"] select:not(.vcp-harness-select-native):focus-visible {
   outline: none;
   border-color: var(--highlight-text);
   box-shadow: inset 1px -1px 1px -1px rgba(255, 255, 255, 0.2),
@@ -179,14 +179,14 @@ body:not(.light-theme) [id="agentSettingsContainer"] select:focus-visible {
 }
 
 /* Number input specific styles */
-[id="agentSettingsContainer"] input[type="number"] {
+[id="agentSettingsContainer"] input[type="number"]:not(.input) {
   padding: 0 12px;
   background-image: none;
 }
 
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:hover,
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:focus,
-body.light-theme [id="agentSettingsContainer"] input[type="number"]:focus-visible {
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):hover,
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):focus,
+body.light-theme [id="agentSettingsContainer"] input[type="number"]:not(.input):focus-visible {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 18%, rgba(255, 255, 255, 0.52)),
@@ -195,11 +195,11 @@ body.light-theme [id="agentSettingsContainer"] input[type="number"]:focus-visibl
   background-image: none;
 }
 
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:focus,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:not(.input):hover,
+body:not(.light-theme) [id="agentSettingsContainer"] input[type="number"]:not(.input):focus,
 body:not(.light-theme)
   [id="agentSettingsContainer"]
-  input[type="number"]:focus-visible {
+  input[type="number"]:not(.input):focus-visible {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 58%, rgba(255, 255, 255, 0.08)),
