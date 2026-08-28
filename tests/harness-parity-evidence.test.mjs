@@ -134,6 +134,19 @@ test('Harness capture prerequisites follow the real pnpm workspace resolver', ()
     assert.equal(report.checks.find(item => item.name === 'Playwright resolver from Harness web')?.exists, true);
 });
 
+test('ConnectionBanner Candidate capture records DOM, geometry, states, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-connection-banner-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP connection consumer'), true);
+    assert.equal(report.connectedHidden.present, false);
+    assert.equal(report.reconnectingVisible.present, true);
+    assert.deepEqual(report.reconnectingVisible.aria, { role: 'status', live: 'polite' });
+    assert.equal(report.reconnectingVisible.style.position, 'fixed');
+    assert.equal(report.reconnectingVisible.style.padding, '4px 12px');
+    assert.equal(report.labelUpdate.text, 'Reconnecting to Harness…');
+    assert.equal(report.ownerRegistrations, 1);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
