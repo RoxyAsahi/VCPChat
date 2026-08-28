@@ -127,10 +127,12 @@ for (const dir of targets) {
       assert.equal(observation?.restored?.tooltip?.position, 'fixed', `${name}: restored tooltip is not fixed`);
       assert.equal(observation?.restored?.tooltip?.parent, 'body', `${name}: restored tooltip is not body-portalized`);
       assert.equal(observation?.restored?.tooltip?.inViewport, true, `${name}: restored tooltip is outside the viewport`);
+      assert.notEqual(observation?.restored?.tooltip?.interaction?.method, 'synthetic-mouseenter', `${name}: restored Tooltip only opened via synthetic mouseenter`);
       assert.equal(observation?.resized?.tooltip?.open, true, `${name}: tooltip did not open after narrow resize`);
       assert.equal(observation?.resized?.tooltip?.position, 'fixed', `${name}: narrow tooltip is not fixed`);
       assert.equal(observation?.resized?.tooltip?.parent, 'body', `${name}: narrow tooltip is not body-portalized`);
       assert.equal(observation?.resized?.tooltip?.inViewport, true, `${name}: narrow tooltip is outside the viewport`);
+      assert.notEqual(observation?.resized?.tooltip?.interaction?.method, 'synthetic-mouseenter', `${name}: narrow Tooltip only opened via synthetic mouseenter`);
       for (const type of ['menu', 'modal']) {
         assert.equal(observation?.resized?.[type]?.open, true, `${name}: ${type} did not open after narrow resize`);
         assert.equal(observation?.resized?.[type]?.inViewport, true, `${name}: narrow ${type} is outside the viewport`);
