@@ -1107,6 +1107,14 @@ function mountHarnessDisclosures(form) {
         const header = container.querySelector('.style-collapse-header');
         const content = container.querySelector('.agent-style-controls');
         if (!header || !content) return;
+        const originalHeaderClass = header.className;
+        const originalHeaderAttrs = {
+            role: header.getAttribute('role'),
+            tabindex: header.getAttribute('tabindex'),
+            ariaControls: header.getAttribute('aria-controls'),
+            ariaExpanded: header.getAttribute('aria-expanded'),
+        };
+        const originalContentId = content.id;
         if (!content.id) content.id = `${container.id || 'settings-disclosure'}-content`;
         header.classList.add('vcp-harness-disclosure-row');
         header.setAttribute('role', 'button');
@@ -1130,8 +1138,17 @@ function mountHarnessDisclosures(form) {
             observer?.disconnect();
             header.removeAttribute('aria-controls');
             header.removeAttribute('aria-expanded');
-            header.removeAttribute('role');
-            header.removeAttribute('tabindex');
+            if (originalHeaderAttrs.role === null) header.removeAttribute('role');
+            else header.setAttribute('role', originalHeaderAttrs.role);
+            if (originalHeaderAttrs.tabindex === null) header.removeAttribute('tabindex');
+            else header.setAttribute('tabindex', originalHeaderAttrs.tabindex);
+            if (originalHeaderAttrs.ariaControls === null) header.removeAttribute('aria-controls');
+            else header.setAttribute('aria-controls', originalHeaderAttrs.ariaControls);
+            if (originalHeaderAttrs.ariaExpanded === null) header.removeAttribute('aria-expanded');
+            else header.setAttribute('aria-expanded', originalHeaderAttrs.ariaExpanded);
+            header.className = originalHeaderClass;
+            if (originalContentId) content.id = originalContentId;
+            else content.removeAttribute('id');
             disclosureStates.delete(state);
         }};
         disclosureStates.add(state);

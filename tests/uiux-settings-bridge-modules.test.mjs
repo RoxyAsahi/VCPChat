@@ -382,6 +382,9 @@ test('legacy disclosure fast teardown is explicitly idempotent', () => {
     assert.match(helper, /cleaned:\s*false/);
     assert.match(helper, /if \(state\.cleaned\) return;/);
     assert.match(helper, /state\.cleaned = true;/);
+    assert.match(helper, /originalHeaderClass/);
+    assert.match(helper, /header\.className = originalHeaderClass/);
+    assert.match(helper, /originalContentId/);
 });
 
 test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
