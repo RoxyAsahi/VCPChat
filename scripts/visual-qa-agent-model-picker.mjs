@@ -213,6 +213,11 @@ try {
       };
     });
     await page.screenshot({ path: path.join(output, `${name}-model-hover.png`), fullPage: false });
+    // Hover leaves the pointer over a row but does not guarantee which
+    // element owns keyboard focus after the production Settings surface has
+    // rebuilt. Focus the real portal card so Escape is exercised through its
+    // shipped key handler, then require the model pane to return to root.
+    await page.$eval('.vcp-harness-popup-select-card', card => card.focus());
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.querySelector('.vcp-harness-popup-select-card .vcp-harness-agent-model-picker-cell')?.hidden === false, { timeout: timeoutMs });
     await page.setViewport({ width: Math.max(320, width - 240), height, deviceScaleFactor: 1 });
