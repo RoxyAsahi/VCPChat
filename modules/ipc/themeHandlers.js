@@ -77,7 +77,7 @@ const handleGetThemes = async () => {
             };
 
             const rootScopeRegex = /:root\s*\{([\s\S]*?)\}/;
-            const lightThemeScopeRegex = /body\.light-theme\s*\{([\s\S]*?)\}/;
+            const lightThemeScopeRegex = /body(?:\.light-theme|\[data-vcp-theme=["']light["']\])\s*\{([\s\S]*?)\}/;
 
             const darkVariables = extractVariables(rootScopeRegex);
             const lightVariables = extractVariables(lightThemeScopeRegex);
