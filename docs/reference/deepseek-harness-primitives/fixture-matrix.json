@@ -5,6 +5,7 @@
   "cases": [
     ["button", "primary"], ["button", "ghost"], ["button", "outline"], ["button", "toolbar"], ["button", "compact"], ["button", "disabled"],
     ["connection-banner", "connected-hidden"], ["connection-banner", "reconnecting-visible"], ["connection-banner", "label-update"],
+    ["menu", "dense-portal-selected-submenu"],
     ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
     ["field", "description"], ["field", "error"],
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
@@ -148,7 +149,7 @@
     "buttonCandidate": "candidate consumer-projection pixel-policy pass at 800x600 @1x; real Harness WelcomeNotice capture and VCP Button ROI share DOM/geometry/computed-style contract and pass the strict 1%/2 threshold (37/4320 pixels, ratio 0.856%, mean delta 0.051); VCP production consumer and legacy deletion pending",
     "connectionBannerCandidate": "fixed 800x600 VCP generated-artifact DOM/ARIA/computed-style/screenshot and owner-restore capture active; no VCP connection consumer; Harness capture and same-semantic pixel diff pending",
     "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)",
-    "menuCandidate": "interaction/geometry/screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "menuCandidate": "independent generated-artifact portal DOM/ARIA/computed-style/screenshot, outside/Escape close and owner restore capture active at 800x600 @1x; same-semantic Harness pixel diff pending",
     "modalCandidate": "standard/headless interaction, geometry and screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
     "tooltipCandidate": "hover/focus/delay/disabled interaction and fixed geometry active; same-semantic Harness pixel diff pending",
     "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending",

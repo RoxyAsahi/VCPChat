@@ -147,6 +147,20 @@ test('ConnectionBanner Candidate capture records DOM, geometry, states, and tear
     assert.equal(report.ownerRegistrations, 1);
 });
 
+test('Menu Candidate capture records portal, interaction states, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-menu-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-menu-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP production consumer'), true);
+    assert.equal(report.open.present, true);
+    assert.equal(report.open.role, 'menu');
+    assert.deepEqual(report.open.aria, { triggerHasPopup: 'menu', triggerExpanded: 'true' });
+    assert.equal(report.open.style.position, 'fixed');
+    assert.equal(report.open.items.filter(item => item.selected === 'true').length, 2);
+    assert.deepEqual(report.submenuItems, ['List', 'Grid']);
+    assert.equal(report.outsideClosed, true);
+    assert.equal(report.escapeClosed, true);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
@@ -221,7 +235,7 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
     assert.ok(report.uncoveredContracts.includes('settings-root'));
     assert.equal(report.counts.effectiveContractsWithFixtures, report.counts.contractsWithFixtures + 2);
-    assert.deepEqual(report.candidateFixtureGaps, ['menu', 'onboarding-surface', 'pill']);
+    assert.deepEqual(report.candidateFixtureGaps, ['onboarding-surface', 'pill']);
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.category, 'covered-by-semantic-fixture-alias');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.fixture, 'agent-model-picker');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'settings-root')?.category, 'source-only-boundary');
