@@ -1,7 +1,18 @@
 {
   "primitive": "PresetMenu",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
-  "sharedPrimitiveSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx",
+  "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "sharedPrimitiveSource": "packages/client/ui-primitives/src/Menu.tsx",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+      "packages/client/ui-primitives/src/Menu.tsx",
+      "packages/client/ui-primitives/src/Menu.module.css"
+    ],
+    "selectionRule": "Use PresetMenu composition for trigger/label semantics and shared Menu source for popup ownership and geometry; VCP remains reference-only without a business consumer."
+  },
+  "candidateStatus": "reference-only; Harness composition is source-backed, VCP has no legal AgentPreset business consumer or paired visual capture",
   "root": { "composition": "Menu + caller-owned anchor button" },
   "anchor": { "tag": "button", "type": "button", "ariaHaspopup": "menu", "ariaExpanded": "open state", "disabled": "caller-owned" },
   "items": { "source": "options roster order", "selected": "selectedId", "userTrustLabel": "name + localized userTrust suffix" },

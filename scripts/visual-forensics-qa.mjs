@@ -106,8 +106,6 @@ try {
     const rows = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, .settings-section') || [])]
       .filter(node => node.getClientRects().length).slice(0, 24).map(node => {
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-        const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
-        const topmost = document.elementFromPoint(point.x, point.y);
         return { className: node.className, text: (node.textContent || '').trim().slice(0, 120), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gap: s.gap, padding: s.padding, borderRadius: s.borderRadius, backgroundColor: s.backgroundColor };
       });
     const shell = modal?.querySelector('.vcp-ui-settings-shell, #globalSettingsForm');
