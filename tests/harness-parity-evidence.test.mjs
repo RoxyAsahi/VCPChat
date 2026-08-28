@@ -373,6 +373,19 @@ test('Real Harness RiskConfirmation source capture preserves controlled gate and
     assert.deepEqual(report.unmounted, { rootEmpty: true, dialogs: 0 });
 });
 
+test('RiskConfirmation source/Candidate diff records matched controlled states and geometry boundary', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-risk-confirmation-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-risk-confirmation-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-risk-confirmation-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-risk-confirmation-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.domAria.pass, true);
+    assert.equal(Object.values(report.states).every(Boolean), true);
+    assert.equal(report.geometry.comparable, false);
+    assert.equal(report.pixel.status, 'not-comparable-geometry');
+    assert.equal(report.pass, false);
+});
+
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });

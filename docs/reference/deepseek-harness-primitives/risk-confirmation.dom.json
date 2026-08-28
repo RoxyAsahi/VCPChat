@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness controlled acknowledgement dialog and CSS; VCP generic confirmation is intentionally not treated as equivalent."
   },
-  "candidateStatus": "candidate-interaction-active; real Harness source capture records controlled acknowledgement/disabled/dialog/unmount states; no equivalent VCP production consumer or paired VCP DOM/style/pixel capture",
+  "candidateStatus": "candidate-interaction-active; same-engine source/Candidate DOM/ARIA and controlled acknowledgement/disabled/dispose states recorded; dialog geometry mismatch blocks strict ROI pixel comparison and no equivalent VCP production consumer exists",
   "productionConsumers": [
     "packages/client/ui-permission-presets/src/client/PermissionRow.tsx",
     "packages/client/ui-commands/src/client/PopupSelectView.tsx",

@@ -134,6 +134,12 @@ unmount states. This is source-side evidence only: a matching VCP Candidate
 capture, computed-style/structural diff, strict pixel comparison, and any
 production consumer remain open.
 
+RiskConfirmation also has a paired Candidate capture for the controlled gate,
+ARIA, and teardown matrix. Those states align, but the real Harness dialog is
+442×228 while the Candidate dialog is 382×250; the diff records this as a
+non-comparable geometry boundary and deliberately does not crop, resize, or
+claim a strict ROI pixel result.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept
