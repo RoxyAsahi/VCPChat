@@ -239,6 +239,23 @@ Harness same-semantic capture. It separates the missing capture types from
 the frozen consumer boundary and always keeps `pass: false`; it is not a
 priority ranking and does not authorize production wiring.
 
+`node scripts/check-harness-agent-preset-seat-source-provenance.mjs` records
+the three-file Harness AgentPresetSeat boundary (`AgentPresetSeat.tsx`,
+`PresetMenu.tsx`, and its stylesheet), including current SHA-256 values and
+owner/ARIA/portal/style anchors. It also validates only the shape of the fixed
+VCP Candidate capture. It deliberately remains `pass: false`: a real Harness
+browser capture, same-semantic DOM/computed-style/pixel diffs, and a legal VCP
+production consumer remain absent while assistant-agent/chat switching is
+frozen.
+
+`node scripts/check-harness-agent-preset-row-source-provenance.mjs` applies the
+same source-drift boundary to the settings AgentPresetRow composite. It pins
+the row's status/disabled/error ownership, PresetMenu `align=end` portal and
+trust-label contract, stylesheet geometry, and the fixed Candidate capture
+shape. The report remains `pass=false`: no same-semantic Harness browser or
+DOM/style/pixel pair exists, and VCP has no equivalent non-frozen preset
+preference consumer.
+
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
