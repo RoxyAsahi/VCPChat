@@ -233,6 +233,12 @@ non-passing: the existing screenshot is model-picker-derived rather than a
 same-semantic PopupSelect replay, and the Composer/input-overlay production
 consumer is frozen.
 
+`node scripts/check-harness-candidate-capture-gaps.mjs` is the read-only
+planning ledger for source-backed Candidate controls that still lack a real
+Harness same-semantic capture. It separates the missing capture types from
+the frozen consumer boundary and always keeps `pass: false`; it is not a
+priority ranking and does not authorize production wiring.
+
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
