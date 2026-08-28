@@ -1459,6 +1459,9 @@ if (agentModelPickerInteraction) {
 }
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
+    // QA can boot the same production journey in either persisted theme
+    // without mutating renderer state after mount.
+    currentThemeMode: process.env.VCPCHAT_STRESS_THEME || 'light',
     enableDistributedServer: false,
     vcpServerUrl: modelServerPort ? `http://127.0.0.1:${modelServerPort}` : 'http://127.0.0.1:1',
     vcpApiKey: 'lifecycle-stress-key',

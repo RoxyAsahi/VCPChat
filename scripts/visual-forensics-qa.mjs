@@ -20,35 +20,86 @@ const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const timeout = 90_000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hoverTooltip = async (page, handle) => {
+  const attempts = [];
+  const capturePointerState = async () => handle.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      point: { x, y },
+      inViewport: rect.width > 0 && rect.height > 0 && x >= 0 && x < innerWidth && y >= 0 && y < innerHeight,
+      hitAnchor: Boolean(hit && (hit === element || element.contains(hit))),
+      hit: hit ? { tag: hit.tagName.toLowerCase(), id: hit.id || '', className: typeof hit.className === 'string' ? hit.className : '', text: (hit.textContent || '').trim().slice(0, 80) } : null,
+      hovered: element.matches(':hover'),
+    };
+  }).catch(() => null);
+  const waitForBubble = async () => {
+    try {
+      await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
   // Never reuse a potentially stale hover location after a viewport change.
   // Leaving first makes the subsequent pointer move an observable native
   // mouseenter, rather than assuming Puppeteer will synthesize one in place.
   await page.mouse.move(2, 2).catch(() => {});
   await sleep(20);
   await handle.hover().catch(() => {});
-  try {
-    await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 });
-    return true;
-  } catch {}
+  attempts.push({ method: 'puppeteer-hover', pointer: await capturePointerState(), bubble: await waitForBubble() });
+  if (attempts.at(-1).bubble) return { open: true, method: 'puppeteer-hover', attempts };
   // Resize can move the anchor between Puppeteer's hover calculation and the
-  // dispatched event. Re-read the live rect and move the real pointer once.
-  const point = await handle.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  }).catch(() => null);
-  if (!point) return false;
-  await page.mouse.move(2, 2).catch(() => {});
-  await sleep(20);
-  await page.mouse.move(point.x, point.y).catch(() => {});
-  await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 }).catch(() => {});
-  if (await page.$('.vcp-harness-tooltip-bubble').catch(() => null)) return true;
+  // dispatched event. Re-read the live rect for every native retry, because
+  // scrolling and delayed layout can move a fixed-tooltip anchor between hops.
+  for (let retry = 1; retry <= 3; retry += 1) {
+    const pointer = await capturePointerState();
+    if (!pointer?.inViewport) {
+      await handle.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await sleep(80);
+    }
+    const livePointer = await capturePointerState();
+    if (!livePointer) break;
+    await page.mouse.move(2, 2).catch(() => {});
+    await sleep(20);
+    await page.mouse.move(livePointer.point.x, livePointer.point.y).catch(() => {});
+    await sleep(30);
+    attempts.push({ method: `native-pointer-retry-${retry}`, pointer: await capturePointerState(), bubble: await waitForBubble() });
+    if (attempts.at(-1).bubble) return { open: true, method: 'native-pointer-retry', attempts };
+  }
   // Electron still renders the exact production portal below; this final
   // fallback only delivers mouseenter through the mounted renderer listener
   // when a transient overlay has swallowed the native pointer move.
   await handle.evaluate(element => element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }))).catch(() => {});
-  await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 }).catch(() => {});
-  return Boolean(await page.$('.vcp-harness-tooltip-bubble').catch(() => null));
+  attempts.push({ method: 'synthetic-mouseenter', pointer: await capturePointerState(), bubble: await waitForBubble() });
+  return { open: attempts.at(-1).bubble, method: 'synthetic-mouseenter', attempts };
 };
+const scrollTooltipIntoPointerViewport = async handle => handle.evaluate(async element => {
+  element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  const owner = element.closest('.vcp-ui-showcase-shell, .vcp-ui-page-shell-content');
+  if (!owner || !Number.isFinite(owner.scrollTop)) return;
+  const previousBehavior = owner.style.scrollBehavior;
+  owner.style.scrollBehavior = 'auto';
+  // Sticky headers can cover the centre after the first scrollIntoView. Iterate
+  // against the live hit-test so fractional layout and scroll clamping cannot
+  // leave the real pointer over the header.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    if (hit && (hit === element || element.contains(hit))) break;
+    const occluder = document.elementsFromPoint(x, y).find(node => !element.contains(node) && !node.contains(element));
+    const occluderBottom = occluder?.getBoundingClientRect().bottom || 0;
+    const desiredY = Math.min(innerHeight * 0.55, Math.max(occluderBottom + 28, innerHeight * 0.3));
+    const delta = rect.top - desiredY;
+    if (Math.abs(delta) < 2) owner.scrollTop -= 120;
+    else owner.scrollTop += delta;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+  owner.style.scrollBehavior = previousBehavior;
+});
 const request = url => new Promise((resolve, reject) => http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject));
 const waitForMainRenderer = async browser => {
   const deadline = Date.now() + timeout;
@@ -645,17 +696,18 @@ try {
       return null;
     })();
     if (tooltipHandle) {
-      await tooltipHandle.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await scrollTooltipIntoPointerViewport(tooltipHandle).catch(() => {});
       await sleep(80);
-      await hoverTooltip(page, tooltipHandle);
+      const tooltipInteraction = await hoverTooltip(page, tooltipHandle);
       await sleep(160);
       resized.tooltip = await page.evaluate(() => {
         const node = document.querySelector('.vcp-harness-tooltip-bubble');
         const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
         if (!node || !anchor) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const ar = anchor.getBoundingClientRect(); const s = getComputedStyle(node);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, anchorHovered: anchor.matches(':hover'), position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
       }).catch(() => ({ open: false, rect: null }));
+      resized.tooltip.interaction = tooltipInteraction;
       await page.screenshot({ path: path.join(output, `${name}-narrow-tooltip.png`), fullPage: false });
       await page.mouse.move(2, 2).catch(() => {});
     } else resized.tooltip = { open: false, rect: null };
@@ -698,17 +750,18 @@ try {
       return null;
     })();
     if (restoredTooltipTarget) {
-      await restoredTooltipTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await scrollTooltipIntoPointerViewport(restoredTooltipTarget).catch(() => {});
       await sleep(80);
-      await hoverTooltip(page, restoredTooltipTarget);
+      const tooltipInteraction = await hoverTooltip(page, restoredTooltipTarget);
       await sleep(160);
       restored.tooltip = await page.evaluate(() => {
         const node = document.querySelector('.vcp-harness-tooltip-bubble');
         const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
         if (!node || !anchor) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const ar = anchor.getBoundingClientRect(); const s = getComputedStyle(node);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, anchorHovered: anchor.matches(':hover'), position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
       }).catch(() => ({ open: false, rect: null }));
+      restored.tooltip.interaction = tooltipInteraction;
       await page.screenshot({ path: path.join(output, `${name}-restored-tooltip.png`), fullPage: false });
       await page.mouse.move(2, 2).catch(() => {});
     } else restored.tooltip = { open: false, rect: null };
