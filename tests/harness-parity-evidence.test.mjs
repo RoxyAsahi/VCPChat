@@ -220,7 +220,13 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.equal(report.pass, false);
     assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
     assert.ok(report.uncoveredContracts.includes('settings-root'));
-    assert.ok(report.note.includes('does not imply a replayable visual fixture'));
+    assert.equal(report.counts.effectiveContractsWithFixtures, report.counts.contractsWithFixtures + 2);
+    assert.deepEqual(report.candidateFixtureGaps, ['menu', 'onboarding-surface', 'pill']);
+    assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.category, 'covered-by-semantic-fixture-alias');
+    assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.fixture, 'agent-model-picker');
+    assert.equal(report.uncoveredByBoundary.find(item => item.name === 'settings-root')?.category, 'source-only-boundary');
+    assert.equal(report.uncoveredByBoundary.find(item => item.name === 'color-pair')?.category, 'vcp-local-contract');
+    assert.ok(report.note.includes('no category implies production parity'));
 });
 
 test('MessageImage source audit preserves frozen attachment lifecycle evidence', () => {
