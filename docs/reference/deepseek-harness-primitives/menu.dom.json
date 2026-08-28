@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness Menu implementation and CSS as the shared dropdown contract; paired VCP capture remains candidate-only."
   },
-  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine real-source Harness/VCP DOM/ARIA, computed-style, portal/submenu/outside/Escape/unmount-dispose evidence recorded; Candidate-only trigger ARIA and danger/footer rows remain explicit non-passes, strict same-semantic ROI pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine real-source Harness/VCP DOM/ARIA, computed-style, portal/submenu/outside/Escape/unmount-dispose evidence and strict same-semantic ROI measurement recorded; trigger ARIA remains Candidate-owned and the 218x287 Harness versus 218x290 Candidate ROI is non-comparable",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
     "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
