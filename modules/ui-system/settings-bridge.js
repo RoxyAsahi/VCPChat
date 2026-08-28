@@ -1214,6 +1214,8 @@ function mountTypedFieldOwner(root, form) {
     if (!root || !form || form.dataset.vcpTypedFieldOwnerMounted === 'true') return;
     const service = typedSettingsRegistry?.get('settings-ui') || ensureTypedSettingsService();
     if (!service?.save?.execute) return;
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
     const controls = Object.keys(TYPED_FIELD_DEFINITIONS)
         .map(id => form.querySelector(`#${id}`))
         .filter(Boolean);
@@ -1299,8 +1301,7 @@ function mountTypedFieldOwner(root, form) {
     syncConditionalRows();
     ['change', 'input'].forEach(type => {
         const onChange = () => syncConditionalRows();
-        form.addEventListener(type, onChange);
-        state.cleanups.push(() => form.removeEventListener(type, onChange));
+        ownerScope.listen(form, type, onChange);
     });
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
@@ -1380,11 +1381,9 @@ function mountTypedFieldOwner(root, form) {
     };
     controls.forEach(control => {
         control.dataset.vcpTypedFieldOwner = 'true';
-        control.addEventListener('input', onInput);
-        control.addEventListener('change', onInput);
+        ownerScope.listen(control, 'input', onInput);
+        ownerScope.listen(control, 'change', onInput);
         state.cleanups.push(() => {
-            control.removeEventListener('input', onInput);
-            control.removeEventListener('change', onInput);
             delete control.dataset.vcpTypedFieldOwner;
         });
     });
@@ -1393,8 +1392,7 @@ function mountTypedFieldOwner(root, form) {
         const select = form.querySelector(`#${id}`);
         if (!select) return;
         const onRenderPresetChange = () => syncRenderSettingsVisibility(form);
-        select.addEventListener('change', onRenderPresetChange);
-        state.cleanups.push(() => select.removeEventListener('change', onRenderPresetChange));
+        ownerScope.listen(select, 'change', onRenderPresetChange);
     });
     const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
     if (middleClickAdvancedDelay) {
@@ -1403,8 +1401,7 @@ function mountTypedFieldOwner(root, form) {
                 middleClickAdvancedDelay.dispatchEvent(new Event('input', { bubbles: true }));
             }
         };
-        middleClickAdvancedDelay.addEventListener('blur', onBlur);
-        state.cleanups.push(() => middleClickAdvancedDelay.removeEventListener('blur', onBlur));
+        ownerScope.listen(middleClickAdvancedDelay, 'blur', onBlur);
     }
     if (pathsContainer) {
         const onRowsDirty = () => {
@@ -1414,12 +1411,10 @@ function mountTypedFieldOwner(root, form) {
             markDirty();
             schedule();
         };
-        pathsContainer.addEventListener('input', onRowsDirty);
-        pathsContainer.addEventListener('change', onRowsDirty);
+        ownerScope.listen(pathsContainer, 'input', onRowsDirty);
+        ownerScope.listen(pathsContainer, 'change', onRowsDirty);
         pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { input.dataset.vcpTypedFieldOwner = 'true'; });
         state.cleanups.push(() => {
-            pathsContainer.removeEventListener('input', onRowsDirty);
-            pathsContainer.removeEventListener('change', onRowsDirty);
             pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { delete input.dataset.vcpTypedFieldOwner; });
         });
     }
