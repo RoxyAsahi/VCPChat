@@ -126,6 +126,11 @@ while its Candidate-only `role=status` and `aria-live=polite` addition is kept
 as an explicit DOM/ARIA non-pass. Its 800×26 strict ROI result is comparable
 but non-passing; no connection transport consumer is wired.
 
+OnboardingSurface now has a real-source mounted/unmounted capture with portal,
+inert, mask, and stage contracts. Its 800×600 full-surface strict RGB result is
+comparable but non-passing; Candidate reopen remains an experimental controller
+state, and no first-run production consumer is connected.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
