@@ -204,6 +204,9 @@ test('Real Harness Tooltip source capture exposes the VCP Candidate portal struc
     assert.equal(report.dom.role.pass, true);
     assert.equal(report.dom.side.pass, true);
     assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.interaction.pass, true);
+    assert.equal(report.interaction.focusImmediate.pass, true);
+    assert.equal(report.interaction.flippedTop.pass, true);
     assert.equal(report.structuralPass, false);
     assert.equal(report.pass, false);
     assert.equal(report.pixel.status, 'pending-roi-diff');
