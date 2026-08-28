@@ -289,9 +289,7 @@
         html .vcp-ui-scope .next-ui-notification-menu {
             position: fixed;
             top: calc(var(--vcp-ui-shell-header-height) + var(--vcp-ui-space-2));
-            right: auto;
             right: var(--vcp-ui-space-2);
-            left: auto;
             width: min(196px, calc(100vw - var(--vcp-ui-space-4)));
             min-width: 0;
         }
