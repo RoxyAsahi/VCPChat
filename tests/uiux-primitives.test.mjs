@@ -677,6 +677,8 @@ test('Harness Tooltip keeps the anchor DOM and owns hover/focus/delay/disabled e
         await delay(10);
         assert.equal(tooltip.bubble?.getAttribute('role'), 'tooltip');
         assert.equal(tooltip.bubble?.dataset.side, 'bottom');
+        assert.equal(tooltip.bubble?.parentElement, anchor.parentElement, 'Tooltip bubble must remain a fragment sibling of its anchor');
+        assert.notEqual(tooltip.bubble?.parentElement, document.body, 'Tooltip must not become a body portal');
         assert.equal(tooltip.bubble?.style.left, '90px');
         assert.equal(tooltip.bubble?.style.top, '72px');
         assert.equal(tooltip.bubble?.style.maxWidth, '360px');
