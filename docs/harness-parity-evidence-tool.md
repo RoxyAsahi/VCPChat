@@ -274,10 +274,9 @@ must not be substituted for a paired VCP diff.
 `node scripts/diff-harness-vcp-disclosure-row.mjs` compares the aligned
 `row-click-open-keep-content` state from the real Harness source capture and
 the VCP Candidate. It emits independent DOM/ARIA and computed-style field
-results, then performs a strict decoded-RGB comparison without cropping or
-resizing. The current screenshots have different capture scopes (element
-fixture versus full Candidate page), so pixel status is
-`not-comparable-geometry`; the aggregate remains `pass=false` and the frozen
+results, then performs a strict decoded-RGB full-viewport comparison without
+cropping or resizing. Current fixture-host layouts differ, so the measured
+pixel result is non-passing; the aggregate remains `pass=false` and the frozen
 chat/message consumer boundary is retained.
 
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,

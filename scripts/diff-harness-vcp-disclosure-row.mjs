@@ -58,9 +58,9 @@ const report = {
   semanticFixture: { harness: harness.semanticFixture, vcp: 'disclosure-row/row-click-open-keep-content', alignedState: 'rowOpen ↔ candidate', pass: true },
   dom: { structuralPass: checks.every(item => item.pass), checks },
   computedStyle: { pass: checks.filter(item => /display|alignItems|height|overflow|width|marginRight|padding|borderWidth|fontSize|lineHeight/.test(item.field)).every(item => item.pass), fields: checks.filter(item => /display|alignItems|height|overflow|width|marginRight|padding|borderWidth|fontSize|lineHeight/.test(item.field)) },
-  pixel: { comparison: 'strict decoded RGB screenshot comparison; no crop or resize', comparable, harness: { width: a.width, height: a.height, bytes: a.bytes, sha256: crypto.createHash('sha256').update(harnessPng).digest('hex') }, vcp: { width: b.width, height: b.height, bytes: b.bytes, sha256: crypto.createHash('sha256').update(candidatePng).digest('hex') }, differentPixels, totalChannelDelta, exactPixelPass: comparable && differentPixels === 0, status: comparable ? 'compared' : 'not-comparable-geometry' },
+  pixel: { comparison: 'strict decoded RGB screenshot comparison; no crop or resize', comparable, harness: { width: a.width, height: a.height, bytes: a.bytes, sha256: crypto.createHash('sha256').update(harnessPng).digest('hex') }, vcp: { width: b.width, height: b.height, bytes: b.bytes, sha256: crypto.createHash('sha256').update(candidatePng).digest('hex') }, differentPixels, totalPixels: comparable ? a.width * a.height : null, pixelRatio: comparable ? differentPixels / (a.width * a.height) : null, totalChannelDelta, exactPixelPass: comparable && differentPixels === 0, status: comparable ? 'compared' : 'not-comparable-geometry' },
   pass: false,
-  missingEvidence: ['same screenshot geometry/ROI capture scope', 'authorized VCP production consumer; chat/message integration remains frozen'],
+  missingEvidence: ['equivalent fixture-host layout for a passing pixel result', 'authorized VCP production consumer; chat/message integration remains frozen'],
   note: 'Structural and computed-style fields are compared independently from screenshot dimensions. This Candidate Lab report is non-promoting and does not authorize chat/message consumer wiring.',
 };
 fs.writeFileSync(path.join(reports, 'harness-vcp-disclosure-row-diff.json'), `${JSON.stringify(report, null, 2)}\n`);

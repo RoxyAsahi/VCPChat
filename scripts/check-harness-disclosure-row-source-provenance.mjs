@@ -82,7 +82,7 @@ const diffPass = diff?.semanticFixture?.alignedState === 'rowOpen ↔ candidate'
   && diff?.semanticFixture?.pass === true
   && diff?.dom?.structuralPass === true
   && diff?.computedStyle?.pass === true
-  && diff?.pixel?.status === 'not-comparable-geometry'
+  && diff?.pixel?.status === 'compared'
   && diff?.pass === false;
 const report = {
   generatedAt: new Date().toISOString(), harnessRoot, sourceKind: dom.sourceKind,
@@ -93,7 +93,7 @@ const report = {
   diff: { report: 'reports/harness-vcp-disclosure-row-diff.json', present: Boolean(diff), shape: diffPass, pixelStatus: diff?.pixel?.status ?? 'missing' },
   contract: dom.contract, pass: false,
   missingEvidence: [
-    'same screenshot geometry/ROI capture scope for strict pixel comparison',
+    'equivalent fixture-host layout for a passing strict pixel comparison',
     'authorized non-chat/non-message VCP production consumer evidence',
   ],
   note: 'Source provenance and Candidate shape evidence only. The chat/message integration boundary remains frozen; this report does not claim parity or authorize consumer wiring.',
