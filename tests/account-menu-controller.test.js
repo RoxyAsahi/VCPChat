@@ -19,6 +19,7 @@ function fixture() {
         openThemes: () => calls.push('themes'),
         setThemeMode: mode => { calls.push(`theme:${mode}`); return true; },
         setIcon: (element, icon) => { element.textContent = icon; },
+        getThemeSnapshot: () => ({ value: { effective: 'dark' } }),
     });
     return { dom, calls, controller };
 }
@@ -47,4 +48,14 @@ test('account menu synchronizes identity/theme and owns dismissal behavior', () 
     controller.dispose();
     document.getElementById('nextUiAccountMenuTrigger').click();
     assert.equal(document.getElementById('nextUiAccountMenu').hidden, true);
+});
+
+test('account menu uses the typed theme snapshot instead of body classes', () => {
+    const { dom, controller } = fixture();
+    dom.window.document.body.className = 'light-theme';
+    assert.equal(controller.mount(), true);
+    const document = dom.window.document;
+    assert.equal(document.getElementById('nextUiAccountThemeLabel').textContent, '切换为浅色模式');
+    document.getElementById('nextUiAccountThemeToggleBtn').click();
+    controller.dispose();
 });
