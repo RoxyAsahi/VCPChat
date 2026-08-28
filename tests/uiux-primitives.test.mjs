@@ -375,6 +375,9 @@ test('Harness PopupSelect parity mode preserves provider groups and menuitemradi
         assert.equal(view.card.querySelectorAll('button[role=menuitemradio]').length, 2);
         assert.equal(view.card.querySelectorAll('[role=option]').length, 0);
         assert.equal(view.card.querySelector('button[aria-checked="true"]')?.textContent?.includes('Acme Think'), true);
+        const check = view.card.querySelector('button[aria-checked="true"] .vcp-harness-popup-select-option-check > svg');
+        assert.equal(check?.getAttribute('width'), '16', 'ModelSelect parity uses the Harness 16px check SVG, not the generic icon host');
+        assert.equal(check?.getAttribute('viewBox'), '0 0 16 16');
         await view.dispose();
         await scope.dispose('popup-select-grouped-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }

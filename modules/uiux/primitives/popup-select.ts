@@ -4,6 +4,29 @@ import { mountSemanticIcon } from './semantic-icon.js';
 
 const STYLE_ID = 'vcp-harness-uiux-popup-select';
 
+/**
+ * ModelSelect renders its selected marker as a 16px inline SVG, not through
+ * the generic icon host. Keep this exact light-DOM shape limited to the
+ * grouped menuitemradio parity contract; ordinary VCP PopupSelect rows still
+ * use the shared semantic icon primitive.
+ *
+ * Source: packages/client/ui-model-selection/src/client/ModelSelect.tsx
+ * (`IconCheckOutline16` inside `.check`).
+ */
+function mountHarnessModelSelectCheck(host: HTMLElement) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '16');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z');
+    path.setAttribute('fill', 'currentColor');
+    svg.append(path);
+    host.append(svg);
+}
+
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
@@ -416,7 +439,11 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                 const check = document.createElement('span');
                 check.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-check' : 'vcp-harness-popup-select-check';
                 check.setAttribute('aria-hidden', 'true');
-                mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
+                if (grouped && optionRole === 'menuitemradio') {
+                    mountHarnessModelSelectCheck(check);
+                } else {
+                    mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
+                }
                 row.append(check);
             }
             nextRowsScope.listen(row, 'click', () => { if (option.disabled !== true) void popup.select(index); });
