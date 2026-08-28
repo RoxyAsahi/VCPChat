@@ -245,6 +245,7 @@ reports into `reports/harness-parity-status.json`. It reports when scope is
 accounted for, but always keeps `pass=false`: source/contract coverage and
 Candidate evidence never establish production parity or unlock frozen
 Settings/Chat/Composer consumers.
+Its focused regression check is `node --test tests/harness-parity-status.test.mjs`.
 
 `node scripts/check-harness-agent-preset-seat-source-provenance.mjs` records
 the three-file Harness AgentPresetSeat boundary (`AgentPresetSeat.tsx`,
