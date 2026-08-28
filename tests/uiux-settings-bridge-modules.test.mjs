@@ -144,6 +144,13 @@ test('legacy Rust visibility listeners are fallback-only when typed consumer is 
         'legacy Rust binder must exit when the typed section owner is available');
 });
 
+test('typed Rust visibility listeners use the presentation scope', () => {
+    const entry = read(bridgeEntry);
+    const owner = entry.slice(entry.indexOf('const rustService = ensureRustAssistantUiService'), entry.indexOf('const forumService = ensureForumConfigUiService'));
+    assert.match(owner, /rustScope\.listen\(form, type, onChange\)/);
+    assert.doesNotMatch(owner, /rustScope\?\.own\(\(\) => form\.removeEventListener/);
+});
+
 test('legacy ColorPair binder is artifact-fallback-only', () => {
     const source = read(eventListeners);
     const bind = source.slice(source.indexOf('if (!modal.dataset.globalSettingsControlsBound)'), source.indexOf('const openGlobalSettings'));

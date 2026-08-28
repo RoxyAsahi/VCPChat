@@ -341,8 +341,8 @@ function mountTypedSettingsConsumer(root) {
         syncRustAssistantVisibility(form);
         ['change', 'input'].forEach(type => {
             const onChange = () => syncRustAssistantVisibility(form);
-            form.addEventListener(type, onChange);
-            rustScope?.own(() => form.removeEventListener(type, onChange), `typed-rust-visibility-${type}`, 'ui-presentation');
+            if (rustScope) rustScope.listen(form, type, onChange);
+            else form.addEventListener(type, onChange);
         });
         void rustService.refresh.execute();
     }
