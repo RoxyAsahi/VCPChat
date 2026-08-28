@@ -1153,7 +1153,14 @@ function mountTypedAvatarColorPair(root, form) {
         const text = form?.querySelector?.(textId);
         if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
         try {
-            api.mountColorPair(color, text, scope);
+            api.mountColorPair(color, text, scope, {
+                onValueChange: value => {
+                    if (name === 'avatar-border') {
+                        form.querySelector('#userAvatarPreview')?.style.setProperty('border-color', value);
+                    }
+                },
+                onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
+            });
             color.dataset.vcpTypedPrimitiveMounted = 'true';
             scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
         } catch (error) {

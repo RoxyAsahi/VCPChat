@@ -835,62 +835,6 @@ export function setupEventListeners(deps) {
         }
     }
 
-    // 用户颜色选择器同步
-    const userAvatarBorderColorInput = document.getElementById('userAvatarBorderColor');
-    const userAvatarBorderColorTextInput = document.getElementById('userAvatarBorderColorText');
-    const userNameTextColorInput = document.getElementById('userNameTextColor');
-    const userNameTextColorTextInput = document.getElementById('userNameTextColorText');
-
-    if (userAvatarBorderColorInput && userAvatarBorderColorTextInput) {
-        userAvatarBorderColorInput.addEventListener('input', (e) => {
-            userAvatarBorderColorTextInput.value = e.target.value;
-            const userAvatarPreview = document.getElementById('userAvatarPreview');
-            if (userAvatarPreview) {
-                userAvatarPreview.style.borderColor = e.target.value;
-            }
-        });
-
-        userAvatarBorderColorTextInput.addEventListener('input', (e) => {
-            const color = e.target.value.trim();
-            if (/^#[0-9A-F]{6}$/i.test(color)) {
-                userAvatarBorderColorInput.value = color;
-                const userAvatarPreview = document.getElementById('userAvatarPreview');
-                if (userAvatarPreview) {
-                    userAvatarPreview.style.borderColor = color;
-                }
-            }
-        });
-
-        userAvatarBorderColorTextInput.addEventListener('blur', (e) => {
-            const color = e.target.value.trim();
-            if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                e.target.value = userAvatarBorderColorInput.value;
-                uiHelperFunctions.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-            }
-        });
-    }
-
-    if (userNameTextColorInput && userNameTextColorTextInput) {
-        userNameTextColorInput.addEventListener('input', (e) => {
-            userNameTextColorTextInput.value = e.target.value;
-        });
-
-        userNameTextColorTextInput.addEventListener('input', (e) => {
-            const color = e.target.value.trim();
-            if (/^#[0-9A-F]{6}$/i.test(color)) {
-                userNameTextColorInput.value = color;
-            }
-        });
-
-        userNameTextColorTextInput.addEventListener('blur', (e) => {
-            const color = e.target.value.trim();
-            if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                e.target.value = userNameTextColorInput.value;
-                uiHelperFunctions.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-            }
-        });
-    }
-
     // 用户重置颜色按钮
     const resetUserAvatarColorsBtn = document.getElementById('resetUserAvatarColorsBtn');
     if (resetUserAvatarColorsBtn) {

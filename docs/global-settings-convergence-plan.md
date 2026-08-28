@@ -57,6 +57,15 @@
 - 保留头像文件、论坛 capability 和写入协议；
 - 删除已经由 typed owner 接管的旧投影和重复 marker。
 
+#### G2 首个净删除（颜色镜像）
+
+全局身份区的 `userAvatarBorderColor`/`userAvatarBorderColorText` 与
+`userNameTextColor`/`userNameTextColorText` 现在由 generated ColorPair 的
+owner 回调负责同步、校验提示和头像预览更新；`event-listeners.js` 中原有
+6 个 ambient input/change/blur listener 已删除。重置颜色按钮、canonical
+controls、保存和颜色提取业务保持不变。`npm run check:uiux`、58 项 focused
+tests、artifact consistency 和 `test-settings-wa-electron.mjs` 全部通过。
+
 ### G3：语音与高级
 
 - 语音 mode 使用 Choice，路径/URL/Key 使用 Field + Input；
