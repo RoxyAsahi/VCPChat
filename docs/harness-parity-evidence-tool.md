@@ -40,8 +40,11 @@ The expected capture shape is pinned in
 computed-style selectors, interaction states, and optional PNG ROI.
 
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
-reports missing Harness package aliases or scaffold files without installing
-dependencies or mutating the source checkout.
+checks the same pnpm/Vitest workspace topology used by the capture commands:
+the Harness web package's Playwright resolver, the vendored Cordis workspace
+source, the Vitest runner, scaffold, and target source. It does not mistake a
+missing flat root `node_modules` alias for an unavailable workspace capture,
+and never installs dependencies or mutates the source checkout.
 
 Run `npm run scan:harness-ui-inventory` to rescan exported Harness client
 components. The report separates portable primitives, composites, and frozen

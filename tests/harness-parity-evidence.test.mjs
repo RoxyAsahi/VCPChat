@@ -124,6 +124,16 @@ test('Harness capture freshness gate reports paired artifacts without promoting 
     assert.equal(report.note.includes('does not create'), true);
 });
 
+test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-capture-prerequisites.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-prerequisites.json'), 'utf8'));
+    assert.equal(report.status, 'capture-prerequisites-ready');
+    assert.equal(report.pass, true);
+    assert.equal(report.missing.length, 0);
+    assert.equal(report.checks.find(item => item.name === 'Harness workspace Cordis source')?.exists, true);
+    assert.equal(report.checks.find(item => item.name === 'Playwright resolver from Harness web')?.exists, true);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
