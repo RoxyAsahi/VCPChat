@@ -70,6 +70,12 @@ StateDot is covered by the same source-drift guard, including its aria-hidden
 four-state branch, crisp-edge SVG matrix, eight phase delays, halo/core CSS,
 and replayable Candidate fixture.
 
+`check-harness-real-source-diff-boundaries.mjs` consolidates the Tooltip,
+HoverCard, and StateDot real-source diff reports. It records semantic fixture
+matches separately from parity passes and intentionally keeps its own `pass`
+false while structural, geometry, computed-style, pixel, or consumer evidence
+remains open.
+
 `capture-harness-tooltip-source-fixture.mjs` executes the real Harness
 `Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
 the VCP Candidate deliberately reports a structural mismatch: Harness keeps

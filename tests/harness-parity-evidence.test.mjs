@@ -232,6 +232,17 @@ test('Real Harness StateDot source capture retains the Candidate display and pix
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('Real-source diff ledger records cross-component boundaries without promotion', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-real-source-diff-boundaries.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-real-source-diff-boundaries.json'), 'utf8'));
+    assert.equal(report.status, 'real-source-diff-boundaries-recorded');
+    assert.equal(report.pass, false);
+    assert.equal(report.counts.realSourceDiffs, 3);
+    assert.equal(report.counts.semanticFixtureMatches, 3);
+    assert.equal(report.counts.parityPasses, 0);
+    assert.equal(report.counts.pendingPixelDiffs, 3);
+});
+
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
     execFileSync(process.execPath, ['scripts/check-harness-capture-prerequisites.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-prerequisites.json'), 'utf8'));
