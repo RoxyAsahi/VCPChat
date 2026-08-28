@@ -34,6 +34,9 @@ test('single-concern modules import cleanly and expose their contract', async ()
 
     const rows = await import(pathToFileURL(path.join(settingsDir, 'canonical-rows.js')).href);
     assert.deepEqual(Object.keys(rows).sort(), ['mountCanonicalSettingsRows', 'removeLegacySubsectionHeadings']);
+
+    const advanced = await import(pathToFileURL(path.join(settingsDir, 'advanced-visibility.js')).href);
+    assert.equal(typeof advanced.syncAdvancedSettingsVisibility, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -73,6 +76,7 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.ok(entry.includes("from './settings/autosave.js'"), 'entry must import the autosave module');
     assert.ok(entry.includes("from './settings/canonical-rows.js'"), 'entry must import the canonical rows module');
     assert.match(entry, /createSelectProjection\(\{ ensurePresentationScope \}\)/, 'entry must inject the presentation scope');
+    assert.match(entry, /from '\.\/settings\/advanced-visibility\.js'/, 'entry must import the advanced section helper');
     const globalOwners = [...entry.matchAll(/window\.VCPUISettingsBridge\s*=/g)].length;
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
 });
