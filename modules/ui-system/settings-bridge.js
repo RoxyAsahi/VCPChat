@@ -541,7 +541,11 @@ function mountTypedAgentSectionDisclosures(form) {
     const expectedKeys = new Set(['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
     form?.querySelectorAll?.('.agent-settings-section[data-section-key]').forEach(container => {
         const key = container.dataset.sectionKey;
-        if (!expectedKeys.has(key) || [...agentSectionDisclosureStates].some(state => state.container === container)) return;
+        if (!expectedKeys.has(key)) return;
+        if ([...agentSectionDisclosureStates].some(state => state.container === container)) {
+            mounted.add(container);
+            return;
+        }
 
         const header = container.querySelector('.agent-settings-section-header');
         const content = container.querySelector('.agent-settings-section-content');
@@ -551,14 +555,23 @@ function mountTypedAgentSectionDisclosures(form) {
         if (!header || !content || !title || !summary || !toggle) return;
 
         if (!content.id) content.id = `agent-settings-section-${key}-content`;
-        const disclosure = api.mountDisclosureRowController(header, {
-            content,
-            open: !container.classList.contains('collapsed'),
-            expandable: true,
-            className: 'vcp-agent-settings-disclosure-row',
-            toggle,
-            onToggle: () => manager.toggleAgentSettingsSection(key),
-        }, scope);
+        let disclosure;
+        try {
+            disclosure = api.mountDisclosureRowController(header, {
+                content,
+                open: !container.classList.contains('collapsed'),
+                expandable: true,
+                className: 'vcp-agent-settings-disclosure-row',
+                toggle,
+                onToggle: () => manager.toggleAgentSettingsSection(key),
+            }, scope);
+        } catch (error) {
+            // The bridge must retain the established per-section controller
+            // when a generated candidate cannot mount.  Do not let one bad
+            // adoption abort enhancement for the remaining canonical form.
+            console.warn(`[VCPUI SettingsBridge] Could not adopt Agent disclosure "${key}":`, error);
+            return;
+        }
 
         // The manager also changes collapsed state during selection restore.
         // Observe that canonical DOM state rather than caching a second UI
