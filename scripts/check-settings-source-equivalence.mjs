@@ -229,6 +229,8 @@ assert.doesNotMatch(css, /\.slider/, 'retired local slider CSS must be deleted')
 assert.match(bridge, /networkNotesPaths: collectNetworkNotesPaths\(\)/, 'the typed field owner must recollect the dynamic path list as one unit');
 assert.match(uiHelpers, /vcpTypedFieldOwnerMounted/, 'ui-helpers rows must join the typed field owner when it is mounted');
 assert.match(uiHelpers, /container\.dispatchEvent\(new Event\('change'/, 'ui-helpers row removal must announce the change to the save owner');
+assert.match(bridge, /inputScope\.listen\(removeBtn, 'click', removeRow, \{ once: true \}\)/,
+    'dynamic network path row removal must be owned by the presentation scope');
 
 // Per-agent high-frequency controls must remain on the typed presentation
 // path.  These guards prevent a later broad enhancer change from silently
