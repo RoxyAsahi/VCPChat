@@ -2,7 +2,7 @@
   "source": "packages/client/ui-primitives/src/Menu.module.css",
   "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; fixed 800x600 VCP generated-artifact computed-style capture active, paired same-semantic Harness/VCP computed-style and pixel diff pending",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine real-source computed-style comparison recorded, but Candidate-only danger/footer rows make the 218x290 Candidate card non-comparable with the 218x211 Harness source fixture; strict same-semantic ROI pixel diff pending",
   "selectors": { ".list": { "padding": "4px", "borderRadius": "12px", "minWidth": "218px", "maxWidth": "360px" }, ".item": { "minHeight": "40px", "padding": "8px 10px", "gap": "8px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" }, ".separator": { "height": "1px", "margin": "4px 2px" }, ".scrollable": { "maxHeight": "calc(100vh - 24px)" }, ".submenu": { "minWidth": "163px", "left": "calc(100% + 10px)" } },
   "tokens": ["--dsw-alias-border-inverted", "--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-alias-border-l2", "--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-tertiary", "--dsw-alias-state-error-primary", "--dsw-alias-interactive-bg-hover-danger", "--dsw-alias-border-l1"],
   "states": ["default", "hover", "focus", "disabled", "selected", "danger", "submenu-open"],

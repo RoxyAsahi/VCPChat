@@ -96,8 +96,6 @@ try {
     assert.deepEqual(evidence.submenuItems, ['List', 'Grid']);
     assert.equal(evidence.outsideClosed, true);
     assert.equal(evidence.escapeClosed, true);
-    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await fs.writeFile(path.join(root, 'reports/vcp-menu-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`);
     await page.evaluate(() => globalThis.__menuFixtureScope?.dispose());
     const restored = await page.evaluate(() => {
         delete globalThis.__menuFixtureScope;
@@ -105,6 +103,9 @@ try {
         return anchor?.parentElement?.classList.contains('fixture') && anchor.getAttribute('aria-haspopup') === null && anchor.getAttribute('aria-expanded') === null && document.body.querySelector('.vcp-harness-menu-list') === null;
     });
     assert.equal(restored, true, 'Menu fixture owner must restore the trigger and body portal');
+    evidence.disposed = { restored };
+    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
+    await fs.writeFile(path.join(root, 'reports/vcp-menu-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`);
     console.log('VCP Menu Candidate fixture captured (portal/ARIA/selected/submenu/outside/Escape/dispose; 800x600 @1x).');
 } finally {
     await browser.close();
