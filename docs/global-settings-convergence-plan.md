@@ -77,6 +77,7 @@ settings-bridge-entry
 ```
 
 每个 section controller 只提供 `mount(section) / sync(snapshot) / dispose()`，不拥有第二份 durable state。拆分必须以真实调用方为依据，不为了形式制造公共 API。
+模块化时必须同步更新 source-equivalence 门禁；字段 ownership 不能因 `spread`、动态注册或间接常量而变得不可静态审计。若门禁无法证明单一 owner，则保持当前显式映射，不合并拆分。
 
 ### G5：旧债净删除
 
