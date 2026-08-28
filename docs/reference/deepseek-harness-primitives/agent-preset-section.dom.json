@@ -1,7 +1,16 @@
 {
   "primitive": "AgentPresetSection",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx",
-  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css",
+  "source": "packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx",
+      "packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css"
+    ],
+    "selectionRule": "Use the Harness preset management section and its card/dialog CSS; VCP preset persistence remains outside this Candidate reference slice."
+  },
+  "candidateStatus": "reference-only; no VCP production consumer or paired visual capture",
   "root": { "tag": "div", "class": "section", "content": "heading + intro + trust-group sections" },
   "groups": { "tag": "section", "heading": "h3.groupHead", "cards": "ul.cards > li.card" },
   "card": {
