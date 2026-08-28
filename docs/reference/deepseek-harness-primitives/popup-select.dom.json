@@ -13,7 +13,7 @@
     ],
     "selectionRule": "Use PopupSelectController/View and its CSS as the Harness command-overlay contract; VCP remains Candidate because input-overlay and Composer consumers are frozen."
   },
-  "candidateStatus": "candidate-interaction-active; controller lifecycle and DOM/ARIA contract documented, paired same-semantic Harness/VCP capture pending",
+  "candidateStatus": "candidate-interaction-active; source controller/view/CSS provenance guard recorded, paired same-semantic Harness/VCP capture pending",
   "productionConsumers": [
     "packages/client/ui-commands/src/client/index.ts",
     "packages/client/ui-conversation/src/client/skeleton/InputOverlay.tsx"
@@ -31,6 +31,7 @@
     "maturity": "candidate-interaction-active",
     "stableApi": false,
     "productionConsumer": "none; conversation.input.overlay, the input machine and Composer wiring are frozen",
-    "pixelDiff": "pending-same-semantic-harness-fixture"
+    "pixelDiff": "pending-same-semantic-harness-fixture",
+    "sourceProvenance": "reports/harness-popup-select-source-provenance.json"
   }
 }
