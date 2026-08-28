@@ -168,6 +168,10 @@ for (const state of ['openedByHeader', 'closedByToggle', 'openedByKeyboard']) {
     assert.equal(report.agentDisclosureInteraction[state].headerTabIndex, null, `Disclosure header has invalid tabindex during ${state}`);
     assert.equal(report.agentDisclosureInteraction[state].headerExpanded, null, `Disclosure header has invalid aria-expanded during ${state}`);
 }
+assert.deepEqual(report.agentDisclosureReload, {
+    success: true, warmupSuccess: true, persisted: true, persistedIdentity: false,
+    owners: 6, expanded: 'true', collapsed: false, headerRole: null,
+}, 'Agent disclosure reload must restore canonical uiCollapseStates through the generated single owner');
 
 console.log(JSON.stringify({
     source: report.source,
