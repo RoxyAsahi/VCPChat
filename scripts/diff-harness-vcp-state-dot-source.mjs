@@ -9,7 +9,15 @@ const pixelPath = path.join(root, 'reports/harness-vcp-state-dot-roi-pixel-diff.
 const pixelResult = fs.existsSync(pixelPath) ? read('reports/harness-vcp-state-dot-roi-pixel-diff.json') : null;
 const names = ['done', 'warning', 'ongoing', 'error'];
 const states = names.map(name => { const source = harness.states[name], candidate = vcp.states[name]; return { name, tag: source.tag === candidate.tag, aria: source.ariaHidden === candidate.ariaHidden, size: source.rect.width === candidate.rect.width && source.rect.height === candidate.rect.height, color: source.style.color === candidate.style.color, cells: source.cells === candidate.cells, delays: JSON.stringify(source.delays) === JSON.stringify(candidate.delays), display: source.style.display === candidate.style.display }; });
+const styleFields = ['display', 'position', 'color'];
+const computedStyle = {
+  states: names.map(name => ({
+    name,
+    checks: styleFields.map(field => ({ field, harness: harness.states[name].style[field], vcp: vcp.states[name].style[field], pass: harness.states[name].style[field] === vcp.states[name].style[field] })),
+  })),
+};
+computedStyle.pass = computedStyle.states.every(state => state.checks.every(check => check.pass));
 const pixel = pixelResult ? { status: 'strict-per-state-roi-measured', comparableCases: pixelResult.cases.filter(item => item.comparable).length, exactCases: pixelResult.cases.filter(item => item.exactPixelPass).length, pass: pixelResult.pass, cases: pixelResult.cases } : { status: 'pending-roi-diff' };
-const report = { generatedAt: new Date().toISOString(), comparison: 'same Chromium engine, real Harness StateDot.tsx source fixture versus VCP Candidate fixture', semanticFixture: { pass: harness.semanticFixture === vcp.semanticFixture }, states, domAriaPass: states.every(item => item.tag && item.aria && item.size && item.cells && item.delays), colorPass: states.every(item => item.color), computedStylePass: states.every(item => item.display), pixel, pass: false, missingEvidence: ['display differs: Harness source fixture block versus VCP Candidate inline-block', 'source resize/dispose capture', 'VCP production consumer'] };
+const report = { generatedAt: new Date().toISOString(), comparison: 'same Chromium engine, real Harness StateDot.tsx source fixture versus VCP Candidate fixture', semanticFixture: { pass: harness.semanticFixture === vcp.semanticFixture }, states, domAriaPass: states.every(item => item.tag && item.aria && item.size && item.cells && item.delays), colorPass: states.every(item => item.color), computedStyle, computedStylePass: computedStyle.pass, pixel, pass: false, missingEvidence: ['display differs: Harness source fixture block versus VCP Candidate inline-block', 'source resize/dispose capture', 'VCP production consumer'] };
 fs.writeFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Harness↔VCP StateDot source diff: domAria=${report.domAriaPass}; colors=${report.colorPass}; computedStyle=${report.computedStylePass}; pixel=${report.pixel.status}.`);

@@ -30,7 +30,8 @@ const candidateCaptures = candidateContracts.map(([name, file, contractFile, val
   return { name, file, contract, captured, sourceContractPresent, contractPass, state: pairedStateDot ? 'paired-real-source-boundary-recorded' : 'vcp-candidate-capture-only', missingEvidence: [
     ...contractPass ? [] : ['VCP Candidate state-matrix/teardown capture'],
     ...pairedStateDot ? [] : ['Harness same-semantic capture', 'pixel diff'],
-    'computed-style cross-page diff', 'VCP production consumer',
+    ...pairedStateDot ? [] : ['computed-style cross-page diff'],
+    'VCP production consumer',
   ] };
 });
 const sourceOrConsumerBoundaries = (parity?.missingEvidence ?? []).map(item => ({ evidence: item, state: /blocked-vcp-consumer/.test(item) ? 'consumer-boundary' : 'source-only-boundary' }));

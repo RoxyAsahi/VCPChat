@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness four-state StateDot DOM/SVG and CSS animation contract; consumer status text remains outside the dot."
   },
-  "candidateStatus": "candidate-interaction-active; paired real-source per-state strict ROI pixel evidence recorded (non-passing); no VCP production consumer",
+  "candidateStatus": "candidate-interaction-active; paired real-source per-state strict computed-style and ROI pixel evidence recorded (non-passing); no VCP production consumer",
   "productionConsumers": [
     "packages/client/ui-jobs/src/client/JobListAction.tsx",
     "packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx",
