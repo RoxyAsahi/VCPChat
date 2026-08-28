@@ -77,6 +77,27 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
 });
 
+test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
+    const entry = read(bridgeEntry);
+    const helper = entry.match(/function mountTypedAgentInput\(form, \{ id, marker, ownerKey, placeholder = false, restoreClass = false \}\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+    assert.match(helper, /api\.mountInput\(input, props, scope\)/, 'the helper must mount on the injected presentation owner');
+    assert.match(helper, /delete input\.dataset\[marker\]/, 'scope teardown must remove each input marker');
+    assert.match(helper, /restoreClass && input\.isConnected/, 'only configured fields restore their native class');
+
+    const callers = entry.slice(
+        entry.indexOf('function mountTypedAgentRegexInputs'),
+        entry.indexOf('function mountTypedAgentStreamChoice'),
+    );
+    assert.doesNotMatch(callers, /api\.mountInput\(/, 'callers must not grow a second primitive owner');
+    for (const marker of [
+        'vcpTypedAgentIdentity', 'vcpTypedAgentModel', 'vcpTypedAgentTemperature',
+        'vcpTypedAgentContextLimit', 'vcpTypedAgentMaxOutput', 'vcpTypedAgentTopP',
+        'vcpTypedAgentTopK', 'vcpTypedPrimitiveMounted',
+    ]) {
+        assert.match(callers, new RegExp(marker), `typed Agent Input marker must remain configured: ${marker}`);
+    }
+});
+
 test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
     const dom = new JSDOM('<!doctype html><form><select id="voice"><option value="one">One</option><option value="two">Two</option></select></form>');
     const previous = Object.fromEntries([
