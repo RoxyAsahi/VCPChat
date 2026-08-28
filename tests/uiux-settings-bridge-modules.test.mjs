@@ -176,8 +176,8 @@ test('render preset listeners retract with the typed field owner', () => {
     const entry = read(bridgeEntry);
     const owner = entry.slice(entry.indexOf('function mountTypedFieldOwner'), entry.indexOf('function flushSettingsAutosave'));
     assert.match(owner, /renderPresetIds = \['chatFontPreset', 'chatCodeFontPreset', 'chatDiaryFontPreset', 'chatToolFontPreset'\]/);
-    assert.match(owner, /select\.addEventListener\('change', onRenderPresetChange\)/);
-    assert.match(owner, /state\.cleanups\.push\(\(\) => select\.removeEventListener\('change', onRenderPresetChange\)\)/);
+    assert.match(owner, /ownerScope\.listen\(select, 'change', onRenderPresetChange\)/);
+    assert.doesNotMatch(owner, /select\.addEventListener\('change', onRenderPresetChange\)/);
 });
 
 test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
