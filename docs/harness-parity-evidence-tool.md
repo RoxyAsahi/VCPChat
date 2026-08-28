@@ -140,6 +140,11 @@ ARIA, and teardown matrix. Those states align, but the real Harness dialog is
 non-comparable geometry boundary and deliberately does not crop, resize, or
 claim a strict ROI pixel result.
 
+Modal now has a real Harness source capture for standard and headless branches,
+body portal/dialog ARIA, Escape and mask closing, reopen, and root unmount.
+This source-side evidence does not yet pair a VCP Candidate capture, DOM/style
+diff, or strict ROI pixel comparison.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept

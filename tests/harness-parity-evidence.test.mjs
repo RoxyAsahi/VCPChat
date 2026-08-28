@@ -386,6 +386,18 @@ test('RiskConfirmation source/Candidate diff records matched controlled states a
     assert.equal(report.pass, false);
 });
 
+test('Real Harness Modal source capture preserves standard, headless, close, reopen, and teardown states', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-modal-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-modal-source.json'), 'utf8'));
+    assert.equal(report.standard.parent, 'body');
+    assert.deepEqual(report.standard.aria, { role: 'dialog', modal: 'true', label: 'Harness modal' });
+    assert.deepEqual(report.standard.standard, { header: true, close: true, body: true, footer: true });
+    assert.equal(report.escapeClosed, true);
+    assert.equal(report.maskClosed, true);
+    assert.deepEqual(report.headless.standard, { header: false, close: false, body: false, footer: false });
+    assert.deepEqual(report.unmounted, { rootEmpty: true, dialogs: 0 });
+});
+
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });
