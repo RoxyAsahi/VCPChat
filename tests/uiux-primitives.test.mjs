@@ -335,7 +335,10 @@ test('Harness AgentModelPicker keeps injected directory actions transient and re
         const card = controller.root.querySelector('.vcp-harness-popup-select-card');
         assert.equal(subscribeCalls, 1, 'models-updated subscribes only after this popup opens');
         assert.equal(card?.querySelectorAll('[data-option-action="favorite"]').length, 1);
-        card?.querySelector('[data-option-action="favorite"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        const favorite = card?.querySelector('[data-option-action="favorite"]');
+        assert.equal(favorite?.closest('[role="menuitemradio"]'), null,
+            'the injected favorite action must be adjacent to, never nested inside, the native model button');
+        favorite?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
         assert.equal(toggleCalls, 1, 'favorite action routes through the injected directory capability');
         assert.deepEqual(selected, [], 'favorite action must never select or write the canonical model input');
