@@ -516,10 +516,9 @@ function mountTypedAgentRegexInputs(form) {
     ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'].forEach(id => {
         const input = form?.querySelector?.(`#${id}`);
         if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountInput(input, {}, scope);
+        api.mountInput(input, {}, scope);
         input.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${id}-input`, 'ui-primitive');
     });
 }
 
@@ -712,10 +711,9 @@ function mountTypedAgentPromptModeButtons(form) {
     if (!scope) return;
     form?.querySelectorAll?.('.prompt-mode-button').forEach((button, index) => {
         if (!(button instanceof HTMLButtonElement) || button.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
+        api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
         button.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete button.dataset.vcpTypedPrimitiveMounted; }, `typed-agent-prompt-mode-${index}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-agent-prompt-mode-${index}`, 'ui-primitive');
     });
 }
 
@@ -820,10 +818,9 @@ function mountTypedAgentStreamChoice(form) {
     const scope = ensurePresentationScope();
     if (!group || !api?.mountChoice || !scope || group.dataset.vcpTypedAgentStreamChoice === 'true') return;
     try {
-        const release = api.mountChoice(group, scope);
+        api.mountChoice(group, scope);
         group.dataset.vcpTypedAgentStreamChoice = 'true';
         scope.own(() => { delete group.dataset.vcpTypedAgentStreamChoice; }, 'agent-stream-choice-marker', 'ui-presentation');
-        if (release) scope.own(release, 'agent-stream-choice', 'ui-primitive');
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent stream Choice:', error);
     }
@@ -839,10 +836,9 @@ function mountTypedAgentTtsSpeedRange(form) {
     const scope = ensurePresentationScope();
     if (!input || !output || !api?.mountRange || !scope || input.dataset.vcpTypedAgentTtsSpeed === 'true') return;
     try {
-        const release = api.mountRange(input, { output, format: value => value }, scope);
+        api.mountRange(input, { output, format: value => value }, scope);
         input.dataset.vcpTypedAgentTtsSpeed = 'true';
         scope.own(() => { delete input.dataset.vcpTypedAgentTtsSpeed; }, 'agent-tts-speed-range-marker', 'ui-presentation');
-        if (release) scope.own(release, 'agent-tts-speed-range', 'ui-primitive');
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent TTS speed Range:', error);
     }
@@ -860,10 +856,9 @@ function mountTypedAgentColorPairs(form) {
         const color = form?.querySelector?.(colorSelector);
         const text = form?.querySelector?.(textSelector);
         if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountColorPair(color, text, scope);
+        api.mountColorPair(color, text, scope);
         color.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${key}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${key}`, 'ui-primitive');
     });
 }
 
