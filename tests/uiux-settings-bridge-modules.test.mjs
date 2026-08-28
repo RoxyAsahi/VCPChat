@@ -46,6 +46,8 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof appearance.mountAppearanceSelects, 'function');
     const ranges = await import(pathToFileURL(path.join(settingsDir, 'appearance-ranges.js')).href);
     assert.equal(typeof ranges.mountAppearanceRanges, 'function');
+    const toggles = await import(pathToFileURL(path.join(settingsDir, 'appearance-toggles.js')).href);
+    assert.equal(typeof toggles.mountAppearanceToggles, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -316,10 +318,11 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
     const entry = read(bridgeEntry);
     const appearance = read(path.join(settingsDir, 'appearance-controls.js'));
     const ranges = read(path.join(settingsDir, 'appearance-ranges.js'));
+    const toggles = read(path.join(settingsDir, 'appearance-toggles.js'));
     const globalTypedOwners = entry.slice(
         entry.indexOf('function mountTypedRadiusChoice'),
         entry.indexOf('// Single-line text inputs are projected'),
-    ) + '\n' + appearance + '\n' + ranges;
+    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles;
     // Each generated primitive calls scope.own() internally.  The bridge can
     // own its DOM marker, but must not register the returned release again:
     // that adds a second resource to every Settings-open cycle and asks the

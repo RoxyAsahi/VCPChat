@@ -16,6 +16,7 @@ import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
 import { mountAppearanceSelects } from './settings/appearance-controls.js';
 import { mountAppearanceRanges } from './settings/appearance-ranges.js';
+import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1057,7 +1058,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedRadiusChoice(root, form);
     mountTypedGlobalChoiceGroups(root, form);
     mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
-    mountTypedHomeVisualToggles(root, form);
+    mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
     mountTypedAvatarColorPair(root, form);
     mountTypedForumInputs(root, form);
     mountTypedForumFieldOwner(root, form);
@@ -1120,17 +1121,6 @@ function mountTypedGlobalChoiceGroups(root, form) {
 }
 
 
-function mountTypedHomeVisualToggles(root, form) {
-    const api = window.VCPUIUX; if (!api?.mountToggle) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    ['showHomeVisualBrand', 'showHomeVisualTagline'].forEach(id => {
-        const input = form?.querySelector?.(`#${id}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountToggle(input, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
 function mountTypedAvatarColorPair(root, form) {
     const api = window.VCPUIUX; if (!api?.mountColorPair) return;
