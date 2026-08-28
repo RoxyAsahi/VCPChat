@@ -9,7 +9,7 @@ function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-agent-model-picker{position:relative;min-width:0;display:inline-flex}.vcp-harness-agent-model-picker-trigger{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 4px 0 8px;border:0;border-radius:24px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer}.vcp-harness-agent-model-picker-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-trigger:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,var(--vcp-color-brand,#1677ff))}.vcp-harness-agent-model-picker-trigger:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker-trigger-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker-trigger-icon{flex:none;transition:transform 120ms ease}.vcp-harness-agent-model-picker-trigger[aria-expanded="true"] .vcp-harness-agent-model-picker-trigger-icon{transform:rotate(180deg)}.vcp-harness-agent-model-picker .vcp-harness-popup-select-card{right:0;left:auto;bottom:calc(100% + 8px);top:auto;width:min(240px,calc(100vw - 32px));max-width:min(240px,calc(100vw - 32px));box-sizing:border-box;max-height:min(360px,calc(100vh - 96px));border-radius:12px}.vcp-harness-agent-model-picker-cell{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font-family:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-harness-agent-model-picker-cell:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-cell-label{flex:1;min-width:0}.vcp-harness-agent-model-picker-cell-value{color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row{min-height:38px;padding:6px 8px;border-radius:10px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled:hover{background:transparent}`;
+    style.textContent = `.vcp-harness-agent-model-picker{position:relative;min-width:0;display:inline-flex}.vcp-harness-agent-model-picker-trigger{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 4px 0 8px;border:0;border-radius:24px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer}.vcp-harness-agent-model-picker-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-trigger:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,var(--vcp-color-brand,#1677ff))}.vcp-harness-agent-model-picker-trigger:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker-trigger-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker-trigger-icon{flex:none;transition:transform 120ms ease}.vcp-harness-agent-model-picker-trigger[aria-expanded="true"] .vcp-harness-agent-model-picker-trigger-icon{transform:rotate(180deg)}.vcp-harness-agent-model-picker .vcp-harness-popup-select-card{right:0;left:auto;bottom:calc(100% + 8px);top:auto;width:min(240px,calc(100vw - 32px));max-width:min(240px,calc(100vw - 32px));box-sizing:border-box;max-height:min(360px,calc(100vh - 96px));border-radius:12px}.vcp-harness-agent-model-picker-cell{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font-family:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-harness-agent-model-picker-cell:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-cell-label{flex:1;min-width:0}.vcp-harness-agent-model-picker-cell-value{color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row{min-height:38px;padding:6px 8px;border-radius:10px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled:hover{background:transparent}.vcp-harness-agent-model-picker-directory-actions{display:flex;justify-content:flex-end;padding:2px 2px 4px}.vcp-harness-agent-model-picker-directory-refresh{border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font:inherit;font-size:12px;line-height:18px;cursor:pointer}.vcp-harness-agent-model-picker-directory-refresh:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-directory-refresh:disabled{cursor:default;opacity:.65}.vcp-harness-popup-select-favorite{flex:none;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-tertiary,#737780);font-size:16px;line-height:18px;cursor:pointer}.vcp-harness-popup-select-favorite[aria-pressed="true"]{color:var(--dsw-alias-state-warn-label,#c68610)}.vcp-harness-popup-select-favorite:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}`;
     (document.head || document.documentElement).append(style);
 }
 
@@ -28,6 +28,17 @@ export interface AgentModelEffortOption {
     readonly description?: string;
 }
 
+/**
+ * Ephemeral model-directory operations injected by the real Settings Surface.
+ * The primitive never imports chatAPI; the bridge remains the only boundary
+ * that maps IPC results into presentation options.
+ */
+export interface AgentModelDirectoryCapability {
+    refresh?(signal: AbortSignal): Promise<void>;
+    toggleFavorite?(id: string, signal: AbortSignal): Promise<void>;
+    subscribeUpdated?(listener: () => void): UiDisposer | void;
+}
+
 export interface AgentModelPickerProps {
     readonly label?: string;
     /** Harness ModelSelect disables the native trigger while its owner is locked. */
@@ -35,6 +46,7 @@ export interface AgentModelPickerProps {
     /** Reuse an existing surface trigger while keeping its identity intact. */
     readonly trigger?: HTMLButtonElement;
     readonly options: (signal: AbortSignal) => Promise<readonly AgentModelOption[]>;
+    readonly directory?: AgentModelDirectoryCapability;
     /** `false` rejects the selection; Harness parity keeps the menu open and shows a Toast. */
     readonly onSelect: (option: AgentModelOption) => void | boolean | Promise<void | boolean>;
     readonly efforts?: readonly AgentModelEffortOption[];
@@ -146,9 +158,52 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
                 ? undefined
                 : [option.provider, option.favorite ? 'Favorite' : undefined].filter(Boolean).join(' · ') || undefined,
             group: option.provider,
+            favorite: option.favorite,
             active: option.active === true || option.id === selectedId,
             disabled: option.disabled === true,
         }));
+    };
+    let directoryActionGeneration = 0;
+    let directoryBusy = false;
+    let activeDirectoryAction: { readonly generation: number; readonly scope: UiScope } | null = null;
+    let syncDirectoryActions = () => {};
+    const cancelDirectoryAction = () => {
+        directoryActionGeneration += 1;
+        const previous = activeDirectoryAction;
+        activeDirectoryAction = null;
+        directoryBusy = false;
+        syncDirectoryActions();
+        if (previous) void previous.scope.dispose('agent-model-picker-directory-action-cancelled');
+    };
+    const runDirectoryAction = async (label: string, action: (signal: AbortSignal) => Promise<void>): Promise<boolean> => {
+        const generation = ++directoryActionGeneration;
+        const previous = activeDirectoryAction;
+        activeDirectoryAction = null;
+        directoryBusy = true;
+        syncDirectoryActions();
+        await previous?.scope.dispose('agent-model-picker-directory-action-replaced');
+        if (!pickerScope.active || generation !== directoryActionGeneration) return false;
+        const actionScope = pickerScope.child(`agent-model-picker-directory-${label}`);
+        const abort = new AbortController();
+        actionScope.own(() => abort.abort(), `agent-model-picker-directory-${label}-abort`, 'abort-controller');
+        activeDirectoryAction = { generation, scope: actionScope };
+        try {
+            await action(abort.signal);
+            return pickerScope.active && generation === directoryActionGeneration
+                && activeDirectoryAction?.generation === generation && !abort.signal.aborted;
+        } catch (error) {
+            if (pickerScope.active && generation === directoryActionGeneration && !abort.signal.aborted) {
+                console.warn(`[VCPUI AgentModelPicker] ${label} directory action failed:`, error);
+            }
+            return false;
+        } finally {
+            if (activeDirectoryAction?.generation === generation) {
+                activeDirectoryAction = null;
+                directoryBusy = false;
+                syncDirectoryActions();
+            }
+            await actionScope.dispose(`agent-model-picker-directory-${label}-settled`);
+        }
     };
     const popup = createPopupSelectController({
         options: (_context, signal) => loadOptions(signal),
@@ -192,6 +247,14 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             syncPane();
             return true;
         },
+        onFavoriteToggle: props.directory?.toggleFavorite ? option => {
+            if (directoryBusy) return;
+            const selected = lastOptions.find(candidate => candidate.id === option.id);
+            if (!selected) return;
+            void runDirectoryAction('favorite', signal => props.directory!.toggleFavorite!(selected.id, signal)).then(applied => {
+                if (applied && popup.getSnapshot().open) popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-favorite' } });
+            });
+        } : undefined,
     }, pickerScope);
     const menuId = `vcp-harness-agent-model-picker-menu-${++pickerSequence}`;
     view.card.id = menuId;
@@ -211,6 +274,28 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     const effortList = document.createElement('div');
     effortList.className = 'vcp-harness-agent-model-picker-effort-list';
     effortList.setAttribute('role', 'group');
+    const directoryActions = document.createElement('div');
+    directoryActions.className = 'vcp-harness-agent-model-picker-directory-actions';
+    const refreshDirectory = document.createElement('button');
+    refreshDirectory.type = 'button';
+    refreshDirectory.className = 'vcp-harness-agent-model-picker-directory-refresh';
+    refreshDirectory.textContent = 'Refresh models';
+    refreshDirectory.hidden = props.directory?.refresh === undefined;
+    directoryActions.append(refreshDirectory);
+    view.card.prepend(directoryActions);
+    syncDirectoryActions = () => {
+        const modelPane = popup.getSnapshot().open && pane === 'model';
+        directoryActions.hidden = !modelPane || props.directory?.refresh === undefined;
+        refreshDirectory.disabled = directoryBusy;
+        refreshDirectory.textContent = directoryBusy ? 'Refreshing…' : 'Refresh models';
+        view.card.dataset.directoryBusy = String(directoryBusy);
+    };
+    pickerScope.listen(refreshDirectory, 'click', () => {
+        if (directoryBusy || props.directory?.refresh === undefined) return;
+        void runDirectoryAction('refresh', signal => props.directory!.refresh!(signal)).then(applied => {
+            if (applied && popup.getSnapshot().open) popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-refresh-directory' } });
+        });
+    });
     view.card.prepend(effortCell, effortList);
     let effortSelectionGeneration = 0;
     const renderEfforts = () => {
@@ -295,6 +380,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             // whether the in-menu load strip is visible.
             error.style.display = open && pane === 'model' && popup.getSnapshot().error !== null ? '' : 'none';
         }
+        syncDirectoryActions();
         renderEfforts();
         placeExternalCard();
     };
@@ -312,7 +398,28 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         }
     }, { capture: true });
     const syncTrigger = () => trigger.setAttribute('aria-expanded', String(popup.getSnapshot().open));
-    const unsubscribe = popup.subscribe(() => { syncTrigger(); syncPane(); });
+    let releaseDirectoryUpdates: UiDisposer | null = null;
+    const syncDirectoryUpdates = () => {
+        const shouldSubscribe = props.directory?.subscribeUpdated !== undefined && popup.getSnapshot().open;
+        if (shouldSubscribe && releaseDirectoryUpdates === null) {
+            const release = props.directory?.subscribeUpdated?.(() => {
+                if (!pickerScope.active || !popup.getSnapshot().open) return;
+                cancelDirectoryAction();
+                popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-models-updated' } });
+            });
+            if (release) releaseDirectoryUpdates = pickerScope.own(release, 'agent-model-picker-directory-updates', 'subscription');
+        } else if (!shouldSubscribe && releaseDirectoryUpdates !== null) {
+            const release = releaseDirectoryUpdates;
+            releaseDirectoryUpdates = null;
+            void release();
+        }
+    };
+    const unsubscribe = popup.subscribe(() => {
+        if (!popup.getSnapshot().open) cancelDirectoryAction();
+        syncDirectoryUpdates();
+        syncTrigger();
+        syncPane();
+    });
     pickerScope.own(unsubscribe, 'agent-model-picker-subscription', 'ui-presentation');
     pickerScope.listen(window, 'resize', placeExternalCard);
     pickerScope.listen(document, 'scroll', placeExternalCard, { capture: true });
@@ -339,6 +446,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         restoreAttribute('aria-controls', originalTriggerAria.controls);
         selectionToastGeneration += 1;
         activeSelectionToast = null;
+        cancelDirectoryAction();
     }, 'agent-model-picker', 'ui-primitive');
     return {
         root,

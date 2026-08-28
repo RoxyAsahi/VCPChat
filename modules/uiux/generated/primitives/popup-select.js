@@ -378,6 +378,23 @@ export function mountPopupSelectView(host, props, scope) {
                 }
                 row.append(check);
             }
+            if (props.onFavoriteToggle !== undefined && option.favorite !== undefined) {
+                const favorite = document.createElement('button');
+                favorite.type = 'button';
+                favorite.className = 'vcp-harness-popup-select-favorite';
+                favorite.dataset.optionAction = 'favorite';
+                favorite.setAttribute('aria-label', option.favorite ? `Remove ${option.label} from favorites` : `Add ${option.label} to favorites`);
+                favorite.setAttribute('aria-pressed', String(option.favorite));
+                favorite.textContent = option.favorite ? '★' : '☆';
+                favorite.disabled = disabled;
+                nextRowsScope.listen(favorite, 'click', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!disabled)
+                        props.onFavoriteToggle?.(option);
+                });
+                row.append(favorite);
+            }
             nextRowsScope.listen(row, 'click', () => { if (!disabled)
                 void popup.select(index); });
             nextRowsScope.listen(row, 'mouseenter', () => { if (!disabled)

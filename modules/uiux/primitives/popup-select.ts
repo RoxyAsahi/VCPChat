@@ -55,6 +55,8 @@ export interface PopupSelectOption {
     readonly active?: boolean;
     readonly disabled?: boolean;
     readonly group?: string;
+    /** Optional row-level favorite state. Its action is injected by the owning surface. */
+    readonly favorite?: boolean;
     readonly confirmation?: PopupSelectConfirmation;
 }
 
@@ -305,6 +307,8 @@ export interface PopupSelectViewProps {
     readonly listboxAria?: string;
     /** Return true when the owner consumed Escape without dismissing. */
     readonly onEscape?: () => boolean;
+    /** Optional row action; used by the Agent model directory's favorite mutation. */
+    readonly onFavoriteToggle?: (option: PopupSelectOption) => void;
 }
 
 export interface PopupSelectViewController {
@@ -463,6 +467,22 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                     mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
                 }
                 row.append(check);
+            }
+            if (props.onFavoriteToggle !== undefined && option.favorite !== undefined) {
+                const favorite = document.createElement('button');
+                favorite.type = 'button';
+                favorite.className = 'vcp-harness-popup-select-favorite';
+                favorite.dataset.optionAction = 'favorite';
+                favorite.setAttribute('aria-label', option.favorite ? `Remove ${option.label} from favorites` : `Add ${option.label} to favorites`);
+                favorite.setAttribute('aria-pressed', String(option.favorite));
+                favorite.textContent = option.favorite ? '★' : '☆';
+                favorite.disabled = disabled;
+                nextRowsScope.listen(favorite, 'click', event => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!disabled) props.onFavoriteToggle?.(option);
+                });
+                row.append(favorite);
             }
             nextRowsScope.listen(row, 'click', () => { if (!disabled) void popup.select(index); });
             nextRowsScope.listen(row, 'mouseenter', () => { if (!disabled) popup.highlight(index); });

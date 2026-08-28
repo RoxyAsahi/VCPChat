@@ -663,6 +663,26 @@ function mountTypedAgentModelPicker(form) {
             };
         }).filter(Boolean);
     };
+    // The directory remains a short-lived UI capability: this bridge is the
+    // sole chatAPI boundary, while AgentModelPicker owns only the current
+    // popup projection. Neither refresh nor a favorite mutation writes a
+    // second model store or changes the canonical #agentModel input.
+    const modelDirectory = {
+        async refresh(signal) {
+            if (!electronAPI?.refreshModels) throw new Error('当前环境不支持刷新模型列表');
+            await electronAPI.refreshModels();
+            if (signal.aborted) return;
+        },
+        async toggleFavorite(modelId, signal) {
+            if (!electronAPI?.toggleFavoriteModel) throw new Error('当前环境不支持收藏模型');
+            await electronAPI.toggleFavoriteModel(modelId);
+            if (signal.aborted) return;
+        },
+        subscribeUpdated(listener) {
+            if (!electronAPI?.onModelsUpdated) return undefined;
+            return electronAPI.onModelsUpdated(() => listener());
+        },
+    };
 
     const originalTriggerInline = {};
     ['position', 'right', 'top', 'transform', 'width', 'min-width', 'max-width', 'height', 'padding',
@@ -677,6 +697,7 @@ function mountTypedAgentModelPicker(form) {
             label: '选择模型',
             selectedId: input.value || undefined,
             options: modelOptions,
+            directory: modelDirectory,
             onSelect: option => {
                 if (input.disabled) return;
                 input.value = option.id;
@@ -719,7 +740,10 @@ function mountTypedAgentModelPicker(form) {
                 if (value) trigger.style.setProperty(property, value, priority);
                 else trigger.style.removeProperty(property);
             }
-            await picker?.dispose?.();
+            // `pickerScope` owns the primitive's child scope. Disposing the
+            // controller first and then its parent created two synonymous
+            // cleanup requests on every Settings surface swap; one parent
+            // scope disposal reaches quiescence and preserves exact restore.
             await pickerScope.dispose('agent-model-picker-production-released');
             agentModelPickerReleases.delete(trigger);
         }, 'agent-model-picker-production', 'ui-primitive');
