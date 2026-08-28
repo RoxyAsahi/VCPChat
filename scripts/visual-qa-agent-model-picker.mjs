@@ -116,7 +116,7 @@ try {
       return { trigger: describe(trigger), theme: { body: getComputedStyle(document.body).backgroundColor, text: getComputedStyle(document.body).color, colorScheme: getComputedStyle(document.documentElement).colorScheme } };
     });
     await page.click('#agentSettingsForm #openModelSelectBtn');
-    await page.waitForFunction(() => document.querySelector('#agentSettingsForm .vcp-harness-popup-select-card')?.getClientRects().length > 0, { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length > 0, { timeout: timeoutMs });
     const open = await page.evaluate(() => {
       const describe = node => {
         if (!node) return null;
@@ -125,7 +125,7 @@ try {
         return { tag: node.tagName.toLowerCase(), id: node.id || '', className: typeof node.className === 'string' ? node.className : '', rect: { x: value.x, y: value.y, width: value.width, height: value.height }, position: style.position, zIndex: style.zIndex, display: style.display, opacity: style.opacity, transform: style.transform };
       };
       const trigger = document.querySelector('#agentSettingsForm #openModelSelectBtn');
-      const card = document.querySelector('#agentSettingsForm .vcp-harness-popup-select-card');
+      const card = document.querySelector('.vcp-harness-popup-select-card');
       const r = card?.getBoundingClientRect();
       const x = r ? Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2)) : 0;
       const y = r ? Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2)) : 0;
@@ -137,9 +137,10 @@ try {
       return { trigger: describe(trigger), card: describe(card), point: { x, y }, topmost: describe(topmost), topmostInsideCard: Boolean(card && topmost && card.contains(topmost)), topmostChain: chain, cardAncestors: ancestors, bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow };
     });
     await page.screenshot({ path: path.join(output, `${name}-open.png`), fullPage: false });
+    await page.$eval('.vcp-harness-popup-select-card', card => card.focus()).catch(() => {});
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('#agentSettingsForm .vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
-    const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('#agentSettingsForm .vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
+    await page.waitForFunction(() => !document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
+    const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('.vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
     evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, closed });
     if (!open.topmostInsideCard) evidence.gate.failures.push(`${name}: menu center topmost element is outside card`);
     if (open.card?.position !== 'fixed' && open.card?.position !== 'absolute') evidence.gate.failures.push(`${name}: menu has unexpected position ${open.card?.position}`);

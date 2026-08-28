@@ -159,6 +159,9 @@ export function mountAgentModelPicker(host, props, scope) {
     const placeExternalCard = () => {
         if (!props.trigger || !popup.getSnapshot().open || !view.card.getClientRects().length)
             return;
+        const portal = document.body || document.documentElement;
+        if (portal && view.card.parentElement !== portal)
+            portal.append(view.card);
         const anchorRect = trigger.getBoundingClientRect();
         const cardRect = view.card.getBoundingClientRect();
         const margin = 8;
