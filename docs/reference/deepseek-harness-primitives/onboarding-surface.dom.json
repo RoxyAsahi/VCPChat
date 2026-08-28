@@ -1,8 +1,16 @@
 {
   "primitive": "OnboardingSurface",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/OnboardingSurface.tsx",
+  "source": "packages/client/ui-primitives/src/OnboardingSurface.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/OnboardingSurface.module.css",
+  "provenance": {
+    "sources": ["packages/client/ui-primitives/src/OnboardingSurface.tsx", "packages/client/ui-primitives/tests/onboarding-surface.client.spec.tsx"],
+    "selectionRule": "Use the Harness body portal and app-root inert restoration test as the source contract; VCP remains a Candidate Lab surface with no first-run consumer."
+  },
+  "candidateStatus": "candidate-interaction-active; portal/inert lifecycle covered in Candidate Lab, no VCP production onboarding consumer or paired visual capture",
   "tree": "body > div.onboardingOverlay[role=presentation] > div.onboardingMask[aria-hidden] + div.onboardingStage > content",
   "states": ["closed", "open", "root-inert", "close", "dispose"],
   "owner": "surface scope owns portal and restores content; app root inert is restored to its prior value",
-  "vcpStatus": "candidate-interaction-active"
+  "vcpStatus": "candidate-interaction-active",
+  "vcpBoundary": "Candidate Lab only; do not connect to first-run, Settings, or Chat application flow"
 }
