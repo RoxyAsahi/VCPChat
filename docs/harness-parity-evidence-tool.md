@@ -115,10 +115,11 @@ comparable and pixel-identical; the current baseline remains a non-passing
 visual result when any state differs.
 
 The Pill source fixture now runs the real Harness `Pill.tsx` with native static,
-interactive, active, hover, click, and unmount states. Its interaction/lifecycle
-checks align with the Candidate, while the active native-tag and display-style
-differences remain explicit; strict Pill pixel evidence and a production
-consumer are still open.
+interactive, active, hover, click, and unmount states in the same fixed white
+fixture host as the Candidate. Its interaction/lifecycle checks align with the
+Candidate, while native-tag and display-style differences remain explicit. A
+strict decoded-RGB fixture comparison is now recorded separately; it cannot
+erase those DOM/style boundaries or the lack of a production consumer.
 
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,

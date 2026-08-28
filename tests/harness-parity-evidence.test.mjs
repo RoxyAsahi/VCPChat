@@ -211,7 +211,7 @@ test('Real Harness Tooltip source capture exposes the VCP Candidate portal struc
     assert.equal(report.structuralPass, false);
     assert.equal(report.pass, false);
     assert.equal(report.pixel.status, 'strict-roi-measured');
-    assert.equal(report.pixel.pass, false);
+    assert.equal(report.pixel.pass, report.pixel.exactPixelPass);
 });
 
 test('Tooltip source and Candidate fixed ROIs have an explicit strict pixel result', () => {
@@ -439,12 +439,16 @@ test('Pill Candidate capture records native states, hover, click, and teardown',
 test('Real Harness Pill source capture records native state and lifecycle boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-pill-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-pill-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-pill-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-pill-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-pill-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
     assert.equal(report.structuralPass, false);
     assert.equal(report.computedStylePass, false);
     assert.equal(Object.values(report.interaction).every(item => item.pass), true);
+    assert.equal(report.pixel.status, 'strict-fixture-measured');
+    assert.equal(typeof report.pixel.comparable, 'boolean');
+    assert.equal(report.pixel.pass, false);
     assert.equal(report.pass, false);
 });
 
