@@ -452,6 +452,14 @@ export function mountAgentModelPicker(host, props, scope) {
     pickerScope.own(unsubscribe, 'agent-model-picker-subscription', 'ui-presentation');
     pickerScope.listen(window, 'resize', placeExternalCard);
     pickerScope.listen(document, 'scroll', placeExternalCard, { capture: true });
+    if (typeof ResizeObserver !== 'undefined') {
+        const cardResizeObserver = new ResizeObserver(() => {
+            if (pickerScope.active)
+                placeExternalCard();
+        });
+        cardResizeObserver.observe(view.card);
+        pickerScope.own(() => cardResizeObserver.disconnect(), 'agent-model-picker-card-resize', 'observer');
+    }
     if (props.open === true && !trigger.disabled)
         popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });
     pickerScope.own(async () => {
