@@ -39,3 +39,18 @@ itself remains pending because its full Harness semantic/group contract and
 legacy hot/favorite/refresh parity are separate requirements. This distinction
 is intentional: a passing menu ROI must not promote an enhanced picker or
 silently retire the legacy modal.
+
+## Current Recheck
+
+The latest Agent Settings production evidence records 9 typed Inputs, 2
+Toggles, 1 Choice group with 2 radio options, 1 Range, and 2 Selects. The
+Model Picker journey now proves open, filter, select, close, reopen, Escape,
+focus restoration, and portal cleanup on the real Electron surface. Lifecycle
+stress remains flat at 474 listeners and 312 resources with no detached roots
+or options.
+
+Visual Forensics remains green for both themes at 800x600, 1280x800, and
+1680x1000. The provenance gate currently reports `38/49` contracts with
+`16` gaps; these are explicit evidence gaps, not a basis for promotion. The
+remaining work therefore stays evidence-first: close provenance and full
+state coverage before retiring any legacy presentation path.
