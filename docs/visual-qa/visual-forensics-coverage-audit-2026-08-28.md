@@ -94,14 +94,15 @@ Tooltip states, along with rendered hover evidence. The exact evidence verifier
 and every pixel/geometry baseline pass for this pair; this conclusion is based
 on the real Electron screenshots and manifests, not static source inspection.
 
-The latest rerun is `run-ZQDdcv/{light,dark}`. It reproduces the Tooltip body
-portal at initial, narrow, and restored widths for both themes and all three
-viewports; every narrow/restored record reports `puppeteer-hover` and
-`anchorHovered:true`. The earlier failures were caused by the scanner placing
-the anchor beneath the sticky Showcase header. The scanner now iterates live
-`elementFromPoint` geometry and offsets the actual scroll owner until the
-anchor is pointer-hittable; synthetic `mouseenter` is retained only as
-diagnostic output and is rejected by the evidence gate.
+The latest native-pointer fixture pair is `run-8qqgi5/{light,dark}`. It
+reproduces the Tooltip body portal at initial, narrow, and restored widths for
+both themes and all three viewports. For every narrow/restored state, the
+recorded activation attempt has a rendered bubble, `elementFromPoint` inside
+the anchor, and `:hover=true` at that moment. The earlier failures were caused
+by the scanner placing the anchor beneath the sticky Showcase header. The
+scanner now iterates live hit-test geometry and offsets the actual scroll owner
+until the anchor is pointer-hittable; synthetic `mouseenter` is retained only
+as diagnostic output and is rejected by the evidence gate.
 
 ## Agent Settings ColorPair lifecycle probe
 

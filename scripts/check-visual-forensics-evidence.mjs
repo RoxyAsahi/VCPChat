@@ -8,6 +8,10 @@ const targets = dirs.length ? dirs : [path.join(root, 'reports/visual-forensics-
 const requiredViewports = [[800, 600], [1280, 800], [1680, 1000]];
 const failures = [];
 const manifests = [];
+const hasNativeTooltipPointerEvidence = tooltip => (
+  ['puppeteer-hover', 'native-pointer-retry'].includes(tooltip?.interaction?.method)
+  && tooltip?.interaction?.attempts?.some(attempt => attempt.bubble && attempt.pointer?.hitAnchor && attempt.pointer?.hovered)
+);
 try {
   const fixturePath = path.join(root, 'docs/visual-qa/fixtures/visual-forensics-fixture-matrix.json');
   const fixtureMatrix = JSON.parse(await fs.readFile(fixturePath, 'utf8'));
@@ -127,12 +131,12 @@ for (const dir of targets) {
       assert.equal(observation?.restored?.tooltip?.position, 'fixed', `${name}: restored tooltip is not fixed`);
       assert.equal(observation?.restored?.tooltip?.parent, 'body', `${name}: restored tooltip is not body-portalized`);
       assert.equal(observation?.restored?.tooltip?.inViewport, true, `${name}: restored tooltip is outside the viewport`);
-      assert.notEqual(observation?.restored?.tooltip?.interaction?.method, 'synthetic-mouseenter', `${name}: restored Tooltip only opened via synthetic mouseenter`);
+      assert.ok(hasNativeTooltipPointerEvidence(observation?.restored?.tooltip), `${name}: restored Tooltip has no native pointer evidence`);
       assert.equal(observation?.resized?.tooltip?.open, true, `${name}: tooltip did not open after narrow resize`);
       assert.equal(observation?.resized?.tooltip?.position, 'fixed', `${name}: narrow tooltip is not fixed`);
       assert.equal(observation?.resized?.tooltip?.parent, 'body', `${name}: narrow tooltip is not body-portalized`);
       assert.equal(observation?.resized?.tooltip?.inViewport, true, `${name}: narrow tooltip is outside the viewport`);
-      assert.notEqual(observation?.resized?.tooltip?.interaction?.method, 'synthetic-mouseenter', `${name}: narrow Tooltip only opened via synthetic mouseenter`);
+      assert.ok(hasNativeTooltipPointerEvidence(observation?.resized?.tooltip), `${name}: narrow Tooltip has no native pointer evidence`);
       for (const type of ['menu', 'modal']) {
         assert.equal(observation?.resized?.[type]?.open, true, `${name}: ${type} did not open after narrow resize`);
         assert.equal(observation?.resized?.[type]?.inViewport, true, `${name}: narrow ${type} is outside the viewport`);
