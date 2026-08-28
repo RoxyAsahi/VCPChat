@@ -296,6 +296,7 @@ results, then performs a strict decoded-RGB full-viewport comparison without
 cropping or resizing. Current fixture-host layouts differ, so the measured
 pixel result is non-passing; the aggregate remains `pass=false` and the frozen
 chat/message consumer boundary is retained.
+Its focused regression check is `node --test tests/disclosure-row-parity-evidence.test.mjs`.
 
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
