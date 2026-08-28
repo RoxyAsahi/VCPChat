@@ -224,6 +224,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 2026-08-28 增量：高级区条件显示与延迟值校验的旧 ambient listeners 已净删除，
 校验语义由 typed owner 保持；该 section 的直接 presentation 债务已收口。
 
+论坛凭据 owner 的监听器也已改为直接注册到 Settings presentation scope：两个
+控件的 `input/change` 与 autosave 状态重试不再同时依赖手工 listener removal 和
+scope cleanup。dispose 仍保留 timer 取消、dirty marker 清理和 pending save 的
+业务语义；本切片只减少 presentation lifecycle 的重复清理路径。
+
 ## 不作为阻塞条件
 
 ## 当前完成度快照（2026-08-28）
