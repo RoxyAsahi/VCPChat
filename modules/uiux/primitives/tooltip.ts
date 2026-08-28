@@ -42,6 +42,7 @@ export function mountTooltip(anchor: HTMLElement, props: TooltipProps, scope: Ui
     let bubble: HTMLSpanElement | null = null;
     let showTimer: ReturnType<typeof setTimeout> | null = null;
     let resizeRelease: UiDisposer | null = null;
+    let scrollRelease: UiDisposer | null = null;
 
     const cancelShow = () => {
         if (showTimer === null) return;
@@ -52,9 +53,14 @@ export function mountTooltip(anchor: HTMLElement, props: TooltipProps, scope: Ui
         resizeRelease?.();
         resizeRelease = null;
     };
+    const releaseScroll = () => {
+        scrollRelease?.();
+        scrollRelease = null;
+    };
     const hide = () => {
         cancelShow();
         releaseResize();
+        releaseScroll();
         bubble?.remove();
         bubble = null;
     };
@@ -85,18 +91,19 @@ export function mountTooltip(anchor: HTMLElement, props: TooltipProps, scope: Ui
     };
     const show = () => {
         if (disabled || bubble) return;
-        const parent = anchor.parentNode;
-        if (!parent) return;
         bubble = document.createElement('span');
         bubble.className = 'vcp-harness-tooltip-bubble';
         bubble.setAttribute('role', 'tooltip');
         bubble.textContent = typeof props.label === 'function' ? props.label() : props.label;
         if (props.maxWidth !== undefined) bubble.style.maxWidth = `${props.maxWidth}px`;
-        parent.insertBefore(bubble, anchor.nextSibling);
+        anchor.parentNode?.insertBefore(bubble, anchor.nextSibling);
         place();
         const onResize = () => place();
         window.addEventListener('resize', onResize);
         resizeRelease = () => window.removeEventListener('resize', onResize);
+        const onScroll = () => place();
+        document.addEventListener('scroll', onScroll, true);
+        scrollRelease = () => document.removeEventListener('scroll', onScroll, true);
     };
     const showAfterDelay = () => {
         cancelShow();
