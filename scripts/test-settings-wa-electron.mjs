@@ -805,6 +805,20 @@ try {
     assert.equal(await page.$eval('#userNameTextColor', node => node.value), '#abcdef', 'clean name color consumes typed Settings snapshot');
     assert.equal(await page.$eval('#userNameTextColorText', node => node.value), '#abcdef', 'clean name color mirror consumes typed Settings snapshot');
     assert.deepEqual(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.map(node => node.value)), ['typed-nas', '/typed/notes'], 'clean network notes list consumes typed Settings snapshot');
+    const pathAction = await page.$eval('#addNetworkPathBtn', button => {
+        const style = getComputedStyle(button);
+        return {
+            generated: button.classList.contains('vcp-harness-button'),
+            variant: button.classList.contains('outline'),
+            size: button.classList.contains('sm'),
+            marker: button.dataset.vcpTypedNetworkPathAction || '',
+            height: style.height,
+            radius: style.borderRadius,
+        };
+    });
+    assert.deepEqual(pathAction, {
+        generated: true, variant: true, size: true, marker: 'true', height: '28px', radius: '14px',
+    }, `network-path add action uses the generated Button owner (${JSON.stringify(pathAction)})`);
     await page.$eval('#addNetworkPathBtn', button => button.click());
     assert.equal(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.length), 3, 'typed network path consumer owns Add row creation');
     await page.$$eval('#networkNotesPathsContainer .network-path-input-group:last-child button', buttons => buttons[0]?.click());
