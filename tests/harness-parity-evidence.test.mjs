@@ -647,6 +647,17 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.ok(report.note.includes('no category implies production parity'));
 });
 
+test('Candidate capture-gap ledger retains frozen boundaries without promotion', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-candidate-capture-gaps.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-candidate-capture-gaps.json'), 'utf8'));
+    assert.equal(report.status, 'candidate-capture-gaps-recorded');
+    assert.equal(report.pass, false);
+    assert.equal(report.counts.candidates, 4);
+    assert.equal(report.counts.captureGaps, 4);
+    assert.equal(report.nextCandidate, 'agent-preset-seat');
+    assert.ok(report.entries.every(item => item.sourcePass && item.candidatePass && item.referencePass && item.captureGap && item.pass === false));
+});
+
 test('MessageImage source audit preserves frozen attachment lifecycle evidence', () => {
     execFileSync(process.execPath, ['scripts/check-harness-message-image-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-message-image-source.json'), 'utf8'));
