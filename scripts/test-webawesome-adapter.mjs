@@ -198,6 +198,24 @@ await checkAsync('mounted scope follows runtime light and dark theme changes', a
     release();
 });
 
+await checkAsync('mounted scope prefers the typed theme snapshot over body classes', async () => {
+    let listener = null;
+    adapterWin.uiManager = {
+        getThemeSnapshot: () => ({ value: { effective: 'dark' } }),
+        subscribeTheme: candidate => { listener = candidate; return () => { listener = null; }; },
+    };
+    adapterWin.document.body.className = 'light-theme';
+    const root = scopeRoot();
+    const release = adapter.applyTokens(root);
+    assert.equal(root.classList.contains('wa-dark'), true);
+    assert.equal(root.classList.contains('wa-light'), false);
+    listener?.(null, { value: { effective: 'light' } });
+    assert.equal(root.classList.contains('wa-light'), true);
+    assert.equal(root.classList.contains('wa-dark'), false);
+    release();
+    delete adapterWin.uiManager;
+});
+
 await checkAsync('loadComponents failure is deterministic and observable', async () => {
     adapterWin.document.documentElement.dataset.uiMode = 'next';
     const events = [];
