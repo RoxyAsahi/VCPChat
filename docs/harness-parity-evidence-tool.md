@@ -39,6 +39,13 @@ The expected capture shape is pinned in
 `model-picker.capture.schema.json`, including the fixed viewport, ARIA links,
 computed-style selectors, interaction states, and optional PNG ROI.
 
+`node scripts/check-harness-fixture-evidence.mjs` validates the replayed
+Harness-production and VCP generated-artifact AgentPreset Select menu pair:
+same semantic fixture id, DOM/geometry inputs, and ROI pixel report. A passing
+result is only the open/selected/hover menu ROI at its fixed viewport; it does
+not prove a closed trigger, busy trigger, production adoption, or any other
+Candidate surface.
+
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:
 the Harness web package's Playwright resolver, the vendored Cordis workspace

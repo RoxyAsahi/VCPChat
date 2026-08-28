@@ -124,6 +124,18 @@ test('Harness capture freshness gate reports paired artifacts without promoting 
     assert.equal(report.note.includes('does not create'), true);
 });
 
+test('AgentPreset Select paired Harness/VCP evidence remains semantic-fixture scoped', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-fixture-evidence.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-fixture-evidence.json'), 'utf8'));
+    assert.equal(report.pass, true);
+    assert.equal(report.harnessSelectStatus, 'available');
+    assert.equal(report.vcpBrowserSelectStatus, 'available');
+    assert.equal(report.geometryStatus, 'cross-page-select-geometry-equivalent');
+    assert.equal(report.geometryPass, true);
+    assert.equal(report.pixelStatus, 'compared');
+    assert.equal(report.pixelPass, true);
+});
+
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
     execFileSync(process.execPath, ['scripts/check-harness-capture-prerequisites.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-prerequisites.json'), 'utf8'));
