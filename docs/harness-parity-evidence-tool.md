@@ -131,6 +131,15 @@ inert, mask, and stage contracts. Its 800×600 full-surface strict RGB result is
 comparable but non-passing; Candidate reopen remains an experimental controller
 state, and no first-run production consumer is connected.
 
+Menu now has a real-source same-engine capture for its dense portal, selected and
+disabled rows, focus-opened submenu, outside/Escape close, and unmount boundary.
+The paired diff confirms the shared menu role, selected/disabled row projection,
+separator, and interaction sequence. It deliberately records Candidate trigger
+ARIA plus danger/footer rows as structural non-passes; this makes the current
+218×211 Harness and 218×290 Candidate cards non-comparable for a strict ROI
+pixel result. A matching source danger/footer fixture, strict ROI pixel diff,
+and a VCP production consumer remain required evidence.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
