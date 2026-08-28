@@ -197,6 +197,21 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     };
     view.card.prepend(paneCell);
     const invalidateEffortSelection = () => { effortSelectionGeneration += 1; };
+    const placeExternalCard = () => {
+        if (!props.trigger || !popup.getSnapshot().open || !view.card.getClientRects().length) return;
+        const anchorRect = trigger.getBoundingClientRect();
+        const cardRect = view.card.getBoundingClientRect();
+        const margin = 8;
+        const maxLeft = Math.max(margin, window.innerWidth - cardRect.width - margin);
+        const left = Math.min(maxLeft, Math.max(margin, anchorRect.right - cardRect.width));
+        const above = anchorRect.top - cardRect.height - margin;
+        const top = above >= margin ? above : Math.min(window.innerHeight - cardRect.height - margin, anchorRect.bottom + margin);
+        view.card.style.position = 'fixed';
+        view.card.style.left = `${left}px`;
+        view.card.style.right = 'auto';
+        view.card.style.top = `${Math.max(margin, top)}px`;
+        view.card.style.bottom = 'auto';
+    };
     const syncPane = () => {
         const open = popup.getSnapshot().open;
         const setVisibility = (element: HTMLElement, visible: boolean) => {
@@ -223,6 +238,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             error.style.display = open && pane === 'model' && errorText !== '' ? '' : 'none';
         }
         renderEfforts();
+        placeExternalCard();
     };
     pickerScope.listen(trigger, 'click', event => {
         // Agent Settings already has a legacy listener on this canonical
@@ -239,6 +255,8 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     const syncTrigger = () => trigger.setAttribute('aria-expanded', String(popup.getSnapshot().open));
     const unsubscribe = popup.subscribe(() => { syncTrigger(); syncPane(); });
     pickerScope.own(unsubscribe, 'agent-model-picker-subscription', 'ui-presentation');
+    pickerScope.listen(window, 'resize', placeExternalCard);
+    pickerScope.listen(document, 'scroll', placeExternalCard, { capture: true });
     if (props.open === true) popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });
 
     pickerScope.own(async () => {
