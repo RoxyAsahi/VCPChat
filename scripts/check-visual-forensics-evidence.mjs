@@ -95,6 +95,8 @@ for (const dir of targets) {
       assert.ok(observation.settingsViewport?.cascade?.length > 0);
       assert.ok(observation.settingsViewport?.contextSample?.showcase?.ancestry?.length > 0);
       assert.ok(observation.settingsViewport?.contextSample?.settings?.ancestry?.length > 0);
+      assert.equal(observation?.settingsViewport?.settingsOverlay?.inViewport, true, `${name}: settings overlay is outside the viewport`);
+      assert.equal(observation?.settingsViewport?.settingsOverlay?.topmostInside, true, `${name}: settings overlay center is occluded`);
       assert.equal(observation?.stateTransitions?.loading?.visible, true);
       assert.equal(observation?.stateTransitions?.loading?.cleared, true);
       assert.ok(observation?.stateTransitions?.loading?.position);

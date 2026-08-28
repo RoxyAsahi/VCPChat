@@ -335,7 +335,12 @@ try {
       modal?.querySelector('#vcpSettingsTab-user-identity')?.click();
       await new Promise(resolve => setTimeout(resolve, 20));
       const contextSample = { showcase: describeContext(document.querySelector('.vcp-harness-primitive-lab input, .vcp-harness-primitive-lab textarea, .vcp-harness-primitive-lab select')), settings: describeContext([...((modal?.querySelector('.settings-section.active') || modal)?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].find(node => node.getClientRects().length)) };
-      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections, contextSample };
+      const modalRect = modal?.getBoundingClientRect();
+      const modalStyle = modal ? getComputedStyle(modal) : null;
+      const point = modalRect ? { x: Math.max(0, Math.min(innerWidth - 1, modalRect.x + modalRect.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, modalRect.y + modalRect.height / 2)) } : null;
+      const topmost = point ? document.elementFromPoint(point.x, point.y) : null;
+      const settingsOverlay = modalRect ? { rect: { x: modalRect.x, y: modalRect.y, width: modalRect.width, height: modalRect.height }, position: modalStyle?.position || '', zIndex: modalStyle?.zIndex || '', point, topmost: topmost ? { tag: topmost.tagName?.toLowerCase() || '', id: topmost.id || '', className: typeof topmost.className === 'string' ? topmost.className : '' } : null, topmostInside: Boolean(topmost && modal.contains(topmost)), inViewport: modalRect.x >= -2 && modalRect.y >= -2 && modalRect.right <= innerWidth + 2 && modalRect.bottom <= innerHeight + 2 } : null;
+      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections, contextSample, settingsOverlay };
     }).catch(error => ({ error: error.message }));
     settingsViewport.cascade = await captureMatchedRules('#globalSettingsModal #userName');
     await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
