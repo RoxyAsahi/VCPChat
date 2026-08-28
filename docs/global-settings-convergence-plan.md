@@ -234,6 +234,12 @@ ARIA，现在其 click/keydown 监听也直接归属 presentation scope；状态
 属性恢复仍由记录对象负责。这样重复 mount/refresh 不会重新绑定同一 header，且
 dispose 的监听器清理与其它 generated primitive 使用同一 owner 机制。
 
+字段 owner scope 化后的完整回归（2026-08-28）已通过：`npm run test:uiux`
+88/88、`check:uiux:artifacts`，以及 `test:electron-agent-settings-interaction`。
+真实 Electron 交互周期前后保持 41 个 active scopes、501 个 active resources、570
+个 listeners，detached roots/options 均为 0，说明这次 listener 归属调整未引入
+重开泄漏或 Agent Settings 交互回归。
+
 ## 不作为阻塞条件
 
 ## 当前完成度快照（2026-08-28）
