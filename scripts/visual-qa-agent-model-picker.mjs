@@ -55,6 +55,14 @@ const modelServer = http.createServer((request, response) => {
     { id: 'probe-secondary', name: 'Probe Secondary', owned_by: 'Probe' },
   ] }));
 });
+// Electron may retain a keep-alive request to the test-only model endpoint.
+// Track and destroy those sockets during teardown so a completed renderer
+// capture cannot leave the paired-runner blocked in server.close().
+const modelServerSockets = new Set();
+modelServer.on('connection', socket => {
+  modelServerSockets.add(socket);
+  socket.once('close', () => modelServerSockets.delete(socket));
+});
 await new Promise((resolve, reject) => modelServer.once('error', reject).listen(0, '127.0.0.1', resolve));
 const modelPort = modelServer.address().port;
 const remotePort = await freePort();
@@ -316,20 +324,22 @@ try {
   try { browser?.disconnect(); } catch {}
   if (child.exitCode === null && child.signalCode === null) {
     const exited = new Promise(resolve => child.once('exit', resolve));
-    try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
+    try { child.kill('SIGTERM'); } catch {}
     await Promise.race([exited, sleep(2_000)]);
-  }
-  await new Promise(resolve => modelServer.close(resolve));
-  // Electron descendants can retain a profile file for a short interval after
-  // the detached process group receives SIGTERM.  Do not turn a completed
-  // visual gate into a false failure because of that OS-level teardown race.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      await fs.rm(appData, { recursive: true, force: true, maxRetries: 0 });
-      break;
-    } catch (error) {
-      if (attempt === 4 || error?.code !== 'ENOTEMPTY') throw error;
-      await sleep(250);
+    if (child.exitCode === null && child.signalCode === null) {
+      try { child.kill('SIGKILL'); } catch {}
+      await Promise.race([exited, sleep(1_000)]);
     }
   }
+  for (const socket of modelServerSockets) socket.destroy();
+  if (modelServer.listening) await Promise.race([
+    new Promise(resolve => modelServer.close(resolve)),
+    sleep(2_000),
+  ]);
+  // The per-run temp profile is not renderer evidence. Bound cleanup so a
+  // stubborn Chromium child cannot hold a completed visual gate open forever.
+  await Promise.race([
+    fs.rm(appData, { recursive: true, force: true, maxRetries: 0 }).catch(() => {}),
+    sleep(2_000),
+  ]);
 }
