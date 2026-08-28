@@ -290,6 +290,46 @@ test('Harness AgentModelPicker projects loading, load failure and retry through 
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentModelPicker projects selecting as busy native rows and restores trigger focus', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-selecting-test'));
+        const host = document.getElementById('host');
+        let resolveSelection;
+        const selection = new Promise(resolve => { resolveSelection = resolve; });
+        const controller = mountAgentModelPicker(host, {
+            harnessEquivalent: true,
+            searchEnabled: false,
+            options: async () => [
+                { id: 'flash', label: 'Flash', provider: 'DeepSeek' },
+                { id: 'think', label: 'Think', provider: 'DeepSeek' },
+            ],
+            onSelect: async () => selection,
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        const choice = card?.querySelector('[data-option-id="think"]');
+        choice?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.popup.getSnapshot().submitting, true);
+        assert.equal(card?.getAttribute('aria-busy'), 'true');
+        const liveChoice = card?.querySelector('[data-option-id="think"]');
+        assert.equal(choice?.isConnected, false, 'selecting replaces the prior row owner instead of retaining stale interactive DOM');
+        assert.equal(liveChoice?.disabled, true, 'selecting must lock the live native Harness option row');
+        assert.equal(liveChoice?.getAttribute('aria-disabled'), 'true');
+        resolveSelection();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.popup.getSnapshot().open, false, 'accepted selection closes the popup owner');
+        assert.equal(document.activeElement, controller.trigger, 'accepted selection restores focus to the canonical trigger');
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-selecting-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness Pill preserves static and native interactive semantics and retracts cleanly', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="static">Static</span><button id="interactive">Active</button></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
