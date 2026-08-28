@@ -69,7 +69,7 @@ const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-d
 let stderr = '';
 child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-12_000); });
 let browser;
-const evidence = { source: 'VCP production Agent Settings Electron Surface', reference: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx', theme, viewports, output, captures: [], gate: { pass: true, failures: [] } };
+const evidence = { generatedAt: new Date().toISOString(), source: 'VCP production Agent Settings Electron Surface', reference: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx', theme, viewports, output, captures: [], gate: { pass: true, failures: [] } };
 
 try {
   const deadline = Date.now() + timeoutMs;
