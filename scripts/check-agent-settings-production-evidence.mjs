@@ -19,8 +19,8 @@ for (const id of [
     'agentMaxOutputTokens', 'agentTopP', 'agentTopK',
     'agentStreamOutputTrue', 'agentStreamOutputFalse',
 ]) assert.match(report.dom, new RegExp(`id="${id}"`), `production DOM is missing ${id}`);
-assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
-    'model trigger must retain the canonical button id and Harness Button presentation');
+assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*class="[^"]*vcp-harness-agent-model-picker-trigger[^\"]*"/,
+    'model trigger must retain the canonical button id and model-picker presentation');
 assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*aria-label="选择模型"/,
     'model trigger must expose an explicit accessible name');
 assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
@@ -101,6 +101,7 @@ for (const button of report.promptButtons) {
     assert.match(button.class, /vcp-harness-button/, 'prompt mode Button must retain Harness presentation');
 }
 for (const action of report.actions) {
+    if (action.controlId === 'openModelSelectBtn') continue;
     assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
     assert.ok(Array.isArray(action.style?.displayRules), `Agent action ${action.controlId} must report authored display rules`);
     assert.ok(action.style.displayRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.display === 'inline-flex'),

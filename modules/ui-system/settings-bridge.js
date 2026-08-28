@@ -523,14 +523,14 @@ function mountTypedAgentRegexInputs(form) {
     });
 }
 
-// The model trigger remains wired to the legacy picker command/modal. The
-// typed Button only owns its Light-DOM presentation and lifecycle marker.
+// The model picker owns the model trigger's presentation and lifecycle. Keep
+// that trigger out of the generic Button batch below so one node never has
+// two presentation owners.
 function mountTypedAgentButtons(form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
     if (!api?.mountButton || !scope) return;
     const buttons = [
-        ['#openModelSelectBtn', 'outline', 'agent-model-trigger'],
         ['#refreshTtsModelsBtn', 'outline', 'agent-tts-refresh'],
         ['#resetAvatarColorsBtn', 'outline', 'agent-reset-colors'],
         ['.form-actions button[type="submit"]', 'primary', 'agent-save'],
