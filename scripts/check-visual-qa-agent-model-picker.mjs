@@ -32,6 +32,12 @@ for (const dir of targets) {
         assert.equal(info.height, height, `${name}-${suffix}: height mismatch`);
       }
       const hover = capture.modelPaneHover;
+      const icon = capture.open?.semanticIcon;
+      assert.ok(icon?.slotClass?.includes('vcp-harness-agent-model-picker-trigger-icon'), `${name}: production ModelPicker semantic icon slot is missing`);
+      assert.equal(icon?.tag, 'svg', `${name}: production ModelPicker semantic icon did not render as SVG`);
+      assert.equal(icon?.ariaHidden, 'true', `${name}: production ModelPicker semantic icon is exposed to accessibility tree`);
+      assert.equal(icon?.viewBox, '0 0 24 24', `${name}: production ModelPicker semantic icon viewBox drifted`);
+      assert.ok(icon?.pathCount > 0 && icon.rect.width === 14 && icon.rect.height === 14, `${name}: production ModelPicker semantic icon has no 14px glyph geometry`);
       assert.equal(hover?.role, 'option', `${name}: production model-row role is not option`);
       assert.equal(hover?.hovered, true, `${name}: production model-row hover state was not captured`);
       assert.equal(hover?.topmostInsideCard, true, `${name}: production model-row hover is occluded outside the card`);

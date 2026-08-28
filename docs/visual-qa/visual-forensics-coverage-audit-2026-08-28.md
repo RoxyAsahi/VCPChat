@@ -23,6 +23,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Next notification quick-actions menu | Fresh real Electron pair `reports/visual-forensics-qa/notification-menu/run-0912/{light,dark}` covers `800x600`, `1280x800`, and `1680x1000`: all seven role-backed items, generated neutral Button geometry, hover/focus, filter selected state, Escape/reopen, fixed compact-window placement, topmost hit tests, and empty body inline style after close. Both theme manifests report `gate.pass:true`. | Passed |
 | Production Agent Settings ModelPicker | Fresh isolated pair `reports/visual-forensics-qa/agent-model-picker/run-safe-top-retry/{light,dark}` passes its independent verifier at all three viewports after the portal safe-area fix. | Passed |
 | Production ModelPicker hover / resize / Escape | Each `run-safe-top-retry` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
+| Production ModelPicker SemanticIcon slot | Fresh pair `reports/visual-forensics-qa/agent-model-picker/run-semantic-production/{light,dark}` proves the shipped Agent Settings trigger renders its generated SemanticIcon slot in real Electron at all three viewports: a `14×14` SVG, `viewBox="0 0 24 24"`, `aria-hidden="true"`, and a visible path. The production ModelPicker portal, transient actions, hover, narrow/restored resize, Escape focus restoration, and body cleanup verifier also passes. This is consumer evidence only; it does not claim Harness filled-glyph or pixel parity. | Passed for consumer presence and runtime contract |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
 | Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-10UtiP/{light,dark}` after the current Settings Range, Showcase, component-manifest, and `main.html` worktree changes. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
@@ -43,6 +44,17 @@ themes, the `800x600` record has a fixed menu at `x=596`, `width=196`,
 `right=8px`, in-viewport and topmost. It also records the filter transition to
 `aria-checked=true`, visible hover/focus, Escape focus return to
 `#nextUiNotificationMenuBtn`, reopen, and no body inline-style residue.
+
+## SemanticIcon consumer boundary
+
+`SemanticIcon` remains a private Candidate for glyph-parity purposes: the
+Harness source uses different filled paths while VCP delegates to its existing
+Lucide adapter, so neither structural glyph equality nor pixel equality is
+claimed. However, it is no longer accurate to describe the primitive as having
+no VCP production consumer. The production Agent ModelPicker uses its chevron
+slot; `agent-model-picker/run-semantic-production/{light,dark}` is fresh real
+Electron evidence for that consumer. Candidate maturity remains unchanged until
+the distinct cross-runtime glyph-parity question is resolved.
 
 ## Commands for exact evidence pairs
 
