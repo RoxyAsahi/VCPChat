@@ -47,6 +47,8 @@ const entries = Object.entries(files).map(([name, file]) => {
 const dom = JSON.parse(read(path.join(referenceRoot, 'disclosure-row.dom.json')));
 const geometry = JSON.parse(read(path.join(referenceRoot, 'disclosure-row.geometry.json')));
 const candidate = JSON.parse(read(path.join(root, 'reports/vcp-harness-disclosure-row-candidate.json')));
+const sourceCapturePath = path.join(root, 'reports/harness-disclosure-row-source.json');
+const sourceCapture = fs.existsSync(sourceCapturePath) ? JSON.parse(read(sourceCapturePath)) : null;
 const referencePass = dom.sourceKind === 'harness-primitive-source-only'
   && dom.provenance?.sources?.length === 2
   && geometry.styleSource === 'packages/client/ui-primitives/src/DisclosureRow.module.css';
@@ -59,14 +61,29 @@ const candidatePass = candidate.source === 'generated-artifact-electron'
   && candidate.row?.ariaExpanded === 'true'
   && candidate.summaryVisible === true
   && candidate.bodyVisible === true;
+const sourceCapturePass = sourceCapture?.sourcePath === 'packages/client/ui-primitives/src/DisclosureRow.tsx'
+  && sourceCapture?.styleSource === 'packages/client/ui-primitives/src/DisclosureRow.module.css'
+  && sourceCapture?.status === 'harness-source-component-capture'
+  && sourceCapture?.viewport?.width === 800
+  && sourceCapture?.viewport?.height === 600
+  && sourceCapture?.collapsed?.row?.role === 'button'
+  && sourceCapture?.collapsed?.row?.height === '24px'
+  && sourceCapture?.rowOpen?.row?.ariaExpanded === 'true'
+  && sourceCapture?.keyboardClosed?.row?.ariaExpanded === 'false'
+  && sourceCapture?.leadingClosed?.leading?.tag === 'BUTTON'
+  && sourceCapture?.leadingOpen?.leading?.ariaExpanded === 'true'
+  && sourceCapture?.forcedOpen?.row?.role === null
+  && sourceCapture?.forcedOpen?.bodyVisible === true
+  && sourceCapture?.unmounted?.rootEmpty === true
+  && sourceCapture?.unmounted?.rows === 0;
 const report = {
   generatedAt: new Date().toISOString(), harnessRoot, sourceKind: dom.sourceKind,
   source: dom.provenance.sources, files: entries,
   reference: { dom: referencePass, geometry: referencePass },
+  sourceCapture: { capture: 'reports/harness-disclosure-row-source.json', present: Boolean(sourceCapture), shape: sourceCapturePass, status: sourceCapture?.status ?? 'missing' },
   candidate: { capture: 'reports/vcp-harness-disclosure-row-candidate.json', present: true, shape: candidatePass, status: dom.candidateStatus },
   contract: dom.contract, pass: false,
   missingEvidence: [
-    'real Harness DisclosureRow browser capture through the source dependency closure',
     'same-semantic Harness/VCP DOM/ARIA and computed-style diff',
     'same-semantic Harness/VCP pixel diff',
     'authorized non-chat/non-message VCP production consumer evidence',

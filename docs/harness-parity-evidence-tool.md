@@ -260,9 +260,16 @@ preference consumer.
 Harness DisclosureRow controlled interaction contract (row versus leading
 button, keyboard activation, forced-open and content projection) and its 24px
 CSS geometry against the replayable VCP Candidate capture. It remains
-`pass=false`: the candidate has no real-source paired browser/DOM/style/pixel
-evidence, and chat/message integration stays frozen. This guard does not
-authorize a consumer or alter existing production call sites.
+`pass=false`: the real Harness source capture is now recorded separately, but
+same-semantic Harness/VCP DOM/style/pixel evidence is still missing and
+chat/message integration stays frozen. This guard does not authorize a
+consumer or alter existing production call sites.
+
+`node scripts/capture-harness-disclosure-row-source-fixture.mjs` replays the
+actual Harness `DisclosureRow.tsx` through an isolated Vite/Chromium page. It
+captures row-click/keyboard, leading-button, forced-open, geometry, and
+unmount states at 800×600@1x. The output is source-side evidence only and
+must not be substituted for a paired VCP diff.
 
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
