@@ -376,6 +376,14 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
     }
 });
 
+test('legacy disclosure fast teardown is explicitly idempotent', () => {
+    const entry = read(bridgeEntry);
+    const helper = entry.slice(entry.indexOf('function mountHarnessDisclosures'), entry.indexOf('// R2-02C:'));
+    assert.match(helper, /cleaned:\s*false/);
+    assert.match(helper, /if \(state\.cleaned\) return;/);
+    assert.match(helper, /state\.cleaned = true;/);
+});
+
 test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
     const dom = new JSDOM('<!doctype html><form><select id="voice"><option value="one">One</option><option value="two">Two</option></select></form>');
     const previous = Object.fromEntries([
