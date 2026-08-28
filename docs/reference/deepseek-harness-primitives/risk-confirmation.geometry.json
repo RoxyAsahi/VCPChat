@@ -1,5 +1,18 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "source": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "styleSource": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; no equivalent VCP production consumer and paired pixel capture pending",
+  "selectors": {
+    ".confirmation": { "width": "min(440px, 100%)", "maxHeight": "calc(100vh - 48px)", "overflow": "hidden" },
+    ".confirmationContent": { "minHeight": "0", "overflowY": "auto", "overscrollBehavior": "contain" },
+    ".warning": { "display": "flex", "alignItems": "flex-start", "gap": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".acknowledgement": { "display": "flex", "alignItems": "flex-start", "gap": "10px", "marginTop": "20px", "fontSize": "14px", "lineHeight": "22px" },
+    ".acknowledgement input": { "width": "16px", "height": "16px", "margin": "3px 0 0" },
+    ".modalAction": { "minWidth": "72px" },
+    ".confirmAction": { "minWidth": "136px" }
+  },
+  "tokens": ["--dsw-alias-label-secondary", "--dsw-alias-state-error-primary", "--dsw-alias-label-primary", "--dsw-alias-button-primary-fill", "--dsw-alias-border-l4"],
   "dialog": { "width": "min(440px, 100%)", "maxHeight": "calc(100vh - 48px)", "overflow": "hidden" },
   "content": { "minHeight": "0", "overflowY": "auto", "overscrollBehavior": "contain" },
   "warning": { "gap": "10px", "fontSize": "14px", "lineHeight": "22px", "iconMarginTop": "2px" },
