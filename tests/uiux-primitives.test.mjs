@@ -1089,6 +1089,8 @@ test('Harness DisclosureRow controller adopts canonical Light DOM and retracts a
                 controller.setOpen(!section.classList.contains('collapsed'));
             },
         }, scope);
+        assert.deepEqual(scope.snapshot().resources.map(resource => resource.type), ['child-scope'],
+            'an adopted disclosure contributes one child lifecycle branch, not a duplicate parent disposer');
         assert.equal(header.querySelector('#title')?.textContent, 'Identity', 'adoption keeps canonical header children in place');
         assert.equal(header.querySelector('#summary')?.textContent, ' · Ada', 'business summary remains readable by its manager');
         assert.equal(header.getAttribute('role'), null, 'a header containing a native button must not create nested button semantics');

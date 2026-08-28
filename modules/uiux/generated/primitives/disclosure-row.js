@@ -146,11 +146,15 @@ export function mountDisclosureRow(host, props, scope) {
                 parent.append(node);
         });
     };
-    const dispose = scope.own(async () => {
-        await disclosureScope.dispose('harness-disclosure-row-unmounted');
+    // `scope.child()` already registers this owner with its parent.  Keep the
+    // primitive teardown inside that child instead of also registering an
+    // equivalent parent disposer; one DisclosureRow must contribute one
+    // lifecycle branch, not two synonymous parent records.
+    disclosureScope.own(async () => {
         restoreNodes();
         host.replaceChildren(...originalNodes);
     }, 'harness-disclosure-row', 'ui-primitive');
+    const dispose = () => disclosureScope.dispose('harness-disclosure-row-unmounted');
     return {
         root,
         row,
@@ -245,8 +249,10 @@ export function mountDisclosureRowController(host, props, scope) {
             requestToggle();
         });
     render();
-    const dispose = scope.own(async () => {
-        await disclosureScope.dispose('harness-disclosure-row-controller-unmounted');
+    // The parent owns `disclosureScope` through child(), so placing this
+    // reversible DOM cleanup on the child avoids a duplicate parent record
+    // while retaining explicit, quiescent controller disposal.
+    disclosureScope.own(async () => {
         delete host.dataset.disclosureRow;
         delete host.dataset.expandable;
         trackedAttributes.forEach(name => {
@@ -267,6 +273,7 @@ export function mountDisclosureRowController(host, props, scope) {
                 toggle.setAttribute('aria-expanded', toggleExpanded);
         }
     }, 'harness-disclosure-row-controller', 'ui-primitive');
+    const dispose = () => disclosureScope.dispose('harness-disclosure-row-controller-unmounted');
     return {
         host,
         get open() { return open; },
