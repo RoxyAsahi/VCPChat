@@ -219,6 +219,11 @@ screenshot 与 control geometry 全部通过；window resize 因 CDP 能力缺�
 `ERR_FILE_NOT_FOUND` 资源错误。该失败继续归属于并行主题/资源改动，本线程不覆盖其
 文件；Settings owner 与组件接入证据不受影响。
 
+只读资源追踪将 gate 的 `ERR_FILE_NOT_FOUND` 收敛到 `main.html` 中现存的
+`path/to/xiaoke_avatar.png` 引用（仓库内无对应路径）。该引用位于并行修改的
+`main.html`，本线程不直接修复；并行线程应将其替换为实际存在的 avatar asset，
+随后重新运行 Settings gate。
+
 ### G5：旧债净删除
 
 按 section 删除：
