@@ -132,6 +132,27 @@ try {
     tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     return { menu: menuEvidence, modal: modalEvidence, tooltip: tooltipEvidence };
   }).catch(error => ({ error: error.message }));
+  // Capture the initial Tooltip through the same native-pointer path used by
+  // the resize fixtures. A prior DOM-only mouseenter could race the delayed
+  // body portal and record an empty screenshot despite a working renderer.
+  const initialTooltipHandle = await (async () => {
+    for (const button of await page.$$('.vcp-harness-primitive-lab button')) {
+      if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
+    }
+    return null;
+  })();
+  if (initialTooltipHandle) {
+    await initialTooltipHandle.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+    await hoverTooltip(page, initialTooltipHandle);
+    await sleep(160);
+    overlays.tooltip = await page.evaluate(() => {
+      const node = document.querySelector('.vcp-harness-tooltip-bubble');
+      if (!node) return { open: false, rect: null, side: '' };
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '' }, side: node.getAttribute('data-side') || '' };
+    });
+    await page.mouse.move(2, 2).catch(() => {});
+  }
   evidence.overlays = overlays;
   if (overlays.error || !overlays.menu?.rect || !overlays.modal?.open || !overlays.tooltip?.open) {
     evidence.gate.failures.push(`showcase overlays: ${JSON.stringify(overlays)}`);
@@ -239,11 +260,18 @@ try {
   await page.evaluate(async () => {
     const lab = document.querySelector('.vcp-harness-primitive-lab');
     const anchor = [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'Hover for details');
-    anchor?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    await new Promise(resolve => setTimeout(resolve, 160));
+    anchor?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
   }).catch(() => {});
+  const initialCascadeTooltip = await (async () => {
+    for (const button of await page.$$('.vcp-harness-primitive-lab button')) {
+      if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
+    }
+    return null;
+  })();
+  if (initialCascadeTooltip) await hoverTooltip(page, initialCascadeTooltip);
+  await sleep(160);
   overlayCascade.tooltip = await captureMatchedRules('.vcp-harness-tooltip-bubble');
-  await page.evaluate(() => document.querySelector('.vcp-harness-primitive-lab button')?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }))).catch(() => {});
+  await page.mouse.move(2, 2).catch(() => {});
   evidence.overlays.cdpCascade = overlayCascade;
   if (!overlayCascade.menu.length || !overlayCascade.modal.length || !overlayCascade.tooltip.length) evidence.gate.failures.push(`overlay cascade provenance incomplete: ${JSON.stringify(Object.fromEntries(Object.entries(overlayCascade).map(([key, value]) => [key, value.length])))}`);
   for (const [width, height] of viewports) {
@@ -534,9 +562,11 @@ try {
     if (stateTarget) {
       await page.mouse.move(2, 2).catch(() => {});
       await sleep(20);
-      await stateTarget.hover().catch(() => {});
       const box = await stateTarget.boundingBox().catch(() => null);
-      if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
+      if (box) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
+        await page.waitForFunction(({ x, y }) => document.elementFromPoint(x, y)?.closest('.vcp-harness-primitive-lab button')?.matches(':hover'), { timeout: 500 }, { x: box.x + box.width / 2, y: box.y + box.height / 2 }).catch(() => {});
+      }
       await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: false });
       const hoverState = await stateTarget.evaluate(el => { const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return { active: el.matches(':hover'), className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; }).catch(() => null);
       await stateTarget.focus().catch(() => {});
