@@ -240,6 +240,10 @@ dispose 的监听器清理与其它 generated primitive 使用同一 owner 机�
 个 listeners，detached roots/options 均为 0，说明这次 listener 归属调整未引入
 重开泄漏或 Agent Settings 交互回归。
 
+Disclosure host 属性恢复修复后的 Electron 复测同样通过：Agent Settings 交互周期
+前后节点 5830、listeners 570、active scopes 41、active resources 501，detached
+roots/options 均为 0；generated artifact consistency 仍通过（78 个产物）。
+
 ## 不作为阻塞条件
 
 ## 当前完成度快照（2026-08-28）
