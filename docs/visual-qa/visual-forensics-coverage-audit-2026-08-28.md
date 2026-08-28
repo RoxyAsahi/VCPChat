@@ -10,7 +10,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 
 | Requirement | Electron evidence and gate | Status |
 | --- | --- | --- |
-| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Fresh isolated Showcase pair `reports/visual-forensics-qa/run-20260828-0735/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
+| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Fresh isolated Showcase pair `reports/visual-forensics-qa/run-ZQDdcv/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
 | First open, close/reopen, root identity, and cleanup | `run-KCjtuH` records `openedInitially`, `removedOnClose`, `reopened`, `newRootIdentity`, and empty body inline style for every observation. | Passed |
 | Scroll, narrow viewport, and restored viewport | Every `run-KCjtuH` observation records moved showcase scroll owner, narrow width `width - 240`, no horizontal overflow, and restored dimensions. | Passed |
 | Screenshot, geometry, computed style, DOM, and CSS cascade provenance | The isolated manifests include per-state screenshots, client rects, computed colors/tokens, root DOM tree, CDP matched rules with specificity/cascade order, and real Settings context samples. | Passed |
@@ -26,7 +26,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Production ModelPicker SemanticIcon slot | Fresh pair `reports/visual-forensics-qa/agent-model-picker/run-semantic-production/{light,dark}` proves the shipped Agent Settings trigger renders its generated SemanticIcon slot in real Electron at all three viewports: a `14×14` SVG, `viewBox="0 0 24 24"`, `aria-hidden="true"`, and a visible path. The production ModelPicker portal, transient actions, hover, narrow/restored resize, Escape focus restoration, and body cleanup verifier also passes. This is consumer evidence only; it does not claim Harness filled-glyph or pixel parity. | Passed for consumer presence and runtime contract |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
-| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-20260828-0735/{light,dark}`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass, including the previously intermittent light `1280x800` narrow Tooltip sequence. | Passed for this snapshot; rerun after subsequent UI edits settle |
+| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-ZQDdcv/{light,dark}`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass, including native-pointer Tooltip activation after sticky-header-safe scrolling. | Passed for this snapshot; rerun after subsequent UI edits settle |
 
 ## Notification menu compact-viewport regression
 
@@ -94,13 +94,14 @@ Tooltip states, along with rendered hover evidence. The exact evidence verifier
 and every pixel/geometry baseline pass for this pair; this conclusion is based
 on the real Electron screenshots and manifests, not static source inspection.
 
-The latest rerun is `run-20260828-0735/{light,dark}`. It reproduces the
-Tooltip body portal at initial, narrow, and restored widths for both themes and
-all three viewports; the exact verifier and paired baseline both pass. The
-earlier `run-BFQ62t` light `1280x800` miss is therefore classified as a
-non-reproduced timing flake, not a confirmed product defect. It remains a
-regression-watch item because the scanner records the failed attempt and keeps
-the narrow sequence in the gate.
+The latest rerun is `run-ZQDdcv/{light,dark}`. It reproduces the Tooltip body
+portal at initial, narrow, and restored widths for both themes and all three
+viewports; every narrow/restored record reports `puppeteer-hover` and
+`anchorHovered:true`. The earlier failures were caused by the scanner placing
+the anchor beneath the sticky Showcase header. The scanner now iterates live
+`elementFromPoint` geometry and offsets the actual scroll owner until the
+anchor is pointer-hittable; synthetic `mouseenter` is retained only as
+diagnostic output and is rejected by the evidence gate.
 
 ## Agent Settings ColorPair lifecycle probe
 
