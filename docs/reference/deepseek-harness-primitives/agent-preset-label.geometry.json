@@ -1,6 +1,10 @@
 {
   "primitive": "AgentPresetLabel",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css",
+  "source": "packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "reference-only; no VCP production consumer or paired visual capture",
+  "tokens": ["--dsw-alias-fill-tsp-secondary", "--dsw-alias-label-secondary"],
   "selectors": {
     ".label": { "display": "inline-flex", "height": "22px", "maxWidth": "180px", "gap": "4px", "padding": "0 2px 0 0", "borderRadius": "6px", "fontSize": "12px", "lineHeight": "22px" },
     ".icon": { "opacity": "0.7" }
