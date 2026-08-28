@@ -120,7 +120,7 @@ export function mountWebAwesomeComparison(host, { create, on }) {
         // consumes uiManager's typed snapshot rather than inferring a theme
         // from body classes.
         const syncLegacyTheme = () => syncTheme({ value: {
-            effective: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+            effective: document.body.dataset.vcpTheme === 'light' ? 'light' : 'dark',
         } });
         syncLegacyTheme();
         const themeObserver = new MutationObserver(syncLegacyTheme);

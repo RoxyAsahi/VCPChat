@@ -96,6 +96,10 @@ async function setTheme(page, theme) {
     await page.evaluate((name) => {
         document.body.classList.remove('light-theme', 'dark-theme');
         document.body.classList.add(`${name}-theme`);
+        // Keep the typed ThemePresenter contract in sync with the legacy class
+        // toggles used by upstream callers while this journey drives themes
+        // directly in the renderer.
+        document.body.dataset.vcpTheme = name;
     }, theme);
     await new Promise(resolve => setTimeout(resolve, 250));
 }

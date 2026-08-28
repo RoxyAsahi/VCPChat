@@ -68,7 +68,7 @@ body {
 /* =================================================================
  * Light Theme: Eva Light
  * ================================================================= */
-body.light-theme {
+body[data-vcp-theme="light"] {
     /* --- Wallpaper --- */
     --chat-wallpaper-light: url('../assets/wallpaper/eva-light.jpg');
     background-image: var(--chat-wallpaper-light);

@@ -100,6 +100,11 @@
     }
 
     function applyMaterialVariables(resolved) {
+        if (window.VCPMaterialRuntime) {
+            window.__vcpMaterialRuntime ||= new window.VCPMaterialRuntime();
+            window.__vcpMaterialRuntime.apply(resolved, document);
+            return;
+        }
         let materialVariablesNode = document.getElementById('vcpAppearanceMaterialVariables');
         if (!materialVariablesNode) {
             materialVariablesNode = document.createElement('style');
@@ -191,7 +196,9 @@
 
     function apply(profile, options = {}) {
         const uiMode = options.uiMode || document.documentElement.dataset.uiMode || 'classic';
-        const resolved = normalize(profile, uiMode);
+        const resolved = window.VCPAppearanceProfileRuntime
+            ? (window.__vcpAppearanceProfileRuntime ||= new window.VCPAppearanceProfileRuntime({ normalize })).resolve(profile, uiMode)
+            : normalize(profile, uiMode);
         const root = document.documentElement;
         root.dataset.vcpDensity = resolved.density;
         root.dataset.vcpRadius = resolved.radius;
@@ -226,7 +233,9 @@
 
     function commit(profile, options = {}) {
         revision += 1;
-        return apply(profile, { ...options, cache: true });
+        const result = apply(profile, { ...options, cache: true });
+        window.__vcpAppearanceProfileRuntime?.commit?.(result, options.uiMode || document.documentElement.dataset.uiMode || 'classic');
+        return result;
     }
 
     function getRevision() {

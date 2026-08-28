@@ -74,7 +74,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: transparent;
   color: var(--highlight-text);
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: background var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), box-shadow var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
 [id="agentSettingsContainer"] .system-prompt-container .prompt-textarea,
@@ -176,49 +176,49 @@
 }
 
 /* Light theme styles */
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button),
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input,
-body.light-theme [id="agentSettingsContainer"] .system-prompt-container .toolbar-btn,
-body.light-theme
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .system-prompt-container .toolbar-btn,
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-browse-btn,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-refresh-btn,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .add-variant-btn,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .blocks-container,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .warehouse-container,
-body.light-theme [id="agentSettingsContainer"] .system-prompt-container .preview-text,
-body.light-theme
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .system-prompt-container .preview-text,
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-block.text-block {
@@ -235,43 +235,43 @@ body.light-theme
     inset 0 0 0 1px rgba(255, 255, 255, 0.18), inset 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button):hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .toolbar-btn:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-browse-btn:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-refresh-btn:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .add-variant-btn:hover,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-block.text-block:hover {
@@ -286,7 +286,7 @@ body.light-theme
     0 0 0 1px color-mix(in srgb, var(--highlight-text) 24%, transparent);
 }
 
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button).active {
@@ -306,55 +306,55 @@ body.light-theme
 }
 
 /* Dark theme styles */
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button),
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .toolbar-btn,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-browse-btn,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-refresh-btn,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .add-variant-btn,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .blocks-container,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .warehouse-container,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preview-text,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-block.text-block {
@@ -372,43 +372,43 @@ body:not(.light-theme)
     inset 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button):hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .toolbar-btn:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-browse-btn:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-refresh-btn:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .add-variant-btn:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-block.text-block:hover {
@@ -423,7 +423,7 @@ body:not(.light-theme)
     0 0 0 1px color-mix(in srgb, var(--highlight-text) 26%, transparent);
 }
 
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-mode-button:not(.vcp-harness-button).active {
@@ -440,35 +440,35 @@ body:not(.light-theme)
 }
 
 /* Focus states - Light theme */
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:focus,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:focus-visible,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:focus,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:focus-visible,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:focus,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:focus-visible,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:focus,
-body.light-theme
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:focus-visible {
@@ -481,35 +481,35 @@ body.light-theme
 }
 
 /* Focus states - Dark theme */
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:focus,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .prompt-textarea:focus-visible,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:focus,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-path-input:focus-visible,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:focus,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .preset-select:focus-visible,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:focus,
-body:not(.light-theme)
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .system-prompt-container
   .block-name-input:focus-visible {

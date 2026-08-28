@@ -33,7 +33,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
     box-sizing: border-box;
     height: 38px;
     /* Match the typical height of inputs */
@@ -53,7 +53,7 @@
 #groupSettingsForm .model-input-container button svg {
     /* 新增群组设置按钮SVG样式 */
     stroke: currentColor;
-    transition: transform 0.5s ease;
+    transition: transform var(--vcp-motion-duration-slow) var(--vcp-motion-ease-standard);
 }
 
 #agentSettingsForm .model-input-container button:not(.vcp-harness-agent-model-picker-trigger):active svg,
@@ -92,7 +92,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), transform var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
     flex-shrink: 0;
     min-width: 24px;
     z-index: 2;
@@ -143,7 +143,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
     box-sizing: border-box;
     height: 36px;
     width: 36px;
@@ -158,7 +158,7 @@
 
 #refreshModelsBtn svg {
     stroke: currentColor;
-    transition: transform 0.5s ease;
+    transition: transform var(--vcp-motion-duration-slow) var(--vcp-motion-ease-standard);
 }
 
 #refreshModelsBtn:active svg {
@@ -179,7 +179,7 @@
     padding: 10px 15px;
     cursor: pointer;
     border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s ease;
+    transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -223,7 +223,7 @@
 .hot-model-badge {
     font-size: 0.85em;
     flex-shrink: 0;
-    animation: flame-pulse 1.5s ease-in-out infinite;
+    animation: flame-pulse 1.5s var(--vcp-motion-ease-standard) infinite;
 }
 
 .model-name-text {
@@ -258,7 +258,9 @@
     color: var(--secondary-text);
     cursor: pointer;
     border-radius: 4px;
-    transition: all 0.2s ease;
+    transition: opacity var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard),
+                color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard),
+                background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
     opacity: 0.6;
 }
 

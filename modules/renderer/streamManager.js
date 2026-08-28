@@ -1418,7 +1418,7 @@ function playStreamingCodeLineSweep(lineElement, delayMs = 0) {
     if (!lineElement || typeof lineElement.animate !== 'function') return;
     if (ownerWindow()?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
-    const isLightTheme = ownerDocument()?.body?.classList.contains('light-theme');
+    const isLightTheme = ownerDocument()?.body?.dataset.vcpTheme === 'light';
     const baseColor = isLightTheme ? '#333333' : '#abb2bf';
     const colorSweep = isLightTheme
         ? `linear-gradient(90deg, transparent 0%, transparent 24%, #0077b6 37%, #6f42c1 46%, #d63384 54%, #b26a00 63%, #238636 70%, transparent 82%, transparent 100%)`

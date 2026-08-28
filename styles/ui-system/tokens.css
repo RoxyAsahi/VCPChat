@@ -8,13 +8,13 @@
        (the "menu z-index computed to auto" trap).
 
        Derived chains (e.g. --vcp-ui-bg-primary -> --primary-bg) are declared
-       TWICE, on :root and on body.light-theme: custom-property var()
+       TWICE, on :root and on body[data-vcp-theme="light"]: custom-property var()
        substitution happens at the declaring element's computed-value time and
        that substituted result is what descendants inherit. The legacy theme
        variables are declared at :root (dark) and overridden at
-       body.light-theme (light), so a single :root declaration would freeze
+       body[data-vcp-theme="light"] (light), so a single :root declaration would freeze
        every derived token at its dark value. Re-declaring the identical block
-       at body.light-theme re-derives it from the light overrides.
+       at body[data-vcp-theme="light"] re-derives it from the light overrides.
 
        color-scheme deliberately stays scoped to .vcp-ui-scope hosts (below):
        the settings overlay and appearance studio are dark surfaces even while
@@ -124,11 +124,29 @@
         --vcp-ui-veil-8: rgba(127, 127, 127, 0.08);
         --vcp-ui-veil-5: rgba(127, 127, 127, 0.05);
 
-        --vcp-ui-duration-fast: 160ms;
-        --vcp-ui-duration-normal: 260ms;
-        --vcp-ui-duration-slow: 360ms;
-        --vcp-ui-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-        --vcp-ui-easing-spring: cubic-bezier(0.22, 1, 0.36, 1);
+        /* Motion contract: semantic durations/easing are the single source
+           for UI transitions. Keep the legacy aliases below for existing
+           consumers while migrating them to --vcp-motion-* names. */
+        --vcp-motion-duration-instant: 0ms;
+        --vcp-motion-duration-fast: 120ms;
+        --vcp-motion-duration-standard: 160ms;
+        --vcp-motion-duration-normal: 220ms;
+        --vcp-motion-duration-slow: 300ms;
+        --vcp-motion-duration-spinner: 900ms;
+        --vcp-motion-duration-ambient: 5.5s;
+        --vcp-motion-duration-flow: 6.5s;
+        --vcp-motion-duration-reveal: 1.35s;
+        --vcp-motion-delay-reveal: 250ms;
+        --vcp-motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+        --vcp-motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+        --vcp-motion-ease-linear: linear;
+        --vcp-motion-toast-hold: 3000ms;
+        --vcp-motion-toast-fade: 1000ms;
+        --vcp-ui-duration-fast: var(--vcp-motion-duration-standard);
+        --vcp-ui-duration-normal: var(--vcp-motion-duration-normal);
+        --vcp-ui-duration-slow: var(--vcp-motion-duration-slow);
+        --vcp-ui-easing-standard: var(--vcp-motion-ease-standard);
+        --vcp-ui-easing-spring: var(--vcp-motion-ease-emphasized);
         --vcp-ui-transition-fast: var(--vcp-ui-duration-fast) var(--vcp-ui-easing-standard);
         --vcp-ui-transition-normal: var(--vcp-ui-duration-normal) var(--vcp-ui-easing-standard);
         --vcp-ui-transition-spring: 220ms var(--vcp-ui-easing-spring);
@@ -183,7 +201,7 @@
         --vcp-ui-modal-height: 760px;
     }
 
-    body.light-theme {
+    body[data-vcp-theme="light"] {
 
 
         --vcp-ui-palette-cyan: oklch(0.75 0.14 230);
@@ -287,11 +305,19 @@
         --vcp-ui-veil-8: rgba(127, 127, 127, 0.08);
         --vcp-ui-veil-5: rgba(127, 127, 127, 0.05);
 
-        --vcp-ui-duration-fast: 160ms;
-        --vcp-ui-duration-normal: 260ms;
-        --vcp-ui-duration-slow: 360ms;
-        --vcp-ui-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-        --vcp-ui-easing-spring: cubic-bezier(0.22, 1, 0.36, 1);
+        --vcp-motion-duration-instant: 0ms;
+        --vcp-motion-duration-fast: 120ms;
+        --vcp-motion-duration-standard: 160ms;
+        --vcp-motion-duration-normal: 220ms;
+        --vcp-motion-duration-slow: 300ms;
+        --vcp-motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+        --vcp-motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+        --vcp-motion-ease-linear: linear;
+        --vcp-ui-duration-fast: var(--vcp-motion-duration-standard);
+        --vcp-ui-duration-normal: var(--vcp-motion-duration-normal);
+        --vcp-ui-duration-slow: var(--vcp-motion-duration-slow);
+        --vcp-ui-easing-standard: var(--vcp-motion-ease-standard);
+        --vcp-ui-easing-spring: var(--vcp-motion-ease-emphasized);
         --vcp-ui-transition-fast: var(--vcp-ui-duration-fast) var(--vcp-ui-easing-standard);
         --vcp-ui-transition-normal: var(--vcp-ui-duration-normal) var(--vcp-ui-easing-standard);
         --vcp-ui-transition-spring: 220ms var(--vcp-ui-easing-spring);
@@ -368,7 +394,7 @@
         --vcp-ui-density-gap: var(--vcp-ui-space-3);
     }
 
-    :is(html, html.vcp-appearance-studio-host) body.light-theme .vcp-ui-scope {
+    :is(html, html.vcp-appearance-studio-host) body[data-vcp-theme="light"] .vcp-ui-scope {
         color-scheme: light;
         --vcp-ui-backdrop: oklch(0.2 0.01 240 / 0.28);
         --vcp-ui-shadow-sm: 0 1px 2px oklch(0.12 0.01 230 / 0.08);

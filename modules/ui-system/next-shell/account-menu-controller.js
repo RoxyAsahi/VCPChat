@@ -107,8 +107,8 @@
                 const Observer = this.window.MutationObserver;
                 if (Observer) {
                     this.observer = new Observer(() => this.sync());
-                    if (scope) scope.observe(this.observer, this.document.body, { attributes: true, attributeFilter: ['class'] }, 'account-theme-observer');
-                    else this.observer.observe(this.document.body, { attributes: true, attributeFilter: ['class'] });
+                    if (scope) scope.observe(this.observer, this.document.body, { attributes: true, attributeFilter: ['data-vcp-theme'] }, 'account-theme-observer');
+                    else this.observer.observe(this.document.body, { attributes: true, attributeFilter: ['data-vcp-theme'] });
                 }
             }
             if (scope) scope.own(() => this.dispose(), 'account-menu-controller', 'controller');

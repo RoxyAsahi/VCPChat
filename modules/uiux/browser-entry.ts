@@ -106,11 +106,54 @@ const api = {
     },
 };
 
+function createDocumentThemeScope(): LegacyScopeLike {
+    const disposers = new Set<UiDisposer>();
+    let active = true;
+    let scope: LegacyScopeLike;
+    scope = {
+        label: 'document:theme-presenter',
+        get active() { return active; },
+        own(disposer: UiDisposer) { disposers.add(disposer); return disposer; },
+        listen(target: EventTarget, type: string, handler: EventListener, options?: AddEventListenerOptions) { target.addEventListener(type, handler, options); return scope.own(() => target.removeEventListener(type, handler, options)); },
+        subscribe(register: () => UiDisposer | void) { return scope.own(register() || (() => {})); },
+        child: () => scope,
+        track: <T>(task: Promise<T>) => task,
+        dispose: async () => { active = false; await Promise.allSettled([...disposers].map(disposer => disposer())); disposers.clear(); },
+        snapshot: () => Object.freeze({ label: 'document:theme-presenter', active, resourceCount: disposers.size }),
+    };
+    return scope;
+}
+
+function mountDocumentThemePresenter() {
+    const target = globalThis as typeof globalThis & { uiManager?: any; __vcpDocumentThemePresenterMounted?: boolean; VCPLifecycle?: { LifecycleScope?: new (label: string) => LegacyScopeLike } };
+    if (target.__vcpDocumentThemePresenterMounted) return true;
+    const root = document.querySelector<HTMLElement>('.next-ui-account-dock');
+    const manager = target.uiManager;
+    if (!root || !manager?.getThemeSnapshot || !manager?.subscribeTheme || !manager?.getThemeState) {
+        return false;
+    }
+    const scope = target.VCPLifecycle?.LifecycleScope ? new target.VCPLifecycle.LifecycleScope('document:theme-presenter') : createDocumentThemeScope();
+    try {
+        api.mountThemePresenterFromScope(root, { get: manager.getThemeState, getSnapshot: manager.getThemeSnapshot, subscribe: manager.subscribeTheme }, scope);
+        target.__vcpDocumentThemePresenterMounted = true;
+        return true;
+    } catch (error) {
+        console.warn('[VCPUIUX] Document ThemePresenter delayed:', error);
+        void scope.dispose('theme-presenter-retry');
+        return false;
+    }
+}
+
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),
     writable: false,
     configurable: false,
 });
 globalThis.dispatchEvent?.(new CustomEvent('vcp-uiux-ready'));
+globalThis.addEventListener?.('vcp-ui-manager-ready', mountDocumentThemePresenter);
+if (!mountDocumentThemePresenter()) {
+    const retry = () => { if (!mountDocumentThemePresenter()) globalThis.setTimeout(retry, 50); };
+    globalThis.setTimeout(retry, 0);
+}
 
 export { api as uiuxBrowserApi };

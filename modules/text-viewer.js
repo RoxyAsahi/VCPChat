@@ -1054,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Theme Management ---
     function applyTheme(theme) {
         const currentTheme = theme || 'dark';
-        document.body.classList.toggle('light-theme', currentTheme === 'light');
+                document.body.dataset.vcpTheme = currentTheme;
         const highlightThemeStyle = document.getElementById('highlight-theme-style');
         if (highlightThemeStyle) {
             highlightThemeStyle.href = currentTheme === 'light'
@@ -1267,7 +1267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function highlightQuotedTextInRenderedContent(container) {
         if (!container) return;
 
-        const className = document.body.classList.contains('light-theme') ? 'custom-quote-light' : 'custom-quote-dark';
+        const className = document.body.dataset.vcpTheme === 'light' ? 'custom-quote-light' : 'custom-quote-dark';
         const walker = document.createTreeWalker(
             container,
             NodeFilter.SHOW_TEXT,
@@ -1623,7 +1623,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     let finalHtml = codeContent;
                     const trimmedCode = codeContent.trim().toLowerCase();
                     if (!trimmedCode.startsWith('<!doctype') && !trimmedCode.startsWith('<html>')) {
-                        const bodyStyles = document.body.classList.contains('light-theme')
+                        const bodyStyles = document.body.dataset.vcpTheme === 'light'
                             ? 'color: #2c3e50; background-color: #ffffff;'
                             : 'color: #abb2bf; background-color: #282c34;';
                         finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>HTML Preview</title><script src="../vendor/anime.min.js"><\/script><style>body { font-family: sans-serif; padding: 15px; margin: 0; ${bodyStyles} }</style></head><body>${codeContent}</body></html>`;
@@ -2057,7 +2057,7 @@ ${codeContent}
                 // 该库支持 color-mix / oklch 等现代 CSS 颜色函数，且通过 SVG <foreignObject>
                 // 渲染，对 flex/text-node 等场景表现更稳定。
                 const bodyBg = window.getComputedStyle(document.body).backgroundColor;
-                const isLightTheme = document.body.classList.contains('light-theme');
+                const isLightTheme = document.body.dataset.vcpTheme === 'light';
 
                 // 自适应缩放：避免长 Markdown 文档生成超大 canvas（Chromium 单边上限约 16384px）。
                 // 同时为高 DPI 屏提供更清晰的输出。
@@ -2076,9 +2076,7 @@ ${codeContent}
                     onCloneNode: (clonedRoot) => {
                         try {
                             if (clonedRoot && clonedRoot.classList) {
-                                if (isLightTheme) {
-                                    clonedRoot.classList.add('light-theme');
-                                }
+                                clonedRoot.dataset.vcpTheme = isLightTheme ? 'light' : 'dark';
                                 clonedRoot.style.backgroundColor = bodyBg;
                             }
                         } catch (cloneErr) {

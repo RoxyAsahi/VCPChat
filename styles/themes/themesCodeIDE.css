@@ -79,7 +79,7 @@ body {
  * Inspired by light IDE color schemes.
  * =================================================================
  */
-body.light-theme {
+body[data-vcp-theme="light"] {
     background-image: var(--chat-wallpaper-light);
     background-size: cover;
     background-position: center;

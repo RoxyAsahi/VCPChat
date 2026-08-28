@@ -11,7 +11,7 @@ export function createMainChatThemeOwner({ settingsOwner, documentRef, presentat
         theme ||= 'light';
         const uiManager = getUiManager?.();
         if (uiManager?.applyTheme) uiManager.applyTheme(theme);
-        else { documentRef.body.classList.remove('light-theme', 'dark-theme'); documentRef.body.classList.add(`${theme}-theme`); }
+        else { documentRef.body.dataset.vcpTheme = theme; }
         presentationState?.set?.({ theme }); documentRef.body.removeAttribute('data-theme-pending');
     };
     const applyPresentation = async (mode, { persist = false, preserveScroll = true, notify: shouldNotify = false, source = 'unknown' } = {}) => {

@@ -199,7 +199,7 @@ function applyTokens(scopeRoot) {
         // Classic/boot fallback only. Next UI should provide uiManager's typed
         // snapshot channel so presentation scopes do not infer theme from DOM.
         const syncLegacyTheme = () => syncTheme({ value: {
-            effective: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+            effective: document.body.dataset.vcpTheme === 'light' ? 'light' : 'dark',
         } });
         syncLegacyTheme();
         observer = typeof MutationObserver === 'function'

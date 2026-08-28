@@ -714,7 +714,7 @@ async function handleMiddleClickQuickAction(event, messageItem, message, quickAc
                     const contentString = (typeof rawContent === 'string') ? rawContent : (rawContent?.text || '');
 
                     const windowTitle = `阅读: ${message.id.substring(0, 10)}...`;
-                    const currentTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+                    const currentTheme = document.body.dataset.vcpTheme === 'light' ? 'light' : 'dark';
 
                     if (electronAPI && typeof electronAPI.openTextInNewWindow === 'function') {
                         electronAPI.openTextInNewWindow(contentString, windowTitle, currentTheme);

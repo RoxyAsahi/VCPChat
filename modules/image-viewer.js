@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Theme Management
     function applyTheme(theme) {
-        document.body.classList.toggle('light-theme', theme === 'light');
+        document.body.dataset.vcpTheme = theme;
     }
 
     const params = new URLSearchParams(window.location.search);

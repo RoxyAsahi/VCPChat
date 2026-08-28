@@ -15,10 +15,12 @@ function isThemeReadable(value) {
         && typeof candidate.subscribe === 'function');
 }
 function normalizeThemeSnapshot(snapshot) {
+    const preference = snapshot.value.preference === 'dark' || snapshot.value.preference === 'system'
+        ? snapshot.value.preference : 'light';
     const effective = snapshot.value.effective === 'dark' ? 'dark' : 'light';
     return Object.freeze({
         ...snapshot,
-        value: Object.freeze({ ready: snapshot.value.ready === true, effective }),
+        value: Object.freeze({ ready: snapshot.value.ready === true, preference, effective }),
     });
 }
 const SEMANTIC_THEME_TOKENS = Object.freeze({
@@ -73,12 +75,17 @@ const SEMANTIC_THEME_TOKENS = Object.freeze({
         '--dsw-alias-border-l2': 'rgba(0, 0, 0, 0.1)',
         '--dsw-alias-label-primary': 'rgb(15, 17, 21)',
         '--dsw-alias-label-tertiary': 'rgb(129, 133, 140)',
-        '--dsw-alias-interactive-bg-hover': 'rgba(0, 0, 0, 0.04)',
+        // Harness source: ui-theme/src/styles/design-platform.css.
+        // Keep the document-level token canonical so every Candidate Light-DOM
+        // consumer inherits the same hover material rather than patching it
+        // locally in individual primitives.
+        '--dsw-alias-interactive-bg-hover': 'rgba(38, 49, 72, 0.06)',
         '--dsw-specific-menu': 'rgb(255, 255, 255)',
         '--dsw-shadow-lv3': '0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08)',
     }),
 });
 const tokenOwners = new WeakMap();
+const presenterOwners = new WeakMap();
 function applySemanticTokens(root, effective) {
     const tokenRoot = root.ownerDocument?.documentElement || root;
     const doc = root.ownerDocument;
@@ -116,13 +123,32 @@ function applySemanticTokens(root, effective) {
 export function mountThemePresenter(root, service, context) {
     if (!root)
         throw new TypeError('ThemePresenter requires a root element.');
+    const documentRef = root.ownerDocument;
+    if (!documentRef)
+        throw new TypeError('ThemePresenter requires a document-backed root.');
+    const body = documentRef.body;
+    const html = documentRef.documentElement;
+    const ownedMeta = documentRef.querySelector('meta[data-vcp-theme-color]') || documentRef.createElement('meta');
+    const createdMeta = !ownedMeta.isConnected;
+    if (createdMeta) {
+        ownedMeta.name = 'theme-color';
+        ownedMeta.dataset.vcpThemeColor = 'true';
+        documentRef.head?.append(ownedMeta);
+    }
+    presenterOwners.set(documentRef, (presenterOwners.get(documentRef) || 0) + 1);
     let restoreTokens = applySemanticTokens(root, normalizeThemeSnapshot(service.theme.getSnapshot()).value.effective);
     const apply = (snapshot) => {
         const normalized = normalizeThemeSnapshot(snapshot);
         restoreTokens();
         restoreTokens = applySemanticTokens(root, normalized.value.effective);
+        html.style.colorScheme = normalized.value.effective;
+        if (body) {
+            body.dataset.vcpTheme = normalized.value.effective;
+        }
+        ownedMeta.content = normalized.value.effective === 'dark' ? '#232324' : '#ffffff';
         root.dataset.themeEffective = normalized.value.effective;
         root.dataset.themeReady = String(normalized.value.ready);
+        root.dataset.themePreference = normalized.value.preference;
         root.dataset.themeRevision = String(normalized.revision);
         root.dataset.themeSource = normalized.source;
     };
@@ -132,5 +158,15 @@ export function mountThemePresenter(root, service, context) {
     return async () => {
         await release();
         await releaseTokens();
+        const remaining = Math.max(0, (presenterOwners.get(documentRef) || 1) - 1);
+        if (remaining)
+            presenterOwners.set(documentRef, remaining);
+        else {
+            presenterOwners.delete(documentRef);
+            if (body?.dataset.vcpTheme === normalizeThemeSnapshot(service.theme.getSnapshot()).value.effective)
+                delete body.dataset.vcpTheme;
+            if (createdMeta)
+                ownedMeta.remove();
+        }
     };
 }
