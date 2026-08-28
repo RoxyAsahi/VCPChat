@@ -13,6 +13,7 @@ import { mountSettingsAutosave, flushLegacyAutosave, teardownLegacyAutosave } fr
 import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './settings/canonical-rows.js';
 import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
 import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
+import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1535,11 +1536,7 @@ function mountTypedFieldOwner(root, form) {
         set('chatDiaryFontCustom', settings.chatDiaryFontCustom || '');
         set('chatToolFontPreset', settings.chatToolFontPreset || 'system');
         set('chatToolFontCustom', settings.chatToolFontCustom || '');
-        [['chatFontPreset', 'chatFontCustomRow'], ['chatCodeFontPreset', 'chatCodeFontCustomRow'], ['chatDiaryFontPreset', 'chatDiaryFontCustomRow'], ['chatToolFontPreset', 'chatToolFontCustomRow']].forEach(([selectId, rowId]) => {
-            const select = form.querySelector(`#${selectId}`);
-            const row = form.querySelector(`#${rowId}`);
-            if (select && row) row.style.display = select.value === 'custom' ? 'block' : 'none';
-        });
+        syncRenderSettingsVisibility(form);
         // Network notes rows: the typed field owner is their single writer;
         // the generic consumer projection no longer rebuilds them.
         if (pathsContainer) {
