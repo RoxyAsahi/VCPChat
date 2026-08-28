@@ -36,6 +36,17 @@ for (const dir of targets) {
       for (const type of ['input', 'select', 'range', 'toggle', 'choice']) {
         assert.ok(capture.state?.primitiveCounts?.[type] > 0, `${name}: no visible ${type} primitive`);
       }
+      assert.ok(capture.state?.controls?.length > 0, `${name}: computed control samples are missing`);
+      assert.ok(capture.state.controls.every(control => (
+        control && Number.isFinite(control.rect?.x) && Number.isFinite(control.rect?.y)
+        && Number.isFinite(control.rect?.width) && Number.isFinite(control.rect?.height)
+        && control.rect.width > 0 && control.rect.height > 0
+        && typeof control.display === 'string' && typeof control.color === 'string'
+        && typeof control.backgroundColor === 'string' && typeof control.borderRadius === 'string'
+      )), `${name}: control geometry/computed style sample is incomplete`);
+      for (const surface of ['modal', 'panel', 'content']) {
+        assert.ok(Number.isFinite(capture.state?.[surface]?.rect?.width) && Number.isFinite(capture.state?.[surface]?.rect?.height), `${name}: ${surface} geometry is missing`);
+      }
       assert.equal(capture.state?.overflow?.modal, false, `${name}: modal has horizontal overflow`);
       assert.equal(capture.state?.overflow?.content, false, `${name}: content has horizontal overflow`);
       assert.equal(capture.menu?.inViewport, true, `${name}: Select menu is outside viewport`);
