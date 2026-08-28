@@ -202,3 +202,31 @@ Before any Stable or pixel-equivalent claim:
   three fixed viewports**.
 - Agent ModelPicker pixel equivalence: **pending**.
 - Legacy model modal retirement: **pending**.
+
+## Production ModelPicker directory-action follow-up
+
+The first directory-action probe (`run-hdQIJX`) captured valid refresh and
+favorite controls at `800x600`, but stopped before completing the matrix while
+waiting for the model pane to return to its root state. The production card
+was still rendered; the scanner had relied on the pointer-hover step to leave a
+keyboard target focused, which is not a valid Electron focus contract after a
+catalog projection rebuild.
+
+The scanner now focuses the real portal card before sending Escape and still
+requires the root cell to become visible. A fresh isolated pair at
+
+```text
+reports/visual-forensics-qa/agent-model-picker/run-Tq4144/light
+reports/visual-forensics-qa/agent-model-picker/run-Tq4144/dark
+```
+
+completed in real Electron with all three fixed viewports per theme. The
+directory refresh and favorite controls were visible, finite, in-viewport, and
+card-contained at each viewport; model-row hover, narrow/restore portal
+containment, Escape close, focus restoration, and body inline-style cleanup
+also passed. The explicit production verifier passed for the exact pair.
+
+The serial theme wrapper was separately observed to stall after a successful
+light leg without producing a terminal child result. That runner orchestration
+issue is kept separate from the visual manifest: the light and dark manifests
+above are independently complete and verified.
