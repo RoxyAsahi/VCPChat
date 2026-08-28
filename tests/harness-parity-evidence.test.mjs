@@ -263,6 +263,8 @@ test('Real Harness StateDot source capture retains the Candidate display and pix
     assert.equal(report.computedStyle.states.length, 4);
     assert.equal(report.computedStyle.states.every(state => state.checks.some(check => check.field === 'display' && check.pass === false)), true);
     assert.equal(report.computedStyle.states.every(state => state.checks.filter(check => check.field !== 'display').every(check => check.pass)), true);
+    assert.equal(report.lifecycle.resizePass, true);
+    assert.equal(report.lifecycle.cleanupPass, true);
     assert.equal(report.pixel.status, 'strict-per-state-roi-measured');
     assert.equal(report.pixel.pass, false);
 });
