@@ -61,8 +61,12 @@ for (const dir of targets) {
       assert.ok(!observation?.reopen?.bodyAfterClose?.bodyClasses?.includes('next-ui-internal-app-open'));
       assert.equal(observation?.overlayViewport?.menu?.open, true);
       assert.ok(observation?.overlayViewport?.menu?.rect);
+      assert.ok(observation.overlayViewport.menu.rect.x >= -2 && observation.overlayViewport.menu.rect.y >= -2 && observation.overlayViewport.menu.rect.x + observation.overlayViewport.menu.rect.width <= width + 2 && observation.overlayViewport.menu.rect.y + observation.overlayViewport.menu.rect.height <= height + 2, `${name}: menu is outside the viewport`);
+      assert.equal(observation.overlayViewport.menu.topmostInside, true, `${name}: menu center is occluded`);
       assert.equal(observation?.overlayViewport?.modal?.open, true);
       assert.ok(observation?.overlayViewport?.modal?.rect);
+      assert.ok(observation.overlayViewport.modal.rect.x >= -2 && observation.overlayViewport.modal.rect.y >= -2 && observation.overlayViewport.modal.rect.x + observation.overlayViewport.modal.rect.width <= width + 2 && observation.overlayViewport.modal.rect.y + observation.overlayViewport.modal.rect.height <= height + 2, `${name}: modal is outside the viewport`);
+      assert.equal(observation.overlayViewport.modal.topmostInside, true, `${name}: modal center is occluded`);
       assert.equal(observation?.overlayViewport?.modal?.mask, true);
       assert.ok(observation?.overlayViewport?.modal?.parent);
       assert.equal(observation?.overlayViewport?.tooltip?.open, true);
