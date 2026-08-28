@@ -274,6 +274,13 @@ never produced the Row trigger within 30 seconds; the component needs the full
 Harness slot/runtime composition. That blocker is recorded as evidence, not as
 an excuse to synthesize an HTML imitation or relabel the Section snapshot.
 
+`node scripts/check-harness-language-row-source-provenance.mjs` pins the
+Harness locale row source (`LanguageRow.tsx`, its stylesheet, and `Menu.tsx`)
+plus the VCP Candidate's portal/rebuild/dispose anchors. It remains
+`pass=false`: no real Harness browser capture or paired DOM/style/pixel diff
+exists, and VCP has no locale capability or persisted UI-language key. The
+existing Candidate lifecycle tests do not create a production consumer.
+
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
 Harness DisclosureRow controlled interaction contract (row versus leading
 button, keyboard activation, forced-open and content projection) and its 24px
