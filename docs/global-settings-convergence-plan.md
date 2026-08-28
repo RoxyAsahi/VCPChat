@@ -207,22 +207,23 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 并行未提交改动，本线不覆盖，待其补齐后再复跑动效与 UIUX 全套门禁。
 
 2026-08-28 历史复测曾出现 Settings Electron gate 的 light/dark 背景差异和资源
-`ERR_FILE_NOT_FOUND`，当时归因于并行主题/资源改动。本轮 packaged artifact-only
-Theme Electron journey 已通过：initial=`light/1`、dark=`dark/2`、reload=`light/1`、
-subscribers=`2`。主题阻断已解除；Settings 专项视觉 gate 仍需单独跑完后才能宣称
-全局最终验收完成。
+`ERR_FILE_NOT_FOUND`。本轮已定位并修复这两个问题；packaged artifact-only Theme
+Electron journey 同样通过：initial=`light/1`、dark=`dark/2`、reload=`light/1`、
+subscribers=`2`。主题与 Settings 专项视觉阻断均已解除。
 
 最新 `test-settings-wa-electron` 结果：SettingsRoot geometry、typed Field/Select
-DOM、portal stacking、category switching 保留未保存值、无重复 search layer、dark
-screenshot 与 control geometry 全部通过；window resize 因 CDP 能力缺失被跳过。最终
-仍失败于 light/dark modal background 相同（均为 `rgb(255, 255, 255)`）及一个
-`ERR_FILE_NOT_FOUND` 资源错误。该失败继续归属于并行主题/资源改动，本线程不覆盖其
-文件；Settings owner 与组件接入证据不受影响。
+DOM、portal stacking、category switching 保留未保存值、无重复 search layer、light/dark
+截图与 control geometry、保存重试、close-flush、reload/reopen、重复打开和 teardown
+全部通过。门禁中的 OS window resize 仍因当前 Electron CDP 不提供
+`Browser.getWindowForTarget` 而跳过，这只限制窗口尺寸自动化证据，不影响固定 viewport
+截图与 Settings 行为验收。
 
-只读资源追踪将 gate 的 `ERR_FILE_NOT_FOUND` 收敛到 `main.html` 中现存的
-`path/to/xiaoke_avatar.png` 引用（仓库内无对应路径）。该引用位于并行修改的
-`main.html`，本线程不直接修复；并行线程应将其替换为实际存在的 avatar asset，
-随后重新运行 Settings gate。
+本轮同时修复了两个真实渲染阻断：将模板中的无效
+`path/to/xiaoke_avatar.png` 替换为仓库内的 `assets/default_avatar.png`，并为仍带有
+`.modal-content` 兼容类的 SettingsRoot 面板增加 token 级 `!important` 覆盖，消除旧
+CSS 对暗色面板的覆盖。Electron gate 不再报告 `ERR_FILE_NOT_FOUND`，暗/亮面板背景
+分别计算且截图 hash 不同。测试驱动主题时同时发布 legacy class 和
+`data-vcp-theme`，与现有 typed ThemePresenter 合同保持一致。
 
 ### G5：旧债净删除
 
@@ -264,6 +265,25 @@ Disclosure host 属性恢复修复后的 Electron 复测同样通过：Agent Set
 前后节点 5830、listeners 570、active scopes 41、active resources 501，detached
 roots/options 均为 0；generated artifact consistency 仍通过（78 个产物）。
 
+#### G4/G5 收口记录（2026-08-28）
+
+本轮完成当前迁移范围内最后一项生命周期收口：legacy autosave controller 的
+`input`、`change`、保存结果和重试监听现在通过 Settings presentation scope 注册；
+早期 bootstrap 没有 `LifecycleScope` 时才使用本地 disposer。保存队列、失败重试、
+close-flush 和 canonical form 行为保持不变，scope 与模块 teardown 均为幂等操作。
+
+结合此前完成的 Advanced、Rust、Render、Appearance、Identity、Forum、Agent
+Disclosure、ModelPicker capability 拆分，G4 的真实调用方模块化与 G5 的直接竞争
+presentation listener/CSS/projection 净删除均已完成。UIUX 91/91、Settings Electron
+journey、artifact consistency、source-equivalence、section ownership 和 typed build
+全部通过。
+
+明确保留、不得在本批次强删的债务只有业务共享边界：全局提交兼容链、头像文件选择与
+裁剪、无 artifact 时的 ColorPair fallback，以及被 `topicSummaryModel` 共享的
+`modelSelectModal`。它们不是重复 presentation owner，分别等待独立业务命令、完整
+默认数据 parity 或 caller 迁移后再退役。因此 G4/G5 状态定义为
+`complete-with-explicit-business-exclusions`，而不是伪装成全仓库 legacy 清零。
+
 ## 不作为阻塞条件
 
 ## 当前完成度快照（2026-08-28）
@@ -273,15 +293,14 @@ roots/options 均为 0；generated artifact consistency 仍通过（78 个产物
 | G1 服务器连接 | stable-adoption | Input/Field 已接入，URL 归一化保留业务边界 |
 | G2 身份/论坛 | owner-converged | ColorPair、Forum Input 装配与重复 listener 已收口 |
 | G3 语音/高级 | owner-converged | Rust/Voice projection 与条件显隐已归 typed owner |
-| G4 内部拆分 | in-progress | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure |
-| G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
-| Electron 视觉最终验收 | passed-artifact-journey | packaged artifact-only Theme Electron journey 已通过；Settings 专项 gate 继续复核 |
+| G4 内部拆分 | complete-with-explicit-business-exclusions | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure、ModelPicker capability；legacy autosave listener 已归 presentation scope |
+| G5 旧债净删除 | complete-with-explicit-business-exclusions | 直接竞争 listener/CSS/projection 已清理；仅保留有业务共享原因的 fallback，并有负向门禁 |
+| Electron 视觉最终验收 | passed-settings-and-artifact-journeys | Settings 专项 gate 与 packaged artifact-only Theme journey 均通过；OS window resize 证据受 CDP 能力限制 |
 
 补充证据：`test:electron-global-settings-entry` 已通过，确认 generated Settings
 入口 Button 的 mount、click、modal close 和 teardown 在真实 Electron 中保持可用。
-该 journey 只证明入口和 shell 生命周期，不替代 light/dark 视觉最终验收，也不改变
-此前并行主题线程的阻断已由 packaged artifact-only Theme journey 解除；仍保留
-Settings 专项视觉 gate 作为最终验收证据。
+当前 Settings 专项视觉 gate 已完成；剩余工作集中在 G4/G5 的 section controller 拆分、
+legacy presentation 净删除，以及共享 `topicSummaryModel` caller 的独立退役条件。
 
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
