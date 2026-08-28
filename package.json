@@ -112,6 +112,7 @@
     "capture:vcp-agent-model-picker-equivalent": "VCP_MODEL_PICKER_MODE=harness-equivalent node scripts/capture-vcp-agent-model-picker-candidate.mjs",
     "check:vcp-agent-model-picker-candidate-evidence": "node scripts/check-vcp-agent-model-picker-candidate-evidence.mjs",
     "check:vcp-agent-model-picker-trusted-keyboard-evidence": "node scripts/check-vcp-agent-model-picker-trusted-keyboard-evidence.mjs",
+    "check:agent-model-picker-legacy-parity": "node scripts/check-agent-model-picker-legacy-parity.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",
     "guard:classic-parity": "node scripts/check-classic-parity.mjs",
     "guard:classic-retirement": "node scripts/check-classic-retirement-boundary.mjs",
