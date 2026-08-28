@@ -30,12 +30,18 @@ const candidate = fs.existsSync(candidatePath) ? read(candidatePath) : '';
 const candidateAnchors = ['mountLanguageRow', 'align: \'end\'', 'portal: true', 'setOptions', 'setLoading', 'harness-language-row-menu', 'optionsGeneration'];
 const candidateChecks = candidateAnchors.map(anchor => ({ anchor, pass: candidate.includes(anchor) }));
 const candidatePass = candidateChecks.every(item => item.pass);
+const directCaptureAttempt = {
+  attempted: true,
+  status: 'blocked-complete-harness-composition-required',
+  evidence: 'isolated Vite dependency resolution succeeded, but direct LanguageRow render produced no trigger within 30s; the component requires the full Harness locale/slot/runtime composition',
+};
 const report = {
   generatedAt: new Date().toISOString(), harnessRoot, sourceKind: dom.sourceKind, source: dom.provenance.sources, files: entries,
   reference: { dom: dom.sourceKind === 'harness-production-consumer-contract' && dom.provenance.sources.length === 3, geometry: path.normalize(geometry.source).endsWith(path.normalize('packages/client/locale/src/client/LanguageRow.module.css')) },
   candidate: { source: 'modules/uiux/primitives/language-row.ts', present: fs.existsSync(candidatePath), anchors: candidateChecks, shape: candidatePass, status: dom.candidateStatus },
+  browserEvidence: { directCaptureAttempt },
   contract: dom.harnessContract, pass: false,
-  missingEvidence: ['real Harness LanguageRow browser capture', 'same-semantic Harness/VCP DOM/ARIA and computed-style diff', 'same-semantic Harness/VCP pixel diff', 'VCP locale capability and persisted UI-language key (not in scope)'],
+  missingEvidence: ['dedicated real Harness LanguageRow browser capture through complete locale/slot/runtime composition (isolated direct render is blocked)', 'same-semantic Harness/VCP DOM/ARIA and computed-style diff', 'same-semantic Harness/VCP pixel diff', 'VCP locale capability and persisted UI-language key (not in scope)'],
   note: 'Source provenance and Candidate implementation evidence only. VCP has no locale capability or persisted UI-language key; this report is permanently non-promoting and does not authorize a Settings consumer.',
 };
 fs.mkdirSync(path.dirname(reportPath), { recursive: true });

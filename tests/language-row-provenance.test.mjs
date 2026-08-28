@@ -16,6 +16,7 @@ test('LanguageRow provenance remains source-only without locale consumer', () =>
   assert.equal(report.candidate.present, true);
   assert.equal(report.candidate.shape, true);
   assert.equal(report.pass, false);
-  assert.ok(report.missingEvidence.includes('real Harness LanguageRow browser capture'));
+  assert.equal(report.browserEvidence.directCaptureAttempt.status, 'blocked-complete-harness-composition-required');
+  assert.ok(report.missingEvidence.some(item => item.includes('complete locale/slot/runtime composition')));
   assert.ok(report.missingEvidence.some(item => item.includes('persisted UI-language key')));
 });

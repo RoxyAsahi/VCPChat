@@ -280,6 +280,9 @@ plus the VCP Candidate's portal/rebuild/dispose anchors. It remains
 `pass=false`: no real Harness browser capture or paired DOM/style/pixel diff
 exists, and VCP has no locale capability or persisted UI-language key. The
 existing Candidate lifecycle tests do not create a production consumer.
+An isolated direct-render attempt resolved dependencies but produced no trigger
+within 30 seconds; the guard records this as a complete locale/slot/runtime
+composition blocker rather than synthesizing a source capture.
 Its focused regression check is `node --test tests/language-row-provenance.test.mjs`.
 
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the

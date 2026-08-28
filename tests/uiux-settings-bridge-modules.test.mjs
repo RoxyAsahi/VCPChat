@@ -98,6 +98,19 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
+test('global network-path add action uses the generated Button owner', () => {
+    const entry = read(bridgeEntry);
+    const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
+    const owner = entry.match(/function mountGlobalSettingsPathAction\(root\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+    assert.match(entry, /mountGlobalSettingsPathAction\(globalSettingsModal\);/,
+        'global Settings refresh must adopt the network-path action');
+    assert.match(owner, /#addNetworkPathBtn/);
+    assert.match(owner, /api\.mountButton\(button, \{ variant: 'outline', size: 'sm' \}, scope\)/);
+    assert.match(owner, /delete button\.dataset\.vcpTypedNetworkPathAction/);
+    assert.match(shellCss, /#openTopicSummaryModelSelectBtn\)\:not\(\.vcp-harness-button\)/,
+        'legacy Settings action CSS must exclude generated Buttons');
+});
+
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
