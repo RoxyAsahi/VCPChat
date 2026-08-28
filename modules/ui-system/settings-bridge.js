@@ -497,6 +497,25 @@ function mountGlobalSettingsEntryButton() {
     }
 }
 
+// The network-path add action is a routine, non-destructive Settings command.
+// Keep its existing event handler and canonical form mutation, while adopting
+// the same generated Button owner as the Settings entry itself.
+function mountGlobalSettingsPathAction(root) {
+    const button = root?.querySelector?.('#addNetworkPathBtn');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!button || !api?.mountButton || !scope || button.dataset.vcpTypedNetworkPathAction === 'true') return;
+    try {
+        api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
+        button.dataset.vcpTypedNetworkPathAction = 'true';
+        scope.own(() => {
+            delete button.dataset.vcpTypedNetworkPathAction;
+        }, 'typed-network-path-action-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount network-path action Button:', error);
+    }
+}
+
 function enhanceForm(form) {
     mountTypedAgentIdentityInput(form);
     mountTypedAgentModelInput(form);
@@ -1968,6 +1987,7 @@ function refresh() {
     cleanupDisconnectedControllers();
     mountGlobalSettingsEntryButton();
     const globalSettingsModal = syncGlobalSettingsHost();
+    mountGlobalSettingsPathAction(globalSettingsModal);
     if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }

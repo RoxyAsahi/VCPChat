@@ -850,7 +850,7 @@
         gap: var(--vcp-ui-space-2);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):not(.vcp-harness-button) {
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-3);
@@ -864,7 +864,7 @@
         cursor: pointer;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):hover {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):not(.vcp-harness-button):hover {
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-2);
     }
