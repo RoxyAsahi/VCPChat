@@ -71,6 +71,13 @@ the bubble in the anchor parent's React fragment while VCP appends it to
 `body`. The matching semantic role/side and computed-style fields do not erase
 that mismatch; pixel comparison remains pending.
 
+The HoverCard source fixture executes its real Harness component with the same
+delayed/copy semantic fixture. Its DOM/ARIA and captured style fields match the
+Candidate, while anchor-root geometry does not (`Harness` source root is sized
+by its inline anchor; the Candidate fixture exposes a distinct wrapper basis).
+The report keeps geometry and ROI pixel evidence pending rather than inferring
+visual equivalence from the matching card box styles.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
