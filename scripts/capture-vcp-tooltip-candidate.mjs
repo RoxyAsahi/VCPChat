@@ -71,7 +71,7 @@ try {
             style: { position: style.position, zIndex: style.zIndex, width: style.width, maxWidth: style.maxWidth, padding: style.padding, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight, pointerEvents: style.pointerEvents, transform: style.transform },
         };
     });
-    await page.screenshot({ path: path.join(root, 'reports', 'vcp-tooltip-candidate.png') });
+    await page.getByRole('tooltip').screenshot({ path: path.join(root, 'reports', 'vcp-tooltip-candidate.png') });
     await primary.dispatchEvent('mouseleave');
     const hiddenAfterLeave = await page.getByRole('tooltip').count() === 0;
     await primary.focus();

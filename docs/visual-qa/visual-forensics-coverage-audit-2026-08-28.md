@@ -21,7 +21,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Production ModelPicker hover / resize / Escape | Each `run-PVaBFj` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
-| Freshness after dirty worktree UI changes | `main.html`, Settings/ModelPicker/UI system files, and showcase CSS are currently modified by parallel work and are outside this committed evidence snapshot. | Pending rerun after those changes settle |
+| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-X0eTSy/{light,dark}` at `2026-08-28T04:02:28.108Z` / `04:02:57.346Z`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
 
 ## Commands for exact evidence pairs
 
@@ -42,3 +42,13 @@ changes to StreamCoordinator, StreamProjection, message rendering, chat
 protocol/IPC/persistence, Plugin Loader, chat plugin manifest, or Composer
 internals. No such files are changed by the Visual Forensics commits listed in
 this audit.
+
+## Startup-race regression evidence
+
+The first current-worktree dark leg (`run-sr6Dp2/dark`) reached DevTools but
+enumerated pages before `main.html` was available and wrote a zero-observation
+failure manifest. `92d34613` changed the scanner to wait, within its existing
+90-second budget, for the actual renderer page rather than treating that
+startup race as a visual defect. The replacement isolated pair `run-X0eTSy`
+then passed both themes and all gates above. This is a QA harness correction;
+it does not alter product rendering.

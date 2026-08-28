@@ -207,6 +207,16 @@ test('Real Harness Tooltip source capture exposes the VCP Candidate portal struc
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('Tooltip source and Candidate fixed ROIs have an explicit strict pixel result', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-tooltip-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-tooltip-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-tooltip-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(typeof report.exactPixelPass, 'boolean');
+    assert.equal(report.pass, report.exactPixelPass);
+    assert.ok(report.harness.bytes > 0 && report.vcp.bytes > 0);
+});
+
 test('Real Harness HoverCard source capture retains the Candidate geometry and pixel boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-hover-card-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
