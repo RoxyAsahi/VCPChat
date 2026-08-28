@@ -14,6 +14,8 @@ const finite = value => Number.isFinite(value);
 for (const dir of targets) {
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
+    const generatedAtMs = Date.parse(manifest.generatedAt);
+    assert.ok(Number.isFinite(generatedAtMs), 'manifest generatedAt is invalid');
     assert.equal(manifest.source, 'VCP production Agent Settings Electron Surface');
     assert.equal(manifest.gate?.pass, true);
     assert.deepEqual(manifest.viewports, viewports);
@@ -26,6 +28,7 @@ for (const dir of targets) {
         const screenshot = path.join(dir, `${name}-${suffix}.png`);
         const stat = await fs.stat(screenshot);
         assert.ok(stat.size > 1_000, `${name}-${suffix}: screenshot is unexpectedly small`);
+        assert.ok(stat.mtimeMs >= generatedAtMs - 120_000, `${name}-${suffix}: screenshot is stale relative to manifest`);
         const info = await sharp(screenshot).metadata();
         const expectedWidth = suffix === 'narrow-open' ? Math.max(320, width - 240) : width;
         assert.equal(info.width, expectedWidth, `${name}-${suffix}: width mismatch`);
