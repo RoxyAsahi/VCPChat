@@ -306,7 +306,8 @@ try {
       const topmost = document.elementFromPoint(point.x, point.y);
       return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', point, topmostInside: Boolean(topmost && node.contains(topmost)) };
     }).catch(() => ({ open: false, rect: null }));
-    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+    await sleep(40);
     await page.evaluate(async selector => {
       const root = document.querySelector(selector);
       const button = [...(root?.querySelectorAll('button') || [])].find(node => node.textContent.trim() === 'Open modal');
@@ -322,7 +323,8 @@ try {
       const topmost = document.elementFromPoint(point.x, point.y);
       return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', mask: Boolean(document.querySelector('.vcp-harness-modal-mask')), point, topmostInside: Boolean(topmost && node.contains(topmost)) };
     }).catch(() => ({ open: false, rect: null }));
-    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+    await page.keyboard.press('Escape').catch(() => {});
+    await sleep(40);
     const tooltipButtons = await page.$$(`${lab} button`);
     let tooltipTarget = null;
     for (const button of tooltipButtons) {
