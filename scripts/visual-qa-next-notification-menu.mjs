@@ -98,6 +98,11 @@ try {
     await page.$eval('#nextUiNotificationFilterToggle', node => node.click());
     await page.waitForFunction(() => document.getElementById('nextUiNotificationMenu')?.hidden, { timeout });
     const selected = await page.$eval('#nextUiNotificationFilterToggle', node => ({ checked: node.getAttribute('aria-checked'), state: document.getElementById('nextUiNotificationFilterState')?.textContent || '', backgroundColor: getComputedStyle(node).backgroundColor }));
+    const resizedWidth = Math.max(640, width - 120);
+    await page.setViewport({ width: resizedWidth, height, deviceScaleFactor: 1 }); await sleep(100);
+    const resized = await page.evaluate(() => { const menu = document.getElementById('nextUiNotificationMenu'); const r = menu.getBoundingClientRect(); return { innerWidth, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.left >= -2 && r.top >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 }; });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 }); await sleep(100);
+    const restored = await page.evaluate(() => { const menu = document.getElementById('nextUiNotificationMenu'); const r = menu.getBoundingClientRect(); return { innerWidth, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.left >= -2 && r.top >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 }; });
     await page.$eval('#nextUiNotificationMenuBtn', node => node.click());
     await page.waitForFunction(() => !document.getElementById('nextUiNotificationMenu')?.hidden, { timeout });
     await page.screenshot({ path: path.join(output, `${name}-notification-menu-open.png`), fullPage: false });
@@ -107,7 +112,7 @@ try {
     await page.$eval('#nextUiNotificationMenuBtn', node => node.click()); await page.waitForFunction(() => !document.getElementById('nextUiNotificationMenu')?.hidden, { timeout });
     const reopen = await page.evaluate(() => ({ hidden: document.getElementById('nextUiNotificationMenu')?.hidden, active: document.activeElement?.id || '', selected: document.getElementById('nextUiNotificationFilterToggle')?.getAttribute('aria-checked') }));
     await page.keyboard.press('Escape');
-    evidence.captures.push({ viewport: { width, height }, open, hover, focus, selected, closed, reopen });
+    evidence.captures.push({ viewport: { width, height }, open, hover, focus, selected, resized, restored, closed, reopen });
   }
 } catch (error) { evidence.gate.pass = false; evidence.gate.failures.push(error?.stack || String(error)); process.exitCode = 2; }
 finally { await fs.writeFile(path.join(output, 'manifest.json'), `${JSON.stringify(evidence, null, 2)}\n`); try { browser?.disconnect(); } catch {} await terminate(); await fs.rm(appData, { recursive: true, force: true }); }

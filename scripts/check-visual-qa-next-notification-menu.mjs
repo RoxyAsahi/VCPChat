@@ -14,7 +14,7 @@ for (const manifest of manifests) {
   assert.equal(manifest.captures?.length, 3, `${manifest.theme}: expected three viewport captures`);
   for (const capture of manifest.captures) {
     const name = `${capture.viewport.width}x${capture.viewport.height}`;
-    const { open, hover, focus, selected, closed, reopen } = capture;
+    const { open, hover, focus, selected, resized, restored, closed, reopen } = capture;
     assert.equal(open.trigger.expanded, 'true', `${manifest.theme}/${name}: trigger not expanded`);
     assert.equal(open.items.length, 7, `${manifest.theme}/${name}: action count drifted`);
     assert.ok(open.menu.inViewport && open.menu.topmost, `${manifest.theme}/${name}: menu clipped or occluded`);
@@ -23,6 +23,9 @@ for (const manifest of manifests) {
     assert.equal(hover.hovered, true, `${manifest.theme}/${name}: hover evidence missing`);
     assert.equal(focus.focused, true, `${manifest.theme}/${name}: focus evidence missing`);
     assert.ok(['true', 'false'].includes(selected.checked), `${manifest.theme}/${name}: selected state missing`);
+    assert.ok(resized.inViewport && resized.innerWidth <= capture.viewport.width, `${manifest.theme}/${name}: resize placement invalid`);
+    assert.equal(restored.innerWidth, capture.viewport.width, `${manifest.theme}/${name}: viewport restore missing`);
+    assert.ok(restored.inViewport, `${manifest.theme}/${name}: restored menu clipped`);
     assert.equal(closed.hidden, true, `${manifest.theme}/${name}: Escape did not close`);
     assert.equal(closed.focus, 'nextUiNotificationMenuBtn', `${manifest.theme}/${name}: focus not restored`);
     assert.equal(reopen.hidden, false, `${manifest.theme}/${name}: reopen failed`);
