@@ -157,6 +157,13 @@ Forum credential 的两个 generated Input mount 已抽为
 `modules/ui-system/settings/forum-controls.js`；ForumConfigUiService 的保存、
 dirty、retry 和 capability 语义仍由原 field owner 管理。
 
+拆分复核（2026-08-28）：bridge 已从约 2111 行降至约 2019 行，Appearance、
+Identity、Forum 的纯 primitive 装配已有独立归属。剩余约 2k 行主要集中在
+Agent section disclosure/model picker、service 装配和全局 shell 生命周期；这些
+包含真实业务调用方，不再继续做机械小 helper 拆分。下一阶段优先处理 Agent
+section controller 的 mount/sync/dispose 边界，并以真实 consumer 与 Electron
+回归作为拆分依据。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
