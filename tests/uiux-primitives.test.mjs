@@ -190,6 +190,21 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.getAttribute('role'), 'menu');
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.id, controller.trigger.getAttribute('aria-controls'));
         assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, false);
+        // Enter on a focused native root row must activate that row's owner
+        // (and therefore drill into the model pane), rather than being
+        // consumed by PopupSelect's generic option handler.
+        const modelCell = controller.root.querySelector('.vcp-harness-agent-model-picker-cell');
+        modelCell.focus();
+        const rootEnter = new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+        modelCell.dispatchEvent(rootEnter);
+        assert.equal(rootEnter.defaultPrevented, false, 'the generic card keydown handler must leave native menuitem activation to the row owner');
+        // jsdom does not synthesize the browser's native click default for
+        // Enter, so execute that default explicitly after asserting it was
+        // not canceled. The Electron capture covers the trusted key path.
+        modelCell.click();
+        assert.equal(modelCell.hidden, true);
+        assert.equal(controller.root.querySelector('.vcp-harness-popup-select-viewport')?.hidden, false);
+        controller.setPane('root');
         controller.setPane('model');
         assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, true);
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-search')?.hidden, false);
@@ -201,6 +216,15 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         controller.setPane('model');
         controller.root.querySelector('.vcp-harness-popup-select-card')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert.equal(controller.popup.getSnapshot().open, true);
+        assert.equal(document.activeElement, modelCell,
+            'pane-back Escape must give the visible Model menuitem focus instead of leaving it on a hidden option');
+        controller.root.querySelector('.vcp-harness-popup-select-card')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(controller.popup.getSnapshot().open, false);
+        assert.equal(document.activeElement, controller.trigger,
+            'root Escape must dismiss the popup and restore the canonical trigger focus');
+        controller.open();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        controller.setPane('effort');
         controller.root.querySelector('.vcp-harness-agent-model-picker-option:last-child')?.click();
         assert.deepEqual(selected, ['effort:deep']);
         assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
@@ -212,7 +236,8 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         assert.equal(controller.popup.getSnapshot().open, false);
         controller.refresh();
         await new Promise(resolve => setTimeout(resolve, 0));
-        assert.equal(loads, 2);
+        assert.equal(loads, 3,
+            'the post-Escape reopen starts one fresh catalog load before the existing refresh assertion');
         controller.close();
         await controller.dispose();
         assert.equal(host.querySelector('.vcp-harness-agent-model-picker'), null);

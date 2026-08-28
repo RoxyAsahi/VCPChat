@@ -187,6 +187,7 @@ export function mountAgentModelPicker(host, props, scope) {
     });
     let pane = 'root';
     let selectedEffort = props.selectedEffort;
+    let paneCell = null;
     const view = mountPopupSelectView(root, {
         popup,
         anchor: trigger,
@@ -200,6 +201,10 @@ export function mountAgentModelPicker(host, props, scope) {
                 return false;
             pane = 'root';
             syncPane();
+            // A pane transition hides the focused option tree. Move focus to
+            // the now-visible root cell so the next Tab/Enter sequence starts
+            // from the same native menuitem contract as Harness.
+            paneCell?.focus();
             return true;
         },
         onFavoriteToggle: props.directory?.toggleFavorite ? option => {
@@ -217,7 +222,7 @@ export function mountAgentModelPicker(host, props, scope) {
     const menuId = `vcp-harness-agent-model-picker-menu-${++pickerSequence}`;
     view.card.id = menuId;
     trigger.setAttribute('aria-controls', menuId);
-    const paneCell = document.createElement('button');
+    paneCell = document.createElement('button');
     paneCell.type = 'button';
     paneCell.className = 'vcp-harness-agent-model-picker-cell';
     paneCell.setAttribute('role', 'menuitem');
