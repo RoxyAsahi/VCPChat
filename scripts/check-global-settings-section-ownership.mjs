@@ -5,13 +5,16 @@ const bridge = fs.readFileSync(new URL('../modules/ui-system/settings-bridge.js'
 const rows = fs.readFileSync(new URL('../modules/ui-system/settings/canonical-rows.js', import.meta.url), 'utf8');
 const ownership = fs.readFileSync(new URL('../modules/ui-system/settings/section-ownership.js', import.meta.url), 'utf8');
 const doc = fs.readFileSync(new URL('../docs/global-settings-section-ownership.md', import.meta.url), 'utf8');
+const settingsDir = new URL('../modules/ui-system/settings/', import.meta.url);
+const identity = fs.readFileSync(new URL('identity-controls.js', settingsDir), 'utf8');
+const choices = fs.readFileSync(new URL('choice-controls.js', settingsDir), 'utf8');
 const advancedVisibility = fs.readFileSync(new URL('../modules/ui-system/settings/advanced-visibility.js', import.meta.url), 'utf8');
 const rustVisibility = fs.readFileSync(new URL('../modules/ui-system/settings/rust-visibility.js', import.meta.url), 'utf8');
 const sections = ['user-identity', 'server-connection', 'appearance-settings', 'render-settings', 'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions'];
 for (const section of sections) assert.ok(doc.includes(`| \`${section}\` |`), `ownership document must list ${section}`);
 assert.match(bridge, /function enhanceGlobalSettings\(root, form\)/, 'bridge must retain one global section entry point during migration');
-assert.match(bridge, /function mountTypedAvatarColorPair\(/, 'identity owner must remain explicit');
-assert.match(bridge, /function mountTypedGlobalChoiceGroups\(/, 'choice owner must remain explicit');
+assert.match(`${bridge}\n${identity}`, /(?:function mountTypedAvatarColorPair|export function mountIdentityColorPairs)\(/, 'identity owner must remain explicit');
+assert.match(`${bridge}\n${choices}`, /(?:function mountTypedGlobalChoiceGroups|export function mountChoiceControls)\(/, 'choice owner must remain explicit');
 assert.match(bridge, /function mountHarnessInputs\(/, 'input owner must remain explicit');
 assert.match(rows, /sectionKeyForRow\(row\)/, 'canonical rows must publish section ownership metadata');
 assert.match(rows, /sectionKeyForTitle\(title\)/, 'canonical section roots must publish section ownership metadata');
