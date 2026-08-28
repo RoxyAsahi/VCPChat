@@ -19,6 +19,30 @@ const electron = process.platform === 'darwin'
 const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const timeout = 90_000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const hoverTooltip = async (page, handle) => {
+  // Never reuse a potentially stale hover location after a viewport change.
+  // Leaving first makes the subsequent pointer move an observable native
+  // mouseenter, rather than assuming Puppeteer will synthesize one in place.
+  await page.mouse.move(2, 2).catch(() => {});
+  await sleep(20);
+  await handle.hover().catch(() => {});
+  try {
+    await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 });
+    return true;
+  } catch {}
+  // Resize can move the anchor between Puppeteer's hover calculation and the
+  // dispatched event. Re-read the live rect and move the real pointer once.
+  const point = await handle.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }).catch(() => null);
+  if (!point) return false;
+  await page.mouse.move(2, 2).catch(() => {});
+  await sleep(20);
+  await page.mouse.move(point.x, point.y).catch(() => {});
+  await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 }).catch(() => {});
+  return Boolean(await page.$('.vcp-harness-tooltip-bubble').catch(() => null));
+};
 const request = url => new Promise((resolve, reject) => http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject));
 const waitForMainRenderer = async browser => {
   const deadline = Date.now() + timeout;
@@ -508,6 +532,8 @@ try {
     initial.stateTargets.selected = await captureViewportState('selected', '.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
     if (stateTarget) {
+      await page.mouse.move(2, 2).catch(() => {});
+      await sleep(20);
       await stateTarget.hover().catch(() => {});
       const box = await stateTarget.boundingBox().catch(() => null);
       if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
@@ -549,7 +575,7 @@ try {
     if (tooltipHandle) {
       await tooltipHandle.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
       await sleep(80);
-      await tooltipHandle.hover().catch(() => {});
+      await hoverTooltip(page, tooltipHandle);
       await sleep(160);
       resized.tooltip = await page.evaluate(() => {
         const node = document.querySelector('.vcp-harness-tooltip-bubble');
@@ -602,7 +628,7 @@ try {
     if (restoredTooltipTarget) {
       await restoredTooltipTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
       await sleep(80);
-      await restoredTooltipTarget.hover().catch(() => {});
+      await hoverTooltip(page, restoredTooltipTarget);
       await sleep(160);
       restored.tooltip = await page.evaluate(() => {
         const node = document.querySelector('.vcp-harness-tooltip-bubble');
