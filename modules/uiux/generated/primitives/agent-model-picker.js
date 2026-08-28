@@ -199,6 +199,8 @@ export function mountAgentModelPicker(host, props, scope) {
     let pane = 'root';
     let selectedEffort = props.selectedEffort;
     let paneCell = null;
+    let cancelDeferredPlacement = () => { };
+    pickerScope.own(() => cancelDeferredPlacement(), 'agent-model-picker-deferred-placement', 'animation-frame');
     const view = mountPopupSelectView(root, {
         popup,
         anchor: trigger,
@@ -372,10 +374,32 @@ export function mountAgentModelPicker(host, props, scope) {
         // list after this synchronous pass. Re-measure on the next frame so
         // the body portal is not left under the application chrome at narrow
         // production Settings heights.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (pickerScope.active)
-                placeExternalCard();
-        }));
+        // Electron uses two frames here because the body portal may grow
+        // after the root pane switches to the directory.  JSDOM does not
+        // expose a global requestAnimationFrame, so resolve it from the DOM
+        // window and keep the fallback timer owned by this picker.
+        cancelDeferredPlacement();
+        const ownerWindow = typeof window === 'undefined' ? null : window;
+        if (typeof ownerWindow?.requestAnimationFrame === 'function') {
+            let firstFrame = ownerWindow.requestAnimationFrame(() => {
+                firstFrame = null;
+                const secondFrame = ownerWindow.requestAnimationFrame(() => {
+                    if (pickerScope.active)
+                        placeExternalCard();
+                });
+                cancelDeferredPlacement = () => ownerWindow.cancelAnimationFrame(secondFrame);
+            });
+            cancelDeferredPlacement = () => {
+                if (firstFrame !== null)
+                    ownerWindow.cancelAnimationFrame(firstFrame);
+                firstFrame = null;
+            };
+        }
+        else {
+            const timer = setTimeout(() => { if (pickerScope.active)
+                placeExternalCard(); }, 0);
+            cancelDeferredPlacement = () => clearTimeout(timer);
+        }
     };
     pickerScope.listen(trigger, 'click', event => {
         // Agent Settings already has a legacy listener on this canonical
