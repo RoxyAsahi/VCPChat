@@ -163,3 +163,116 @@ export function mountDisclosureRow(host, props, scope) {
         dispose,
     };
 }
+/**
+ * Adopt an existing Light-DOM disclosure header without replacing its child
+ * nodes.  This is intentionally not a general DOM renderer: callers keep the
+ * business DOM and supply the canonical open state through setOpen().
+ */
+export function mountDisclosureRowController(host, props, scope) {
+    if (!host || !props?.content || !props?.onToggle || !scope) {
+        throw new TypeError('DisclosureRowController requires a host, content, onToggle and scope.');
+    }
+    ensureStyles();
+    const disclosureScope = scope.child('harness-disclosure-row-controller');
+    const trackedAttributes = ['class', 'role', 'tabindex', 'aria-controls', 'aria-expanded'];
+    const originals = new Map(trackedAttributes.map(name => [name, host.getAttribute(name)]));
+    const toggle = props.toggle || null;
+    const toggleControls = toggle?.getAttribute('aria-controls') ?? null;
+    const toggleExpanded = toggle?.getAttribute('aria-expanded') ?? null;
+    let open = Boolean(props.open);
+    let expandable = Boolean(props.expandable);
+    if (!props.content.id)
+        props.content.id = `${host.id || 'disclosure'}-content`;
+    host.classList.add('vcp-harness-disclosure-row');
+    addClasses(host, props.className);
+    host.dataset.disclosureRow = '';
+    const render = () => {
+        if (expandable) {
+            host.dataset.expandable = 'true';
+            // Existing production DOM keeps a native toggle button.  It is
+            // the sole semantic/keyboard command owner; assigning role=button
+            // to its ancestor would create invalid nested button semantics.
+            if (toggle) {
+                host.removeAttribute('role');
+                host.removeAttribute('tabindex');
+                host.removeAttribute('aria-controls');
+                host.removeAttribute('aria-expanded');
+                toggle.setAttribute('aria-controls', props.content.id);
+                toggle.setAttribute('aria-expanded', String(open));
+            }
+            else {
+                host.setAttribute('role', 'button');
+                host.tabIndex = 0;
+                host.setAttribute('aria-controls', props.content.id);
+                host.setAttribute('aria-expanded', String(open));
+            }
+        }
+        else {
+            delete host.dataset.expandable;
+            host.removeAttribute('role');
+            host.removeAttribute('tabindex');
+            host.removeAttribute('aria-controls');
+            host.removeAttribute('aria-expanded');
+            toggle?.removeAttribute('aria-controls');
+            toggle?.removeAttribute('aria-expanded');
+        }
+    };
+    const requestToggle = () => { if (expandable)
+        props.onToggle(); };
+    disclosureScope.listen(host, 'click', event => {
+        if (!expandable)
+            return;
+        event.preventDefault();
+        requestToggle();
+    });
+    disclosureScope.listen(host, 'keydown', event => {
+        if (!expandable || toggle)
+            return;
+        const key = event.key;
+        if (key !== 'Enter' && key !== ' ')
+            return;
+        event.preventDefault();
+        requestToggle();
+    });
+    if (toggle)
+        disclosureScope.listen(toggle, 'keydown', event => {
+            if (!expandable)
+                return;
+            const key = event.key;
+            if (key !== 'Enter' && key !== ' ')
+                return;
+            event.preventDefault();
+            requestToggle();
+        });
+    render();
+    const dispose = scope.own(async () => {
+        await disclosureScope.dispose('harness-disclosure-row-controller-unmounted');
+        delete host.dataset.disclosureRow;
+        delete host.dataset.expandable;
+        trackedAttributes.forEach(name => {
+            const value = originals.get(name);
+            if (value === null || value === undefined)
+                host.removeAttribute(name);
+            else
+                host.setAttribute(name, value);
+        });
+        if (toggle) {
+            if (toggleControls === null)
+                toggle.removeAttribute('aria-controls');
+            else
+                toggle.setAttribute('aria-controls', toggleControls);
+            if (toggleExpanded === null)
+                toggle.removeAttribute('aria-expanded');
+            else
+                toggle.setAttribute('aria-expanded', toggleExpanded);
+        }
+    }, 'harness-disclosure-row-controller', 'ui-primitive');
+    return {
+        host,
+        get open() { return open; },
+        get expandable() { return expandable; },
+        setOpen(value) { open = Boolean(value); render(); },
+        setExpandable(value) { expandable = Boolean(value); render(); },
+        dispose,
+    };
+}

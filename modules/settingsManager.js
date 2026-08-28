@@ -1051,6 +1051,11 @@ const settingsManager = (() => {
         openModelSelectForInput: async (targetInputElement) => {
             await handleOpenModelSelect(targetInputElement);
         },
+        // Presentation owners must use this narrow command rather than
+        // reproducing the collapse-state projection themselves.  The manager
+        // remains the only place that knows how the current Agent, summaries
+        // and persisted uiCollapseStates fit together.
+        toggleAgentSettingsSection: (key) => toggleAgentSettingsSection(key),
         triggerAgentSave: async (overrideAgentId) => {
             // 触发Agent设置保存（不含头像）。override 只能用于验证当前上下文，
             // 不能把当前共享 DOM 的内容强行写入一个已切走的 Agent。
@@ -1913,19 +1918,22 @@ function setupParamsCollapsible() {
             }
         };
 
-        if (!header.dataset.collapsibleBound) {
-            header.addEventListener('click', (event) => {
-                event.preventDefault();
-                controller.setCollapsed(!controller.container.classList.contains('collapsed'));
-                updateSectionSummary(key);
-                persistCollapseStatesForCurrentSelection();
-                scheduleStickyButtonsRefresh();
-            });
-            header.dataset.collapsibleBound = 'true';
-        }
-
         sectionControllers.set(key, controller);
         return controller;
+    }
+
+    // Keep the Agent configuration's uiCollapseStates as the canonical durable
+    // state.  UI presentation owners only request this command; they neither
+    // write the config directly nor retain a duplicate collapsed-state store.
+    function toggleAgentSettingsSection(key) {
+        const controller = sectionControllers.get(key);
+        if (!controller) return false;
+
+        controller.setCollapsed(!controller.container.classList.contains('collapsed'));
+        void updateSectionSummary(key);
+        void persistCollapseStatesForCurrentSelection();
+        scheduleStickyButtonsRefresh();
+        return true;
     }
 
     function buildIdentitySummary() {

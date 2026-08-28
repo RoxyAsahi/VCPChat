@@ -98,6 +98,36 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
+test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
+    const entry = read(bridgeEntry);
+    const manager = read(path.join(root, 'modules', 'settingsManager.js'));
+    const owner = entry.slice(
+        entry.indexOf('function mountTypedAgentSectionDisclosures(form)'),
+        entry.indexOf('// The Agent inputs differ', entry.indexOf('function mountTypedAgentSectionDisclosures(form)')),
+    );
+    assert.match(owner, /api\?\.mountDisclosureRowController/, 'Agent headers must use the generated Light-DOM DisclosureRow controller');
+    assert.match(owner, /manager\.toggleAgentSettingsSection\(key\)/, 'presentation must call the manager command, not mutate DOM/config itself');
+    assert.match(owner, /new window\.MutationObserver\(sync\)/, 'selection restore must project canonical collapsed DOM state into ARIA');
+    assert.match(owner, /scope\.own\(state\.cleanup/, 'the observer and marker must retract with the presentation owner');
+    for (const key of ['identity', 'prompt', 'model', 'params', 'tts', 'regex']) {
+        assert.match(owner, new RegExp(`['\"]${key}['\"]`), `section ${key} must be owned by the migration slice`);
+    }
+    assert.match(manager, /toggleAgentSettingsSection:\s*\(key\)\s*=>\s*toggleAgentSettingsSection\(key\)/,
+        'SettingsManager must expose one narrow canonical toggle command');
+    const controller = manager.slice(
+        manager.indexOf('function createSectionController(key, buildSummary)'),
+        manager.indexOf('function buildIdentitySummary()', manager.indexOf('function createSectionController(key, buildSummary)')),
+    );
+    assert.doesNotMatch(controller, /header\.addEventListener\('click'/,
+        'legacy manager header listeners must be retired once the typed owner owns activation');
+    assert.match(owner, /const mounted = new Set\(\)/,
+        'the typed owner must report exactly which canonical sections it adopted');
+    assert.match(entry, /if \(!typedAgentSectionOwners\.has\(section\)\) enhance\('SettingsSection', section\)/,
+        'a section without the generated artifact must retain the legacy fallback owner');
+    assert.doesNotMatch(entry, /form\.querySelectorAll\('\.agent-settings-section, \.group-settings-section'\)/,
+        'Agent sections must not be bulk-enhanced alongside a typed owner');
+});
+
 test('global voice mode adopts generated Choice without extending the frozen chat radio surface', () => {
     const entry = read(bridgeEntry);
     const css = read(path.join(root, 'styles', 'ui-system', 'settings-overrides.css'));
