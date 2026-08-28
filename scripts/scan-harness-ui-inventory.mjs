@@ -31,7 +31,7 @@ const contractKeyFor = (name, relative) => {
 const scopeBoundaryFor = relative => {
     if (/ui-goal/.test(relative)) return 'composer-goal-surface-frozen';
     if (/ui-message-feedback/.test(relative)) return 'chat-feedback-surface-frozen';
-    if (/ui-skill|ui-trajectory/.test(relative)) return 'chat-toolview-surface-frozen';
+    if (/ui-skill|ui-trajectory|ui-workflow-run/.test(relative)) return 'chat-toolview-surface-frozen';
     if (/ui-subagent/.test(relative)) return 'composer-subagent-surface-frozen';
     if (/ui-user-questions/.test(relative)) return 'composer-question-surface-frozen';
     if (/ui-theme/.test(relative)) return 'settings-theme-surface-owned-by-main-thread';

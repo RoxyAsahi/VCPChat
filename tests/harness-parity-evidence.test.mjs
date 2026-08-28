@@ -80,7 +80,7 @@ test('Harness UI inventory separates frozen surfaces from contract candidates', 
     assert.ok(report.entries.some(item => item.scopeBoundary === 'chat-feedback-surface-frozen'));
     assert.ok(report.entries.some(item => item.scopeBoundary === 'chat-toolview-surface-frozen'));
     assert.ok(report.entries.some(item => item.scopeBoundary === 'settings-theme-surface-owned-by-main-thread'));
-    assert.equal(report.nextCandidates.some(item => ['ui-goal', 'ui-message-feedback', 'ui-skill', 'ui-subagent', 'ui-trajectory', 'ui-theme', 'ui-user-questions'].includes(item.package)), false);
+    assert.equal(report.nextCandidates.some(item => ['ui-goal', 'ui-message-feedback', 'ui-skill', 'ui-subagent', 'ui-trajectory', 'ui-workflow-run', 'ui-theme', 'ui-user-questions'].includes(item.package)), false);
     assert.ok(report.nextCandidates.length > 0);
     assert.ok(report.entries.filter(item => item.relative.includes('ui-primitives/src/icons/index.tsx')).every(item => item.referenceContract === true));
     assert.equal(report.missingContracts.some(item => item.relative.includes('ui-primitives/src/icons/index.tsx')), false);
