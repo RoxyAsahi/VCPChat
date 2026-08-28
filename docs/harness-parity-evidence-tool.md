@@ -54,9 +54,11 @@ categories, contract coverage, and remaining gaps.
 
 Run `node scripts/check-harness-fixture-coverage.mjs` to compare the registered
 DOM contracts with visual cases in `fixture-matrix.json`. Its report separates
-contracts without replayable fixtures from fixture-only pending candidates;
-`--strict` is reserved for a gate that intentionally requires every contract
-to have a case.
+literal contract names from declared semantic-fixture aliases, VCP-local
+contracts, source-only boundaries, and actionable Candidate fixture gaps.
+An alias preserves its named Candidate/pixel boundary; it is not a parity
+promotion. `--strict` is reserved for a gate that intentionally requires every
+contract to have a case.
 
 The source-only lifecycle gates can be replayed directly when their Harness
 files are available:
