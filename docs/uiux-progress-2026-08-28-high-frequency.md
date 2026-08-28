@@ -25,6 +25,15 @@ presentation path 删除。
 
 ## 当前验收状态
 
+### 生命周期压力更新
+
+`node scripts/test-electron-lifecycle-stress.mjs` 已通过 3 次 warmup + 20 次 measured
+cycles，覆盖 ask-nova、Settings、Agent Settings、embedded、detached-app 和
+mode-round-trip。baseline 到 cycle-20 的 `enhancedSettingsControls` 保持 33，
+listeners 保持 850，active lifecycle resources 保持 802，detached roots/icons/options
+均为 0。该证据支持高频 Agent 设置组件继续接入，但不改变其
+`visual-equivalence-pending` 状态。
+
 - `npm run test:uiux`：82 项通过。
 - Settings/Notification/App Tray focused tests：18 项通过。
 - `npm run check:uiux`、`npm run build:uiux`、`npm run check:uiux:artifacts`：通过。
