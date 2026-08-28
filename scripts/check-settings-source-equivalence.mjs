@@ -21,7 +21,11 @@ const css = readCssEntry('styles/ui-system/settings.css');
 const html = read('main.html');
 const selectProjection = read('modules/ui-system/settings/select-projection.js');
 const canonicalRows = read('modules/ui-system/settings/canonical-rows.js');
-const settingsModules = `${bridge}\n${selectProjection}\n${canonicalRows}`;
+const advancedVisibility = read('modules/ui-system/settings/advanced-visibility.js');
+const rustVisibility = read('modules/ui-system/settings/rust-visibility.js');
+const renderVisibility = read('modules/ui-system/settings/render-visibility.js');
+const appearanceControls = read('modules/ui-system/settings/appearance-controls.js');
+const settingsModules = `${bridge}\n${selectProjection}\n${canonicalRows}\n${advancedVisibility}\n${rustVisibility}\n${renderVisibility}\n${appearanceControls}`;
 const settingsEntry = read('styles/settings.css');
 const agentFormCss = read('styles/setting/settings-agent-form.css');
 const agentIdentityCss = read('styles/setting/settings-agent-identity.css');
@@ -35,6 +39,14 @@ const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
 const presentationOwner = read('modules/renderer/mainChatSettingsPresentationOwner.js');
 const renderer = read('renderer.js');
+
+// Section visibility helpers are intentionally presentation-only. Keep them
+// in the static equivalence plane so a future extraction cannot smuggle in a
+// second durable store or a business/IPC dependency.
+for (const [name, source] of [['advanced', advancedVisibility], ['rust', rustVisibility], ['render', renderVisibility]]) {
+    assert.doesNotMatch(source, /new\s+(Map|Set|WeakMap|WeakSet)\s*\(/, `${name} visibility helper must remain stateless`);
+    assert.doesNotMatch(source, /saveSettings|loadSettings|chatAPI/, `${name} visibility helper must not cross the business boundary`);
+}
 
 // ---- Retirement evidence E1 (handoff ledger): main.html is the only
 // document that renders the global settings form, and it declares
@@ -306,8 +318,8 @@ const agentParamsCss = read('styles/setting/settings-agent-params.css');
 for (const selector of [
     '.params-content input[type="number"]:not(.input)',
     '.params-content input[type="number"]:not(.input):focus',
-    'body.light-theme .params-content input[type="number"]:not(.input):hover',
-    'body:not(.light-theme) .params-content input[type="number"]:not(.input):focus-visible',
+    'body[data-vcp-theme="light"] .params-content input[type="number"]:not(.input):hover',
+    'body[data-vcp-theme="dark"] .params-content input[type="number"]:not(.input):focus-visible',
 ]) {
     assert.ok(agentParamsCss.includes(selector),
         `typed Agent numeric Input fallback must exclude the generated owner: ${selector}`);

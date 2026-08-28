@@ -139,6 +139,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 等待并行 Visual QA 脚本修正后再判断 CSS cascade，不以此阻塞 Settings owner
 施工。
 
+并行动效线程当前阻断：`npm run test:ui-motion-contract` 要求 Tooltip 在
+显示/隐藏时发布 `data-motion="enter|exit"`，但现有 Tooltip 源码尚未写入该
+状态；Theme Presenter 单测通过，问题限定在动效合同实现。Tooltip 文件属于
+并行未提交改动，本线不覆盖，待其补齐后再复跑动效与 UIUX 全套门禁。
+
 ### G5：旧债净删除
 
 按 section 删除：
