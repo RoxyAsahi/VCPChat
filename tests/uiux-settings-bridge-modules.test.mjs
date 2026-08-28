@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { JSDOM } from 'jsdom';
 
 // Settings bridge split invariants (refactor 2026-08-27, R2-02E item 4b).
 // settings-bridge.js was a 2200-line module mixing a dozen concerns. This
@@ -74,4 +75,90 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.match(entry, /createSelectProjection\(\{ ensurePresentationScope \}\)/, 'entry must inject the presentation scope');
     const globalOwners = [...entry.matchAll(/window\.VCPUISettingsBridge\s*=/g)].length;
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
+});
+
+test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
+    const dom = new JSDOM('<!doctype html><form><select id="voice"><option value="one">One</option><option value="two">Two</option></select></form>');
+    const previous = Object.fromEntries([
+        'window', 'document', 'Element', 'Node', 'Event', 'MutationObserver', 'Option', 'HTMLElement',
+    ].map(key => [key, globalThis[key]]));
+    const records = new Set();
+    const createScope = () => {
+        let active = true;
+        const scope = {
+            get active() { return active; },
+            own(disposer) {
+                let released = false;
+                const release = () => {
+                    if (released) return Promise.resolve();
+                    released = true;
+                    records.delete(release);
+                    return Promise.resolve(disposer());
+                };
+                records.add(release);
+                return release;
+            },
+            child() {
+                const child = createScope();
+                scope.own(() => child.dispose());
+                return child;
+            },
+            async dispose() {
+                if (!active) return;
+                active = false;
+                await Promise.all([...records].reverse().map(release => release()));
+            },
+        };
+        return scope;
+    };
+    const scope = createScope();
+    try {
+        Object.assign(globalThis, {
+            window: dom.window,
+            document: dom.window.document,
+            Element: dom.window.Element,
+            Node: dom.window.Node,
+            Event: dom.window.Event,
+            MutationObserver: dom.window.MutationObserver,
+            Option: dom.window.Option,
+            HTMLElement: dom.window.HTMLElement,
+        });
+        let mounts = 0;
+        dom.window.VCPUIUX = {
+            mountSelect(select, _props, selectScope) {
+                mounts += 1;
+                const parent = select.parentNode;
+                const wrap = dom.window.document.createElement('span');
+                wrap.className = 'vcp-harness-select';
+                parent.insertBefore(wrap, select);
+                wrap.append(select);
+                return selectScope.own(() => {
+                    if (select.parentNode === wrap) parent.insertBefore(select, wrap);
+                    wrap.remove();
+                });
+            },
+        };
+        const projectionModule = await import(`${pathToFileURL(path.join(settingsDir, 'select-projection.js')).href}?scope-owner=${Date.now()}`);
+        const projection = projectionModule.createSelectProjection({ ensurePresentationScope: () => scope });
+        const form = dom.window.document.querySelector('form');
+        const select = dom.window.document.querySelector('select');
+        projection.mount(form);
+        assert.equal(mounts, 1, 'initial native select receives one projection');
+
+        select.append(new dom.window.Option('Three', 'three'));
+        await new Promise(resolve => setTimeout(resolve, 30));
+        assert.equal(mounts, 2, 'option-list change remounts exactly one projection');
+        assert.equal(form.dataset.vcpSelectRebuilding, undefined, 'rebuild guard releases after the owned continuation');
+
+        await scope.dispose();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(form.querySelectorAll('.vcp-harness-select').length, 0, 'scope disposal restores the canonical select DOM');
+        assert.equal(records.size, 0, 'observer and deferred turns are retracted from the owner');
+    } finally {
+        Object.entries(previous).forEach(([key, value]) => {
+            if (value === undefined) delete globalThis[key];
+            else globalThis[key] = value;
+        });
+        dom.window.close();
+    }
 });
