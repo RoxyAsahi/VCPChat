@@ -387,6 +387,40 @@ test('Harness PopupSelect parity mode preserves provider groups and menuitemradi
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness PopupSelect parity skips disabled rows and hands keyboard focus to the active menuitemradio', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const selected = [];
+        const scope = createUiScope(new LifecycleScope('popup-select-keyboard-owner-test'));
+        const host = document.getElementById('host');
+        const popup = createPopupSelectController({
+            options: async () => [
+                { id: 'blocked', label: 'Blocked', group: 'DeepSeek', disabled: true },
+                { id: 'available', label: 'Available', group: 'DeepSeek' },
+            ],
+            onSelect: async option => { selected.push(option.id); },
+        }, { consume: () => true, focusComposer: () => {} });
+        const view = mountPopupSelectView(host, { popup, searchEnabled: false, grouped: true, optionRole: 'menuitemradio' }, scope);
+        popup.open('model', {}, { via: 'menu', span: {} });
+        await delay(0);
+        const blocked = view.card.querySelector('[data-option-id="blocked"]');
+        assert.equal(blocked?.getAttribute('aria-disabled'), 'true');
+        assert.equal(blocked?.disabled, true, 'Harness parity rows expose native disabled state');
+        await popup.select(0);
+        assert.deepEqual(selected, [], 'Enter/controller selection cannot invoke a disabled row');
+        view.card.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        const available = view.card.querySelector('[data-option-id="available"]');
+        assert.equal(popup.getSnapshot().active, 1, 'keyboard navigation skips disabled rows');
+        assert.equal(document.activeElement, available, 'menuitemradio owns focus after keyboard navigation');
+        const stylesheet = document.getElementById('vcp-harness-uiux-popup-select')?.textContent || '';
+        assert.match(stylesheet, /\.vcp-harness-popup-select-option:focus-visible/, 'Harness parity keeps the source focus-visible material state');
+        await view.dispose();
+        await scope.dispose('popup-select-keyboard-owner-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness DirectoryBrowser foundation aborts stale listings and retracts on close', async () => {
     const dom = new JSDOM('<!doctype html><main></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
