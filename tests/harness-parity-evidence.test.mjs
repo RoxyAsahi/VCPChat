@@ -380,6 +380,7 @@ test('OnboardingSurface Candidate capture records portal, inert lifecycle, and t
 test('Real Harness OnboardingSurface source capture records mount/unmount boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-onboarding-surface-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-onboarding-surface-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-onboarding-surface-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-onboarding-surface-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-onboarding-surface-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
@@ -388,6 +389,9 @@ test('Real Harness OnboardingSurface source capture records mount/unmount bounda
     assert.equal(report.domAria.maskHidden.pass, true);
     assert.equal(report.computedStyle.pass, true);
     assert.equal(report.candidateExtraState.reopenRecorded, true);
+    assert.equal(report.pixel.status, 'strict-full-surface-measured');
+    assert.equal(report.pixel.comparable, true);
+    assert.equal(report.pixel.pass, false);
     assert.equal(report.pass, false);
 });
 
