@@ -116,6 +116,12 @@
       "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
     },
     {
+      "id": "showcase-restored-tooltip-portal",
+      "trigger": "resize(width - 240); resize(original); scroll tooltip trigger into viewport; hover('Hover for details')",
+      "screenshotSuffix": "restored-tooltip",
+      "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
+    },
+    {
       "id": "showcase-narrow-menu-overlay",
       "trigger": "resize(width - 240); scroll trigger into viewport; click('View options')",
       "screenshotSuffix": "narrow-menu",
