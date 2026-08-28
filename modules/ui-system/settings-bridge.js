@@ -14,6 +14,8 @@ import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './se
 import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
 import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
+import { mountAppearanceSelects } from './settings/appearance-controls.js';
+import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1049,12 +1051,12 @@ function enhanceGlobalSettings(root, form) {
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
-    mountTypedAppearanceSelects(root, form);
+    mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
     mountTypedGlobalChoiceGroups(root, form);
-    mountTypedAppearanceRanges(root, form);
+    mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
     mountTypedHomeVisualToggles(root, form);
     mountTypedAvatarColorPair(root, form);
     mountTypedForumInputs(root, form);
@@ -1117,18 +1119,6 @@ function mountTypedGlobalChoiceGroups(root, form) {
     });
 }
 
-function mountTypedAppearanceRanges(root, form) {
-    const api = window.VCPUIUX;
-    if (!api?.mountRange) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    [['appearanceSidebarAvatarSize', 'appearanceSidebarAvatarSizeValue'], ['appearanceSidebarRowHeight', 'appearanceSidebarRowHeightValue'], ['appearanceCustomRadius', 'appearanceCustomRadiusValue']].forEach(([id, outputId]) => {
-        const input = form?.querySelector?.(`#${id}`); const output = form?.querySelector?.(`#${outputId}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountRange(input, { output, format: value => `${value}px` }, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
 function mountTypedHomeVisualToggles(root, form) {
     const api = window.VCPUIUX; if (!api?.mountToggle) return;
@@ -1276,29 +1266,6 @@ function mountTypedForumFieldOwner(root, form) {
     }, 'typed-forum-field-owner', 'ui-presentation');
 }
 
-function mountTypedAppearanceSelects(root, form) {
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!scope || !api?.mountSelect) return;
-    const fields = [
-        ['appearanceDensity', '界面密度'],
-        ['appearanceRadius', '圆角风格'],
-        ['appearanceTypography', '界面字体'],
-        ['appearanceFontScale', '界面字号'],
-        ['appearanceContentWidth', '内容宽度'],
-        ['appearanceSurface', '页面材质'],
-    ];
-    fields.forEach(([id, label]) => {
-        const select = form?.querySelector?.(`#${id}`);
-        if (!select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        if (api.mountField && select.parentElement) {
-            api.mountField(select.parentElement, { label, control: select }, scope);
-        }
-        api.mountSelect(select, { label, portal: true }, scope);
-        select.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
 // Single-line text inputs are projected by the real library Input primitive
 // (window.VCPUIUX.mountInput): the native input stays the sole business node
