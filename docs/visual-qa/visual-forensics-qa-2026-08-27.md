@@ -64,6 +64,7 @@ On 2026-08-27 in the current dirty worktree:
 - Reopen cleanup now gates body class state as well as inline style: the close snapshot must retain the active `light-theme`/`dark-theme` class and remove `next-ui-internal-app-open` before the new root is mounted.
 - Formal evidence now includes freshness binding: every required PNG must have a filesystem modification time within two minutes of its manifest `generatedAt`, preventing stale captures from being paired with a newer runtime record.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
+- Tooltip defect regression (2026-08-28): a fresh real Electron scan initially found the 800x600 Tooltip bubble at `y≈2512` while its anchor was visible at `y≈321`; runtime inspection showed the bubble was mounted in the scrolling lab row and retained stale placement after the anchor settled. The minimal repair mounts the fixed bubble in `document.body` and re-places it on captured scroll events (source and generated artifacts). Fresh light and dark scans now record body-owned Tooltip geometry inside the viewport at all three sizes (`800x600: y≈357`, `1280x800: y≈618-636`, `1680x1000: y≈683-699`); `npm run check:visual-forensics` and the direct Tooltip contract test pass.
 
 ## Scope and frozen boundaries
 
