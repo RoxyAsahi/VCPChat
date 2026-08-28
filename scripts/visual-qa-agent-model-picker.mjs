@@ -148,7 +148,11 @@ try {
       for (let node = topmost; node && chain.length < 6; node = node.parentElement) chain.push(describe(node));
       const ancestors = [];
       for (let node = card; node && ancestors.length < 8; node = node.parentElement) ancestors.push(describe(node));
-      return { trigger: describe(trigger), card: describe(card), point: { x, y }, topmost: describe(topmost), topmostInsideCard: Boolean(card && topmost && card.contains(topmost)), topmostChain: chain, cardAncestors: ancestors, bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow };
+      const iconSlot = trigger?.querySelector('.vcp-harness-agent-model-picker-trigger-icon');
+      const icon = iconSlot?.querySelector('svg');
+      const iconRect = icon?.getBoundingClientRect();
+      return { trigger: describe(trigger), card: describe(card), point: { x, y }, topmost: describe(topmost), topmostInsideCard: Boolean(card && topmost && card.contains(topmost)), topmostChain: chain, cardAncestors: ancestors, bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow,
+        semanticIcon: icon && iconRect ? { slotClass: iconSlot.className, tag: icon.tagName.toLowerCase(), ariaHidden: icon.getAttribute('aria-hidden'), focusable: icon.getAttribute('focusable'), viewBox: icon.getAttribute('viewBox'), rect: { x: iconRect.x, y: iconRect.y, width: iconRect.width, height: iconRect.height }, pathCount: icon.querySelectorAll('path').length } : null };
     });
     await page.screenshot({ path: path.join(output, `${name}-open.png`), fullPage: false });
     // Root geometry alone cannot catch a selector that only leaks into the
