@@ -1,5 +1,15 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Toast.tsx",
+  "source": "packages/client/ui-primitives/src/Toast.tsx",
+  "sourceKind": "harness-primitive-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Toast.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Toast.tsx",
+      "packages/client/ui-primitives/src/Toast.module.css"
+    ],
+    "selectionRule": "Use the Harness body-portal alert and timed animation contract; production consumers remain outside this Candidate slice."
+  },
+  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
   "productionConsumers": [
     "packages/client/ui-conversation/src/client/skeleton/InputBar.tsx",
     "packages/client/ui-model-selection/src/client/ModelSelect.tsx"
