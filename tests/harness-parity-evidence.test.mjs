@@ -136,6 +136,21 @@ test('AgentPreset Select paired Harness/VCP evidence remains semantic-fixture sc
     assert.equal(report.pixelPass, true);
 });
 
+test('Paired evidence ledger keeps Candidate captures and blocked boundaries explicit', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-paired-evidence-boundaries.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-paired-evidence-boundaries.json'), 'utf8'));
+    assert.equal(report.status, 'paired-evidence-scoped');
+    assert.equal(report.pass, false);
+    assert.equal(report.counts.pairedRoiPasses, 1);
+    assert.equal(report.counts.vcpCandidateCaptures, 4);
+    assert.equal(report.counts.candidateCaptureMissing, 0);
+    assert.equal(report.pairedSelect.state, 'paired-roi-pass');
+    assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
+    assert.equal(report.candidateCaptures.every(item => item.state === 'vcp-candidate-capture-only' && item.captured), true);
+    assert.ok(report.sourceOrConsumerBoundaries.some(item => item.state === 'consumer-boundary'));
+    assert.equal(report.activeExternalBoundary.name, 'model-picker');
+});
+
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
     execFileSync(process.execPath, ['scripts/check-harness-capture-prerequisites.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-prerequisites.json'), 'utf8'));

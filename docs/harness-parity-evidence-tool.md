@@ -46,6 +46,12 @@ result is only the open/selected/hover menu ROI at its fixed viewport; it does
 not prove a closed trigger, busy trigger, production adoption, or any other
 Candidate surface.
 
+`node scripts/check-harness-paired-evidence-boundaries.mjs` consolidates the
+paired Select ROI pass, VCP-only Candidate captures, source/consumer blockers,
+and the active shared ModelPicker boundary. Its `paired-evidence-scoped` status
+is deliberately non-promoting: `pass` remains false until every authorized
+paired state and production boundary is closed.
+
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:
 the Harness web package's Playwright resolver, the vendored Cordis workspace
