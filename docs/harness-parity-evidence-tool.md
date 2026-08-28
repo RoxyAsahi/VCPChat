@@ -52,6 +52,11 @@ and the active shared ModelPicker boundary. Its `paired-evidence-scoped` status
 is deliberately non-promoting: `pass` remains false until every authorized
 paired state and production boundary is closed.
 
+Each listed Candidate capture is now checked against its matching reference
+contract and its indispensable interaction/teardown fields. A missing or
+truncated report makes the ledger `paired-evidence-incomplete`; passing that
+schema only proves the isolated Candidate baseline, never a Harness/VCP pair.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
