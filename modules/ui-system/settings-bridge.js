@@ -712,10 +712,9 @@ function mountTypedAgentPromptModeButtons(form) {
     if (!scope) return;
     form?.querySelectorAll?.('.prompt-mode-button').forEach((button, index) => {
         if (!(button instanceof HTMLButtonElement) || button.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
+        api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
         button.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete button.dataset.vcpTypedPrimitiveMounted; }, `typed-agent-prompt-mode-${index}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-agent-prompt-mode-${index}`, 'ui-primitive');
     });
 }
 
