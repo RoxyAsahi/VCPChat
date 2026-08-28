@@ -4,7 +4,7 @@
   "sourceKind": "harness-atom-source-only",
   "styleSource": "packages/client/ui-primitives/src/OnboardingSurface.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; portal geometry documented, paired Harness/VCP computed-style and pixel diff pending",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 VCP generated-artifact computed-style capture active, paired Harness/VCP computed-style and pixel diff pending",
   "selectors": {
     ".onboardingOverlay": { "position": "fixed", "inset": "0", "zIndex": "1100" },
     ".onboardingMask": { "top": "80px", "bottom": "0", "background": "rgba(0,0,0,.24)", "backdropFilter": "blur(2px)" },

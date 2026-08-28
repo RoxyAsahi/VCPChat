@@ -4,7 +4,7 @@
   "sourceKind": "harness-composite-source-only",
   "styleSource": "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; root/model/effort states are replayable, paired pixel parity remains explicitly pending or mismatch-scoped",
+  "candidateStatus": "production-consumer-active / Candidate Lab ready-selected same-engine static-source-reference pixel baseline passes; root/model/effort lifecycle remains replayable, but state-matrix and legacy retirement evidence are pending",
   "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
   "selectors": {
     ".root": { "position": "relative", "minWidth": "0" },

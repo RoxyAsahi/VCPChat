@@ -16,6 +16,25 @@ const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ?
 const outputStem = captureMode === 'harness-equivalent'
     ? 'vcp-agent-model-picker-harness-equivalent'
     : 'vcp-agent-model-picker-candidate';
+const harnessModelSelectCssPath = '/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.module.css';
+const harnessModelSelectCss = await fs.readFile(harnessModelSelectCssPath, 'utf8');
+const harnessReferenceClasses = Object.freeze({
+    root: 'vcp-harness-reference-model-root', menu: 'vcp-harness-reference-model-menu',
+    groups: 'vcp-harness-reference-model-groups', group: 'vcp-harness-reference-model-group',
+    groupTitle: 'vcp-harness-reference-model-group-title', option: 'vcp-harness-reference-model-option',
+    optionCopy: 'vcp-harness-reference-model-option-copy', modelName: 'vcp-harness-reference-model-name',
+    check: 'vcp-harness-reference-model-check', selected: 'vcp-harness-reference-model-selected',
+});
+const harnessModelSelectElectronCss = Object.entries(harnessReferenceClasses).reduce(
+    (css, [source, target]) => css.replace(new RegExp(`\\.${source}\\b`, 'g'), `.${target}`),
+    harnessModelSelectCss,
+);
+// ModelSelect relies on the Harness web shell's scoped form-control reset.
+// Keep that production prerequisite in this Electron source reference; without
+// it Chromium gives the source `<button>` Arial while the candidate correctly
+// inherits the Harness system stack, turning a fixture omission into a false
+// visual regression.
+const harnessModelSelectElectronBaseCss = `.${harnessReferenceClasses.root}{font-family:var(--dsw-font-family)}.${harnessReferenceClasses.root} button{font-family:inherit}`;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const request = url => new Promise((resolve, reject) => {
     http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject);
@@ -62,8 +81,17 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
     const evidence = await page.evaluate(async (mode) => {
         const host = document.createElement('div');
+        // Candidate captures run in the same UI scope as production so the
+        // existing Lucide icon adapter can resolve semantic icons synchronously.
+        host.className = 'vcp-ui-scope';
         host.dataset.vcpCandidateAgentModelPicker = 'true';
-        host.style.cssText = 'position:fixed;left:480px;top:420px;width:280px;height:140px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        // Isolate the synthetic fixture from the real chat surface so the
+        // primitive ROI measures its own pixels, not an unrelated stacking
+        // context painted above a fixed host.
+        // Keep the menu's right edge on a device pixel.  The Harness capture
+        // uses an integer-origin clip; a fractional origin changes text and
+        // rounded-corner rasterization even when computed geometry matches.
+        host.style.cssText = 'position:fixed;left:480.3359375px;top:420px;z-index:2000;width:280px;height:140px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
         document.body.append(host);
         const scope = new window.VCPLifecycle.LifecycleScope('test:candidate-agent-model-picker');
         const selected = [];
@@ -144,6 +172,27 @@ try {
                     boxSizing: style.boxSizing,
                 };
             }),
+            // Pixel parity has to be diagnosable at the glyph level.  Record
+            // the actual semantic-token resolution of the two text layers and
+            // the selected check, rather than inferring them from the parent
+            // option's inherited style.
+            textStyles: {
+                groupTitles: [...host.querySelectorAll(`${optionRoot} .vcp-harness-popup-select-group-title`)].map(node => {
+                    const style = getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, fontKerning: style.fontKerning, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings, textRendering: style.textRendering, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+                }),
+                modelNames: [...host.querySelectorAll(`${optionRoot} .vcp-harness-popup-select-option-label`)].map(node => {
+                    const style = getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, fontKerning: style.fontKerning, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings, textRendering: style.textRendering, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+                }),
+                checks: [...host.querySelectorAll(`${optionRoot} .vcp-harness-popup-select-option-check`)].map(node => {
+                    const style = getComputedStyle(node);
+                    const rect = node.getBoundingClientRect();
+                    return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, fontKerning: style.fontKerning, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings, textRendering: style.textRendering, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+                }),
+            },
             menuChildren: (() => {
                 const menuNode = host.querySelector('.vcp-harness-popup-select-card');
                 const viewport = menuNode?.querySelector('.vcp-harness-popup-select-viewport');
@@ -266,6 +315,28 @@ try {
                 border: `${style.borderTopWidth} ${style.borderBottomWidth}`,
             };
         })();
+        const compositingAncestors = (() => {
+            const nodes = [];
+            let node = menu;
+            while (node && nodes.length < 8) {
+                const style = getComputedStyle(node);
+                nodes.push({
+                    tag: node.tagName.toLowerCase(),
+                    id: node.id,
+                    className: node.className,
+                    opacity: style.opacity,
+                    backgroundColor: style.backgroundColor,
+                    backgroundImage: style.backgroundImage,
+                    mixBlendMode: style.mixBlendMode,
+                    isolation: style.isolation,
+                    filter: style.filter,
+                    transform: style.transform,
+                    position: style.position,
+                });
+                node = node.parentElement;
+            }
+            return nodes;
+        })();
         const search = host.querySelector('.vcp-harness-popup-select-search');
         const card = host.querySelector('.vcp-harness-popup-select-card');
         if (search) search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -354,6 +425,7 @@ try {
                 computed: menuStyleSnapshot,
                 children: modelMenuChildren,
                 viewportStyle: modelViewportMetrics,
+                compositingAncestors,
                 layer: menuLayer,
             } : null,
             selected, efforts,
@@ -409,6 +481,102 @@ try {
         path: path.join(root, 'reports', `${outputStem}.png`),
         clip: menuRect,
     });
+    // Cross-engine pixels are useful as a coarse signal, but text raster and
+    // compositor details are not a visual contract when Playwright Chromium
+    // is compared with Electron.  Mount the *actual Harness ModelSelect CSS*
+    // plus its captured ready-state Light DOM in this same Electron renderer.
+    // It is intentionally labelled a static source reference (not a Harness
+    // production consumer): its only purpose is to distinguish VCP DOM/CSS
+    // drift from browser-engine raster variance without loosening the policy.
+    const sameEngineReference = await page.evaluate(({ css, baseCss, classes, rect }) => {
+        const style = document.createElement('style');
+        style.dataset.vcpHarnessModelSelectElectronReference = 'true';
+        style.textContent = `${baseCss}\n${css}`;
+        const referenceRoot = document.createElement('div');
+        referenceRoot.className = classes.root;
+        referenceRoot.dataset.vcpHarnessModelSelectElectronReference = 'true';
+        referenceRoot.innerHTML = `<div class="${classes.menu}" role="menu" aria-label="Model and reasoning effort" aria-busy="false">
+            <div class="${classes.groups}">
+                <section role="group" class="${classes.group}"><div class="${classes.groupTitle}">DeepSeek</div><button type="button" role="menuitemradio" aria-checked="false" class="${classes.option}"><span class="${classes.optionCopy}"><span class="${classes.modelName}">DeepSeek-V4-Flash</span></span><span class="${classes.check}"></span></button></section>
+                <section role="group" class="${classes.group}"><div class="${classes.groupTitle}">Acme Gateway</div><button type="button" role="menuitemradio" aria-checked="true" class="${classes.option} ${classes.selected}"><span class="${classes.optionCopy}"><span class="${classes.modelName}">Acme Think</span></span><span class="${classes.check}"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.0498 3.92579L8.49512 12.3818C8.25774 12.6881 8.04517 12.9645 7.84668 13.1689C7.63957 13.3823 7.38732 13.5841 7.04492 13.6719C6.86373 13.7183 6.6757 13.7346 6.48926 13.7197C6.13666 13.6915 5.8528 13.5355 5.6123 13.3604C5.38201 13.1926 5.12573 12.9567 4.83984 12.6953L1.03125 9.21289L1.96875 8.1875L5.77734 11.6699C6.08684 11.9529 6.27773 12.1249 6.43066 12.2363C6.50183 12.2882 6.54699 12.3135 6.57324 12.3252C6.58525 12.3305 6.59269 12.3322 6.5957 12.333C6.59802 12.3336 6.59961 12.334 6.59961 12.334C6.63317 12.3367 6.66758 12.3335 6.7002 12.3252C6.7002 12.3252 6.70211 12.3251 6.7041 12.3242C6.70698 12.3229 6.71348 12.319 6.72461 12.3115C6.74849 12.2956 6.78843 12.2642 6.84961 12.2012C6.98138 12.0654 7.13957 11.8628 7.39648 11.5313L13.9502 3.07422L15.0498 3.92579Z" fill="currentColor"></path></svg></span></button></section>
+            </div>
+        </div>`;
+        const menu = referenceRoot.querySelector(`.${classes.menu}`);
+        menu.style.position = 'fixed';
+        menu.style.left = `${rect.x}px`;
+        menu.style.top = `${rect.y}px`;
+        menu.style.right = 'auto';
+        menu.style.bottom = 'auto';
+        menu.style.zIndex = '2001';
+        // ModelSelect source CSS intentionally relies on the Harness theme
+        // rather than carrying fallbacks.  Inject the values captured from
+        // the same light production fixture so Electron evaluates source CSS
+        // rather than inheriting unrelated VCP page colors.  This is an
+        // explicit fixture context, never a new product Theme owner.
+        const harnessTokens = {
+            '--dsw-alias-border-inverted': 'rgba(0, 0, 0, 0)',
+            '--dsw-alias-label-primary': 'rgb(15, 17, 21)',
+            '--dsw-alias-label-tertiary': 'rgb(129, 133, 140)',
+            '--dsw-specific-menu': 'rgb(255, 255, 255)',
+            '--dsw-shadow-lv3': '0 0 1px rgba(0,0,0,.2), 0 0 4px rgba(0,0,0,.02), 0 12px 32px rgba(0,0,0,.08)',
+            '--dsw-font-family': '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif',
+        };
+        for (const [name, value] of Object.entries(harnessTokens)) menu.style.setProperty(name, value);
+        // Harness production resolves the 240px menu width as its content
+        // box (4px padding + 1px border on both sides => 250px ROI).  VCP's
+        // global reset is border-box, so pin this source-context invariant
+        // rather than accidentally comparing two different box models.
+        menu.style.boxSizing = 'content-box';
+        document.head.append(style);
+        document.body.append(referenceRoot);
+        const menuRect = menu.getBoundingClientRect();
+        const computed = getComputedStyle(menu);
+        const textStyle = node => {
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, fontKerning: style.fontKerning, fontFeatureSettings: style.fontFeatureSettings, fontVariationSettings: style.fontVariationSettings, textRendering: style.textRendering, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+        };
+        window.__vcpHarnessModelSelectElectronReferenceCleanup = () => {
+            referenceRoot.remove();
+            style.remove();
+        };
+        return {
+            source: 'Harness ModelSelect source DOM/CSS mounted in VCP Electron',
+            sourcePath: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx + ModelSelect.module.css',
+            renderingEngine: 'VCP Electron renderer',
+            referenceKind: 'same-engine-static-source-reference; not a Harness production consumer',
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+            productionConsumer: false,
+            status: 'same-engine-source-reference-active',
+            dom: menu.outerHTML,
+            menu: { role: menu.getAttribute('role'), rect: { x: menuRect.x, y: menuRect.y, width: menuRect.width, height: menuRect.height }, width: computed.width, maxHeight: computed.maxHeight, padding: computed.padding, borderRadius: computed.borderRadius, border: computed.border, boxSizing: computed.boxSizing },
+            modelPane: {
+                groupCount: menu.querySelectorAll('section[role="group"]').length,
+                options: [...menu.querySelectorAll('[role="menuitemradio"]')].map(node => ({ text: node.textContent?.trim() || '', ariaChecked: node.getAttribute('aria-checked') })),
+                textStyles: {
+                    groupTitles: [...menu.querySelectorAll(`.${classes.groupTitle}`)].map(textStyle),
+                    modelNames: [...menu.querySelectorAll(`.${classes.modelName}`)].map(textStyle),
+                    checks: [...menu.querySelectorAll(`.${classes.check}`)].map(textStyle),
+                },
+            },
+            effortPane: { options: [{ text: 'Off' }, { text: 'High' }, { text: 'Max' }] },
+            interaction: { searchVisible: false },
+        };
+    }, { css: harnessModelSelectElectronCss, baseCss: harnessModelSelectElectronBaseCss, classes: harnessReferenceClasses, rect: menuRect });
+    assert.deepEqual(sameEngineReference.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.equal(sameEngineReference.modelPane.groupCount, 2);
+    assert.equal(sameEngineReference.modelPane.options.length, 2);
+    assert.deepEqual(sameEngineReference.effortPane.options.map(option => option.text), ['Off', 'High', 'Max']);
+    assert.equal(sameEngineReference.menu.rect.width, menuRect.width,
+        `same-engine Harness source reference must match the candidate ROI width: ${JSON.stringify(sameEngineReference.menu)}`);
+    assert.equal(sameEngineReference.menu.rect.height, menuRect.height,
+        `same-engine Harness source reference must match the candidate ROI height: ${JSON.stringify(sameEngineReference.menu)}`);
+    await page.screenshot({
+        path: path.join(root, 'reports', 'harness-agent-model-picker-electron-reference.png'),
+        clip: sameEngineReference.menu.rect,
+    });
+    await page.evaluate(() => window.__vcpHarnessModelSelectElectronReferenceCleanup?.());
+    await fs.writeFile(path.join(root, 'reports', 'harness-agent-model-picker-electron-reference.json'), `${JSON.stringify(sameEngineReference, null, 2)}\n`, 'utf8');
     evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
     assert.equal(evidence.disposed, true);
     await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');

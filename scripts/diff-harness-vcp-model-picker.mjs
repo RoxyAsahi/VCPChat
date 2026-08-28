@@ -99,6 +99,22 @@ try {
         }
         if (report.status !== 'pending-harness-interaction-evidence') report.status = 'harness-capture-available-pixel-pending';
         report.missingEvidence.push('same-semantic ModelSelect pixel diff');
+        const textStyleKeys = ['color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing'];
+        const textStyleChecks = [];
+        for (const layer of ['groupTitles', 'modelNames', 'checks']) {
+            const harnessStyles = harness.modelPane?.textStyles?.[layer] ?? [];
+            const candidateStyles = candidate.modelPane?.textStyles?.[layer] ?? [];
+            const count = Math.min(harnessStyles.length, candidateStyles.length);
+            for (let index = 0; index < count; index += 1) {
+                for (const key of textStyleKeys) {
+                    if (harnessStyles[index]?.[key] == null && candidateStyles[index]?.[key] == null) continue;
+                    textStyleChecks.push({ layer, index, property: key, harness: harnessStyles[index]?.[key] ?? null, vcp: candidateStyles[index]?.[key] ?? null,
+                        pass: normalize(harnessStyles[index]?.[key]) === normalize(candidateStyles[index]?.[key]) });
+                }
+            }
+            if (harnessStyles.length !== candidateStyles.length) textStyleChecks.push({ layer, property: 'count', harness: harnessStyles.length, vcp: candidateStyles.length, pass: false });
+        }
+        report.textStyle = { checks: textStyleChecks, pass: textStyleChecks.length > 0 && textStyleChecks.every(check => check.pass) };
     }
     if (!report.dom.ariaContractPass || !report.dom.structuralPass) report.missingEvidence.push('Candidate DOM/ARIA structural contract');
     if (!report.computedStyle.pass) report.missingEvidence.push('Candidate computed-style contract');

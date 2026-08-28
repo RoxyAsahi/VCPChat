@@ -375,6 +375,10 @@ test('Harness PopupSelect parity mode preserves provider groups and menuitemradi
         assert.equal(view.card.querySelectorAll('button[role=menuitemradio]').length, 2);
         assert.equal(view.card.querySelectorAll('[role=option]').length, 0);
         assert.equal(view.card.querySelector('button[aria-checked="true"]')?.textContent?.includes('Acme Think'), true);
+        assert.equal(view.card.querySelectorAll('button[role=menuitemradio] .vcp-harness-popup-select-option-check').length, 2,
+            'Harness ModelSelect retains a trailing check slot on both selected and unselected rows');
+        assert.equal(view.card.querySelector('button[aria-checked="false"] .vcp-harness-popup-select-option-check')?.childElementCount, 0,
+            'only the selected Harness row paints the check glyph');
         const check = view.card.querySelector('button[aria-checked="true"] .vcp-harness-popup-select-option-check > svg');
         assert.equal(check?.getAttribute('width'), '16', 'ModelSelect parity uses the Harness 16px check SVG, not the generic icon host');
         assert.equal(check?.getAttribute('viewBox'), '0 0 16 16');

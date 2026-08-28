@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use ModelSelect view, CSS, and client interaction tests as the Harness source; Candidate captures may compare injected model/effort state but must not claim chat consumer migration."
   },
-  "candidateStatus": "candidate-interaction-active; Harness/VCP DOM and computed-style evidence exists, pixel evidence remains pending or mismatch-scoped, chat model consumer boundary preserved",
+  "candidateStatus": "production-consumer-active / Candidate Lab ready-selected same-engine static-source-reference pixel baseline passes; hover/focus/disabled/loading/error-retry state matrix, legacy modal parity/deletion, packaged artifact and Windows evidence remain pending",
   "root": { "tag": "div", "class": "root", "positioning": "relative" },
   "trigger": {
     "tag": "button",

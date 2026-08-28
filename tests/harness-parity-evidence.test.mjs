@@ -147,6 +147,52 @@ test('ConnectionBanner Candidate capture records DOM, geometry, states, and tear
     assert.equal(report.ownerRegistrations, 1);
 });
 
+test('Menu Candidate capture records portal, interaction states, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-menu-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-menu-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP production consumer'), true);
+    assert.equal(report.open.present, true);
+    assert.equal(report.open.role, 'menu');
+    assert.deepEqual(report.open.aria, { triggerHasPopup: 'menu', triggerExpanded: 'true' });
+    assert.equal(report.open.style.position, 'fixed');
+    assert.equal(report.open.items.filter(item => item.selected === 'true').length, 2);
+    assert.deepEqual(report.submenuItems, ['List', 'Grid']);
+    assert.equal(report.outsideClosed, true);
+    assert.equal(report.escapeClosed, true);
+});
+
+test('OnboardingSurface Candidate capture records portal, inert lifecycle, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-onboarding-surface-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-onboarding-surface-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP first-run consumer'), true);
+    assert.deepEqual(report.closed, { present: false, rootInert: false, contentInRoot: true });
+    assert.equal(report.open.present, true);
+    assert.equal(report.open.rootInert, true);
+    assert.equal(report.open.contentInRoot, false);
+    assert.deepEqual(report.open.aria, { overlayRole: 'presentation', maskHidden: 'true' });
+    assert.equal(report.open.style.overlay.position, 'fixed');
+    assert.equal(report.open.style.mask.top, '80px');
+    assert.equal(report.open.style.stage.justifyContent, 'center');
+    assert.deepEqual(report.close, { present: false, rootInert: false, contentInRoot: true });
+    assert.equal(report.reopen.present, true);
+});
+
+test('Pill Candidate capture records native states, hover, click, and teardown', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-pill-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-pill-candidate.json'), 'utf8'));
+    assert.equal(report.candidateStatus.includes('no VCP production consumer'), true);
+    assert.equal(report.static.tag, 'span');
+    assert.equal(report.interactive.tag, 'button');
+    assert.equal(report.interactive.type, 'button');
+    assert.equal(report.static.style.display, 'inline-flex');
+    assert.equal(report.static.style.height, '24px');
+    assert.equal(report.static.style.padding, '0px 8px');
+    assert.equal(report.active.className, 'vcp-harness-pill pill active');
+    assert.equal(report.hover.interactive.style.backgroundColor, 'rgba(0, 0, 0, 0.06)');
+    assert.equal(report.clicks, 1);
+    assert.equal(report.ownerRegistrations, 4);
+});
+
 test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
     execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
     const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
@@ -221,7 +267,7 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
     assert.ok(report.uncoveredContracts.includes('settings-root'));
     assert.equal(report.counts.effectiveContractsWithFixtures, report.counts.contractsWithFixtures + 2);
-    assert.deepEqual(report.candidateFixtureGaps, ['menu', 'onboarding-surface', 'pill']);
+    assert.deepEqual(report.candidateFixtureGaps, []);
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.category, 'covered-by-semantic-fixture-alias');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.fixture, 'agent-model-picker');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'settings-root')?.category, 'source-only-boundary');

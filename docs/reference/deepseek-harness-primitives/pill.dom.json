@@ -7,7 +7,7 @@
     "sources": ["packages/client/ui-primitives/src/Pill.tsx", "packages/client/ui-primitives/tests/atoms.client.spec.tsx"],
     "selectionRule": "Use the native span/button Pill implementation and atom tests as the Harness source; VCP remains Candidate Lab-only."
   },
-  "candidateStatus": "candidate-interaction-active; source and native teardown behavior covered, no VCP production consumer or paired visual capture",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 VCP generated-artifact static/interactive-hover/active/click/dispose capture active, no VCP production consumer or paired Harness visual capture",
   "root": { "staticTag": "span", "interactiveTag": "button", "native": true, "type": "button" },
   "classes": ["pill", "interactive", "active"],
   "states": ["static", "interactive", "hover", "active", "dispose"],
