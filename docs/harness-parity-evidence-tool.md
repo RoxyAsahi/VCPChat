@@ -240,8 +240,8 @@ the frozen consumer boundary and always keeps `pass: false`; it is not a
 priority ranking and does not authorize production wiring.
 
 `node scripts/check-harness-parity-status.mjs` consolidates the current
-inventory, fixture-coverage, Candidate capture-gap, and composite provenance
-reports into `reports/harness-parity-status.json`. It reports when scope is
+inventory, fixture-coverage, Candidate capture-gap, and composite/locale
+provenance reports into `reports/harness-parity-status.json`. It reports when scope is
 accounted for, but always keeps `pass=false`: source/contract coverage and
 Candidate evidence never establish production parity or unlock frozen
 Settings/Chat/Composer consumers.
@@ -280,6 +280,7 @@ plus the VCP Candidate's portal/rebuild/dispose anchors. It remains
 `pass=false`: no real Harness browser capture or paired DOM/style/pixel diff
 exists, and VCP has no locale capability or persisted UI-language key. The
 existing Candidate lifecycle tests do not create a production consumer.
+Its focused regression check is `node --test tests/language-row-provenance.test.mjs`.
 
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
 Harness DisclosureRow controlled interaction contract (row versus leading
