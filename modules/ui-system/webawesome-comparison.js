@@ -103,15 +103,30 @@ export function mountWebAwesomeComparison(host, { create, on }) {
     );
     root.append(intro);
 
-    const syncTheme = () => {
-        const isLight = document.body.classList.contains('light-theme');
+    const syncTheme = snapshot => {
+        const isLight = snapshot?.value?.effective === 'light';
         root.classList.toggle('wa-light', isLight);
         root.classList.toggle('wa-dark', !isLight);
     };
-    syncTheme();
-    const themeObserver = new MutationObserver(syncTheme);
-    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    disposers.push(() => themeObserver.disconnect());
+    const themeService = window.uiManager;
+    if (typeof themeService?.getThemeSnapshot === 'function' && typeof themeService?.subscribeTheme === 'function') {
+        syncTheme(themeService.getThemeSnapshot());
+        const releaseTheme = themeService.subscribeTheme((_value, snapshot) => {
+            syncTheme(snapshot || themeService.getThemeSnapshot());
+        }, { immediate: false });
+        disposers.push(() => releaseTheme?.());
+    } else {
+        // Classic/boot compatibility only. In Next UI the comparison Surface
+        // consumes uiManager's typed snapshot rather than inferring a theme
+        // from body classes.
+        const syncLegacyTheme = () => syncTheme({ value: {
+            effective: document.body.classList.contains('light-theme') ? 'light' : 'dark',
+        } });
+        syncLegacyTheme();
+        const themeObserver = new MutationObserver(syncLegacyTheme);
+        themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        disposers.push(() => themeObserver.disconnect());
+    }
 
     const grid = createElement('div', { class: 'vcp-ui-wa-grid' });
     const vcpColumn = column('现有 VCPUI', 'Native DOM + VCP runtime');
