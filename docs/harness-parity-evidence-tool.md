@@ -285,6 +285,12 @@ within 30 seconds; the guard records this as a complete locale/slot/runtime
 composition blocker rather than synthesizing a source capture.
 Its focused regression check is `node --test tests/language-row-provenance.test.mjs`.
 
+`node scripts/check-harness-agent-preset-label-source-provenance.mjs` records
+the read-only Harness session-header label source and CSS geometry. It
+deliberately creates no VCP implementation: the session-header/chat boundary
+has no authorized consumer. The report is permanently `pass=false` and keeps
+the missing Candidate and paired visual evidence explicit.
+
 `node scripts/check-harness-disclosure-row-source-provenance.mjs` pins the
 Harness DisclosureRow controlled interaction contract (row versus leading
 button, keyboard activation, forced-open and content projection) and its 24px
