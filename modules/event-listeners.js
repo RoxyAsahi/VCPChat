@@ -689,6 +689,11 @@ export function setupEventListeners(deps) {
         // 首先加载当前的Rust配置并填充表单
         await loadAndPopulateRustConfig();
 
+        // When the typed Settings consumer is active it owns the Rust section
+        // projection and its lifecycle-bound visibility listeners. Keep this
+        // legacy binder exclusively for Classic/early-bootstrap fallback.
+        if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;
+
         // 启用Rust助手时，显示规则容器
         const rustUseAssistantCheckbox = document.getElementById('rustUseAssistant');
         const rustGuardRulesContainer = document.getElementById('rustGuardRulesContainer');
