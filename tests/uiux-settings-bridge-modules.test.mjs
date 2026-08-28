@@ -40,6 +40,8 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof advanced.syncAdvancedSettingsVisibility, 'function');
     const rust = await import(pathToFileURL(path.join(settingsDir, 'rust-visibility.js')).href);
     assert.equal(typeof rust.syncRustAssistantVisibility, 'function');
+    const render = await import(pathToFileURL(path.join(settingsDir, 'render-visibility.js')).href);
+    assert.equal(typeof render.syncRenderSettingsVisibility, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -81,6 +83,7 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.match(entry, /createSelectProjection\(\{ ensurePresentationScope \}\)/, 'entry must inject the presentation scope');
     assert.match(entry, /from '\.\/settings\/advanced-visibility\.js'/, 'entry must import the advanced section helper');
     assert.match(entry, /from '\.\/settings\/rust-visibility\.js'/, 'entry must import the Rust section helper');
+    assert.match(entry, /from '\.\/settings\/render-visibility\.js'/, 'entry must import the render section helper');
     const globalOwners = [...entry.matchAll(/window\.VCPUISettingsBridge\s*=/g)].length;
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
 });
