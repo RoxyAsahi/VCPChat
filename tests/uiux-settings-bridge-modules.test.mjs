@@ -183,11 +183,9 @@ test('global network-path add action uses the generated Button owner', () => {
 
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
+    const disclosureModule = read(path.join(settingsDir, 'agent-disclosures.js'));
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
-    const owner = entry.slice(
-        entry.indexOf('function mountTypedAgentSectionDisclosures(form)'),
-        entry.indexOf('// The Agent inputs differ', entry.indexOf('function mountTypedAgentSectionDisclosures(form)')),
-    );
+    const owner = disclosureModule;
     assert.match(owner, /api\?\.mountDisclosureRowController/, 'Agent headers must use the generated Light-DOM DisclosureRow controller');
     assert.match(owner, /manager\.toggleAgentSettingsSection\(key\)/, 'presentation must call the manager command, not mutate DOM/config itself');
     assert.match(owner, /new window\.MutationObserver\(sync\)/, 'selection restore must project canonical collapsed DOM state into ARIA');

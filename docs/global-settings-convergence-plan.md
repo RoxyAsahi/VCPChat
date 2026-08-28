@@ -149,6 +149,11 @@ owner 负责，helper 仅建立 Light-DOM primitive 和销毁标记。
 `modules/ui-system/settings/identity-controls.js`；头像预览与错误提示通过
 注入回调保持，颜色持久化和业务同步仍由原有 owner 负责。
 
+Agent 六个 section 的 DisclosureRow presentation owner 已抽为
+`modules/ui-system/settings/agent-disclosures.js`；该模块通过注入的
+`settingsManager.toggleAgentSettingsSection` 保持业务命令归属，并观察
+canonical collapsed class，不复制折叠状态。
+
 Appearance 圆角 Choice 与 Voice Mode Choice 的 generated mount 已合并抽为
 `modules/ui-system/settings/choice-controls.js`；仅负责两个高频 Choice 的
 展示装配和 marker cleanup，不接管冻结的聊天布局 radio。

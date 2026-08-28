@@ -21,6 +21,7 @@ import { mountHomeTaglineInput } from './settings/home-controls.js';
 import { mountIdentityColorPairs } from './settings/identity-controls.js';
 import { mountChoiceControls } from './settings/choice-controls.js';
 import { mountForumCredentialInputs } from './settings/forum-controls.js';
+import { mountAgentSectionDisclosures } from './settings/agent-disclosures.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -535,7 +536,7 @@ function enhanceForm(form) {
     mountTypedAgentButtons(form);
     mountTypedAgentModelPicker(form);
     mountTypedAgentPromptModeButtons(form);
-    const typedAgentSectionOwners = mountTypedAgentSectionDisclosures(form);
+    const typedAgentSectionOwners = mountAgentSectionDisclosures(form, window.VCPUIUX, ensurePresentationScope(), window.settingsManager, agentSectionDisclosureStates);
     selectProjection.mount(form);
     // A successfully adopted Agent section is directly owned by the generated
     // DisclosureRow controller.  If the generated artifact did not load (or
@@ -579,67 +580,6 @@ function enhanceForm(form) {
 // manager remains the sole owner of uiCollapseStates, summaries and config
 // persistence.  This is deliberately a real Surface adapter, not a second
 // collapse-state projection or a hidden-DOM click proxy.
-function mountTypedAgentSectionDisclosures(form) {
-    const mounted = new Set();
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    const manager = window.settingsManager;
-    if (!api?.mountDisclosureRowController || !scope || typeof manager?.toggleAgentSettingsSection !== 'function') return mounted;
-
-    const expectedKeys = new Set(['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
-    form?.querySelectorAll?.('.agent-settings-section[data-section-key]').forEach(container => {
-        const key = container.dataset.sectionKey;
-        if (!expectedKeys.has(key)) return;
-        if ([...agentSectionDisclosureStates].some(state => state.container === container)) {
-            mounted.add(container);
-            return;
-        }
-
-        const header = container.querySelector('.agent-settings-section-header');
-        const content = container.querySelector('.agent-settings-section-content');
-        const title = header?.querySelector('.agent-settings-section-title');
-        const summary = header?.querySelector('.agent-settings-section-summary');
-        const toggle = header?.querySelector('.agent-settings-toggle-btn');
-        if (!header || !content || !title || !summary || !toggle) return;
-
-        if (!content.id) content.id = `agent-settings-section-${key}-content`;
-        let disclosure;
-        try {
-            disclosure = api.mountDisclosureRowController(header, {
-                content,
-                open: !container.classList.contains('collapsed'),
-                expandable: true,
-                className: 'vcp-agent-settings-disclosure-row',
-                toggle,
-                onToggle: () => manager.toggleAgentSettingsSection(key),
-            }, scope);
-        } catch (error) {
-            // The bridge must retain the established per-section controller
-            // when a generated candidate cannot mount.  Do not let one bad
-            // adoption abort enhancement for the remaining canonical form.
-            console.warn(`[VCPUI SettingsBridge] Could not adopt Agent disclosure "${key}":`, error);
-            return;
-        }
-
-        // The manager also changes collapsed state during selection restore.
-        // Observe that canonical DOM state rather than caching a second UI
-        // boolean, and retract both observer and marker with this Surface.
-        const sync = () => disclosure.setOpen(!container.classList.contains('collapsed'));
-        const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
-        observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
-        header.dataset.vcpTypedAgentDisclosure = 'true';
-        sync();
-        const state = { container, observer, cleanup: () => {
-            observer?.disconnect();
-            delete header.dataset.vcpTypedAgentDisclosure;
-            agentSectionDisclosureStates.delete(state);
-        }};
-        agentSectionDisclosureStates.add(state);
-        scope.own(state.cleanup, `typed-agent-section-disclosure-${key}`, 'ui-presentation');
-        mounted.add(container);
-    });
-    return mounted;
-}
 
 // The Agent inputs differ in business semantics (identity, free-form model,
 // numeric limits and TTS regexes), but their presentation lifecycle is the
