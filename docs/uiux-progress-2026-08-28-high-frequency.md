@@ -13,6 +13,7 @@ presentation path 删除。
 | 侧栏“全局设置”入口 `#globalSettingsBtn` | `Button(outline/sm)` | 原有 `openModal('globalSettingsModal')` 点击命令不变 | Settings presentation scope 单 owner；旧 sidebar/shell action CSS 排除 `.vcp-harness-button`（`df893f32`） | 真实 Electron mount/click/close/teardown；bridge focused test | `production-consumer-active / visual-equivalence-pending` |
 | 全局 Settings“添加网络路径” `#addNetworkPathBtn` | `Button(outline/sm)` | 动态路径行创建、typed list dirty/close-flush、IPC/persisted key 不变 | 同一 Settings presentation scope；旧 Settings action CSS 排除 generated Button（`6b2767c8`） | `test-settings-wa-electron.mjs` 断言 class/variant/size/28×14 geometry、添加/删除、close-flush、reload/teardown（`5c08aedb`） | `production-consumer-active / visual-equivalence-pending` |
 | 公共 Button | `Button` primitive | 不拥有业务命令；原生 button/type/disabled 保留 | generated artifact 增加统一 `focus-visible` ring（`ed8d389d`） | 44 primitive tests；source/build/artifact gates | `candidate contract improved` |
+| Next Shell 通知菜单 5 个中性动作 | `Button(ghost/md)` | 原有通知命令、menuitem 结构与筛选/清空语义不变 | `NotificationMenuController` 子 scope；仅 neutral actions 接管，checkbox 与 destructive clear 保留 bespoke | light/dark × 800×600、1280×800、1680×1000 真实 Electron capture 与 verified gate（`4745bb88`） | `production-consumer-active / visual-equivalence-pending` |
 
 ## 有意保留的 bespoke / 冻结入口
 
