@@ -11,6 +11,8 @@
 import { createSelectProjection } from './settings/select-projection.js';
 import { mountSettingsAutosave, flushLegacyAutosave, teardownLegacyAutosave } from './settings/autosave.js';
 import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './settings/canonical-rows.js';
+import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
+import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -313,8 +315,6 @@ function mountTypedSettingsConsumer(root) {
             set('rustScreenshotSuspendMs', thresholds.screenshotSuspendMs);
             set('rustClipboardConflictSuspendMs', thresholds.clipboardConflictSuspendMs);
             set('rustClipboardCheckIntervalMs', thresholds.clipboardCheckIntervalMs);
-            const panel = form.querySelector('#rustCustomThresholdsPanel');
-            if (panel) panel.style.display = custom ? 'block' : 'none';
             set('rustWhitelistKeywords', Array.isArray(rust.whitelist) ? rust.whitelist.join('\n') : '');
             set('rustBlacklistKeywords', Array.isArray(rust.blacklist) ? rust.blacklist.join('\n') : '');
             set('rustScreenshotApps', Array.isArray(rust.screenshotApps) ? rust.screenshotApps.join('\n') : '');
@@ -322,19 +322,18 @@ function mountTypedSettingsConsumer(root) {
                 ? 'whitelist'
                 : (Array.isArray(rust.blacklist) && rust.blacklist.length ? 'blacklist' : 'none');
             set('rustRuleMode', ruleMode);
-            const guard = form.querySelector('#rustGuardRulesContainer');
-            if (guard) guard.style.display = rust.useRustAssistant === true ? 'block' : 'none';
-            const whitelistPanel = form.querySelector('#rustWhitelistPanel');
-            const blacklistPanel = form.querySelector('#rustBlacklistPanel');
-            if (whitelistPanel) whitelistPanel.style.display = ruleMode === 'whitelist' ? 'block' : 'none';
-            if (blacklistPanel) blacklistPanel.style.display = ruleMode === 'blacklist' ? 'block' : 'none';
-            const debugPanel = form.querySelector('#rustDebugPanel');
-            if (debugPanel) debugPanel.style.display = rust.debugMode === true ? 'block' : 'none';
+            syncRustAssistantVisibility(form);
         };
         const release = rustService.state.subscribe(applyRust);
         const rustScope = ensurePresentationScope();
         if (rustScope) rustScope.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
         else release?.();
+        syncRustAssistantVisibility(form);
+        ['change', 'input'].forEach(type => {
+            const onChange = () => syncRustAssistantVisibility(form);
+            form.addEventListener(type, onChange);
+            rustScope?.own(() => form.removeEventListener(type, onChange), `typed-rust-visibility-${type}`, 'ui-presentation');
+        });
         void rustService.refresh.execute();
     }
     const forumService = ensureForumConfigUiService();
@@ -1153,7 +1152,14 @@ function mountTypedAvatarColorPair(root, form) {
         const text = form?.querySelector?.(textId);
         if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
         try {
-            api.mountColorPair(color, text, scope);
+            api.mountColorPair(color, text, scope, {
+                onValueChange: value => {
+                    if (name === 'avatar-border') {
+                        form.querySelector('#userAvatarPreview')?.style.setProperty('border-color', value);
+                    }
+                },
+                onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
+            });
             color.dataset.vcpTypedPrimitiveMounted = 'true';
             scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
         } catch (error) {
@@ -1552,6 +1558,16 @@ function mountTypedFieldOwner(root, form) {
             }
         }
     };
+    // Conditional rows are presentation-owned. Keep their immediate response
+    // local to this Settings owner so the ambient event-listeners module does
+    // not compete with snapshot projection or survive modal teardown.
+    const syncConditionalRows = () => syncAdvancedSettingsVisibility(form);
+    syncConditionalRows();
+    ['change', 'input'].forEach(type => {
+        const onChange = () => syncConditionalRows();
+        form.addEventListener(type, onChange);
+        state.cleanups.push(() => form.removeEventListener(type, onChange));
+    });
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
         form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success, error: error || undefined, owner: 'typed-settings-field-owner' } }));
@@ -1601,9 +1617,18 @@ function mountTypedFieldOwner(root, form) {
         status()?.setAttribute('data-state', 'dirty');
         if (status()) status().textContent = '未保存';
     };
+    const normalizeMiddleClickDelay = control => {
+        if (!control) return false;
+        const value = Number.parseInt(control.value, 10);
+        if (Number.isFinite(value) && value >= 1000) return false;
+        control.value = '1000';
+        window.uiHelperFunctions?.showToastNotification?.('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
+        return true;
+    };
     const onInput = event => {
         const control = event.target;
         if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
+        if (control.id === 'middleClickAdvancedDelay') normalizeMiddleClickDelay(control);
         const patch = readTypedFieldPatch(control, service, state.pendingPatch) || {};
         if (patch.appearanceProfile) {
             state.pendingPatch = {
@@ -1629,6 +1654,16 @@ function mountTypedFieldOwner(root, form) {
             delete control.dataset.vcpTypedFieldOwner;
         });
     });
+    const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
+    if (middleClickAdvancedDelay) {
+        const onBlur = () => {
+            if (normalizeMiddleClickDelay(middleClickAdvancedDelay)) {
+                middleClickAdvancedDelay.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
+        middleClickAdvancedDelay.addEventListener('blur', onBlur);
+        state.cleanups.push(() => middleClickAdvancedDelay.removeEventListener('blur', onBlur));
+    }
     if (pathsContainer) {
         const onRowsDirty = () => {
             // Row removal, row addition and typing all reduce to "recollect

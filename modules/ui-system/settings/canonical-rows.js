@@ -1,6 +1,7 @@
 // canonical-rows — one canonical row system for the unified settings surface.
 // The upstream form row is retained as the business anchor; geometry, spacing
 // and typography belong to the canonical wrapper.
+import { sectionKeyForRow, sectionKeyForTitle } from './section-ownership.js';
 function removeLegacySubsectionHeadings(form) {
     form.querySelectorAll('.vcp-harness-editor-section-heading').forEach(heading => {
         const section = heading.closest('.settings-section');
@@ -12,6 +13,11 @@ function removeLegacySubsectionHeadings(form) {
 
 function mountCanonicalSettingsRows(form) {
     if (!form) return;
+    form.querySelectorAll(':scope > .settings-section').forEach(section => {
+        const title = section.querySelector(':scope > .settings-section-title')?.textContent;
+        const key = sectionKeyForTitle(title);
+        if (key) section.dataset.settingsSectionKey = key;
+    });
     const candidates = form.querySelectorAll(
         ':scope [data-vcp-settings-row], :scope [data-vcp-settings-control-row], :scope .vcp-settings-row, :scope .vcp-settings-control-row, :scope .settings-form-group, :scope .form-group-inline, :scope > .form-group, :scope .form-group'
     );
@@ -31,6 +37,8 @@ function mountCanonicalSettingsRows(form) {
             item.setAttribute(attribute.name, attribute.value);
         }
         item.dataset.settingPrimitive = 'general-item';
+        const sectionKey = sectionKeyForRow(row);
+        if (sectionKey) item.dataset.settingsSectionKey = sectionKey;
         const appearanceOwner = row.closest('.appearance-settings-section, .appearance-sidebar-geometry-section, .appearance-home-tagline-setting');
         if (appearanceOwner) {
             item.dataset.settingPrimitive = 'appearance-row';

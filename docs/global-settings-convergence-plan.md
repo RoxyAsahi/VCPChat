@@ -57,12 +57,38 @@
 - 保留头像文件、论坛 capability 和写入协议；
 - 删除已经由 typed owner 接管的旧投影和重复 marker。
 
+#### G2 首个净删除（颜色镜像）
+
+全局身份区的 `userAvatarBorderColor`/`userAvatarBorderColorText` 与
+`userNameTextColor`/`userNameTextColorText` 现在由 generated ColorPair 的
+owner 回调负责同步、校验提示和头像预览更新；`event-listeners.js` 中原有
+6 个 ambient input/change/blur listener 已删除。重置颜色按钮、canonical
+controls、保存和颜色提取业务保持不变。`npm run check:uiux`、58 项 focused
+tests、artifact consistency 和 `test-settings-wa-electron.mjs` 全部通过。
+
 ### G3：语音与高级
 
 - 语音 mode 使用 Choice，路径/URL/Key 使用 Field + Input；
 - 高级布尔项使用 Toggle，数值项使用 Input；
 - 保留能力发现、失败状态和条件显示；
 - `topicSummaryModel` 和复杂模型 picker 暂不收口。
+
+### G3 审计结果（2026-08-28）
+
+语音模式已由 generated Choice 接管，浏览器路径、识别页路径、本地/网络
+URL 与 Key 已由 generic generated Input 接管；现有测试覆盖 snapshot 投影、
+条件显示和 reload 恢复。未发现第二套语音 listener 或可安全删除的独立
+projection，因此本批不做空转改动，保留现有业务 capability 与默认值语义。
+
+G2 身份颜色镜像的 6 个 ambient listener 已在提交 `2a69fb01` 删除；该结果
+作为后续 section ownership 拆分的参考实现。
+
+本轮补充收口高级区的条件显示：context sanitizer、middle-click quick action、
+advanced action 与 regenerate confirmation 的即时显隐现在由同一个 typed
+field owner 统一处理，并随 Settings presentation scope 销毁；
+`event-listeners.js` 中对应的 5 个重复绑定已删除。`middleClickAdvancedDelay`
+的 1000ms 归一化已迁入同一 owner（input/blur 均覆盖），message/renderer 的
+业务读取边界保持不变。
 
 ### G4：section controller 拆分
 
@@ -79,6 +105,22 @@ settings-bridge-entry
 每个 section controller 只提供 `mount(section) / sync(snapshot) / dispose()`，不拥有第二份 durable state。拆分必须以真实调用方为依据，不为了形式制造公共 API。
 模块化时必须同步更新 source-equivalence 门禁；字段 ownership 不能因 `spread`、动态注册或间接常量而变得不可静态审计。若门禁无法证明单一 owner，则保持当前显式映射，不合并拆分。
 
+首个 G4 内部切片已完成：高级区条件显隐抽为
+`modules/ui-system/settings/advanced-visibility.js`，bridge 仅负责注入
+owner 生命周期与事件绑定；字段字面量仍保留在 helper 中，source-equivalence
+可继续静态追踪。该模块不建立 durable state，也不改变 Settings/IPC 协议。
+
+随后 Rust Assistant 区也完成同样的收口：
+`modules/ui-system/settings/rust-visibility.js` 负责面板显隐，typed Rust
+consumer 绑定并销毁即时响应监听；旧 `event-listeners.js` 监听仅在 typed
+service 不可用的 Classic/早期 bootstrap 路径启用，避免生产 Settings 双写。
+
+同时，颜色镜像的旧 binder 现在仅在 UIUX artifact 不存在时启用；生成的
+ColorPair 可用时，生产 Settings 不再注册第二套颜色同步监听。
+
+用户样式折叠标题的旧单击绑定也已删除；`mountHarnessDisclosures` 现在是该
+标题的唯一 presentation owner，统一处理点击、键盘、ARIA 和 dispose。
+
 ### G5：旧债净删除
 
 按 section 删除：
@@ -88,6 +130,9 @@ settings-bridge-entry
 - 重复 listener、observer、timer 和 disposer；
 - 无调用方 helper 与死 projection；
 - 只为旧 bridge 保留的 fallback。
+
+2026-08-28 增量：高级区条件显示与延迟值校验的旧 ambient listeners 已净删除，
+校验语义由 typed owner 保持；该 section 的直接 presentation 债务已收口。
 
 ## 不作为阻塞条件
 

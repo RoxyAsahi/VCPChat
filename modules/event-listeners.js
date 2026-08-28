@@ -549,17 +549,11 @@ export function setupEventListeners(deps) {
             resetBtn.dataset.globalSettingsBound = 'true';
         }
 
-        const styleHeader = modal.querySelector('#userStyleCollapseHeader');
-        if (styleHeader && !styleHeader.dataset.globalSettingsBound) {
-            styleHeader.addEventListener('click', () => {
-                const container = styleHeader.closest('.agent-style-collapsible-container');
-                if (container) container.classList.toggle('collapsed');
-            });
-            styleHeader.dataset.globalSettingsBound = 'true';
-        }
-
         if (!modal.dataset.globalSettingsControlsBound) {
-            setupColorSyncListeners();
+            // Generated ColorPair owns the production mirror listeners. Keep
+            // the legacy binder only for bootstrap environments without the
+            // UIUX artifact, avoiding duplicate writes in the real surface.
+            if (!window.VCPUIUX?.mountColorPair) setupColorSyncListeners();
             setupRustAssistantConfigListeners();
             modal.dataset.globalSettingsControlsBound = 'true';
         }
@@ -688,6 +682,11 @@ export function setupEventListeners(deps) {
     async function setupRustAssistantConfigListeners() {
         // 首先加载当前的Rust配置并填充表单
         await loadAndPopulateRustConfig();
+
+        // When the typed Settings consumer is active it owns the Rust section
+        // projection and its lifecycle-bound visibility listeners. Keep this
+        // legacy binder exclusively for Classic/early-bootstrap fallback.
+        if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;
 
         // 启用Rust助手时，显示规则容器
         const rustUseAssistantCheckbox = document.getElementById('rustUseAssistant');
@@ -833,62 +832,6 @@ export function setupEventListeners(deps) {
         } catch (error) {
             console.error('[EventListeners] Error loading rust config:', error);
         }
-    }
-
-    // 用户颜色选择器同步
-    const userAvatarBorderColorInput = document.getElementById('userAvatarBorderColor');
-    const userAvatarBorderColorTextInput = document.getElementById('userAvatarBorderColorText');
-    const userNameTextColorInput = document.getElementById('userNameTextColor');
-    const userNameTextColorTextInput = document.getElementById('userNameTextColorText');
-
-    if (userAvatarBorderColorInput && userAvatarBorderColorTextInput) {
-        userAvatarBorderColorInput.addEventListener('input', (e) => {
-            userAvatarBorderColorTextInput.value = e.target.value;
-            const userAvatarPreview = document.getElementById('userAvatarPreview');
-            if (userAvatarPreview) {
-                userAvatarPreview.style.borderColor = e.target.value;
-            }
-        });
-
-        userAvatarBorderColorTextInput.addEventListener('input', (e) => {
-            const color = e.target.value.trim();
-            if (/^#[0-9A-F]{6}$/i.test(color)) {
-                userAvatarBorderColorInput.value = color;
-                const userAvatarPreview = document.getElementById('userAvatarPreview');
-                if (userAvatarPreview) {
-                    userAvatarPreview.style.borderColor = color;
-                }
-            }
-        });
-
-        userAvatarBorderColorTextInput.addEventListener('blur', (e) => {
-            const color = e.target.value.trim();
-            if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                e.target.value = userAvatarBorderColorInput.value;
-                uiHelperFunctions.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-            }
-        });
-    }
-
-    if (userNameTextColorInput && userNameTextColorTextInput) {
-        userNameTextColorInput.addEventListener('input', (e) => {
-            userNameTextColorTextInput.value = e.target.value;
-        });
-
-        userNameTextColorTextInput.addEventListener('input', (e) => {
-            const color = e.target.value.trim();
-            if (/^#[0-9A-F]{6}$/i.test(color)) {
-                userNameTextColorInput.value = color;
-            }
-        });
-
-        userNameTextColorTextInput.addEventListener('blur', (e) => {
-            const color = e.target.value.trim();
-            if (!/^#[0-9A-F]{6}$/i.test(color)) {
-                e.target.value = userNameTextColorInput.value;
-                uiHelperFunctions.showToastNotification('颜色格式无效，请使用 #RRGGBB 格式', 'warning');
-            }
-        });
     }
 
     // 用户重置颜色按钮
@@ -1186,63 +1129,6 @@ export function setupEventListeners(deps) {
     }
     */
 
-    {
-        const enableMiddleClickCheckbox = document.getElementById('enableMiddleClickQuickAction');
-        const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
-        const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
-
-        if (enableMiddleClickCheckbox && middleClickContainer && middleClickAdvancedContainer) {
-            enableMiddleClickCheckbox.addEventListener('change', () => {
-                const isEnabled = enableMiddleClickCheckbox.checked;
-                middleClickContainer.style.display = isEnabled ? 'block' : 'none';
-                middleClickAdvancedContainer.style.display = isEnabled ? 'block' : 'none';
-            });
-        }
-
-        const enableMiddleClickAdvancedCheckbox = document.getElementById('enableMiddleClickAdvanced');
-        const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
-
-        if (enableMiddleClickAdvancedCheckbox && middleClickAdvancedSettings) {
-            enableMiddleClickAdvancedCheckbox.addEventListener('change', () => {
-                middleClickAdvancedSettings.style.display = enableMiddleClickAdvancedCheckbox.checked ? 'block' : 'none';
-            });
-        }
-
-        const middleClickQuickActionSelect = document.getElementById('middleClickQuickAction');
-        const regenerateConfirmationContainer = document.getElementById('regenerateConfirmationContainer');
-
-        if (enableMiddleClickCheckbox && middleClickQuickActionSelect && regenerateConfirmationContainer) {
-            const updateRegenerateConfirmationVisibility = () => {
-                const isMiddleClickEnabled = enableMiddleClickCheckbox.checked;
-                const selectedAction = middleClickQuickActionSelect.value;
-                const shouldShowConfirmation = isMiddleClickEnabled && selectedAction === 'regenerate';
-                regenerateConfirmationContainer.style.display = shouldShowConfirmation ? 'block' : 'none';
-            };
-            updateRegenerateConfirmationVisibility();
-            enableMiddleClickCheckbox.addEventListener('change', updateRegenerateConfirmationVisibility);
-            middleClickQuickActionSelect.addEventListener('change', updateRegenerateConfirmationVisibility);
-        }
-
-        const middleClickAdvancedDelayInput = document.getElementById('middleClickAdvancedDelay');
-        if (middleClickAdvancedDelayInput) {
-            middleClickAdvancedDelayInput.addEventListener('input', (e) => {
-                const value = parseInt(e.target.value, 10);
-                if (value < 1000) {
-                    e.target.value = 1000;
-                    uiHelperFunctions.showToastNotification('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
-                }
-            });
-            middleClickAdvancedDelayInput.addEventListener('blur', (e) => {
-                const value = parseInt(e.target.value, 10);
-                if (isNaN(value) || value < 1000) {
-                    e.target.value = 1000;
-                    uiHelperFunctions.showToastNotification('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
-                }
-            });
-        }
-
-    }
-
     if (openTranslatorBtn) {
         openTranslatorBtn.addEventListener('click', async () => {
             if (chatAPI?.openTranslatorWindow) {
@@ -1528,12 +1414,6 @@ export function setupEventListeners(deps) {
     if (agentSearchInput) {
         agentSearchInput.addEventListener('input', (e) => {
             filterAgentList(e.target.value);
-        });
-    }
-
-    if (enableContextSanitizerCheckbox && contextSanitizerDepthContainer) {
-        enableContextSanitizerCheckbox.addEventListener('change', () => {
-            contextSanitizerDepthContainer.style.display = enableContextSanitizerCheckbox.checked ? 'block' : 'none';
         });
     }
 
