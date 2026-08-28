@@ -18,6 +18,15 @@ const trayManager = (function () {
     let outsideClickBindTimer = null;
     let drawerKeydownListenerBound = false;
     let drawerCloseTimer = null;
+    // The fixed dock has intentionally bespoke 32px icon geometry.  Only the
+    // generic app-launch rows in the expandable drawer are a Harness Button /
+    // Tooltip consumer.  Keep their lifecycle separate so every re-projection
+    // retracts the old button and body-portal tooltip effects before replacing
+    // the DOM.
+    let trayScope = null;
+    let drawerScope = null;
+    let drawerDisposePromise = null;
+    let initialized = false;
 
     // VChat 系统应用注册表 (从 vchatApps.js 复制的核心定义)
     const VCHAT_APPS = [
@@ -71,7 +80,11 @@ const trayManager = (function () {
      * 初始化托盘
      */
     function init() {
+        if (initialized) return;
+        initialized = true;
         console.log('[TrayManager] Initializing...');
+        const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
+        trayScope = LifecycleScope ? new LifecycleScope('next:app-tray-controller') : null;
         loadSettings();
         renderPinnedApps();
         renderDrawerGrid();
@@ -138,6 +151,8 @@ const trayManager = (function () {
         const grid = document.getElementById('appTrayDrawerGrid');
         if (!grid) return;
 
+        disposeDrawerScope('app-tray-drawer-rerender');
+        drawerScope = trayScope?.child?.('next:app-tray-drawer') || null;
         grid.innerHTML = '';
         // 过滤逻辑：1. 去掉主界面 2. 去掉已经固定在底栏的图标
         const drawerApps = VCHAT_APPS.filter(app => 
@@ -148,17 +163,58 @@ const trayManager = (function () {
             const item = document.createElement('button');
             item.className = 'capsule-button app-tray-drawer-item';
             item.title = app.name;
+            item.setAttribute('aria-label', app.name);
             item.innerHTML = `
                 ${SVG_ICONS[app.icon] || ''}
                 <span class="notes-button-label">${app.name}</span>
             `;
-            item.onclick = (e) => {
+            const open = e => {
                 e.stopPropagation();
-                launchApp(app);
+                void launchApp(app);
                 toggleDrawer(false);
             };
+            if (drawerScope) drawerScope.listen(item, 'click', open, undefined, `app-tray:open:${app.id}`);
+            else item.onclick = open;
             grid.appendChild(item);
+            // Tooltip needs a connected Light-DOM anchor because it owns a
+            // body portal. Mount after insertion; otherwise Button succeeds,
+            // Tooltip throws, and the half-mounted candidate falls back to a
+            // legacy title (a subtle split-owner state).
+            mountDrawerActionCandidate(item, app, drawerScope);
         });
+    }
+
+    function disposeDrawerScope(reason) {
+        if (!drawerScope) return drawerDisposePromise || Promise.resolve();
+        const scope = drawerScope;
+        drawerScope = null;
+        drawerDisposePromise = Promise.resolve(scope.dispose(reason)).catch(error => {
+            console.error('[TrayManager] Failed to dispose app drawer UIUX effects:', error);
+        }).finally(() => {
+            drawerDisposePromise = null;
+        });
+        return drawerDisposePromise;
+    }
+
+    function mountDrawerActionCandidate(item, app, scope) {
+        const uiux = window.VCPUIUX;
+        if (!scope || !uiux?.mountButton || !uiux?.mountTooltip) return;
+        // Do not let the legacy title bridge create a second tooltip for these
+        // rows. The generated Harness Tooltip owns a body portal and returns
+        // all hover/focus listeners when this projection is retired.
+        const label = item.getAttribute('title') || app.name;
+        item.removeAttribute('title');
+        item.dataset.uiuxShellAction = 'app-tray-launch';
+        try {
+            uiux.mountButton(item, { variant: 'toolbar', size: 'md' }, scope);
+            uiux.mountTooltip(item, { label, side: 'top', delayMs: 120, maxWidth: 240 }, scope);
+        } catch (error) {
+            // UIUX is progressive enhancement here: retain the legacy title
+            // and the canonical launcher action if an artifact is unavailable.
+            delete item.dataset.uiuxShellAction;
+            item.setAttribute('title', label);
+            console.warn('[TrayManager] Harness drawer action candidate unavailable:', error);
+        }
     }
 
     /**
@@ -434,6 +490,24 @@ const trayManager = (function () {
         };
     }
 
+    async function dispose() {
+        if (!initialized) return;
+        initialized = false;
+        disposeDrawerScope('app-tray-controller-dispose');
+        if (outsideClickBindTimer) clearTimeout(outsideClickBindTimer);
+        if (drawerCloseTimer) clearTimeout(drawerCloseTimer);
+        outsideClickBindTimer = null;
+        drawerCloseTimer = null;
+        if (outsideClickListenerBound) document.removeEventListener('click', closeOnOutsideClick, true);
+        if (drawerKeydownListenerBound) document.removeEventListener('keydown', closeDrawerOnEscape, true);
+        outsideClickListenerBound = false;
+        drawerKeydownListenerBound = false;
+        const scope = trayScope;
+        trayScope = null;
+        await drawerDisposePromise;
+        await scope?.dispose?.('app-tray-controller-dispose');
+    }
+
     return {
         init: init,
         getApps: () => VCHAT_APPS.map(app => ({
@@ -441,7 +515,8 @@ const trayManager = (function () {
             embed: window.VCPEmbeddedAppAllowlist?.isEmbeddable?.(app.action) === true,
         })),
         getIcon: (iconName) => SVG_ICONS[iconName] || '',
-        launchApp: launchApp
+        launchApp: launchApp,
+        dispose: dispose
     };
 })();
 
