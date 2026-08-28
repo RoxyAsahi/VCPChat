@@ -72,7 +72,11 @@ try {
         candidate: true, marker: 'true', type: 'button', height: '28px', radius: '14px',
     }, 'the Settings entry must use the generated small Button geometry');
 
-    await page.click('#globalSettingsBtn');
+    // Invoke the canonical DOM event because the Settings tab may be outside
+    // the startup layout viewport at a narrow Electron geometry. This still
+    // exercises the production click listener; coordinate hit testing belongs
+    // to the visual-forensics suite.
+    await page.evaluate(() => document.getElementById('globalSettingsBtn')?.click());
     await page.waitForFunction(() => document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
     await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
     await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
