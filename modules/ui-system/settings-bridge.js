@@ -939,7 +939,7 @@ function enhanceGlobalSettings(root, form) {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
     mountSettingsShell(root);
-    mountSettingsAutosave(root, form);
+    mountSettingsAutosave(root, form, ensurePresentationScope());
     mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
 }
