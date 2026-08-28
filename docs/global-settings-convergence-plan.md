@@ -182,6 +182,12 @@ canonical input/change 事件和 primitive owner 生命周期。
 更新订阅释放。它仍不授权删除 `modelSelectModal`；删除前必须继续取得真实生产
 Electron 的选择、刷新/失败、close-race、reopen/reload 和 focus 恢复证据。
 
+同日真实 Electron `agent-settings` lifecycle stress 已通过（1 warmup + 1 measured
+cycle）：节点 5856、监听器 571、active scopes 41、active resources 501 在周期前后
+保持稳定；detached roots/icons/options 均为 0，ModelPicker 的 close/dispose 没有留下
+瞬态 scope 或 DOM。该证据支持“当前 picker owner 无增长/泄漏”，但仍不等同于
+legacy `modelSelectModal` 已具备删除资格。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
