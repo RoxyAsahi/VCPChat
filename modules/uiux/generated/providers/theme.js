@@ -34,6 +34,24 @@ const SEMANTIC_THEME_TOKENS = Object.freeze({
         '--vcp-ui-theme-accent': 'oklch(0.68 0.16 230)',
         '--vcp-ui-theme-accent-hover': 'oklch(0.60 0.18 230)',
         '--vcp-ui-theme-on-accent': 'oklch(1 0 0)',
+        // Harness aliases are deliberately projected by the same document
+        // token owner. Candidate primitives consume these names directly;
+        // without them they each choose an unrelated local fallback and a
+        // source-mounted Harness fixture can lose declarations such as its
+        // transparent elevated-surface border.
+        // Source: ui-theme/src/styles/design-platform.css and
+        // ui-theme/src/styles/gradient-shadow-text.css.
+        '--dsw-alias-bg-layer-1': 'rgb(35, 35, 36)',
+        '--dsw-alias-bg-layer-2': 'rgb(44, 44, 46)',
+        '--dsw-alias-bg-layer-3': 'rgb(53, 54, 56)',
+        '--dsw-alias-bg-module-platform': 'rgb(53, 54, 56)',
+        '--dsw-alias-border-inverted': 'rgba(255, 255, 255, 0.06)',
+        '--dsw-alias-border-l2': 'rgba(255, 255, 255, 0.12)',
+        '--dsw-alias-label-primary': 'rgb(249, 250, 251)',
+        '--dsw-alias-label-tertiary': 'rgb(173, 178, 184)',
+        '--dsw-alias-interactive-bg-hover': 'rgba(255, 255, 255, 0.08)',
+        '--dsw-specific-menu': 'rgb(53, 54, 56)',
+        '--dsw-shadow-lv3': '0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08)',
     }),
     light: Object.freeze({
         '--vcp-ui-theme-bg-primary': 'oklch(0.98 0.008 230)',
@@ -47,6 +65,17 @@ const SEMANTIC_THEME_TOKENS = Object.freeze({
         '--vcp-ui-theme-accent': 'oklch(0.52 0.15 230)',
         '--vcp-ui-theme-accent-hover': 'oklch(0.44 0.17 230)',
         '--vcp-ui-theme-on-accent': 'oklch(1 0 0)',
+        '--dsw-alias-bg-layer-1': 'rgb(255, 255, 255)',
+        '--dsw-alias-bg-layer-2': 'rgb(255, 255, 255)',
+        '--dsw-alias-bg-layer-3': 'rgb(255, 255, 255)',
+        '--dsw-alias-bg-module-platform': 'rgb(245, 246, 247)',
+        '--dsw-alias-border-inverted': 'rgba(0, 0, 0, 0)',
+        '--dsw-alias-border-l2': 'rgba(0, 0, 0, 0.1)',
+        '--dsw-alias-label-primary': 'rgb(15, 17, 21)',
+        '--dsw-alias-label-tertiary': 'rgb(129, 133, 140)',
+        '--dsw-alias-interactive-bg-hover': 'rgba(0, 0, 0, 0.04)',
+        '--dsw-specific-menu': 'rgb(255, 255, 255)',
+        '--dsw-shadow-lv3': '0 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 4px 0 rgba(0, 0, 0, 0.02), 0 12px 32px 0 rgba(0, 0, 0, 0.08)',
     }),
 });
 const tokenOwners = new WeakMap();
