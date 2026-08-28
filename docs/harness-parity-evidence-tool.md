@@ -248,6 +248,14 @@ browser capture, same-semantic DOM/computed-style/pixel diffs, and a legal VCP
 production consumer remain absent while assistant-agent/chat switching is
 frozen.
 
+`node scripts/check-harness-agent-preset-row-source-provenance.mjs` applies the
+same source-drift boundary to the settings AgentPresetRow composite. It pins
+the row's status/disabled/error ownership, PresetMenu `align=end` portal and
+trust-label contract, stylesheet geometry, and the fixed Candidate capture
+shape. The report remains `pass=false`: no same-semantic Harness browser or
+DOM/style/pixel pair exists, and VCP has no equivalent non-frozen preset
+preference consumer.
+
 - `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
   open-only ticking, listener cleanup, and Escape focus restoration;
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
