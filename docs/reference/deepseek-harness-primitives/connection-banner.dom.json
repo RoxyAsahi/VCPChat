@@ -1,8 +1,15 @@
 {
   "primitive": "ConnectionBanner",
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/ConnectionBanner.tsx",
+  "source": "packages/client/ui-primitives/src/ConnectionBanner.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "provenance": {
+    "sources": ["packages/client/ui-primitives/src/ConnectionBanner.tsx", "packages/client/ui-primitives/tests/atoms.client.spec.tsx"],
+    "selectionRule": "Use the pure reconnecting projection and upstream atom test as the Harness source; VCP fixture remains Candidate-only with caller-owned connection state."
+  },
+  "candidateStatus": "candidate-interaction-active; source and lifecycle fixture covered, no VCP connection consumer or paired visual capture",
   "root": { "tag": "div", "class": "banner", "role": "status", "ariaLive": "polite" },
   "states": ["connected-hidden", "reconnecting-visible", "label-update", "dispose"],
   "owner": "caller owns reconnecting state; scope owns host restoration",
-  "vcpStatus": "candidate-interaction-active"
+  "vcpStatus": "candidate-interaction-active",
+  "vcpBoundary": "modules/uiux/lab/primitive-lab.ts only; do not connect to chat/session transport"
 }
