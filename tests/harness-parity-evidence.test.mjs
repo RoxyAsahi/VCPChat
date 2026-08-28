@@ -22,6 +22,7 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.equal(report.primitives.find(item => item.name === 'field')?.provenancePass, true);
     assert.equal(report.primitives.find(item => item.name === 'input')?.provenancePass, true);
     assert.equal(report.primitives.find(item => item.name === 'settings-root')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'button')?.provenancePass, true);
     assert.ok(report.missingEvidence.includes('select/busy-trigger-disabled: blocked-vcp-consumer'));
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
     assert.equal(report.nextCandidate, 'select/busy-trigger-disabled');
