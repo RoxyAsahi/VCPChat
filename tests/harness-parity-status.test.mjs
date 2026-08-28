@@ -21,11 +21,12 @@ test('Harness parity status accounts for scope without promoting Candidate evide
   assert.ok(report.inventory.counts.scopeBlockedSurfaces > 0);
   assert.ok(report.coverage.counts.scopeBlockedContracts > 0);
   assert.equal(report.candidateCaptureGaps.counts.captureGaps, 4);
-  assert.equal(report.provenanceGuards.length, 8);
+  assert.equal(report.provenanceGuards.length, 9);
   assert.equal(report.provenanceGuards.every(guard => guard.present && guard.pass === false), true);
   assert.equal(report.provenanceGuards.find(guard => guard.name === 'language-row')?.present, true);
   assert.equal(report.provenanceGuards.find(guard => guard.name === 'agent-preset-label')?.present, true);
   assert.equal(report.provenanceGuards.find(guard => guard.name === 'agent-preset-section')?.present, true);
   assert.equal(report.provenanceGuards.find(guard => guard.name === 'workspace-browser')?.present, true);
+  assert.equal(report.provenanceGuards.find(guard => guard.name === 'settings-root')?.present, true);
   assert.ok(report.openBoundaries.some(boundary => boundary.includes('non-promoting')));
 });
