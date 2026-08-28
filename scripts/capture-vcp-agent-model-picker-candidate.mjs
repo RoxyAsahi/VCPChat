@@ -18,8 +18,9 @@ const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ?
 // catalog transition.  Harness has a source-level client test for this state,
 // but no reproducible production-page failure injection yet, so this report
 // must remain test-derived evidence rather than a production visual baseline.
-const captureScenario = process.env.VCP_MODEL_PICKER_SCENARIO === 'load-error-retry'
-    ? 'load-error-retry'
+const requestedScenario = process.env.VCP_MODEL_PICKER_SCENARIO;
+const captureScenario = requestedScenario === 'load-error-retry' || requestedScenario === 'selection-error-toast'
+    ? requestedScenario
     : 'ready-selected';
 const outputStem = captureMode === 'harness-equivalent'
     ? 'vcp-agent-model-picker-harness-equivalent'
@@ -142,7 +143,10 @@ try {
                     { id: 'local-llama', label: 'Llama 3.3', provider: 'Local', disabled: true },
                 ];
             },
-            onSelect: option => selected.push(option.id),
+            onSelect: async option => {
+                if (scenario === 'selection-error-toast') throw new Error('session already contains images');
+                selected.push(option.id);
+            },
             onEffortSelect: option => efforts.push(option.id),
         }, scope);
         picker.open();
@@ -302,6 +306,36 @@ try {
                 };
             })(),
         };
+        let selectionErrorToast = null;
+        if (scenario === 'selection-error-toast') {
+            const card = host.querySelector('.vcp-harness-popup-select-card');
+            const rejected = card?.querySelector(`${optionRoot} ${optionSelector}:not([aria-disabled="true"])`);
+            rejected?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const toast = document.body.querySelector('.vcp-harness-toast');
+            const error = card?.querySelector('.vcp-harness-popup-select-error');
+            const retry = card?.querySelector('.vcp-harness-popup-select-retry');
+            selectionErrorToast = {
+                evidenceKind: 'VCP Electron generated-artifact capture; Harness source-test-derived selection failure reference only',
+                harnessSource: 'packages/client/ui-model-selection/tests/model-select.client.spec.tsx: rejected selection announces a transient Toast and does not render the in-menu Retry strip',
+                popup: {
+                    open: picker.popup.getSnapshot().open,
+                    status: picker.popup.getSnapshot().status,
+                    submitting: picker.popup.getSnapshot().submitting,
+                    error: picker.popup.getSnapshot().error,
+                },
+                menuErrorDisplay: error instanceof HTMLElement ? error.style.display : null,
+                retryVisible: retry instanceof HTMLElement && getComputedStyle(retry).display !== 'none'
+                    && retry.parentElement instanceof HTMLElement && getComputedStyle(retry.parentElement).display !== 'none',
+                toast: toast ? {
+                    role: toast.getAttribute('role'),
+                    text: toast.textContent ?? '',
+                    parent: toast.parentElement?.tagName.toLowerCase() ?? null,
+                    outerHtml: toast.outerHTML,
+                    style: (() => { const style = getComputedStyle(toast); return { position: style.position, zIndex: style.zIndex, pointerEvents: style.pointerEvents, left: style.left, top: style.top }; })(),
+                } : null,
+            };
+        }
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
         const menuStyleSnapshot = menuStyle ? {
@@ -454,7 +488,7 @@ try {
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
             scenario, rootPane, modelPane, keyboardNavigation, modelEscape, effortPane, effortEscape, focusRestored,
-            loadErrorRetry,
+            loadErrorRetry, selectionErrorToast,
             dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
             trigger: {
                 tag: picker.trigger.tagName.toLowerCase(),
@@ -545,6 +579,17 @@ try {
         assert.equal(evidence.loadErrorRetry?.settled.status, 'ready');
         assert.equal(evidence.loadErrorRetry?.settled.optionCount, captureMode === 'harness-equivalent' ? 2 : 3);
         assert.equal(evidence.loadErrorRetry?.settled.loadAttempts, 2);
+    }
+    if (captureScenario === 'selection-error-toast') {
+        assert.equal(evidence.selectionErrorToast?.popup.open, true);
+        assert.equal(evidence.selectionErrorToast?.popup.status, 'ready');
+        assert.equal(evidence.selectionErrorToast?.popup.submitting, false);
+        assert.equal(evidence.selectionErrorToast?.popup.error, null);
+        assert.equal(evidence.selectionErrorToast?.menuErrorDisplay, 'none');
+        assert.equal(evidence.selectionErrorToast?.retryVisible, false);
+        assert.equal(evidence.selectionErrorToast?.toast?.role, 'alert');
+        assert.match(evidence.selectionErrorToast?.toast?.text ?? '', /Model operation failed: session already contains images/);
+        assert.equal(evidence.selectionErrorToast?.toast?.parent, 'body');
     }
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-full.png`) });

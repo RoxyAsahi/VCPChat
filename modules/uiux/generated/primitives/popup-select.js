@@ -94,7 +94,8 @@ export function createPopupSelectController(spec, deps) {
         catch (error) {
             if (binding !== current)
                 return;
-            set({ submitting: false, error: errorText(error) });
+            const handled = spec.onSelectError?.(error, option, current.context) === true;
+            set({ submitting: false, error: handled ? null : errorText(error) });
             return;
         }
         if (binding !== current)

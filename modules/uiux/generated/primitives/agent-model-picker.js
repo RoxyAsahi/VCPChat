@@ -1,5 +1,6 @@
 import { createPopupSelectController, mountPopupSelectView } from './popup-select.js';
 import { mountSemanticIcon } from './semantic-icon.js';
+import { mountToast } from './toast.js';
 const STYLE_ID = 'vcp-harness-uiux-agent-model-picker';
 let pickerSequence = 0;
 function ensureStyles() {
@@ -25,6 +26,7 @@ export function mountAgentModelPicker(host, props, scope) {
     const trigger = props.trigger ?? document.createElement('button');
     const originalTriggerClass = trigger.getAttribute('class');
     const originalTriggerType = trigger.getAttribute('type');
+    const originalTriggerDisabled = trigger.disabled;
     const originalTriggerAria = {
         haspopup: trigger.getAttribute('aria-haspopup'),
         expanded: trigger.getAttribute('aria-expanded'),
@@ -39,6 +41,8 @@ export function mountAgentModelPicker(host, props, scope) {
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-label', props.label ?? 'Select model');
+    if (props.locked === true)
+        trigger.disabled = true;
     const triggerLabel = document.createElement('span');
     triggerLabel.className = 'vcp-harness-agent-model-picker-trigger-label';
     triggerLabel.textContent = 'Select model';
@@ -52,6 +56,45 @@ export function mountAgentModelPicker(host, props, scope) {
     host.append(root);
     let selectedId = props.selectedId;
     let lastOptions = [];
+    let selectionFailure = false;
+    let selectionToastGeneration = 0;
+    let activeSelectionToast = null;
+    const selectionErrorText = (error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        return `Model operation failed: ${message || 'selection was rejected'}`;
+    };
+    const showSelectionToast = (error) => {
+        if (props.harnessEquivalent !== true || !pickerScope.active)
+            return;
+        const previous = activeSelectionToast;
+        activeSelectionToast = null;
+        if (previous)
+            void previous.scope.dispose('agent-model-picker-selection-toast-replaced');
+        const toastScope = pickerScope.child('harness-agent-model-picker-selection-toast');
+        const generation = ++selectionToastGeneration;
+        const icon = document.createElement('span');
+        mountSemanticIcon(icon, { name: 'warning', size: 16 }, toastScope);
+        activeSelectionToast = { generation, scope: toastScope };
+        try {
+            mountToast({
+                text: selectionErrorText(error),
+                icon,
+                anchor: trigger,
+                onDone: () => {
+                    if (activeSelectionToast?.generation !== generation)
+                        return;
+                    activeSelectionToast = null;
+                    void toastScope.dispose('agent-model-picker-selection-toast-expired');
+                },
+            }, toastScope);
+        }
+        catch (mountError) {
+            if (activeSelectionToast?.generation === generation)
+                activeSelectionToast = null;
+            void toastScope.dispose('agent-model-picker-selection-toast-mount-failed');
+            throw mountError;
+        }
+    };
     const loadOptions = async (signal) => {
         const options = await props.options(signal);
         lastOptions = options;
@@ -72,10 +115,25 @@ export function mountAgentModelPicker(host, props, scope) {
             const selected = lastOptions.find(candidate => candidate.id === option.id);
             if (!selected || selected.disabled)
                 return;
-            await props.onSelect(selected);
-            selectedId = selected.id;
-            triggerLabel.textContent = selected.label;
+            selectionFailure = false;
+            try {
+                const accepted = await props.onSelect(selected);
+                if (accepted === false)
+                    throw new Error('selection was rejected');
+                selectedId = selected.id;
+                triggerLabel.textContent = selected.label;
+            }
+            catch (error) {
+                selectionFailure = props.harnessEquivalent === true;
+                showSelectionToast(error);
+                throw error;
+            }
         },
+        // Only Harness parity selection failures are consumed as a Toast;
+        // catalog load failures still own the in-menu Retry strip.  The
+        // boolean is set by the selected owner's command above, so neither
+        // the DOM nor a second durable store becomes an error authority.
+        onSelectError: () => selectionFailure,
     }, {
         consume: () => true,
         focusComposer: () => trigger.focus(),
@@ -212,6 +270,8 @@ export function mountAgentModelPicker(host, props, scope) {
         // button. Capture-phase interception keeps that behavior available
         // after disposal without proxying through a hidden control.
         event.stopImmediatePropagation();
+        if (trigger.disabled)
+            return;
         if (popup.getSnapshot().open) {
             invalidateEffortSelection();
             popup.dismiss();
@@ -227,7 +287,7 @@ export function mountAgentModelPicker(host, props, scope) {
     pickerScope.own(unsubscribe, 'agent-model-picker-subscription', 'ui-presentation');
     pickerScope.listen(window, 'resize', placeExternalCard);
     pickerScope.listen(document, 'scroll', placeExternalCard, { capture: true });
-    if (props.open === true)
+    if (props.open === true && !trigger.disabled)
         popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });
     pickerScope.own(async () => {
         unsubscribe();
@@ -243,6 +303,7 @@ export function mountAgentModelPicker(host, props, scope) {
             trigger.removeAttribute('type');
         else
             trigger.setAttribute('type', originalTriggerType);
+        trigger.disabled = originalTriggerDisabled;
         const restoreAttribute = (name, value) => {
             if (value === null)
                 trigger.removeAttribute(name);
@@ -253,16 +314,26 @@ export function mountAgentModelPicker(host, props, scope) {
         restoreAttribute('aria-expanded', originalTriggerAria.expanded);
         restoreAttribute('aria-label', originalTriggerAria.label);
         restoreAttribute('aria-controls', originalTriggerAria.controls);
+        selectionToastGeneration += 1;
+        activeSelectionToast = null;
     }, 'agent-model-picker', 'ui-primitive');
     return {
         root,
         trigger,
         popup,
-        open: () => { invalidateEffortSelection(); pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } }); },
+        open: () => {
+            if (trigger.disabled)
+                return;
+            invalidateEffortSelection();
+            pane = 'root';
+            popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });
+        },
         // Closing from the trigger/picker surface must return focus to the
         // trigger, matching the Harness menu focus contract.
         close: () => { invalidateEffortSelection(); popup.dismiss({ focusComposer: true }); },
         refresh: () => {
+            if (trigger.disabled)
+                return;
             invalidateEffortSelection();
             if (popup.getSnapshot().open)
                 popup.dismiss();

@@ -292,6 +292,58 @@ test('Harness AgentModelPicker projects loading, load failure and retry through 
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentModelPicker locks its native trigger and routes rejected selections to an owned Toast', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="locked"></div><div id="candidate"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-locked-selection-error-test'));
+        const lockedHost = document.getElementById('locked');
+        let lockedLoads = 0;
+        const locked = mountAgentModelPicker(lockedHost, {
+            locked: true,
+            harnessEquivalent: true,
+            options: async () => { lockedLoads += 1; return []; },
+            onSelect: () => {},
+        }, scope);
+        assert.equal(locked.trigger.disabled, true, 'Harness locked must be a native disabled trigger');
+        locked.trigger.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        locked.open();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(lockedLoads, 0, 'a locked trigger must not begin a catalog load through either pointer or controller entry');
+        assert.equal(locked.popup.getSnapshot().open, false);
+        await locked.dispose();
+        assert.equal(locked.trigger.disabled, false, 'dispose restores the trigger disabled state it took ownership of');
+
+        const host = document.getElementById('candidate');
+        const picker = mountAgentModelPicker(host, {
+            harnessEquivalent: true,
+            searchEnabled: false,
+            selectedId: 'flash',
+            options: async () => [
+                { id: 'flash', label: 'Flash', provider: 'DeepSeek' },
+                { id: 'think', label: 'Think', provider: 'DeepSeek' },
+            ],
+            onSelect: () => false,
+        }, scope);
+        picker.open();
+        picker.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = picker.root.querySelector('.vcp-harness-popup-select-card');
+        card?.querySelector('[data-option-id="think"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(picker.popup.getSnapshot().open, true, 'a rejected selection must retain the menu owner');
+        assert.equal(picker.popup.getSnapshot().status, 'ready');
+        assert.equal(picker.popup.getSnapshot().error, null, 'selection rejection must not become a catalog-load error');
+        assert.equal(card?.querySelector('[role="alert"]')?.style.display, 'none', 'the in-menu Retry strip is reserved for catalog loads');
+        const toast = document.body.querySelector('.vcp-harness-toast[role="alert"]');
+        assert.match(toast?.textContent || '', /Model operation failed: selection was rejected/);
+        await picker.dispose();
+        await scope.dispose('agent-model-picker-locked-selection-error-complete');
+        assert.equal(document.querySelector('.vcp-harness-toast'), null, 'picker disposal retracts its selection-error Toast owner');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness AgentModelPicker projects selecting as busy native rows and restores trigger focus', async () => {
     const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
@@ -329,6 +381,39 @@ test('Harness AgentModelPicker projects selecting as busy native rows and restor
         assert.equal(document.activeElement, controller.trigger, 'accepted selection restores focus to the canonical trigger');
         await controller.dispose();
         await scope.dispose('agent-model-picker-selecting-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness AgentModelPicker reports rejected selection through an owner-bound Toast, not the load Retry strip', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-selection-toast-test'));
+        const host = document.getElementById('host');
+        const controller = mountAgentModelPicker(host, {
+            harnessEquivalent: true,
+            searchEnabled: false,
+            options: async () => [{ id: 'unavailable', label: 'Unavailable', provider: 'DeepSeek' }],
+            onSelect: async () => { throw new Error('session already contains images'); },
+        }, scope);
+        controller.open();
+        controller.setPane('model');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const card = controller.root.querySelector('.vcp-harness-popup-select-card');
+        card?.querySelector('[data-option-id="unavailable"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const toast = document.body.querySelector('.vcp-harness-toast');
+        assert.equal(controller.popup.getSnapshot().open, true, 'a rejected selection keeps the model menu open');
+        assert.equal(controller.popup.getSnapshot().status, 'ready');
+        assert.equal(controller.popup.getSnapshot().error, null, 'selection rejection must not become the catalog-load error state');
+        assert.equal(card?.querySelector('.vcp-harness-popup-select-error')?.style.display, 'none',
+            'the load-error container must remain hidden; a child Retry button is not independently meaningful');
+        assert.equal(toast?.getAttribute('role'), 'alert');
+        assert.match(toast?.textContent || '', /Model operation failed: session already contains images/);
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-selection-toast-complete');
+        assert.equal(document.body.querySelector('.vcp-harness-toast'), null, 'picker disposal retracts its selection-error Toast');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
