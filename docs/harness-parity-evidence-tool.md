@@ -52,6 +52,15 @@ and the active shared ModelPicker boundary. Its `paired-evidence-scoped` status
 is deliberately non-promoting: `pass` remains false until every authorized
 paired state and production boundary is closed.
 
+The Tooltip Candidate capture replays the source-contract state matrix in a
+standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
+flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
+baseline, not a Harness/VCP comparison; a same-semantic Harness browser capture,
+computed-style/DOM diff, pixel diff, and any production consumer remain missing.
+The replay also reloads the isolated page after disposal and requires a clean
+two-anchor/no-tooltip baseline, so it does not substitute a live browser page
+for close/flush evidence.
+
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:
 the Harness web package's Playwright resolver, the vendored Cordis workspace

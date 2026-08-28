@@ -142,13 +142,28 @@ test('Paired evidence ledger keeps Candidate captures and blocked boundaries exp
     assert.equal(report.status, 'paired-evidence-scoped');
     assert.equal(report.pass, false);
     assert.equal(report.counts.pairedRoiPasses, 1);
-    assert.equal(report.counts.vcpCandidateCaptures, 4);
+    assert.equal(report.counts.vcpCandidateCaptures, 5);
     assert.equal(report.counts.candidateCaptureMissing, 0);
     assert.equal(report.pairedSelect.state, 'paired-roi-pass');
     assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
     assert.equal(report.candidateCaptures.every(item => item.state === 'vcp-candidate-capture-only' && item.captured), true);
     assert.ok(report.sourceOrConsumerBoundaries.some(item => item.state === 'consumer-boundary'));
     assert.equal(report.activeExternalBoundary.name, 'model-picker');
+});
+
+test('Tooltip Candidate capture preserves delayed hover, immediate focus, flip, disabled, and disposal boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-tooltip-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-tooltip-candidate.json'), 'utf8'));
+    assert.equal(report.semanticFixture, 'tooltip/bottom-delayed-hover-focus-flip-disabled-dispose');
+    assert.equal(report.beforeDelay, 0);
+    assert.equal(report.hover.role, 'tooltip');
+    assert.equal(report.hover.parent, 'body');
+    assert.equal(report.hover.style.position, 'fixed');
+    assert.equal(report.focusImmediate, true);
+    assert.equal(report.flipped.side, 'top');
+    assert.equal(report.disabled.bubbleCount, 0);
+    assert.equal(report.disposed.bubbles, 0);
+    assert.deepEqual(report.reloaded, { bubbles: 0, anchors: 2 });
 });
 
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
