@@ -55,10 +55,13 @@ try {
   const sidebarCss = await fs.readFile(styleFile, 'utf8');
   evidence.cascadeContract = {
     accountMenuItemRule: /\.next-ui-account-menu-item[\s\S]*?min-height:\s*var\(--vcp-ui-sidebar-row-height\)/.test(sidebarCss),
-    generatedButtonClassAbsent: !/\.vcp-harness-button/.test(sidebarCss),
+    // The generated Button is mounted at runtime on exactly the three Account
+    // actions.  Sidebar CSS remains the layout/material owner and must not
+    // grow a competing generated-button selector.
+    generatedButtonRuleAbsent: !/\.vcp-harness-button/.test(sidebarCss),
     trayMinHeightRule: /#appTrayDrawerGrid\s+\.app-tray-drawer-item[\s\S]*?min-height:\s*var\(--vcp-ui-control-md\)/.test(await fs.readFile(new URL('../styles/ui-system/notifications.css', import.meta.url), 'utf8')),
   };
-  assert.deepEqual(evidence.cascadeContract, { accountMenuItemRule: true, generatedButtonClassAbsent: true, trayMinHeightRule: true }, 'sidebar/tray authored cascade contract drifted');
+  assert.deepEqual(evidence.cascadeContract, { accountMenuItemRule: true, generatedButtonRuleAbsent: true, trayMinHeightRule: true }, 'sidebar/tray authored cascade contract drifted');
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { try { await request(`http://127.0.0.1:${port}/json/version`); break; } catch { await sleep(100); } }
   browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}` });
@@ -79,10 +82,11 @@ try {
       const describe = node => { const box = node.getBoundingClientRect(); const style = getComputedStyle(node); return { id: node.id, rect: { x: box.x, y: box.y, width: box.width, height: box.height }, height: style.height, minHeight: style.minHeight, padding: style.padding, gap: style.gap, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color, backgroundColor: style.backgroundColor, outline: style.outline }; };
       const first = items[0]; const itemRect = first?.getBoundingClientRect(); const hit = itemRect && document.elementFromPoint(itemRect.left + itemRect.width / 2, itemRect.top + itemRect.height / 2);
       return { menu: menu && r ? { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: getComputedStyle(menu).position, zIndex: getComputedStyle(menu).zIndex, inViewport: r.left >= -2 && r.top >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 } : null,
-        triggerExpanded: trigger?.getAttribute('aria-expanded'), items: items.map(describe), topmostFirstItem: Boolean(first && hit && first.contains(hit)), bodyTheme: [...document.body.classList] };
+        triggerExpanded: trigger?.getAttribute('aria-expanded'), items: items.map(node => ({ ...describe(node), harnessButton: node.classList.contains('vcp-harness-button') })), topmostFirstItem: Boolean(first && hit && first.contains(hit)), bodyTheme: [...document.body.classList] };
     });
     assert.equal(account.triggerExpanded, 'true', `${name}: account trigger is not expanded`);
     assert.equal(account.items.length, 3, `${name}: account menu item count drifted`);
+    assert.ok(account.items.every(item => item.harnessButton), `${name}: Account actions lost generated Harness Button presentation: ${JSON.stringify(account.items)}`);
     assert.ok(account.menu?.inViewport && account.topmostFirstItem, `${name}: account menu is clipped or occluded: ${JSON.stringify(account.menu)}`);
     assert.ok(account.items.every(item => Number.parseFloat(item.minHeight) >= 36), `${name}: sidebar CSS reduced a menu item below 36px: ${JSON.stringify(account.items)}`);
     await page.hover('#nextUiAccountAppearanceStudioBtn'); await sleep(40);

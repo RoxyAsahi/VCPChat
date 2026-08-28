@@ -21,6 +21,10 @@
             this.toggleTheme = options.toggleTheme || (() => {});
             this.syncAppearance = options.syncAppearance || (() => {});
             this.setIcon = options.setIcon || null;
+            // The generated artifact is an optional presentation capability.
+            // Account actions remain native buttons with their existing
+            // controller-owned commands if it is unavailable.
+            this.buttonApi = options.buttonApi || null;
             this.getThemeSnapshot = options.getThemeSnapshot || null;
             this.subscribeTheme = options.subscribeTheme || null;
             this.escapeDispatcher = options.escapeDispatcher || null;
@@ -31,6 +35,8 @@
             this.mounted = false;
             this.themeSubscriptionDisposer = null;
             this.escapeDisposer = null;
+            this.generatedButtonScope = null;
+            this.generatedButtonsMounted = false;
         }
 
         mount(scope = null) {
@@ -106,7 +112,44 @@
                 }
             }
             if (scope) scope.own(() => this.dispose(), 'account-menu-controller', 'controller');
+            this.mountGeneratedMenuButtons();
+            // `browser-entry` normally loads before NextShell.  Retain a
+            // narrow late-ready seam for a failed/slow generated artifact;
+            // it only adopts the three presentation buttons and never binds
+            // a second command, menu, or theme subscription owner.
+            listen(this.window, 'vcp-uiux-ready', () => this.mountGeneratedMenuButtons());
             this.sync();
+            return true;
+        }
+
+        mountGeneratedMenuButtons() {
+            if (!this.mounted || this.generatedButtonsMounted || !this.scope) return false;
+            const api = this.buttonApi || this.window.VCPUIUX;
+            if (typeof api?.mountButton !== 'function') return false;
+            if (typeof this.scope.child !== 'function') return false;
+            const buttons = [
+                this.elements?.appearanceButton,
+                this.elements?.themeStoreButton,
+                this.elements?.themeToggleButton,
+            ].filter(button => button instanceof this.window.HTMLButtonElement);
+            if (buttons.length !== 3) return false;
+            // `mountButton` registers its own disposer. Give this batch a
+            // child owner so partial installation rolls back atomically and
+            // the parent scope remains the only teardown authority.
+            const buttonScope = this.scope.child('next:account-menu-buttons');
+            try {
+                for (const button of buttons) {
+                    api.mountButton(button, { variant: 'ghost', size: 'md' }, buttonScope);
+                }
+            } catch (error) {
+                void buttonScope.dispose('account-menu-button-adoption-failed').catch(releaseError => {
+                    console.warn('[NextUI] Failed to roll back Account menu Button presentation:', releaseError);
+                });
+                console.warn('[NextUI] Generated Account menu Button presentation unavailable; native menu remains active:', error);
+                return false;
+            }
+            this.generatedButtonScope = buttonScope;
+            this.generatedButtonsMounted = true;
             return true;
         }
 
@@ -174,6 +217,10 @@
             this.escapeDisposer = null;
             this.observer?.disconnect();
             this.themeSubscriptionDisposer?.();
+            // The parent scope owns the child scope; do not release it here
+            // or duplicate `mountButton`'s scope-owned disposal chain.
+            this.generatedButtonScope = null;
+            this.generatedButtonsMounted = false;
             this.abortController = null;
             this.observer = null;
             this.themeSubscriptionDisposer = null;
