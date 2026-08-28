@@ -240,8 +240,8 @@ the frozen consumer boundary and always keeps `pass: false`; it is not a
 priority ranking and does not authorize production wiring.
 
 `node scripts/check-harness-parity-status.mjs` consolidates the current
-inventory, fixture-coverage, Candidate capture-gap, and composite provenance
-reports into `reports/harness-parity-status.json`. It reports when scope is
+inventory, fixture-coverage, Candidate capture-gap, and composite/locale
+provenance reports into `reports/harness-parity-status.json`. It reports when scope is
 accounted for, but always keeps `pass=false`: source/contract coverage and
 Candidate evidence never establish production parity or unlock frozen
 Settings/Chat/Composer consumers.
