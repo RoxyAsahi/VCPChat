@@ -147,6 +147,42 @@ test('Agent TTS Range has one presentation output owner and no manager-side list
         'the typed Range wrapper, not an Agent-id selector, must own flexible row geometry');
 });
 
+test('Agent TTS Voice Select keeps business option loading while one typed projection owns presentation', () => {
+    const entry = read(bridgeEntry);
+    const manager = read(path.join(root, 'modules', 'settingsManager.js'));
+    const selectProjection = read(path.join(settingsDir, 'select-projection.js'));
+    const agentCss = read(path.join(root, 'styles', 'setting', 'settings-agent-card-shell.css'));
+    const enhanceForm = entry.slice(entry.indexOf('function enhanceForm(form)'), entry.indexOf('function mountHarnessSwitches', entry.indexOf('function enhanceForm(form)')));
+
+    assert.match(enhanceForm, /selectProjection\.mount\(form\)/,
+        'Agent TTS Voice Select must mount through the shared generated Select projection');
+    assert.match(enhanceForm, /if \(!select\.closest\('\.vcp-harness-select'\)\) enhance\('Select'/,
+        'legacy VCPUI Select enhancement must not mount inside a typed Select wrapper');
+    assert.match(selectProjection, /select\.dataset\.vcpTypedPrimitiveMounted === 'true'/,
+        'a native node already owned by the generated primitive must not receive a second projection');
+    assert.match(selectProjection, /selectScope = scope\.child\(`select-projection:/,
+        'each Select presentation owner must retract with its own child scope');
+    assert.match(selectProjection, /new window\.MutationObserver\(/,
+        'dynamic model option replacement must be observed by the one Select projection owner');
+    assert.match(manager, /async function populateTtsModels\(currentPrimaryVoice, currentSecondaryVoice\)/,
+        'TTS voice model discovery remains the canonical business loader');
+    assert.match(manager, /commitOptions\(agentTtsVoicePrimarySelect, primaryOptions, currentPrimaryVoice\)/,
+        'the primary native select remains the canonical option/value node');
+    assert.match(manager, /commitOptions\(agentTtsVoiceSecondarySelect, secondaryOptions, currentSecondaryVoice\)/,
+        'the secondary native select remains the canonical option/value node');
+    assert.match(manager, /await electronAPI\.sovitsGetModels\(true\)/,
+        'the refresh command remains on the native TTS model path');
+    assert.doesNotMatch(manager, /agentTtsVoice(?:Primary|Secondary)Select\.addEventListener\(/,
+        'SettingsManager must not register a competing TTS Select presentation listener');
+    for (const selector of [
+        '#agentSettingsContainer select:not(.vcp-harness-select-native)',
+        'body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native)',
+        'body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native)',
+    ]) {
+        assert.ok(agentCss.includes(selector), `legacy Select CSS must exclude the typed native node: ${selector}`);
+    }
+});
+
 test('Agent ColorPairs have one generated synchronization owner and preserve canonical color controls', () => {
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
