@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { LifecycleScope } = require('../modules/ui-system/lifecycle-scope.js');
+const { LifecycleScope, diagnostics } = require('../modules/ui-system/lifecycle-scope.js');
 const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountButton } = await import('../modules/uiux/primitives/button.ts');
@@ -93,6 +93,62 @@ test('Harness LanguageRow composes a locale selector and retracts cleanly', asyn
         await scope.dispose('language-row-complete');
         assert.equal(host.textContent, 'original');
         assert.equal(document.querySelector('.vcp-harness-language-row'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness LanguageRow serializes concurrent option replacement by generation', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"><span>original</span></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('language-row-concurrency-test'));
+        const host = document.getElementById('host');
+        const controller = mountLanguageRow(host, {
+            activeId: 'latest',
+            options: [{ id: 'initial', label: 'Initial' }],
+            onSelect: () => {},
+        }, scope);
+
+        const stale = controller.setOptions([{ id: 'stale', label: 'Stale' }]);
+        const latest = controller.setOptions([{ id: 'latest', label: 'Latest' }]);
+        await Promise.all([stale, latest]);
+
+        assert.deepEqual(
+            [...controller.menu.list.querySelectorAll('[role="menuitem"]')].map(node => node.textContent),
+            ['Latest'],
+            'the newest options must be the only published menu',
+        );
+        assert.equal(
+            scope.snapshot().resources.filter(resource => resource.label === 'child:harness-language-row-menu').length,
+            1,
+            'stale rebuilds must not leak an owned menu scope',
+        );
+
+        await scope.dispose('language-row-concurrency-complete');
+        assert.equal(diagnostics.find('harness-language-row-menu').length, 0);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness LanguageRow cancels queued rebuilds when disposed', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"><span>original</span></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('language-row-dispose-race-test'));
+        const host = document.getElementById('host');
+        const controller = mountLanguageRow(host, {
+            options: [{ id: 'initial', label: 'Initial' }],
+            onSelect: () => {},
+        }, scope);
+
+        const pending = controller.setOptions([{ id: 'late', label: 'Late' }]);
+        const disposing = scope.dispose('language-row-dispose-race');
+        await Promise.all([pending, disposing]);
+
+        assert.equal(host.textContent, 'original');
+        assert.equal(host.querySelector('.vcp-harness-language-row'), null);
+        assert.equal(diagnostics.find('harness-language-row-menu').length, 0);
+        assert.equal(diagnostics.find('harness-language-row').length, 0);
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
