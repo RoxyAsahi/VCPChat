@@ -52,3 +52,26 @@ failure manifest. `92d34613` changed the scanner to wait, within its existing
 startup race as a visual defect. The replacement isolated pair `run-X0eTSy`
 then passed both themes and all gates above. This is a QA harness correction;
 it does not alter product rendering.
+
+## Current dirty-worktree freshness checkpoint
+
+After the subsequent uncommitted theme, Showcase, Settings, and generated
+artifact changes present on 2026-08-28, the isolated real-Electron scanner was
+run again. The exact paired output is:
+
+```text
+reports/visual-forensics-qa/run-y3bh9m/light
+reports/visual-forensics-qa/run-y3bh9m/dark
+```
+
+Both manifests contain the three required fixed viewports and `gate.pass:true`.
+The exact-pair evidence check, light/dark computed-token contrast, and all six
+pixel/geometry baselines passed. This refresh covers first-open/reopen,
+scroll, narrow/restored dimensions, visible interaction/transient states,
+Settings cascade/context, portal geometry, and cleanup on the current dirty
+renderer—not just the earlier committed snapshot.
+
+The Electron stderr still records the expected unavailable CDS binary, local
+model endpoint, and Rust sidecar. The rendered target surfaces and every
+visual gate completed successfully, so these environment messages remain
+outside the visual-defect ledger.
