@@ -33,6 +33,12 @@ export function mountLanguageRow(host, props, scope) {
     title.className = 'vcp-harness-language-row-title';
     title.textContent = props.title ?? 'Language';
     text.append(title);
+    if (props.description) {
+        const description = document.createElement('div');
+        description.className = 'vcp-harness-language-row-description';
+        description.textContent = props.description;
+        text.append(description);
+    }
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'vcp-harness-language-row-selector';

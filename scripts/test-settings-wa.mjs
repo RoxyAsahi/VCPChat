@@ -126,7 +126,7 @@ const populateForm = (settings) => {
     set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
     set('appearanceSidebarRowHeight', settings.appearanceProfile?.sidebarRowHeight ?? 46);
     set('appearanceSidebarAvatarSize', settings.appearanceProfile?.sidebarAvatarSize ?? 32);
-    check(`appearanceSidebarRadiusChoice-${settings.appearanceProfile?.sidebarRadius ?? 'tuned'}`, true);
+    set('appearanceSidebarRadius', settings.appearanceProfile?.sidebarRadius ?? 'tuned');
     set('appearanceCustomRadius', settings.appearanceProfile?.customRadius ?? 10);
     set('minChunkBufferSize', settings.minChunkBufferSize ?? 16);
     set('smoothStreamIntervalMs', settings.smoothStreamIntervalMs ?? 100);
@@ -168,7 +168,7 @@ assert.ok(document.getElementById('showHomeVisualTagline'), 'home tagline toggle
 assert.ok(document.getElementById('homeVisualTagline'), 'home tagline text control exists');
 assert.ok(document.getElementById('appearanceSidebarRowHeight'), 'navigation row height range exists');
 assert.ok(document.getElementById('appearanceSidebarAvatarSize'), 'sidebar avatar size range exists');
-assert.ok(document.querySelector('input[name="appearanceSidebarRadiusChoice"]'), 'sidebar radius choice group exists');
+assert.ok(document.getElementById('appearanceSidebarRadius'), 'sidebar radius select exists');
 assert.ok(!document.getElementById('appearanceSidebarRadius'), 'retired hidden sidebar radius compatibility control stays deleted');
 assert.ok(document.getElementById('appearanceCustomRadius'), 'custom radius range exists');
 
@@ -384,14 +384,15 @@ assert.equal(document.getElementById('showHomeVisualTagline').checked, false, 'h
 assert.equal(document.getElementById('homeVisualTagline').value, '已保存的寄语', 'home tagline text reflects persisted content');
 assert.equal(document.getElementById('appearanceSidebarRowHeight').value, '50', 'navigation row height reflects persisted value');
 assert.equal(document.getElementById('appearanceSidebarAvatarSize').value, '36', 'sidebar avatar size reflects persisted value');
-assert.equal(document.getElementById('appearanceSidebarRadiusChoice-medium').checked, true, 'sidebar item radius reflects persisted value');
+assert.equal(document.getElementById('appearanceSidebarRadius').value, 'medium', 'sidebar item radius reflects persisted value');
 assert.equal(document.getElementById('appearanceCustomRadius').value, '11', 'custom radius reflects persisted value');
 document.getElementById('showHomeVisualBrand').checked = true;
 document.getElementById('showHomeVisualTagline').checked = true;
 document.getElementById('homeVisualTagline').value = '自定义首页寄语';
 document.getElementById('appearanceSidebarRowHeight').value = '60';
 document.getElementById('appearanceSidebarAvatarSize').value = '44';
-document.getElementById('appearanceSidebarRadiusChoice-round').checked = true;
+document.getElementById('appearanceSidebarRadius').value = 'round';
+document.getElementById('appearanceSidebarRadius').dispatchEvent(new Event('change', { bubbles: true }));
 document.getElementById('appearanceCustomRadius').value = '18';
 await submitForm();
 assert.equal(savedSettings.last.showHomeVisualBrand, true, 'home visual toggle persists');

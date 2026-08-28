@@ -2,6 +2,13 @@
 
 更新时间：2026-08-28
 
+## 最新验收记录（2026-08-28）
+
+- 继续复测后，当前 `npm run test:uiux` 为 94/94，`npm run test:ui-system` 为 115/115；Harness fixture matrix 为 161 visual / 32 interaction，reference pack 为 97 files / 47 primitive contracts。
+- 修复 artifact-only Electron Tooltip/HoverCard 视觉 fixture 的不稳定触发：fixture 现在显式发送 Tooltip anchor 的 `pointerenter`，不再把视觉门禁建立在窗口焦点副作用上；Tooltip 的 focus 交互仍由 UIUX interaction tests 覆盖。
+- 通过 `npm run test:electron-uiux:artifacts`、`npm run check:uiux`、`npm run check:uiux:artifacts`、`npm run test:uiux`（95/95）、`npm run test:ui-system`（115/115）、`node scripts/test-settings-wa-electron.mjs` 与 `node scripts/test-electron-global-settings-entry.mjs`。
+- 本次仅调整测试 fixture，未修改 Tooltip 生产实现、Settings 业务保存链或聊天冻结区域。
+
 ## 唯一目标
 
 让 VCPChat 全局设置页继续使用已经接入的 Harness 风格组件（Input、Field、Select、Toggle、Range、Choice、ColorPair、Button、Menu、Tooltip、Modal、Toast），并通过分区收口减少旧 CSS、重复 listener、重复 projection 和过宽 bridge 职责。
@@ -9,6 +16,10 @@
 这是一份产品施工计划，不是 DeepSeek Harness 源码复刻研究计划。旧的 `ui-runtime-2-roadmap.md`、parity ledger、reference pack 只用于追溯和必要回归，不作为高频设置迁移的阻塞条件。
 
 ## 当前基线
+
+### 列表项圆角行式控件（2026-08-28）
+
+全局设置的“列表项圆角”已改为 Harness 风格的单行设置项：左侧为字段说明，右侧为可换行的 Choice 选项组。原有 radio 节点仍是 canonical control，`appearanceProfile.sidebarRadius` 映射、自动保存和 Appearance engine 均未改变；仅删除原两列卡片式布局的 presentation 约束，并在窄屏降为上下排列。验证通过 `check:uiux`、`build:uiux`、artifact consistency、`test:uiux` 和 `test:ui-system`。Settings Electron 全流程本轮在既有 90 秒等待点超时，未进入该字段断言，不能作为本项通过证据。
 
 - Global Settings 已有约 93 个控件节点；
 - 已有 generated primitive 的真实 consumer：Input/Field、Select、Range、Toggle、Choice、ColorPair、Button，以及 Tooltip/Modal/Toast；
@@ -274,15 +285,52 @@ close-flush 和 canonical form 行为保持不变，scope 与模块 teardown 均
 
 结合此前完成的 Advanced、Rust、Render、Appearance、Identity、Forum、Agent
 Disclosure、ModelPicker capability 拆分，G4 的真实调用方模块化与 G5 的直接竞争
-presentation listener/CSS/projection 净删除均已完成。UIUX 91/91、Settings Electron
+presentation listener/CSS/projection 净删除均已完成。UIUX 95/95、Settings Electron
 journey、artifact consistency、source-equivalence、section ownership 和 typed build
 全部通过。
 
 明确保留、不得在本批次强删的债务只有业务共享边界：全局提交兼容链、头像文件选择与
 裁剪、无 artifact 时的 ColorPair fallback，以及被 `topicSummaryModel` 共享的
-`modelSelectModal`。它们不是重复 presentation owner，分别等待独立业务命令、完整
-默认数据 parity 或 caller 迁移后再退役。因此 G4/G5 状态定义为
+`modelSelectModal`。其中 `topicSummaryModel` 的 canonical 文本输入已接入 typed
+field owner，legacy whole-form autosave 不再监听该字段；仍保留共享 modal，因为
+Agent 模型和话题总结模型共用其目录、刷新、收藏和默认数据 caller。上述剩余债务
+分别等待独立业务命令、完整默认数据 parity 或 caller 迁移后再退役。因此 G4/G5 状态定义为
 `complete-with-explicit-business-exclusions`，而不是伪装成全仓库 legacy 清零。
+
+### Topic summary field owner 收口（2026-08-28）
+
+`topicSummaryModel` 的 native input 现在纳入 `TYPED_FIELD_DEFINITIONS`，由现有
+typed Settings owner 负责 input/change 草稿、debounced save、snapshot projection、
+close-flush 和 reload restore。模型选择按钮及共享 `modelSelectModal` 保持原状，仍
+由 `settingsManager` 的业务目录能力负责；本切片只退役该字段的 legacy autosave
+presentation 监听，不改变 persisted key、IPC 或话题总结业务语义。
+
+验证：`npm run check:uiux`、`npm run test:uiux`（91/91）、
+`node scripts/check-settings-source-equivalence.mjs` 通过。
+
+### 头像异步回写生命周期收口（2026-08-28）
+
+头像文件选择与裁剪仍保留原有业务链，但颜色提取 Promise 现在绑定本次选择的
+generation，并要求原始 input 和所属 Settings modal 仍处于当前 active 状态后才允许
+回写颜色控件。关闭、重开或连续选择新头像时，旧结果会失去提交资格；未改变头像保存、
+裁剪、颜色提取 API 或 persisted key。由于 `event-listeners.js` 含有并行工作树改动，
+本切片不单独提交整文件，待该文件归属明确后再固化。
+
+### 设置页视觉与保存缺陷修复（2026-08-28）
+
+在 G4/G5 的既有 owner 边界内完成一轮用户可见缺陷修复：
+
+- 折叠 section header/summary 在窄侧栏不再使用会裁剪内容的固定高度，摘要允许完整换行；
+- Agent 表单的自动保存状态现在可挂载到 Agent 自身的 action row，继续调用 canonical form submit；
+- 显式“保存 Agent 设置”和“删除此 Agent”入口隐藏，删除业务命令与兼容 submit 节点保留；
+- Agent 基础信息摘要、正则操作、TTS 模型刷新按钮移除液态玻璃背景、渐变、模糊和内阴影；
+- TTS 语速继续使用 native range 作为业务节点，但 generated Range 增加 Harness 风格轨道、滑块和输出布局；
+- 全局 SettingsRoot 移除导航标题下边线和左右分栏竖线。
+
+本轮不改变 persisted key、IPC、settingsManager 保存/删除语义、聊天区域或任何冻结业务边界。
+验证证据：`test:uiux` 91/91、`check:uiux`、`check:uiux:artifacts`、设置源码等价与
+section ownership 门禁、`test:electron-agent-settings-interaction` 均通过；Electron 压力
+周期前后 listeners=570、active scopes=41、active resources=501，detached roots/icons/options=0。
 
 ## 不作为阻塞条件
 
@@ -299,8 +347,8 @@ journey、artifact consistency、source-equivalence、section ownership 和 type
 
 补充证据：`test:electron-global-settings-entry` 已通过，确认 generated Settings
 入口 Button 的 mount、click、modal close 和 teardown 在真实 Electron 中保持可用。
-当前 Settings 专项视觉 gate 已完成；剩余工作集中在 G4/G5 的 section controller 拆分、
-legacy presentation 净删除，以及共享 `topicSummaryModel` caller 的独立退役条件。
+当前 Settings 专项视觉 gate 已完成；G4/G5 的 section controller 拆分与直接竞争
+presentation 净删除已完成，剩余工作集中在共享 `topicSummaryModel` caller 的独立退役条件。
 
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
@@ -335,3 +383,175 @@ G1 当前已经满足“现有 generated Input + canonical native node”的接�
 - 当前没有发现连接字段可安全删除的独立 listener/projection，G1 进入“保持现状、等待 section controller 拆分”的状态，而不是强行改代码。
 
 这说明全局设置已经在使用 Harness 风格组件；后续收口重点是拆分过宽 bridge、统一旧 CSS 层级和继续减少 legacy 竞争，不是重新接入 Input。
+
+## 复核记录（2026-08-28，继续施工）
+
+本轮按当前工作树重新核对了 G1-G5 及显式保留债务：
+
+- `check:uiux` 与 `check:uiux:artifacts` 通过，generated Range 源码/产物一致；
+- `test:uiux` 91/91 通过；
+- Agent Settings production evidence 与 ModelPicker legacy parity boundary 通过；
+- Electron Agent Settings interaction stress 通过，周期前后无 listener、scope、resource 或 detached DOM 增长；
+- `modelSelectModal` 仍被 `topicSummaryModel` 共享，当前删除条件尚未满足；头像文件/裁剪、全局 submit 兼容链和无 artifact ColorPair fallback 仍分别承担业务或 bootstrap 责任，暂不进行 presentation 误删。
+
+因此当前不是“全仓库 legacy 清零”，而是 G1-G5 的高频设置 presentation 收口已完成，剩余工作只在各自业务调用方和完整 parity 证据闭合后继续退役。目标保持 active。
+
+### 真实渲染复核与基线边界（2026-08-28）
+
+`test-settings-wa-electron.mjs` 已再次通过 SettingsRoot 的真实 Electron 验收：导航/标题/选项
+布局、Field/Select DOM 与 geometry、portal stacking、分类切换保留未保存值、light/dark
+截图、失败重试、close-flush、reload/reopen、重复打开和 teardown 均通过；窗口 resize 因
+当前 CDP 不提供 `Browser.getWindowForTarget` 仍按既有规则跳过。`visual-qa-next-global-settings-controls.mjs`
+的 light capture 通过，未发现控件 geometry 变化或 Range 输出失步。
+
+完整 `check:ui-system` 当前仍会报告大量工作树中既有的主题、Harness reference 和其他
+非本批文件不满足 subtraction allowlist；这些路径不属于本轮 global-settings 改动，不能用
+来否定 SettingsRoot 的专项证据，也不能据此扩大本批次修改范围。目标继续保持 active。
+
+### 共享颜色重置监听净删除（2026-08-28）
+
+复核发现 `resetUserAvatarColorsBtn` 曾同时由全局 Settings modal 绑定路径和文件
+后置初始化路径注册 click listener。后置重复 handler 已删除，modal 的
+`setupResetUserColorsListener` 作为唯一业务入口，并继续通过 `listenerOwner` 管理
+生命周期；颜色提取、表单字段写入、提示文案和保存协议保持不变。
+
+`test:uiux` 91/91、`test:ui-system` 115/115、语法检查和 diff whitespace gate 通过。
+
+### 全局设置监听 owner 收口（2026-08-28）
+
+全局设置 modal 的关闭、提交、头像选择、头像裁剪入口、颜色重置以及
+`modal-ready` 监听现统一通过 `setupEventListeners` 已有的 `listenerOwner` 注册；
+没有改变 `handleSaveGlobalSettings`、头像 capability 或颜色业务逻辑。这样这些仍需
+保留的业务监听也具备统一 teardown，避免 modal 重开或 renderer 销毁时形成裸监听。
+
+`test:ui-system` 115/115、`test:uiux` 91/91、`check:uiux` 和 artifact consistency
+继续通过。该切片完成的是生命周期归属，不代表头像裁剪或共享 model modal 已满足删除条件。
+
+### 全局设置入口与 fallback listener 统一 owner（2026-08-28）
+
+全局设置入口按钮、ColorPair fallback 的镜像监听，以及 Rust fallback 条件显隐监听
+现在都通过 `setupEventListeners` 的统一 `addListener` 注册；fallback 的启用条件和
+业务归一化保持不变。这样 production typed owner、Classic fallback 和 renderer
+teardown 之间不再混用裸 listener 注册路径。
+
+`test:uiux` 91/91、`test:ui-system` 115/115、`node --check modules/event-listeners.js`
+和 `git diff --check` 通过。
+
+### Artifact-only 复测边界（2026-08-28）
+
+`test-electron-global-settings-entry.mjs` 通过，确认 generated Settings 入口 Button 的
+mount、click、modal close 和 teardown。`test-settings-wa-electron.mjs` 与
+`visual-qa-next-global-settings-controls.mjs` 也通过。
+
+此前独立 Tooltip/HoverCard Candidate fixture 因只依赖窗口焦点触发 Tooltip 而出现不稳定
+结果；已在 `scripts/test-electron-uiux-theme.mjs` 改为显式发送 `pointerenter`，并提交
+`823aa06b`。当前 `npm run test:electron-uiux:artifacts` 已通过，artifact-only 全局证据
+恢复闭合。Settings Select 重开路径另补充了关闭终态等待（提交 `1729857a`），避免测试
+在异步 portal teardown 与下一次打开之间产生竞态。
+
+### Agent Settings 窄栏与隐藏 action 回归收口（2026-08-28）
+
+真实 Agent Settings 截图复核发现两处仅靠低优先级 fallback 无法保证的回归：
+旧 SettingsShell grid 将折叠摘要压进标题列，且 generated Button 装配会把带
+`hidden` 的兼容 submit/delete 节点重新设为可见。现已在统一 Settings tab 的
+surface override 中强制使用 `"title toggle" / "summary summary"` 两行 grid，
+并让隐藏 action 在 Button adapter 入口直接跳过。基础信息摘要改为普通平面框，
+不会再被液态玻璃 fallback 覆盖。
+
+证据：真实 Electron Agent Settings 截图已确认摘要不再与标题重叠，保存/删除
+入口保持不可见；Agent Settings lifecycle stress（1 warmup + 1 measured cycle）
+前后 nodes=5829、listeners=570、active scopes=41、active resources=497，
+detached roots/options=0。新增静态合同覆盖 hidden action skip 与 compact summary
+grid，`check:uiux`、artifact consistency、Settings bridge focused tests 均通过。
+
+### Topic Summary ModelPicker 复用（2026-08-28）
+
+`topicSummaryModel` 现在复用与 Agent 模型相同的 generated `AgentModelPicker`
+装配函数：目录读取、热门/收藏分区、刷新、收藏切换、Escape、焦点恢复和 owner
+dispose 均由同一 typed primitive contract 提供；native `#topicSummaryModel`
+仍是唯一 canonical business/persistence 节点。旧 `modelSelectModal` 模板和
+`settingsManager` 的共享目录 helper 暂时保留，避免在 Agent 与话题总结两个 caller
+尚未完成完整 default-data parity 前误删业务能力。
+
+本切片只增加一个 presentation owner，不创建第二份 durable model state，也不修改
+IPC、persisted key 或话题总结业务逻辑。`check:uiux`、`test:uiux`（93/93）、
+Settings source-equivalence、ModelPicker 专项 Electron journey 与 global Settings entry
+Electron journey 全部通过。总 Settings journey 只保留模型目录 IPC capability 检查，避免
+section bank 的关闭状态污染重复验证。下一退役条件仍是同时证明两个 caller 的默认数据、刷新/失败、
+收藏、关闭竞态、reload 和 focus parity，之后才可删除 legacy modal。
+
+### ModelPicker directory parity 复测（2026-08-28）
+
+重新运行 `npm run test:electron-agent-model-picker-directory-parity` 通过。真实
+`agentSettingsForm` + generated `AgentModelPicker` 已重复证明三分区投影、收藏 mutation
+隔离、refresh success/empty/failure、close-race、迟到结果丢弃和 owner dispose 无残留。
+这只强化 Agent caller 的 capability-contract 证据；`topicSummaryModel` 的 default IPC
+directory parity 和共享 `modelSelectModal` 的删除条件仍未满足，因此本轮不删除 legacy modal。
+
+### Topic Summary production consumer journey（2026-08-28）
+
+`topicSummaryModel` 的真实 consumer 验收已移入独立 ModelPicker Electron journey，避免
+总 Settings journey 在切换 section 后复用已关闭 modal 的 stale active 状态。独立 journey
+继续覆盖 generated `AgentModelPicker` 的打开、目录投影、选择、Escape、关闭、reload、
+focus restore 与 owner teardown；总 Settings journey 只验证注入的目录/热门/收藏 IPC capability。
+这仍不等价于两个 caller 的完整 default-data parity，`modelSelectModal` 继续保留。
+
+### ModelPicker legacy handler fallback gate（2026-08-28）
+
+`settingsManager` 的 Agent 与 Topic Summary 旧 click handler 现在都检查 generated
+picker marker：typed owner 已挂载时直接返回，仅在 Classic/bootstrap 没有 typed marker
+的路径保留 `handleOpenModelSelect()` fallback。这样新旧 owner 不再依赖事件传播顺序
+来避免双开；`modelSelectModal`、IPC、收藏/刷新业务和 canonical native input 均保持不变。
+
+新增 focused contract 后，Settings bridge tests 为 28/28，`check:uiux`、artifact
+consistency 与 ModelPicker legacy boundary gate 继续通过。
+
+### Hot/favorite IPC 隔离阻断记录（2026-08-28）
+
+审计 `modules/modelUsageTracker.js` 后确认热门/收藏状态固定落在仓库级
+`AppData/model_usage_stats.json` 与 `AppData/model_favorites.json`，不跟随
+`VCPCHAT_APP_DATA_DIR` 临时 profile。为避免测试污染真实开发数据，本轮没有直接写入
+这些文件；因此两个 caller 的 default hot/favorite parity 仍是明确的外部状态阻断，
+不是“测试没覆盖”。后续需增加显式 tracker data-root capability，并在保持生产默认
+路径兼容的前提下重跑真实 IPC parity，之后才重新评估共享 `modelSelectModal` 退役。
+
+本轮已增加 `VCPCHAT_MODEL_USAGE_DATA_DIR` 测试覆盖：未设置时保持生产默认
+`AppData` 路径，设置后使用临时 profile，避免热门/收藏 parity 测试污染开发数据。
+隔离层已通过 Settings Electron journey 和 ModelPicker directory parity journey。
+
+当前复测已证明隔离 IPC 数据链可用：临时 HTTP 服务返回三条模型，hot metadata 为
+`probe-hot`/`probe-secondary`，favorite metadata 为 `probe-hot`；Agent 真实 production
+form 已通过三分区投影、favorite mutation、refresh success/empty/failure、close-race、
+dispose-race 与生命周期稳定性证据。generated ModelPicker 首次 root → model pane 的
+异步目录投影也已修复并由 focused tests 覆盖。剩余删除阻断收窄为 Topic Summary caller
+的默认数据 parity 与共享业务 modal 的完整退役链，因此在此之前不删除 `modelSelectModal`。
+
+本轮进一步修复目录首开时序：`agent-model-picker-directory.js` 现在优先消费
+`refreshModels()` 返回的模型 payload，仅在刷新命令不返回模型时回读 renderer cache。
+这样不会因 IPC cache 更新通知晚于 popup 首次 options load 而产生空目录；Agent directory
+parity Electron journey 已复测通过。Topic Summary 仍需在真实 caller 上补齐同样的默认数据、
+刷新失败和重开证据后，才能评估共享 modal 退役。
+
+补充验证：default-mounted Agent ModelPicker 的真实 IPC refresh journey 也已通过（1 warmup
++ 1 measured cycle，listeners=571、active scopes=41、active resources=497，detached roots/
+icons/options=0）。这证明默认 bridge → `chatAPI` → `refresh-models` → `models-updated` →
+picker projection 链路稳定；剩余阻断仍仅针对 Topic Summary caller 和共享 legacy modal。
+
+### 当前收口 checkpoint（2026-08-28）
+
+- 不再重复拆分已经完成的 G4/G5 section helper；当前 bridge 剩余代码均有真实调用方或
+  明确的 Classic/bootstrap 兼容职责。
+- `settingsManager` 中 Topic Summary 的旧 click listener 继续保留为 fallback，但在
+  generated marker 存在时立即返回；因此 production Next surface 不存在双 presentation owner。
+- Agent 的 default refresh、隔离目录 parity、Shell close/reopen reconciliation 和全局
+  Settings 专项回归均已有真实证据。
+- 下一项只接受能增加 Topic Summary 真实证据或减少其共享 legacy 依赖的改动；不再以机械
+  helper 拆分或新增字段迁移作为进度。
+
+历史 fresh Electron 复测曾发现，Global Settings 在 modal 关闭/重开与 section 切换交错后
+可能留下 `active` 标记，却未把对应 section 重新挂回可见 `sectionHost`。该 Shell 生命周期
+切片现已修复：`mountSettingsShell()` 对已存在的 unified shell 执行
+幂等 reconciliation，重新挂回 `active sectionHost`、清理 section bank 的 stale active
+class，并同步 nav selected/tabIndex。Settings Electron journey 新增 close → reopen →
+activate advanced → visible geometry 断言，已通过；这只修复 presentation host，不改变
+section 选择状态的业务来源或表单持久化。

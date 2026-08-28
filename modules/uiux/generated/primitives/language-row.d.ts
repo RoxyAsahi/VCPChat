@@ -7,6 +7,7 @@ export interface LanguageRowOption {
 }
 export interface LanguageRowProps {
     readonly title?: string;
+    readonly description?: string;
     readonly options: readonly LanguageRowOption[];
     readonly activeId?: string;
     readonly loading?: boolean;

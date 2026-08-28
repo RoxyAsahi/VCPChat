@@ -296,7 +296,7 @@
         const snapshot = getUiManager()?.getThemeSnapshot?.();
         const effective = snapshot?.value?.effective;
         if (effective === 'light' || effective === 'dark') return effective;
-        return document.body.classList.contains('light-theme') ? 'light' : 'dark';
+        return document.body.dataset.vcpTheme === 'light' ? 'light' : 'dark';
     }
 
     function effectiveThemeForMode(mode) {
@@ -382,7 +382,7 @@
             ))),
             // The visible choice group is the only sidebar-radius control; the
             // retired hidden compatibility select no longer mirrors it.
-            sidebarRadius: document.querySelector('input[name="appearanceSidebarRadiusChoice"]:checked')?.value
+            sidebarRadius: document.getElementById('appearanceSidebarRadius')?.value
                 || base.profile.sidebarRadius
         };
         return normalizeState({
@@ -1074,12 +1074,10 @@
                 control.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
-        const sidebarRadiusChoice = document.querySelector(
-            `input[name="appearanceSidebarRadiusChoice"][value="${draft.profile.sidebarRadius}"]`
-        );
-        if (sidebarRadiusChoice) {
-            sidebarRadiusChoice.checked = true;
-            sidebarRadiusChoice.dispatchEvent(new Event('change', { bubbles: true }));
+        const sidebarRadius = document.getElementById('appearanceSidebarRadius');
+        if (sidebarRadius) {
+            sidebarRadius.value = draft.profile.sidebarRadius;
+            sidebarRadius.dispatchEvent(new Event('change', { bubbles: true }));
         }
         const presentation = document.querySelector(
             `input[name="chatPresentationMode"][value="${draft.presentation}"]`

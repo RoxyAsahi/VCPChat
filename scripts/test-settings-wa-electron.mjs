@@ -26,7 +26,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electron = process.platform === 'darwin'
     ? path.join(root, 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron')
     : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
-const timeoutMs = 90_000;
+const timeoutMs = Number(process.env.VCPCHAT_SETTINGS_TIMEOUT_MS || 90_000);
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const reopenCycles = Math.max(1, Number.parseInt(process.env.VCPCHAT_SETTINGS_REOPEN_CYCLES || '3', 10) || 3);
 const screenshotsDir = path.join(root, 'screenshots');
@@ -55,10 +55,26 @@ function requestJson(url) {
 }
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-settings-wa-electron-'));
+const modelServer = http.createServer((request, response) => {
+    if (request.url !== '/v1/models') { response.writeHead(404); response.end(); return; }
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ data: [
+        { id: 'probe-hot', name: 'Probe Hot', owned_by: 'Parity' },
+        { id: 'probe-secondary', name: 'Probe Secondary', owned_by: 'Parity' },
+        { id: 'probe-other', name: 'Probe Other', owned_by: 'Parity' },
+    ] }));
+});
+await new Promise((resolve, reject) => modelServer.once('error', reject).listen(0, '127.0.0.1', resolve));
+const modelPort = modelServer.address().port;
+await fs.writeFile(path.join(appData, 'model_usage_stats.json'), JSON.stringify({
+    'probe-hot': 12,
+    'probe-secondary': 5,
+}), 'utf8');
+await fs.writeFile(path.join(appData, 'model_favorites.json'), JSON.stringify(['probe-hot']), 'utf8');
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
     enableDistributedServer: false,
-    vcpServerUrl: 'http://127.0.0.1:1',
+    vcpServerUrl: `http://127.0.0.1:${modelPort}`,
     vcpApiKey: 'smoke-test-key',
     continueWritingPrompt: '请继续',
     userName: '初始用户',
@@ -69,7 +85,12 @@ const stderr = { value: '' };
 const rendererErrors = [];
 const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debugging-port=${port}`], {
     cwd: root,
-    env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
+    env: {
+        ...process.env,
+        VCPCHAT_APP_DATA_DIR: appData,
+        VCPCHAT_MODEL_USAGE_DATA_DIR: appData,
+        VCPCHAT_E2E_TEST: '1',
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
     // Own the process group so a timeout cannot leave helper children behind.
@@ -612,6 +633,21 @@ try {
     assert.ok(controlState.switchInputs > 0, `switch checkboxes present (${controlState.switchInputs})`);
     assert.equal(controlState.switchInputs, controlState.primitiveToggles, 'every switch checkbox is projected by the library Toggle primitive');
     assert.equal(controlState.visibleLegacySliders, 0, 'retired local slider spans are hidden or gone');
+
+    // The Topic Summary ModelPicker has its own dedicated production journey
+    // (`test-vcp-model-picker-*`). Keep this aggregate Settings journey
+    // focused on shell/control invariants and the injected IPC capability.
+    const modelRefreshResult = await page.evaluate(() => window.chatAPI?.refreshModels?.());
+    console.log(`  [INFO] isolated model refresh result ${JSON.stringify(modelRefreshResult)}`);
+    const modelMetadata = await page.evaluate(async () => ({
+        hot: await window.chatAPI?.getHotModels?.(),
+        favorites: await window.chatAPI?.getFavoriteModels?.(),
+    }));
+    assert.deepEqual(modelMetadata.hot, ['probe-hot', 'probe-secondary'], 'isolated IPC hot-model metadata uses the temporary tracker root');
+    assert.deepEqual(modelMetadata.favorites, ['probe-hot'], 'isolated IPC favorite metadata uses the temporary tracker root');
+    await page.waitForFunction(async () => (await window.chatAPI?.getCachedModels?.())?.length > 0, { timeout: 15_000 }).catch(() => {});
+    console.log('  [PASS] 1b. isolated model catalog and hot/favorite IPC capability');
+
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');
         const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
@@ -701,6 +737,24 @@ try {
     assert.equal(backState.active, 'section-user-identity', 'nav switched back');
     assert.equal(backState.userName, '未保存测试', 'unsaved value survived the category round-trip');
     console.log('  [PASS] 2. category switching keeps unsaved values');
+
+    // Reopen reconciliation: a close/reopen followed by section activation
+    // must reattach the active section to the visible shell host instead of
+    // leaving only a stale `.active` marker in the section bank.
+    await page.$eval('#globalSettingsModal .close-button', button => button.click());
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 120));
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsModal')?.classList.contains('active')
+        && document.getElementById('globalSettingsModal')?.getBoundingClientRect().width > 0, { timeout: timeoutMs });
+    await page.$eval('#globalSettingsModal .vcp-harness-settings-nav-cell[data-section="advanced-features"]', button => button.click());
+    await page.waitForFunction(() => {
+        const modal = document.getElementById('globalSettingsModal');
+        const section = modal?.querySelector('#section-advanced-features.active');
+        const trigger = modal?.querySelector('#openTopicSummaryModelSelectBtn.vcp-harness-agent-model-picker-trigger');
+        return Boolean(section && trigger && trigger.getBoundingClientRect().width > 0 && trigger.getBoundingClientRect().height > 0);
+    }, { timeout: timeoutMs });
+    console.log('  [PASS] 2b. close/reopen section reconciliation restores visible active content');
 
     // ---- 3. Canonical nav exposes every section without an extra search layer ----
     assert.equal(await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell').length), 8, 'canonical nav remains stable');
@@ -887,7 +941,7 @@ try {
     assert.equal(await page.$eval('#chatLayoutModeNormal', node => node.checked), false, 'clean normal-layout radio consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
-    assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean sidebar radius Choice consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRadius', node => node.value), 'round', 'clean sidebar radius Select consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceTypography', node => node.value), 'humanist', 'clean appearance typography consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceFontScale', node => node.value), 'large', 'clean appearance scale consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceContentWidth', node => node.value), 'centered', 'clean appearance width consumes typed Settings snapshot');
@@ -904,7 +958,7 @@ try {
     await page.waitForFunction(() => document.getElementById('showHomeVisualBrand')?.checked === true && document.getElementById('showHomeVisualTagline')?.checked === true, { timeout: timeoutMs });
     assert.equal(await page.$eval('#appearanceCustomRadius', node => node.value), '14', 'clean custom radius consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceCustomRadiusValue', node => node.value), '14px', 'clean custom-radius output consumes typed Settings snapshot');
-    assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean radius choice consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRadius', node => node.value), 'round', 'clean radius Select consumes typed Settings snapshot');
     assert.equal(await page.$eval('#enableSmoothStreaming', node => node.checked), false, 'clean checkbox consumes typed Settings snapshot');
     const rustConsumerState = await page.evaluate(() => {
         const service = window.VCPUISettingsBridge?.getRustAssistantService?.();
@@ -1077,8 +1131,8 @@ try {
             node.checked = !node.checked;
             node.dispatchEvent(new Event('change', { bubbles: true }));
         });
-        const choice = document.getElementById(`appearanceSidebarRadiusChoice-${values.radiusChoice}`);
-        choice.checked = true;
+        const choice = document.getElementById('appearanceSidebarRadius');
+        choice.value = values.radiusChoice;
         choice.dispatchEvent(new Event('change', { bubbles: true }));
         set('adminUsername', values.forumUser);
         set('adminPassword', values.forumPassword);
@@ -1661,4 +1715,5 @@ try {
     } catch {
         /* already exited */
     }
+    await new Promise((resolve) => modelServer.close(resolve)).catch(() => {});
 }
