@@ -61,6 +61,12 @@ The replay also reloads the isolated page after disposal and requires a clean
 two-anchor/no-tooltip baseline, so it does not substitute a live browser page
 for close/flush evidence.
 
+The HoverCard Candidate replay adds the composite's pointer-grace and copy
+contract: delayed portal open, crossing the anchor/card gap without closing,
+grace expiry, copy feedback/status, disabled suppression, owner disposal, and
+post-dispose reload. It remains VCP-only evidence; Harness capture and all
+cross-engine DOM/style/pixel and production-consumer evidence are still absent.
+
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:
 the Harness web package's Playwright resolver, the vendored Cordis workspace

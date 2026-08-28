@@ -142,13 +142,28 @@ test('Paired evidence ledger keeps Candidate captures and blocked boundaries exp
     assert.equal(report.status, 'paired-evidence-scoped');
     assert.equal(report.pass, false);
     assert.equal(report.counts.pairedRoiPasses, 1);
-    assert.equal(report.counts.vcpCandidateCaptures, 5);
+    assert.equal(report.counts.vcpCandidateCaptures, 6);
     assert.equal(report.counts.candidateCaptureMissing, 0);
     assert.equal(report.pairedSelect.state, 'paired-roi-pass');
     assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
     assert.equal(report.candidateCaptures.every(item => item.state === 'vcp-candidate-capture-only' && item.captured), true);
     assert.ok(report.sourceOrConsumerBoundaries.some(item => item.state === 'consumer-boundary'));
     assert.equal(report.activeExternalBoundary.name, 'model-picker');
+});
+
+test('HoverCard Candidate capture preserves portal grace copy disabled disposal and reload boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-hover-card-candidate.json'), 'utf8'));
+    assert.equal(report.semanticFixture, 'hover-card/portal-grace-copy-disabled-dispose');
+    assert.equal(report.beforeDelay, 0);
+    assert.equal(report.open.role, 'button');
+    assert.equal(report.open.parent, 'body');
+    assert.equal(report.graceOpen, true);
+    assert.equal(report.graceClosed, true);
+    assert.equal(report.copied.text, 'Copied');
+    assert.equal(report.copied.clipboard, 'copy');
+    assert.equal(report.disabled, true);
+    assert.deepEqual(report.reloaded, { cards: 0, anchors: 2 });
 });
 
 test('Tooltip Candidate capture preserves delayed hover, immediate focus, flip, disabled, and disposal boundaries', () => {
