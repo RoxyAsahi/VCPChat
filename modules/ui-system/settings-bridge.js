@@ -17,6 +17,7 @@ import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
 import { mountAppearanceSelects } from './settings/appearance-controls.js';
 import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 import { mountAppearanceToggles } from './settings/appearance-toggles.js';
+import { mountHomeTaglineInput } from './settings/home-controls.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1054,7 +1055,7 @@ function enhanceGlobalSettings(root, form) {
     // one authoritative business node.
     mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
-    mountTypedHomeTaglineInput(root, form);
+    mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
     mountTypedRadiusChoice(root, form);
     mountTypedGlobalChoiceGroups(root, form);
     mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
@@ -1151,16 +1152,6 @@ function mountTypedAvatarColorPair(root, form) {
     });
 }
 
-function mountTypedHomeTaglineInput(root, form) {
-    const input = form?.querySelector?.('#homeVisualTagline');
-    const api = window.VCPUIUX;
-    if (!input || !api?.mountInput || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-    const scope = ensurePresentationScope();
-    if (!scope) return;
-    api.mountInput(input, {}, scope);
-    input.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, 'typed-home-tagline-marker', 'ui-primitive');
-}
 
 // Forum credentials are presentation-only in this phase.  The existing
 // ForumConfigUiService/global submit path remains the command owner until its
