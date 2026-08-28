@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness Tooltip clone-element anchor contract and fixed bubble CSS; Candidate interaction evidence does not imply production parity."
   },
-  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; paired real-source interaction and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
   "productionConsumers": [
     "packages/client/ui-goal/src/client/GoalBar.tsx",
     "packages/client/ui-sidebar/src/client/SidebarRoot.tsx",

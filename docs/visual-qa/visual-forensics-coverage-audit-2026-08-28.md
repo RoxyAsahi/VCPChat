@@ -75,3 +75,22 @@ The Electron stderr still records the expected unavailable CDS binary, local
 model endpoint, and Rust sidecar. The rendered target surfaces and every
 visual gate completed successfully, so these environment messages remain
 outside the visual-defect ledger.
+
+## Current production ModelPicker freshness checkpoint
+
+The current dirty production ModelPicker artifacts were independently scanned
+in real Electron at:
+
+```text
+reports/visual-forensics-qa/agent-model-picker/run-current/light
+reports/visual-forensics-qa/agent-model-picker/run-current/dark
+```
+
+Each theme contains three complete observations for `800x600`, `1280x800`,
+and `1680x1000`, with `gate.pass:true`. The exact production verifier passed
+for this pair. Refresh/favorite directory actions, enabled option hover,
+narrow/restored portal geometry, Escape root-pane return, close/focus restore,
+and body inline-style cleanup were all recorded from the rendered Settings
+surface. The capture process can remain alive briefly after writing a complete
+manifest during Electron teardown; that process-level delay does not weaken
+the already-written renderer evidence.

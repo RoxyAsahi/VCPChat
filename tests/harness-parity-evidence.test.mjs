@@ -204,6 +204,9 @@ test('Real Harness Tooltip source capture exposes the VCP Candidate portal struc
     assert.equal(report.dom.role.pass, true);
     assert.equal(report.dom.side.pass, true);
     assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.interaction.pass, true);
+    assert.equal(report.interaction.focusImmediate.pass, true);
+    assert.equal(report.interaction.flippedTop.pass, true);
     assert.equal(report.structuralPass, false);
     assert.equal(report.pass, false);
     assert.equal(report.pixel.status, 'pending-roi-diff');
@@ -230,6 +233,9 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.structuralPass, true);
     assert.equal(report.computedStyle.pass, true);
     assert.equal(report.geometry.pass, false);
+    assert.equal(report.interaction.pass, true);
+    assert.equal(report.interaction.disabled.pass, true);
+    assert.equal(report.interaction.unmountOrDispose.pass, true);
     assert.equal(report.pass, false);
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
@@ -258,6 +264,8 @@ test('Real Harness StateDot source capture retains the Candidate display and pix
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
     assert.equal(report.domAriaPass, true);
+    assert.equal(report.structuralPass, true);
+    assert.equal(report.structural.length, 4);
     assert.equal(report.colorPass, true);
     assert.equal(report.computedStylePass, false);
     assert.equal(report.computedStyle.states.length, 4);

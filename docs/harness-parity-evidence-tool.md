@@ -75,8 +75,9 @@ HoverCard, and StateDot real-source diff reports. It records semantic fixture
 matches separately from parity passes and intentionally keeps its own `pass`
 false while structural, geometry, computed-style, pixel, or consumer evidence
 remains open.
-The ledger also includes Tooltip's measured strict ROI result separately from
-the other components' pending pixel lanes.
+The ledger includes measured strict ROI results for Tooltip, HoverCard, and
+StateDot. A measured result may be non-comparable or non-passing; measurement
+does not promote a Candidate to production parity.
 
 Tooltip also has a strict fixed-ROI PNG comparator. It records SHA-256 and
 byte equality for the real-source and Candidate tooltip screenshots. Its result
@@ -96,17 +97,17 @@ the bubble in the anchor parent's React fragment while VCP appends it to
 that mismatch; pixel comparison remains pending.
 
 The HoverCard source fixture executes its real Harness component with the same
-delayed/copy semantic fixture. Its DOM/ARIA and captured style fields match the
-Candidate, while anchor-root geometry does not (`Harness` source root is sized
-by its inline anchor; the Candidate fixture exposes a distinct wrapper basis).
-The report keeps geometry and ROI pixel evidence pending rather than inferring
-visual equivalence from the matching card box styles.
+delayed/copy/pointer-grace/disabled/unmount semantic fixture. Its DOM/ARIA and
+captured style fields match the Candidate, while anchor-root geometry does not
+(`Harness` source root is sized by its inline anchor; the Candidate fixture
+exposes a distinct wrapper basis). The report records the strict ROI result
+without inferring visual equivalence from matching card box styles.
 
 StateDot now has the same real-source capture lane. Its four states, ARIA,
-10px geometry, semantic colors, and eight ongoing animation phases are
-compared; the report records the observed `block` (Harness fixture) versus
-`inline-block` (Candidate) display difference and retains pixel evidence as
-pending.
+10px geometry, semantic colors, eight ongoing animation phases, structural SVG
+signature, resize, and disposal are compared; the report records the observed
+`block` (Harness fixture) versus `inline-block` (Candidate) display difference
+and retains the per-state strict pixel result.
 
 StateDot also has a per-state strict decoded-RGB ROI comparator. It records
 whether each of `done`, `warning`, `ongoing`, and `error` is dimensionally
@@ -125,8 +126,9 @@ for close/flush evidence.
 The HoverCard Candidate replay adds the composite's pointer-grace and copy
 contract: delayed portal open, crossing the anchor/card gap without closing,
 grace expiry, copy feedback/status, disabled suppression, owner disposal, and
-post-dispose reload. It remains VCP-only evidence; Harness capture and all
-cross-engine DOM/style/pixel and production-consumer evidence are still absent.
+post-dispose reload. Its real-source Harness interaction/lifecycle capture is
+now paired, while computed-style/DOM structural closure and any production
+consumer remain open.
 
 Run `npm run check:harness-capture-prerequisites` before browser capture. It
 checks the same pnpm/Vitest workspace topology used by the capture commands:

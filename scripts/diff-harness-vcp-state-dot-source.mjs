@@ -9,6 +9,16 @@ const pixelPath = path.join(root, 'reports/harness-vcp-state-dot-roi-pixel-diff.
 const pixelResult = fs.existsSync(pixelPath) ? read('reports/harness-vcp-state-dot-roi-pixel-diff.json') : null;
 const names = ['done', 'warning', 'ongoing', 'error'];
 const states = names.map(name => { const source = harness.states[name], candidate = vcp.states[name]; return { name, tag: source.tag === candidate.tag, aria: source.ariaHidden === candidate.ariaHidden, size: source.rect.width === candidate.rect.width && source.rect.height === candidate.rect.height, color: source.style.color === candidate.style.color, cells: source.cells === candidate.cells, delays: JSON.stringify(source.delays) === JSON.stringify(candidate.delays), display: source.style.display === candidate.style.display }; });
+const structural = names.map(name => {
+  const source = harness.states[name], candidate = vcp.states[name];
+  const checks = [
+    ['tag', source.tag, candidate.tag], ['state', source.state, candidate.state], ['ariaHidden', source.ariaHidden, candidate.ariaHidden],
+    ['svg.viewBox', source.svg?.viewBox ?? null, candidate.svg?.viewBox ?? null], ['svg.shapeRendering', source.svg?.shapeRendering ?? null, candidate.svg?.shapeRendering ?? null],
+    ['svg.rects', JSON.stringify(source.svg?.rects ?? []), JSON.stringify(candidate.svg?.rects ?? [])],
+  ].map(([field, harnessValue, vcpValue]) => ({ field, harness: harnessValue, vcp: vcpValue, pass: harnessValue === vcpValue }));
+  return { name, checks, pass: checks.every(check => check.pass) };
+});
+const structuralPass = structural.every(item => item.pass);
 const styleFields = ['display', 'position', 'color'];
 const computedStyle = {
   states: names.map(name => ({
@@ -19,6 +29,6 @@ const computedStyle = {
 computedStyle.pass = computedStyle.states.every(state => state.checks.every(check => check.pass));
 const pixel = pixelResult ? { status: 'strict-per-state-roi-measured', comparableCases: pixelResult.cases.filter(item => item.comparable).length, exactCases: pixelResult.cases.filter(item => item.exactPixelPass).length, pass: pixelResult.pass, cases: pixelResult.cases } : { status: 'pending-roi-diff' };
 const lifecycle = { sourceResize: harness.resized?.rect ?? null, vcpResize: vcp.resized?.rect ?? null, resizePass: harness.resized?.rect?.width === vcp.resized?.rect?.width && harness.resized?.rect?.height === vcp.resized?.rect?.height, sourceUnmount: harness.unmounted ?? null, vcpDispose: { restored: vcp.restored, registrations: vcp.registrations }, cleanupPass: harness.unmounted?.rootEmpty === true && harness.unmounted?.stateDots === 0 && vcp.restored === true && vcp.registrations === 0 };
-const report = { generatedAt: new Date().toISOString(), comparison: 'same Chromium engine, real Harness StateDot.tsx source fixture versus VCP Candidate fixture', semanticFixture: { pass: harness.semanticFixture === vcp.semanticFixture }, states, domAriaPass: states.every(item => item.tag && item.aria && item.size && item.cells && item.delays), colorPass: states.every(item => item.color), computedStyle, computedStylePass: computedStyle.pass, lifecycle, pixel, pass: false, missingEvidence: ['display differs: Harness source fixture block versus VCP Candidate inline-block', 'VCP production consumer'] };
+const report = { generatedAt: new Date().toISOString(), comparison: 'same Chromium engine, real Harness StateDot.tsx source fixture versus VCP Candidate fixture', semanticFixture: { pass: harness.semanticFixture === vcp.semanticFixture }, states, structural, structuralPass, domAriaPass: states.every(item => item.tag && item.aria && item.size && item.cells && item.delays), colorPass: states.every(item => item.color), computedStyle, computedStylePass: computedStyle.pass, lifecycle, pixel, pass: false, missingEvidence: ['display differs: Harness source fixture block versus VCP Candidate inline-block', 'VCP production consumer'] };
 fs.writeFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Harness↔VCP StateDot source diff: domAria=${report.domAriaPass}; colors=${report.colorPass}; computedStyle=${report.computedStylePass}; pixel=${report.pixel.status}.`);

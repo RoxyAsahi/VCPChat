@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness HoverCard pointer-grace/copy lifecycle and module CSS; Candidate evidence is not production parity."
   },
-  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; paired real-source lifecycle and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/rows/Rows.tsx"
   ],
