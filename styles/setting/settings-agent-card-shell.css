@@ -814,7 +814,11 @@ body:not(.light-theme)
 #agentSettingsContainer input[type="url"],
 #agentSettingsContainer input[type="password"],
 #agentSettingsContainer input[type="number"],
-#agentSettingsContainer select {
+/* The generated Select owns its hidden native node's geometry and visual
+   state. Keep this legacy native fallback only for controls that have not
+   been adopted yet; otherwise its theme/hover rules compete with the
+   Light-DOM trigger contract. */
+#agentSettingsContainer select:not(.vcp-harness-select-native) {
   width: 100%;
   height: 34px;
   min-height: 34px;
@@ -852,7 +856,7 @@ body.light-theme
 body.light-theme #agentSettingsContainer input[type="url"],
 body.light-theme #agentSettingsContainer input[type="password"],
 body.light-theme #agentSettingsContainer input[type="number"],
-body.light-theme #agentSettingsContainer select {
+body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native) {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 18%, rgba(255, 255, 255, 0.52)),
@@ -874,7 +878,7 @@ body.light-theme
 body.light-theme #agentSettingsContainer input[type="url"]:hover,
 body.light-theme #agentSettingsContainer input[type="password"]:hover,
 body.light-theme #agentSettingsContainer input[type="number"]:hover,
-body.light-theme #agentSettingsContainer select:hover {
+body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native):hover {
   border-color: color-mix(
     in srgb,
     var(--highlight-text) 72%,
@@ -900,8 +904,8 @@ body.light-theme #agentSettingsContainer input[type="password"]:focus,
 body.light-theme #agentSettingsContainer input[type="password"]:focus-visible,
 body.light-theme #agentSettingsContainer input[type="number"]:focus,
 body.light-theme #agentSettingsContainer input[type="number"]:focus-visible,
-body.light-theme #agentSettingsContainer select:focus,
-body.light-theme #agentSettingsContainer select:focus-visible {
+body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native):focus,
+body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native):focus-visible {
   outline: none;
   border-color: var(--highlight-text);
   box-shadow: inset 2px -2px 1px -1px rgba(255, 255, 255, 0.82),
@@ -916,7 +920,7 @@ body:not(.light-theme)
 body:not(.light-theme) #agentSettingsContainer input[type="url"],
 body:not(.light-theme) #agentSettingsContainer input[type="password"],
 body:not(.light-theme) #agentSettingsContainer input[type="number"],
-body:not(.light-theme) #agentSettingsContainer select {
+body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native) {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--user-bubble-bg) 58%, rgba(255, 255, 255, 0.08)),
@@ -937,7 +941,7 @@ body:not(.light-theme)
 body:not(.light-theme) #agentSettingsContainer input[type="url"]:hover,
 body:not(.light-theme) #agentSettingsContainer input[type="password"]:hover,
 body:not(.light-theme) #agentSettingsContainer input[type="number"]:hover,
-body:not(.light-theme) #agentSettingsContainer select:hover {
+body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native):hover {
   border-color: color-mix(
     in srgb,
     var(--highlight-text) 68%,
@@ -967,8 +971,8 @@ body:not(.light-theme) #agentSettingsContainer input[type="number"]:focus,
 body:not(.light-theme)
   #agentSettingsContainer
   input[type="number"]:focus-visible,
-body:not(.light-theme) #agentSettingsContainer select:focus,
-body:not(.light-theme) #agentSettingsContainer select:focus-visible {
+body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native):focus,
+body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native):focus-visible {
   outline: none;
   border-color: var(--highlight-text);
   box-shadow: inset 1px -1px 1px -1px rgba(255, 255, 255, 0.2),
