@@ -32,7 +32,7 @@ const candidateChecks = candidateAnchors.map(anchor => ({ anchor, pass: candidat
 const candidatePass = candidateChecks.every(item => item.pass);
 const report = {
   generatedAt: new Date().toISOString(), harnessRoot, sourceKind: dom.sourceKind, source: dom.provenance.sources, files: entries,
-  reference: { dom: dom.sourceKind === 'harness-production-consumer-contract' && dom.provenance.sources.length === 3, geometry: geometry.styleSource === 'packages/client/locale/src/client/LanguageRow.module.css' },
+  reference: { dom: dom.sourceKind === 'harness-production-consumer-contract' && dom.provenance.sources.length === 3, geometry: path.normalize(geometry.source).endsWith(path.normalize('packages/client/locale/src/client/LanguageRow.module.css')) },
   candidate: { source: 'modules/uiux/primitives/language-row.ts', present: fs.existsSync(candidatePath), anchors: candidateChecks, shape: candidatePass, status: dom.candidateStatus },
   contract: dom.harnessContract, pass: false,
   missingEvidence: ['real Harness LanguageRow browser capture', 'same-semantic Harness/VCP DOM/ARIA and computed-style diff', 'same-semantic Harness/VCP pixel diff', 'VCP locale capability and persisted UI-language key (not in scope)'],
