@@ -411,9 +411,9 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         // list after this synchronous pass. Re-measure on the next frame so
         // the body portal is not left under the application chrome at narrow
         // production Settings heights.
-        requestAnimationFrame(() => {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
             if (pickerScope.active) placeExternalCard();
-        });
+        }));
     };
     pickerScope.listen(trigger, 'click', event => {
         // Agent Settings already has a legacy listener on this canonical

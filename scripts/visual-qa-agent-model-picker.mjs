@@ -215,7 +215,9 @@ try {
     let hoverError = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
+        await page.mouse.move(2, 2);
         await page.hover(modelRowSelector);
+        await page.waitForFunction(selector => document.querySelector(selector)?.matches(':hover'), { timeout: timeoutMs }, modelRowSelector);
         hoverError = null;
         break;
       } catch (error) {
