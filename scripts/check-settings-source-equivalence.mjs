@@ -298,6 +298,23 @@ const typedAgentInputConsumers = bridge.slice(
 assert.doesNotMatch(typedAgentInputConsumers, /api\.mountInput\(/,
     'Agent Input callers must delegate lifecycle work to the one private helper');
 
+// Typed numeric Agent Inputs add `.input` while mounted.  The historical
+// parameter-sheet material remains only as the runtime-unavailable/dispose
+// fallback; it must not continue matching a generated Input and depend on
+// inline `!important` declarations to win the cascade.
+const agentParamsCss = read('styles/setting/settings-agent-params.css');
+for (const selector of [
+    '.params-content input[type="number"]:not(.input)',
+    '.params-content input[type="number"]:not(.input):focus',
+    'body.light-theme .params-content input[type="number"]:not(.input):hover',
+    'body:not(.light-theme) .params-content input[type="number"]:not(.input):focus-visible',
+]) {
+    assert.ok(agentParamsCss.includes(selector),
+        `typed Agent numeric Input fallback must exclude the generated owner: ${selector}`);
+}
+assert.doesNotMatch(agentParamsCss, /\.params-content input\[type="number"\](?!:not\(\.input\))/,
+    'legacy Agent numeric Input material must never match a generated .input node');
+
 // AgentModelPicker owns the model trigger as a distinct composite. Keep it
 // out of the generic Button batch so a refresh can never install two
 // presentation/lifecycle owners on #openModelSelectBtn again.
