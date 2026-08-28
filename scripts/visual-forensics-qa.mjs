@@ -387,10 +387,14 @@ try {
         loading: document.querySelectorAll('.is-loading, [aria-busy="true"], [data-loading="true"]').length,
       };
       const stateTarget = selector => {
-        const element = [...document.querySelectorAll(selector)].find(candidate => candidate.getClientRects().length);
+        const candidates = [...document.querySelectorAll(selector)].filter(candidate => candidate.getClientRects().length);
+        const element = candidates.find(candidate => {
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        }) || candidates[0];
         if (!element) return null;
         const r = element.getBoundingClientRect(); const s = getComputedStyle(element);
-        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
+        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
       };
       const stateTargets = {
         disabled: stateTarget(':disabled, .is-disabled, [aria-disabled="true"]'),
@@ -422,6 +426,34 @@ try {
       return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, themeTokens, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, stateTargets, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
+    const captureViewportState = async (state, selector) => {
+      const selected = await page.evaluate(({ selector }) => {
+        const candidates = [...document.querySelectorAll(selector)].filter(candidate => candidate.getClientRects().length);
+        const element = candidates.find(candidate => {
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        }) || candidates[0];
+        if (!element) return false;
+        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        return true;
+      }, { selector }).catch(() => false);
+      if (!selected) return null;
+      await sleep(80);
+      const evidence = await page.evaluate(({ selector }) => {
+        const element = [...document.querySelectorAll(selector)].find(candidate => {
+          if (!candidate.getClientRects().length) return false;
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        });
+        if (!element) return null;
+        const r = element.getBoundingClientRect(); const s = getComputedStyle(element);
+        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: true, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
+      }, { selector }).catch(() => null);
+      await page.screenshot({ path: path.join(output, `${name}-${state}.png`), fullPage: false });
+      return evidence;
+    };
+    initial.stateTargets.disabled = await captureViewportState('disabled', ':disabled, .is-disabled, [aria-disabled="true"]');
+    initial.stateTargets.selected = await captureViewportState('selected', '.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
     if (stateTarget) {
       await stateTarget.hover().catch(() => {});
