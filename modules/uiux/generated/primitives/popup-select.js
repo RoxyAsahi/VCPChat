@@ -28,7 +28,7 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);background:transparent;text-align:left}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-group{display:flex;flex-direction:column}.vcp-harness-popup-select-group-title{padding:5px 8px 3px;color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:18px;font-weight:500}.vcp-harness-popup-select-option{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-harness-popup-select-option:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-option-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:0}.vcp-harness-popup-select-option-label{overflow:hidden;color:inherit;font-size:14px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-detail{font-size:12px;line-height:16px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-check{display:inline-flex;flex:0 0 18px;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-option-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-popup-select-option-disabled:hover{background:transparent}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
+    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);background:transparent;text-align:left}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-group{display:flex;flex-direction:column}.vcp-harness-popup-select-group-title{padding:5px 8px 3px;color:var(--dsw-alias-label-tertiary,#81858c);font-size:12px;line-height:18px;font-weight:500}.vcp-harness-popup-select-option{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 8px;border:0;border-radius:10px;outline:none;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-harness-popup-select-option:hover:not(:disabled),.vcp-harness-popup-select-option:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-option-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:0}.vcp-harness-popup-select-option-label{overflow:hidden;color:inherit;font-size:14px;font-weight:500;line-height:20px;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-detail{font-size:12px;line-height:16px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-check{display:inline-flex;flex:0 0 18px;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-option:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
     // Keep grouped parity geometry aligned with Harness and prevent a
     // horizontal scrollbar from consuming an extra 8px of menu height.
     style.textContent += '.vcp-harness-popup-select-viewport{overflow-x:hidden}.vcp-harness-popup-select-group+.vcp-harness-popup-select-group{margin-top:4px}.vcp-harness-popup-select-option-label{font-size:14px;line-height:20px;font-weight:500}.vcp-harness-popup-select-option-check{display:grid;place-items:center;flex:0 0 18px}.vcp-harness-popup-select-card[data-harness-equivalent="true"] .vcp-harness-popup-select-group-title{color:#81858c}';
@@ -150,7 +150,13 @@ export function createPopupSelectController(spec, deps) {
             const rows = filterOptions(s.options, s.search);
             if (rows.length === 0)
                 return;
-            set({ active: (s.active + direction + rows.length) % rows.length });
+            for (let offset = 1; offset <= rows.length; offset += 1) {
+                const active = (s.active + direction * offset + rows.length) % rows.length;
+                if (rows[active]?.disabled !== true) {
+                    set({ active });
+                    return;
+                }
+            }
         },
         highlight(index) {
             const s = snapshot;
@@ -271,16 +277,24 @@ export function mountPopupSelectView(host, props, scope) {
     let lastOpen = false;
     let riskScope = null;
     let rowsScope = null;
+    let focusActiveOption = false;
+    const moveAndFocus = (direction) => {
+        const before = popup.getSnapshot().active;
+        focusActiveOption = optionRole === 'menuitemradio';
+        popup.move(direction);
+        if (popup.getSnapshot().active === before)
+            focusActiveOption = false;
+    };
     viewScope.listen(card, 'keydown', event => {
         const s = popup.getSnapshot();
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                popup.move(1);
+                moveAndFocus(1);
                 return;
             case 'ArrowUp':
                 event.preventDefault();
-                popup.move(-1);
+                moveAndFocus(-1);
                 return;
             case 'Enter':
                 event.preventDefault();
@@ -324,10 +338,14 @@ export function mountPopupSelectView(host, props, scope) {
         const renderOption = (option, index) => {
             const row = document.createElement(optionRole === 'menuitemradio' ? 'button' : 'div');
             row.dataset.optionId = option.id;
-            if (row.tagName.toLowerCase() === 'button')
-                row.setAttribute('type', 'button');
+            const disabled = option.disabled === true || s.submitting;
+            if (row.tagName === 'BUTTON') {
+                const button = row;
+                button.type = 'button';
+                button.disabled = disabled;
+            }
             row.setAttribute('role', optionRole);
-            row.setAttribute('aria-disabled', String(option.disabled === true));
+            row.setAttribute('aria-disabled', String(disabled));
             if (optionRole === 'menuitemradio')
                 row.setAttribute('aria-checked', String(option.active === true));
             else
@@ -337,7 +355,7 @@ export function mountPopupSelectView(host, props, scope) {
                 : (index === s.active
                     ? 'vcp-harness-popup-select-row vcp-harness-popup-select-row-active'
                     : 'vcp-harness-popup-select-row');
-            if (option.disabled === true)
+            if (disabled)
                 row.classList.add(optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-disabled' : 'vcp-harness-popup-select-row-disabled');
             const copy = document.createElement('span');
             copy.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-copy' : 'vcp-harness-popup-select-label';
@@ -367,9 +385,9 @@ export function mountPopupSelectView(host, props, scope) {
                 }
                 row.append(check);
             }
-            nextRowsScope.listen(row, 'click', () => { if (option.disabled !== true)
+            nextRowsScope.listen(row, 'click', () => { if (!disabled)
                 void popup.select(index); });
-            nextRowsScope.listen(row, 'mouseenter', () => { if (option.disabled !== true)
+            nextRowsScope.listen(row, 'mouseenter', () => { if (!disabled)
                 popup.highlight(index); });
             return row;
         };
@@ -401,6 +419,12 @@ export function mountPopupSelectView(host, props, scope) {
         // Focus ownership sits with the search input, so scrolling the virtual
         // highlight into view is explicit here (source useEffect on `active`).
         listbox.querySelector('[aria-selected="true"], [aria-checked="true"]')?.scrollIntoView?.({ block: 'nearest' });
+        if (focusActiveOption) {
+            focusActiveOption = false;
+            const row = listbox.querySelectorAll('[role="menuitemradio"]')[s.active];
+            if (row?.tagName === 'BUTTON' && !row.disabled)
+                row.focus({ preventScroll: true });
+        }
     };
     const sync = () => {
         const s = popup.getSnapshot();
