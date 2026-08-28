@@ -203,16 +203,7 @@ export function createPopupSelectController(spec: PopupSelectSpec, deps: PopupSe
             binding = current;
             snapshot = { ...POPUP_CLOSED, open: true, command };
             emit();
-            void spec.options(context, current.abort.signal).then(
-                options => {
-                    if (binding !== current) return;
-                    set({ status: 'ready', options, active: 0, error: null });
-                },
-                (error: unknown) => {
-                    if (binding !== current) return;
-                    set({ status: 'failed', options: [], active: 0, error: errorText(error) });
-                },
-            );
+            runLoad(current);
         },
         retry() {
             const s = snapshot;
