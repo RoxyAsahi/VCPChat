@@ -323,6 +323,11 @@ export function mountAgentModelPicker(host, props, scope) {
         const anchorRect = trigger.getBoundingClientRect();
         const cardRect = view.card.getBoundingClientRect();
         const margin = 8;
+        // The Electron window chrome occupies the first ~40px of the
+        // renderer surface at compact heights. Keep portal controls below it
+        // so directory actions remain genuinely hittable, not merely inside
+        // the viewport rectangle.
+        const topSafeArea = 48;
         const maxLeft = Math.max(margin, window.innerWidth - cardRect.width - margin);
         const left = Math.min(maxLeft, Math.max(margin, anchorRect.right - cardRect.width));
         const above = anchorRect.top - cardRect.height - margin;
@@ -330,7 +335,7 @@ export function mountAgentModelPicker(host, props, scope) {
         view.card.style.position = 'fixed';
         view.card.style.left = `${left}px`;
         view.card.style.right = 'auto';
-        view.card.style.top = `${Math.max(margin, top)}px`;
+        view.card.style.top = `${Math.max(topSafeArea, top)}px`;
         view.card.style.bottom = 'auto';
     };
     const syncPane = () => {
