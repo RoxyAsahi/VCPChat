@@ -10,7 +10,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 
 | Requirement | Electron evidence and gate | Status |
 | --- | --- | --- |
-| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Fresh isolated Showcase pair `reports/visual-forensics-qa/run-gvkr53/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
+| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Fresh isolated Showcase pair `reports/visual-forensics-qa/run-b6wG3o/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
 | First open, close/reopen, root identity, and cleanup | `run-KCjtuH` records `openedInitially`, `removedOnClose`, `reopened`, `newRootIdentity`, and empty body inline style for every observation. | Passed |
 | Scroll, narrow viewport, and restored viewport | Every `run-KCjtuH` observation records moved showcase scroll owner, narrow width `width - 240`, no horizontal overflow, and restored dimensions. | Passed |
 | Screenshot, geometry, computed style, DOM, and CSS cascade provenance | The isolated manifests include per-state screenshots, client rects, computed colors/tokens, root DOM tree, CDP matched rules with specificity/cascade order, and real Settings context samples. | Passed |
@@ -22,7 +22,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Production ModelPicker hover / resize / Escape | Each `run-safe-top-retry` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
-| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-gvkr53/{light,dark}` after the production ModelPicker portal change. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
+| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-b6wG3o/{light,dark}` after the production ModelPicker portal and Agent DisclosureRow changes. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
 
 ## Commands for exact evidence pairs
 
@@ -94,6 +94,9 @@ The Electron stderr still records the expected unavailable CDS binary, local
 model endpoint, and Rust sidecar. The rendered target surfaces and every
 visual gate completed successfully, so these environment messages remain
 outside the visual-defect ledger.
+
+The later pair `run-b6wG3o` supersedes this checkpoint after Agent Settings
+DisclosureRow adoption and the production ModelPicker portal safe-area work.
 
 ## Current production ModelPicker freshness checkpoint
 
