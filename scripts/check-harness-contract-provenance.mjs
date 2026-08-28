@@ -31,19 +31,25 @@ for (const domFile of domFiles) {
     return { ...item, resolved, exists };
   });
   const candidateStatus = geometry.candidateStatus ?? dom.candidateStatus ?? null;
+  const sourceKind = typeof dom.sourceKind === 'string' && dom.sourceKind.length > 0 ? dom.sourceKind : null;
   const selectors = geometry.selectors && typeof geometry.selectors === 'object' ? Object.keys(geometry.selectors) : [];
   const tokens = Array.isArray(geometry.tokens) ? geometry.tokens : [];
   if (candidateStatus === null) gaps.push(`${name}: missing candidateStatus boundary`);
   if (tokens.length === 0) gaps.push(`${name}: missing geometry tokens`);
-  entries.push({ name, domFile, geometryFile, candidateStatus, selectors: selectors.length, tokens: tokens.length, provenance: sourceChecks, pass: sourceChecks.length > 0 && sourceChecks.every(item => item.exists) && candidateStatus !== null && tokens.length > 0 });
+  entries.push({ name, domFile, geometryFile, sourceKind, candidateStatus, selectors: selectors.length, tokens: tokens.length, provenance: sourceChecks, pass: sourceChecks.length > 0 && sourceChecks.every(item => item.exists) && candidateStatus !== null && tokens.length > 0 });
 }
+const sourceKinds = entries.reduce((counts, entry) => {
+  const key = entry.sourceKind ?? 'undeclared';
+  counts[key] = (counts[key] ?? 0) + 1;
+  return counts;
+}, {});
 const report = {
   generatedAt: new Date().toISOString(),
   harnessRoot,
   referenceDir,
   status: gaps.length === 0 ? 'provenance-complete' : 'provenance-gaps-present',
   pass: gaps.length === 0,
-  counts: { contracts: entries.length, provenanceRecords: entries.reduce((sum, item) => sum + item.provenance.length, 0), complete: entries.filter(item => item.pass).length, gaps: gaps.length },
+  counts: { contracts: entries.length, provenanceRecords: entries.reduce((sum, item) => sum + item.provenance.length, 0), complete: entries.filter(item => item.pass).length, gaps: gaps.length, sourceKindDeclared: entries.filter(item => item.sourceKind !== null).length, sourceKinds },
   entries,
   gaps,
   note: 'Read-only reference provenance gate; it does not create or authorize any VCP Settings/Chat consumer.',
@@ -52,4 +58,3 @@ fs.mkdirSync(path.dirname(reportPath), { recursive: true });
 fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 console.log(`Harness contract provenance: ${report.status} (${report.counts.complete}/${report.counts.contracts}; gaps=${gaps.length}).`);
 if (strict && !report.pass) process.exitCode = 1;
-
