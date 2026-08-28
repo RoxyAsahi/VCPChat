@@ -531,6 +531,10 @@ try {
         window.VCPUIUX.mountButton(tooltipAnchor, { variant: 'toolbar', size: 'sm' }, scope);
         const tooltip = window.VCPUIUX.mountTooltip(tooltipAnchor, { label: 'Open workspace details', side: 'bottom', maxWidth: 240 }, scope);
         tooltipAnchor.focus();
+        // Drive the hover contract explicitly. Window focus can remain on the
+        // host page in artifact-only Electron runs, while pointerenter is the
+        // deterministic visual trigger for this fixture.
+        tooltipAnchor.dispatchEvent(new PointerEvent('pointerenter'));
         const hoverAnchor = document.createElement('div');
         hoverAnchor.textContent = 'Workspace path';
         hoverAnchor.style.cssText = 'padding:10px 12px;border:1px solid rgba(0,0,0,.12);border-radius:8px';

@@ -662,6 +662,10 @@ try {
     await page.waitForFunction(() => document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelectorAll('.vcp-uiux-primitive-menu:not([hidden]) [role="menuitem"]')[1]?.click());
     assert.equal(await page.$eval('#chatFontPreset', select => select.value), await page.$eval('#chatFontPreset', select => select.options[1].value), 'select choice writes through to native source');
+    // Selecting an option dismisses the owned portal through a subscription
+    // turn. Wait for that terminal state before reopening so the next click
+    // cannot race the primitive's close transition and toggle it closed.
+    await page.waitForFunction(() => !document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger')?.click());
     await page.waitForFunction(() => Boolean(document.querySelector('.vcp-uiux-primitive-menu:not([hidden])')), { timeout: timeoutMs });
     await page.mouse.click(4, 4);
