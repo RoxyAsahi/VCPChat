@@ -198,6 +198,7 @@ test('Tooltip and HoverCard Candidate baselines remain anchored to real Harness 
 test('Real Harness Tooltip source capture exposes the VCP Candidate portal structural mismatch', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-tooltip-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-tooltip-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-tooltip-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
@@ -209,7 +210,8 @@ test('Real Harness Tooltip source capture exposes the VCP Candidate portal struc
     assert.equal(report.interaction.flippedTop.pass, true);
     assert.equal(report.structuralPass, false);
     assert.equal(report.pass, false);
-    assert.equal(report.pixel.status, 'pending-roi-diff');
+    assert.equal(report.pixel.status, 'strict-roi-measured');
+    assert.equal(report.pixel.pass, false);
 });
 
 test('Tooltip source and Candidate fixed ROIs have an explicit strict pixel result', () => {
@@ -227,6 +229,7 @@ test('Tooltip source and Candidate fixed ROIs have an explicit strict pixel resu
 test('Real Harness HoverCard source capture retains the Candidate geometry and pixel boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-hover-card-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-roi-pixels.mjs'], { cwd: root, stdio: 'pipe', env: { ...process.env, VCP_PIXEL_COMPONENT: 'hover-card' } });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-hover-card-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-hover-card-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
@@ -237,7 +240,8 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.interaction.disabled.pass, true);
     assert.equal(report.interaction.unmountOrDispose.pass, true);
     assert.equal(report.pass, false);
-    assert.equal(report.pixel.status, 'pending-roi-diff');
+    assert.equal(report.pixel.status, 'strict-roi-measured');
+    assert.equal(report.pixel.pass, false);
 });
 
 test('HoverCard fixed ROI comparator rejects mismatched dimensions instead of inferring a pixel pass', () => {
