@@ -51,6 +51,11 @@ let typedSettingsDisposed = false;
 function addTypedNetworkPathInput(root, path = '') {
     const container = root?.querySelector?.('#networkNotesPathsContainer');
     if (!container) return false;
+    // Resolve the owner before binding any dynamic-row listener.  Rows can be
+    // created after the Settings surface mounted; their controls must still
+    // retract with the same presentation scope instead of leaving an ambient
+    // listener on a detached row during a close/reopen cycle.
+    const inputScope = ensurePresentationScope();
     const inputGroup = document.createElement('div');
     inputGroup.className = 'network-path-input-group vcp-settings-row';
     inputGroup.dataset.vcpSettingsRow = 'true';
@@ -71,17 +76,18 @@ function addTypedNetworkPathInput(root, path = '') {
     removeBtn.className = 'sidebar-button small-button danger-button';
     // A silent row removal previously skipped every dirty chain; announce it
     // so the owning owner recomputes the serialized list.
-    removeBtn.addEventListener('click', () => {
+    const removeRow = () => {
         inputGroup.remove();
         container.dispatchEvent(new Event('change', { bubbles: true }));
-    }, { once: true });
+    };
+    if (inputScope) inputScope.listen(removeBtn, 'click', removeRow, { once: true });
+    else removeBtn.addEventListener('click', removeRow, { once: true });
     inputGroup.append(input, removeBtn);
     container.appendChild(inputGroup);
     // Dynamic rows adopt the same real Input primitive as static fields; a
     // bare input keeps the native control contract when the runtime or the
     // presentation scope is unavailable.
     const inputApi = window.VCPUIUX;
-    const inputScope = ensurePresentationScope();
     if (inputApi?.mountInput && inputScope) {
         try {
             inputApi.mountInput(input, {}, inputScope);
