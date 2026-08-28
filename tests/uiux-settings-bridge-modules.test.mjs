@@ -184,6 +184,8 @@ test('global network-path add action uses the generated Button owner', () => {
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
     const disclosureModule = read(path.join(settingsDir, 'agent-disclosures.js'));
+    assert.doesNotMatch(disclosureModule, /chatAPI|saveSettings|loadSettings/, 'Agent disclosure helper must not cross the business boundary');
+    assert.match(disclosureModule, /manager\.toggleAgentSettingsSection\(key\)/, 'Agent disclosure helper must call the injected manager command');
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
     const owner = disclosureModule;
     assert.match(owner, /api\?\.mountDisclosureRowController/, 'Agent headers must use the generated Light-DOM DisclosureRow controller');
