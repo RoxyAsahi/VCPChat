@@ -68,7 +68,7 @@ for (const dir of targets) {
         assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minStateDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
       }
       assert.ok(deltaRatio(images.initial, images.reopen) >= baseline.minInteractionDeltaRatio, `${name}-reopen: no measurable pixel delta from initial`);
-      for (const suffix of ['menu', 'modal', 'tooltip', 'narrow-menu', 'narrow-modal', 'narrow-tooltip']) assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minInteractionDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
+      for (const suffix of ['menu', 'modal', 'tooltip', 'narrow-menu', 'narrow-modal', 'narrow-tooltip', 'restored-tooltip']) assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minInteractionDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
       const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value)) && rect.width > 0 && rect.height > 0;
       assert.ok(observation.initial?.controls?.some(control => finiteRect(control.rect)), `${name}: no finite initial control geometry`);
       assert.ok(observation.initial?.themeTokens && ['accent', 'surface', 'inputBackground', 'textPrimary'].every(key => typeof observation.initial.themeTokens[key] === 'string' && observation.initial.themeTokens[key].trim()), `${name}: incomplete computed theme token snapshot`);

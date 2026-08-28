@@ -90,7 +90,7 @@ try {
     const modalEvidence = { open: Boolean(modal), rect: rect(modal), mask: Boolean(document.querySelector('.vcp-harness-modal-mask')), zIndex: modal ? getComputedStyle(modal).zIndex : '' };
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     const tooltipAnchor = byText('Hover for details'); tooltipAnchor?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 160));
-    const tooltip = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
+    const tooltip = document.querySelector('.vcp-harness-tooltip-bubble');
     const tooltipEvidence = { open: Boolean(tooltip), rect: rect(tooltip), side: tooltip?.getAttribute('data-side') || '' };
     tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
     return { menu: menuEvidence, modal: modalEvidence, tooltip: tooltipEvidence };
@@ -278,7 +278,7 @@ try {
       await sleep(160);
       await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
       var tooltipViewport = await page.evaluate(() => {
-        const node = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
+        const node = document.querySelector('.vcp-harness-tooltip-bubble');
         if (!node) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
         const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
@@ -539,7 +539,7 @@ try {
       await tooltipHandle.hover().catch(() => {});
       await sleep(160);
       resized.tooltip = await page.evaluate(() => {
-        const node = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
+        const node = document.querySelector('.vcp-harness-tooltip-bubble');
         const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
         if (!node || !anchor) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const ar = anchor.getBoundingClientRect(); const s = getComputedStyle(node);
@@ -580,6 +580,27 @@ try {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await sleep(150);
     const restored = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
+    const restoredTooltipTarget = await (async () => {
+      for (const button of await page.$$(`${lab} button`)) {
+        if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
+      }
+      return null;
+    })();
+    if (restoredTooltipTarget) {
+      await restoredTooltipTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await sleep(80);
+      await restoredTooltipTarget.hover().catch(() => {});
+      await sleep(160);
+      restored.tooltip = await page.evaluate(() => {
+        const node = document.querySelector('.vcp-harness-tooltip-bubble');
+        const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
+        if (!node || !anchor) return { open: false, rect: null };
+        const r = node.getBoundingClientRect(); const ar = anchor.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, anchor: { x: ar.x, y: ar.y, width: ar.width, height: ar.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+      }).catch(() => ({ open: false, rect: null }));
+      await page.screenshot({ path: path.join(output, `${name}-restored-tooltip.png`), fullPage: false });
+      await page.mouse.move(2, 2).catch(() => {});
+    } else restored.tooltip = { open: false, rect: null };
     await page.screenshot({ path: path.join(output, `${name}-restored.png`), fullPage: false });
     evidence.observations.push({ viewport: { width, height }, initial, overlayViewport, settingsViewport, stateTransitions, scrolled, resized, restored });
     if (initial.overlap) evidence.gate.failures.push(`${name}: visible control overlap`);
