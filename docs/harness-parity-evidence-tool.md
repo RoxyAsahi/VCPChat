@@ -78,6 +78,12 @@ by its inline anchor; the Candidate fixture exposes a distinct wrapper basis).
 The report keeps geometry and ROI pixel evidence pending rather than inferring
 visual equivalence from the matching card box styles.
 
+StateDot now has the same real-source capture lane. Its four states, ARIA,
+10px geometry, semantic colors, and eight ongoing animation phases are
+compared; the report records the observed `block` (Harness fixture) versus
+`inline-block` (Candidate) display difference and retains pixel evidence as
+pending.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only

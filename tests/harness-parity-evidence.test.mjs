@@ -220,6 +220,18 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('Real Harness StateDot source capture retains the Candidate display and pixel boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.domAriaPass, true);
+    assert.equal(report.colorPass, true);
+    assert.equal(report.computedStylePass, false);
+    assert.equal(report.pixel.status, 'pending-roi-diff');
+});
+
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
     execFileSync(process.execPath, ['scripts/check-harness-capture-prerequisites.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-prerequisites.json'), 'utf8'));
