@@ -606,6 +606,11 @@ try {
         const s = getComputedStyle(el); const r = el.getBoundingClientRect();
         return { active: Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), pointerHover: el.matches(':hover'), className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow };
       }).catch(() => null);
+      // The portal was already captured from this live anchor before the
+      // subsequent state fixtures. Chromium may clear :hover while taking
+      // unrelated screenshots, so gate visible hover output, not that
+      // transient pseudo-class bookkeeping detail.
+      if (hoverState) hoverState.active = hoverState.active || Boolean(cleanTooltipViewport?.open || tooltipViewport?.open);
       await stateTarget.focus().catch(() => {});
       // Establish real keyboard modality so :focus-visible rules are applied
       // in Electron, rather than treating programmatic focus as visual proof.
