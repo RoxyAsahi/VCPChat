@@ -23,6 +23,39 @@
 computed style、interaction、legacy retirement 和平台证据闭合前，状态只能是
 `production-consumer-active`，不能称为 `Stable`。
 
+## 加速执行规则（2026-08-28）
+
+后续不再按“一个 Candidate 完成全部深度 parity 才允许下一个”的串行方式施工。
+改为两条互不混淆的并行车道：
+
+```text
+接入车道：已有 generated Candidate
+  -> 同语义、高频、非冻结的真实 consumer
+  -> 保持 canonical business DOM/state
+  -> 删除该节点直接竞争的 presentation debt
+
+等价车道：Harness source/reference
+  -> DOM/CSS/interaction/pixel evidence
+  -> Visual Forensics 真正页面巡检
+  -> 决定是否可以升为 Stable
+```
+
+这允许在不触碰业务边界的前提下成组提升真实产品覆盖率，同时不把“已经挂载”
+误报成“已经像素等价”。一个批次只允许复用已存在且语义相容的 primitive；没有
+Harness 同语义 contract 的特殊控件保持 bespoke，不为了统一而替换。
+
+### 下一批次的批量范围
+
+| 批次 | 允许快速应用 | 明确保留 bespoke | 完成定义 |
+| --- | --- | --- | --- |
+| Wave A | Agent Settings 中已经有 Input/Toggle/Choice/Range/Select/Button/ColorPair contract 的 canonical 节点 | 模型 modal 的 hot/favorite/refresh 直到 feature parity；任何聊天参数和 TTS 业务语义 | 每个节点一位 presentation owner，删除相应重复 listener/CSS/projection，跑 Agent Electron journey |
+| Wave B | Account、Notification、App drawer 的普通文字 action/row（Button、Tooltip） | 32px Dock/topbar icon trigger、`menuitemcheckbox` filter、danger clear | controller/command/focus 不变，真实 theme/窄视口/Escape/reopen evidence 通过 |
+| Wave C | 已有同语义 contract 的 Settings 普通表单字段 | 无 contract 的专用 picker、复杂编辑器、业务组合 widget | 不改 persisted key/IPC，接入后旧 field-level presentation path 可删除 |
+
+优先选择“一次能覆盖多个同构真实节点”的组，例如一组普通操作按钮或一组已有
+native canonical form fields；不把时间消耗在低频 DiffBlock、展示页专用样例或冻结
+聊天内容上。每组仍按一个可回滚提交交付，避免把并行修改混成大包。
+
 ## 当前优先队列
 
 | 顺序 | 真实入口 | 复用组件/缺口 | 保留不动的业务与定制部分 | 本切片可清理的债 |
