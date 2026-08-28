@@ -64,6 +64,13 @@ dispose semantics) against the reference contract and replayable Candidate
 capture. A pass is provenance evidence only, not a visual or consumer parity
 promotion.
 
+`capture-harness-tooltip-source-fixture.mjs` executes the real Harness
+`Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
+the VCP Candidate deliberately reports a structural mismatch: Harness keeps
+the bubble in the anchor parent's React fragment while VCP appends it to
+`body`. The matching semantic role/side and computed-style fields do not erase
+that mismatch; pixel comparison remains pending.
+
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top
 flip, disabled mid-open suppression, and owner disposal. It records a VCP-only
