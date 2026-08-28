@@ -10,7 +10,7 @@ they do not upgrade a missing renderer capture to passing evidence.
 
 | Requirement | Electron evidence and gate | Status |
 | --- | --- | --- |
-| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Isolated Showcase pair `reports/visual-forensics-qa/run-KCjtuH/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
+| Fixed `800x600`, `1280x800`, `1680x1000` viewports in light and dark | Fresh isolated Showcase pair `reports/visual-forensics-qa/run-aMd3YS/{light,dark}`, three observations each; `check-visual-forensics-evidence` and `check-visual-forensics-baseline` pass for all six combinations. | Passed |
 | First open, close/reopen, root identity, and cleanup | `run-KCjtuH` records `openedInitially`, `removedOnClose`, `reopened`, `newRootIdentity`, and empty body inline style for every observation. | Passed |
 | Scroll, narrow viewport, and restored viewport | Every `run-KCjtuH` observation records moved showcase scroll owner, narrow width `width - 240`, no horizontal overflow, and restored dimensions. | Passed |
 | Screenshot, geometry, computed style, DOM, and CSS cascade provenance | The isolated manifests include per-state screenshots, client rects, computed colors/tokens, root DOM tree, CDP matched rules with specificity/cascade order, and real Settings context samples. | Passed |
@@ -21,17 +21,17 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Production ModelPicker hover / resize / Escape | Each `run-PVaBFj` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
-| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-X0eTSy/{light,dark}` at `2026-08-28T04:02:28.108Z` / `04:02:57.346Z`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
+| Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-aMd3YS/{light,dark}`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
 
 ## Commands for exact evidence pairs
 
 ```sh
 node scripts/check-visual-forensics-evidence.mjs \
-  reports/visual-forensics-qa/run-KCjtuH/light \
-  reports/visual-forensics-qa/run-KCjtuH/dark
+reports/visual-forensics-qa/run-KCjtuH/light \
+reports/visual-forensics-qa/run-KCjtuH/dark
 node scripts/check-visual-forensics-baseline.mjs \
-  reports/visual-forensics-qa/run-KCjtuH/light \
-  reports/visual-forensics-qa/run-KCjtuH/dark
+reports/visual-forensics-qa/run-KCjtuH/light \
+reports/visual-forensics-qa/run-KCjtuH/dark
 node scripts/check-visual-qa-agent-model-picker.mjs \
   reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/light \
   reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/dark
@@ -42,6 +42,24 @@ changes to StreamCoordinator, StreamProjection, message rendering, chat
 protocol/IPC/persistence, Plugin Loader, chat plugin manifest, or Composer
 internals. No such files are changed by the Visual Forensics commits listed in
 this audit.
+
+## Current Tooltip lifecycle refresh
+
+The current isolated pair is:
+
+```text
+reports/visual-forensics-qa/run-aMd3YS/light
+reports/visual-forensics-qa/run-aMd3YS/dark
+```
+
+This replaced the earlier intermittent Tooltip capture evidence. The scanner
+now records initial Tooltip geometry before the Menu/Modal sequence, then
+separately verifies the same body-owned, fixed portal after narrow resize and
+after restoring the original width. In both themes and at all three required
+viewports, the manifests record `open:true` for initial, narrow, and restored
+Tooltip states, along with rendered hover evidence. The exact evidence verifier
+and every pixel/geometry baseline pass for this pair; this conclusion is based
+on the real Electron screenshots and manifests, not static source inspection.
 
 ## Startup-race regression evidence
 
