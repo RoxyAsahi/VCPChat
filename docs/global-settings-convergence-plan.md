@@ -121,6 +121,12 @@ ColorPair 可用时，生产 Settings 不再注册第二套颜色同步监听。
 用户样式折叠标题的旧单击绑定也已删除；`mountHarnessDisclosures` 现在是该
 标题的唯一 presentation owner，统一处理点击、键盘、ARIA 和 dispose。
 
+当前 `event-listeners.js` 中仍保留的全局设置绑定已完成边界分类：
+`submit`（兼容字段保存）、头像文件选择/裁剪、颜色重置按钮和无 UIUX
+artifact 时的 ColorPair fallback 均直接承载业务或 bootstrap 语义，暂不退役；
+它们不是与 typed primitive 竞争的生产 presentation owner。后续只有在对应
+业务命令拥有独立 owner 且有 Electron 回归证据后才迁移。
+
 ### G5：旧债净删除
 
 按 section 删除：
