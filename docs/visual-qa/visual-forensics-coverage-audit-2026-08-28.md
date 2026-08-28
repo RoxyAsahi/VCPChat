@@ -94,3 +94,25 @@ and body inline-style cleanup were all recorded from the rendered Settings
 surface. The capture process can remain alive briefly after writing a complete
 manifest during Electron teardown; that process-level delay does not weaken
 the already-written renderer evidence.
+
+## Directory-action transient-state checkpoint
+
+The production ModelPicker scanner now exercises the injected directory
+capabilities in the renderer instead of only measuring their static geometry.
+For every viewport and theme it clicks `Refresh models` and records the
+immediate `directoryBusy=true`, disabled button, and `Refreshing...` label;
+it then clicks a real favorite action and records the pressed/busy transition.
+The regression screenshots are `*-model-directory-busy.png` and
+`*-model-directory-favorite.png`.
+
+The isolated pair
+
+```text
+reports/visual-forensics-qa/agent-model-picker/run-actions/light
+reports/visual-forensics-qa/agent-model-picker/run-actions/dark
+```
+
+contains three complete observations per theme and passes the explicit
+production verifier. This closes the previously unmeasured directory-action
+loading/selected interaction evidence; it does not change the separate,
+still-open production-consumer pixel-equivalence claim.

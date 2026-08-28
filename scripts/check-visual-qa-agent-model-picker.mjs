@@ -22,7 +22,7 @@ for (const dir of targets) {
       const name = `${width}x${height}`;
       const capture = manifest.captures.find(item => item.viewport?.width === width && item.viewport?.height === height);
       assert.ok(capture, `${name}: capture missing`);
-      for (const suffix of ['open', 'model-directory', 'model-hover', 'narrow-open', 'restored-open']) {
+      for (const suffix of ['open', 'model-directory', 'model-directory-busy', 'model-directory-favorite', 'model-hover', 'narrow-open', 'restored-open']) {
         const screenshot = path.join(dir, `${name}-${suffix}.png`);
         const stat = await fs.stat(screenshot);
         assert.ok(stat.size > 1_000, `${name}-${suffix}: screenshot is unexpectedly small`);
@@ -55,6 +55,10 @@ for (const dir of targets) {
           `${name}: production model-directory ${action} has invalid geometry`,
         );
       }
+      assert.equal(capture.directoryTransient?.refreshBusy?.busy, 'true', `${name}: refresh busy state was not rendered`);
+      assert.equal(capture.directoryTransient?.refreshBusy?.refresh?.disabled, true, `${name}: refresh button was not disabled while busy`);
+      assert.equal(capture.directoryTransient?.refreshBusy?.refresh?.text, 'Refreshing…', `${name}: refresh busy label was not rendered`);
+      assert.ok(capture.favoriteTransient?.before, `${name}: favorite action transition was not captured`);
       for (const [phase, expectedWidth] of [['narrow', Math.max(320, width - 240)], ['restored', width]]) {
         const snapshot = capture[phase];
         const card = snapshot?.card;

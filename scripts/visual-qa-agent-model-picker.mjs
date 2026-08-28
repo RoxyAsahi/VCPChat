@@ -179,6 +179,35 @@ try {
       };
     });
     await page.screenshot({ path: path.join(output, `${name}-model-directory.png`), fullPage: false });
+    // Exercise the injected directory capabilities themselves.  The click is
+    // dispatched and sampled in one renderer turn so the synchronous
+    // directoryBusy transition cannot be mistaken for a later static state.
+    const directoryTransient = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      const refresh = card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh');
+      const favorite = card?.querySelector('[data-option-action="favorite"]');
+      const snapshot = (node) => node ? {
+        text: node.textContent?.trim() || '', disabled: node.disabled,
+        pressed: node.getAttribute('aria-pressed'),
+        rect: node.getBoundingClientRect().toJSON(),
+      } : null;
+      const before = { refresh: snapshot(refresh), favorite: snapshot(favorite), busy: card?.dataset.directoryBusy || 'false' };
+      refresh?.click();
+      const refreshBusy = { refresh: snapshot(refresh), favorite: snapshot(favorite), busy: card?.dataset.directoryBusy || 'false' };
+      return { before, refreshBusy };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-model-directory-busy.png`), fullPage: false });
+    await sleep(120);
+    const favoriteTransient = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      const favorite = card?.querySelector('[data-option-action="favorite"]');
+      if (!card || !favorite) return null;
+      const before = { pressed: favorite.getAttribute('aria-pressed'), text: favorite.textContent?.trim() || '', busy: card.dataset.directoryBusy || 'false' };
+      favorite.click();
+      return { before, after: { pressed: favorite.getAttribute('aria-pressed'), text: favorite.textContent?.trim() || '', busy: card.dataset.directoryBusy || 'false' } };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-model-directory-favorite.png`), fullPage: false });
+    await sleep(160);
     // The real catalog may publish a fresh row list between waitForSelector
     // and pointer placement. Resolve at the action boundary so a late
     // projection rebuild cannot turn visual evidence into a detached-handle
@@ -246,12 +275,16 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
     const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('.vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
-    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, modelDirectory, modelPaneHover, narrow, restored, closed });
+    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, modelDirectory, directoryTransient, favoriteTransient, modelPaneHover, narrow, restored, closed });
     if (!open.topmostInsideCard) evidence.gate.failures.push(`${name}: menu center topmost element is outside card`);
     if (!modelPaneHover?.hovered || !modelPaneHover.topmostInsideCard) evidence.gate.failures.push(`${name}: model-row hover is not painted/hittable ${JSON.stringify(modelPaneHover)}`);
     for (const [action, snapshot] of Object.entries(modelDirectory)) {
       if (!snapshot?.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: model-directory ${action} is not visible/hittable ${JSON.stringify(snapshot)}`);
     }
+    if (directoryTransient?.refreshBusy?.busy !== 'true' || directoryTransient.refreshBusy.refresh?.disabled !== true || directoryTransient.refreshBusy.refresh?.text !== 'Refreshing…') {
+      evidence.gate.failures.push(`${name}: refresh directory busy transition was not rendered ${JSON.stringify(directoryTransient)}`);
+    }
+    if (!favoriteTransient?.before || favoriteTransient.before.busy === undefined) evidence.gate.failures.push(`${name}: favorite directory action transition was not exercised ${JSON.stringify(favoriteTransient)}`);
     if (open.card?.position !== 'fixed' && open.card?.position !== 'absolute') evidence.gate.failures.push(`${name}: menu has unexpected position ${open.card?.position}`);
     for (const [phase, snapshot] of [['narrow', narrow], ['restored', restored]]) {
       if (!snapshot.open || !snapshot.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: ${phase} menu containment/hit-test ${JSON.stringify(snapshot)}`);
