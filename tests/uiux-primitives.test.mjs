@@ -52,7 +52,7 @@ const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
 const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
 const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
 const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.ts');
-const { mountDisclosureRow } = await import('../modules/uiux/primitives/disclosure-row.ts');
+const { mountDisclosureRow, mountDisclosureRowController } = await import('../modules/uiux/primitives/disclosure-row.ts');
 const { mountStateDot } = await import('../modules/uiux/primitives/state-dot.ts');
 const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/uiux/primitives/toast.ts');
 // RiskConfirmation is the first composed primitive; source-plane Node cannot
@@ -1062,6 +1062,48 @@ test('Harness DisclosureRow preserves controlled row-click and leading-button co
         assert.deepEqual([...host.children].map(node => node.id), ['icon', 'summary', 'body']);
         assert.deepEqual([...buttonHost.children].map(node => node.id), ['icon-2', 'summary-2', 'body-2']);
         await scope.dispose('disclosure-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness DisclosureRow controller adopts canonical Light DOM and retracts all presentation state', async () => {
+    const dom = new JSDOM('<!doctype html><main><section id="section" class="collapsed"><div id="header"><span id="title">Identity</span><span id="summary"> · Ada</span><button id="toggle" type="button">⌄</button></div><div id="content">Form</div></section></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('disclosure-controller-test'));
+        const section = document.getElementById('section');
+        const header = document.getElementById('header');
+        const content = document.getElementById('content');
+        const toggle = document.getElementById('toggle');
+        let toggles = 0;
+        let controller;
+        controller = mountDisclosureRowController(header, {
+            content,
+            open: false,
+            expandable: true,
+            toggle,
+            className: 'agent-disclosure',
+            onToggle: () => {
+                toggles += 1;
+                section.classList.toggle('collapsed');
+                controller.setOpen(!section.classList.contains('collapsed'));
+            },
+        }, scope);
+        assert.equal(header.querySelector('#title')?.textContent, 'Identity', 'adoption keeps canonical header children in place');
+        assert.equal(header.querySelector('#summary')?.textContent, ' · Ada', 'business summary remains readable by its manager');
+        assert.equal(header.getAttribute('role'), null, 'a header containing a native button must not create nested button semantics');
+        assert.equal(toggle.getAttribute('aria-controls'), 'content');
+        assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+        toggle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+        assert.equal(toggles, 1);
+        assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+        toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+        assert.equal(toggles, 2, 'pointer activation on the retained toggle routes to the same owner');
+        await scope.dispose('disclosure-controller-complete');
+        assert.equal(header.getAttribute('role'), null);
+        assert.equal(toggle.getAttribute('aria-expanded'), null);
+        assert.equal(toggle.getAttribute('aria-controls'), null);
+        assert.equal(header.querySelector('#summary')?.textContent, ' · Ada', 'dispose preserves canonical summary DOM');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
