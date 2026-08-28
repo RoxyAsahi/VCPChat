@@ -14,6 +14,7 @@ const guards = [
   ['popup-select', 'harness-popup-select-source-provenance.json'],
   ['language-row', 'harness-language-row-source-provenance.json'],
   ['agent-preset-label', 'harness-agent-preset-label-source-provenance.json'],
+  ['agent-preset-section', 'harness-agent-preset-section-source-provenance.json'],
 ].map(([name, file]) => {
   const present = fs.existsSync(path.join(reportsDir, file));
   return { name, report: file, present, pass: present ? read(file).pass === true : false };
