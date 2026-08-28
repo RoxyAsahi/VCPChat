@@ -4,7 +4,7 @@
 // the legacy autosave registry and its lifecycle.
 const autosaveStates = new Set();
 
-export function mountSettingsAutosave(root, form) {
+export function mountSettingsAutosave(root, form, scope = null) {
     if (form.dataset.vcpAutosaveMounted === 'true') return;
     const statusHost = root.querySelector('.vcp-harness-settings-actions');
     if (!statusHost) return;
@@ -75,16 +75,24 @@ export function mountSettingsAutosave(root, form) {
         if (state.failureOwner === 'typed-forum-field-owner') return;
         if (status.dataset.state === 'error') schedule();
     };
-    form.addEventListener('input', onInput);
-    form.addEventListener('change', onInput);
-    form.addEventListener('vcp-settings-save-result', onResult);
-    status.addEventListener('click', onStatusClick);
+    const listen = (target, type, handler, label) => {
+        if (scope?.listen) return scope.listen(target, type, handler, undefined, label);
+        target.addEventListener(type, handler);
+        return () => target.removeEventListener(type, handler);
+    };
+    const releaseInput = listen(form, 'input', onInput, 'settings-legacy-autosave-input');
+    const releaseChange = listen(form, 'change', onInput, 'settings-legacy-autosave-change');
+    const releaseResult = listen(form, 'vcp-settings-save-result', onResult, 'settings-legacy-autosave-result');
+    const releaseStatus = listen(status, 'click', onStatusClick, 'settings-legacy-autosave-retry');
     state.cleanups.push(() => {
         if (state.timer) clearTimeout(state.timer);
-        form.removeEventListener('input', onInput);
-        form.removeEventListener('change', onInput);
-        form.removeEventListener('vcp-settings-save-result', onResult);
-        status.removeEventListener('click', onStatusClick);
+        // Scope-owned listeners are released by the presentation owner. The
+        // fallback disposer keeps this module safe when LifecycleScope is not
+        // available during early bootstrap, and every release is idempotent.
+        void releaseInput?.();
+        void releaseChange?.();
+        void releaseResult?.();
+        void releaseStatus?.();
         status.remove();
         delete form.dataset.vcpAutosaveMounted;
     });

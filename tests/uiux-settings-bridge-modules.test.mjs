@@ -144,6 +144,13 @@ test('legacy Rust visibility listeners are fallback-only when typed consumer is 
         'legacy Rust binder must exit when the typed section owner is available');
 });
 
+test('typed Rust visibility listeners use the presentation scope', () => {
+    const entry = read(bridgeEntry);
+    const owner = entry.slice(entry.indexOf('const rustService = ensureRustAssistantUiService'), entry.indexOf('const forumService = ensureForumConfigUiService'));
+    assert.match(owner, /rustScope\.listen\(form, type, onChange\)/);
+    assert.doesNotMatch(owner, /rustScope\?\.own\(\(\) => form\.removeEventListener/);
+});
+
 test('legacy ColorPair binder is artifact-fallback-only', () => {
     const source = read(eventListeners);
     const bind = source.slice(source.indexOf('if (!modal.dataset.globalSettingsControlsBound)'), source.indexOf('const openGlobalSettings'));
@@ -374,6 +381,20 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
         assert.match(globalTypedOwners, new RegExp(`api\\.${primitive}\\(`),
             `${primitive} must remain mounted by the generated primitive`);
     }
+});
+
+test('settings shell navigation binds through the presentation scope', () => {
+    const entry = read(bridgeEntry);
+    const shell = entry.slice(entry.indexOf('function mountSettingsShell'), entry.indexOf('function cleanupDisconnectedControllers'));
+    assert.match(shell, /shellScope\.listen\(row, 'click', onClick\)/);
+    assert.match(shell, /shellScope\.listen\(row, 'keydown', onKeydown\)/);
+});
+
+test('typed settings external updates use the bridge scope', () => {
+    const entry = read(bridgeEntry);
+    const owner = entry.slice(entry.indexOf('function ensureTypedSettingsService'), entry.indexOf('function mountTypedSettingsConsumer'));
+    assert.match(owner, /bridgeScope\.listen\(window, 'global-settings-updated'/);
+    assert.match(owner, /else window\.addEventListener\('global-settings-updated'/);
 });
 
 test('legacy disclosure fast teardown is explicitly idempotent', () => {

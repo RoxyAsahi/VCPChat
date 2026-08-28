@@ -121,9 +121,10 @@ function ensureTypedSettingsService() {
         externalListeners.forEach(listener => listener(typedSettingsState));
     };
     const onExternalSettings = event => publishExternal(event.detail?.settings);
-    window.addEventListener('global-settings-updated', onExternalSettings);
+    if (bridgeScope) bridgeScope.listen(window, 'global-settings-updated', onExternalSettings, undefined, 'typed-settings-external-update');
+    else window.addEventListener('global-settings-updated', onExternalSettings);
     typedSettingsExternalRelease = () => {
-        window.removeEventListener('global-settings-updated', onExternalSettings);
+        if (!bridgeScope) window.removeEventListener('global-settings-updated', onExternalSettings);
         externalListeners.clear();
         typedSettingsExternalRelease = null;
     };
@@ -341,8 +342,8 @@ function mountTypedSettingsConsumer(root) {
         syncRustAssistantVisibility(form);
         ['change', 'input'].forEach(type => {
             const onChange = () => syncRustAssistantVisibility(form);
-            form.addEventListener(type, onChange);
-            rustScope?.own(() => form.removeEventListener(type, onChange), `typed-rust-visibility-${type}`, 'ui-presentation');
+            if (rustScope) rustScope.listen(form, type, onChange);
+            else form.addEventListener(type, onChange);
         });
         void rustService.refresh.execute();
     }
@@ -1542,6 +1543,7 @@ function restoreFormIcons(root) {
 function mountSettingsShell(root) {
     if (root.querySelector('.vcp-harness-settings-panel')) return;
     mountTypedSettingsConsumer(root);
+    const shellScope = ensurePresentationScope();
     const panel = root.querySelector('.vcp-settings-source-panel');
     const layout = root.querySelector('.vcp-settings-source-layout');
     const nav = root.querySelector('.vcp-settings-source-nav');
@@ -1699,15 +1701,22 @@ function mountSettingsShell(root) {
         label.textContent = item.label;
         copy.append(label);
         row.append(icon, copy);
-        row.addEventListener('click', () => activateSection(item.value));
-        row.addEventListener('keydown', event => {
+        const onClick = () => activateSection(item.value);
+        const onKeydown = event => {
             if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
             const current = rows.indexOf(row);
             const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
             rows[next]?.focus();
             if (rows[next]) activateSection(rows[next].dataset.section);
-        });
+        };
+        if (shellScope) {
+            shellScope.listen(row, 'click', onClick);
+            shellScope.listen(row, 'keydown', onKeydown);
+        } else {
+            row.addEventListener('click', onClick);
+            row.addEventListener('keydown', onKeydown);
+        }
         state.listHost.append(row);
         return row;
     });
