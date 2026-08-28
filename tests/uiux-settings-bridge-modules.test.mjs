@@ -103,6 +103,27 @@ test('legacy ColorPair binder is artifact-fallback-only', () => {
         'legacy color mirror listeners must not run beside generated ColorPair');
 });
 
+test('render visibility helper projects all custom typography rows', async () => {
+    const { syncRenderSettingsVisibility } = await import(pathToFileURL(path.join(settingsDir, 'render-visibility.js')).href);
+    const dom = new JSDOM(`<!doctype html><form>
+        <select id="chatFontPreset"><option value="system">system</option><option value="custom">custom</option></select><div id="chatFontCustomRow"></div>
+        <select id="chatCodeFontPreset"><option value="system">system</option><option value="custom">custom</option></select><div id="chatCodeFontCustomRow"></div>
+        <select id="chatDiaryFontPreset"><option value="system">system</option><option value="custom">custom</option></select><div id="chatDiaryFontCustomRow"></div>
+        <select id="chatToolFontPreset"><option value="system">system</option><option value="custom">custom</option></select><div id="chatToolFontCustomRow"></div>
+    </form>`);
+    const form = dom.window.document.querySelector('form');
+    syncRenderSettingsVisibility(form);
+    for (const id of ['chatFontCustomRow', 'chatCodeFontCustomRow', 'chatDiaryFontCustomRow', 'chatToolFontCustomRow']) {
+        assert.equal(form.querySelector(`#${id}`).style.display, 'none');
+    }
+    form.querySelector('#chatCodeFontPreset').value = 'custom';
+    form.querySelector('#chatToolFontPreset').value = 'custom';
+    syncRenderSettingsVisibility(form);
+    assert.equal(form.querySelector('#chatCodeFontCustomRow').style.display, 'block');
+    assert.equal(form.querySelector('#chatToolFontCustomRow').style.display, 'block');
+    assert.equal(form.querySelector('#chatFontCustomRow').style.display, 'none');
+});
+
 test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
     const entry = read(bridgeEntry);
     const helper = entry.match(/function mountTypedAgentInput\(form, \{ id, marker, ownerKey, placeholder = false, restoreClass = false \}\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
