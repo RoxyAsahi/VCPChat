@@ -27,14 +27,14 @@ computed style、interaction、legacy retirement 和平台证据闭合前，状�
 
 | 顺序 | 真实入口 | 复用组件/缺口 | 保留不动的业务与定制部分 | 本切片可清理的债 |
 | --- | --- | --- | --- | --- |
-| F1 | Agent Settings：名称、模型、参数、TTS、动作、折叠区 | Input、Range、Toggle、Choice、Select、Button、DisclosureRow 已有真实 consumer；继续按控件组收口 | `settingsManager`、保存协议、模型 modal 的 feature parity、TTS/聊天消费 | 每个已接管控件的重复 disposer、legacy enhancer、冲突 geometry selector |
+| F1 | Agent Settings：名称、模型、参数、TTS、动作、折叠区 | Input、Range、Toggle、Choice、Select、Button、DisclosureRow 已有真实 consumer；TTS Range/ColorPair 与 Voice Select 的直接旧 presentation 已退役 | `settingsManager`、保存协议、模型 modal 的 feature parity、TTS/聊天消费 | 每个尚未接管控件的重复 disposer、legacy enhancer、冲突 geometry selector |
 | F2 | Sidebar Account tray | Button 已接入；维持真实菜单 controller | 32px icon trigger、导航和 theme command | 已接管 action 的旧 presentation selector |
-| F3 | Notification quick-actions | 中性 Button 已接入；补 selectable `menuitemcheckbox` 与 danger menu-item adoption | `NotificationMenuController` command routing、filter subscription、clear confirmation/业务语义 | filter/clear 的局部 hover、selected、danger presentation 分支 |
+| F3 | Notification quick-actions | 中性 Button 已接入并有真实视觉证据；Harness Menu 无 `menuitemcheckbox` contract，因此 filter/clear 保留专属语义 | `NotificationMenuController` command routing、filter subscription、clear confirmation/业务语义 | 仅在存在同语义真源时处理 filter/clear 的局部 presentation |
 | F4 | App tray drawer | Button/Tooltip 已接入通用 drawer rows | 32px Fixed Dock 定制 geometry | 已接管 row 的旧 action presentation |
-| F5 | Launchpad cards | 先建立 app-launch tile contract，再接入动态 controller | app launch command、embedded app lifecycle、特殊卡片 | 手工 DOM/CSS 的 card-only presentation |
+| F5 | Launchpad cards | Harness 没有可追溯 app-launch tile；暂不伪造 primitive，动态卡片已改为结构化 DOM | app launch command、embedded app lifecycle、特殊卡片 | 未来仅在找到真源 contract 后处理 card-only presentation |
 
 F1--F4 可并行，但同一真实 DOM 节点只允许一条施工线；F5 在 tile 的 Harness
-source provenance 登记后开始。聊天消息、工具结果、思维链、composer 内部布局和
+source provenance 登记后才允许作为 primitive 施工。聊天消息、工具结果、思维链、composer 内部布局和
 所有聊天核心仍绝对冻结。
 
 ## 快速验收门槛
@@ -64,3 +64,17 @@ Shell 大重构。
 DeepSeek Harness 的生产像素等价。等价链（Harness provenance → DOM/CSS →
 interaction/lifecycle → Electron/pixel → legacy retirement）继续作为晋级条件，
 不会因为快车道而被跳过。
+
+## 已验收的快车道切片
+
+| 切片 | 提交 | 已闭合的实际边界 | 仍未闭合 |
+| --- | --- | --- | --- |
+| Agent TTS Range | `a6d5e7ed` | generated Range 唯一投影 `#ttsSpeedValue`；移除 Manager listener 与 id-specific layout CSS；Electron restore/stress | Harness Range 同语义 DOM/geometry/pixel |
+| Agent ColorPair | `ff41430f` | generated ColorPair 唯一同步/invalid rollback/preview owner；移除 Manager listeners；Electron restore/stress | Harness 生产 consumer 与 pixel evidence |
+| Agent TTS Voice Select | `0dca6c47`、`49d436dd` | native select 保持 business/options owner；typed Select 管理 portal/keyboard；legacy Agent Select CSS 排除 typed native node | Harness Select 同语义 DOM/geometry/pixel |
+| Account menu actions | `1f3285c8` | 三个普通 action 使用 generated Button；controller 保留 command/focus/theme owner | production visual equivalence、legacy action CSS deletion |
+| Notification neutral actions | `b1ab4b8c`、`76f65312`、`b5f0335a` | 五个普通 action 使用 generated Button；light/dark/三视口 Electron QA | checkbox/danger 没有同语义 Harness contract，故不迁移 |
+| Launchpad catalog DOM | `1fdf7838` | runtime app name 使用结构化文本节点；render scope/commands/keyboard 不变 | 无 Harness app-tile 真源，不能宣称 primitive equivalence |
+
+这些切片都是 `production-consumer-active` 或 presentation-debt reduction，均不是
+`Stable`；任何能改变业务命令、IPC、持久化或冻结聊天 Surface 的扩张仍然不在快车道内。
