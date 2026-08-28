@@ -73,6 +73,9 @@ for (const dir of targets) {
       assert.ok(observation?.overlayViewport?.tooltip?.rect);
       assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation.overlayViewport.tooltip.rect.y >= -2 && observation.overlayViewport.tooltip.rect.y + observation.overlayViewport.tooltip.rect.height <= height + 2, `${name}: tooltip is outside the viewport`);
+      if (observation.overlayViewport.tooltip.pointerEvents !== 'none') {
+        assert.equal(observation.overlayViewport.tooltip.topmostInside, true, `${name}: tooltip center is occluded`);
+      }
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation.initial.cdpCascade.every(rule => Array.isArray(rule.specificity) && Number.isInteger(rule.cascadeOrder)));

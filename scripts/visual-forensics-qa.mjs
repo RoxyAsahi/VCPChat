@@ -106,6 +106,8 @@ try {
     const rows = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, .settings-section') || [])]
       .filter(node => node.getClientRects().length).slice(0, 24).map(node => {
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+        const topmost = document.elementFromPoint(point.x, point.y);
         return { className: node.className, text: (node.textContent || '').trim().slice(0, 120), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gap: s.gap, padding: s.padding, borderRadius: s.borderRadius, backgroundColor: s.backgroundColor };
       });
     const shell = modal?.querySelector('.vcp-ui-settings-shell, #globalSettingsForm');
@@ -281,6 +283,8 @@ try {
         const node = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
         if (!node) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+        const topmost = document.elementFromPoint(point.x, point.y);
         const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
         const ar = anchor?.getBoundingClientRect();
         const ancestors = [];
@@ -293,7 +297,11 @@ try {
         }
         const bodyStyle = getComputedStyle(document.body);
         const htmlStyle = getComputedStyle(document.documentElement);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: ancestors, body: { transform: bodyStyle.transform, position: bodyStyle.position, top: bodyStyle.top, overflow: bodyStyle.overflow }, html: { transform: htmlStyle.transform, position: htmlStyle.position, overflow: htmlStyle.overflow } };
+        const topmostAncestry = [];
+        for (let current = topmost; current && topmostAncestry.length < 8; current = current.parentElement) {
+          topmostAncestry.push({ tag: current.tagName?.toLowerCase() || '', id: current.id || '', className: typeof current.className === 'string' ? current.className : '' });
+        }
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, pointerEvents: s.pointerEvents, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, point, topmost: topmost ? { tag: topmost.tagName?.toLowerCase() || '', id: topmost.id || '', className: typeof topmost.className === 'string' ? topmost.className : '' } : null, topmostAncestry, topmostInside: Boolean(topmost && node.contains(topmost)), anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: ancestors, body: { transform: bodyStyle.transform, position: bodyStyle.position, top: bodyStyle.top, overflow: bodyStyle.overflow }, html: { transform: htmlStyle.transform, position: htmlStyle.position, overflow: htmlStyle.overflow } };
       }).catch(() => ({ open: false, rect: null }));
       await page.mouse.move(2, 2).catch(() => {});
     } else tooltipViewport = { open: false, rect: null };
