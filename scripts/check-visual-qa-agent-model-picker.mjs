@@ -22,7 +22,7 @@ for (const dir of targets) {
       const name = `${width}x${height}`;
       const capture = manifest.captures.find(item => item.viewport?.width === width && item.viewport?.height === height);
       assert.ok(capture, `${name}: capture missing`);
-      for (const suffix of ['open', 'model-hover', 'narrow-open', 'restored-open']) {
+      for (const suffix of ['open', 'model-directory', 'model-hover', 'narrow-open', 'restored-open']) {
         const screenshot = path.join(dir, `${name}-${suffix}.png`);
         const stat = await fs.stat(screenshot);
         assert.ok(stat.size > 1_000, `${name}-${suffix}: screenshot is unexpectedly small`);
@@ -44,6 +44,17 @@ for (const dir of targets) {
           && hoverRect.y + hoverRect.height <= height + 2,
         `${name}: production model-row hover geometry exceeds viewport`,
       );
+      for (const action of ['refresh', 'favorite']) {
+        const directory = capture.modelDirectory?.[action];
+        assert.ok(directory, `${name}: production model-directory ${action} evidence is missing`);
+        assert.equal(directory.inViewport, true, `${name}: production model-directory ${action} is outside viewport`);
+        assert.equal(directory.topmostInsideCard, true, `${name}: production model-directory ${action} is occluded outside card`);
+        assert.ok(
+          [directory.rect?.x, directory.rect?.y, directory.rect?.width, directory.rect?.height].every(finite)
+            && directory.rect.width > 0 && directory.rect.height > 0,
+          `${name}: production model-directory ${action} has invalid geometry`,
+        );
+      }
       for (const [phase, expectedWidth] of [['narrow', Math.max(320, width - 240)], ['restored', width]]) {
         const snapshot = capture[phase];
         const card = snapshot?.card;
