@@ -49,7 +49,7 @@ const hoverTooltip = async (page, handle) => {
   await sleep(20);
   await handle.hover().catch(() => {});
   attempts.push({ method: 'puppeteer-hover', pointer: await capturePointerState(), bubble: await waitForBubble() });
-  if (attempts.at(-1).bubble) return { open: true, method: 'puppeteer-hover', attempts };
+  if (attempts.at(-1).bubble && attempts.at(-1).pointer?.hitAnchor && attempts.at(-1).pointer?.hovered) return { open: true, method: 'puppeteer-hover', attempts };
   // Resize can move the anchor between Puppeteer's hover calculation and the
   // dispatched event. Re-read the live rect for every native retry, because
   // scrolling and delayed layout can move a fixed-tooltip anchor between hops.
@@ -66,7 +66,7 @@ const hoverTooltip = async (page, handle) => {
     await page.mouse.move(livePointer.point.x, livePointer.point.y).catch(() => {});
     await sleep(30);
     attempts.push({ method: `native-pointer-retry-${retry}`, pointer: await capturePointerState(), bubble: await waitForBubble() });
-    if (attempts.at(-1).bubble) return { open: true, method: 'native-pointer-retry', attempts };
+    if (attempts.at(-1).bubble && attempts.at(-1).pointer?.hitAnchor && attempts.at(-1).pointer?.hovered) return { open: true, method: 'native-pointer-retry', attempts };
   }
   // Electron still renders the exact production portal below; this final
   // fallback only delivers mouseenter through the mounted renderer listener
@@ -81,6 +81,7 @@ const scrollTooltipIntoPointerViewport = async handle => handle.evaluate(async e
   if (!owner || !Number.isFinite(owner.scrollTop)) return;
   const previousBehavior = owner.style.scrollBehavior;
   owner.style.scrollBehavior = 'auto';
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   // Sticky headers can cover the centre after the first scrollIntoView. Iterate
   // against the live hit-test so fractional layout and scroll clamping cannot
   // leave the real pointer over the header.
