@@ -16,6 +16,7 @@ const candidateCaptures = [
   ['menu', 'reports/vcp-menu-candidate.json'],
   ['onboarding-surface', 'reports/vcp-onboarding-surface-candidate.json'],
   ['pill', 'reports/vcp-pill-candidate.json'],
+  ['tooltip', 'reports/vcp-tooltip-candidate.json'],
 ].map(([name, file]) => ({ name, file, captured: exists(file), state: 'vcp-candidate-capture-only', missingEvidence: ['Harness same-semantic capture', 'computed-style cross-page diff', 'pixel diff', 'VCP production consumer'] }));
 const sourceOrConsumerBoundaries = (parity?.missingEvidence ?? []).map(item => ({ evidence: item, state: /blocked-vcp-consumer/.test(item) ? 'consumer-boundary' : 'source-only-boundary' }));
 const pairedSelect = {
