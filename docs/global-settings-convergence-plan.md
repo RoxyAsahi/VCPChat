@@ -206,10 +206,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 状态；Theme Presenter 单测通过，问题限定在动效合同实现。Tooltip 文件属于
 并行未提交改动，本线不覆盖，待其补齐后再复跑动效与 UIUX 全套门禁。
 
-2026-08-28 最新复测：Settings Electron gate 的全部 Settings 交互断言仍通过，
-但最终 light/dark 背景差异断言仍失败（两者均为 `rgb(255, 255, 255)`），并伴随
-一个资源 `ERR_FILE_NOT_FOUND`。该失败来自并行主题/资源改动；本线程不修改其
-文件，待主题线程稳定后重跑最终 gate。
+2026-08-28 历史复测曾出现 Settings Electron gate 的 light/dark 背景差异和资源
+`ERR_FILE_NOT_FOUND`，当时归因于并行主题/资源改动。本轮 packaged artifact-only
+Theme Electron journey 已通过：initial=`light/1`、dark=`dark/2`、reload=`light/1`、
+subscribers=`2`。主题阻断已解除；Settings 专项视觉 gate 仍需单独跑完后才能宣称
+全局最终验收完成。
 
 ### G5：旧债净删除
 
@@ -262,12 +263,13 @@ roots/options 均为 0；generated artifact consistency 仍通过（78 个产物
 | G3 语音/高级 | owner-converged | Rust/Voice projection 与条件显隐已归 typed owner |
 | G4 内部拆分 | in-progress | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure |
 | G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
-| Electron 视觉最终验收 | blocked-by-parallel-theme | Settings 交互通过，dark/light 背景断言等待主题线程修复 |
+| Electron 视觉最终验收 | passed-artifact-journey | packaged artifact-only Theme Electron journey 已通过；Settings 专项 gate 继续复核 |
 
 补充证据：`test:electron-global-settings-entry` 已通过，确认 generated Settings
 入口 Button 的 mount、click、modal close 和 teardown 在真实 Electron 中保持可用。
 该 journey 只证明入口和 shell 生命周期，不替代 light/dark 视觉最终验收，也不改变
-并行主题线程的阻断记录。
+此前并行主题线程的阻断已由 packaged artifact-only Theme journey 解除；仍保留
+Settings 专项视觉 gate 作为最终验收证据。
 
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
