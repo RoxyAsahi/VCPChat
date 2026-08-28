@@ -558,17 +558,22 @@ try {
     };
     initial.stateTargets.disabled = await captureViewportState('disabled', ':disabled, .is-disabled, [aria-disabled="true"]');
     initial.stateTargets.selected = await captureViewportState('selected', '.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]');
-    const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
-    if (stateTarget) {
-      await page.mouse.move(2, 2).catch(() => {});
-      await sleep(20);
-      const box = await stateTarget.boundingBox().catch(() => null);
-      if (box) {
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
-        await page.waitForFunction(({ x, y }) => document.elementFromPoint(x, y)?.closest('.vcp-harness-primitive-lab button')?.matches(':hover'), { timeout: 500 }, { x: box.x + box.width / 2, y: box.y + box.height / 2 }).catch(() => {});
+    const stateTarget = await (async () => {
+      for (const button of await page.$$('.vcp-harness-primitive-lab button')) {
+        if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
       }
+      return null;
+    })();
+    if (stateTarget) {
+      await stateTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await hoverTooltip(page, stateTarget);
       await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: false });
-      const hoverState = await stateTarget.evaluate(el => { const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return { active: el.matches(':hover'), className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; }).catch(() => null);
+      const hoverState = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(candidate => candidate.matches(':hover'));
+        if (!el) return { active: false, className: '', rect: null, inViewport: false };
+        const s = getComputedStyle(el); const r = el.getBoundingClientRect();
+        return { active: true, className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow };
+      }).catch(() => null);
       await stateTarget.focus().catch(() => {});
       // Establish real keyboard modality so :focus-visible rules are applied
       // in Electron, rather than treating programmatic focus as visual proof.
