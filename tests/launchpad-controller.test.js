@@ -58,3 +58,21 @@ test('launchpad hides non-discoverable internal test apps while retaining other 
     controller.dispose();
     dom.window.close();
 });
+
+test('launchpad keeps external app labels as text while retaining the trusted icon slot', () => {
+    const dom = new JSDOM('<!doctype html><body><div id="nextUiAppGrid"></div></body>');
+    const controller = new LaunchpadController({
+        document: dom.window.document,
+        getExternalApps: () => [{
+            id: 'catalog-app', name: '<img src=x onerror=alert(1)>', icon: 'catalog', embed: false,
+        }],
+        getIcon: icon => `<svg data-icon="${icon}"></svg>`,
+    });
+    controller.mount();
+    const button = dom.window.document.querySelector('.next-ui-app-item');
+    assert.equal(button?.querySelector('[data-icon="catalog"]')?.tagName, 'svg');
+    assert.equal(button?.querySelector('img'), null);
+    assert.equal(button?.lastElementChild?.textContent, '<img src=x onerror=alert(1)>');
+    controller.dispose();
+    dom.window.close();
+});
