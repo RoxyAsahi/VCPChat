@@ -17,8 +17,8 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Light/dark tokens and visible hover/focus/disabled/selected/loading/error states | Explicit paired token contrast, in-viewport interaction state fields, and non-blank/delta screenshot baseline all pass in `run-KCjtuH`. | Passed |
 | Menu, Modal, Tooltip and portal placement | Menu/Modal center hit tests are inside their surfaces; Tooltip fixed/body portal and geometry are checked across original, narrow, and restored widths. Tooltip center ownership is intentionally not required when computed `pointer-events:none`. | Passed |
 | Settings context deformation and cleanup | The scanner captures showcase-vs-Settings ancestry/geometry, all eight Settings sections, settings cascade, overlay containment, and post-close body style. | Passed |
-| Production Agent Settings ModelPicker | Isolated pair `reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/{light,dark}` passes its independent verifier at all three viewports. | Passed |
-| Production ModelPicker hover / resize / Escape | Each `run-PVaBFj` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
+| Production Agent Settings ModelPicker | Fresh isolated pair `reports/visual-forensics-qa/agent-model-picker/run-safe-top-retry/{light,dark}` passes its independent verifier at all three viewports after the portal safe-area fix. | Passed |
+| Production ModelPicker hover / resize / Escape | Each `run-safe-top-retry` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
 | Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-aMd3YS/{light,dark}`. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
@@ -112,6 +112,27 @@ and body inline-style cleanup were all recorded from the rendered Settings
 surface. The capture process can remain alive briefly after writing a complete
 manifest during Electron teardown; that process-level delay does not weaken
 the already-written renderer evidence.
+
+## Production ModelPicker chrome-safe portal regression
+
+A fresh production scan found a real compact-height defect: at light
+`800x600`, after switching to the model directory pane, `Refresh models` could
+be geometrically inside the viewport at `y=27` but be hit by window chrome
+rather than the fixed card. The correction keeps the body portal below a
+`48px` window-chrome safe area and lets its owner observe card-size changes so
+asynchronous directory content repositions the same portal. The exact pair:
+
+```text
+reports/visual-forensics-qa/agent-model-picker/run-safe-top-retry/light
+reports/visual-forensics-qa/agent-model-picker/run-safe-top-retry/dark
+```
+
+passes the independent production verifier for all six theme/viewport
+captures. It checks screenshot dimensions, Refresh `directoryBusy=true` with
+disabled `Refreshing…`, favorite transition, real option hover, fixed/body
+portal geometry after narrow/restored resize, Escape focus return, and body
+inline-style cleanup. Legacy parity also passes; the legacy modal remains
+intentionally retained.
 
 ## Directory-action transient-state checkpoint
 
