@@ -98,6 +98,23 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
+test('the global Settings entry uses one generated Button presentation owner', () => {
+    const entry = read(bridgeEntry);
+    const sidebarCss = read(path.join(root, 'styles', 'setting', 'settings-sidebar-list.css'));
+    const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
+    const owner = entry.match(/function mountGlobalSettingsEntryButton\(\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+
+    assert.match(entry, /mountGlobalSettingsEntryButton\(\);/, 'Settings refresh must mount the high-frequency entry');
+    assert.match(owner, /api\.mountButton\(button, \{ variant: 'outline', size: 'sm' \}, scope\)/,
+        'the entry must use the generated small outline Button contract');
+    assert.match(owner, /delete button\.dataset\.vcpTypedGlobalSettingsEntry/,
+        'the marker must retract with the presentation scope');
+    assert.match(sidebarCss, /\.global-settings-btn:not\(\.vcp-harness-button\)/,
+        'the old sidebar button CSS must exclude the generated Button');
+    assert.match(shellCss, /\.global-settings-btn:not\(\.vcp-harness-button\)/,
+        'the shared Settings shell must not restyle the generated Button');
+});
+
 test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
@@ -187,6 +204,7 @@ test('Agent shell CSS leaves typed primitive inner controls to their own present
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
     const cardCss = read(path.join(root, 'styles', 'setting', 'settings-agent-card-shell.css'));
     const legacyControlsCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));
+    const paramsCss = read(path.join(root, 'styles', 'setting', 'settings-agent-params.css'));
     for (const selector of [
         '.vcp-uiux-input-wrap > input',
         '.vcp-uiux-color-pair > input',
@@ -203,6 +221,10 @@ test('Agent shell CSS leaves typed primitive inner controls to their own present
         'the still-loaded Agent control fallback must also exclude generated Input and ColorPair inner nodes');
     assert.match(legacyControlsCss, /select:not\(\.vcp-harness-select-native\)/,
         'the still-loaded Agent control fallback must not style a typed Select native node');
+    assert.match(paramsCss, /\.params-content input\[type="number"\]:not\(\.input\)/,
+        'the parameter-sheet numeric fallback must exclude generated Input nodes');
+    assert.doesNotMatch(paramsCss, /\.params-content input\[type="number"\](?!:not\(\.input\))/,
+        'the parameter sheet must not retain a competing numeric Input presentation owner');
 });
 
 test('Agent ColorPairs have one generated synchronization owner and preserve canonical color controls', () => {

@@ -239,6 +239,13 @@ Harness same-semantic capture. It separates the missing capture types from
 the frozen consumer boundary and always keeps `pass: false`; it is not a
 priority ranking and does not authorize production wiring.
 
+`node scripts/check-harness-parity-status.mjs` consolidates the current
+inventory, fixture-coverage, Candidate capture-gap, and composite provenance
+reports into `reports/harness-parity-status.json`. It reports when scope is
+accounted for, but always keeps `pass=false`: source/contract coverage and
+Candidate evidence never establish production parity or unlock frozen
+Settings/Chat/Composer consumers.
+
 `node scripts/check-harness-agent-preset-seat-source-provenance.mjs` records
 the three-file Harness AgentPresetSeat boundary (`AgentPresetSeat.tsx`,
 `PresetMenu.tsx`, and its stylesheet), including current SHA-256 values and
