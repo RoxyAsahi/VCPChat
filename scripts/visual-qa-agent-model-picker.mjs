@@ -25,6 +25,13 @@ await fs.mkdir(output, { recursive: true });
 const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const timeoutMs = 90_000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const within = (promise, label) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  Promise.resolve(promise).then(
+    value => { clearTimeout(timer); resolve(value); },
+    error => { clearTimeout(timer); reject(error); },
+  );
+});
 const requestJson = url => new Promise((resolve, reject) => {
   http.get(url, response => {
     let body = '';
@@ -74,8 +81,15 @@ const evidence = { generatedAt: new Date().toISOString(), source: 'VCP productio
 try {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) { try { await requestJson(`http://127.0.0.1:${remotePort}/json/version`); break; } catch { await sleep(100); } }
-  browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${remotePort}`, protocolTimeout: timeoutMs });
-  const pages = await browser.pages();
+  // The DevTools HTTP endpoint can be live while its CDP transport is wedged
+  // by a saturated local Electron host.  Bound both setup steps so that the
+  // failure is recorded in the evidence manifest and finally can reclaim the
+  // detached test app instead of leaving an unbounded QA worker behind.
+  browser = await within(
+    puppeteer.connect({ browserURL: `http://127.0.0.1:${remotePort}`, protocolTimeout: timeoutMs }),
+    'connect to production ModelPicker Electron renderer',
+  );
+  const pages = await within(browser.pages(), 'enumerate production ModelPicker Electron pages');
   const page = pages.find(candidate => candidate.url().includes('main.html'));
   assert.ok(page, `main renderer missing: ${stderr}`);
   await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
