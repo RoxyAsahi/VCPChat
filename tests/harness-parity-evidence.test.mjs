@@ -33,6 +33,7 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.equal(report.primitives.find(item => item.name === 'risk-confirmation')?.provenancePass, true);
     assert.equal(report.primitives.find(item => item.name === 'semantic-icon')?.provenancePass, true);
     assert.equal(report.primitives.find(item => item.name === 'agent-preset-label')?.provenancePass, true);
+    assert.equal(report.primitives.find(item => item.name === 'agent-preset-row')?.provenancePass, true);
     assert.ok(report.missingEvidence.includes('select/busy-trigger-disabled: blocked-vcp-consumer'));
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
     assert.equal(report.nextCandidate, 'select/busy-trigger-disabled');

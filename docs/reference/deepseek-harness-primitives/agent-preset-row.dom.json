@@ -1,8 +1,19 @@
 {
   "source": [
-    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
-    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/PresetMenu.tsx"
+    "packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
+    "packages/client/ui-agent-preset/src/client/PresetMenu.tsx"
   ],
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
+      "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+      "packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css"
+    ],
+    "selectionRule": "Use the Harness settings preference row plus PresetMenu composition; no equivalent VCP preset preference consumer is claimed."
+  },
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer and paired pixel diff pending",
   "productionConsumers": [
     "packages/client/ui-settings-agent-preset/src/client/AgentPresetRow.tsx"
   ],
