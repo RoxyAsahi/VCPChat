@@ -18,6 +18,7 @@ import { mountAppearanceSelects } from './settings/appearance-controls.js';
 import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 import { mountHomeTaglineInput } from './settings/home-controls.js';
+import { mountIdentityColorPairs } from './settings/identity-controls.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1060,7 +1061,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedGlobalChoiceGroups(root, form);
     mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
-    mountTypedAvatarColorPair(root, form);
+    mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
     mountTypedForumInputs(root, form);
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
@@ -1123,34 +1124,6 @@ function mountTypedGlobalChoiceGroups(root, form) {
 
 
 
-function mountTypedAvatarColorPair(root, form) {
-    const api = window.VCPUIUX; if (!api?.mountColorPair) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    // The Agent form mounts the same two pairs; the global form must keep
-    // parity so its hex text boxes and pickers stay two-way synced.
-    [['#userAvatarBorderColor', '#userAvatarBorderColorText', 'avatar-border'],
-     ['#userNameTextColor', '#userNameTextColorText', 'user-name-text']].forEach(([colorId, textId, name]) => {
-        const color = form?.querySelector?.(colorId);
-        const text = form?.querySelector?.(textId);
-        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        try {
-            api.mountColorPair(color, text, scope, {
-                onValueChange: value => {
-                    if (name === 'avatar-border') {
-                        form.querySelector('#userAvatarPreview')?.style.setProperty('border-color', value);
-                    }
-                },
-                onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
-            });
-            color.dataset.vcpTypedPrimitiveMounted = 'true';
-            scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
-        } catch (error) {
-            // A pairing contract violation (e.g. a wrap moved one input) must
-            // not break the whole enhancement chain; the pair stays native.
-            console.warn('[VCPUI SettingsBridge] Could not mount color pair primitive:', error);
-        }
-    });
-}
 
 
 // Forum credentials are presentation-only in this phase.  The existing

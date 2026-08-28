@@ -50,6 +50,8 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof toggles.mountAppearanceToggles, 'function');
     const home = await import(pathToFileURL(path.join(settingsDir, 'home-controls.js')).href);
     assert.equal(typeof home.mountHomeTaglineInput, 'function');
+    const identity = await import(pathToFileURL(path.join(settingsDir, 'identity-controls.js')).href);
+    assert.equal(typeof identity.mountIdentityColorPairs, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -322,10 +324,11 @@ test('global typed primitive mounts keep one lifecycle registration per primitiv
     const ranges = read(path.join(settingsDir, 'appearance-ranges.js'));
     const toggles = read(path.join(settingsDir, 'appearance-toggles.js'));
     const home = read(path.join(settingsDir, 'home-controls.js'));
+    const identity = read(path.join(settingsDir, 'identity-controls.js'));
     const globalTypedOwners = entry.slice(
         entry.indexOf('function mountTypedRadiusChoice'),
         entry.indexOf('// Single-line text inputs are projected'),
-    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles + '\n' + home;
+    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles + '\n' + home + '\n' + identity;
     // Each generated primitive calls scope.own() internally.  The bridge can
     // own its DOM marker, but must not register the returned release again:
     // that adds a second resource to every Settings-open cycle and asks the
