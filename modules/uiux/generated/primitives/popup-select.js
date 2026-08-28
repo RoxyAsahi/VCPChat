@@ -289,10 +289,22 @@ export function mountPopupSelectView(host, props, scope) {
                 event.preventDefault();
                 moveAndFocus(-1);
                 return;
-            case 'Enter':
+            case 'Enter': {
+                // The ModelPicker root owns real native menuitem buttons
+                // (Model / Effort) inside this generic card.  Let their
+                // browser activation reach the owner click listener instead
+                // of treating Enter as an option-row selection.  Actual
+                // PopupSelect options are never `role=menuitem`, so their
+                // select/submit contract remains owned here.
+                const target = event.target;
+                if (target?.tagName === 'BUTTON'
+                    && target.getAttribute('role') === 'menuitem'
+                    && !target.disabled)
+                    return;
                 event.preventDefault();
                 void popup.select(s.active);
                 return;
+            }
             case 'Escape':
                 event.preventDefault();
                 if (props.onEscape?.() === true)

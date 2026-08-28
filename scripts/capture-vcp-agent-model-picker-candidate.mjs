@@ -19,7 +19,7 @@ const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ?
 // but no reproducible production-page failure injection yet, so this report
 // must remain test-derived evidence rather than a production visual baseline.
 const requestedScenario = process.env.VCP_MODEL_PICKER_SCENARIO;
-const captureScenario = requestedScenario === 'load-error-retry' || requestedScenario === 'selection-error-toast' || requestedScenario === 'locked'
+const captureScenario = requestedScenario === 'load-error-retry' || requestedScenario === 'selection-error-toast' || requestedScenario === 'selecting' || requestedScenario === 'locked' || requestedScenario === 'hover-focus' || requestedScenario === 'keyboard-path'
     ? requestedScenario
     : 'ready-selected';
 const outputStem = captureMode === 'harness-equivalent'
@@ -124,6 +124,7 @@ try {
         const efforts = [];
         let loadAttempts = 0;
         let rejectFirstLoad = null;
+        let resolveSelecting = null;
         const picker = window.VCPUIUX.mountAgentModelPicker(host, {
             label: 'Agent model', selectedId: mode === 'harness-equivalent' ? 'acme-think' : 'gpt-4o', selectedEffort: mode === 'harness-equivalent' ? 'high' : 'balanced',
             searchEnabled: mode !== 'harness-equivalent',
@@ -157,6 +158,9 @@ try {
             },
             onSelect: async option => {
                 if (scenario === 'selection-error-toast') throw new Error('session already contains images');
+                if (scenario === 'selecting') {
+                    await new Promise(resolve => { resolveSelecting = resolve; });
+                }
                 selected.push(option.id);
             },
             onEffortSelect: option => efforts.push(option.id),
@@ -228,6 +232,70 @@ try {
         const modelRow = host.querySelector('.vcp-harness-agent-model-picker-cell');
         modelRow?.click();
         await new Promise(resolve => setTimeout(resolve, 0));
+        if (scenario === 'selecting') {
+            const card = host.querySelector('.vcp-harness-popup-select-card');
+            const rows = [...card?.querySelectorAll('.vcp-harness-popup-select-viewport [role="menuitemradio"]') ?? []];
+            rows.find(row => row.getAttribute('aria-disabled') !== 'true')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const snapshot = picker.popup.getSnapshot();
+            const triggerStyle = getComputedStyle(picker.trigger);
+            // PopupSelect intentionally replaces the keyed option DOM on
+            // each snapshot. Read the post-submit nodes, not the stale row
+            // that initiated the command, when checking busy native state.
+            const renderedRows = [...card?.querySelectorAll('.vcp-harness-popup-select-viewport [role="menuitemradio"]') ?? []];
+            const screenshot = {
+                source: mode === 'harness-equivalent'
+                    ? 'VCP generated AgentModelPicker Harness-equivalent Electron capture'
+                    : 'VCP generated AgentModelPicker Candidate Electron capture',
+                fixtureMode: mode,
+                provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
+                viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+                scenario,
+                selecting: {
+                    evidenceKind: 'VCP Electron generated-artifact state capture; Harness source DOM/state reference only',
+                    harnessSource: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx:103 sets busy for selecting; :303 disables native model rows while busy',
+                    popup: {
+                        open: snapshot.open,
+                        status: snapshot.status,
+                        submitting: snapshot.submitting,
+                        error: snapshot.error,
+                    },
+                    ariaBusy: card?.getAttribute('aria-busy') ?? null,
+                    statusText: card?.querySelector('.vcp-harness-popup-select-status')?.textContent ?? '',
+                    rowCount: renderedRows.length,
+                    allNativeRowsDisabled: renderedRows.every(row => row instanceof HTMLButtonElement && row.disabled && row.getAttribute('aria-disabled') === 'true'),
+                },
+                dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
+                trigger: {
+                    tag: picker.trigger.tagName.toLowerCase(),
+                    role: picker.trigger.getAttribute('role'),
+                    ariaHaspopup: picker.trigger.getAttribute('aria-haspopup'),
+                    ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
+                    ariaControls: picker.trigger.getAttribute('aria-controls'),
+                    disabled: picker.trigger.disabled,
+                    height: triggerStyle.height,
+                    maxWidth: triggerStyle.maxWidth,
+                    borderRadius: triggerStyle.borderRadius,
+                    padding: triggerStyle.padding,
+                    gap: triggerStyle.gap,
+                    fontSize: triggerStyle.fontSize,
+                    lineHeight: triggerStyle.lineHeight,
+                },
+                menu: card ? { role: card.getAttribute('role'), ariaBusy: card.getAttribute('aria-busy') } : null,
+                productionConsumer: false,
+                status: mode === 'harness-equivalent' ? 'harness-equivalent-fixture-active' : 'candidate-interaction-active',
+            };
+            window.__vcpAgentModelPickerCleanup = async () => {
+                resolveSelecting?.();
+                await new Promise(resolve => setTimeout(resolve, 0));
+                await picker.dispose();
+                await scope.dispose('candidate-agent-model-picker-selecting-complete');
+                const disposed = host.querySelector('.vcp-harness-agent-model-picker') === null;
+                host.remove();
+                return disposed;
+            };
+            return screenshot;
+        }
         let loadErrorRetry = null;
         if (scenario === 'load-error-retry') {
             const card = host.querySelector('.vcp-harness-popup-select-card');
@@ -510,7 +578,13 @@ try {
         if (search) search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         else card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
+        // This is deliberately kept as auxiliary controller coverage only.
+        // `KeyboardEvent` constructed inside the page is not a trusted browser
+        // keyboard action, so it cannot prove :focus-visible parity with the
+        // Harness browser fixture.  The outer Puppeteer journey records that
+        // separately below.
         const keyboardNavigation = {
+            evidenceKind: 'in-page synthetic KeyboardEvent; controller/focus-owner coverage only; not trusted keyboard-equivalence evidence',
             activeOption: host.querySelector(selectedSelector)?.textContent?.trim() || null,
             focusedOption: document.activeElement?.getAttribute?.('data-option-id') || null,
         };
@@ -625,6 +699,15 @@ try {
         assert.equal(evidence.locked?.popupOpen, false);
         assert.equal(evidence.locked?.cardPresent, false);
         assert.equal(evidence.locked?.loadAttempts, 0);
+    } else if (captureScenario === 'selecting') {
+        assert.equal(evidence.selecting?.popup.open, true);
+        assert.equal(evidence.selecting?.popup.status, 'ready');
+        assert.equal(evidence.selecting?.popup.submitting, true, JSON.stringify(evidence.selecting));
+        assert.equal(evidence.selecting?.popup.error, null);
+        assert.equal(evidence.selecting?.ariaBusy, 'true');
+        assert.equal(evidence.selecting?.statusText, 'Applying…');
+        assert.equal(evidence.selecting?.rowCount, captureMode === 'harness-equivalent' ? 2 : 3);
+        assert.equal(evidence.selecting?.allNativeRowsDisabled, true, JSON.stringify(evidence.selecting));
     } else {
         assert.equal(evidence.rootPane.expanded, 'true');
         assert.equal(evidence.rootPane.cardPresent, true);
@@ -668,16 +751,149 @@ try {
     }
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-full.png`) });
-    if (captureScenario !== 'locked') {
-    await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
-    await page.waitForFunction(({ mode }) => {
-        const root = document.querySelector('[data-vcp-candidate-agent-model-picker="true"]');
-        const viewport = root?.querySelector('.vcp-harness-popup-select-viewport');
-        const selector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
-        return viewport && viewport.hidden === false && viewport.querySelectorAll(selector).length > 0;
-    }, { timeout }, { mode: captureMode });
+    if (captureScenario !== 'locked' && captureScenario !== 'selecting') {
+    const needsTrustedKeyboardPath = (captureScenario === 'hover-focus' || captureScenario === 'keyboard-path')
+        && captureMode === 'harness-equivalent';
+    if (!needsTrustedKeyboardPath) {
+        await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
+        await page.waitForFunction(({ mode }) => {
+            const root = document.querySelector('[data-vcp-candidate-agent-model-picker="true"]');
+            const viewport = root?.querySelector('.vcp-harness-popup-select-viewport');
+            const selector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
+            return viewport && viewport.hidden === false && viewport.querySelectorAll(selector).length > 0;
+        }, { timeout }, { mode: captureMode });
+    }
+    if (needsTrustedKeyboardPath) {
+        // Match the Harness production keyboard route with trusted CDP input.
+        // The precondition focus mirrors Playwright's `trigger.focus()` in the
+        // reference fixture; every state transition after it is an actual
+        // browser key press, never an in-page synthetic KeyboardEvent.
+        const triggerSelector = '[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-agent-model-picker-trigger';
+        const modelRowSelector = '[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-agent-model-picker-cell[role="menuitem"]';
+        const optionSelector = '[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-viewport [role="menuitemradio"]';
+        const describeActive = label => page.evaluate(step => {
+            const active = document.activeElement;
+            return {
+                step,
+                tag: active?.tagName?.toLowerCase() ?? null,
+                role: active?.getAttribute?.('role') ?? null,
+                text: active?.textContent?.trim() ?? '',
+                optionId: active?.getAttribute?.('data-option-id') ?? null,
+                focusVisible: active instanceof HTMLElement && active.matches(':focus-visible'),
+            };
+        }, label);
+        await page.focus(triggerSelector);
+        const trustedKeyboardNavigation = { evidenceKind: 'trusted Puppeteer keyboard input; trigger focus precondition then Enter → Tab → Enter → Tab', steps: [] };
+        trustedKeyboardNavigation.steps.push(await describeActive('trigger-focus'));
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(selector => {
+            const row = document.querySelector(selector);
+            return row instanceof HTMLElement && row.hidden === false && getComputedStyle(row).display !== 'none';
+        }, { timeout }, modelRowSelector);
+        trustedKeyboardNavigation.steps.push(await describeActive('trigger-enter-open-root'));
+        await page.keyboard.press('Tab');
+        await page.waitForFunction(selector => document.activeElement?.matches(selector) === true, { timeout }, modelRowSelector);
+        trustedKeyboardNavigation.steps.push(await describeActive('tab-root-model-row'));
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(selector => document.querySelectorAll(selector).length > 0, { timeout }, optionSelector);
+        trustedKeyboardNavigation.steps.push(await describeActive('enter-open-model-pane'));
+        await page.keyboard.press('Tab');
+        await page.waitForFunction(selector => document.activeElement?.matches(selector) === true, { timeout }, optionSelector);
+        trustedKeyboardNavigation.steps.push(await describeActive('tab-model-option'));
+        trustedKeyboardNavigation.modelPath = {
+            root: trustedKeyboardNavigation.steps[1],
+            modelRow: trustedKeyboardNavigation.steps[2],
+            pane: trustedKeyboardNavigation.steps[3],
+            option: trustedKeyboardNavigation.steps[4],
+        };
+        evidence.trustedKeyboardNavigation = trustedKeyboardNavigation;
+        assert.equal(trustedKeyboardNavigation.modelPath.option.role, 'menuitemradio');
+        // Harness production's Tab route lands on the first rendered model,
+        // DeepSeek-V4-Flash.  `acme-think` is selected, but selection is not
+        // the tab-order contract.
+        assert.equal(trustedKeyboardNavigation.modelPath.option.optionId, 'deepseek-v4-flash');
+        assert.equal(trustedKeyboardNavigation.modelPath.option.focusVisible, true);
+
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(selector => {
+            const row = document.querySelector(selector);
+            return row instanceof HTMLElement && row.hidden === false && getComputedStyle(row).display !== 'none';
+        }, { timeout }, modelRowSelector);
+        trustedKeyboardNavigation.paneBack = await describeActive('escape-model-pane-back-root');
+        await page.keyboard.press('Escape');
+        await page.waitForFunction(selector => {
+            const trigger = document.querySelector(selector);
+            return trigger instanceof HTMLButtonElement
+                && trigger.getAttribute('aria-expanded') === 'false'
+                && document.activeElement === trigger;
+        }, { timeout }, triggerSelector);
+        trustedKeyboardNavigation.dismissed = await describeActive('escape-root-close-restore-trigger');
+        assert.equal(trustedKeyboardNavigation.dismissed.tag, 'button');
+        assert.equal(trustedKeyboardNavigation.dismissed.focusVisible, true);
+
+        if (captureScenario === 'keyboard-path') {
+            // This is a closed-state interaction fixture.  Do not reopen a
+            // pointer-driven visual pane merely to satisfy the generic menu
+            // ROI postamble: that would turn the trusted keyboard report into
+            // an ambiguous hybrid interaction baseline.
+            await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-closed.png`) });
+            evidence.keyboardCapture = {
+                screenshot: `${scenarioOutputStem}-closed.png`,
+                terminalState: 'closed-trigger-focus-restored',
+                visualComparison: 'not-evaluated: keyboard-path is interaction evidence, not an open-menu pixel baseline',
+            };
+        } else {
+            // Restore the fixture's baseline visual pane after the trusted
+            // path. This leaves hover/focus snapshots comparable with the
+            // pre-existing same-engine source-reference route without
+            // promoting their direct `.focus()` probe to keyboard evidence.
+            await page.focus(triggerSelector);
+            await page.keyboard.press('Enter');
+            await page.waitForFunction(selector => {
+                const row = document.querySelector(selector);
+                return row instanceof HTMLElement && row.hidden === false && getComputedStyle(row).display !== 'none';
+            }, { timeout }, modelRowSelector);
+            await page.keyboard.press('Tab');
+            await page.keyboard.press('Enter');
+            await page.waitForFunction(selector => document.querySelectorAll(selector).length > 0, { timeout }, optionSelector);
+            const rowSelector = '[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-viewport [role="menuitemradio"]';
+            await page.hover(rowSelector);
+            const hovered = await page.$eval(rowSelector, element => {
+                const style = getComputedStyle(element);
+                return {
+                    pseudo: { hover: element.matches(':hover'), focus: element.matches(':focus'), focusVisible: element.matches(':focus-visible') },
+                    computed: { backgroundColor: style.backgroundColor, color: style.color, outline: style.outline, outlineOffset: style.outlineOffset, boxShadow: style.boxShadow, borderColor: style.borderColor },
+                };
+            });
+            await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-hover.png`) });
+            await page.mouse.move(4, 4);
+            const programmaticFocused = await page.$eval(rowSelector, element => {
+                (element instanceof HTMLElement ? element : null)?.focus();
+                const style = getComputedStyle(element);
+                return {
+                    pseudo: { hover: element.matches(':hover'), focus: element.matches(':focus'), focusVisible: element.matches(':focus-visible') },
+                    computed: { backgroundColor: style.backgroundColor, color: style.color, outline: style.outline, outlineOffset: style.outlineOffset, boxShadow: style.boxShadow, borderColor: style.borderColor },
+                };
+            });
+            await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-focus.png`) });
+            evidence.hoverFocus = {
+                evidenceKind: 'VCP Electron generated-artifact pseudo-class capture; trusted keyboard evidence is stored separately in trustedKeyboardNavigation',
+                optionRole: 'menuitemradio',
+                hovered,
+                programmaticFocused,
+            };
+            assert.equal(hovered.pseudo.hover, true);
+            assert.equal(programmaticFocused.pseudo.hover, false);
+            assert.equal(programmaticFocused.pseudo.focus, true);
+        }
+    }
+    if (captureScenario !== 'keyboard-path') {
     await page.screenshot({ path: path.join(root, 'reports', `${scenarioOutputStem}-open-full.png`) });
-    const menuRect = await page.$eval('[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-card', element => {
+    // PopupSelect may place its overlay at document level when its owner has
+    // completed a close/reopen cycle.  The candidate card remains uniquely
+    // identifiable in this isolated Electron fixture, but is no longer
+    // necessarily a DOM descendant of the fixture host.
+    const menuRect = await page.$eval('.vcp-harness-popup-select-card', element => {
         const rect = element.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     });
@@ -904,6 +1120,7 @@ try {
     });
     await page.evaluate(() => window.__vcpHarnessModelSelectElectronReferenceCleanup?.());
     await fs.writeFile(path.join(root, 'reports', `${sameEngineReferenceStem}.json`), `${JSON.stringify(sameEngineReference, null, 2)}\n`, 'utf8');
+    }
     }
     evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
     assert.equal(evidence.disposed, true);
