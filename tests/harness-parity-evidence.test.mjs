@@ -68,11 +68,11 @@ test('Model picker diff reports pending or compares when a Harness capture exist
 test('Harness UI inventory separates frozen surfaces from contract candidates', () => {
     execFileSync(process.execPath, ['scripts/scan-harness-ui-inventory.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-ui-inventory.json'), 'utf8'));
-    assert.equal(report.status, 'inventory-gaps-present');
+    assert.ok(['inventory-gaps-present', 'inventory-scoped-complete'].includes(report.status));
     assert.ok(report.counts.portablePrimitives > 0);
     assert.ok(report.counts.composites > 0);
     assert.ok(report.counts.frozenDomainSurfaces > 0);
-    assert.ok(report.counts.missingContracts > 0);
+    assert.equal(report.counts.missingContracts, 0);
     assert.ok(report.entries.some(item => item.name === 'ModelSelect' && item.category === 'composite-surface'));
     assert.ok(report.entries.some(item => item.category === 'frozen-domain-surface'));
     assert.ok(report.counts.scopeBlockedSurfaces > 0);
@@ -81,8 +81,10 @@ test('Harness UI inventory separates frozen surfaces from contract candidates', 
     assert.ok(report.entries.some(item => item.scopeBoundary === 'chat-toolview-surface-frozen'));
     assert.ok(report.entries.some(item => item.scopeBoundary === 'settings-theme-surface-owned-by-main-thread'));
     assert.ok(report.entries.some(item => item.scopeBoundary === 'workspace-persistence-and-chat-entry-frozen'));
-    assert.equal(report.nextCandidates.some(item => ['ui-goal', 'ui-message-feedback', 'ui-skill', 'ui-subagent', 'ui-trajectory', 'ui-workflow-run', 'ui-theme', 'ui-user-questions', 'ui-workspace'].includes(item.package)), false);
-    assert.ok(report.nextCandidates.length > 0);
+    assert.ok(report.entries.some(item => item.scopeBoundary === 'plugin-loader-runtime-shell-frozen'));
+    assert.ok(report.entries.some(item => item.scopeBoundary === 'chat-session-provider-runtime-frozen'));
+    assert.equal(report.nextCandidates.some(item => ['ui-goal', 'ui-message-feedback', 'ui-skill', 'ui-subagent', 'ui-trajectory', 'ui-workflow-run', 'ui-theme', 'ui-user-questions', 'ui-workspace', 'web', 'web-react'].includes(item.package)), false);
+    assert.equal(report.nextCandidates.length, 0);
     assert.ok(report.entries.filter(item => item.relative.includes('ui-primitives/src/icons/index.tsx')).every(item => item.referenceContract === true));
     assert.equal(report.missingContracts.some(item => item.relative.includes('ui-primitives/src/icons/index.tsx')), false);
     assert.ok(report.surfacePatterns.some(item => item.pattern === 'ui-permission-presets' && item.composites > 0));
@@ -292,9 +294,9 @@ test('Unified contract provenance gate reports every reference boundary', () => 
         assert.equal(entry?.provenance[0]?.kind, 'local-contract');
         assert.equal(entry?.provenance[0]?.evidence, 'declared-vcp-local-boundary');
     }
-    assert.equal(report.status, 'provenance-gaps-present');
-    assert.equal(report.pass, false);
-    assert.ok(report.counts.gaps > 0);
-    assert.ok(report.gaps.some(item => item.includes('missing candidateStatus boundary')));
+    assert.equal(report.status, 'provenance-complete');
+    assert.equal(report.pass, true);
+    assert.equal(report.counts.gaps, 0);
+    assert.deepEqual(report.gaps, []);
     assert.ok(report.entries.some(item => item.pass === true));
 });
