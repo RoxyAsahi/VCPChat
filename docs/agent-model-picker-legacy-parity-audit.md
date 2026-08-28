@@ -41,6 +41,21 @@ modal 的删除资格。
 | 选择失败提示 | legacy 通知 | Harness-equivalent 路径已有 owner-bound Toast；production enhanced 路径保持现有 canonical 写入 | 保持“catalog load Retry”和“selection failure Toast”分流；不得增加 durable UI state |
 | modal close / focus | legacy modal helper | picker 有 Escape / trigger focus restore / dispose | parity consumer 下 close、重开、surface refresh、3-cycle stress 全部通过 |
 
+### 2026-08-28：injected directory capability 的真实 form 证据
+
+`npm run test:electron-agent-model-picker-directory-parity` 在真实 Electron 的
+`agentSettingsForm`、原生 `#agentModel` 和 generated `AgentModelPicker` 上运行。它先释放
+该临时会话的 Settings presentation owner，再通过 primitive 的公开 injected capability contract
+挂载唯一测试 owner；不会重写不可变的 `window.chatAPI` context bridge，也不更改 IPC、持久化、
+legacy modal 或业务 input。
+
+覆盖结果：热门/收藏/全部三组的顺序和重复投影；收藏 mutation 不写 `#agentModel`；refresh 的
+`Refreshing…` busy、成功、空列表和 owner-bound failure Toast；打开期间恰好一次
+`subscribeUpdated`、关闭时释放；refresh 的迟到成功在 close 和 explicit dispose 后均不重新创建
+popup/row，也没有遗留 picker scope。此项是 **真实 production form + generated primitive 的
+capability-contract Electron evidence**，不是 `settings-bridge → immutable chatAPI` 真实目录数据
+的端到端 IPC 证据，也不构成 `modelSelectModal` 的删除授权。
+
 ## 迁移设计约束
 
 1. 把热门、收藏、refresh、toggle 作为注入 capability 传给 picker；不要让 primitive
@@ -57,7 +72,8 @@ modal 的删除资格。
 ## 当前结论
 
 `AgentModelPicker` 是 `production-consumer-active`，但不是 legacy modal 的完整替代，
-更不是 Stable。热门/收藏分区、收藏 mutation 和显式刷新已经有 source/generated focused
-evidence；它们缺的是 capability-injected production Electron 成功/失败/close-race 证据，且
-`topicSummaryModel` 仍使用 legacy modal。因此当前继续双轨；任何删除 `modelSelectModal`
+更不是 Stable。热门/收藏分区、收藏 mutation 和显式刷新已经有 source/generated focused 与
+capability-contract Electron 成功/失败/close-race evidence；仍缺真实
+`settings-bridge → immutable chatAPI` 目录数据的端到端证据，且 `topicSummaryModel` 仍使用
+legacy modal。因此当前继续双轨；任何删除 `modelSelectModal`
 或其 `settingsManager` 行为的改动都应被视为 P0 边界违规。
