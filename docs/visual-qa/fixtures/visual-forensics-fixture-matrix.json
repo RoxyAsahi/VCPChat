@@ -37,6 +37,18 @@
       "selectors": [".vcp-ui-loading-layer", ".vcp-ui-async-boundary[data-status=error]", ".vcp-ui-async-boundary[data-status=loading]"]
     },
     {
+      "id": "showcase-disabled-control",
+      "trigger": "scrollIntoView(first visible disabled control)",
+      "screenshotSuffix": "disabled",
+      "selectors": [":disabled", ".is-disabled", "[aria-disabled=true]"]
+    },
+    {
+      "id": "showcase-selected-control",
+      "trigger": "scrollIntoView(first visible selected control)",
+      "screenshotSuffix": "selected",
+      "selectors": [".is-selected", "[aria-selected=true]", "[data-selected=true]", "[aria-checked=true]"]
+    },
+    {
       "id": "showcase-menu-modal-tooltip",
       "trigger": "click('View options'); click('Open modal'); hover('Hover for details')",
       "screenshotSuffix": null,
