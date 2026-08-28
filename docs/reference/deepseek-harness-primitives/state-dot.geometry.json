@@ -2,7 +2,7 @@
   "source": "packages/client/ui-primitives/src/StateDot.module.css",
   "styleSource": "packages/client/ui-primitives/src/StateDot.module.css",
   "status": "candidate-reference",
-  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; paired real-source per-state strict ROI pixel evidence recorded (non-passing); no VCP production consumer",
   "selectors": {
     ".dot": { "position": "relative", "display": "inline-block", "flex": "none" },
     ".dot::before": { "inset": "0", "opacity": "0.1", "borderRadius": "50%" },
@@ -26,6 +26,6 @@
     "screenshot": "fixtures/vcp/state-dot.candidate.png",
     "report": "fixtures/vcp/state-dot.candidate.json",
     "status": "candidate-interaction-active",
-    "pixelDiff": "pending-same-semantic-harness-fixture"
+    "pixelDiff": "strict-per-state-real-source-ROI-measured-non-passing"
   }
 }

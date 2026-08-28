@@ -83,6 +83,11 @@ byte equality for the real-source and Candidate tooltip screenshots. Its result
 is deliberately separate from structural parity: an exact pixel pass cannot
 erase the `main` versus `body` ownership mismatch.
 
+The same decoder can target HoverCard with `VCP_PIXEL_COMPONENT=hover-card`.
+Its current 245x245 versus 244x244 ROI mismatch is reported as
+`comparable=false`, `exactPixelPass=false`; zero compared pixels is never
+treated as a pass when dimensions do not match.
+
 `capture-harness-tooltip-source-fixture.mjs` executes the real Harness
 `Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
 the VCP Candidate deliberately reports a structural mismatch: Harness keeps
@@ -102,6 +107,11 @@ StateDot now has the same real-source capture lane. Its four states, ARIA,
 compared; the report records the observed `block` (Harness fixture) versus
 `inline-block` (Candidate) display difference and retains pixel evidence as
 pending.
+
+StateDot also has a per-state strict decoded-RGB ROI comparator. It records
+whether each of `done`, `warning`, `ongoing`, and `error` is dimensionally
+comparable and pixel-identical; the current baseline remains a non-passing
+visual result when any state differs.
 
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top

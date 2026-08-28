@@ -26,9 +26,11 @@ const candidateCaptures = candidateContracts.map(([name, file, contractFile, val
   const contract = `docs/reference/deepseek-harness-primitives/${contractFile}`;
   const sourceContractPresent = exists(contract);
   const contractPass = captured && sourceContractPresent && validate(capture);
-  return { name, file, contract, captured, sourceContractPresent, contractPass, state: 'vcp-candidate-capture-only', missingEvidence: [
+  const pairedStateDot = name === 'state-dot' && read('reports/harness-vcp-state-dot-source-diff.json')?.pixel?.status === 'strict-per-state-roi-measured';
+  return { name, file, contract, captured, sourceContractPresent, contractPass, state: pairedStateDot ? 'paired-real-source-boundary-recorded' : 'vcp-candidate-capture-only', missingEvidence: [
     ...contractPass ? [] : ['VCP Candidate state-matrix/teardown capture'],
-    'Harness same-semantic capture', 'computed-style cross-page diff', 'pixel diff', 'VCP production consumer',
+    ...pairedStateDot ? [] : ['Harness same-semantic capture', 'pixel diff'],
+    'computed-style cross-page diff', 'VCP production consumer',
   ] };
 });
 const sourceOrConsumerBoundaries = (parity?.missingEvidence ?? []).map(item => ({ evidence: item, state: /blocked-vcp-consumer/.test(item) ? 'consumer-boundary' : 'source-only-boundary' }));

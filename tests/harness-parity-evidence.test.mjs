@@ -232,16 +232,47 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
+test('HoverCard fixed ROI comparator rejects mismatched dimensions instead of inferring a pixel pass', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-hover-card-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-roi-pixels.mjs'], {
+        cwd: root,
+        stdio: 'pipe',
+        env: { ...process.env, VCP_PIXEL_COMPONENT: 'hover-card' },
+    });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-hover-card-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(report.component, 'hover-card');
+    assert.equal(report.comparable, false);
+    assert.equal(report.exactPixelPass, false);
+    assert.equal(report.pass, false);
+    assert.equal(report.pixelRatio, null);
+});
+
 test('Real Harness StateDot source capture retains the Candidate display and pixel boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
     assert.equal(report.domAriaPass, true);
     assert.equal(report.colorPass, true);
     assert.equal(report.computedStylePass, false);
-    assert.equal(report.pixel.status, 'pending-roi-diff');
+    assert.equal(report.pixel.status, 'strict-per-state-roi-measured');
+    assert.equal(report.pixel.pass, false);
+});
+
+test('StateDot per-state ROI comparator records strict decoded pixel results', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(report.cases.length, 4);
+    assert.equal(report.cases.filter(item => item.comparable).length, 3);
+    assert.equal(report.cases.some(item => !item.comparable), true);
+    assert.equal(report.cases.some(item => !item.exactPixelPass), true);
+    assert.equal(report.pass, report.cases.every(item => item.exactPixelPass));
+    assert.equal(report.pass, false);
 });
 
 test('Real-source diff ledger records cross-component boundaries without promotion', () => {
@@ -252,9 +283,9 @@ test('Real-source diff ledger records cross-component boundaries without promoti
     assert.equal(report.counts.realSourceDiffs, 3);
     assert.equal(report.counts.semanticFixtureMatches, 3);
     assert.equal(report.counts.parityPasses, 0);
-    assert.equal(report.counts.pixelMeasured, 1);
-    assert.equal(report.counts.pixelPasses, 0);
-    assert.equal(report.counts.pendingPixelDiffs, 3);
+    assert.equal(report.counts.pixelMeasured, 3);
+    assert.ok(report.counts.pixelPasses <= report.counts.pixelMeasured);
+    assert.equal(report.counts.pendingPixelDiffs, 0);
 });
 
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
