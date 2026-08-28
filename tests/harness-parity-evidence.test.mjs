@@ -252,6 +252,8 @@ test('Real-source diff ledger records cross-component boundaries without promoti
     assert.equal(report.counts.realSourceDiffs, 3);
     assert.equal(report.counts.semanticFixtureMatches, 3);
     assert.equal(report.counts.parityPasses, 0);
+    assert.equal(report.counts.pixelMeasured, 1);
+    assert.equal(report.counts.pixelPasses, 0);
     assert.equal(report.counts.pendingPixelDiffs, 3);
 });
 

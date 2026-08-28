@@ -75,6 +75,8 @@ HoverCard, and StateDot real-source diff reports. It records semantic fixture
 matches separately from parity passes and intentionally keeps its own `pass`
 false while structural, geometry, computed-style, pixel, or consumer evidence
 remains open.
+The ledger also includes Tooltip's measured strict ROI result separately from
+the other components' pending pixel lanes.
 
 Tooltip also has a strict fixed-ROI PNG comparator. It records SHA-256 and
 byte equality for the real-source and Candidate tooltip screenshots. Its result
