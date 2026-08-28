@@ -177,7 +177,7 @@
         background: var(--vcp-ui-border);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar .global-settings-btn {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar .global-settings-btn:not(.vcp-harness-button) {
         min-height: var(--vcp-ui-control-sm);
         height: var(--vcp-ui-control-sm);
         padding: 0 var(--vcp-ui-space-2);

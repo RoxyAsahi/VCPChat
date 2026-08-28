@@ -475,6 +475,28 @@ function enhance(name, element, options = {}) {
     }
 }
 
+// The sidebar entry is a routine text action, so it can use the same generated
+// Button contract as the other high-frequency Settings actions.  Its existing
+// click handler stays outside this bridge: this owner changes only the visual
+// presentation and retracts it with the Settings surface scope.
+function mountGlobalSettingsEntryButton() {
+    const button = document.getElementById('globalSettingsBtn');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!button || !api?.mountButton || !scope || button.dataset.vcpTypedGlobalSettingsEntry === 'true') return;
+    try {
+        api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
+        button.dataset.vcpTypedGlobalSettingsEntry = 'true';
+        scope.own(() => {
+            delete button.dataset.vcpTypedGlobalSettingsEntry;
+        }, 'typed-global-settings-entry-marker', 'ui-presentation');
+    } catch (error) {
+        // The existing native button and listener remain fully operational if
+        // the optional presentation artifact cannot mount.
+        console.warn('[VCPUI SettingsBridge] Could not mount global Settings entry Button:', error);
+    }
+}
+
 function enhanceForm(form) {
     mountTypedAgentIdentityInput(form);
     mountTypedAgentModelInput(form);
@@ -1944,6 +1966,7 @@ function refresh() {
     if (destroyed) return;
     ensurePresentationScope();
     cleanupDisconnectedControllers();
+    mountGlobalSettingsEntryButton();
     const globalSettingsModal = syncGlobalSettingsHost();
     if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
