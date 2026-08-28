@@ -217,7 +217,7 @@ try {
       try {
         await page.mouse.move(2, 2);
         await page.hover(modelRowSelector);
-        await page.waitForFunction(selector => document.querySelector(selector)?.matches(':hover'), { timeout: timeoutMs }, modelRowSelector);
+        await page.waitForFunction(selector => document.querySelector(selector)?.matches(':hover'), { timeout: 1_000 }, modelRowSelector);
         hoverError = null;
         break;
       } catch (error) {
