@@ -158,6 +158,27 @@ try {
     await page.waitForSelector('.vcp-harness-popup-select-card .vcp-harness-popup-select-viewport [data-option-id]', { timeout: timeoutMs });
     const modelRowSelector = '.vcp-harness-popup-select-card .vcp-harness-popup-select-viewport [data-option-id]:not([aria-disabled="true"])';
     assert.ok(await page.$(modelRowSelector), `${name}: production model pane has no enabled option`);
+    const modelDirectory = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      const describe = node => {
+        if (!card || !node) return null;
+        const rect = node.getBoundingClientRect(); const style = getComputedStyle(node);
+        const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        const topmost = document.elementFromPoint(point.x, point.y);
+        return {
+          text: node.textContent?.trim() || '', disabled: node.disabled,
+          pressed: node.getAttribute('aria-pressed'), rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+          color: style.color, backgroundColor: style.backgroundColor, borderRadius: style.borderRadius,
+          inViewport: rect.width > 0 && rect.height > 0 && rect.left >= -2 && rect.top >= -2 && rect.right <= innerWidth + 2 && rect.bottom <= innerHeight + 2,
+          topmostInsideCard: Boolean(topmost && card.contains(topmost)),
+        };
+      };
+      return {
+        refresh: describe(card?.querySelector('.vcp-harness-agent-model-picker-directory-refresh')),
+        favorite: describe(card?.querySelector('[data-option-action="favorite"]')),
+      };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-model-directory.png`), fullPage: false });
     // The real catalog may publish a fresh row list between waitForSelector
     // and pointer placement. Resolve at the action boundary so a late
     // projection rebuild cannot turn visual evidence into a detached-handle
@@ -220,9 +241,12 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
     const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('.vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
-    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, modelPaneHover, narrow, restored, closed });
+    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, modelDirectory, modelPaneHover, narrow, restored, closed });
     if (!open.topmostInsideCard) evidence.gate.failures.push(`${name}: menu center topmost element is outside card`);
     if (!modelPaneHover?.hovered || !modelPaneHover.topmostInsideCard) evidence.gate.failures.push(`${name}: model-row hover is not painted/hittable ${JSON.stringify(modelPaneHover)}`);
+    for (const [action, snapshot] of Object.entries(modelDirectory)) {
+      if (!snapshot?.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: model-directory ${action} is not visible/hittable ${JSON.stringify(snapshot)}`);
+    }
     if (open.card?.position !== 'fixed' && open.card?.position !== 'absolute') evidence.gate.failures.push(`${name}: menu has unexpected position ${open.card?.position}`);
     for (const [phase, snapshot] of [['narrow', narrow], ['restored', restored]]) {
       if (!snapshot.open || !snapshot.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: ${phase} menu containment/hit-test ${JSON.stringify(snapshot)}`);
