@@ -427,6 +427,21 @@ test('Modal source/Candidate diff records standard parity evidence and headless 
     assert.equal(report.pass, false);
 });
 
+test('SemanticIcon source/Candidate evidence preserves exact SVG and glyph boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-semantic-icon-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-semantic-icon-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-semantic-icon-source.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-semantic-icon-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-semantic-icon-source-diff.json'), 'utf8'));
+    const pixel = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-semantic-icon-roi-pixel-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.structuralPass, false);
+    assert.equal(report.glyphGeometryPass, false);
+    assert.equal(pixel.comparable, false);
+    assert.equal(report.pass, false);
+    assert.ok(report.missingEvidence.includes('VCP production SemanticIcon consumer'));
+});
+
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });

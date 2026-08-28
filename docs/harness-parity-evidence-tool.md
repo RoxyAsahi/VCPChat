@@ -153,6 +153,16 @@ selected computed-style fields align. Its strict decoded-RGB ROI is comparable
 but non-passing; the Harness headless branch remains source-captured only until
 a matching Candidate headless replay is recorded.
 
+SemanticIcon now has a real `icons/index.tsx` capture for warning, close, check,
+and chevron-down at the same semantic sizes as the Candidate Lab adapter. The
+paired report records SVG tag, viewBox, path count/signatures, fill/ARIA
+contract, source unmount, and a strict decoded-RGB fixture comparison. The
+semantic names and rendered box sizes align, but Harness's exact filled paths
+and the Candidate's Lucide 24×24 stroke glyphs differ. The measured fixture
+height consequently differs (66px versus 69px), so pixel evidence is explicitly
+`comparable=false`; no crop or resize is permitted. This remains Candidate-only
+evidence and does not create a VCP SemanticIcon production consumer.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept

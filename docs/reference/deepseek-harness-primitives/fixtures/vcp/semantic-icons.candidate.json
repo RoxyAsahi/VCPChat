@@ -1,47 +1,134 @@
 {
+  "source": "VCP generated artifact Candidate Lab",
+  "semanticFixture": "four-semantic-icons-current-color",
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer",
   "viewport": {
     "width": 800,
     "height": 600,
     "deviceScaleFactor": 1
   },
-  "source": "generated-artifact-electron",
-  "state": "four-semantic-icons-current-color",
-  "states": [
+  "icons": [
     {
       "name": "warning",
-      "width": "18px",
-      "height": "18px",
-      "color": "rgb(38, 120, 255)",
+      "tag": "svg",
+      "width": "24",
+      "height": "24",
+      "viewBox": "0 0 24 24",
+      "fill": "none",
       "ariaHidden": "true",
       "focusable": "false",
-      "dataIcon": "warning"
+      "dataIcon": "warning",
+      "pathCount": 3,
+      "pathSignatures": [
+        {
+          "fill": null,
+          "dLength": 72
+        },
+        {
+          "fill": null,
+          "dLength": 7
+        },
+        {
+          "fill": null,
+          "dLength": 10
+        }
+      ],
+      "rect": {
+        "width": 18,
+        "height": 18
+      },
+      "slot": {
+        "width": "18px",
+        "height": "18px"
+      }
     },
     {
       "name": "close",
-      "width": "16px",
-      "height": "16px",
-      "color": "rgb(38, 120, 255)",
+      "tag": "svg",
+      "width": "24",
+      "height": "24",
+      "viewBox": "0 0 24 24",
+      "fill": "none",
       "ariaHidden": "true",
       "focusable": "false",
-      "dataIcon": "close"
+      "dataIcon": "close",
+      "pathCount": 2,
+      "pathSignatures": [
+        {
+          "fill": null,
+          "dLength": 10
+        },
+        {
+          "fill": null,
+          "dLength": 10
+        }
+      ],
+      "rect": {
+        "width": 16,
+        "height": 16
+      },
+      "slot": {
+        "width": "16px",
+        "height": "16px"
+      }
     },
     {
       "name": "check",
-      "width": "16px",
-      "height": "16px",
-      "color": "rgb(38, 120, 255)",
+      "tag": "svg",
+      "width": "24",
+      "height": "24",
+      "viewBox": "0 0 24 24",
+      "fill": "none",
       "ariaHidden": "true",
       "focusable": "false",
-      "dataIcon": "check"
+      "dataIcon": "check",
+      "pathCount": 1,
+      "pathSignatures": [
+        {
+          "fill": null,
+          "dLength": 15
+        }
+      ],
+      "rect": {
+        "width": 16,
+        "height": 16
+      },
+      "slot": {
+        "width": "16px",
+        "height": "16px"
+      }
     },
     {
       "name": "chevron-down",
-      "width": "14px",
-      "height": "14px",
-      "color": "rgb(38, 120, 255)",
+      "tag": "svg",
+      "width": "24",
+      "height": "24",
+      "viewBox": "0 0 24 24",
+      "fill": "none",
       "ariaHidden": "true",
       "focusable": "false",
-      "dataIcon": "chevron_down"
+      "dataIcon": "chevron_down",
+      "pathCount": 1,
+      "pathSignatures": [
+        {
+          "fill": null,
+          "dLength": 12
+        }
+      ],
+      "rect": {
+        "width": 14,
+        "height": 14
+      },
+      "slot": {
+        "width": "14px",
+        "height": "14px"
+      }
     }
+  ],
+  "disposed": {
+    "renderedIcons": 0
+  },
+  "missingEvidence": [
+    "VCP production SemanticIcon consumer"
   ]
 }
