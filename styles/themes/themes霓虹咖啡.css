@@ -85,7 +85,7 @@ body {
  * Warm, nurturing, and gently energizing
  * =================================================================
  */
-body.light-theme {
+body[data-vcp-theme="light"] {
     /* Wallpaper and background properties */
     background-image: var(--chat-wallpaper-light);
     background-size: cover;

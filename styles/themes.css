@@ -68,7 +68,7 @@ body {
     background-image: none;
 }
 
-body.light-theme {
+body[data-vcp-theme="light"] {
     --chat-wallpaper-light: none;
     --primary-bg: #edf1f5;
     --secondary-bg: #ffffff;

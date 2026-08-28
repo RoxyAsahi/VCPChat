@@ -20,8 +20,8 @@
     inset 6px -6px 1px -6px rgba(255, 255, 255, 0.12),
     inset -6px 6px 1px -6px rgba(255, 255, 255, 0.08),
     inset 0 0 2px rgba(0, 0, 0, 0.38), 0 6px 14px rgba(0, 0, 0, 0.14);
-  transition: border-color 0.22s ease, box-shadow 0.22s ease,
-    background 0.22s ease;
+  transition: border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), box-shadow var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard),
+    background var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
 [id="agentSettingsForm"] > .agent-settings-card-shell::before,
@@ -54,10 +54,10 @@
   );
 }
 
-body.light-theme [id="agentSettingsForm"] > .agent-settings-card-shell,
-body.light-theme [id="agentSettingsContainer"] .agent-identity-container,
-body.light-theme [id="agentSettingsContainer"] .agent-params-collapsible-container,
-body.light-theme [id="agentSettingsContainer"] .strip-regex-container {
+body[data-vcp-theme="light"] [id="agentSettingsForm"] > .agent-settings-card-shell,
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .agent-identity-container,
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .agent-params-collapsible-container,
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .strip-regex-container {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(51, 51, 51, 0.08);
   backdrop-filter: blur(3px) saturate(104%);
@@ -69,12 +69,12 @@ body.light-theme [id="agentSettingsContainer"] .strip-regex-container {
     inset 0 0 2px rgba(0, 0, 0, 0.18), 0 4px 8px rgba(0, 0, 0, 0.12);
 }
 
-body.light-theme [id="agentSettingsForm"] > .agent-settings-card-shell:hover,
-body.light-theme [id="agentSettingsContainer"] .agent-identity-container:hover,
-body.light-theme
+body[data-vcp-theme="light"] [id="agentSettingsForm"] > .agent-settings-card-shell:hover,
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .agent-identity-container:hover,
+body[data-vcp-theme="light"]
   [id="agentSettingsContainer"]
   .agent-params-collapsible-container:hover,
-body.light-theme [id="agentSettingsContainer"] .strip-regex-container:hover {
+body[data-vcp-theme="light"] [id="agentSettingsContainer"] .strip-regex-container:hover {
   background: rgba(255, 255, 255, 0.08);
   box-shadow: inset 2px -2px 1px -1px rgba(255, 255, 255, 0.94),
     inset -2px 2px 1px -1px rgba(255, 255, 255, 0.94),
@@ -83,12 +83,12 @@ body.light-theme [id="agentSettingsContainer"] .strip-regex-container:hover {
     inset 0 0 2px rgba(0, 0, 0, 0.2), 0 6px 10px rgba(0, 0, 0, 0.14);
 }
 
-body:not(.light-theme) [id="agentSettingsForm"] > .agent-settings-card-shell,
-body:not(.light-theme) [id="agentSettingsContainer"] .agent-identity-container,
-body:not(.light-theme)
+body[data-vcp-theme="dark"] [id="agentSettingsForm"] > .agent-settings-card-shell,
+body[data-vcp-theme="dark"] [id="agentSettingsContainer"] .agent-identity-container,
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .agent-params-collapsible-container,
-body:not(.light-theme) [id="agentSettingsContainer"] .strip-regex-container {
+body[data-vcp-theme="dark"] [id="agentSettingsContainer"] .strip-regex-container {
   background: color-mix(
     in srgb,
     var(--input-bg) 88%,
@@ -102,12 +102,12 @@ body:not(.light-theme) [id="agentSettingsContainer"] .strip-regex-container {
     inset 0 0 1px rgba(0, 0, 0, 0.42), 0 3px 8px rgba(0, 0, 0, 0.14);
 }
 
-body:not(.light-theme) [id="agentSettingsForm"] > .agent-settings-card-shell:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] .agent-identity-container:hover,
-body:not(.light-theme)
+body[data-vcp-theme="dark"] [id="agentSettingsForm"] > .agent-settings-card-shell:hover,
+body[data-vcp-theme="dark"] [id="agentSettingsContainer"] .agent-identity-container:hover,
+body[data-vcp-theme="dark"]
   [id="agentSettingsContainer"]
   .agent-params-collapsible-container:hover,
-body:not(.light-theme) [id="agentSettingsContainer"] .strip-regex-container:hover {
+body[data-vcp-theme="dark"] [id="agentSettingsContainer"] .strip-regex-container:hover {
   background: color-mix(
     in srgb,
     var(--input-bg) 84%,

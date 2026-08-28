@@ -3107,7 +3107,7 @@ async function renderAttachments(message, contentDiv) {
                 attachmentElement.classList.add('message-attachment-image-thumbnail');
                 const onImageClick = (e) => {
                     e.stopPropagation();
-                    const currentTheme = ownerDocument.body?.classList.contains('light-theme') ? 'light' : 'dark';
+                    const currentTheme = ownerDocument.body?.dataset.vcpTheme === 'light' ? 'light' : 'dark';
                     electronAPI.openImageViewer({ src: att.src, title: att.name, theme: currentTheme });
                 };
                 const onImageContextMenu = (e) => {

@@ -45,7 +45,7 @@
         }
 
         /* Define CSS variables for light theme */
-        body.light-theme {
+        body[data-vcp-theme="light"] {
             --viewer-bg-color: var(--primary-bg);
             --viewer-primary-text: var(--primary-text);
             --viewer-message-bg-assistant: var(--tertiary-bg);
@@ -85,12 +85,12 @@
             color: var(--viewer-heading-color); /* Default blue for headings in dark theme */
         }
 
-        body.light-theme h1,
-        body.light-theme h2,
-        body.light-theme h3,
-        body.light-theme h4,
-        body.light-theme h5,
-        body.light-theme h6 {
+        body[data-vcp-theme="light"] h1,
+        body[data-vcp-theme="light"] h2,
+        body[data-vcp-theme="light"] h3,
+        body[data-vcp-theme="light"] h4,
+        body[data-vcp-theme="light"] h5,
+        body[data-vcp-theme="light"] h6 {
             color: var(--viewer-heading-color-light); /* Blue for headings in light theme */
         }
 
@@ -137,40 +137,40 @@
         }
 
         /* --- Light Theme Code Block Overrides --- */
-        body.light-theme pre {
+        body[data-vcp-theme="light"] pre {
             background-color: rgba(255, 250, 240, 0.85); /* 米白磨砂背景 */
             color: #333333; /* 深灰色基础文字 */
             border-color: rgba(0, 0, 0, 0.1);
         }
 
         /* --- Light Theme Syntax Highlighting Overrides --- */
-        body.light-theme pre code.hljs {
+        body[data-vcp-theme="light"] pre code.hljs {
             color: #333333;
         }
-        body.light-theme pre .hljs-keyword {
+        body[data-vcp-theme="light"] pre .hljs-keyword {
             color: #d73a49; /* Dark Red */
         }
-        body.light-theme pre .hljs-built_in {
+        body[data-vcp-theme="light"] pre .hljs-built_in {
             color: #6f42c1; /* Dark Purple */
         }
-        body.light-theme pre .hljs-string {
+        body[data-vcp-theme="light"] pre .hljs-string {
             color: #032f62; /* Dark Blue */
         }
-        body.light-theme pre .hljs-comment {
+        body[data-vcp-theme="light"] pre .hljs-comment {
             color: #6a737d; /* Grey */
             font-style: italic;
         }
-        body.light-theme pre .hljs-number {
+        body[data-vcp-theme="light"] pre .hljs-number {
             color: #005cc5; /* Blue */
         }
-        body.light-theme pre .hljs-title,
-        body.light-theme pre .hljs-class .hljs-title {
+        body[data-vcp-theme="light"] pre .hljs-title,
+        body[data-vcp-theme="light"] pre .hljs-class .hljs-title {
             color: #6f42c1; /* Dark Purple */
         }
-        body.light-theme pre .hljs-params {
+        body[data-vcp-theme="light"] pre .hljs-params {
             color: #24292e; /* Almost black */
         }
-        body.light-theme pre .hljs-meta {
+        body[data-vcp-theme="light"] pre .hljs-meta {
             color: #e36209; /* Dark Orange */
         }
 
@@ -189,7 +189,7 @@
             );
         }
 
-        body.light-theme .content-container hr {
+        body[data-vcp-theme="light"] .content-container hr {
             background: linear-gradient(
                 90deg,
                 transparent 0%,
@@ -726,35 +726,35 @@
             word-break: break-word;
         }
         /* --- Maid Diary Dark Theme Overrides --- */
-        body:not(.light-theme) .maid-diary-bubble {
+        body[data-vcp-theme="dark"] .maid-diary-bubble {
             background: #2c2a3a !important; /* A deep, slightly magical purple-gray */
             border-color: #4a485f;
             color: #d8d2c9 !important; /* A soft, parchment-like off-white */
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
         }
 
-        body:not(.light-theme) .diary-header {
+        body[data-vcp-theme="dark"] .diary-header {
             border-bottom-color: #4a485f;
         }
 
-        body:not(.light-theme) .diary-title {
+        body[data-vcp-theme="dark"] .diary-title {
             color: #ffb74d; /* A warm, golden-orange for the title */
         }
 
-        body:not(.light-theme) .diary-date {
+        body[data-vcp-theme="dark"] .diary-date {
             color: #a0a0b0; /* A muted gray for secondary info */
         }
 
-        body:not(.light-theme) .diary-maid-info {
+        body[data-vcp-theme="dark"] .diary-maid-info {
             color: #b0bec5;
         }
 
-        body:not(.light-theme) .diary-maid-name {
+        body[data-vcp-theme="dark"] .diary-maid-name {
             color: #ffcc80; /* Lighter shade of the title color */
             background: rgba(255, 183, 77, 0.1);
         }
 
-        body:not(.light-theme) .diary-content {
+        body[data-vcp-theme="dark"] .diary-content {
             color: #c5c8c6; /* A clear, readable light gray for the main content */
         }
 
@@ -869,7 +869,7 @@
             color: #1b5e20;
             background-color: rgba(76, 175, 80, 0.15);
         }
-        body:not(.light-theme) .vcp-tool-result-status.status-success {
+        body[data-vcp-theme="dark"] .vcp-tool-result-status.status-success {
             color: #c8e6c9;
             background-color: rgba(76, 175, 80, 0.2);
         }
@@ -877,7 +877,7 @@
             color: #b71c1c;
             background-color: rgba(211, 47, 47, 0.15);
         }
-        body:not(.light-theme) .vcp-tool-result-status.status-failure {
+        body[data-vcp-theme="dark"] .vcp-tool-result-status.status-failure {
             color: #ffcdd2;
             background-color: rgba(211, 47, 47, 0.2);
         }

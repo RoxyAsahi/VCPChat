@@ -57,7 +57,7 @@ export function createImageHandler({ fixUrl = value => value } = {}) {
         
         const onClick = (e) => {
             e.stopPropagation();
-            const currentTheme = contentDiv.ownerDocument.body.classList.contains('light-theme') ? 'light' : 'dark';
+            const currentTheme = contentDiv.ownerDocument.body.dataset.vcpTheme === 'light' ? 'light' : 'dark';
             transport.openImageViewer({
                 src: src,
                 title: img.alt || src.split('/').pop() || 'AI 图片',

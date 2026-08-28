@@ -73,7 +73,7 @@ body {
  * Emphasizes high contrast, clean white, and a cool blue accent.
  * =================================================================
  */
-body.light-theme {
+body[data-vcp-theme="light"] {
     /* Wallpaper and background properties */
     background-image: var(--chat-wallpaper-light);
     background-size: cover;
