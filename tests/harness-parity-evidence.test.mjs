@@ -277,6 +277,12 @@ test('Unified contract provenance gate reports every reference boundary', () => 
     assert.equal(report.counts.sourceKindDeclared > 0, true);
     assert.ok(report.counts.sourceKinds['vcp-local-contract'] >= 2);
     assert.equal(report.entries.find(item => item.name === 'range')?.sourceKind, 'vcp-local-contract');
+    for (const name of ['range', 'toggle', 'color-pair']) {
+        const entry = report.entries.find(item => item.name === name);
+        assert.equal(entry?.pass, true, `${name} must remain a declared VCP-local boundary rather than a missing Harness path`);
+        assert.equal(entry?.provenance[0]?.kind, 'local-contract');
+        assert.equal(entry?.provenance[0]?.evidence, 'declared-vcp-local-boundary');
+    }
     assert.equal(report.status, 'provenance-gaps-present');
     assert.equal(report.pass, false);
     assert.ok(report.counts.gaps > 0);

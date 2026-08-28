@@ -22,20 +22,27 @@ for (const domFile of domFiles) {
   const dom = JSON.parse(fs.readFileSync(path.join(referenceDir, domFile), 'utf8'));
   const geometryFile = `${name}.geometry.json`;
   const geometry = JSON.parse(fs.readFileSync(path.join(referenceDir, geometryFile), 'utf8'));
+  const sourceKind = typeof dom.sourceKind === 'string' && dom.sourceKind.length > 0 ? dom.sourceKind : null;
   const sources = asArray(dom.provenance?.sources ?? dom.source);
   const styles = asArray(dom.styleSource ?? dom.provenance?.style ?? geometry.styleSource);
   const sourceChecks = [...sources.map(value => ({ kind: 'source', declared: value })), ...styles.map(value => ({ kind: 'style', declared: value }))].map(item => {
+    // A VCP-local contract is intentionally not a Harness provenance claim.
+    // Its human-readable source names the local semantic boundary, so resolving
+    // it below the Harness root would fabricate a missing Harness file.
+    if (sourceKind === 'vcp-local-contract' && item.kind === 'source') {
+      return { ...item, kind: 'local-contract', resolved: null, exists: typeof item.declared === 'string' && item.declared.length > 0, evidence: 'declared-vcp-local-boundary' };
+    }
     const resolved = resolve(item.declared);
     const exists = resolved !== null && fs.existsSync(resolved);
     if (!exists) gaps.push(`${name}: missing ${item.kind} ${item.declared}`);
     return { ...item, resolved, exists };
   });
   const candidateStatus = geometry.candidateStatus ?? dom.candidateStatus ?? null;
-  const sourceKind = typeof dom.sourceKind === 'string' && dom.sourceKind.length > 0 ? dom.sourceKind : null;
   const selectors = geometry.selectors && typeof geometry.selectors === 'object' ? Object.keys(geometry.selectors) : [];
   const tokens = Array.isArray(geometry.tokens) ? geometry.tokens : [];
   if (candidateStatus === null) gaps.push(`${name}: missing candidateStatus boundary`);
   if (tokens.length === 0) gaps.push(`${name}: missing geometry tokens`);
+  if (sourceKind === 'vcp-local-contract' && (typeof dom.provenanceNote !== 'string' || dom.provenanceNote.length === 0)) gaps.push(`${name}: missing vcp-local provenanceNote`);
   entries.push({ name, domFile, geometryFile, sourceKind, candidateStatus, selectors: selectors.length, tokens: tokens.length, provenance: sourceChecks, pass: sourceChecks.length > 0 && sourceChecks.every(item => item.exists) && candidateStatus !== null && tokens.length > 0 });
 }
 const sourceKinds = entries.reduce((counts, entry) => {
