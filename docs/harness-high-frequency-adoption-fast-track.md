@@ -65,6 +65,7 @@ native canonical form fields；不把时间消耗在低频 DiffBlock、展示页
 | F3 | Notification quick-actions | 中性 Button 已接入并有真实视觉证据；Harness Menu 无 `menuitemcheckbox` contract，因此 filter/clear 保留专属语义 | `NotificationMenuController` command routing、filter subscription、clear confirmation/业务语义 | 仅在存在同语义真源时处理 filter/clear 的局部 presentation |
 | F4 | App tray drawer | Button/Tooltip 已接入通用 drawer rows | 32px Fixed Dock 定制 geometry | 已接管 row 的旧 action presentation |
 | F5 | Launchpad cards | Harness 没有可追溯 app-launch tile；暂不伪造 primitive，动态卡片已改为结构化 DOM | app launch command、embedded app lifecycle、特殊卡片 | 未来仅在找到真源 contract 后处理 card-only presentation |
+| F6 | Global Settings：外观、首页、身份、网络与论坛普通字段 | SettingsRoot、Field、Input、Select、Range、Toggle、Choice 已是 production consumer；2026-08-28 Electron journey 覆盖真实保存、失败重试、close-flush、reload/reopen 和 teardown | 聊天字体/消息渲染配置的业务效果与聊天渲染保持冻结；专用 picker 保持原路径 | 仅处理对应字段的重复 presentation owner、冲突 selector 和无调用方 fallback |
 
 F1--F4 可并行，但同一真实 DOM 节点只允许一条施工线；F5 在 tile 的 Harness
 source provenance 登记后才允许作为 primitive 施工。聊天消息、工具结果、思维链、composer 内部布局和
@@ -108,6 +109,7 @@ interaction/lifecycle → Electron/pixel → legacy retirement）继续作为晋
 | Account menu actions | `1f3285c8` | 三个普通 action 使用 generated Button；controller 保留 command/focus/theme owner | production visual equivalence、legacy action CSS deletion |
 | Notification neutral actions | `b1ab4b8c`、`76f65312`、`b5f0335a` | 五个普通 action 使用 generated Button；light/dark/三视口 Electron QA | checkbox/danger 没有同语义 Harness contract，故不迁移 |
 | Launchpad catalog DOM | `1fdf7838` | runtime app name 使用结构化文本节点；render scope/commands/keyboard 不变 | 无 Harness app-tile 真源，不能宣称 primitive equivalence |
+| Global Settings high-frequency field baseline | 2026-08-28 `test-settings-wa-electron` | 真实 SettingsRoot 中的普通 Input/Field、6 个 Appearance Select、3 个 Appearance Range、Home Toggle、Choice、portal menu、失败重试、close-flush、reload/reopen、owner teardown 全通过 | 全 Surface Harness DOM/computed-style/pixel 对照、artifact-only Electron 和 Windows evidence；聊天输出视觉仍不在本切片 |
 
 这些切片都是 `production-consumer-active` 或 presentation-debt reduction，均不是
 `Stable`；任何能改变业务命令、IPC、持久化或冻结聊天 Surface 的扩张仍然不在快车道内。
