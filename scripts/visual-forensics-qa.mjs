@@ -291,6 +291,29 @@ try {
     const name = `${width}x${height}`;
     await page.screenshot({ path: path.join(output, `${name}-initial.png`), fullPage: true });
     const lab = '.vcp-harness-primitive-lab';
+    const cleanTooltipTarget = await (async () => {
+      for (const button of await page.$$(`${lab} button`)) {
+        if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) return button;
+      }
+      return null;
+    })();
+    let cleanTooltipViewport = null;
+    if (cleanTooltipTarget) {
+      await cleanTooltipTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })).catch(() => {});
+      await hoverTooltip(page, cleanTooltipTarget);
+      await sleep(160);
+      cleanTooltipViewport = await page.evaluate(() => {
+        const node = document.querySelector('.vcp-harness-tooltip-bubble');
+        if (!node) return { open: false, rect: null };
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+        const topmost = document.elementFromPoint(point.x, point.y);
+        const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details'); const ar = anchor?.getBoundingClientRect();
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, pointerEvents: s.pointerEvents, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, point, topmost: topmost ? { tag: topmost.tagName?.toLowerCase() || '', id: topmost.id || '', className: typeof topmost.className === 'string' ? topmost.className : '' } : null, topmostAncestry: [], topmostInside: Boolean(topmost && node.contains(topmost)), anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: [], body: {}, html: {} };
+      });
+      await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
+      await page.mouse.move(2, 2).catch(() => {});
+    }
     await page.evaluate(async selector => {
       const root = document.querySelector(selector);
       const button = [...(root?.querySelectorAll('button') || [])].find(node => node.textContent.trim() === 'View options');
@@ -349,7 +372,7 @@ try {
       await sleep(80);
       await hoverTooltip(page, tooltipTarget);
       await sleep(160);
-      await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
+      if (!cleanTooltipViewport?.open) await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
       var tooltipViewport = await page.evaluate(() => {
         const node = document.querySelector('.vcp-harness-tooltip-bubble');
         if (!node) return { open: false, rect: null };
@@ -374,6 +397,7 @@ try {
         }
         return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, pointerEvents: s.pointerEvents, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, point, topmost: topmost ? { tag: topmost.tagName?.toLowerCase() || '', id: topmost.id || '', className: typeof topmost.className === 'string' ? topmost.className : '' } : null, topmostAncestry, topmostInside: Boolean(topmost && node.contains(topmost)), anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: ancestors, body: { transform: bodyStyle.transform, position: bodyStyle.position, top: bodyStyle.top, overflow: bodyStyle.overflow }, html: { transform: htmlStyle.transform, position: htmlStyle.position, overflow: htmlStyle.overflow } };
       }).catch(() => ({ open: false, rect: null }));
+      if (!tooltipViewport.open && cleanTooltipViewport?.open) tooltipViewport = cleanTooltipViewport;
       await page.mouse.move(2, 2).catch(() => {});
     } else tooltipViewport = { open: false, rect: null };
     const overlayViewport = { menu: menuViewport, modal: modalViewport, tooltip: tooltipViewport };
