@@ -130,6 +130,8 @@ artifact 时的 ColorPair fallback 均直接承载业务或 bootstrap 语义，�
 `render-settings` 的四组字体 preset/custom 行显隐也已抽为
 `modules/ui-system/settings/render-visibility.js`；该 helper 只投影 DOM
 显示状态，不读取或写入聊天状态，作为 G4 的第三个无状态 section helper。
+其四个 preset select 现在由同一 owner 绑定即时 change 响应，切换后无需等待
+autosave 回写即可显示/隐藏 custom 行，监听随 owner teardown 撤销。
 
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与

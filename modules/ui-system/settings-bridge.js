@@ -1651,6 +1651,14 @@ function mountTypedFieldOwner(root, form) {
             delete control.dataset.vcpTypedFieldOwner;
         });
     });
+    const renderPresetIds = ['chatFontPreset', 'chatCodeFontPreset', 'chatDiaryFontPreset', 'chatToolFontPreset'];
+    renderPresetIds.forEach(id => {
+        const select = form.querySelector(`#${id}`);
+        if (!select) return;
+        const onRenderPresetChange = () => syncRenderSettingsVisibility(form);
+        select.addEventListener('change', onRenderPresetChange);
+        state.cleanups.push(() => select.removeEventListener('change', onRenderPresetChange));
+    });
     const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
     if (middleClickAdvancedDelay) {
         const onBlur = () => {
