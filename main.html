@@ -292,7 +292,7 @@
                     <ul class="agent-list" id="agentList">
                     <!-- 示例:
                     <li class="active" data-agent-id="xiaoke">
-                        <img src="path/to/xiaoke_avatar.png" alt="小克头像" class="avatar">
+                        <img src="assets/default_avatar.png" alt="小克头像" class="avatar">
                         <span class="agent-name">猫娘小克</span>
                     </li>
                     -->
@@ -385,9 +385,9 @@
             </div>
             <div class="sidebar-tab-content" id="tabContentSettings" data-settings-presentation="unified" role="tabpanel" aria-hidden="true">
                 <!-- 设置内容区 -->
-                <div class="settings-header-bar">
+                <div class="settings-header-bar" hidden>
                     <h2>设置</h2>
-                    <button id="globalSettingsBtn" class="sidebar-button global-settings-btn" type="button">全局设置</button>
+                    <button id="globalSettingsBtn" class="sidebar-button global-settings-btn" type="button" hidden>全局设置</button>
                 </div>
 
                 <div id="agentSettingsContainer" style="display: none;"> <!-- Initially hidden -->
@@ -698,9 +698,9 @@
                         </div>
 
                         <div class="form-actions">
-                            <button type="submit">保存Agent设置</button>
+                            <button type="submit" hidden>保存Agent设置</button>
                             <div class="delete-button-container">
-                                <button type="button" id="deleteAgentBtn" class="danger-button">删除此Agent</button>
+                                <button type="button" id="deleteAgentBtn" class="danger-button" hidden>删除此Agent</button>
                             </div>
                         </div>
                     </form>
@@ -1130,7 +1130,8 @@
                                                     <input type="color" id="userAvatarBorderColor"
                                                         name="userAvatarBorderColor" value="#3d5a80">
                                                     <input type="text" id="userAvatarBorderColorText"
-                                                        placeholder="#3d5a80" maxlength="7">
+                                                        placeholder="#3d5a80" maxlength="7"
+                                                        aria-label="头像外框颜色十六进制值">
                                                 </div>
                                             </div>
                                             <div class="style-control-item">
@@ -1139,7 +1140,7 @@
                                                     <input type="color" id="userNameTextColor" name="userNameTextColor"
                                                         value="#ffffff">
                                                     <input type="text" id="userNameTextColorText" placeholder="#ffffff"
-                                                        maxlength="7">
+                                                        maxlength="7" aria-label="名称文字颜色十六进制值">
                                                 </div>
                                             </div>
 
@@ -1355,17 +1356,16 @@
                                             <input type="range" id="appearanceSidebarAvatarSize" name="appearanceSidebarAvatarSize"
                                                 min="20" max="52" step="1" value="32">
                                         </label>
-                                        <div class="vcp-settings-row appearance-geometry-control appearance-radius-choice-control">
-                                            <span>列表项圆角</span>
-                                            <div class="appearance-radius-choice-grid" role="radiogroup" aria-label="列表项圆角">
-                                                <label><input id="appearanceSidebarRadiusChoice-tuned" type="radio" name="appearanceSidebarRadiusChoice" value="tuned"><span>原设计<small>10px</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-follow" type="radio" name="appearanceSidebarRadiusChoice" value="follow"><span>跟随全局<small>自动</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-square" type="radio" name="appearanceSidebarRadiusChoice" value="square"><span>直角<small>0px</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-small" type="radio" name="appearanceSidebarRadiusChoice" value="small"><span>小圆角<small>6px</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-medium" type="radio" name="appearanceSidebarRadiusChoice" value="medium"><span>中圆角<small>10px</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-round" type="radio" name="appearanceSidebarRadiusChoice" value="round"><span>大圆角<small>14px</small></span></label>
-                                                <label><input id="appearanceSidebarRadiusChoice-custom" type="radio" name="appearanceSidebarRadiusChoice" value="custom"><span>自定义<small>使用下方数值</small></span></label>
-                                            </div>
+                                        <div class="appearance-radius-language-host" id="appearanceSidebarRadiusLanguageRow">
+                                            <select id="appearanceSidebarRadius" name="appearanceSidebarRadius" aria-label="列表项圆角" hidden>
+                                                <option value="tuned">原设计 · 10px</option>
+                                                <option value="follow">跟随全局 · 自动</option>
+                                                <option value="square">直角 · 0px</option>
+                                                <option value="small">小圆角 · 6px</option>
+                                                <option value="medium">中圆角 · 10px</option>
+                                                <option value="round">大圆角 · 14px</option>
+                                                <option value="custom">自定义 · 使用下方数值</option>
+                                            </select>
                                         </div>
                                         <label class="vcp-settings-row appearance-geometry-control" for="appearanceCustomRadius">
                                             <span class="appearance-range-heading">
@@ -1397,7 +1397,8 @@
                                         </select>
                                         <div id="chatFontCustomRow" data-vcp-style="8">
                                             <input type="text" id="chatFontCustom" name="chatFontCustom"
-                                                placeholder='例如: "LXGW WenKai", "Microsoft YaHei", sans-serif'>
+                                                placeholder='例如: "LXGW WenKai", "Microsoft YaHei", sans-serif'
+                                                aria-label="聊天字体自定义值">
                                             <small data-vcp-style="4">
                                                 支持输入完整的 CSS `font-family` 值，保存后会立即应用到聊天正文。
                                             </small>
@@ -1416,7 +1417,8 @@
                                         </select>
                                         <div id="chatCodeFontCustomRow" data-vcp-style="8">
                                             <input type="text" id="chatCodeFontCustom" name="chatCodeFontCustom"
-                                                placeholder='例如: "Maple Mono", "JetBrains Mono", monospace'>
+                                                placeholder='例如: "Maple Mono", "JetBrains Mono", monospace'
+                                                aria-label="代码字体自定义值">
                                             <small data-vcp-style="4">
                                                 会应用到聊天代码块、行内代码，以及工具/思维链中的代码样式。
                                             </small>
@@ -1455,7 +1457,8 @@
                                                     </select>
                                                     <div id="chatDiaryFontCustomRow" data-vcp-style="8">
                                                         <input type="text" id="chatDiaryFontCustom" name="chatDiaryFontCustom"
-                                                            placeholder='例如: "Noto Serif SC", Georgia, serif'>
+                                                            placeholder='例如: "Noto Serif SC", Georgia, serif'
+                                                            aria-label="日记字体自定义值">
                                                     </div>
                                                 </div>
                                             </div>
@@ -1485,7 +1488,8 @@
                                                     </select>
                                                     <div id="chatToolFontCustomRow" data-vcp-style="8">
                                                         <input type="text" id="chatToolFontCustom" name="chatToolFontCustom"
-                                                            placeholder='例如: "Segoe UI", "Microsoft YaHei", sans-serif'>
+                                                            placeholder='例如: "Segoe UI", "Microsoft YaHei", sans-serif'
+                                                            aria-label="工具字体自定义值">
                                                     </div>
                                                 </div>
                                             </div>

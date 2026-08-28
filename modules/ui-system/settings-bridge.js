@@ -14,7 +14,7 @@ import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './se
 import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
 import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
-import { mountAppearanceSelects } from './settings/appearance-controls.js';
+import { mountAppearanceSelects, mountAppearanceRadiusLanguageRow } from './settings/appearance-controls.js';
 import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 import { mountHomeTaglineInput } from './settings/home-controls.js';
@@ -634,7 +634,12 @@ function mountTypedAgentButtons(form) {
     buttons.forEach(([selector, variant, key]) => {
         const button = form?.querySelector?.(selector);
         const marker = `vcpTyped${key.replace(/(^|-)(\w)/g, (_, __, value) => value.toUpperCase())}`;
-        if (!button || button.dataset[marker] === 'true') return;
+        // Submit/delete remain canonical compatibility commands, but their
+        // controls are intentionally hidden while Agent autosave is active.
+        // Do not mount a generated Button on a hidden node: the primitive's
+        // geometry contract would correctly restore display and make the
+        // obsolete action visible again.
+        if (!button || button.hidden || button.dataset[marker] === 'true') return;
         try {
             const size = key.includes('refresh') ? 'sm' : 'md';
             api.mountButton(button, { variant, size }, scope);
@@ -667,15 +672,21 @@ function mountTypedAgentButtons(form) {
 // The Agent consumer now projects hot/favorite sections and injected directory
 // actions. The legacy modal remains for topicSummaryModel and until the
 // production parity evidence in the audit closes its separate retirement path.
-function mountTypedAgentModelPicker(form) {
+function mountTypedModelPicker(form, {
+    inputId = 'agentModel',
+    triggerId = 'openModelSelectBtn',
+    marker = 'vcpTypedAgentModelPicker',
+    scopeLabel = 'agent-model-picker-production',
+    eventKind = 'agent',
+} = {}) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
-    const host = form?.querySelector?.('.model-input-container');
-    const input = form?.querySelector?.('#agentModel');
-    const trigger = form?.querySelector?.('#openModelSelectBtn');
+    const input = form?.querySelector?.(`#${inputId}`);
+    const trigger = form?.querySelector?.(`#${triggerId}`);
+    const host = trigger?.closest?.('.model-input-container') || input?.closest?.('.model-input-container');
     const electronAPI = window.chatAPI;
     if (!api?.mountAgentModelPicker || !scope || !host || !input || !trigger
-        || trigger.dataset.vcpTypedAgentModelPicker === 'true') return;
+        || trigger.dataset[marker] === 'true') return;
 
     // Agent Settings can retain the previous section bank in the connected
     // DOM while replacing the active form. Treat the picker as a single
@@ -698,11 +709,11 @@ function mountTypedAgentModelPicker(form) {
         originalTriggerInline[property] = [trigger.style.getPropertyValue(property), trigger.style.getPropertyPriority(property)];
     });
     let picker = null;
-    const pickerScope = scope.child('agent-model-picker-production');
+    const pickerScope = scope.child(scopeLabel);
     try {
         picker = api.mountAgentModelPicker(host, {
             trigger,
-            label: '选择模型',
+            label: inputId === 'agentModel' ? '选择模型' : '选择话题总结模型',
             selectedId: input.value || undefined,
             options: modelDirectory.options,
             directory: modelDirectory,
@@ -736,15 +747,15 @@ function mountTypedAgentModelPicker(form) {
         trigger.style.setProperty('background', 'transparent', 'important');
         trigger.style.setProperty('display', 'inline-flex', 'important');
         trigger.style.setProperty('justify-content', 'center', 'important');
-        trigger.dataset.vcpTypedAgentModelPicker = 'true';
+        trigger.dataset[marker] = 'true';
 
         pickerScope.listen(input, 'input', () => picker?.setSelected(input.value || undefined));
         pickerScope.listen(input, 'change', () => picker?.setSelected(input.value || undefined));
         pickerScope.listen(document, 'vcp-settings-surface-updated', event => {
-            if (event.detail?.root === form || event.detail?.kind === 'agent') picker?.setSelected(input.value || undefined);
+            if (event.detail?.root === form || event.detail?.kind === eventKind) picker?.setSelected(input.value || undefined);
         });
         const release = scope.own(async () => {
-            delete trigger.dataset.vcpTypedAgentModelPicker;
+            delete trigger.dataset[marker];
             for (const [property, [value, priority]] of Object.entries(originalTriggerInline)) {
                 if (value) trigger.style.setProperty(property, value, priority);
                 else trigger.style.removeProperty(property);
@@ -753,15 +764,29 @@ function mountTypedAgentModelPicker(form) {
             // controller first and then its parent created two synonymous
             // cleanup requests on every Settings surface swap; one parent
             // scope disposal reaches quiescence and preserves exact restore.
-            await pickerScope.dispose('agent-model-picker-production-released');
+            await pickerScope.dispose(`${scopeLabel}-released`);
             agentModelPickerReleases.delete(trigger);
-        }, 'agent-model-picker-production', 'ui-primitive');
+        }, scopeLabel, 'ui-primitive');
         agentModelPickerReleases.set(trigger, release);
     } catch (error) {
         void picker?.dispose?.();
-        void pickerScope.dispose('agent-model-picker-production-failed');
+        void pickerScope.dispose(`${scopeLabel}-failed`);
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model picker:', error);
     }
+}
+
+function mountTypedAgentModelPicker(form) {
+    mountTypedModelPicker(form);
+}
+
+function mountTypedTopicSummaryModelPicker(form) {
+    mountTypedModelPicker(form, {
+        inputId: 'topicSummaryModel',
+        triggerId: 'openTopicSummaryModelSelectBtn',
+        marker: 'vcpTypedTopicSummaryModelPicker',
+        scopeLabel: 'topic-summary-model-picker-production',
+        eventKind: 'topic-summary',
+    });
 }
 
 function mountTypedAgentPromptModeButtons(form) {
@@ -920,6 +945,7 @@ function enhanceGlobalSettings(root, form) {
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
     mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceRadiusLanguageRow(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
     mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
     mountChoiceControls(form, window.VCPUIUX, ensurePresentationScope());
@@ -927,6 +953,10 @@ function enhanceGlobalSettings(root, form) {
     mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
     mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
     mountForumCredentialInputs(form, window.VCPUIUX, ensurePresentationScope());
+    // Reuse the production AgentModelPicker contract for the topic-summary
+    // field.  The native input remains canonical; the legacy modal template
+    // stays available until its shared business callers are fully retired.
+    mountTypedTopicSummaryModelPicker(form);
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     mountHarnessSwitches(form);
@@ -1192,19 +1222,13 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     appearanceFontScale: { path: 'appearanceProfile.fontScale', kind: 'string' },
     appearanceContentWidth: { path: 'appearanceProfile.contentWidth', kind: 'string' },
     appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
+    appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
     // The model-selection button still uses the shared legacy modal, but the
     // canonical text value can already use the single typed save owner.
     topicSummaryModel: { path: 'topicSummaryModel', kind: 'string' },
-    'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
-    'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
-    'appearanceSidebarRadiusChoice-square': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'square' },
-    'appearanceSidebarRadiusChoice-small': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'small' },
-    'appearanceSidebarRadiusChoice-medium': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'medium' },
-    'appearanceSidebarRadiusChoice-round': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'round' },
-    'appearanceSidebarRadiusChoice-custom': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'custom' },
 });
 
 function readTypedFieldPatch(control, service, pendingPatch) {
@@ -1269,9 +1293,7 @@ function mountTypedFieldOwner(root, form) {
         set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
         set('appearanceCustomRadius', appearance.customRadius ?? 10);
         set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
-        const radius = appearance.sidebarRadius || 'tuned';
-        Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
-            .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));
+        set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
         check('chatLayoutModeWide', settings.enableWideChatLayout === true);
         check('chatLayoutModeNormal', settings.enableWideChatLayout !== true);
         check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
@@ -1544,7 +1566,10 @@ function restoreFormIcons(root) {
 // The original form sections remain the business source of truth; only the
 // shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
-    if (root.querySelector('.vcp-harness-settings-panel')) return;
+    if (root.querySelector('.vcp-harness-settings-panel')) {
+        reconcileSettingsShell(root);
+        return;
+    }
     mountTypedSettingsConsumer(root);
     const shellScope = ensurePresentationScope();
     const panel = root.querySelector('.vcp-settings-source-panel');
@@ -1762,6 +1787,32 @@ function mountSettingsShell(root) {
     };
 
     renderList();
+}
+
+// Reconcile a previously mounted shell after modal reopen or section-bank
+// churn.  The form remains canonical; this only restores the active section's
+// physical host and presentation markers when an earlier close/reopen turn
+// left a stale active class behind.
+function reconcileSettingsShell(root) {
+    const state = shellState.get(root);
+    if (!state?.sectionHost || !state.sectionBank || !state.form) return;
+    const activeSection = state.sections.get(state.active);
+    if (!activeSection) return;
+    if (activeSection.parentNode !== state.sectionHost) {
+        const current = state.sectionHost.querySelector('.settings-section');
+        if (current && current !== activeSection) state.sectionBank.append(current);
+        state.sectionHost.append(activeSection);
+    }
+    state.sections.forEach((section, value) => {
+        section.classList.toggle('active', value === state.active);
+    });
+    state.listHost?.querySelectorAll?.('[data-section]')?.forEach(row => {
+        const selected = row.dataset.section === state.active;
+        row.classList.toggle('is-active', selected);
+        row.classList.toggle('active', selected);
+        row.dataset.state = selected ? 'selected' : 'idle';
+        row.tabIndex = selected ? 0 : -1;
+    });
 }
 
 function cleanupDisconnectedControllers() {

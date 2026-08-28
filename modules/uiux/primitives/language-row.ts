@@ -12,7 +12,7 @@ function ensureStyles() {
 }
 
 export interface LanguageRowOption { readonly id: string; readonly label: string; readonly disabled?: boolean; }
-export interface LanguageRowProps { readonly title?: string; readonly options: readonly LanguageRowOption[]; readonly activeId?: string; readonly loading?: boolean; readonly onSelect: (id: string) => void; readonly onClose?: () => void; }
+export interface LanguageRowProps { readonly title?: string; readonly description?: string; readonly options: readonly LanguageRowOption[]; readonly activeId?: string; readonly loading?: boolean; readonly onSelect: (id: string) => void; readonly onClose?: () => void; }
 export interface LanguageRowController { readonly root: HTMLDivElement; readonly trigger: HTMLButtonElement; readonly menu: MenuController; readonly open: boolean; setOptions(options: readonly LanguageRowOption[]): Promise<void>; setActive(id?: string): void; setLoading(value: boolean): void; setOpen(value: boolean): void; dispose(): void | Promise<void>; }
 
 function makeChevron() {
@@ -31,6 +31,7 @@ export function mountLanguageRow(host: HTMLElement, props: LanguageRowProps, sco
     const row = document.createElement('div'); row.className = 'vcp-harness-language-row';
     const text = document.createElement('div'); text.className = 'vcp-harness-language-row-text';
     const title = document.createElement('div'); title.className = 'vcp-harness-language-row-title'; title.textContent = props.title ?? 'Language'; text.append(title);
+    if (props.description) { const description = document.createElement('div'); description.className = 'vcp-harness-language-row-description'; description.textContent = props.description; text.append(description); }
     const trigger = document.createElement('button'); trigger.type = 'button'; trigger.className = 'vcp-harness-language-row-selector'; const label = document.createTextNode(''); trigger.append(label, makeChevron()); row.append(text, trigger); host.append(row);
     let options = [...props.options]; let activeId = props.activeId ?? ''; let loading = Boolean(props.loading);
     let menuScope = scope.child('harness-language-row-menu');
