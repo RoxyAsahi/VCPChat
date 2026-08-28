@@ -61,3 +61,21 @@ positioning, focus-ring, reopen/dispose, or CSS cascade failure was observed in
 this pass. Model Picker pixel equivalence remains an independent pending
 condition (the paired ROI diff is still approximately 6.19% differing pixels),
 so this evidence does not promote the primitive to Stable or pixel-equivalent.
+
+## Finding (resolved): production Model Picker overlay anchor
+
+The dedicated production probe initially found the canonical Agent Settings
+trigger mounted beside a zero-width picker root. The shared absolute popup then
+resolved to `x=-4` at all required viewports; at 800x600 its center was hit by
+the underlying Settings header instead of the menu. This was a real Electron
+geometry and stacking defect, not a static CSS finding.
+
+The minimal repair keeps the native trigger as the business node, moves the
+opened picker card to the body portal for the external-trigger composition, and
+positions it from the trigger's live viewport rect with resize/scroll updates.
+The probe now records `position: fixed`, `x=11`, body ownership, and
+`topmostInsideCard=true` at 800x600, 1280x800, and 1680x1000 in both themes.
+Escape closes the portal, restores focus to `openModelSelectBtn`, removes the
+card, and leaves body inline style empty. Evidence is in
+`reports/visual-forensics-qa/agent-model-picker/{light,dark}/manifest.json`;
+the implementation was committed as `deefb364`.

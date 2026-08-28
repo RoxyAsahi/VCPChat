@@ -231,7 +231,9 @@ try {
       const node = document.querySelector('.vcp-harness-menu-list[role="menu"]');
       if (!node) return { open: false, rect: null };
       const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '' };
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', point, topmostInside: Boolean(topmost && node.contains(topmost)) };
     }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     await page.evaluate(async selector => {
@@ -245,7 +247,9 @@ try {
       const node = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
       if (!node) return { open: false, rect: null };
       const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', mask: Boolean(document.querySelector('.vcp-harness-modal-mask')), point, topmostInside: Boolean(topmost && node.contains(topmost)) };
     }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     const tooltipButtons = await page.$$(`${lab} button`);

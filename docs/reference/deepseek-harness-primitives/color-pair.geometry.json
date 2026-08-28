@@ -1,5 +1,15 @@
 {
   "primitive": "ColorPair",
+  "sourceKind": "vcp-local-contract",
+  "status": "candidate-reference",
+  "candidateStatus": "vcp-local-contract; no portable Harness ColorPair primitive or cross-engine parity claim",
+  "selectors": {
+    ".vcp-uiux-color-pair": { "display": "inline-flex", "alignItems": "center", "gap": "6px", "height": "32px" },
+    "input[type=color]": { "width": "32px", "height": "32px", "padding": "2px", "border": "0", "borderRadius": "8px" },
+    "input[type=text]": { "height": "32px", "padding": "0 8px", "border": "1px solid var(--vcp-color-border,#c8ccd4)", "borderRadius": "8px", "fontSize": "14px", "lineHeight": "22px" }
+  },
+  "tokens": ["--vcp-color-border"],
+  "states": ["color-input", "text-input-valid", "text-input-invalid-rollback", "focus-within", "dispose-restore"],
   "root": { "display": "inline-flex", "alignItems": "center", "gap": "6px", "height": "32px" },
   "colorInput": { "width": "32px", "height": "32px", "padding": "2px", "borderRadius": "8px" },
   "textMirror": { "height": "32px", "padding": "0 8px", "borderRadius": "8px", "fontSize": "14px", "lineHeight": "22px" }
