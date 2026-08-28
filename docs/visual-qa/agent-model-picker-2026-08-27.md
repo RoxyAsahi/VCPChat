@@ -36,7 +36,7 @@ The correction is covered by the Agent picker production interaction sequence an
 
 ## Scope and evidence gaps
 
-This audit did not modify Settings, chat rendering, IPC, persistence, Plugin Loader, Composer internals, or DiffBlock. Current production evidence is fixed at `800x600@1x`; `1280x800` and `1680x1000` captures, open-section screenshots, and light/dark state screenshots are still missing. The full structured record is [agent-model-picker-2026-08-27.json](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/visual-qa/agent-model-picker-2026-08-27.json).
+This audit did not modify Settings, chat rendering, IPC, persistence, Plugin Loader, Composer internals, or DiffBlock. The original `800x600@1x` limitation is superseded by the fresh paired production capture at `reports/visual-forensics-qa/agent-model-picker/run-YTgOBc/{light,dark}`, which covers `800x600`, `1280x800`, and `1680x1000` with open-section, transient-state, hover, narrow/restored, Escape, and cleanup screenshots. The full structured record remains [agent-model-picker-2026-08-27.json](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/visual-qa/agent-model-picker-2026-08-27.json).
 
 The default Agent Settings npm command does not enable the model-picker interaction probe, so the explicit environment-variable command must remain part of the QA gate until the main thread decides where to wire it.
 
