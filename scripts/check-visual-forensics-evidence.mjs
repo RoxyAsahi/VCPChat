@@ -45,7 +45,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'disabled', 'selected', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'loading', 'error', 'async-loading', 'disabled', 'selected', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
         const screenshotPath = path.join(dir, `${name}-${suffix}.png`);
         await fs.access(screenshotPath);
         const stat = await fs.stat(screenshotPath);
@@ -100,10 +100,19 @@ for (const dir of targets) {
       assert.equal(observation?.stateTransitions?.loading?.visible, true);
       assert.equal(observation?.stateTransitions?.loading?.cleared, true);
       assert.ok(observation?.stateTransitions?.loading?.position);
+      assert.equal(observation?.stateTransitions?.visual?.loading?.visible, true);
+      assert.ok(observation?.stateTransitions?.visual?.loading?.rect);
+      assert.equal(observation?.stateTransitions?.visual?.loading?.inViewport, true);
       assert.equal(observation?.stateTransitions?.errorState?.status, 'error');
       assert.ok(observation?.stateTransitions?.errorState?.className);
+      assert.equal(observation?.stateTransitions?.visual?.error?.status, 'error');
+      assert.equal(observation?.stateTransitions?.visual?.error?.visible, true);
+      assert.equal(observation?.stateTransitions?.visual?.error?.inViewport, true);
       assert.equal(observation?.stateTransitions?.asyncLoading?.status, 'loading');
       assert.ok(observation?.stateTransitions?.asyncLoading?.animationName !== undefined);
+      assert.equal(observation?.stateTransitions?.visual?.asyncLoading?.status, 'loading');
+      assert.equal(observation?.stateTransitions?.visual?.asyncLoading?.visible, true);
+      assert.equal(observation?.stateTransitions?.visual?.asyncLoading?.inViewport, true);
       assert.equal(observation?.stateTransitions?.reset, 'idle');
       assert.equal(observation?.restored?.width, width);
       assert.equal(observation?.restored?.height, height);

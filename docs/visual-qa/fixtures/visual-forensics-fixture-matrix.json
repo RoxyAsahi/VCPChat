@@ -37,6 +37,24 @@
       "selectors": [".vcp-ui-loading-layer", ".vcp-ui-async-boundary[data-status=error]", ".vcp-ui-async-boundary[data-status=loading]"]
     },
     {
+      "id": "showcase-global-loading-visible",
+      "trigger": "click('模拟加载 1.2 秒'); capture before cleanup",
+      "screenshotSuffix": "loading",
+      "selectors": [".vcp-ui-loading-layer:not([hidden])"]
+    },
+    {
+      "id": "showcase-error-visible",
+      "trigger": "click('error'); scroll state surface into viewport",
+      "screenshotSuffix": "error",
+      "selectors": [".vcp-ui-async-boundary[data-status=error]", "[role=alert]"]
+    },
+    {
+      "id": "showcase-async-loading-visible",
+      "trigger": "click('loading'); scroll state surface into viewport",
+      "screenshotSuffix": "async-loading",
+      "selectors": [".vcp-ui-async-boundary[data-status=loading]", ".vcp-ui-skeleton"]
+    },
+    {
       "id": "showcase-disabled-control",
       "trigger": "scrollIntoView(first visible disabled control)",
       "screenshotSuffix": "disabled",

@@ -371,6 +371,40 @@ try {
       find('idle', boundary || document)?.click();
       return { loading, errorState, asyncLoading, reset: boundary?.querySelector('.vcp-ui-async-boundary')?.dataset.status || '' };
     }).catch(error => ({ error: error.message }));
+    const snapshotState = async (kind) => {
+      const state = await page.evaluate(async kind => {
+        const find = (text, root = document) => [...root.querySelectorAll('button')].find(button => button.textContent.trim() === text);
+        const rect = node => node ? (() => { const r = node.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })() : null;
+        const boundary = document.querySelector('.vcp-ui-showcase-section[data-component="asyncboundary"]');
+        if (kind === 'loading') {
+          find('模拟加载 1.2 秒')?.click();
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const layer = document.querySelector('.vcp-ui-loading-layer');
+          const layerRect = rect(layer);
+          return { visible: Boolean(layer && !layer.hasAttribute('hidden')), rect: layerRect, inViewport: Boolean(layerRect && layerRect.width > 0 && layerRect.height > 0 && layerRect.x + layerRect.width > 0 && layerRect.y + layerRect.height > 0 && layerRect.x < innerWidth && layerRect.y < innerHeight) };
+        }
+        find(kind === 'error' ? 'error' : 'loading', boundary || document)?.click();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const root = boundary?.querySelector('.vcp-ui-async-boundary');
+        const target = kind === 'error' ? boundary?.querySelector('[role="alert"], .vcp-ui-alert') : boundary?.querySelector('.vcp-ui-skeleton, .vcp-ui-skeleton-line');
+        target?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const targetRect = rect(target);
+        const inViewport = Boolean(targetRect && targetRect.width > 0 && targetRect.height > 0 && targetRect.x + targetRect.width > 0 && targetRect.y + targetRect.height > 0 && targetRect.x < innerWidth && targetRect.y < innerHeight);
+        return { status: root?.dataset.status || '', visible: inViewport, rect: targetRect, inViewport };
+      }, kind).catch(error => ({ error: error.message }));
+      await page.screenshot({ path: path.join(output, `${name}-${kind}.png`), fullPage: false });
+      return state;
+    };
+    stateTransitions.visual = {};
+    stateTransitions.visual.loading = await snapshotState('loading');
+    await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1_250))).catch(() => {});
+    stateTransitions.visual.error = await snapshotState('error');
+    stateTransitions.visual.asyncLoading = await snapshotState('async-loading');
+    await page.evaluate(() => {
+      const boundary = document.querySelector('.vcp-ui-showcase-section[data-component="asyncboundary"]');
+      [...(boundary?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'idle')?.click();
+    }).catch(() => {});
     await page.screenshot({ path: path.join(output, `${name}-states.png`), fullPage: true });
     const initial = await page.evaluate(() => {
       const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); const owner = el.closest('.vcp-ui-showcase-root, .vcp-ui-page-shell, #main-content, #chat-container')?.className || 'document'; return { tag: el.tagName.toLowerCase(), id: el.id, className: el.className, owner, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, zIndex: s.zIndex, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius }; };
