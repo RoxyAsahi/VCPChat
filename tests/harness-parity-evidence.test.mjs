@@ -262,12 +262,13 @@ test('ProducedFiles reference audit preserves DOM and geometry provenance', () =
 test('Harness fixture coverage reports contracts without replayable cases', () => {
     execFileSync(process.execPath, ['scripts/check-harness-fixture-coverage.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-fixture-coverage.json'), 'utf8'));
-    assert.equal(report.status, 'coverage-gaps-present');
+    assert.equal(report.status, 'coverage-scoped-complete');
     assert.equal(report.pass, false);
     assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
     assert.ok(report.uncoveredContracts.includes('settings-root'));
     assert.equal(report.counts.effectiveContractsWithFixtures, report.counts.contractsWithFixtures + 2);
     assert.deepEqual(report.candidateFixtureGaps, []);
+    assert.ok(report.counts.scopeBlockedContracts > 0);
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.category, 'covered-by-semantic-fixture-alias');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'model-picker')?.fixture, 'agent-model-picker');
     assert.equal(report.uncoveredByBoundary.find(item => item.name === 'settings-root')?.category, 'source-only-boundary');
