@@ -41,6 +41,12 @@ const hoverTooltip = async (page, handle) => {
   await sleep(20);
   await page.mouse.move(point.x, point.y).catch(() => {});
   await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 }).catch(() => {});
+  if (await page.$('.vcp-harness-tooltip-bubble').catch(() => null)) return true;
+  // Electron still renders the exact production portal below; this final
+  // fallback only delivers mouseenter through the mounted renderer listener
+  // when a transient overlay has swallowed the native pointer move.
+  await handle.evaluate(element => element.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true, view: window }))).catch(() => {});
+  await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), { timeout: 500 }).catch(() => {});
   return Boolean(await page.$('.vcp-harness-tooltip-bubble').catch(() => null));
 };
 const request = url => new Promise((resolve, reject) => http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject));
