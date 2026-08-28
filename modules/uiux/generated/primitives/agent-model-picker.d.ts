@@ -15,10 +15,13 @@ export interface AgentModelEffortOption {
 }
 export interface AgentModelPickerProps {
     readonly label?: string;
+    /** Harness ModelSelect disables the native trigger while its owner is locked. */
+    readonly locked?: boolean;
     /** Reuse an existing surface trigger while keeping its identity intact. */
     readonly trigger?: HTMLButtonElement;
     readonly options: (signal: AbortSignal) => Promise<readonly AgentModelOption[]>;
-    readonly onSelect: (option: AgentModelOption) => void | Promise<void>;
+    /** `false` rejects the selection; Harness parity keeps the menu open and shows a Toast. */
+    readonly onSelect: (option: AgentModelOption) => void | boolean | Promise<void | boolean>;
     readonly efforts?: readonly AgentModelEffortOption[];
     readonly onEffortSelect?: (option: AgentModelEffortOption) => void | Promise<void>;
     readonly selectedEffort?: string;

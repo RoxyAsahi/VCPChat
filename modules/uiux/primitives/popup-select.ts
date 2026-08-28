@@ -82,6 +82,13 @@ export interface PopupSelectSpec {
     readonly options: (context: unknown, signal: AbortSignal) => Promise<readonly PopupSelectOption[]>;
     /** Settle the picked option against the open-time context. */
     readonly onSelect: (option: PopupSelectOption, context: unknown) => void | Promise<void>;
+    /**
+     * An owner may consume a rejected selection outside the menu (for
+     * example, ModelSelect's transient Toast).  Returning true keeps the
+     * shell ready/open without converting a selection failure into the
+     * catalog-load Retry strip.
+     */
+    readonly onSelectError?: (error: unknown, option: PopupSelectOption, context: unknown) => boolean;
 }
 
 /** Injected session-wiring callbacks (token consumption + composer focus). */
@@ -177,7 +184,8 @@ export function createPopupSelectController(spec: PopupSelectSpec, deps: PopupSe
             await spec.onSelect(option, current.context);
         } catch (error) {
             if (binding !== current) return;
-            set({ submitting: false, error: errorText(error) });
+            const handled = spec.onSelectError?.(error, option, current.context) === true;
+            set({ submitting: false, error: handled ? null : errorText(error) });
             return;
         }
         if (binding !== current) return;
