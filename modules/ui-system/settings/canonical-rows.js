@@ -1,7 +1,7 @@
 // canonical-rows — one canonical row system for the unified settings surface.
 // The upstream form row is retained as the business anchor; geometry, spacing
 // and typography belong to the canonical wrapper.
-import { sectionKeyForRow } from './section-ownership.js';
+import { sectionKeyForRow, sectionKeyForTitle } from './section-ownership.js';
 function removeLegacySubsectionHeadings(form) {
     form.querySelectorAll('.vcp-harness-editor-section-heading').forEach(heading => {
         const section = heading.closest('.settings-section');
@@ -13,6 +13,11 @@ function removeLegacySubsectionHeadings(form) {
 
 function mountCanonicalSettingsRows(form) {
     if (!form) return;
+    form.querySelectorAll(':scope > .settings-section').forEach(section => {
+        const title = section.querySelector(':scope > .settings-section-title')?.textContent;
+        const key = sectionKeyForTitle(title);
+        if (key) section.dataset.settingsSectionKey = key;
+    });
     const candidates = form.querySelectorAll(
         ':scope [data-vcp-settings-row], :scope [data-vcp-settings-control-row], :scope .vcp-settings-row, :scope .vcp-settings-control-row, :scope .settings-form-group, :scope .form-group-inline, :scope > .form-group, :scope .form-group'
     );

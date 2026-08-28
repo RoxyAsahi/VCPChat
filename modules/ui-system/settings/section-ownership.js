@@ -17,4 +17,8 @@ function sectionKeyForRow(row) {
     return title ? SECTION_KEYS[title] || '' : '';
 }
 
-export { SECTION_KEYS, sectionKeyForRow };
+function sectionKeyForTitle(title) {
+    return SECTION_KEYS[String(title || '').trim()] || '';
+}
+
+export { SECTION_KEYS, sectionKeyForRow, sectionKeyForTitle };
