@@ -91,12 +91,14 @@ export function mountTooltip(anchor: HTMLElement, props: TooltipProps, scope: Ui
     };
     const show = () => {
         if (disabled || bubble) return;
+        const portal = document.body || document.documentElement;
+        if (!portal) return;
         bubble = document.createElement('span');
         bubble.className = 'vcp-harness-tooltip-bubble';
         bubble.setAttribute('role', 'tooltip');
         bubble.textContent = typeof props.label === 'function' ? props.label() : props.label;
         if (props.maxWidth !== undefined) bubble.style.maxWidth = `${props.maxWidth}px`;
-        anchor.parentNode?.insertBefore(bubble, anchor.nextSibling);
+        portal.append(bubble);
         place();
         const onResize = () => place();
         window.addEventListener('resize', onResize);
