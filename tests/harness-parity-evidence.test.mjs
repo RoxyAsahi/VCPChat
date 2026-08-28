@@ -216,3 +216,12 @@ test('JsonTree reference audit preserves tree semantics and geometry provenance'
     assert.equal(report.candidateStatus, 'source-only frozen trajectory/tool inspection; no VCP structured-message consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP structured-message consumer'));
 });
+
+test('ReadBlock reference audit preserves source-window and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-read-block-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-read-block-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '28/28');
+    assert.equal(report.candidateStatus, 'source-only frozen tool detail; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP tool-detail consumer'));
+});
