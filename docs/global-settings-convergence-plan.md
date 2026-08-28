@@ -141,6 +141,10 @@ Home 视觉的两个 Toggle mount 已进一步抽为
 `modules/ui-system/settings/appearance-toggles.js`；checkbox 仍是 canonical
 节点，helper 不拥有持久化状态，仅注册 generated Toggle 与 scope cleanup。
 
+Home tagline 的 generated Input mount 也已抽为
+`modules/ui-system/settings/home-controls.js`；输入值与保存仍由 typed field
+owner 负责，helper 仅建立 Light-DOM primitive 和销毁标记。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，
