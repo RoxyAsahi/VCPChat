@@ -1,5 +1,8 @@
 {
   "source": "packages/client/ui-settings-general/src/client/SettingsRoot.module.css",
+  "styleSource": "packages/client/ui-settings-general/src/client/SettingsRoot.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "source-only; no paired Harness/VCP browser capture or production consumer claim",
   "viewport": "fixed reference viewport; capture in Electron gate",
   "selectors": {
     ".panel": { "width": "800px", "height": "min(800px, calc(100vh - 48px))", "maxWidth": "calc(100vw - 48px)", "borderRadius": "24px" },
@@ -9,5 +12,6 @@
     ".options": { "padding": "0 24px 24px" },
     ".close": { "width": "28px", "height": "28px", "borderRadius": "28px" }
   },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-bg-mask-1", "--dsw-mask-blur", "--dsw-alias-bg-layer-2", "--dsw-shadow-lv3", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-specific-sidebar-nav-item-hover", "--dsw-specific-sidebar-nav-item-active"],
   "states": ["default", "hover", "focus", "active", "closed", "destroyed"]
 }
