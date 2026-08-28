@@ -42,6 +42,8 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof rust.syncRustAssistantVisibility, 'function');
     const render = await import(pathToFileURL(path.join(settingsDir, 'render-visibility.js')).href);
     assert.equal(typeof render.syncRenderSettingsVisibility, 'function');
+    const appearance = await import(pathToFileURL(path.join(settingsDir, 'appearance-controls.js')).href);
+    assert.equal(typeof appearance.mountAppearanceSelects, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -84,6 +86,7 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.match(entry, /from '\.\/settings\/advanced-visibility\.js'/, 'entry must import the advanced section helper');
     assert.match(entry, /from '\.\/settings\/rust-visibility\.js'/, 'entry must import the Rust section helper');
     assert.match(entry, /from '\.\/settings\/render-visibility\.js'/, 'entry must import the render section helper');
+    assert.match(entry, /from '\.\/settings\/appearance-controls\.js'/, 'entry must import the appearance helper');
     const globalOwners = [...entry.matchAll(/window\.VCPUISettingsBridge\s*=/g)].length;
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
 });
@@ -309,10 +312,11 @@ test('global voice mode adopts generated Choice without extending the frozen cha
 
 test('global typed primitive mounts keep one lifecycle registration per primitive', () => {
     const entry = read(bridgeEntry);
+    const appearance = read(path.join(settingsDir, 'appearance-controls.js'));
     const globalTypedOwners = entry.slice(
         entry.indexOf('function mountTypedRadiusChoice'),
         entry.indexOf('// Single-line text inputs are projected'),
-    );
+    ) + '\n' + appearance;
     // Each generated primitive calls scope.own() internally.  The bridge can
     // own its DOM marker, but must not register the returned release again:
     // that adds a second resource to every Settings-open cycle and asks the
