@@ -137,6 +137,49 @@ try {
       return { trigger: describe(trigger), card: describe(card), point: { x, y }, topmost: describe(topmost), topmostInsideCard: Boolean(card && topmost && card.contains(topmost)), topmostChain: chain, cardAncestors: ancestors, bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow };
     });
     await page.screenshot({ path: path.join(output, `${name}-open.png`), fullPage: false });
+    // Root geometry alone cannot catch a selector that only leaks into the
+    // real model rows.  Enter the production model pane and capture an actual
+    // pointer-hover state before returning to the root pane for resize checks.
+    await page.click('.vcp-harness-popup-select-card .vcp-harness-agent-model-picker-cell');
+    await page.waitForSelector('.vcp-harness-popup-select-card .vcp-harness-popup-select-viewport [data-option-id]', { timeout: timeoutMs });
+    const modelRowSelector = '.vcp-harness-popup-select-card .vcp-harness-popup-select-viewport [data-option-id]:not([aria-disabled="true"])';
+    assert.ok(await page.$(modelRowSelector), `${name}: production model pane has no enabled option`);
+    // The real catalog may publish a fresh row list between waitForSelector
+    // and pointer placement. Resolve at the action boundary so a late
+    // projection rebuild cannot turn visual evidence into a detached-handle
+    // false negative.
+    let hoverError = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await page.hover(modelRowSelector);
+        hoverError = null;
+        break;
+      } catch (error) {
+        hoverError = error;
+        if (!/detached/i.test(String(error?.message || error)) || attempt === 3) break;
+        await sleep(80);
+      }
+    }
+    assert.equal(hoverError, null, `${name}: production model row detached throughout hover retry window: ${hoverError?.message || hoverError}`);
+    await sleep(80);
+    const modelPaneHover = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      const row = card?.querySelector('.vcp-harness-popup-select-viewport [data-option-id]:not([aria-disabled="true"])');
+      if (!card || !row) return null;
+      const rect = row.getBoundingClientRect(); const style = getComputedStyle(row);
+      const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return {
+        role: row.getAttribute('role'), hovered: row.matches(':hover'),
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        backgroundColor: style.backgroundColor, color: style.color,
+        borderRadius: style.borderRadius, outline: style.outline, boxShadow: style.boxShadow,
+        topmostInsideCard: Boolean(topmost && card.contains(topmost)),
+      };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-model-hover.png`), fullPage: false });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.querySelector('.vcp-harness-popup-select-card .vcp-harness-agent-model-picker-cell')?.hidden === false, { timeout: timeoutMs });
     await page.setViewport({ width: Math.max(320, width - 240), height, deviceScaleFactor: 1 });
     await sleep(160);
     const narrow = await page.evaluate(() => {
@@ -163,8 +206,9 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
     const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('.vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
-    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, narrow, restored, closed });
+    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, modelPaneHover, narrow, restored, closed });
     if (!open.topmostInsideCard) evidence.gate.failures.push(`${name}: menu center topmost element is outside card`);
+    if (!modelPaneHover?.hovered || !modelPaneHover.topmostInsideCard) evidence.gate.failures.push(`${name}: model-row hover is not painted/hittable ${JSON.stringify(modelPaneHover)}`);
     if (open.card?.position !== 'fixed' && open.card?.position !== 'absolute') evidence.gate.failures.push(`${name}: menu has unexpected position ${open.card?.position}`);
     for (const [phase, snapshot] of [['narrow', narrow], ['restored', restored]]) {
       if (!snapshot.open || !snapshot.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: ${phase} menu containment/hit-test ${JSON.stringify(snapshot)}`);
