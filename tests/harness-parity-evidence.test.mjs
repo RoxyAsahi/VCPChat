@@ -330,6 +330,23 @@ test('ConnectionBanner Candidate capture records DOM, geometry, states, and tear
     assert.equal(report.ownerRegistrations, 1);
 });
 
+test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-connection-banner-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-connection-banner-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-connection-banner-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.deepEqual(report.states, { hidden: true, label: true, unmount: true });
+    assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.dom.role.pass, false);
+    assert.equal(report.dom.live.pass, false);
+    assert.equal(report.pixel.status, 'strict-roi-measured');
+    assert.equal(report.pixel.comparable, true);
+    assert.equal(report.pixel.pass, false);
+    assert.equal(report.pass, false);
+});
+
 test('Menu Candidate capture records portal, interaction states, and teardown', () => {
     execFileSync(process.execPath, ['scripts/capture-vcp-menu-candidate.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-menu-candidate.json'), 'utf8'));
