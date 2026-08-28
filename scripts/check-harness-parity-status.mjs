@@ -18,6 +18,8 @@ const guards = [
   ['workspace-browser', 'harness-workspace-browser-source-provenance.json'],
   ['settings-root', 'harness-settings-root-source-provenance.json'],
   ['sidebar-root', 'harness-sidebar-root-source-provenance.json'],
+  ['input', 'harness-input-source-provenance.json'],
+  ['preset-menu', 'harness-preset-menu-source-provenance.json'],
 ].map(([name, file]) => {
   const present = fs.existsSync(path.join(reportsDir, file));
   return { name, report: file, present, pass: present ? read(file).pass === true : false };
