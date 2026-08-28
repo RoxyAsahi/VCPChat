@@ -339,7 +339,7 @@ try {
         document.documentElement.style.scrollBehavior = previousDocumentScrollBehavior;
       }).catch(() => {});
       await sleep(80);
-      await tooltipTarget.hover().catch(() => {});
+      await hoverTooltip(page, tooltipTarget);
       await sleep(160);
       await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
       var tooltipViewport = await page.evaluate(() => {
@@ -569,10 +569,10 @@ try {
       await hoverTooltip(page, stateTarget);
       await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: false });
       const hoverState = await page.evaluate(() => {
-        const el = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(candidate => candidate.matches(':hover'));
+        const el = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(candidate => candidate.textContent.trim() === 'Hover for details');
         if (!el) return { active: false, className: '', rect: null, inViewport: false };
         const s = getComputedStyle(el); const r = el.getBoundingClientRect();
-        return { active: true, className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow };
+        return { active: Boolean(document.querySelector('.vcp-harness-tooltip-bubble')), pointerHover: el.matches(':hover'), className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow };
       }).catch(() => null);
       await stateTarget.focus().catch(() => {});
       // Establish real keyboard modality so :focus-visible rules are applied
