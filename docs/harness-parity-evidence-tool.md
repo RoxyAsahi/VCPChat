@@ -131,14 +131,14 @@ inert, mask, and stage contracts. Its 800×600 full-surface strict RGB result is
 comparable but non-passing; Candidate reopen remains an experimental controller
 state, and no first-run production consumer is connected.
 
-Menu now has a real-source same-engine capture for its dense portal, selected and
-disabled rows, focus-opened submenu, outside/Escape close, and unmount boundary.
-The paired diff confirms the shared menu role, selected/disabled row projection,
-separator, and interaction sequence. It deliberately records Candidate trigger
-ARIA plus danger/footer rows as structural non-passes; this makes the current
-218×211 Harness and 218×290 Candidate cards non-comparable for a strict ROI
-pixel result. A matching source danger/footer fixture, strict ROI pixel diff,
-and a VCP production consumer remain required evidence.
+Menu now has a real-source same-engine capture for its dense portal, selected,
+disabled, danger, and footer rows, focus-opened submenu, outside/Escape close,
+and unmount boundary. The paired diff confirms the shared menu role, full row
+projection, separator, footer, and interaction sequence. It separately records
+Candidate trigger ARIA as a structural delta. A strict decoded RGB ROI result is
+now measured but non-comparable: the same-semantic Harness card is 218×287 and
+the Candidate card is 218×290. No crop or resize may convert that mismatch into
+a pixel pass; a VCP production consumer remains required evidence.
 
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top

@@ -365,20 +365,24 @@ test('Menu Candidate capture records portal, interaction states, and teardown', 
 test('Real Harness Menu source capture records DOM/ARIA, style, and lifecycle boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-menu-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-menu-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-menu-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-menu-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-menu-source-diff.json'), 'utf8'));
     assert.equal(report.semanticFixture.pass, true);
     assert.equal(report.domAria.menuRole.pass, true);
-    assert.equal(report.domAria.sharedItems.pass, true);
+    assert.equal(report.domAria.items.pass, true);
     assert.equal(report.domAria.separators.pass, true);
+    assert.equal(report.domAria.footer.pass, true);
     assert.equal(report.domAria.triggerHasPopup.pass, false);
     assert.equal(report.domAria.triggerExpanded.pass, false);
-    assert.equal(report.domAria.candidateOnly.pass, false);
     assert.equal(report.geometry.comparable, false);
     assert.equal(report.interaction.outsideClose.pass, true);
     assert.equal(report.interaction.escapeClose.pass, true);
     assert.equal(report.interaction.submenuFocus.pass, true);
     assert.equal(report.interaction.unmountOrDispose.pass, true);
+    assert.equal(report.pixel.status, 'strict-roi-measured');
+    assert.equal(report.pixel.comparable, false);
+    assert.equal(report.pixel.pass, false);
     assert.equal(report.pass, false);
 });
 

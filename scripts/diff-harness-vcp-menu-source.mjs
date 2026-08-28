@@ -11,9 +11,11 @@ const harnessItems = harness.open.items.map(item => ({
     disabled: item.disabled,
     selected: String(item.selected),
 }));
-const candidateSharedItems = vcp.open.items
-    .filter(item => !['Remove view', 'View settings'].includes(item.text))
-    .map(item => ({ text: item.text, disabled: item.disabled, selected: item.selected }));
+const candidateItems = vcp.open.items.map(item => ({
+    text: item.text,
+    disabled: item.disabled,
+    selected: item.selected,
+}));
 const styleFields = ['position', 'zIndex', 'padding', 'borderRadius', 'minWidth', 'fontFamily'];
 const computedStyle = styleFields.map(field => ({
     field,
@@ -21,6 +23,8 @@ const computedStyle = styleFields.map(field => ({
     vcp: vcp.open.style[field],
     pass: harness.open.style[field] === vcp.open.style[field],
 }));
+const pixelPath = path.join(root, 'reports/harness-vcp-menu-roi-pixel-diff.json');
+const pixelResult = fs.existsSync(pixelPath) ? read('reports/harness-vcp-menu-roi-pixel-diff.json') : null;
 const interaction = {
     outsideClose: { harness: harness.outsideClosed, vcp: vcp.outsideClosed, pass: harness.outsideClosed === true && vcp.outsideClosed === true },
     escapeClose: { harness: harness.escapeClosed, vcp: vcp.escapeClosed, pass: harness.escapeClosed === true && vcp.escapeClosed === true },
@@ -35,9 +39,9 @@ const report = {
         menuRole: { harness: harness.open.role, vcp: vcp.open.role, pass: harness.open.role === vcp.open.role },
         triggerHasPopup: { harness: harness.open.aria.triggerHasPopup, vcp: vcp.open.aria.triggerHasPopup, pass: harness.open.aria.triggerHasPopup === vcp.open.aria.triggerHasPopup, note: 'Harness Menu owns no trigger ARIA mutation; Candidate adapter does.' },
         triggerExpanded: { harness: harness.open.aria.triggerExpanded, vcp: vcp.open.aria.triggerExpanded, pass: harness.open.aria.triggerExpanded === vcp.open.aria.triggerExpanded, note: 'Harness Menu owns no trigger ARIA mutation; Candidate adapter does.' },
-        sharedItems: { harness: harnessItems, vcp: candidateSharedItems, pass: JSON.stringify(harnessItems) === JSON.stringify(candidateSharedItems) },
+        items: { harness: harnessItems, vcp: candidateItems, pass: JSON.stringify(harnessItems) === JSON.stringify(candidateItems) },
         separators: { harness: harness.open.separators, vcp: vcp.open.separators, pass: harness.open.separators === vcp.open.separators },
-        candidateOnly: { dangerItem: 'Remove view', footerItem: 'View settings', pass: false, note: 'The source fixture intentionally lacks danger and footer rows; no structural parity is claimed.' },
+        footer: { harness: harness.open.footer, vcp: vcp.open.footer, pass: harness.open.footer === vcp.open.footer },
     },
     computedStyle: { checks: computedStyle, pass: computedStyle.every(item => item.pass) },
     geometry: {
@@ -45,15 +49,14 @@ const report = {
         vcp: vcp.open.rect,
         comparable: harness.open.rect.width === vcp.open.rect.width && harness.open.rect.height === vcp.open.rect.height,
         pass: false,
-        note: 'Candidate includes its extra danger/footer rows, so its 218×290 card is not a strict-ROI peer of the Harness 218×211 fixture.',
+        note: 'The real-source danger/footer fixture has the same semantic rows, but its measured 218×287 card remains three CSS pixels shorter than the 218×290 Candidate card.',
     },
     interaction,
+    pixel: pixelResult ? { status: 'strict-roi-measured', comparable: pixelResult.comparable, exactPixelPass: pixelResult.exactPixelPass, differentPixels: pixelResult.differentPixels, pixelRatio: pixelResult.pixelRatio, pass: pixelResult.pass } : { status: 'pending-strict-roi-capture' },
     pass: false,
     missingEvidence: [
-        'same-semantic source danger/footer fixture',
-        'strict Menu ROI pixel diff',
         'VCP production Menu consumer',
     ],
 };
 fs.writeFileSync(path.join(root, 'reports/harness-vcp-menu-source-diff.json'), `${JSON.stringify(report, null, 2)}\n`);
-console.log(`Harness↔VCP Menu source diff: sharedItems=${report.domAria.sharedItems.pass}; interaction=${Object.values(interaction).every(item => item.pass)}; style=${report.computedStyle.pass}; geometryComparable=${report.geometry.comparable}.`);
+console.log(`Harness↔VCP Menu source diff: items=${report.domAria.items.pass}; interaction=${Object.values(interaction).every(item => item.pass)}; style=${report.computedStyle.pass}; geometryComparable=${report.geometry.comparable}.`);

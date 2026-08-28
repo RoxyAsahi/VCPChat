@@ -83,7 +83,8 @@ try {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         const escapeClosed = !controller.open && document.body.querySelector('.vcp-harness-menu-list') === null;
         globalThis.__menuFixtureScope = scope;
-        return { source: 'VCP generated artifact Candidate Lab', semanticFixture: 'menu/dense-portal/selected-disabled-danger-submenu', candidateStatus: 'candidate-interaction-active; no VCP production consumer or paired Harness capture', viewport, open, submenuItems, outsideClosed, escapeClosed, selections, ownerRegistrations: scope.count };
+        globalThis.__menuFixtureController = controller;
+        return { source: 'VCP generated artifact Candidate Lab', semanticFixture: 'menu/dense-portal/selected-disabled-danger-submenu', candidateStatus: 'candidate-interaction-active; same-engine real-source DOM/ARIA/computed-style and strict ROI evidence recorded, but no VCP production consumer', viewport, open, submenuItems, outsideClosed, escapeClosed, selections, ownerRegistrations: scope.count };
     });
     assert.equal(evidence.open.present, true);
     assert.equal(evidence.open.role, 'menu');
@@ -96,9 +97,12 @@ try {
     assert.deepEqual(evidence.submenuItems, ['List', 'Grid']);
     assert.equal(evidence.outsideClosed, true);
     assert.equal(evidence.escapeClosed, true);
+    await page.evaluate(() => globalThis.__menuFixtureController?.setOpen(true));
+    await page.locator('.vcp-harness-menu-list').screenshot({ path: path.join(root, 'reports/vcp-menu-candidate.png') });
     await page.evaluate(() => globalThis.__menuFixtureScope?.dispose());
     const restored = await page.evaluate(() => {
         delete globalThis.__menuFixtureScope;
+        delete globalThis.__menuFixtureController;
         const anchor = document.querySelector('.trigger');
         return anchor?.parentElement?.classList.contains('fixture') && anchor.getAttribute('aria-haspopup') === null && anchor.getAttribute('aria-expanded') === null && document.body.querySelector('.vcp-harness-menu-list') === null;
     });
