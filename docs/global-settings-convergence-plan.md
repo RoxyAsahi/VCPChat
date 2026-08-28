@@ -168,6 +168,11 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 状态；Theme Presenter 单测通过，问题限定在动效合同实现。Tooltip 文件属于
 并行未提交改动，本线不覆盖，待其补齐后再复跑动效与 UIUX 全套门禁。
 
+2026-08-28 最新复测：Settings Electron gate 的全部 Settings 交互断言仍通过，
+但最终 light/dark 背景差异断言仍失败（两者均为 `rgb(255, 255, 255)`），并伴随
+一个资源 `ERR_FILE_NOT_FOUND`。该失败来自并行主题/资源改动；本线程不修改其
+文件，待主题线程稳定后重跑最终 gate。
+
 ### G5：旧债净删除
 
 按 section 删除：
