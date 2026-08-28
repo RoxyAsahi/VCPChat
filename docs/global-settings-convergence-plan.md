@@ -234,6 +234,13 @@ ARIA，现在其 click/keydown 监听也直接归属 presentation scope；状态
 属性恢复仍由记录对象负责。这样重复 mount/refresh 不会重新绑定同一 header，且
 dispose 的监听器清理与其它 generated primitive 使用同一 owner 机制。
 
+连续切片复核（2026-08-28）：`npm run test:uiux` 当前 90/90 通过；
+`check-settings-source-equivalence`、`check-global-settings-section-ownership` 和
+`check-agent-model-picker-legacy-parity` 均通过。source-equivalence 仍报告
+`legacy.rows=0`、`legacy.inlineStyles=0`、`legacy.cssSelectors=0`，说明已收口的
+Settings sections 没有重新引入直接竞争 projection；未收口的 legacy modal 与业务
+fallback 仍由负向门禁明确保留。
+
 字段 owner scope 化后的完整回归（2026-08-28）已通过：`npm run test:uiux`
 88/88、`check:uiux:artifacts`，以及 `test:electron-agent-settings-interaction`。
 真实 Electron 交互周期前后保持 41 个 active scopes、501 个 active resources、570
