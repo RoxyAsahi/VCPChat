@@ -92,6 +92,7 @@
     "diff:harness-vcp-agent-input": "node scripts/diff-harness-vcp-agent-input.mjs",
     "diff:harness-vcp-model-picker": "node scripts/diff-harness-vcp-model-picker.mjs",
     "diff:harness-vcp-model-picker-pixels": "node scripts/diff-harness-vcp-model-picker-pixels.mjs",
+    "diff:harness-vcp-model-picker-same-engine-pixels": "npm run capture:vcp-agent-model-picker-equivalent && node scripts/diff-harness-vcp-model-picker-same-engine-pixels.mjs",
     "check:harness-vcp-evidence-schema": "node scripts/check-harness-vcp-evidence-schema.mjs",
     "check:harness-select-source-evidence": "node scripts/check-harness-select-source-evidence.mjs",
     "promote:harness-select-fixture": "node scripts/promote-harness-select-fixture.mjs",
