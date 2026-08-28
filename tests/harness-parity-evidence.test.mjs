@@ -233,6 +233,9 @@ test('Real Harness HoverCard source capture retains the Candidate geometry and p
     assert.equal(report.structuralPass, true);
     assert.equal(report.computedStyle.pass, true);
     assert.equal(report.geometry.pass, false);
+    assert.equal(report.interaction.pass, true);
+    assert.equal(report.interaction.disabled.pass, true);
+    assert.equal(report.interaction.unmountOrDispose.pass, true);
     assert.equal(report.pass, false);
     assert.equal(report.pixel.status, 'pending-roi-diff');
 });

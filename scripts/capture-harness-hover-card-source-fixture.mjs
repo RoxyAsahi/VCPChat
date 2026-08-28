@@ -16,7 +16,7 @@ const viewport = { width: 800, height: 600, deviceScaleFactor: 1 };
 const virtualId = 'virtual:harness-hover-card-source-fixture';
 const resolvedVirtualId = `\0${virtualId}`;
 const fixture = `import React from 'react'; import { createRoot } from 'react-dom/client'; import { HoverCard } from '@deepseek-ai/dsh-client-ui-primitives/src/HoverCard.tsx';
-createRoot(document.querySelector('#root')).render(React.createElement(HoverCard, { anchor: React.createElement('span', { className: 'anchor' }, 'Workspace path'), content: React.createElement('div', null, '/tmp/workspace'), openDelayMs: 40, copyText: '/tmp/workspace', copyLabel: 'Copy path', copiedLabel: 'Copied' }));`;
+const root=createRoot(document.querySelector('#root')); const render=(disabled=false)=>root.render(React.createElement(HoverCard,{anchor:React.createElement('span',{className:'anchor'},'Workspace path'),content:React.createElement('div',null,'/tmp/workspace'),openDelayMs:40,disabled,copyText:'/tmp/workspace',copyLabel:'Copy path',copiedLabel:'Copied'})); render(); globalThis.__harnessHoverFixture={root,render};`;
 const vite = await createServer({
   root: harnessRoot, appType: 'custom',
   resolve: { alias: { 'react/jsx-dev-runtime': reactJsxDev, 'react-dom/client': reactDom, react, '@deepseek-ai/dsh-client-ui-primitives/src/HoverCard.tsx': hoverCard } },
@@ -46,9 +46,12 @@ try {
   const copied = await page.evaluate(() => ({ text: document.querySelector('[role="button"]')?.textContent?.trim(), status: document.querySelector('[role="status"]')?.textContent ?? '', clipboard: globalThis.__harnessHoverCopy }));
   await page.mouse.move(10, 10); await page.waitForTimeout(250);
   const closedAfterGrace = await page.locator('[role="button"]').count() === 0;
-  const evidence = { source: 'Harness HoverCard.tsx through isolated Vite source module', sourcePath: 'packages/client/ui-primitives/src/HoverCard.tsx', styleSource: 'packages/client/ui-primitives/src/HoverCard.module.css', semanticFixture: 'hover-card/portal-grace-copy-disabled-dispose', status: 'harness-source-component-capture', viewport, beforeDelay, open, copied, closedAfterGrace, missingEvidence: ['disabled/dispose Harness source capture', 'cross-page Candidate DOM/computed-style/pixel comparison'] };
-  assert.equal(beforeDelay, 0); assert.equal(open.role, 'button'); assert.equal(open.parent, 'body'); assert.equal(open.style.position, 'fixed'); assert.equal(open.style.zIndex, '100'); assert.equal(copied.text, 'Copied'); assert.equal(copied.status, 'Copied'); assert.equal(copied.clipboard, 'copy'); assert.equal(closedAfterGrace, true);
+  await anchor.hover(); await page.waitForTimeout(50);
+  const disabled = await page.evaluate(async () => { globalThis.__harnessHoverFixture.render(true); await new Promise(requestAnimationFrame); return { cards: document.querySelectorAll('[role="button"]').length, statuses: document.querySelectorAll('[role="status"]').length, anchorPresent: document.querySelector('.anchor') !== null }; });
+  const unmounted = await page.evaluate(() => { globalThis.__harnessHoverFixture.root.unmount(); const result = { rootEmpty: document.querySelector('#root')?.childNodes.length === 0, cards: document.querySelectorAll('[role="button"]').length, statuses: document.querySelectorAll('[role="status"]').length }; delete globalThis.__harnessHoverFixture; return result; });
+  const evidence = { source: 'Harness HoverCard.tsx through isolated Vite source module', sourcePath: 'packages/client/ui-primitives/src/HoverCard.tsx', styleSource: 'packages/client/ui-primitives/src/HoverCard.module.css', semanticFixture: 'hover-card/portal-grace-copy-disabled-dispose', status: 'harness-source-component-capture', viewport, beforeDelay, open, copied, closedAfterGrace, disabled, unmounted, missingEvidence: ['cross-page Candidate DOM/computed-style/pixel comparison'] };
+  assert.equal(beforeDelay, 0); assert.equal(open.role, 'button'); assert.equal(open.parent, 'body'); assert.equal(open.style.position, 'fixed'); assert.equal(open.style.zIndex, '100'); assert.equal(copied.text, 'Copied'); assert.equal(copied.status, 'Copied'); assert.equal(copied.clipboard, 'copy'); assert.equal(closedAfterGrace, true); assert.deepEqual(disabled, { cards: 0, statuses: 0, anchorPresent: true }); assert.deepEqual(unmounted, { rootEmpty: true, cards: 0, statuses: 0 });
   await fs.promises.mkdir(path.join(root, 'reports'), { recursive: true });
   await fs.promises.writeFile(path.join(root, 'reports/harness-hover-card-source.json'), `${JSON.stringify(evidence, null, 2)}\n`);
-  console.log('Harness HoverCard source fixture captured (real HoverCard.tsx delayed portal/copy/grace; 800x600 @1x).');
+  console.log('Harness HoverCard source fixture captured (real HoverCard.tsx portal/copy/grace/disabled/unmount; 800x600 @1x).');
 } finally { await browser.close(); await vite.close(); }
