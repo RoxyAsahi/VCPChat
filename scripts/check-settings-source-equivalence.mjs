@@ -25,6 +25,12 @@ const settingsModules = `${bridge}\n${selectProjection}\n${canonicalRows}`;
 const settingsEntry = read('styles/settings.css');
 const agentFormCss = read('styles/setting/settings-agent-form.css');
 const agentIdentityCss = read('styles/setting/settings-agent-identity.css');
+const agentGroupSectionsCss = read('styles/setting/settings-group-sections.css');
+const agentSidebarTabsCss = read('styles/setting/settings-sidebar-tabs.css');
+const agentPromptCss = read('styles/setting/settings-agent-prompt.css');
+const agentPromptEditorCss = read('styles/setting/agent/agent-prompt-editor.css');
+const agentCardShellCss = read('styles/setting/settings-agent-card-shell.css');
+const promptModulesCss = read('Promptmodules/prompt-modules.css');
 const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
 const presentationOwner = read('modules/renderer/mainChatSettingsPresentationOwner.js');
@@ -298,6 +304,35 @@ assert.doesNotMatch(typedAgentInputConsumers, /api\.mountInput\(/,
 const agentButtonOwner = bridge.match(/function mountTypedAgentButtons\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
 assert.doesNotMatch(agentButtonOwner, /openModelSelectBtn/, 'ModelPicker trigger must not re-enter the generic Agent Button owner');
 assert.match(bridge, /api\.mountAgentModelPicker\(host,/, 'Agent ModelPicker must have one explicit composite owner');
+
+// Once a real Agent Settings node has been adopted by the generated Button,
+// the historical Settings sheets may keep container layout and the unadopted
+// fallback branch, but must no longer restyle that button's geometry, fill or
+// prompt-mode state.  This is deliberately a negative owner gate: without
+// it, a later high-specificity legacy rule can make a typed Button only a
+// class marker while its visual owner remains the old CSS stack.
+for (const [label, source] of Object.entries({
+    shell: css,
+    agentForm: agentFormCss,
+    groupSections: agentGroupSectionsCss,
+    sidebarTabs: agentSidebarTabsCss,
+    identity: agentIdentityCss,
+})) {
+    assert.doesNotMatch(source, /#agentSettingsForm \.form-actions button(?:[.#\[:]|\s|,|\{)(?![^\{]*vcp-harness-button)/,
+        `${label}: typed Agent action Buttons must be excluded from legacy action styling`);
+}
+for (const [label, source] of Object.entries({
+    shell: css,
+    prompt: agentPromptCss,
+    promptEditor: agentPromptEditorCss,
+    cardShell: agentCardShellCss,
+    promptModules: promptModulesCss,
+})) {
+    assert.doesNotMatch(source, /\.prompt-mode-button(?:\.|:|\s|,|\{)(?![^\{]*vcp-harness-button)/,
+        `${label}: typed Agent prompt buttons must be excluded from legacy visual styling`);
+}
+assert.doesNotMatch(agentIdentityCss, /\.reset-colors-btn(?:\.|:|\s|,|\{)(?![^\{]*vcp-harness-button)/,
+    'typed Agent reset-color Button must be excluded from legacy visual styling');
 
 // Primitive mount APIs already bind their disposer to the injected UiScope.
 // Bridge-level Agent mounts may own marker/style restoration, but must not

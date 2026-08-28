@@ -25,7 +25,7 @@
   flex-wrap: wrap;
 }
 
-[id="agentSettingsContainer"] .system-prompt-container .prompt-mode-button {
+[id="agentSettingsContainer"] .system-prompt-container .prompt-mode-button:not(.vcp-harness-button) {
   flex: 1 1 0;
   min-width: 0;
   min-height: 34px;
@@ -42,7 +42,7 @@
 
 [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button:last-child {
+  .prompt-mode-button:not(.vcp-harness-button):last-child {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -179,7 +179,7 @@
 body.light-theme
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button,
+  .prompt-mode-button:not(.vcp-harness-button),
 body.light-theme
   [id="agentSettingsContainer"]
   .system-prompt-container
@@ -238,7 +238,7 @@ body.light-theme
 body.light-theme
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button:hover,
+  .prompt-mode-button:not(.vcp-harness-button):hover,
 body.light-theme
   [id="agentSettingsContainer"]
   .system-prompt-container
@@ -289,7 +289,7 @@ body.light-theme
 body.light-theme
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button.active {
+  .prompt-mode-button:not(.vcp-harness-button).active {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--highlight-text) 92%, rgba(255, 255, 255, 0.18)),
@@ -309,7 +309,7 @@ body.light-theme
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button,
+  .prompt-mode-button:not(.vcp-harness-button),
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   .system-prompt-container
@@ -375,7 +375,7 @@ body:not(.light-theme)
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button:hover,
+  .prompt-mode-button:not(.vcp-harness-button):hover,
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   .system-prompt-container
@@ -426,7 +426,7 @@ body:not(.light-theme)
 body:not(.light-theme)
   [id="agentSettingsContainer"]
   .system-prompt-container
-  .prompt-mode-button.active {
+  .prompt-mode-button:not(.vcp-harness-button).active {
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--highlight-text) 86%, rgba(255, 255, 255, 0.14)),

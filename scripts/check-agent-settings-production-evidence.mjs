@@ -109,11 +109,16 @@ for (const action of report.actions) {
     assert.equal(action.style.authored.matchedRules.some(rule => rule.declarations?.display === 'flex'
         && rule.selector !== '.vcp-harness-agent-model-picker-trigger'), false,
         `Agent action ${action.controlId} has a conflicting authored display:flex rule`);
+    assert.equal(action.style.authored.matchedRules.some(rule => /(?:#agentSettingsForm\s+\.form-actions|\.reset-colors-btn)/.test(rule.selector)
+        && !rule.selector.includes('.vcp-harness-button')), false,
+    `Agent action ${action.controlId} must not match a legacy visual owner`);
 }
 for (const button of report.promptButtons) {
     assert.ok(Array.isArray(button.style?.authored?.matchedRules), 'prompt mode Button must report authored CSS rules');
     assert.ok(button.style.authored.matchedRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.declarations?.display === 'inline-flex'),
         'prompt mode Button must retain the Harness inline-flex authored rule');
+    assert.equal(button.style.authored.matchedRules.some(rule => rule.selector.includes('.prompt-mode-button')),
+        false, 'prompt mode Button must not match a legacy prompt visual owner');
 }
 if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
     assert.deepEqual(report.agentSelectInteraction, {

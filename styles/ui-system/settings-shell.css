@@ -119,7 +119,10 @@
         background: transparent;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button {
+    /* Generated Button instances own their control geometry and state
+       colors. These remain only for Agent controls that have not entered the
+       typed Button slice (notably the separate model-picker trigger). */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button:not(.vcp-harness-button), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn:not(.vcp-harness-button), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button:not(.vcp-harness-button) {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-3);
         border: 1px solid var(--vcp-ui-control-border);
@@ -132,26 +135,26 @@
         font-weight: 600;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"] {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button) {
         border-color: var(--vcp-ui-accent);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions .danger-button, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteAgentBtn, :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteGroupBtn {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions .danger-button:not(.vcp-harness-button), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteAgentBtn:not(.vcp-harness-button), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteGroupBtn {
         border-color: color-mix(in srgb, var(--vcp-ui-danger) 52%, var(--vcp-ui-border));
         color: var(--vcp-ui-danger);
         background: var(--vcp-ui-danger-bg);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button:hover:not(:disabled), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn:hover:not(:disabled), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button:hover:not(:disabled) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button:not(.vcp-harness-button):hover:not(:disabled), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn:not(.vcp-harness-button):hover:not(:disabled), :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button:not(.vcp-harness-button):hover:not(:disabled) {
         border-color: var(--vcp-ui-control-focus);
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-2);
         box-shadow: none;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"]:hover:not(:disabled) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"]:not(.vcp-harness-button):hover:not(:disabled) {
         border-color: var(--vcp-ui-accent-hover);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent-hover);
@@ -397,7 +400,7 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button:not(.vcp-harness-button) {
         min-width: 0;
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-1);
