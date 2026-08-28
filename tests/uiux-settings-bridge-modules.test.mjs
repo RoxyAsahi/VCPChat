@@ -109,6 +109,24 @@ test('global voice mode adopts generated Choice without extending the frozen cha
     assert.doesNotMatch(css, /#voiceModeLocal/, 'the retired page-local voice radio CSS no longer competes with Choice');
 });
 
+test('global typed primitive mounts keep one lifecycle registration per primitive', () => {
+    const entry = read(bridgeEntry);
+    const globalTypedOwners = entry.slice(
+        entry.indexOf('function mountTypedRadiusChoice'),
+        entry.indexOf('// Single-line text inputs are projected'),
+    );
+    // Each generated primitive calls scope.own() internally.  The bridge can
+    // own its DOM marker, but must not register the returned release again:
+    // that adds a second resource to every Settings-open cycle and asks the
+    // same idempotent disposer to run twice during teardown.
+    assert.doesNotMatch(globalTypedOwners, /scope\.own\(\w*release[,) ]/i,
+        'bridge must not duplicate generated primitive disposers in the presentation scope');
+    for (const primitive of ['mountChoice', 'mountRange', 'mountToggle', 'mountColorPair', 'mountInput', 'mountSelect']) {
+        assert.match(globalTypedOwners, new RegExp(`api\\.${primitive}\\(`),
+            `${primitive} must remain mounted by the generated primitive`);
+    }
+});
+
 test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
     const dom = new JSDOM('<!doctype html><form><select id="voice"><option value="one">One</option><option value="two">Two</option></select></form>');
     const previous = Object.fromEntries([

@@ -951,10 +951,12 @@ function mountTypedRadiusChoice(root, form) {
     if (!group || !api?.mountChoice || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
     const scope = ensurePresentationScope();
     if (!scope) return;
-    const release = api.mountChoice(group, scope);
+    // Generated primitives register their own release with `scope`.  The
+    // bridge owns only its marker; re-owning the returned release creates a
+    // second record which can only invoke the same disposer a second time.
+    api.mountChoice(group, scope);
     group.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
-    if (release) scope.own(release, 'typed-radius-choice', 'ui-primitive');
 }
 
 // Global Settings still has a native radio group that is routinely used but
@@ -974,10 +976,9 @@ function mountTypedGlobalChoiceGroups(root, form) {
         const group = form?.querySelector?.(`#${inputId}`)?.closest('.vcp-settings-control-row');
         if (!group || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
         try {
-            const release = api.mountChoice(group, scope);
+            api.mountChoice(group, scope);
             group.dataset.vcpTypedPrimitiveMounted = 'true';
             scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, `typed-${ownerKey}-marker`, 'ui-primitive');
-            if (release) scope.own(release, `typed-${ownerKey}`, 'ui-primitive');
         } catch (error) {
             // The native radio group remains fully usable if the optional
             // presentation artifact is unavailable.
@@ -993,10 +994,9 @@ function mountTypedAppearanceRanges(root, form) {
     [['appearanceSidebarAvatarSize', 'appearanceSidebarAvatarSizeValue'], ['appearanceSidebarRowHeight', 'appearanceSidebarRowHeightValue'], ['appearanceCustomRadius', 'appearanceCustomRadiusValue']].forEach(([id, outputId]) => {
         const input = form?.querySelector?.(`#${id}`); const output = form?.querySelector?.(`#${outputId}`);
         if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountRange(input, { output, format: value => `${value}px` }, scope);
+        api.mountRange(input, { output, format: value => `${value}px` }, scope);
         input.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${id}-range`, 'ui-primitive');
     });
 }
 
@@ -1006,10 +1006,9 @@ function mountTypedHomeVisualToggles(root, form) {
     ['showHomeVisualBrand', 'showHomeVisualTagline'].forEach(id => {
         const input = form?.querySelector?.(`#${id}`);
         if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountToggle(input, scope);
+        api.mountToggle(input, scope);
         input.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${id}-toggle`, 'ui-primitive');
     });
 }
 
@@ -1024,10 +1023,9 @@ function mountTypedAvatarColorPair(root, form) {
         const text = form?.querySelector?.(textId);
         if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
         try {
-            const release = api.mountColorPair(color, text, scope);
+            api.mountColorPair(color, text, scope);
             color.dataset.vcpTypedPrimitiveMounted = 'true';
             scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
-            if (release) scope.own(release, `typed-${name}-color-pair`, 'ui-primitive');
         } catch (error) {
             // A pairing contract violation (e.g. a wrap moved one input) must
             // not break the whole enhancement chain; the pair stays native.
@@ -1042,10 +1040,9 @@ function mountTypedHomeTaglineInput(root, form) {
     if (!input || !api?.mountInput || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
     const scope = ensurePresentationScope();
     if (!scope) return;
-    const release = api.mountInput(input, {}, scope);
+    api.mountInput(input, {}, scope);
     input.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, 'typed-home-tagline-marker', 'ui-primitive');
-    if (release) scope.own(release, 'typed-home-tagline-input', 'ui-primitive');
 }
 
 // Forum credentials are presentation-only in this phase.  The existing
@@ -1060,10 +1057,9 @@ function mountTypedForumInputs(root, form) {
     ['adminUsername', 'adminPassword'].forEach(id => {
         const input = form?.querySelector?.(`#${id}`);
         if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        const release = api.mountInput(input, {}, scope);
+        api.mountInput(input, {}, scope);
         input.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${id}-input`, 'ui-primitive');
     });
 }
 
@@ -1159,13 +1155,11 @@ function mountTypedAppearanceSelects(root, form) {
         const select = form?.querySelector?.(`#${id}`);
         if (!select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
         if (api.mountField && select.parentElement) {
-            const fieldRelease = api.mountField(select.parentElement, { label, control: select }, scope);
-            if (fieldRelease) scope.own(fieldRelease, `typed-${id}-field`, 'ui-primitive');
+            api.mountField(select.parentElement, { label, control: select }, scope);
         }
-        const release = api.mountSelect(select, { label, portal: true }, scope);
+        api.mountSelect(select, { label, portal: true }, scope);
         select.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-        if (release) scope.own(release, `typed-${id}-select`, 'ui-primitive');
     });
 }
 
