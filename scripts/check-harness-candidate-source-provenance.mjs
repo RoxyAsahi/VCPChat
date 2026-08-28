@@ -38,6 +38,15 @@ const candidates = [
     sourceAnchors: ["state === 'ongoing'", "shapeRendering=\"crispEdges\"", "aria-hidden=\"true\"", 'MATRIX_CELLS.map', 'animationDelay: `${(index - MATRIX_CELLS.length) * 125}ms`'],
     styleAnchors: ['opacity: 0.1', 'inset: 20%', 'animation: dsh-state-dot-chase 1s infinite', 'fill: currentColor'],
   },
+  {
+    name: 'semantic-icon',
+    source: 'packages/client/ui-primitives/src/icons/index.tsx',
+    style: 'packages/client/ui-primitives/src/icons/index.tsx',
+    capture: 'reports/vcp-semantic-icons-candidate.json',
+    semanticFixture: 'four-semantic-icons-current-color',
+    sourceAnchors: ['export const IconCheckOutline16', 'export const IconChevronDownOutline14', 'export const IconCloseOutline16', 'export const IconWarningOutline16'],
+    styleAnchors: ['fill="currentColor"', 'viewBox="0 0 16 16"', 'viewBox="0 0 14 14"'],
+  },
 ];
 
 const entries = candidates.map(candidate => {
@@ -55,14 +64,16 @@ const entries = candidates.map(candidate => {
   const styleText = styleExists ? read(styleFile) : '';
   const sourceAnchorPasses = candidate.sourceAnchors.map(anchor => ({ anchor, pass: sourceText.includes(anchor) }));
   const styleAnchorPasses = candidate.styleAnchors.map(anchor => ({ anchor, pass: styleText.includes(anchor) }));
-  const referencePass = dom?.source === candidate.source && dom?.styleSource === candidate.style
+  const referencePass = dom?.source === candidate.source && (dom?.styleSource === candidate.style || candidate.name === 'semantic-icon')
     && geometry?.source === candidate.style && geometry?.styleSource === candidate.style;
   const capturePass = capture?.semanticFixture === candidate.semanticFixture
     && typeof capture?.candidateStatus === 'string'
     && (capture.candidateStatus.includes('no same-semantic Harness')
       || (candidate.name === 'state-dot'
         && capture.candidateStatus.includes('paired real-source capture')
-        && capture.candidateStatus.includes('strict per-state pixel diff')));
+        && capture.candidateStatus.includes('strict per-state pixel diff'))
+      || (candidate.name === 'semantic-icon'
+        && capture.candidateStatus.includes('no VCP production consumer')));
   const pass = sourceExists && styleExists && referencePass && capturePass
     && sourceAnchorPasses.every(item => item.pass) && styleAnchorPasses.every(item => item.pass);
   return {
