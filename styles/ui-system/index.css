@@ -10,6 +10,12 @@
 @import url('./sidebar.css');
 @import url('./notifications.css');
 @import url('./settings.css');
+/* Settings surface presentation layers.  These must load after the legacy
+ * settings sheet so the unified Light-DOM shell owns geometry and cascade. */
+@import url('./settings-primitives.css');
+@import url('./settings-template.css');
+@import url('./settings-overrides.css');
+@import url('./settings-portal.css');
 @import url('./appearance-studio.css');
 @import url('./ask-nova.css');
 @import url('./showcase.css');
