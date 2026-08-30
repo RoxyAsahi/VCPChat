@@ -157,6 +157,7 @@
 | `8d7f8e7e` 规范 memberTags 输入 | `6444c584` | `node --test tests/mobile-sync-failure-contract.test.js`（19/19） | 局部适配；直接采用上游非空 Unicode 键/字符串值校验，暂不替换会改变 Wire 1.2 指纹的哈希排序算法 |
 | `a8e13592` Unix 文件同步作用域 | 无需提交 | `cargo test`（57/57） | 当前源码已使用 `std::fs` 统一作用域，不存在上游旧导入；确认行为等价后不制造空提交 |
 | `ba186996` 配置摄取互斥思路 | `04a48377` | `node --test tests/mobile-sync-*.test.js`（101/102，1 skip）；`cargo test`（57/57） | 局部适配；仅将按 config 路径的进程内锁接入现有 `entity_index` 摄取流程，并补充并发回归；上游新表、Wire/HTTP 版本和 v3 reconcile 不接收 |
+| `8fecce4b` 规则引擎全局对象兼容子变更 | `0e0eda7f` | `node --test tests/tavern-rules-engine.test.js`（6/6） | 直接吸收；仅将 UMD 根对象从 `self` 修正为 `globalThis`，不涉及聊天状态、IPC 或持久化 |
 
 ### 暂缓记录
 
