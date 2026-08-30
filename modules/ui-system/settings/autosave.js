@@ -6,7 +6,8 @@ const autosaveStates = new Set();
 
 export function mountSettingsAutosave(root, form, scope = null) {
     if (form.dataset.vcpAutosaveMounted === 'true') return;
-    const statusHost = root.querySelector('.vcp-harness-settings-actions');
+    const statusHost = root.querySelector('.vcp-harness-settings-actions')
+        || form.querySelector('.form-actions');
     if (!statusHost) return;
     const state = { form, timer: null, saving: false, pending: false, cleanups: [] };
     const status = document.createElement('button');
