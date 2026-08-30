@@ -1,0 +1,23 @@
+{
+  "primitive": "PresetMenu",
+  "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "sharedPrimitiveSource": "packages/client/ui-primitives/src/Menu.tsx",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+      "packages/client/ui-primitives/src/Menu.tsx",
+      "packages/client/ui-primitives/src/Menu.module.css"
+    ],
+    "selectionRule": "Use PresetMenu composition for trigger/label semantics and shared Menu source for popup ownership and geometry; VCP remains reference-only without a business consumer."
+  },
+  "candidateStatus": "reference-only; Harness composition is source-backed, VCP has no legal AgentPreset business consumer or paired visual capture",
+  "root": { "composition": "Menu + caller-owned anchor button" },
+  "anchor": { "tag": "button", "type": "button", "ariaHaspopup": "menu", "ariaExpanded": "open state", "disabled": "caller-owned" },
+  "items": { "source": "options roster order", "selected": "selectedId", "userTrustLabel": "name + localized userTrust suffix" },
+  "ownership": ["caller owns open state", "Menu owns portal/outside-dismiss/Escape", "selection closes before onSelect"],
+  "aria": ["native button semantics", "Menu item semantics delegated to shared primitive"],
+  "states": ["closed", "open", "selected", "disabled", "user-trust", "empty", "dispose"],
+  "vcpCandidate": { "productionConsumer": false, "status": "reference-only", "reason": "Shared Menu composition contract; no duplicate VCP business state" }
+}

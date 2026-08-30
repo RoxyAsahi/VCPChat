@@ -1,0 +1,39 @@
+{
+  "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+      "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
+      "packages/client/ui-model-selection/tests/model-select.client.spec.tsx"
+    ],
+    "selectionRule": "Use ModelSelect view, CSS, and client interaction tests as the Harness source; Candidate captures may compare injected model/effort state but must not claim chat consumer migration."
+  },
+  "candidateStatus": "production-consumer-active / Candidate Lab ready-selected, keyboard-focus, and pointer-hover same-engine static-source-reference pixel baselines pass. Hover requires real pointer hover=true/focus=false for Candidate and source reference, with 148/35500 (0.417%) differing pixels and mean delta 0.0289 under the strict 1%/2 policy; it is not a Harness production consumer comparison. Harness production now has a reproducible image-history -> text-only normal pointer selection -> model-unavailable Toast capture, with durable image event, menu-kept-open, unchanged selection, no Retry and role=alert evidence; it is source truth only, not a VCP comparison. keyboard/disabled and both load-error-retry plus selection-error-Toast have generated-artifact behavior/Electron state evidence. locked and selecting additionally have source/generated/Electron state evidence for native disabled/no popup/no load and submitting/aria-busy/disabled model rows, sourced from ModelSelect.tsx disabled={locked} and disabled={busy}; neither has Harness visual/pixel proof. Same-semantic VCP failure-Toast comparison, cross-source hover/focus, legacy modal parity/deletion, packaged artifact and Windows evidence remain pending",
+  "root": { "tag": "div", "class": "root", "positioning": "relative" },
+  "trigger": {
+    "tag": "button",
+    "class": "trigger",
+    "type": "button",
+    "ariaHaspopup": "menu",
+    "ariaExpanded": "open state",
+    "ariaControls": "generated menu id",
+    "children": ["span.triggerLabel", "span.triggerEffort?", "IconChevronDownOutline14"]
+  },
+  "menu": {
+    "tag": "div",
+    "class": "menu",
+    "role": "menu",
+    "ariaLabel": "localized menu label",
+    "ariaBusy": "loading or selecting",
+    "panes": ["root", "model", "effort"],
+    "vcpCandidate": "root/model/effort panes implemented with injected effort options; provider directory remains external"
+  },
+  "rootPaneItem": { "tag": "button", "role": "menuitem", "class": "cell", "children": ["span.cellLabel", "span.cellValue", "IconChevronRightOutline14"] },
+  "modelPaneItem": { "tag": "button", "role": "menuitem", "class": "option", "children": ["span.optionCopy > span.modelName", "span.description?", "span.check?"] },
+  "states": ["available", "locked", "loading", "load-error-retry", "selecting", "selection-error-toast", "empty", "outside-dismiss", "escape-pane-back", "escape-close"],
+  "escapeContract": "owner intercepts Escape in model/effort panes; root pane delegates to popup dismiss and restores trigger focus",
+  "vcpDeviation": {
+    "rootTag": { "harness": "div", "vcp": "span", "reason": "Candidate mount preserves the injected host as a Light-DOM inline seat wrapper; no business node is replaced." }
+  }
+}

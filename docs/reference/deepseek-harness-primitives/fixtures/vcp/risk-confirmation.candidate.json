@@ -1,0 +1,35 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "unacknowledged-autofocused",
+  "dialog": {
+    "width": "440px",
+    "maxHeight": "552px",
+    "overflow": "hidden",
+    "role": "dialog",
+    "ariaModal": "true"
+  },
+  "warning": {
+    "gap": "10px",
+    "fontSize": "14px",
+    "lineHeight": "22px"
+  },
+  "acknowledgement": {
+    "gap": "10px",
+    "marginTop": "20px",
+    "fontSize": "14px",
+    "lineHeight": "22px",
+    "checked": false,
+    "disabled": false,
+    "autofocus": true
+  },
+  "actions": {
+    "cancelMinWidth": "72px",
+    "confirmMinWidth": "136px",
+    "confirmDisabled": true
+  }
+}

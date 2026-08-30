@@ -1,0 +1,16 @@
+{
+  "primitive": "WebBlock",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/WebBlock.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/WebBlock.module.css"
+  },
+  "root": { "tag": "div", "class": "block", "data": "web=search | fetch" },
+  "search": { "answer": "optional MarkdownText block", "sources": "ol.sources > li.source[value]", "link": "http(s) only external anchor", "empty": "div.empty when answer and sources are empty", "truncated": "div.truncated when source list was capped" },
+  "fetch": { "url": "safe external anchor or plain text", "meta": "span.status + span.truncated?", "status": "HTTP status code" },
+  "states": ["search-answer", "search-citations", "search-empty", "search-truncated", "fetch-success", "fetch-truncated", "unsafe-url-plain-text", "dispose"],
+  "interaction": ["unsafe URL schemes never become href", "citation labels fall back to hostname", "source list scrolls within its cap", "truncated state remains explicit"],
+  "aria": ["source list is an ordered list", "external anchors use target=_blank and rel=noopener noreferrer", "empty/truncated copy is visible text"],
+  "vcpDeviation": "WebBlock is a frozen tool-detail primitive; this contract is source-only and must not alter VCP chat or tool rendering."
+}

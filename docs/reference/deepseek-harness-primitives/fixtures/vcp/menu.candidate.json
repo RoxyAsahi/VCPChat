@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "implementation": "modules/uiux/generated/primitives/menu.js",
+  "harnessSource": "packages/client/ui-primitives/src/Menu.tsx",
+  "state": "open-selected-disabled-danger-submenu",
+  "menu": {
+    "padding": "4px",
+    "borderRadius": "12px",
+    "minWidth": "218px",
+    "maxWidth": "360px",
+    "position": "fixed"
+  },
+  "item": {
+    "minHeight": "34px",
+    "padding": "5px 10px",
+    "gap": "8px",
+    "borderRadius": "10px",
+    "fontSize": "14px",
+    "lineHeight": "22px"
+  },
+  "states": {
+    "labels": 2,
+    "separators": 1,
+    "selected": 2,
+    "disabled": 1,
+    "danger": 1,
+    "submenu": 1
+  },
+  "status": "candidate-interaction-active",
+  "pixelDiff": "pending-same-semantic-harness-fixture"
+}

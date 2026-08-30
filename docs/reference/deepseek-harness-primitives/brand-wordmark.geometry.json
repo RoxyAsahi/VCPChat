@@ -1,0 +1,18 @@
+{
+  "primitive": "BrandWordmark",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/BrandWordmark.tsx",
+  "inlineSource": true,
+  "root": {
+    "width": "182px at default size",
+    "height": "24px",
+    "viewBox": "0 0 182 24",
+    "fill": "none"
+  },
+  "svgGeometry": {
+    "nativeWidth": "182px",
+    "nativeHeight": "24px",
+    "badge": { "x": "129.348", "y": "5.5", "width": "52", "height": "14", "rx": "2" }
+  },
+  "tokens": ["currentColor", "--dsw-alias-label-primary-inverted"],
+  "candidateStatus": "source-only; paired Harness/VCP visual capture remains pending"
+}

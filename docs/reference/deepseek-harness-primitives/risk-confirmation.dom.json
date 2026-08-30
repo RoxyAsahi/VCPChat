@@ -1,0 +1,28 @@
+{
+  "source": "packages/client/ui-primitives/src/RiskConfirmation.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/RiskConfirmation.tsx",
+      "packages/client/ui-primitives/src/RiskConfirmation.module.css"
+    ],
+    "selectionRule": "Use the Harness controlled acknowledgement dialog and CSS; VCP generic confirmation is intentionally not treated as equivalent."
+  },
+  "candidateStatus": "candidate-interaction-active; same-engine source/Candidate DOM/ARIA and controlled acknowledgement/disabled/dispose states recorded; dialog geometry mismatch blocks strict ROI pixel comparison and no equivalent VCP production consumer exists",
+  "productionConsumers": [
+    "packages/client/ui-permission-presets/src/client/PermissionRow.tsx",
+    "packages/client/ui-commands/src/client/PopupSelectView.tsx",
+    "packages/client/ui-conversation/src/client/skeleton/PermissionSelect.tsx"
+  ],
+  "tree": "Modal portal > dialog[role=dialog][aria-modal=true] > content > body > warning(icon[aria-hidden=true] + p) + label(checkbox[autofocus] + span) ; footer > outline cancel + primary confirm[disabled until acknowledgement]",
+  "controlledInputs": ["open", "acknowledged", "disabled"],
+  "actions": ["onAcknowledgedChange", "onCancel", "onConfirm"],
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/risk-confirmation.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionConsumer": "none; VCP generic confirm is not acknowledgement-equivalent and is intentionally untouched"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "harness-vcp-model-picker-capture",
+  "version": 1,
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "required": ["source", "viewport", "dom", "trigger", "menu", "interaction"],
+  "dom": {
+    "required": ["root", "trigger", "menu"],
+    "aria": ["trigger[aria-haspopup=menu]", "trigger[aria-controls=menu.id]", "menu[role=menu]", "menu[aria-label]"]
+  },
+  "computedStyle": {
+    "selectors": [".trigger", ".menu", ".cell", ".option", ".groupTitle"],
+    "properties": ["height", "width", "maxHeight", "padding", "gap", "borderRadius", "fontSize", "lineHeight"]
+  },
+  "interaction": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked", "escape-pane-back", "escape-close", "focus-restore", "dispose"],
+  "fixtureModes": {
+    "harness-equivalent": {
+      "searchEnabled": false,
+      "required": "provider-grouped modelmenuitemradio structure matching the Harness production capture"
+    },
+    "vcp-enhanced": {
+      "searchEnabled": true,
+      "purpose": "VCP product interaction evidence only; not a Harness pixel comparison"
+    }
+  },
+  "pixel": { "optional": true, "format": "png", "roi": "model-picker-menu-or-full-fixture", "requiresMode": "harness-equivalent" },
+  "productionConsumer": false
+}

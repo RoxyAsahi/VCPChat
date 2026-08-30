@@ -1,0 +1,26 @@
+{
+  "primitive": "WorkspaceBrowser",
+  "source": "packages/client/ui-workspace/src/client/WorkspaceBrowser.module.css",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-workspace/src/client/WorkspaceBrowser.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "source-only; Harness sidebar workspace geometry captured, VCP same-semantic capture and all production integration remain out of scope",
+  "selectors": {
+    ".root": { "display": "flex", "flexDirection": "column", "flex": "1", "minHeight": "0", "paddingRight": "var(--dsh-session-list-edge-inset)" },
+    ".root.rail": { "paddingRight": "0" },
+    ".sectionHeader": { "display": "flex", "height": "36px", "gap": "4px", "paddingLeft": "4px", "marginBottom": "4px", "borderRadius": "12px" },
+    ".search": { "width": "100%", "height": "28px", "borderRadius": "50%" },
+    ".searchExpanded": { "width": "calc(100% + 4px)", "height": "30px", "padding": "0 4px 0 0", "borderRadius": "10px" },
+    ".rail .search": { "width": "36px", "height": "36px", "margin": "0 0 12px" },
+    ".iconButton": { "width": "28px", "height": "28px", "borderRadius": "50%" },
+    ".rail .iconButton": { "width": "36px", "height": "36px" },
+    ".listArea": { "flex": "1", "minHeight": "0", "paddingLeft": "4px", "overflow": "visible" },
+    ".fade": { "position": "absolute", "height": "24px", "pointerEvents": "none" }
+  },
+  "tokens": ["--dsh-sidebar-inline-padding", "--dsh-session-list-edge-inset", "--dsh-session-list-scrollbar-width", "--dsh-session-list-scrollbar-offset", "--ds-ease-in-out", "--dsw-specific-sidebar-fill", "--dsw-alias-border-l2", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-label-caption", "--dsw-alias-label-dimmed", "--dsw-alias-interactive-bg-hover", "--dsw-alias-state-business-primary", "--dsw-alias-state-error-primary"],
+  "states": ["wide", "rail", "search-collapsed", "search-expanded", "search-results", "drag-active", "quiet-sidebar-scrollbar", "reduced-motion"],
+  "evidence": {
+    "sourceTests": ["packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx", "packages/client/ui-workspace/tests/browser-styles.client.spec.ts"],
+    "vcpCapture": "not authorized; VCP Workspace/session persistence boundary is frozen"
+  }
+}

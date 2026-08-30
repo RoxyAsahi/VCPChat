@@ -1,0 +1,27 @@
+{
+  "source": "packages/client/ui-primitives/src/DisclosureRow.module.css",
+  "styleSource": "packages/client/ui-primitives/src/DisclosureRow.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; frozen VCP chat/message boundary and paired pixel capture pending",
+  "selectors": {
+    ".root": { "display": "flex", "flexDirection": "column", "width": "100%", "minWidth": "0" },
+    ".row": { "display": "flex", "alignItems": "center", "height": "24px", "minWidth": "0", "overflow": "hidden" },
+    ".leading": { "width": "16px", "height": "16px", "marginRight": "6px", "padding": "0", "border": "none" },
+    ".title": { "fontSize": "14px", "lineHeight": "24px", "color": "var(--dsw-alias-label-secondary)" },
+    ".iconIdle,.chevronHover": { "transition": "opacity 100ms ease" }
+  },
+  "tokens": ["--dsw-alias-label-tertiary", "--dsw-alias-label-secondary"],
+  "root": { "display": "flex", "flexDirection": "column", "width": "100%", "minWidth": "0" },
+  "row": { "display": "flex", "alignItems": "center", "height": "24px", "overflow": "hidden" },
+  "leading": { "width": "16px", "height": "16px", "marginRight": "6px", "padding": "0", "border": "none" },
+  "title": { "fontSize": "14px", "lineHeight": "24px" },
+  "transition": { "idleIcon": "opacity 100ms ease", "hoverChevron": "opacity 100ms ease" },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/disclosure-row.candidate.png",
+    "report": "fixtures/vcp/disclosure-row.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

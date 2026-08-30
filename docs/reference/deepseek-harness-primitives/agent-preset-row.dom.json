@@ -1,0 +1,35 @@
+{
+  "source": [
+    "packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
+    "packages/client/ui-agent-preset/src/client/PresetMenu.tsx"
+  ],
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx",
+      "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+      "packages/client/ui-agent-preset/src/client/AgentPresetRow.module.css"
+    ],
+    "selectionRule": "Use the Harness settings preference row plus PresetMenu composition; no equivalent VCP preset preference consumer is claimed."
+  },
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer and paired pixel diff pending",
+  "productionConsumers": [
+    "packages/client/ui-settings-agent-preset/src/client/AgentPresetRow.tsx"
+  ],
+  "harnessContract": {
+    "tree": "div.row > div.rowText > div.title + div.desc[role=alert only on error]; PresetMenu(portal=true, align=end) > button.selector[aria-haspopup=menu][aria-expanded] > current label + chevron",
+    "labelRule": "menu labels are strings; a user-trust option renders '<name> · <userTrust>'",
+    "disabled": "loading || saving || !writable || options.length === 0",
+    "stateOwner": "the settings surface owns roster/currentValue/writable/status/error and closes the menu after selection",
+    "dispose": "the owner retracts the body portal/listeners and restores the host DOM"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/agent-preset-row.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionConsumer": "none; VCP has no equivalent non-frozen preset preference business capability",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

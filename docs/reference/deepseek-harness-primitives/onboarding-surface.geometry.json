@@ -1,0 +1,18 @@
+{
+  "primitive": "OnboardingSurface",
+  "source": "packages/client/ui-primitives/src/OnboardingSurface.module.css",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/OnboardingSurface.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired real-source computed-style evidence passes and strict full-surface ROI evidence is recorded (non-passing); VCP production onboarding consumer remains absent",
+  "selectors": {
+    ".onboardingOverlay": { "position": "fixed", "inset": "0", "zIndex": "1100" },
+    ".onboardingMask": { "top": "80px", "bottom": "0", "background": "rgba(0,0,0,.24)", "backdropFilter": "blur(2px)" },
+    ".onboardingStage": { "position": "absolute", "inset": "0", "display": "flex", "justifyContent": "center", "overflow": "hidden" }
+  },
+  "overlay": { "position": "fixed", "inset": "0", "zIndex": "1100" },
+  "mask": { "top": "80px", "bottom": "0", "background": "rgba(0,0,0,.24)", "backdropFilter": "blur(2px)" },
+  "stage": { "position": "absolute", "inset": "0", "display": "flex", "justifyContent": "center", "overflow": "hidden" },
+  "tokens": ["--dsw-alias-bg-layer-1"],
+  "states": ["closed", "open", "root-inert", "close-restore", "dispose-restore"]
+}

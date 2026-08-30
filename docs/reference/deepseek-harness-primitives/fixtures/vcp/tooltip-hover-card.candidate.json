@@ -1,0 +1,28 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "source": "generated-artifact-electron",
+  "implementations": [
+    "modules/uiux/generated/primitives/tooltip.js",
+    "modules/uiux/generated/primitives/hover-card.js"
+  ],
+  "harnessSources": [
+    "packages/client/ui-primitives/src/Tooltip.tsx",
+    "packages/client/ui-primitives/src/HoverCard.tsx"
+  ],
+  "tooltip": {
+    "text": "Open workspace details",
+    "side": "bottom",
+    "rect": { "x": 98.453125, "y": 141, "width": 159.09375, "height": 26 },
+    "style": { "position": "fixed", "zIndex": "100", "padding": "3px 7px", "borderRadius": "8px", "fontSize": "13px", "lineHeight": "20px", "maxWidth": "240px", "backgroundColor": "rgb(44, 44, 46)", "color": "rgb(255, 255, 255)" }
+  },
+  "hoverCard": {
+    "role": "button",
+    "tabIndex": 0,
+    "ariaLabel": "Copy path: /Users/asahi/Documents/Codex/VCPChat-newarchitecture",
+    "rect": { "x": 291, "y": 205, "width": 244, "height": 64 },
+    "root": { "position": "relative", "display": "block" },
+    "style": { "position": "fixed", "zIndex": "100", "width": "244px", "padding": "12px 16px", "borderRadius": "12px", "backgroundColor": "rgb(44, 44, 46)" }
+  },
+  "status": "candidate-interaction-active",
+  "pixelDiff": "pending-same-semantic-harness-fixture"
+}

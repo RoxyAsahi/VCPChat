@@ -1,0 +1,17 @@
+{
+  "primitive": "MenuView",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-input-trigger/src/client/MenuView.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-input-trigger/src/client/MenuView.module.css",
+  "root": { "tag": "div", "class": "menu", "role": "listbox", "ariaLabel": "localized suggestions", "ariaActivedescendant": "highlight target", "portal": "conversation.input.overlay", "closedRender": "null" },
+  "children": [{ "tag": "div", "class": "viewport", "children": ["groupTitle", "loading?", "button[role=option]"] }],
+  "group": { "title": { "class": "groupTitle", "role": "presentation", "dataSource": "group.source" }, "loading": { "class": "loading", "dataSource": "group.source" } },
+  "option": { "tag": "button", "class": "item", "role": "option", "id": "dsh-slash-option-source-index", "ariaSelected": "highlight state", "children": ["itemIcon?", "itemName", "itemDescription?"] },
+  "states": ["closed-null", "ready-groups", "pending-group", "highlighted", "empty-ready-group-hidden", "outside-dismiss", "mousedown-pick", "dispose"],
+  "interaction": ["combobox keeps textarea focus", "mousedown prevents focus steal and invokes onPick", "outside pointerdown dismisses outside menu and composer card", "highlight scrolls active option into view"],
+  "aria": ["listbox exposes aria-activedescendant", "option rows expose aria-selected", "group headings are presentation-only", "icons are aria-hidden"],
+  "vcpDeviation": "No VCP production consumer is declared; this contract records Harness menu ownership without wiring Composer or input-trigger business state."
+}

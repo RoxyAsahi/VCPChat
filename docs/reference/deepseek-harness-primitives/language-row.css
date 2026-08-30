@@ -1,0 +1,5 @@
+/* Source: deepseek-harness/packages/client/locale/src/client/LanguageRow.module.css */
+.row { display: flex; align-items: center; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.rowText { flex: 1; min-width: 0; }
+.title { font-size: 14px; line-height: 22px; }
+.selector { display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; border-radius: 18px; }

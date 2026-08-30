@@ -1,0 +1,19 @@
+{
+  "primitive": "AgentPresetLabel",
+  "source": "packages/client/ui-agent-preset/src/client/AgentPresetLabel.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/AgentPresetLabel.tsx",
+      "packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css"
+    ],
+    "selectionRule": "Use the read-only session-header label and its CSS; no header production consumer is claimed in VCP Candidate Lab."
+  },
+  "candidateStatus": "reference-only; no VCP production consumer or paired visual capture",
+  "root": { "tag": "span", "class": "label", "interactive": false, "title": "description or localized header hint" },
+  "children": ["IconAgentPresetOutline16[aria-hidden via icon primitive]", "localized preset name or recorded id"],
+  "aria": ["static label remains ordinary span", "icon is decorative and aria-hidden"],
+  "states": ["absent-session-preset", "known-preset", "unknown-preset-id", "roster-loading", "dispose"],
+  "vcpCandidate": { "productionConsumer": false, "status": "inventoried", "reason": "Session header integration is outside this Candidate Lab reference slice" }
+}

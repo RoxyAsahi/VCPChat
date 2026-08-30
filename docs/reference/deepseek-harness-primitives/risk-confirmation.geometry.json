@@ -1,0 +1,22 @@
+{
+  "source": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "styleSource": "packages/client/ui-primitives/src/RiskConfirmation.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; same-engine source/Candidate geometry capture records Harness 440px/442x228 versus Candidate 380px/382x250 dialog boundary; strict ROI pixel comparison is not comparable and no equivalent VCP production consumer exists",
+  "selectors": {
+    ".confirmation": { "width": "min(440px, 100%)", "maxHeight": "calc(100vh - 48px)", "overflow": "hidden" },
+    ".confirmationContent": { "minHeight": "0", "overflowY": "auto", "overscrollBehavior": "contain" },
+    ".warning": { "display": "flex", "alignItems": "flex-start", "gap": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".acknowledgement": { "display": "flex", "alignItems": "flex-start", "gap": "10px", "marginTop": "20px", "fontSize": "14px", "lineHeight": "22px" },
+    ".acknowledgement input": { "width": "16px", "height": "16px", "margin": "3px 0 0" },
+    ".modalAction": { "minWidth": "72px" },
+    ".confirmAction": { "minWidth": "136px" }
+  },
+  "tokens": ["--dsw-alias-label-secondary", "--dsw-alias-state-error-primary", "--dsw-alias-label-primary", "--dsw-alias-button-primary-fill", "--dsw-alias-border-l4"],
+  "dialog": { "width": "min(440px, 100%)", "maxHeight": "calc(100vh - 48px)", "overflow": "hidden" },
+  "content": { "minHeight": "0", "overflowY": "auto", "overscrollBehavior": "contain" },
+  "warning": { "gap": "10px", "fontSize": "14px", "lineHeight": "22px", "iconMarginTop": "2px" },
+  "acknowledgement": { "gap": "10px", "marginTop": "20px", "fontSize": "14px", "lineHeight": "22px", "checkbox": "16px; margin 3px 0 0" },
+  "actions": { "cancelMinWidth": "72px", "confirmMinWidth": "136px" },
+  "vcpCandidateEvidence": { "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 }, "engine": "Electron Chromium", "screenshot": "fixtures/vcp/risk-confirmation.candidate.png", "report": "fixtures/vcp/risk-confirmation.candidate.json", "status": "candidate-interaction-active", "pixelDiff": "pending-same-semantic-harness-fixture" }
+}

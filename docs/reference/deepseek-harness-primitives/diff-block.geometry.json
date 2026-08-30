@@ -1,0 +1,18 @@
+{
+  "primitive": "DiffBlock",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/DiffBlock.module.css",
+  "root": {
+    "position": "relative",
+    "margin": "16px 0",
+    "borderRadius": "12px",
+    "background": "var(--dsw-alias-markdown-code-block)",
+    "color": "var(--dsw-alias-label-primary)"
+  },
+  "copyButton": { "position": "absolute", "top": "8px", "right": "12px", "padding": "0", "font": "var(--dsw-font-xs-13)" },
+  "body": { "padding": "12px 14px", "font": "var(--dsw-font-markdown-code-block)", "overflowX": "auto", "overflowY": "hidden" },
+  "line": { "minHeight": "22px", "whiteSpace": "pre" },
+  "path": { "fontWeight": "600", "paddingRight": "56px" },
+  "footer": { "padding": "0 14px 12px", "font": "var(--dsw-font-markdown-code-block)" },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-markdown-code-block", "--dsw-alias-state-error-primary", "--dsw-alias-state-success-primary", "--dsw-font-xs-13", "--dsw-font-markdown-code-block"],
+  "candidateStatus": "source-only; paired Harness/VCP capture remains pending"
+}

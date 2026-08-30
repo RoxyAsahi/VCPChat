@@ -1,0 +1,34 @@
+/* Clipped from Harness:
+ * packages/client/ui-settings-models/src/client/ModelsSection.module.css
+ * `.input` and `.selectInput` are the settings field contract. */
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+select.input {
+  max-width: 240px;
+  cursor: pointer;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--dsw-alias-brand-primary);
+}
+
+.selectInput {
+  appearance: none;
+  padding-right: 32px;
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+}

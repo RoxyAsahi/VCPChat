@@ -1,0 +1,34 @@
+{
+  "source": "packages/client/ui-primitives/src/Tooltip.module.css",
+  "styleSource": "packages/client/ui-primitives/src/Tooltip.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired real-source interaction and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
+  "selectors": {
+    ".bubble": { "position": "fixed", "zIndex": "100", "width": "max-content", "maxWidth": "50vw", "padding": "3px 7px", "borderRadius": "8px", "fontSize": "13px", "lineHeight": "20px", "edgeMargin": "12px", "rightGap": "10px", "verticalGap": "8px" },
+    ".bubble[data-side='right']": { "transform": "translateY(-50%)" },
+    ".bubble[data-side='bottom']": { "transform": "translateX(-50%)" },
+    ".bubble[data-side='top']": { "transform": "translate(-50%, -100%)" }
+  },
+  "tokens": ["--dsw-alias-tooltip-bg", "--dsw-static-neutral-bluish-00", "--ds-ease-in-out"],
+  "bubble": {
+    "position": "fixed",
+    "zIndex": "100",
+    "width": "max-content",
+    "maxWidth": "50vw",
+    "padding": "3px 7px",
+    "borderRadius": "8px",
+    "fontSize": "13px",
+    "lineHeight": "20px",
+    "edgeMargin": "12px",
+    "rightGap": "10px",
+    "verticalGap": "8px"
+  },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/tooltip-hover-card.candidate.png",
+    "report": "fixtures/vcp/tooltip-hover-card.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "strict-real-source-ROI-measured-non-passing"
+  }
+}

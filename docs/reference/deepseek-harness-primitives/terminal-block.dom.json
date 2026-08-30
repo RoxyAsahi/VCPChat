@@ -1,0 +1,19 @@
+{
+  "primitive": "TerminalBlock",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/TerminalBlock.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/TerminalBlock.module.css"
+  },
+  "root": { "tag": "div", "class": "block", "data": "terminal; data-running while command active" },
+  "header": { "tree": "div.header > div.prompt + Pill.status? + button.copyButton?", "prompt": "run-state label + one promptLine per command line" },
+  "prompt": { "cwd": "home collapses to ~; subsequent lines use $", "command": "verbatim preformatted text", "state": "ongoing/done/error StateDot with visually hidden label" },
+  "output": { "class": "output", "lines": "div.line", "empty": "localized no-output placeholder", "cap": "head/tail expansion" },
+  "status": { "signalPrecedence": true, "nonZeroExit": "error pill", "cleanExit": "no pill" },
+  "copy": { "scope": "raw output only", "feedback": "useCopyFeedback" },
+  "states": ["running", "clean-done", "failed-exit", "signal-terminated", "empty-output", "capped-collapsed", "expanded", "multiline-command", "dispose"],
+  "interaction": ["expand toggle reveals capped output", "copy is absent while running or output is empty", "ANSI output keeps parsed styles", "command and output scroll horizontally without wrapping"],
+  "aria": ["run state has visually hidden text label", "expand button exposes aria-expanded", "copy is native button"],
+  "vcpDeviation": "TerminalBlock is a frozen tool-detail primitive; this contract is source-only and must not alter VCP chat or tool rendering."
+}

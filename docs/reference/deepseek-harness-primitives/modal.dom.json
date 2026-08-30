@@ -1,0 +1,37 @@
+{
+  "source": "packages/client/ui-primitives/src/Modal.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Modal.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Modal.tsx",
+      "packages/client/ui-primitives/src/Modal.module.css"
+    ],
+    "selectionRule": "Use the standard and headless Modal branches from the Harness source; VCP evidence remains Candidate Lab only."
+  },
+  "candidateStatus": "candidate-interaction-active; same-engine source/Candidate DOM/ARIA, standard/headless tree, close/reopen/dispose evidence recorded; strict standard ROI remains non-passing and no VCP production consumer exists",
+  "productionConsumers": [
+    "packages/client/ui-workspace/src/client/WorkspacePicker.tsx",
+    "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+    "packages/client/ui-settings-models/src/client/ModelListEditor.tsx",
+    "packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.tsx",
+    "packages/client/ui-primitives/src/RiskConfirmation.tsx"
+  ],
+  "standardContract": {
+    "tree": "root[role=presentation] > mask[aria-hidden=true] + dialog[role=dialog][aria-modal=true][aria-label] > content(header(h2 + close), description?, body?) + footer?",
+    "portal": "document.body",
+    "close": ["Escape", "mask-click", "close-button"],
+    "extensionClasses": ["className -> dialog", "contentClassName -> content"],
+    "focus": "no built-in focus trap, autofocus or restoration"
+  },
+  "headlessContract": {
+    "tree": "root > mask + dialog > owner children",
+    "retained": ["portal", "mask", "dialog role", "aria-modal", "aria-label", "Escape"]
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/modal.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}

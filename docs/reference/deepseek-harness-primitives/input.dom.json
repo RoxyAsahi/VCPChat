@@ -1,0 +1,26 @@
+{
+  "primitive": "Input",
+  "source": "packages/client/ui-primitives/src/Input.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Input.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Input.tsx",
+      "packages/client/ui-primitives/src/Input.module.css"
+    ],
+    "selectionRule": "Use the exported Input atom and its module CSS; production-consumer eligibility is separately audited and currently absent."
+  },
+  "candidateStatus": "source-only; no Harness production consumer or paired VCP browser capture",
+  "root": { "tag": "span", "class": "wrap", "role": null },
+  "children": [
+    { "tag": "span", "class": "icon", "optional": true },
+    { "tag": "input", "class": "input", "native": true }
+  ],
+  "states": ["focus-within", "placeholder", "disabled"],
+  "contract": {
+    "nativeBusinessNode": "input",
+    "lightDom": true,
+    "aria": ["native input attributes pass through"],
+    "optional": ["leading icon span"]
+  }
+}

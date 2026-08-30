@@ -1,0 +1,17 @@
+{
+  "primitive": "Button",
+  "source": "packages/client/ui-primitives/src/Button.tsx",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Button.module.css",
+  "candidateStatus": "candidate-reference; WelcomeNotice ROI capture exists, but no VCP production consumer or full-state paired pixel closure",
+  "root": { "tag": "button", "class": "button", "native": true, "type": "button" },
+  "children": [
+    { "tag": "span", "class": "icon", "optional": true, "ariaHidden": true },
+    { "text": "ReactNode children", "required": true }
+  ],
+  "variants": ["primary", "ghost", "outline", "toolbar"],
+  "sizes": ["md", "sm"],
+  "states": ["default", "hover", "active", "disabled", "loading-consumer"],
+  "aria": ["native button semantics", "consumer-provided aria-label/pressed/busy"],
+  "vcpDeviation": "Light-DOM mount adds vcp-harness-button marker and restores the original class/type/disabled state on dispose."
+}

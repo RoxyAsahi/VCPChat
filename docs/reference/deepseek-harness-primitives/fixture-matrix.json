@@ -1,0 +1,173 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "font": "system-ui",
+  "themes": ["light"],
+  "cases": [
+    ["button", "primary"], ["button", "ghost"], ["button", "outline"], ["button", "toolbar"], ["button", "compact"], ["button", "disabled"],
+    ["connection-banner", "connected-hidden"], ["connection-banner", "reconnecting-visible"], ["connection-banner", "label-update"],
+    ["menu", "dense-portal-selected-submenu"],
+    ["onboarding-surface", "closed"], ["onboarding-surface", "open-inert"], ["onboarding-surface", "close-reopen"],
+    ["pill", "static"], ["pill", "interactive-hover"], ["pill", "active"],
+    ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
+    ["field", "description"], ["field", "error"],
+    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
+    ["modal", "standard-open"], ["modal", "headless-open"],
+    ["tooltip", "right"], ["tooltip", "bottom"], ["tooltip", "top-flip"],
+    ["hover-card", "open"], ["hover-card", "copyable"],
+    ["disclosure-row", "collapsed-preview"], ["disclosure-row", "open"], ["disclosure-row", "forced-open"],
+    ["state-dot", "done"], ["state-dot", "warning"], ["state-dot", "ongoing"], ["state-dot", "error"],
+    ["toast", "viewport-centered"], ["toast", "anchor-centered"], ["toast", "icon"],
+    ["risk-confirmation", "unacknowledged"], ["risk-confirmation", "acknowledged"], ["risk-confirmation", "disabled"]
+    , ["semantic-icon", "warning"], ["semantic-icon", "close"], ["semantic-icon", "check"], ["semantic-icon", "chevron-down"]
+    , ["agent-preset-seat", "open-selected-hover"], ["agent-preset-seat", "busy-disabled"], ["agent-preset-row", "open-custom"], ["agent-preset-row", "error-disabled"], ["permission-row", "ready-open"], ["permission-row", "loading-disabled"], ["permission-row", "error-alert"], ["permission-row", "full-access-confirm"]
+    , ["popup-select", "open-filter-highlight"], ["popup-select", "risk-confirmation"], ["popup-select", "failure-retry-dismiss"]
+    , ["directory-browser", "single-pane"], ["directory-browser", "two-pane-selected"], ["directory-browser", "hidden-files"], ["directory-browser", "abort-close-reopen"]
+    , ["diff-block", "collapsed"], ["diff-block", "expanded"], ["diff-block", "copy-success"], ["diff-block", "empty"]
+    , ["brand-wordmark", "default"], ["brand-wordmark", "custom-size"], ["brand-wordmark", "custom-class"]
+    , ["drop-overlay", "accepting"], ["drop-overlay", "disabled"], ["drop-overlay", "reduced-motion"]
+    , ["attachment-rail", "single-item"], ["attachment-rail", "overflow-arrows"], ["attachment-rail", "hover-remove"], ["attachment-rail", "touch-remove"], ["attachment-rail", "reduced-motion"]
+    , ["image-lightbox", "open"], ["image-lightbox", "close-button"], ["image-lightbox", "backdrop-dismiss"], ["image-lightbox", "escape-dismiss"], ["image-lightbox", "focus-restore"]
+    , ["fish-logo", "default"], ["fish-logo", "custom-size"], ["fish-logo", "custom-class"]
+    , ["popup-select-view", "loading"], ["popup-select-view", "ready-options"], ["popup-select-view", "filtered-highlight"], ["popup-select-view", "error-retry"], ["popup-select-view", "risk-confirmation"]
+    , ["menu-view", "ready-groups"], ["menu-view", "pending-group"], ["menu-view", "highlighted"], ["menu-view", "outside-dismiss"]
+    , ["app-frame", "wide-three-column"], ["app-frame", "narrow-auto-collapse"], ["app-frame", "sidebar-drag"], ["app-frame", "details-drag"], ["app-frame", "reduced-motion"]
+    , ["job-list-action", "live-open-ticking"], ["job-list-action", "settled-open"], ["job-list-action", "mixed-order"], ["job-list-action", "failed-detail"], ["job-list-action", "escape-focus-restore"]
+    , ["produced-files", "single-file"], ["produced-files", "overflow-more"], ["produced-files", "overflow-show-folder"], ["produced-files", "resize-remeasure"]
+    , ["message-image", "loading-single"], ["message-image", "loaded-single"], ["message-image", "loaded-tile"], ["message-image", "load-error"], ["message-image", "lightbox-open"]
+    , ["image-gallery", "empty-null"], ["image-gallery", "single-large"], ["image-gallery", "multiple-tiles"], ["image-gallery", "align-end"]
+    , ["plan-chip", "active"], ["plan-chip", "locked-disabled"], ["plan-chip", "leaving-disabled"], ["plan-chip", "exit-failure"]
+    , ["json-tree", "expanded-root"], ["json-tree", "nested-expanded"], ["json-tree", "copy-success"], ["json-tree", "copy-failure"]
+    , ["read-block", "plain-unknown-language"], ["read-block", "highlighted-language"], ["read-block", "windowed-count"], ["read-block", "capped-collapsed"], ["read-block", "copy-success"]
+    , ["search-block", "matches-expanded"], ["search-block", "matches-group-collapsed"], ["search-block", "paths"], ["search-block", "truncated"], ["search-block", "empty"]
+    , ["terminal-block", "running"], ["terminal-block", "clean-done"], ["terminal-block", "failed-exit"], ["terminal-block", "empty-output"], ["terminal-block", "capped-collapsed"]
+    , ["web-block", "search-answer"], ["web-block", "search-citations"], ["web-block", "search-empty"], ["web-block", "fetch-success"], ["web-block", "fetch-truncated"]
+    , ["language-row", "closed"], ["language-row", "open"], ["language-row", "selected"], ["language-row", "disabled"], ["language-row", "long-label"]
+    , ["agent-model-picker", "root-pane"], ["agent-model-picker", "model-pane"], ["agent-model-picker", "effort-pane"], ["agent-model-picker", "loading"], ["agent-model-picker", "error-retry"], ["agent-model-picker", "selection-error-toast"], ["agent-model-picker", "selecting"], ["agent-model-picker", "locked"]
+  ],
+  "interactionCases": [
+    { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
+    { "case": "pill/static-interactive-active-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers static span, native button, active styling, click ownership and exact class/type restoration" },
+    { "case": "connection-banner/reconnecting-hidden-label-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers reconnecting visibility, localized label update and exact host restoration" },
+    { "case": "onboarding-surface/portal-inert-close-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers body portal, mask/stage, root inert lifetime, close restoration and dispose" },
+    { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" },
+    { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" },
+    { "case": "modal/close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers standard/headless portals, mask/Escape/close-button, reopen, close icon, exact owned-node restoration and dispose; same-semantic Harness pixel fixture pending" },
+    { "case": "tooltip/hover-focus-delay-disable", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover delayed hover, immediate focus, mouseleave/blur, lazy label and disabled-mid-open" },
+    { "case": "hover-card/dwell-grace-copy-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover dwell, portal, 200ms grace, scroll placement, copy feedback, disable and exact DOM restoration" },
+    { "case": "disclosure-row/controlled-row-leading-keyboard-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover controlled row click, Enter/Space, leading-only button, preview chevron, keep/hide content, forced-open and exact DOM restoration" },
+    { "case": "state-dot/four-state-shape-size-phase-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover solid halo states, eight-cell phased ongoing matrix, custom size, aria-hidden and exact host restoration" },
+    { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" },
+    { "case": "risk-confirmation/acknowledgement-gate-close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test covers controlled acknowledgement, disabled confirm, cancel/mask/Escape, autofocus, reopen and owner disposal; Electron candidate evidence pending" }
+    , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated artifact smoke imports the module; independent generated Electron fixture records four rendered SVGs, currentColor inheritance, geometry and dispose" }
+    , { "case": "agent-preset-seat/open-selected-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover portal menu, selected nested labels, busy disable, error title, roster replacement and exact trigger restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
+    , { "case": "agent-preset-row/trust-error-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover end portal, user-trust suffix, error alert, busy/writable/empty disabled states, roster replacement and exact host restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
+    , { "case": "permission-row/load-menu-risk-confirmation-dispose", "status": "candidate-source-only", "evidence": "Harness source tests cover descriptor load, portal menu selection, no-op same-value selection, read-only/loading/error projection, Full access acknowledgement gate and unavailability null render; source audit plus 11-property CSS geometry audit preserve provenance; no VCP permission-settings consumer, paired browser capture, computed-style diff or pixel diff" }
+    , { "case": "job-list-action/live-sort-tick-dismiss-focus-dispose", "status": "candidate-source-only", "evidence": "Harness source audit and 21-property CSS geometry audit cover live-first/newest-settled ordering, open-only ticking interval, outside pointerdown, Escape focus restoration and disposal; no VCP jobs consumer, paired browser capture, computed-style diff or pixel diff" }
+    , { "case": "produced-files/fit-overflow-open-folder-resize-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 23-property CSS geometry audit cover basename/title labels, measured prefix fitting, overflow count, loopback/Host capability gating, ResizeObserver cleanup and openFile callbacks; VCP turn-tail/chat rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "message-image/load-retry-lightbox-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 30-property CSS geometry audit cover durable URL loading, stale-resolution guard, retry, single/tile fit, localized thumbnail ARIA and ImageLightbox handoff; VCP chat attachment rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "image-gallery/single-multiple-align-dispose", "status": "frozen-domain-reference", "evidence": "Harness source plus 12-property gallery geometry audit cover empty-null, single-versus-tile variant selection, attachmentId:index keys, data-align placement and child delegation; VCP chat attachment rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "plan-chip/projection-exit-error-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 19-property CSS geometry audit cover projection-driven visibility, locked/leaving disabled states, async exit success/failure, owner liveness and role=status error projection; VCP Composer and chat rendering remain frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "json-tree/expand-keyboard-copy-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 33-property CSS geometry audit cover recursive treeitem/group structure, directional expander navigation, copy mode menus, success/failure reset, scroll/resize reposition and timer/listener cleanup; VCP trajectory/tool inspection remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "read-block/window-highlight-copy-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 28-property CSS geometry audit cover preserved file line numbers, unknown-language fallback, lazy grammar refresh, 16-line head/tail cap, window count, raw-source copy and copy feedback; VCP tool-detail rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "search-block/matches-paths-collapse-copy-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 29-property CSS geometry audit cover grouped matches versus flat paths, file-group collapse, head/tail cap, truncated summary, safe http(s) links, raw structured copy and empty-state rendering; VCP tool-detail rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "terminal-block/run-state-output-cap-copy-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 33-property CSS geometry audit cover running/done/error state, signal precedence, multiline prompt, ANSI output, empty-output guard, head/tail cap, raw-output copy and expansion; VCP tool-detail rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "web-block/search-fetch-safe-link-dispose", "status": "frozen-domain-reference", "evidence": "Harness source audit plus 24-property CSS geometry audit cover search answer/citations, fetch summary, safe http(s) links, hostname fallback, empty/truncated states and capped source scrolling; VCP tool-detail rendering remains frozen and no paired browser, computed-style or pixel capture is authorized" }
+    , { "case": "popup-select/load-filter-keyboard-risk-dismiss-dispose", "status": "candidate-interaction-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected local callbacks, filtering, Enter, RiskConfirmation, success, Escape, focus restoration and teardown; Composer/input-machine/command wiring remains frozen and absent" }
+    , { "case": "agent-model-picker/pane-keyboard-escape-focus-geometry-dispose", "status": "production-consumer-active / Candidate Lab baseline pass", "evidence": "generated artifact, fixed 800x600 Candidate Lab capture and production Agent Settings Electron evidence cover root/model/effort panes, ArrowDown active option and real row focus, native disabled/selection guard, Escape-to-root, trigger focus restore, 240px in-viewport menu geometry and exact disposal. Harness production now captures the same model's durable-image admission failure through the normal sidebar search -> ModelSelect pointer route: text-only remains a visible option, the Host rejects it as model-unavailable, the menu stays open without Retry, selection remains unchanged, and a role=alert Toast is captured. That is Harness source truth, not VCP visual equivalence. The VCP selection-error command still provides only generated-artifact owner/DOM state evidence; same-semantic VCP Toast DOM/computed-style/pixel comparison, locked/selecting production captures and legacy modal parity/deletion remain pending." }
+    , { "case": "directory-browser/injected-listing-selection-hidden-path-submit-draft-preview-two-leg-nested-create-slow-scan-abort-close-reopen-dispose", "status": "foundation-electron-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected listing, selected child listing, hidden filter, Open callback, abort on close, reopen and disposal; path input submits by Enter and cancels by Escape without closing its owner Modal; local separator-debounced draft preview and prefix filtering preserve selection; two-leg target/parent landing uses a 200ms target-first fallback with late parent upgrade; nested injected create uses a 380px child dialog, makes the parent inert, retracts on Escape and selects the created entry; slow scans expose a delayed status with timer cleanup. Same-semantic Harness pixel diff, VCP production consumer and legacy presentation deletion remain pending" }
+    , { "case": "language-row/open-select-dismiss-focus-dispose", "status": "candidate-source-only", "evidence": "generated artifact and focused owner test cover active/unknown locale projection, Menu selection, option replacement and dispose; VCP locale consumer and same-semantic Harness pixel diff remain pending" }
+    , { "case": "diff-block/collapse-copy-expand-dispose", "status": "candidate-source-only", "evidence": "focused generated-artifact test covers empty guard, collapse/expand, textual +/- copy output and exact host restoration; Harness source audit covers trailing-newline flattening, same-file gaps, distinct-file footer, one-second copy feedback and ARIA expansion; paired Harness/VCP browser capture, computed-style diff and pixel diff remain pending" }
+  ],
+  "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
+  "languageRow": {
+    "visualCases": ["closed", "open", "selected", "disabled", "long-label"],
+    "interactionCase": { "case": "language-row/open-select-dismiss-focus-dispose", "status": "candidate-source-only", "evidence": "generated artifact and focused owner test; VCP locale consumer and same-semantic Harness pixel diff pending" }
+  },
+  "agentModelPicker": {
+    "visualCases": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked"],
+    "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+    "vcpStatus": "candidate-lab-only; root/model/effort pane contract active; same-engine DOM/computed-style/pixel fixture pending"
+  },
+  "stateSemantics": {
+    "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
+    "select/open": "AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable",
+    "select/selected": "AgentPresetSeat ready menu with Standard mode selected and hovered; VCP-owned production capture is replayable",
+    "select/disabled": "AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists",
+    "select/focus": "AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus",
+    "menu/candidate": "WorkspaceBrowser-style dense portal menu with multi-selection, disabled/danger rows, footer and submenu; Candidate-only until same-semantic Harness visual diff and VCP production adoption",
+    "modal/standard-open": "Harness standard Modal with mask, title, close, description, body and footer",
+    "modal/headless-open": "Harness headless Modal retains mask/dialog/aria contract while owner supplies the card contents",
+    "tooltip/right": "Existing anchor remains unwrapped; fixed bubble uses the Harness right-side gap and vertical centering",
+    "tooltip/bottom": "Fixed bubble centers below the anchor and clamps horizontally inside a 12px viewport margin",
+    "tooltip/top-flip": "Requested vertical placement flips only when the opposite side genuinely fits",
+    "hover-card/open": "244px body portal opens after dwell and tracks the anchor through scroll/resize",
+    "hover-card/copyable": "Copyable card exposes button semantics, preserves selection and publishes one-second success feedback",
+    "disclosure-row/collapsed-preview": "Collapsed 24px header shows the supplied icon and previews a chevron on hover",
+    "disclosure-row/open": "Controlled open state replaces leading icon with chevron and mounts owner content after the row",
+    "disclosure-row/forced-open": "Workflow status may remain open while expandable=false and exposes no toggle semantics",
+    "state-dot/done": "Green solid core with same-color 10% halo",
+    "state-dot/warning": "Amber solid core with same-color 10% halo",
+    "state-dot/ongoing": "Eight-cell blue pixel chase with unique negative phase delays",
+    "state-dot/error": "Red solid core with same-color 10% halo",
+    "toast/viewport-centered": "Top-center transient alert uses left 50% when no anchor is supplied",
+    "toast/anchor-centered": "Toast follows an owner-provided anchor horizontal center and remeasures on resize",
+    "toast/icon": "Optional warning glyph is aria-hidden while the banner remains a single role=alert announcement",
+    "risk-confirmation/unacknowledged": "Primary action remains disabled until caller-controlled acknowledgement is checked",
+    "risk-confirmation/acknowledged": "Checked acknowledgement enables the primary action without creating a second business state",
+    "risk-confirmation/disabled": "Disabled owner state disables acknowledgement and primary action"
+    , "semantic-icon/warning": "Private 18px warning slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/close": "Private 16px close slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/check": "Private 16px check slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/chevron-down": "Private 16px chevron slot delegates to the existing VCPIcons semantic adapter"
+    , "agent-preset-seat/open-selected-hover": "Hero chip opens a start-aligned body portal with selected name-over-description rows; VCP Candidate fixture is replayable, but Harness same-semantic pixel diff is pending"
+    , "agent-preset-seat/busy-disabled": "Busy state disables the hero trigger; it remains Candidate-only because VCP has no in-scope AgentPreset consumer"
+    , "agent-preset-row/open-custom": "Settings-style row opens an end-aligned body portal and marks user-trust options with the Custom suffix; VCP Candidate fixture is replayable, but Harness same-semantic pixel diff is pending"
+    , "agent-preset-row/error-disabled": "Settings-style row projects an error description as role=alert and disables the 36px selector while busy, non-writable or empty"
+    , "permission-row/ready-open": "New-session permission default row opens an end-aligned portal menu and exposes the current preset through aria-expanded"
+    , "permission-row/loading-disabled": "Loading and saving states keep the selector disabled; loss of writable state retracts open overlays"
+    , "permission-row/error-alert": "Mutation failure remains in the row description and projects role=alert without replacing canonical settings state"
+    , "permission-row/full-access-confirm": "Selecting danger-full-access opens a controlled acknowledgement dialog; persistence waits for explicit confirmation"
+    , "job-list-action/live-sort-tick-dismiss-focus-dispose": "Jobs action keeps live rows first, ticks only while open with live jobs, dismisses on outside pointerdown or Escape, and restores trigger focus on close"
+    , "produced-files/fit-overflow-open-folder-resize-dispose": "Turn-tail produced-file chips measure a fitting prefix, expose an overflow count and conditionally show the Host folder action; this remains a frozen-domain reference"
+    , "message-image/load-retry-lightbox-dispose": "MessageImage loads a durable URL with stale-resolution protection, retries failures, fits single/tile thumbnails and opens the Lightbox only after a successful load; this remains a frozen-domain reference"
+    , "image-gallery/single-multiple-align-dispose": "ImageGallery returns null for empty input and chooses the single-image or fixed-tile MessageImage variant while preserving start/end alignment; this remains a frozen-domain reference"
+    , "plan-chip/projection-exit-error-dispose": "PlanChip follows the host plan projection, disables during lock/exit, and reports asynchronous exit failure beside the chip; this remains a frozen Composer-domain reference"
+    , "json-tree/expand-keyboard-copy-dispose": "JsonTree exposes recursive tree semantics, keyboard expander navigation and hover copy actions with bounded feedback timers; this remains a frozen trajectory/tool reference"
+    , "read-block/window-highlight-copy-dispose": "ReadBlock preserves source line numbering, optionally highlights a window, caps long content head/tail and copies raw source text; this remains a frozen tool-detail reference"
+    , "search-block/matches-paths-collapse-copy-dispose": "SearchBlock renders grouped matches or flat paths with collapse, cap, safe links and structured copy semantics; this remains a frozen tool-detail reference"
+    , "terminal-block/run-state-output-cap-copy-dispose": "TerminalBlock renders command state, prompt/output alignment, ANSI lines, capped expansion and raw-output copy; this remains a frozen tool-detail reference"
+    , "web-block/search-fetch-safe-link-dispose": "WebBlock renders search citations or fetch metadata with safe external-link handling and capped source geometry; this remains a frozen tool-detail reference"
+    , "popup-select/open-filter-highlight": "Standalone Candidate Lab host opens the command card with injected local callbacks only; it is not connected to VCP Composer or command execution"
+    , "popup-select/risk-confirmation": "A candidate option may hide the card and display the controlled acknowledgement gate without creating business state"
+    , "popup-select/failure-retry-dismiss": "Load failure exposes retry; dismiss/reopen/dispose abort prior fetches and prevent late publication"
+    , "agent-model-picker/pane-keyboard-escape-focus-geometry-dispose": "Candidate model/effort panes expose disabled-row skipping, real menuitemradio focus on ArrowDown, Escape-to-root, trigger focus restore, role/menu ARIA binding, 240px in-viewport geometry and owner disposal; Agent Settings has a production consumer, but same-semantic hover/focus screenshots, loading/error-retry and legacy modal parity/deletion remain pending"
+  },
+  "status": {
+    "domStructural": "10/10 pass",
+    "selectMenuOpenSelectedHoverPixel": "pass (menu ROI only)",
+    "selectMenuKeyboardFocus": "pass (Harness and VCP retain trigger focus; no roving keyboard ownership)",
+    "selectBusyTrigger": "Harness production capture active; VCP cross-page comparison blocked by consumer boundary",
+    "fieldBrowserVisual": "pass (description/error production fixture at 1680x1000 @1x)",
+    "buttonCandidate": "candidate consumer-projection pixel-policy pass at 800x600 @1x; real Harness WelcomeNotice capture and VCP Button ROI share DOM/geometry/computed-style contract and pass the strict 1%/2 threshold (37/4320 pixels, ratio 0.856%, mean delta 0.051); VCP production consumer and legacy deletion pending",
+    "connectionBannerCandidate": "fixed 800x600 VCP generated-artifact DOM/ARIA/computed-style/screenshot and owner-restore capture active; no VCP connection consumer; Harness capture and same-semantic pixel diff pending",
+    "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)",
+    "menuCandidate": "independent generated-artifact portal DOM/ARIA/computed-style/screenshot, outside/Escape close and owner restore capture active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "modalCandidate": "standard/headless interaction, geometry and screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "tooltipCandidate": "hover/focus/delay/disabled interaction and fixed geometry active; same-semantic Harness pixel diff pending",
+    "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending",
+    "disclosureRowCandidate": "row/leading/keyboard/forced-open interaction and 24px geometry active; same-semantic Harness pixel diff pending",
+    "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
+    "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
+    "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending",
+    "onboardingSurfaceCandidate": "independent generated-artifact portal/inert DOM/ARIA/computed-style/screenshot and close/reopen/dispose capture active at 800x600 @1x; same-semantic Harness visual capture and pixel diff pending",
+    "pillCandidate": "independent generated-artifact static/interactive hover/active DOM/computed-style/screenshot, click and class/type/listener teardown capture active at 800x600 @1x; same-semantic Harness visual capture and pixel diff pending"
+    , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown, generated artifact smoke, fixed 800x600 screenshot/geometry and generated Electron SVG rendering active; same-semantic Harness pixel diff pending"
+    , "agentPresetSeatCandidate": "start-aligned hero chip candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "agentPresetRowCandidate": "end-aligned settings-row candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "popupSelectCandidate": "generated-artifact controller, Candidate Lab and fixed 800x600 Electron evidence active; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "agentModelPickerCandidate": "root/model/effort panes, provider/favorite/disabled rows, keyboard Escape/focus, ARIA menu binding, 240px viewport geometry and dispose evidence active; ready/selected same-engine static-source-reference ROI passes the strict 1%/2 policy. locked now has source/generated/Electron state evidence (native disabled, no popup/no load, disposal restore), but hover/focus/locked/loading/error-retry visual parity, selecting, legacy modal parity/deletion, packaged artifact and Windows evidence remain pending"
+    , "directoryBrowserFoundation": "injected Light-DOM Miller browser has generated artifact, Candidate Lab, focused owner/liveness, submission-only path-editor, local draft prefix filtering, separator-debounced draft navigation preview, two-leg selected landing with 200ms timeout/late upgrade, nested create dialog, 300ms slow-scan gate and fixed 800x600 Electron evidence; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "jobListActionCandidate": "Harness-only JobListAction contract records live/settled ordering, portal menu geometry and timer/dispose semantics; no VCP jobs consumer or paired visual capture"
+    , "producedFilesReference": "Harness-only ProducedFiles contract records measured chip fitting, overflow/open-folder gating and ResizeObserver cleanup; chat turn-tail rendering and VCP consumer remain frozen"
+  }
+}

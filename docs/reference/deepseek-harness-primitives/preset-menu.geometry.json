@@ -1,0 +1,15 @@
+{
+  "primitive": "PresetMenu",
+  "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "reference-only; trigger geometry is caller-owned and popup geometry delegates to Menu contract",
+  "delegatedGeometry": "menu.geometry.json",
+  "selectors": {},
+  "trigger": { "geometryOwner": "caller-owned buttonClassName/chevronClassName" },
+  "tokens": ["--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-tertiary"],
+  "states": ["closed", "open", "selected", "disabled", "user-trust", "empty", "dispose"],
+  "evidence": { "source": "packages/client/ui-agent-preset/src/client/PresetMenu.tsx", "geometry": "delegated to menu.geometry.json", "pairedCapture": "pending; no legal VCP AgentPreset consumer" },
+  "vcpCandidateEvidence": { "status": "reference-only", "productionConsumer": false }
+}

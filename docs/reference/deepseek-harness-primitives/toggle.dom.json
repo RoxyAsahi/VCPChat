@@ -1,0 +1,10 @@
+{
+  "primitive": "Toggle",
+  "source": "VCPChat Home Visual toggle contract (native checkbox preserved)",
+  "sourceKind": "vcp-local-contract",
+  "candidateStatus": "vcp-local-contract; no portable Harness toggle primitive or cross-engine parity claim",
+  "provenanceNote": "No portable Harness primitive exists; this contract records the VCP native checkbox boundary.",
+  "root": { "tag": "span", "class": "vcp-uiux-toggle" },
+  "children": [{ "tag": "input", "type": "checkbox", "native": true }],
+  "states": ["checked", "unchecked", "focus-within", "disabled", "dispose-restore"]
+}

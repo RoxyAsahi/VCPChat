@@ -1,0 +1,31 @@
+{
+  "source": "packages/client/ui-primitives/src/HoverCard.module.css",
+  "styleSource": "packages/client/ui-primitives/src/HoverCard.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired real-source lifecycle and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
+  "selectors": {
+    ".root": { "position": "relative", "display": "block" },
+    ".card": { "position": "fixed", "zIndex": "100", "width": "244px", "padding": "12px 16px", "borderRadius": "12px", "boxSizing": "border-box", "gapFromAnchor": "8px", "viewportBottomMargin": "8px" },
+    ".copyable:focus-visible": { "outline": "2px solid var(--dsw-alias-state-business-primary)", "outlineOffset": "2px" },
+    ".feedback": { "display": "flex", "alignItems": "center", "justifyContent": "center" }
+  },
+  "tokens": ["--dsw-hovercard-bg", "--dsw-shadow-lv3", "--dsw-alias-state-business-primary"],
+  "root": { "position": "relative", "display": "block" },
+  "card": {
+    "position": "fixed",
+    "zIndex": "100",
+    "width": "244px",
+    "padding": "12px 16px",
+    "borderRadius": "12px",
+    "gapFromAnchor": "8px",
+    "viewportBottomMargin": "8px"
+  },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/tooltip-hover-card.candidate.png",
+    "report": "fixtures/vcp/tooltip-hover-card.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "strict-real-source-ROI-measured-non-passing"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "primitive": "SearchBlock",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/SearchBlock.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/SearchBlock.module.css"
+  },
+  "root": { "tag": "div", "class": "block", "data": "search kind or paths" },
+  "header": { "tree": "div.header > span.summary + button.copyButton?", "summary": "shown/total result count and unit" },
+  "matches": { "fileHeader": "button.fileHeader[aria-expanded]", "rows": "div.line > span.lineNumber + text", "collapse": "file group toggles its match rows" },
+  "paths": { "rows": "div.line", "order": "provider result order" },
+  "body": { "cap": "16 flattened rows default with head/tail retention", "empty": "div.empty when no rows" },
+  "copy": { "scope": "full structured result, independent of cap/collapse", "feedback": "复制成功 via useCopyFeedback" },
+  "safeLinks": "only http(s) URLs become external anchors; other URLs render plain text",
+  "states": ["matches-expanded", "matches-group-collapsed", "paths", "truncated", "empty", "capped-collapsed", "expanded", "copy-success", "unsafe-url-plain-text", "dispose"],
+  "interaction": ["file headers toggle one group", "expand reveals capped middle", "copy excludes presentation chrome", "unsafe URLs never become href anchors"],
+  "aria": ["file group button exposes aria-expanded", "expand button exposes aria-expanded and localized label", "copy is native button"],
+  "vcpDeviation": "SearchBlock is a frozen tool-detail primitive; this contract is source-only and must not alter VCP tool/chat rendering."
+}

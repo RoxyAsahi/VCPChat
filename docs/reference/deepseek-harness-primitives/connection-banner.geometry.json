@@ -1,0 +1,14 @@
+{
+  "primitive": "ConnectionBanner",
+  "source": "packages/client/ui-primitives/src/ConnectionBanner.module.css",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/ConnectionBanner.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired real-source computed-style evidence passes and strict ROI pixel evidence is recorded (non-passing); VCP production connection consumer remains absent",
+  "selectors": {
+    ".banner": { "position": "fixed", "top": "0", "left": "0", "right": "0", "zIndex": "100", "padding": "4px 12px", "fontSize": "12px", "lineHeight": "18px", "textAlign": "center", "background": "var(--dsw-alias-state-error-primary)", "color": "var(--dsw-alias-label-primary-foreground)" }
+  },
+  "root": { "position": "fixed", "top": "0", "left": "0", "right": "0", "zIndex": "100", "padding": "4px 12px", "fontSize": "12px", "lineHeight": "18px", "textAlign": "center" },
+  "tokens": ["--dsw-alias-state-error-primary", "--dsw-alias-label-primary-foreground"],
+  "states": ["connected-hidden", "reconnecting-visible", "label-update", "dispose-restore"]
+}

@@ -1,0 +1,34 @@
+{
+  "source": "packages/client/ui-primitives/src/StateDot.tsx",
+  "sourceKind": "harness-primitive-source-only",
+  "styleSource": "packages/client/ui-primitives/src/StateDot.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/StateDot.tsx",
+      "packages/client/ui-primitives/src/StateDot.module.css"
+    ],
+    "selectionRule": "Use the Harness four-state StateDot DOM/SVG and CSS animation contract; consumer status text remains outside the dot."
+  },
+  "candidateStatus": "candidate-interaction-active; paired real-source per-state strict computed-style and ROI pixel evidence recorded (non-passing); no VCP production consumer",
+  "productionConsumers": [
+    "packages/client/ui-jobs/src/client/JobListAction.tsx",
+    "packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx",
+    "packages/client/ui-workspace/src/client/rows/Rows.tsx",
+    "packages/client/ui-subagent/src/client/SubagentCatalogAction.tsx",
+    "packages/client/ui-tool/src/client/tool/components/ToolRow.tsx"
+  ],
+  "contract": {
+    "states": ["done", "warning", "ongoing", "error"],
+    "solid": "span[data-state][aria-hidden=true] with same-color 10% halo and 60% diameter core",
+    "ongoing": "svg[data-state=ongoing][viewBox='0 0 10 10'][shape-rendering=crispEdges] with eight 2x2 rect cells",
+    "phase": "eight unique negative animation delays from -1000ms to -125ms",
+    "accessibility": "always aria-hidden; consumer supplies readable status text",
+    "size": "same positive pixel size applied to solid width/height or svg width/height"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/state-dot.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}
