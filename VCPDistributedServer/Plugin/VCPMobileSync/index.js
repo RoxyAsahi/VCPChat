@@ -57,6 +57,46 @@ const {
 } = require("./config/defaults");
 
 let chokidar = null;
+// Legacy 索引中，单个 Owner 的配置损坏不应让上一次提交状态继续参与
+// Manifest。本集合仅存在于当前进程，中央 CDS 路径不会读取它。
+const unhealthyLegacyOwners = new Set();
+
+function filterLegacyManifestResults(response, dataType, logger = getLogger()) {
+  const key = Array.isArray(response?.results)
+    ? "results"
+    : Array.isArray(response?.data)
+      ? "data"
+      : null;
+  if (!key) return response;
+  const before = response[key].length;
+  response[key] = response[key].filter((item) => {
+    if (dataType === "agent" || dataType === "group") {
+      return !unhealthyLegacyOwners.has(`${dataType}\0${item.id}`);
+    }
+    if (dataType === "topic") {
+      if (item.ownerType && item.ownerId) {
+        return !unhealthyLegacyOwners.has(`${item.ownerType}\0${item.ownerId}`);
+      }
+      return true;
+    }
+    const separator = typeof item.id === "string" ? item.id.indexOf(":") : -1;
+    if (separator > 0) {
+      return !unhealthyLegacyOwners.has(
+        `${item.id.slice(0, separator)}\0${item.id.slice(separator + 1)}`,
+      );
+    }
+    return true;
+  });
+  const skipped = before - response[key].length;
+  if (skipped > 0) {
+    logger.logInfo(
+      "owner_metadata",
+      `本轮已跳过 ${skipped} 个损坏 Owner 的同步动作`,
+      "warn",
+    );
+  }
+  return response;
+}
 
 try {
   chokidar = require("chokidar");
@@ -137,7 +177,8 @@ async function registerRoutes(app, pluginConfig, projectBasePath, services = {})
           if (centralSync && payload.dataType !== "avatar") {
             return centralSync.handleSyncManifest(payload);
           }
-          return handleSyncManifest(payload);
+          const response = handleSyncManifest(payload);
+          return filterLegacyManifestResults(response, payload.dataType, logger);
         }
         case "GET_MESSAGE_MANIFEST": {
           logger.logOperation("websocket", "message", payload.type, "info", `topicId=${payload.topicId}`);
@@ -634,8 +675,21 @@ async function scanEntities(baseDir, type, db, now, appDataPath, logger) {
   try {
     entries = await fs.readdir(baseDir, { withFileTypes: true });
   } catch (error) {
-    if (error.code === "ENOENT") return { count, topicCount };
+    if (error.code === "ENOENT") {
+      for (const ownerKey of unhealthyLegacyOwners) {
+        if (ownerKey.startsWith(`${type}\0`)) unhealthyLegacyOwners.delete(ownerKey);
+      }
+      return { count, topicCount };
+    }
     throw error;
+  }
+  const physicalOwnerIds = new Set(
+    entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+  );
+  for (const ownerKey of unhealthyLegacyOwners) {
+    if (ownerKey.startsWith(`${type}\0`) && !physicalOwnerIds.has(ownerKey.slice(type.length + 1))) {
+      unhealthyLegacyOwners.delete(ownerKey);
+    }
   }
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -644,20 +698,35 @@ async function scanEntities(baseDir, type, db, now, appDataPath, logger) {
     const entityDir = path.join(baseDir, entry.name);
     const configPath = path.join(entityDir, "config.json");
 
+    let config;
+    let id;
+    let hash;
     try {
       const content = await fs.readFile(configPath, "utf-8");
-      const config = JSON.parse(content);
+      config = JSON.parse(content);
       if (!config || typeof config !== "object" || Array.isArray(config)) {
         throw new Error("Entity config root must be an object");
       }
-      const id = config.id || entry.name;
+      id = config.id || entry.name;
 
       // 索引主实体 (V2: 使用 DTO 提取以对齐默认值处理)
       const dto = type === "agent" ? extractAgentDTO(config) : extractGroupDTO(config);
-      const hash = computeDtoHash(
+      hash = computeDtoHash(
         dto,
         type === "agent" ? AGENT_SYNC_FIELDS : GROUP_SYNC_FIELDS,
       );
+    } catch (error) {
+      unhealthyLegacyOwners.add(`${type}\0${entry.name}`);
+      logger.logOperation("reconcile", type, entry.name, "error", error.message);
+      logger.logInfo(
+        "owner_metadata",
+        `已跳过损坏的 ${type} Owner：${entry.name}`,
+        "warn",
+      );
+      continue;
+    }
+
+    try {
       upsertEntityIndex(id, type, configPath, hash, now);
       count++;
 
@@ -689,11 +758,12 @@ async function scanEntities(baseDir, type, db, now, appDataPath, logger) {
           upsertEntityIndex(topic.id, "topic", configPath, topicHash, now);
         }
       }
+      unhealthyLegacyOwners.delete(`${type}\0${entry.name}`);
+      if (id !== entry.name) unhealthyLegacyOwners.delete(`${type}\0${id}`);
     } catch (error) {
-      // 条目级降级：单个实体 config 损坏不应中止整个 reconcile；
-      // 该实体缺席索引后，其磁盘历史目录会在 scanHistory 按孤儿话题跳过
-      logger.logOperation("reconcile", type, entry.name, "error", error.message);
-      continue;
+      // 事务/索引错误不能伪装成配置损坏；交给上层中止本轮 reconcile，
+      // 避免数据库部分提交后继续对外提供不一致 Manifest。
+      throw error;
     }
   }
   return { count, topicCount };
@@ -968,13 +1038,31 @@ async function ingestConfigToDb(configPath, type, appDataPath) {
   if (!db) return;
 
   const logger = getLogger();
+  const ownerId = path.basename(path.dirname(configPath));
+  const ownerKey = `${type}\0${ownerId}`;
 
+  let config;
+  let id;
   try {
     const content = await fs.readFile(configPath, "utf-8");
-    const config = JSON.parse(content);
+    config = JSON.parse(content);
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
+      throw new Error("Entity config root must be an object");
+    }
+    id = config.id || ownerId;
+  } catch (error) {
+    unhealthyLegacyOwners.add(ownerKey);
+    logger.logOperation("watcher", type, configPath, "error", error.message);
+    logger.logInfo(
+      "owner_metadata",
+      `已跳过损坏的 ${type} Owner：${ownerId}`,
+      "warn",
+    );
+    return;
+  }
+
+  try {
     const now = Date.now();
-    const id = config.id || path.basename(path.dirname(configPath));
-    const ownerId = path.basename(path.dirname(configPath));
     const topicsDir = path.join(appDataPath, "UserData", ownerId, "topics");
     let topicEntries = [];
     try {
@@ -1024,8 +1112,11 @@ async function ingestConfigToDb(configPath, type, appDataPath) {
     computeAggregatedHashes(db, logger);
 
     logger.logOperation("watcher", type, id, "success", `hash updated, topics=${topicLen}`);
+    unhealthyLegacyOwners.delete(ownerKey);
+    if (id !== ownerId) unhealthyLegacyOwners.delete(`${type}\0${id}`);
   } catch (e) {
     logger.logOperation("watcher", type, configPath, "error", e.message);
+    throw e;
   }
 }
 

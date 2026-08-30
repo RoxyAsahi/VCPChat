@@ -46,11 +46,12 @@ const fakeLoggerModule = {
   resetLogger: () => silentLogger,
 };
 
-function loadSqliteModules({ captureOnMessage = null } = {}) {
+function loadSqliteModules({ captureOnMessage = null, disableWatcher = false } = {}) {
   const modulePaths = [
     DB_PATH,
     ENTITY_PATH,
     INDEX_PATH,
+    path.join(path.dirname(INDEX_PATH), "sync", "manifest.js"),
     path.join(path.dirname(ENTITY_PATH), "central.js"),
   ];
   const savedModules = new Map(
@@ -79,14 +80,16 @@ function loadSqliteModules({ captureOnMessage = null } = {}) {
     if (request === "./transport/routes") {
       return { registerRoutes() {} };
     }
+    if (disableWatcher && request === "chokidar") return null;
     return originalLoad.call(this, request, parent, isMain);
   };
 
   try {
     const database = require(DB_PATH);
     const entity = require(ENTITY_PATH);
+    const manifest = require(path.join(path.dirname(INDEX_PATH), "sync", "manifest.js"));
     const index = captureOnMessage ? require(INDEX_PATH) : null;
-    return { database, entity, index };
+    return { database, entity, index, manifest };
   } finally {
     Module._load = originalLoad;
     for (const modulePath of modulePaths) {
@@ -928,6 +931,72 @@ test("中央 Owner Phase 在 ACK 前刷新 CDS 提交视图", async (t) => {
     phase: "topic_metadata",
   });
   assert.equal(reconcileCalls, 2);
+});
+
+test("legacy 损坏 Owner 不参与 Manifest，修复后重扫恢复", async (t) => {
+  let onMessage = null;
+  const { database, index } = loadSqliteModules({
+    disableWatcher: true,
+    captureOnMessage(handler) {
+      onMessage = handler;
+    },
+  });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-sync-unhealthy-owner-"));
+  const projectBasePath = path.join(directory, "VCPDistributedServer");
+  const appDataPath = path.join(directory, "AppData");
+  const ownerId = "owner-damaged";
+  const configPath = path.join(appDataPath, "Agents", ownerId, "config.json");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, "{broken");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const originalSetInterval = global.setInterval;
+  global.setInterval = () => ({ unref() {} });
+  try {
+    await index.registerRoutes(
+      { use() {} },
+      {
+        MobileSyncToken: "legacy-owner-test-token",
+        MobileSyncPort: "15974",
+        MobileSyncUseCentralIndex: false,
+      },
+      projectBasePath,
+    );
+  } finally {
+    global.setInterval = originalSetInterval;
+  }
+  assert.equal(typeof onMessage, "function");
+  // registerRoutes 已完成损坏配置扫描；切换到内存库仅隔离测试数据，
+  // unhealthy owner 标记仍保留在当前模块实例。
+  const db = database.initDb(":memory:");
+  t.after(() => db.close());
+
+  const manifestItem = {
+    id: ownerId,
+    hash: "a".repeat(64),
+    configHash: "a".repeat(64),
+    contentHash: "",
+    ts: 100,
+  };
+  assert.deepEqual(
+    (await onMessage({
+      type: "SYNC_MANIFEST",
+      dataType: "agent",
+      phase: 1,
+      data: [manifestItem],
+    })).data,
+    [],
+  );
+
+  fs.writeFileSync(configPath, JSON.stringify({ id: ownerId, name: "Recovered" }));
+  await index.ingestConfigToDb(configPath, "agent", appDataPath);
+  const recovered = await onMessage({
+    type: "SYNC_MANIFEST",
+    dataType: "agent",
+    phase: 1,
+    data: [{ ...manifestItem, ts: 1000 }],
+  });
+  assert.equal(recovered.data.length, 1);
+  assert.equal(recovered.data[0].action, "PULL");
 });
 
 test("中央 Topic 删除错误保持 topic_metadata 阶段和失败 Topic", async (t) => {

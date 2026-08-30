@@ -134,14 +134,14 @@
 | `074da2cd` CDS 刷新时序 | `0b48d186` | `node --test tests/mobile-sync-sqlite-delete.test.js`（18/18） | 局部适配；在 owner_metadata Phase ACK 前等待一次 reconcile，保留本地阶段 owner |
 | `c54f7cb3` 修复设置保存导入 | `2ab75855` | 设置桥接与全局保存回归测试通过 | 直接吸收；补齐消息布局函数导入，未改变设置状态或持久化键 |
 | `5b0114d3` 修复 CI YAML | `adfc9684` | `git diff --check` | 直接吸收；仅调整工作流命令块格式 |
+| `30c2f3fc` 加固瞬态失败恢复 | `7ed9f97a` | `node --test tests/mobile-sync-*.test.js`（96/96，1 skip）；`cargo test`（56/56） | 局部适配；统一 `SYNC_SNAPSHOT_STALE`、CAS/物理文件校验和流式错误终止，保留本地索引与 writer 生命周期 |
+| `52df169a` 隔离损坏 legacy Owner | 待提交 | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
 
 ### 暂缓记录
 
 | 提交 | 阻断条件 | 最小下一步 |
 | --- | --- | --- |
 | `c8c3e25b` 保留墓碑并暴露 Owner 损坏 | 会删除本地已验证的墓碑保留/损坏降级逻辑，且与当前 CDS 存储语义相反 | 暂不吸收；先以现有 56 个 Rust 测试和 MobileSync 93 项测试为基线，若上游有独立行为需求再局部移植 |
-| `52df169a` 损坏 legacy Owner 隔离 | 依赖上游 owner-state 结构，不能直接套用当前 entity_index | 手工移植 unhealthy owner 集合、manifest 过滤和成功清理 |
-| `30c2f3fc` 快照过期错误归因 | 需适配当前统一错误 envelope | 已完成局部适配；提取 `SYNC_SNAPSHOT_STALE` 行为并补协议、CAS、流式终止回归测试 |
 | `6364f03b` MiMo 音色设计模型 | 当前 `SovitsTTS` 仍是本地/旧网络模型结构，直接套用会冲突 | 暂缓；先定义网络 TTS capability，再补 voicedesign 请求和密钥/缓存测试 |
 | `f92f4423` TTS 播放速度透传 | 与本地 TTS Surface owner、音频队列和播放时钟实现交集较高 | 暂缓；在现有 owner 中局部接入 playbackRate，并补 Electron 音频队列回归 |
 | `5ed0a888` 网络 TTS 供应商切换 | 同时改动设置桥接、TTS 服务、消息菜单和 Surface 生命周期 | 暂缓；拆分供应商请求、设置迁移和播放 Surface 三个独立变更 |
@@ -156,7 +156,7 @@
 ## 当前状态
 
 已完成：建立 `08511fa5` 稳定基线，恢复设置页行布局、字号/数值步进、字体选择、自动保存兼容和 portal 层级。  
-进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97` 以及 `30c2f3fc` 的可验证子集；其余历史差异继续逐项审计。
+进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97`、`30c2f3fc` 和 `52df169a` 的可验证子集；其余历史差异继续逐项审计。
 未完成：`c8c3e25b` 及依赖协议/数据库迁移的提交仍暂缓；语音、TTS、Electron/依赖和设置 UI 专项适配及跨平台证据仍需按受影响范围补齐。
 
 ### `30c2f3fc` 局部适配记录
