@@ -130,7 +130,7 @@
 | `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续抽取锁与快路径思路，映射到本地表后再实现 |
 | `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续局部适配；先不引入新端点 |
 
-`52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
+`52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `a8e13592` 只是 Unix `fs::File` 作用域修复，而当前源码已使用统一 `fs` 模块且不存在对应旧导入，因此确认无代码变更即可视为已覆盖；`61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
 
 ### 已吸收记录
 
@@ -155,6 +155,7 @@
 | `006f2260` 恢复 Topic 时间线 | `a8e0237b` | `node --test tests/mobile-sync-sqlite-delete.test.js`（20/20）；`cargo test`（57/57） | 局部适配；恢复 Topic 使用 ID/mtime 时间，恢复项前置但保留 default 首位与用户配置顺序 |
 | `e1405a4c` 保留桌面消息字段 | `252bc539` | `node --test tests/mobile-sync-streaming.test.js`（14/14） | 局部适配；移动推送只 patch 可移植字段，保留桌面扩展和附件本地路径，未改协议 |
 | `8d7f8e7e` 规范 memberTags 输入 | `6444c584` | `node --test tests/mobile-sync-failure-contract.test.js`（19/19） | 局部适配；直接采用上游非空 Unicode 键/字符串值校验，暂不替换会改变 Wire 1.2 指纹的哈希排序算法 |
+| `a8e13592` Unix 文件同步作用域 | 无需提交 | `cargo test`（57/57） | 当前源码已使用 `std::fs` 统一作用域，不存在上游旧导入；确认行为等价后不制造空提交 |
 
 ### 暂缓记录
 
