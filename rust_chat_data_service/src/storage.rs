@@ -137,9 +137,22 @@ CREATE TABLE IF NOT EXISTS service_meta (
 
 #[derive(Debug, Clone)]
 pub struct SourceMetadata {
+    pub owner_type: String,
+    pub owner_id: String,
+    pub topic_id: String,
     pub mtime_ns: i64,
     pub file_size: i64,
+    pub content_hash: Option<String>,
     pub status: String,
+    pub last_error: Option<String>,
+}
+
+impl SourceMetadata {
+    pub fn matches_topic(&self, key: &TopicKey) -> bool {
+        self.owner_type == key.owner_type.as_str()
+            && self.owner_id == key.owner_id
+            && self.topic_id == key.topic_id
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -493,14 +506,20 @@ impl Database {
         let connection = self.connection.lock();
         connection
             .query_row(
-                "SELECT mtime_ns, file_size, status
+                "SELECT owner_type, owner_id, topic_id, mtime_ns, file_size,
+                        content_hash, status, last_error
                  FROM history_sources WHERE source_path=?1",
                 [source_path.to_string_lossy().as_ref()],
                 |row| {
                     Ok(SourceMetadata {
-                        mtime_ns: row.get(0)?,
-                        file_size: row.get(1)?,
-                        status: row.get(2)?,
+                        owner_type: row.get(0)?,
+                        owner_id: row.get(1)?,
+                        topic_id: row.get(2)?,
+                        mtime_ns: row.get(3)?,
+                        file_size: row.get(4)?,
+                        content_hash: row.get(5)?,
+                        status: row.get(6)?,
+                        last_error: row.get(7)?,
                     })
                 },
             )
@@ -863,13 +882,15 @@ impl Database {
         if previous_hash.as_deref() == Some(content_hash) {
             transaction.execute(
                 "UPDATE history_sources SET
-                    mtime_ns=?2, file_size=?3, indexed_at=?4, status='ready', last_error=NULL
+                    mtime_ns=?2, file_size=?3, content_hash=?5,
+                    indexed_at=?4, status='ready', last_error=NULL
                  WHERE source_path=?1",
                 params![
                     source.source_path.to_string_lossy(),
                     mtime_ns,
                     file_size,
-                    now
+                    now,
+                    content_hash,
                 ],
             )?;
             let revision = transaction

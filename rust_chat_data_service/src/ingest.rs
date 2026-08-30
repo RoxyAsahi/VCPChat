@@ -444,9 +444,23 @@ impl Reconciler {
         let file_size = metadata.len().min(i64::MAX as u64) as i64;
 
         if let Some(previous) = self.database.source_metadata(&source.source_path)? {
-            if previous.mtime_ns == mtime_ns
+            anyhow::ensure!(
+                previous.matches_topic(&source.key),
+                "history source identity conflict at {}: stored={}/{}/{}, expected={}/{}/{}",
+                source.source_path.display(),
+                previous.owner_type,
+                previous.owner_id,
+                previous.topic_id,
+                source.key.owner_type.as_str(),
+                source.key.owner_id,
+                source.key.topic_id,
+            );
+            if mtime_ns != 0
+                && previous.mtime_ns == mtime_ns
                 && previous.file_size == file_size
                 && previous.status == "ready"
+                && previous.last_error.is_none()
+                && is_internal_sha256(previous.content_hash.as_deref())
             {
                 return Ok(Some(IngestCommit {
                     topic: source.key.clone(),
@@ -473,6 +487,15 @@ impl Reconciler {
             )
             .map(Some)
     }
+}
+
+fn is_internal_sha256(value: Option<&str>) -> bool {
+    value.is_some_and(|hash| {
+        hash.len() == 64
+            && hash
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
 }
 
 fn topic_timestamp_from_id(topic_id: &str) -> Option<i64> {
@@ -1551,6 +1574,118 @@ mod tests {
                 .status,
             "invalid"
         );
+    }
+
+    #[tokio::test]
+    async fn ready_source_without_valid_hash_is_rechecked_and_repaired() {
+        let (_temp, config, database, reconciler) = fixture();
+        write_owner(
+            &config,
+            OwnerType::Agent,
+            "agent_source_hash_repair",
+            "Source Hash Repair",
+            &["topic_1"],
+        );
+        write_history(
+            &config,
+            "agent_source_hash_repair",
+            "topic_1",
+            serde_json::json!([
+                {"id":"message_source_hash", "role":"user", "content":"stable"}
+            ]),
+        );
+        reconciler.reconcile().await.expect("initial reconcile");
+
+        let history_path = config
+            .user_data_dir
+            .join("agent_source_hash_repair/topics/topic_1/history.json");
+        {
+            let connection = database.connection.lock();
+            connection
+                .execute(
+                    "UPDATE history_sources SET content_hash=NULL WHERE source_path=?1",
+                    [&history_path.to_string_lossy()],
+                )
+                .expect("clear source hash");
+        }
+
+        let repaired = reconciler.reconcile().await.expect("repair source hash");
+        assert_eq!(repaired.files_invalid, 0);
+        assert_eq!(repaired.files_skipped, 1);
+        let metadata = database
+            .source_metadata(&history_path)
+            .expect("load repaired source metadata")
+            .expect("source metadata exists");
+        assert_eq!(metadata.status, "ready");
+        assert!(metadata.content_hash.as_deref().is_some_and(|hash| {
+            hash.len() == 64
+                && hash
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        }));
+        assert_eq!(metadata.last_error, None);
+    }
+
+    #[tokio::test]
+    async fn history_source_identity_mismatch_is_rejected() {
+        let (_temp, config, database, reconciler) = fixture();
+        write_owner(
+            &config,
+            OwnerType::Agent,
+            "agent_source_identity",
+            "Source Identity",
+            &["topic_1"],
+        );
+        write_history(
+            &config,
+            "agent_source_identity",
+            "topic_1",
+            serde_json::json!([
+                {"id":"message_source_identity", "role":"user", "content":"stable"}
+            ]),
+        );
+        write_owner(
+            &config,
+            OwnerType::Agent,
+            "agent_source_identity_other",
+            "Source Identity Other",
+            &["topic_1"],
+        );
+        write_history(
+            &config,
+            "agent_source_identity_other",
+            "topic_1",
+            serde_json::json!([
+                {"id":"message_source_identity_other", "role":"user", "content":"other"}
+            ]),
+        );
+        reconciler.reconcile().await.expect("initial reconcile");
+
+        let history_path = config
+            .user_data_dir
+            .join("agent_source_identity/topics/topic_1/history.json");
+        {
+            let connection = database.connection.lock();
+            connection
+                .execute(
+                    "UPDATE history_sources SET owner_id='agent_source_identity_other'
+                     WHERE source_path=?1",
+                    [&history_path.to_string_lossy()],
+                )
+                .expect("poison source identity");
+        }
+
+        let result = reconciler.reconcile().await.expect("reconcile reports invalid source");
+        assert_eq!(result.files_invalid, 1);
+        let metadata = database
+            .source_metadata(&history_path)
+            .expect("load invalid source metadata")
+            .expect("source metadata exists");
+        assert_eq!(metadata.status, "invalid");
+        assert!(metadata
+            .last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("identity conflict")));
     }
 
     #[tokio::test]
