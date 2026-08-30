@@ -107,7 +107,7 @@
 | 03abbcb6 | 工程持续推进 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
 | f58a7b9d | 工程持续推进 | 语音输入/辅助窗口；IPC/生命周期以上游 | 有（main.html, modules/global-settings-manager.js, modules/renderer/mainChatSettingsPresentationOwner.js 等） | 最终树以上游为准；共享文件仅保留 presentation | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
 | b9e2b573 | 持续迭代升级 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
-| 8fecce4b | 加速工程推进 | 语音输入/辅助窗口；IPC/生命周期以上游 | 有（modules/chat/singleChatRequestOrchestrator.js, modules/chatManager.js, modules/tavernRulesEngine.js 等） | 最终树以上游为准；共享文件仅保留 presentation | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
+| 8fecce4b | 加速工程推进 | 聊天请求编排、辅助语音窗口；IPC/生命周期以上游 | 有（modules/chat/singleChatRequestOrchestrator.js, modules/chatManager.js, modules/tavernRulesEngine.js 等） | 局部适配已完成：恢复上游单聊请求编排器及其回归测试；`chatManager` 继续保留本地 history/stream owner，未复制第二份状态 | `node --test tests/single-chat-request-orchestrator.test.js`（4/4）；`guard:chat-kernel-consumers` |
 | accc88e5 | 狂暴工程迭代收尾 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
 | 3eae725a | 加固 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
 | 4df8f4fa | 加固 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
@@ -118,6 +118,7 @@
 - 业务整域文件相对 origin/main 已无差异；设置/UI 和本地设计系统差异集中在 presentation 层。
 - 已运行的 MobileSync/CDS、UIUX、设置保存和聊天核心门禁见 upstream-priority-integration-audit.md。
 - 语音运行时启动证据仍受 macOS 缺少 darwin-arm64 二进制限制；Windows 需在对应环境补跑。
+- `8fecce4b` 遗漏的 `singleChatRequestOrchestrator` 运行时代码与测试已恢复；VoiceChat 的模块加载依赖现已闭合。
 
 ## 2026-08-31 Select 分组适配补充
 
