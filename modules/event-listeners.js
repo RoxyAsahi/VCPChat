@@ -556,7 +556,7 @@ export function setupEventListeners(deps) {
         }
 
         if (!modal.dataset.globalSettingsControlsBound) {
-            setupColorSyncListeners();
+            if (!window.VCPUIUX?.mountColorPair) setupColorSyncListeners();
             setupRustAssistantConfigListeners();
             setupGlobalSettingsNavigation();
             modal.dataset.globalSettingsControlsBound = 'true';
@@ -755,6 +755,9 @@ export function setupEventListeners(deps) {
 
     // Rust助手配置UI交互处理
     async function setupRustAssistantConfigListeners() {
+        // The typed Rust section owner is authoritative when mounted. Classic
+        // listeners remain only as a compatibility fallback for legacy pages.
+        if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;
         // 首先加载当前的Rust配置并填充表单
         await loadAndPopulateRustConfig();
 
