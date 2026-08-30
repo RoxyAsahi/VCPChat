@@ -2,6 +2,7 @@
 
 const fs = require("fs").promises;
 const path = require("path");
+const { pathToFileURL } = require("node:url");
 
 const { createDesktopAttachment } = require("../config/defaults");
 const { getExtensionFromType } = require("../utils/mime");
@@ -37,6 +38,90 @@ async function resolveAttachmentPath(db, hash, allowedRoot = null) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
+}
+
+const MOBILE_MESSAGE_PATCH_FIELDS = [
+  "id", "role", "name", "content", "timestamp", "updatedAt",
+  "agentId", "groupId", "topicId", "isGroupMessage", "finishReason",
+];
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function desktopAttachmentHash(attachment) {
+  if (!isRecord(attachment)) return null;
+  const top = typeof attachment.hash === "string" ? attachment.hash : null;
+  const nested = isRecord(attachment._fileManagerData) &&
+    typeof attachment._fileManagerData.hash === "string"
+    ? attachment._fileManagerData.hash
+    : null;
+  const valid = (value) => typeof value === "string" && /^[a-f0-9]{64}$/i.test(value);
+  if (valid(top) && valid(nested) && top.toLowerCase() !== nested.toLowerCase()) return null;
+  const hash = valid(top) ? top : valid(nested) ? nested : null;
+  return hash?.toLowerCase() ?? null;
+}
+
+function mergeDesktopAttachment(existing, incoming) {
+  if (!isRecord(existing) || !isRecord(incoming)) return incoming;
+  const merged = { ...existing, ...incoming };
+  if (incoming.src === "" && typeof existing.src === "string" && existing.src.length > 0) {
+    merged.src = existing.src;
+  }
+  if (
+    incoming.internalPath === "" &&
+    typeof existing.internalPath === "string" &&
+    existing.internalPath.length > 0
+  ) {
+    merged.internalPath = existing.internalPath;
+  }
+  const existingData = isRecord(existing._fileManagerData) ? existing._fileManagerData : null;
+  const incomingData = isRecord(incoming._fileManagerData) ? incoming._fileManagerData : null;
+  if (existingData || incomingData) {
+    merged._fileManagerData = { ...(existingData || {}), ...(incomingData || {}) };
+    if (incomingData?.internalPath === "" && typeof existingData?.internalPath === "string" && existingData.internalPath.length > 0) {
+      merged._fileManagerData.internalPath = existingData.internalPath;
+    }
+  }
+  return merged;
+}
+
+function mergeMobileAttachments(existing, incoming) {
+  const existingByHash = new Map();
+  for (const attachment of Array.isArray(existing) ? existing : []) {
+    const hash = desktopAttachmentHash(attachment);
+    if (!hash) continue;
+    const matches = existingByHash.get(hash) || [];
+    matches.push(attachment);
+    existingByHash.set(hash, matches);
+  }
+  return incoming.map((attachment) => {
+    const hash = desktopAttachmentHash(attachment);
+    const existingAttachment = hash ? existingByHash.get(hash)?.shift() : null;
+    return existingAttachment ? mergeDesktopAttachment(existingAttachment, attachment) : attachment;
+  });
+}
+
+/** Mobile Push carries portable fields; preserve Desktop-only message extensions. */
+function mergeMobileMessage(existing, incoming) {
+  if (!isRecord(existing) || !isRecord(incoming)) return incoming;
+  const merged = { ...existing };
+  for (const key of MOBILE_MESSAGE_PATCH_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(incoming, key) && incoming[key] !== null) {
+      merged[key] = incoming[key];
+    } else {
+      delete merged[key];
+    }
+  }
+  if (typeof incoming.avatarUrl === "string" && incoming.avatarUrl.length > 0) {
+    merged.avatarUrl = incoming.avatarUrl;
+  }
+  if (Array.isArray(incoming.attachments) && incoming.attachments.length > 0) {
+    merged.attachments = mergeMobileAttachments(existing.attachments, incoming.attachments);
+  } else {
+    delete merged.attachments;
+  }
+  return merged;
 }
 
 async function projectMobileMessage({
@@ -110,7 +195,7 @@ async function projectMobileMessage({
       desktop.topicId = canonical.topicId || topicId;
     }
     if (agentId) {
-      desktop.avatarUrl = `file://${path.join(appDataPath, "Agents", agentId, "avatar.png")}`;
+      desktop.avatarUrl = pathToFileURL(path.join(appDataPath, "Agents", agentId, "avatar.png")).href;
     }
     desktop.avatarColor = canonical.avatarColor || "rgb(128, 128, 128)";
   }
@@ -174,6 +259,7 @@ async function projectMobileTopic({
 }
 
 module.exports = {
+  mergeMobileMessage,
   projectMobileMessage,
   projectMobileTopic,
   resolveAttachmentPath,

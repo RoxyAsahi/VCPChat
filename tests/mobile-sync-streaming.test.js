@@ -17,6 +17,9 @@ const {
   uploadAttachmentStream,
 } = require("../VCPDistributedServer/Plugin/VCPMobileSync/sync/message");
 const {
+  mergeMobileMessage,
+} = require("../VCPDistributedServer/Plugin/VCPMobileSync/sync/projection");
+const {
   NdjsonWriter,
   readNdjsonLines,
 } = require("../VCPDistributedServer/Plugin/VCPMobileSync/transport/ndjson");
@@ -77,6 +80,35 @@ function assertWriterListenersClean(response) {
   assert.equal(response.listenerCount("close"), 0);
   assert.equal(response.listenerCount("error"), 0);
 }
+
+test("Mobile 推送仅更新可移植字段并保留桌面扩展", () => {
+  const hash = "a".repeat(64);
+  const existing = {
+    id: "message-1",
+    role: "assistant",
+    content: "旧内容",
+    timestamp: 10,
+    model: "desktop-model",
+    context: { traceId: "desktop" },
+    avatarColor: "rgb(1, 2, 3)",
+    attachments: [{ hash, src: "file:///desktop/path.txt", internalPath: "/desktop/path.txt" }],
+  };
+  const incoming = {
+    id: "message-1",
+    role: "assistant",
+    content: "新内容",
+    timestamp: 20,
+    updatedAt: 20,
+    attachments: [{ hash, src: "", internalPath: "" }],
+  };
+  const merged = mergeMobileMessage(existing, incoming);
+  assert.equal(merged.content, "新内容");
+  assert.equal(merged.model, "desktop-model");
+  assert.deepEqual(merged.context, { traceId: "desktop" });
+  assert.equal(merged.avatarColor, "rgb(1, 2, 3)");
+  assert.equal(merged.attachments[0].src, "file:///desktop/path.txt");
+  assert.equal(merged.attachments[0].internalPath, "/desktop/path.txt");
+});
 
 test("中央 pull 逐帧 canonicalize 并遵守响应背压", async () => {
   const response = new FakeResponse({ blockFirstWrite: true });

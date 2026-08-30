@@ -26,7 +26,7 @@ const { getLogger } = require("../core/logger");
 const { acquireLock } = require("../utils/lock");
 const { parseJsonWithoutDuplicateKeys } = require("../protocol");
 const { canonicalizeHistory } = require("./canonical");
-const { projectMobileTopic } = require("./projection");
+const { mergeMobileMessage, projectMobileTopic } = require("./projection");
 const {
   createHttpErrorBody,
   createStreamErrorFrame,
@@ -387,7 +387,11 @@ async function doUploadSingleTopic(safeTopicId, messages, appDataPath, row) {
     });
 
     for (const desktopMessage of projected.messages) {
-      msgMap.set(desktopMessage.id, desktopMessage);
+      const existing = msgMap.get(desktopMessage.id);
+      msgMap.set(
+        desktopMessage.id,
+        existing ? mergeMobileMessage(existing, desktopMessage) : desktopMessage,
+      );
     }
 
     const finalHistory = Array.from(msgMap.values()).sort(
