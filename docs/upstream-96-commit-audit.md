@@ -3,7 +3,7 @@
 更新日期：2026-08-31  
 上游基线：origin/main=4df8f4fa  
 本地稳定对照：08511fa5  
-当前收口提交：cca48763
+当前收口提交：5c3580cf
 
 ## 使用说明
 
@@ -116,6 +116,7 @@
 
 - 96 个提交均已纳入审计集合；其中无独立文件的合并节点均标记为不单独 cherry-pick。
 - 业务整域文件相对 origin/main 已无差异；设置/UI 和本地设计系统差异集中在 presentation 层。
+- 当前最终树包含 `origin/main` 的全部跟踪文件；仅 `styles/setting/settings-agent-card-shell.css` 与 `styles/setting/settings-global-modal.css` 两个旧设置样式按本地重构合同有意删除，并由 dead-stylesheet 门禁确认无消费者。
 - 已运行的 MobileSync/CDS、UIUX、设置保存和聊天核心门禁见 upstream-priority-integration-audit.md。
 - 语音运行时启动证据仍受 macOS 缺少 darwin-arm64 二进制限制；Windows 需在对应环境补跑。
 - `8fecce4b` 遗漏的 `singleChatRequestOrchestrator` 运行时代码与测试已恢复；VoiceChat 的模块加载依赖现已闭合。
