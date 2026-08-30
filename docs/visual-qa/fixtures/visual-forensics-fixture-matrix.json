@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Runtime fixture map for real Electron visual-forensics evidence",
+  "sourceSurface": "ui-component-library",
+  "viewports": ["800x600", "1280x800", "1680x1000"],
+  "themes": ["light", "dark"],
+  "fixtures": [
+    {
+      "id": "showcase-initial",
+      "trigger": "openInternalApp('ui-component-library')",
+      "screenshotSuffix": "initial",
+      "selectors": [".vcp-ui-showcase-root", ".vcp-harness-primitive-lab"]
+    },
+    {
+      "id": "showcase-reopen",
+      "trigger": "closeView('app:ui-component-library'); openInternalApp('ui-component-library')",
+      "screenshotSuffix": "reopen",
+      "selectors": [".vcp-ui-showcase-root"]
+    },
+    {
+      "id": "showcase-settings-user-identity",
+      "trigger": "openModal('globalSettingsModal')",
+      "screenshotSuffix": "settings",
+      "selectors": ["#globalSettingsModal", ".settings-section.active", ".vcp-settings-row"]
+    },
+    {
+      "id": "showcase-settings-row-context",
+      "trigger": "compare(showcase control, real Settings row control)",
+      "screenshotSuffix": "settings",
+      "evidenceKeys": ["settingsContext.contextSample"],
+      "selectors": [".vcp-harness-primitive-lab input", "#globalSettingsModal #userName"]
+    },
+    {
+      "id": "showcase-loading-error",
+      "trigger": "click('模拟加载 1.2 秒'); click('error'); click('loading')",
+      "screenshotSuffix": "states",
+      "selectors": [".vcp-ui-loading-layer", ".vcp-ui-async-boundary[data-status=error]", ".vcp-ui-async-boundary[data-status=loading]"]
+    },
+    {
+      "id": "showcase-global-loading-visible",
+      "trigger": "click('模拟加载 1.2 秒'); capture before cleanup",
+      "screenshotSuffix": "loading",
+      "selectors": [".vcp-ui-loading-layer:not([hidden])"]
+    },
+    {
+      "id": "showcase-error-visible",
+      "trigger": "click('error'); scroll state surface into viewport",
+      "screenshotSuffix": "error",
+      "selectors": [".vcp-ui-async-boundary[data-status=error]", "[role=alert]"]
+    },
+    {
+      "id": "showcase-async-loading-visible",
+      "trigger": "click('loading'); scroll state surface into viewport",
+      "screenshotSuffix": "async-loading",
+      "selectors": [".vcp-ui-async-boundary[data-status=loading]", ".vcp-ui-skeleton"]
+    },
+    {
+      "id": "showcase-disabled-control",
+      "trigger": "scrollIntoView(first visible disabled control)",
+      "screenshotSuffix": "disabled",
+      "selectors": [":disabled", ".is-disabled", "[aria-disabled=true]"]
+    },
+    {
+      "id": "showcase-selected-control",
+      "trigger": "scrollIntoView(first visible selected control)",
+      "screenshotSuffix": "selected",
+      "selectors": [".is-selected", "[aria-selected=true]", "[data-selected=true]", "[aria-checked=true]"]
+    },
+    {
+      "id": "showcase-menu-modal-tooltip",
+      "trigger": "click('View options'); click('Open modal'); hover('Hover for details')",
+      "screenshotSuffix": null,
+      "evidenceKeys": ["overlays.menu", "overlays.modal", "overlays.tooltip", "overlays.cdpCascade"],
+      "selectors": ["[role=menu]", ".vcp-harness-modal-root [role=dialog]", "[role=tooltip]"]
+    },
+    {
+      "id": "showcase-menu-overlay-pixel",
+      "trigger": "click('View options')",
+      "screenshotSuffix": "menu",
+      "selectors": [".vcp-harness-menu-list[role=menu]"]
+    },
+    {
+      "id": "showcase-modal-overlay-pixel",
+      "trigger": "click('Open modal')",
+      "screenshotSuffix": "modal",
+      "selectors": [".vcp-harness-modal-root [role=dialog]"]
+    },
+    {
+      "id": "showcase-tooltip-overlay-pixel",
+      "trigger": "hover('Hover for details')",
+      "screenshotSuffix": "tooltip",
+      "selectors": ["[role=tooltip]", ".vcp-harness-tooltip-bubble"]
+    },
+    {
+      "id": "showcase-resize-restore",
+      "trigger": "resize(narrow); resize(original)",
+      "screenshotSuffix": "restored",
+      "selectors": [".vcp-ui-showcase-shell"]
+    },
+    {
+      "id": "showcase-scroll-owner",
+      "trigger": "scroll(owner, bottom)",
+      "screenshotSuffix": "scrolled",
+      "selectors": [".vcp-ui-showcase-shell", ".vcp-ui-page-shell-content"]
+    },
+    {
+      "id": "showcase-narrow-resize",
+      "trigger": "resize(width - 240)",
+      "screenshotSuffix": "narrow",
+      "selectors": [".vcp-ui-showcase-shell"]
+    },
+    {
+      "id": "showcase-narrow-tooltip-portal",
+      "trigger": "resize(width - 240); scroll tooltip trigger into viewport; hover('Hover for details')",
+      "screenshotSuffix": "narrow-tooltip",
+      "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
+    },
+    {
+      "id": "showcase-restored-tooltip-portal",
+      "trigger": "resize(width - 240); resize(original); scroll tooltip trigger into viewport; hover('Hover for details')",
+      "screenshotSuffix": "restored-tooltip",
+      "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
+    },
+    {
+      "id": "showcase-narrow-menu-overlay",
+      "trigger": "resize(width - 240); scroll trigger into viewport; click('View options')",
+      "screenshotSuffix": "narrow-menu",
+      "selectors": [".vcp-harness-menu-list[role=menu]"]
+    },
+    {
+      "id": "showcase-narrow-modal-overlay",
+      "trigger": "resize(width - 240); scroll trigger into viewport; click('Open modal')",
+      "screenshotSuffix": "narrow-modal",
+      "selectors": [".vcp-harness-modal-root [role=dialog]"]
+    },
+    {
+      "id": "showcase-hover",
+      "trigger": "hover(real element handle); capture viewport-visible :hover state",
+      "screenshotSuffix": "hover",
+      "selectors": [".vcp-harness-primitive-lab button"]
+    },
+    {
+      "id": "showcase-focus-visible",
+      "trigger": "keyboard Tab/Shift+Tab focus; capture viewport-visible :focus-visible state",
+      "screenshotSuffix": "focus",
+      "selectors": [".vcp-harness-primitive-lab button", ":focus-visible"]
+    }
+  ]
+}
