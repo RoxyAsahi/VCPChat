@@ -3,7 +3,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use anyhow::{Context, Result};
@@ -309,7 +308,6 @@ pub struct MessagesPushResult {
     pub changed: bool,
     pub revision: Option<i64>,
     pub message_count: usize,
-    pub needed_attachment_hashes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
@@ -318,30 +316,6 @@ pub struct MessagesPushResult {
 #[serde(rename_all = "camelCase")]
 pub struct MessagesPushResponse {
     pub results: Vec<MessagesPushResult>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangeRecord {
-    pub sequence: i64,
-    pub entity_type: String,
-    pub operation: String,
-    pub owner_type: Option<OwnerType>,
-    pub owner_id: Option<String>,
-    pub topic_id: Option<String>,
-    pub entity_id: Option<String>,
-    pub revision: i64,
-    pub origin: String,
-    pub changed_at: i64,
-    pub payload: Option<Value>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangeFeedResponse {
-    pub changes: Vec<ChangeRecord>,
-    pub next_sequence: i64,
-    pub has_more: bool,
 }
 
 const MAX_SYNC_ITEMS: usize = 10_000;
@@ -1069,7 +1043,6 @@ pub async fn push_messages(
                 changed: commit.changed,
                 revision: Some(commit.revision),
                 message_count: commit.message_count,
-                needed_attachment_hashes: Vec::new(),
                 error: None,
             },
             Err(error) => MessagesPushResult {
@@ -1078,7 +1051,6 @@ pub async fn push_messages(
                 changed: false,
                 revision: None,
                 message_count: 0,
-                needed_attachment_hashes: Vec::new(),
                 error: Some(format!("{error:#}")),
             },
         });
@@ -1208,50 +1180,6 @@ async fn push_topic(reconciler: &Reconciler, topic: &MessagesPushTopic) -> Resul
         commit.revision = revision;
     }
     Ok(commit)
-}
-
-pub fn changes(database: &Database, after: i64, limit: usize) -> Result<ChangeFeedResponse> {
-    let fetch_limit = limit.clamp(1, 1000);
-    let connection = database.connection.lock();
-    let mut statement = connection.prepare(
-        "SELECT sequence, entity_type, operation, owner_type, owner_id, topic_id,
-                entity_id, revision, origin, changed_at, payload_json
-         FROM change_log WHERE sequence>?1 ORDER BY sequence ASC LIMIT ?2",
-    )?;
-    let mut changes = statement
-        .query_map(params![after, fetch_limit as i64 + 1], |row| {
-            let owner_type = row
-                .get::<_, Option<String>>(3)?
-                .and_then(|value| OwnerType::from_str(&value).ok());
-            let payload = row
-                .get::<_, Option<String>>(10)?
-                .and_then(|value| serde_json::from_str(&value).ok());
-            Ok(ChangeRecord {
-                sequence: row.get(0)?,
-                entity_type: row.get(1)?,
-                operation: row.get(2)?,
-                owner_type,
-                owner_id: row.get(4)?,
-                topic_id: row.get(5)?,
-                entity_id: row.get(6)?,
-                revision: row.get(7)?,
-                origin: row.get(8)?,
-                changed_at: row.get(9)?,
-                payload,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let has_more = changes.len() > fetch_limit;
-    changes.truncate(fetch_limit);
-    // Cursor follows the unfiltered page so a run containing only the desktop-only
-    // default topic cannot trap Mobile on the same sequence forever.
-    let next_sequence = changes.last().map_or(after, |change| change.sequence);
-    changes.retain(|change| change.topic_id.as_deref() != Some(RESERVED_SYNC_TOPIC_ID));
-    Ok(ChangeFeedResponse {
-        changes,
-        next_sequence,
-        has_more,
-    })
 }
 
 fn local_manifest(
@@ -2083,13 +2011,13 @@ mod tests {
     use std::{collections::HashMap, fs, sync::Arc};
 
     use super::{
-        aggregate_hash, changes, manifest, message_diff, message_manifest,
-        mobile_message_hash_from_json, owner_content_hash, owner_manifest, pull_topic_messages,
-        push_messages, topic_content_hash, topic_hash_diff, topic_identity, topic_manifest,
-        topic_manifests, unique_manifest_item_by_id, validate_manifest_request, ManifestItem,
-        ManifestRequest, MessageDiffRequest, MessageDiffState, MessagesPullTopic,
-        MessagesPushRequest, MessagesPushTopic, RemoteManifestItem, TopicHashDiffRequest,
-        TopicHashState, TopicKey, TopicSelector, TOMBSTONE_CONTENT_HASH,
+        aggregate_hash, manifest, message_diff, message_manifest, mobile_message_hash_from_json,
+        owner_content_hash, owner_manifest, pull_topic_messages, push_messages, topic_content_hash,
+        topic_hash_diff, topic_identity, topic_manifest, topic_manifests,
+        unique_manifest_item_by_id, validate_manifest_request, ManifestItem, ManifestRequest,
+        MessageDiffRequest, MessageDiffState, MessagesPullTopic, MessagesPushRequest,
+        MessagesPushTopic, RemoteManifestItem, TopicHashDiffRequest, TopicHashState, TopicKey,
+        TopicSelector, TOMBSTONE_CONTENT_HASH,
     };
     use crate::{
         config::{Cli, ServiceConfig},
@@ -2209,40 +2137,6 @@ mod tests {
             aggregate_hash(vec!["config-a".to_string(), "content-a".to_string()]),
             OWNER_ROOT_GOLDEN
         );
-    }
-
-    #[test]
-    fn change_feed_excludes_default_and_still_advances_its_cursor() {
-        let (_temp, _config, database, _reconciler) = sync_fixture();
-        {
-            let connection = database.connection.lock();
-            for (entity_type, topic_id, entity_id) in [
-                ("topic", "default", "default"),
-                ("message", "default", "message-default"),
-                ("message", "topic-a", "message-a"),
-            ] {
-                connection
-                    .execute(
-                        "INSERT INTO change_log(
-                            entity_type, operation, owner_type, owner_id, topic_id,
-                            entity_id, revision, origin, changed_at, payload_json
-                         ) VALUES(?1, 'upsert', 'agent', 'agent-a', ?2, ?3, 1, 'test', 1, NULL)",
-                        rusqlite::params![entity_type, topic_id, entity_id],
-                    )
-                    .expect("insert change");
-            }
-        }
-
-        let first = changes(&database, 0, 2).expect("first page");
-        assert!(first.changes.is_empty());
-        assert_eq!(first.next_sequence, 2);
-        assert!(first.has_more);
-
-        let second = changes(&database, first.next_sequence, 2).expect("second page");
-        assert_eq!(second.changes.len(), 1);
-        assert_eq!(second.changes[0].topic_id.as_deref(), Some("topic-a"));
-        assert_eq!(second.next_sequence, 3);
-        assert!(!second.has_more);
     }
 
     #[test]
@@ -2525,7 +2419,6 @@ mod tests {
         )
         .await;
         assert!(response.results[0].success);
-        assert!(response.results[0].needed_attachment_hashes.is_empty());
         let persisted: Vec<serde_json::Value> =
             serde_json::from_slice(&fs::read(&history_path).expect("read history"))
                 .expect("parse history");

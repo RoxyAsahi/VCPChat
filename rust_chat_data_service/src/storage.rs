@@ -125,27 +125,9 @@ CREATE TABLE IF NOT EXISTS tombstones (
     topic_id TEXT NOT NULL DEFAULT '',
     entity_id TEXT NOT NULL,
     deleted_at INTEGER NOT NULL,
-    expires_at INTEGER,
     origin TEXT NOT NULL,
     PRIMARY KEY (entity_type, owner_type, owner_id, topic_id, entity_id)
 );
-
-CREATE TABLE IF NOT EXISTS change_log (
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-    entity_type TEXT NOT NULL,
-    operation TEXT NOT NULL,
-    owner_type TEXT,
-    owner_id TEXT,
-    topic_id TEXT,
-    entity_id TEXT,
-    revision INTEGER NOT NULL,
-    origin TEXT NOT NULL,
-    changed_at INTEGER NOT NULL,
-    payload_json TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_change_log_owner_sequence
-ON change_log(owner_type, owner_id, sequence);
 
 CREATE TABLE IF NOT EXISTS service_meta (
     key TEXT PRIMARY KEY,
@@ -495,11 +477,6 @@ impl Database {
                 )?;
             }
 
-            // Owner metadata itself has no Tantivy documents. Topic deletions above
-            // already advance the searchable content revision; an owner with no
-            // topics can reuse the current revision without creating a permanent
-            // content/index revision gap.
-            let revision = current_global_revision(&transaction)?;
             transaction.execute(
                 "UPDATE owners SET deleted_at=?3, updated_at=?3
                  WHERE owner_type=?1 AND owner_id=?2 AND deleted_at IS NULL",
@@ -508,32 +485,12 @@ impl Database {
             transaction.execute(
                 "INSERT INTO tombstones(
                     entity_type, owner_type, owner_id, topic_id, entity_id,
-                    deleted_at, expires_at, origin
-                 ) VALUES('owner', ?1, ?2, '', ?2, ?3, ?4, ?5)
+                    deleted_at, origin
+                 ) VALUES('owner', ?1, ?2, '', ?2, ?3, ?4)
                  ON CONFLICT(entity_type, owner_type, owner_id, topic_id, entity_id)
                  DO UPDATE SET deleted_at=excluded.deleted_at,
-                               expires_at=excluded.expires_at,
                                origin=excluded.origin",
-                params![
-                    owner.owner_type.as_str(),
-                    owner.owner_id,
-                    now,
-                    tombstone_expiry(now),
-                    origin,
-                ],
-            )?;
-            transaction.execute(
-                "INSERT INTO change_log(
-                    entity_type, operation, owner_type, owner_id, topic_id,
-                    entity_id, revision, origin, changed_at, payload_json
-                 ) VALUES('owner', 'delete', ?1, ?2, NULL, ?2, ?3, ?4, ?5, NULL)",
-                params![
-                    owner.owner_type.as_str(),
-                    owner.owner_id,
-                    revision,
-                    origin,
-                    now,
-                ],
+                params![owner.owner_type.as_str(), owner.owner_id, now, origin],
             )?;
             deleted += 1;
         }
@@ -595,17 +552,6 @@ impl Database {
                 params![row_id, now],
             )?;
             upsert_message_tombstone(&transaction, &source.key, &msg_id, origin, now)?;
-            append_change(
-                &transaction,
-                "message",
-                "delete",
-                &source.key,
-                Some(&msg_id),
-                revision,
-                origin,
-                now,
-                Some(r#"{"reason":"history_source_missing"}"#),
-            )?;
             removed_row_ids.push(row_id);
         }
 
@@ -635,18 +581,6 @@ impl Database {
              WHERE source_path=?1",
             params![source.source_path.to_string_lossy(), revision, now,],
         )?;
-        append_change(
-            &transaction,
-            "topic",
-            "update",
-            &source.key,
-            Some(&source.key.topic_id),
-            revision,
-            origin,
-            now,
-            Some(r#"{"historyStatus":"missing","messageCount":0}"#),
-        )?;
-
         transaction.commit()?;
         Ok(Some(IngestCommit {
             topic: source.key.clone(),
@@ -765,17 +699,6 @@ impl Database {
                 );
             }
             upsert_message_tombstone(&transaction, key, &msg_id, origin, deleted_at)?;
-            append_change(
-                &transaction,
-                "message",
-                "delete",
-                key,
-                Some(&msg_id),
-                revision,
-                origin,
-                deleted_at,
-                Some(r#"{"reason":"explicit_mobile_sync"}"#),
-            )?;
         }
         let changed = transaction.execute(
             "UPDATE topics SET content_revision=?4, updated_at=?5
@@ -878,19 +801,6 @@ impl Database {
                 owner_id,
                 effective_at,
                 origin,
-            )?;
-            transaction.execute(
-                "INSERT INTO change_log(
-                    entity_type, operation, owner_type, owner_id, topic_id,
-                    entity_id, revision, origin, changed_at, payload_json
-                 ) VALUES('owner', 'delete', ?1, ?2, NULL, ?2, ?3, ?4, ?5, NULL)",
-                params![
-                    owner_type.as_str(),
-                    owner_id,
-                    current_global_revision(&transaction)?,
-                    origin,
-                    effective_at,
-                ],
             )?;
         }
 
@@ -1013,17 +923,6 @@ impl Database {
                     params![row_id, now],
                 )?;
                 upsert_message_tombstone(&transaction, &source.key, &msg_id, origin, now)?;
-                append_change(
-                    &transaction,
-                    "message",
-                    "delete",
-                    &source.key,
-                    Some(&msg_id),
-                    revision,
-                    origin,
-                    now,
-                    None,
-                )?;
                 removed_row_ids.push(row_id);
             }
         }
@@ -1156,18 +1055,6 @@ impl Database {
                 revision,
                 now,
             ],
-        )?;
-
-        append_change(
-            &transaction,
-            "topic",
-            "upsert",
-            &source.key,
-            Some(&source.key.topic_id),
-            revision,
-            origin,
-            now,
-            Some(&serde_json::json!({ "messageCount": messages.len() }).to_string()),
         )?;
 
         transaction.commit()?;
@@ -1452,17 +1339,6 @@ fn mark_topic_deleted(
             params![row_id, topic_effective_at],
         )?;
         upsert_message_tombstone(transaction, key, &msg_id, origin, topic_effective_at)?;
-        append_change(
-            transaction,
-            "message",
-            "delete",
-            key,
-            Some(&msg_id),
-            revision,
-            origin,
-            topic_effective_at,
-            Some(r#"{"reason":"topic_deleted"}"#),
-        )?;
     }
 
     if topic_state.is_some() && stored_rows_changed {
@@ -1493,17 +1369,6 @@ fn mark_topic_deleted(
             topic_effective_at,
             origin,
         )?;
-        append_change(
-            transaction,
-            "topic",
-            "delete",
-            key,
-            Some(&key.topic_id),
-            revision,
-            origin,
-            topic_effective_at,
-            None,
-        )?;
     }
 
     Ok(())
@@ -1523,15 +1388,11 @@ fn upsert_sync_delete_tombstone(
     transaction.execute(
         "INSERT INTO tombstones(
             entity_type, owner_type, owner_id, topic_id, entity_id,
-            deleted_at, expires_at, origin
-         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            deleted_at, origin
+         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(entity_type, owner_type, owner_id, topic_id, entity_id)
          DO UPDATE SET
             deleted_at=MIN(tombstones.deleted_at, excluded.deleted_at),
-            expires_at=CASE
-                WHEN tombstones.expires_at IS NULL THEN excluded.expires_at
-                ELSE MAX(tombstones.expires_at, excluded.expires_at)
-            END,
             origin=CASE
                 WHEN excluded.deleted_at < tombstones.deleted_at THEN excluded.origin
                 ELSE tombstones.origin
@@ -1543,7 +1404,6 @@ fn upsert_sync_delete_tombstone(
             topic_id,
             entity_id,
             deleted_at,
-            tombstone_expiry(deleted_at),
             origin,
         ],
     )?;
@@ -1560,11 +1420,10 @@ fn upsert_message_tombstone(
     transaction.execute(
         "INSERT INTO tombstones(
             entity_type, owner_type, owner_id, topic_id, entity_id,
-            deleted_at, expires_at, origin
-         ) VALUES('message', ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            deleted_at, origin
+         ) VALUES('message', ?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(entity_type, owner_type, owner_id, topic_id, entity_id)
          DO UPDATE SET deleted_at=excluded.deleted_at,
-                       expires_at=excluded.expires_at,
                        origin=excluded.origin",
         params![
             key.owner_type.as_str(),
@@ -1572,45 +1431,7 @@ fn upsert_message_tombstone(
             key.topic_id,
             msg_id,
             now,
-            tombstone_expiry(now),
             origin,
-        ],
-    )?;
-    Ok(())
-}
-
-fn tombstone_expiry(now: i64) -> i64 {
-    now.saturating_add(30 * 24 * 60 * 60 * 1000_i64)
-}
-
-#[allow(clippy::too_many_arguments)] // Mirrors the fixed change_log row contract at transaction call sites.
-fn append_change(
-    transaction: &Transaction<'_>,
-    entity_type: &str,
-    operation: &str,
-    topic: &TopicKey,
-    entity_id: Option<&str>,
-    revision: i64,
-    origin: &str,
-    changed_at: i64,
-    payload_json: Option<&str>,
-) -> Result<()> {
-    transaction.execute(
-        "INSERT INTO change_log(
-            entity_type, operation, owner_type, owner_id, topic_id,
-            entity_id, revision, origin, changed_at, payload_json
-         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![
-            entity_type,
-            operation,
-            topic.owner_type.as_str(),
-            topic.owner_id,
-            topic.topic_id,
-            entity_id,
-            revision,
-            origin,
-            changed_at,
-            payload_json,
         ],
     )?;
     Ok(())
@@ -1788,10 +1609,6 @@ mod tests {
             )
             .expect("query earliest owner tombstone");
         assert_eq!(deleted_at, 100);
-        let changes: i64 = connection
-            .query_row("SELECT COUNT(*) FROM change_log", [], |row| row.get(0))
-            .expect("count owner changes");
-        assert_eq!(changes, 2);
     }
 
     #[test]
@@ -1843,17 +1660,16 @@ mod tests {
             .apply_sync_topic_tombstone(&key, 400, "mobile_sync")
             .expect("replay topic tombstone");
         let connection = database.connection.lock();
-        let state: (i64, i64) = connection
+        let deleted_at: i64 = connection
             .query_row(
-                "SELECT t.deleted_at, (SELECT COUNT(*) FROM change_log)
-                 FROM tombstones t
-                 WHERE t.entity_type='topic' AND t.owner_type='group'
-                   AND t.owner_id='group-a' AND t.topic_id='topic-a'",
+                "SELECT deleted_at FROM tombstones
+                 WHERE entity_type='topic' AND owner_type='group'
+                   AND owner_id='group-a' AND topic_id='topic-a'",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| row.get(0),
             )
             .expect("query idempotent topic tombstone");
-        assert_eq!(state, (321, 1));
+        assert_eq!(deleted_at, 321);
     }
 
     #[test]
@@ -1947,10 +1763,10 @@ mod tests {
                          'c', 'c', 'c', '{}', 10, NULL);
                      INSERT INTO tombstones(
                         entity_type, owner_type, owner_id, topic_id, entity_id,
-                        deleted_at, expires_at, origin
+                        deleted_at, origin
                      ) VALUES(
                         'message', 'agent', 'agent-a', 'topic-a', 'message-missing',
-                        250, 1000, 'seed'
+                        250, 'seed'
                      );",
                 )
                 .expect("seed owner cascade rows");
@@ -2046,27 +1862,23 @@ mod tests {
                 )
                 .expect("count cascade tombstones");
             assert_eq!(tombstones, 5);
-            let changes: i64 = connection
-                .query_row(
-                    "SELECT COUNT(*) FROM change_log WHERE owner_id='agent-a'",
-                    [],
-                    |row| row.get(0),
-                )
-                .expect("count cascade changes");
-            assert_eq!(changes, 4);
         }
 
         database
             .apply_sync_owner_tombstone(OwnerType::Agent, "agent-a", 400, "mobile_sync")
             .expect("replay cascade tombstone");
         let connection = database.connection.lock();
-        let changes: i64 = connection
+        let state: (i64, i64) = connection
             .query_row(
-                "SELECT COUNT(*) FROM change_log WHERE owner_id='agent-a'",
+                "SELECT deleted_at,
+                        (SELECT COUNT(*) FROM tombstones WHERE owner_id='agent-a')
+                 FROM tombstones
+                 WHERE entity_type='owner' AND owner_type='agent'
+                   AND owner_id='agent-a' AND entity_id='agent-a'",
                 [],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
-            .expect("count changes after idempotent replay");
-        assert_eq!(changes, 4);
+            .expect("query cascade after idempotent replay");
+        assert_eq!(state, (200, 5));
     }
 }
