@@ -14,7 +14,7 @@ import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './se
 import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
 import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
-import { mountAppearanceSelects, mountAppearanceRadiusLanguageRow } from './settings/appearance-controls.js';
+import { mountAppearanceSelects, mountAppearanceLanguageRows, mountChatFontRows, mountAppearanceRadiusLanguageRow, mountAppearanceFontSizeRow } from './settings/appearance-controls.js';
 import { mountAppearanceRanges } from './settings/appearance-ranges.js';
 import { mountAppearanceToggles } from './settings/appearance-toggles.js';
 import { mountHomeTaglineInput } from './settings/home-controls.js';
@@ -944,6 +944,9 @@ function enhanceGlobalSettings(root, form) {
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
+    mountAppearanceFontSizeRow(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceLanguageRows(form, window.VCPUIUX, ensurePresentationScope());
+    mountChatFontRows(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceRadiusLanguageRow(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);

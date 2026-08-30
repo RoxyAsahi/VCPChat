@@ -6,7 +6,6 @@ export function mountAppearanceSelects(form, api, scope) {
         ['appearanceDensity', '界面密度'],
         ['appearanceRadius', '圆角风格'],
         ['appearanceTypography', '界面字体'],
-        ['appearanceFontScale', '界面字号'],
         ['appearanceContentWidth', '内容宽度'],
         ['appearanceSurface', '页面材质'],
     ];
@@ -20,10 +19,66 @@ export function mountAppearanceSelects(form, api, scope) {
     });
 }
 
+export function mountAppearanceLanguageRows(form, api, scope) {
+    if (!form || !scope || !api?.mountLanguageRow) return;
+    const fields = [
+        ['appearanceDensity', '界面密度', '调整设置页与工作区控件的疏密程度'],
+        ['appearanceRadius', '圆角', '调整页面容器与控件的圆角风格'],
+        ['appearanceTypography', '界面字体', '选择界面使用的字体风格'],
+        ['appearanceContentWidth', '内容宽度', '调整工作区内容的最大阅读宽度'],
+        ['appearanceSurface', '导航材质', '选择侧栏与页面的表面材质'],
+    ];
+    fields.forEach(([id, title, description]) => {
+        const host = form.querySelector(`#${id}Row`);
+        const select = form.querySelector(`#${id}`);
+        if (!host || !select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        select.dataset.vcpTypedPrimitiveMounted = 'true';
+        const options = Array.from(select.options).map(option => ({ id: option.value, label: option.textContent || option.value }));
+        const row = api.mountLanguageRow(host, { title, description, options, activeId: select.value, onSelect: value => {
+            select.value = value;
+            select.dispatchEvent(new select.ownerDocument.defaultView.Event('change', { bubbles: true }));
+        } }, scope);
+        scope.listen(select, 'change', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync`);
+        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-language-row-marker`, 'ui-primitive');
+    });
+}
+
+export function mountAppearanceFontSizeRow(form, api, scope) {
+    const host = form?.querySelector('#appearanceFontScaleRow');
+    const select = form?.querySelector('#appearanceFontScale');
+    if (!host || !select || !scope || !api?.mountFontSizeRow || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    select.dataset.vcpTypedPrimitiveMounted = 'true';
+    api.mountFontSizeRow(host, select, scope);
+    scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'typed-appearance-font-size-marker', 'ui-primitive');
+}
+
+export function mountChatFontRows(form, api, scope) {
+    if (!form || !scope || !api?.mountLanguageRow) return;
+    const fields = [
+        ['chatFontPresetRow', 'chatFontPreset', '聊天字体', '选择聊天正文使用的字体'],
+        ['chatCodeFontPresetRow', 'chatCodeFontPreset', '代码字体', '选择代码块使用的字体'],
+        ['chatDiaryFontPresetRow', 'chatDiaryFontPreset', '场景字体', '选择日记与文学块使用的字体'],
+        ['chatToolFontPresetRow', 'chatToolFontPreset', '场景字体', '选择工具结果与系统卡片使用的字体'],
+    ];
+    fields.forEach(([hostId, id, title, description]) => {
+        const host = form.querySelector(`#${hostId}`); const select = form.querySelector(`#${id}`);
+        if (!host || !select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        select.dataset.vcpTypedPrimitiveMounted = 'true';
+        const options = Array.from(select.options).map(option => ({ id: option.value, label: option.textContent || option.value }));
+        const row = api.mountLanguageRow(host, { title, description, options, activeId: select.value, onSelect: value => {
+            select.value = value;
+            select.dispatchEvent(new select.ownerDocument.defaultView.Event('change', { bubbles: true }));
+        } }, scope);
+        scope.listen(select, 'change', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync`);
+        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-language-row-marker`, 'ui-primitive');
+    });
+}
+
 export function mountAppearanceRadiusLanguageRow(form, api, scope) {
     const host = form?.querySelector('#appearanceSidebarRadiusLanguageRow');
     const select = form?.querySelector('#appearanceSidebarRadius');
     if (!host || !select || !scope || !api?.mountLanguageRow || host.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    select.dataset.vcpTypedPrimitiveMounted = 'true';
     const options = Array.from(select.options).map(option => ({ id: option.value, label: option.textContent || option.value }));
     const row = api.mountLanguageRow(host, {
         title: '列表项圆角',
@@ -36,6 +91,7 @@ export function mountAppearanceRadiusLanguageRow(form, api, scope) {
         },
     }, scope);
     host.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete host.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-language-row-marker', 'ui-primitive');
+    scope.listen(select, 'change', () => row.setActive(select.value), undefined, 'typed-radius-language-row-sync');
+    scope.own(() => { delete host.dataset.vcpTypedPrimitiveMounted; delete select.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-language-row-marker', 'ui-primitive');
     scope.own(() => row.dispose(), 'typed-radius-language-row', 'ui-primitive');
 }

@@ -33,6 +33,8 @@ export { AGENT_PRESET_ROW_DEFAULT_DESCRIPTION, AGENT_PRESET_ROW_DEFAULT_TITLE, A
 export type { AgentPresetRowController, AgentPresetRowOption, AgentPresetRowProps } from './primitives/agent-preset-row.js';
 export { mountLanguageRow } from './primitives/language-row.js';
 export type { LanguageRowController, LanguageRowOption, LanguageRowProps } from './primitives/language-row.js';
+export { mountFontSizeRow } from './primitives/font-size-row.js';
+export type { FontSizeRowController } from './primitives/font-size-row.js';
 export { mountAgentModelPicker } from './primitives/agent-model-picker.js';
 export type { AgentModelEffortOption, AgentModelOption, AgentModelPickerController, AgentModelPickerProps } from './primitives/agent-model-picker.js';
 export { mountModal } from './primitives/modal.js';
@@ -53,6 +55,8 @@ export { mountSemanticIcon } from './primitives/semantic-icon.js';
 export type { HarnessSemanticIconName, SemanticIconController, SemanticIconProps } from './primitives/semantic-icon.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
+export { mountNumericStepperRow } from './primitives/numeric-stepper-row.js';
+export type { NumericStepperRowController } from './primitives/numeric-stepper-row.js';
 export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
 export type { ColorPairProps } from './primitives/color-pair.js';

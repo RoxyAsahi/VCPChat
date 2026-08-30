@@ -17,6 +17,7 @@ import { mountMenu } from './primitives/menu.js';
 import { mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 import { mountAgentPresetRow } from './primitives/agent-preset-row.js';
 import { mountLanguageRow } from './primitives/language-row.js';
+import { mountFontSizeRow } from './primitives/font-size-row.js';
 import { mountAgentModelPicker } from './primitives/agent-model-picker.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
@@ -28,6 +29,7 @@ import { mountRiskConfirmation } from './primitives/risk-confirmation.js';
 import { mountSemanticIcon } from './primitives/semantic-icon.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
+import { mountNumericStepperRow } from './primitives/numeric-stepper-row.js';
 import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
 import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
@@ -77,6 +79,7 @@ const api = {
     mountAgentPresetSeat,
     mountAgentPresetRow,
     mountLanguageRow,
+    mountFontSizeRow,
     mountAgentModelPicker,
     mountModal,
     mountTooltip,
@@ -89,6 +92,7 @@ const api = {
     mountSemanticIcon,
     mountChoice,
     mountRange,
+    mountNumericStepperRow,
     mountToggle,
     mountColorPair,
     // Candidate-only command popup primitives. They are exposed solely so the
