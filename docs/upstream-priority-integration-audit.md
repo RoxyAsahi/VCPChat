@@ -163,6 +163,7 @@
 | `8fecce4b` 规则引擎全局对象兼容子变更 | `0e0eda7f` | `node --test tests/tavern-rules-engine.test.js`（6/6） | 直接吸收；仅将 UMD 根对象从 `self` 修正为 `globalThis`，不涉及聊天状态、IPC 或持久化 |
 | `91c9a86b` 历史源证据校验 | `1abdc57e` | `cargo test`（59/59） | 局部适配；复用本地 `history_sources.content_hash`，加入源身份、哈希、mtime、状态和错误字段校验；不接收上游对新 schema 的整套重构 |
 | `552fc5ef` 移除附件墓碑索引 | `ef1164c2` | `node --test tests/mobile-sync-*.test.js`（101/102，1 skip） | 局部吸收；删除未被生产流程维护的 `deleted_at` 读取和写入旁路，保留旧数据库列以兼容既有库 |
+| `bb442bd2` 避免复用已删除默认话题 | 已有等价实现 | `node --test tests/chat-manager-selection-race.test.js`（通过） | 当前本地将删空后的替代项固定为 `default`，并确保其 history 目录存在；比上游临时时间戳 Topic 更符合既有默认话题契约，无需重复改动 |
 
 ### 暂缓记录
 
