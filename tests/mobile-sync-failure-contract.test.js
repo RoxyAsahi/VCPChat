@@ -783,7 +783,7 @@ test("history 原子提交在 source hash 变化时保留并发写入", async (t
         [{ id: "mobile-writer" }],
         snapshot.sourceHash,
       ),
-    /changed concurrently/,
+    (error) => error?.code === "SYNC_SNAPSHOT_STALE" && /changed concurrently/.test(error.message),
   );
   assert.deepEqual(JSON.parse(fs.readFileSync(historyPath, "utf8")), [
     { id: "chat-writer" },

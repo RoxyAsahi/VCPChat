@@ -110,7 +110,10 @@ async function writeHistoryAtomic(filePath, history, expectedSourceHash) {
       if (error.code !== "ENOENT") throw error;
     }
     if (currentHash !== expectedSourceHash) {
-      throw new Error("History changed concurrently; retry this topic");
+      throw Object.assign(
+        new Error("History changed concurrently; retry this topic"),
+        { code: "SYNC_SNAPSHOT_STALE" },
+      );
     }
     await fs.rename(temporary, filePath);
     if (process.platform !== "win32") {
@@ -292,7 +295,7 @@ async function downloadMessagesStreamRaw(requests, appDataPath, res) {
         const updatedAt = indexedTimes.get(message.id);
         if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
           throw createSyncError(
-            "SYNC_INDEX_INVALID",
+            "SYNC_SNAPSHOT_STALE",
             `message index timestamp is invalid for ${safeTopicId}/${message.id}`,
             { stage: "messages", failedTopicIds: [safeTopicId] },
           );
@@ -674,8 +677,11 @@ async function ingestHistoryToDb(
             "SELECT COUNT(*) AS n FROM entity_index WHERE id = ? AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic') AND deleted_at IS NULL",
           )
           .get(topicId).n;
-        throw new Error(
-          `Topic ${topicId} is ${matches === 0 ? "missing" : "ambiguous"} in the local index (matches=${matches})`,
+        throw Object.assign(
+          new Error(
+            `Topic ${topicId} is ${matches === 0 ? "missing" : "ambiguous"} in the local index (matches=${matches})`,
+          ),
+          { code: "SYNC_SNAPSHOT_STALE" },
         );
       }
 

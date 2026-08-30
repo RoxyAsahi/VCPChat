@@ -180,7 +180,7 @@ test("Wire 1.2 golden errors are strict and stable", () => {
   assert.equal(fixture.pluginVersion, "1.2.0");
   assert.equal(
     crypto.createHash("sha256").update(fixtureBytes).digest("hex"),
-    "b97f753848da12cf4b44016bd2defe8eacc317ee3c2cbdb6b0db656c37d9c766",
+    "19506bdca5d41e00db0330d50d4d5c7aa6a13415146e1ac058e04f0adfd7e574",
   );
   for (const entry of fixture.validErrors) {
     assert.deepEqual(parseSyncError(entry.error), entry.error);

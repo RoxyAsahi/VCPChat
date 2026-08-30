@@ -804,7 +804,10 @@ async function writeJsonAtomic(filePath, value) {
       throw error;
     });
     if (observedCurrent !== expectedCurrent) {
-      throw new Error(`Config changed while updating ${filePath}`);
+      throw Object.assign(
+        new Error(`Config changed while updating ${filePath}`),
+        { code: "SYNC_SNAPSHOT_STALE" },
+      );
     }
     await fs.rename(temporary, filePath);
   } catch (error) {
@@ -1160,7 +1163,7 @@ async function downloadAvatar(id, type) {
   }
   const row = db
     .prepare(
-      "SELECT file_path FROM avatar_index WHERE owner_type = ? AND owner_id = ? AND deleted_at IS NULL",
+      "SELECT file_path, hash FROM avatar_index WHERE owner_type = ? AND owner_id = ? AND deleted_at IS NULL",
     )
     .get(type, safeId);
   if (!row) {
@@ -1169,6 +1172,13 @@ async function downloadAvatar(id, type) {
   }
   const stats = await fs.stat(row.file_path);
   if (!stats.isFile()) throw new Error("Avatar index does not point to a file");
+  const bytes = await fs.readFile(row.file_path);
+  if (computeBinaryHash(bytes) !== row.hash) {
+    throw Object.assign(
+      new Error("Avatar changed after its manifest was indexed"),
+      { code: "SYNC_SNAPSHOT_STALE" },
+    );
+  }
 
   logger.logOperation("owner_metadata", "download_avatar", id, "success", `type=${type}`);
   return { filePath: row.file_path };

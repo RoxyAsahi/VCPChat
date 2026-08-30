@@ -132,6 +132,7 @@ const ERROR_DEFINITIONS = Object.freeze({
   SYNC_PROTOCOL_INVALID: definition("owner_metadata", "protocol", "after_user_action"),
   SYNC_BUDGET_EXCEEDED: definition("messages", "data", "after_user_action"),
   SYNC_INDEX_INVALID: definition("topic_metadata", "storage", "manual"),
+  SYNC_SNAPSHOT_STALE: definition("messages", "data", "manual"),
   SYNC_DB_UNAVAILABLE: definition("startup", "storage", "manual"),
   SYNC_DB_QUERY_FAILED: definition("topic_validation", "storage", "manual"),
   TOPIC_HASH_FAILED: definition("messages", "storage", "manual", "desktop_cds"),

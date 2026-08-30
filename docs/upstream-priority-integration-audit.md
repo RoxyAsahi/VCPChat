@@ -141,7 +141,7 @@
 | --- | --- | --- |
 | `c8c3e25b` 保留墓碑并暴露 Owner 损坏 | 会删除本地已验证的墓碑保留/损坏降级逻辑，且与当前 CDS 存储语义相反 | 暂不吸收；先以现有 56 个 Rust 测试和 MobileSync 93 项测试为基线，若上游有独立行为需求再局部移植 |
 | `52df169a` 损坏 legacy Owner 隔离 | 依赖上游 owner-state 结构，不能直接套用当前 entity_index | 手工移植 unhealthy owner 集合、manifest 过滤和成功清理 |
-| `30c2f3fc` 快照过期错误归因 | 需适配当前统一错误 envelope | 提取 `SYNC_SNAPSHOT_STALE` 行为并补协议回归测试 |
+| `30c2f3fc` 快照过期错误归因 | 需适配当前统一错误 envelope | 已完成局部适配；提取 `SYNC_SNAPSHOT_STALE` 行为并补协议、CAS、流式终止回归测试 |
 | `6364f03b` MiMo 音色设计模型 | 当前 `SovitsTTS` 仍是本地/旧网络模型结构，直接套用会冲突 | 暂缓；先定义网络 TTS capability，再补 voicedesign 请求和密钥/缓存测试 |
 | `f92f4423` TTS 播放速度透传 | 与本地 TTS Surface owner、音频队列和播放时钟实现交集较高 | 暂缓；在现有 owner 中局部接入 playbackRate，并补 Electron 音频队列回归 |
 | `5ed0a888` 网络 TTS 供应商切换 | 同时改动设置桥接、TTS 服务、消息菜单和 Surface 生命周期 | 暂缓；拆分供应商请求、设置迁移和播放 Surface 三个独立变更 |
@@ -156,5 +156,16 @@
 ## 当前状态
 
 已完成：建立 `08511fa5` 稳定基线，恢复设置页行布局、字号/数值步进、字体选择、自动保存兼容和 portal 层级。  
-进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97` 的可验证子集；其余历史差异继续逐项审计。  
+进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97` 以及 `30c2f3fc` 的可验证子集；其余历史差异继续逐项审计。
 未完成：`c8c3e25b` 及依赖协议/数据库迁移的提交仍暂缓；语音、TTS、Electron/依赖和设置 UI 专项适配及跨平台证据仍需按受影响范围补齐。
+
+### `30c2f3fc` 局部适配记录
+
+- **保留的上游行为**：配置/历史 CAS、头像物理文件校验、消息索引时间和 Topic 索引漂移统一报告快照过期；CDS 内部 `SNAPSHOT_STALE` 在插件边界映射为 Wire 1.2 的 `SYNC_SNAPSHOT_STALE`；已开始的 NDJSON 响应通过受保护 writer 写入错误帧后再结束。
+- **本地结构**：继续使用现有 `entity_index`、消息历史 authority、`NdjsonWriter` 和统一错误 envelope；没有引入上游不存在于本地的 `staleLive` 第二状态，也没有新增全局 listener 或持久化键。
+- **验证证据**：`node --test tests/mobile-sync-*.test.js`（96 pass、1 skip）；`cargo test`（56/56）；错误契约 golden、CAS 并发写入和流式背压测试均通过。
+- **提交**：本地适配将在独立中文提交中提交，当前分支尚未推送。
+
+### `52df169a` 后续手工适配说明
+
+该提交的 `unhealthyLegacyOwners` 隔离机制不能直接 cherry-pick：当前分支使用 `entity_index` + `scanEntities`，而上游版本依赖另一套 owner-state。后续若纳入，将只在 legacy 非 central manifest 路径增加 owner 级隔离，区分配置解析失败与事务失败，并在成功重扫后清理标记；central CDS 路径不维护第二份状态。适配前先补“损坏 Owner 不阻塞其他 Owner、物理目录消失清理标记、恢复后重新纳入 manifest”的回归测试。

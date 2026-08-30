@@ -24,6 +24,10 @@ function withCdsErrorContext(error, fallback = {}) {
     root = Object.assign(new Error(error.message), error, {
       code: "CDS_PROTOCOL_MISMATCH",
     });
+  } else if (error?.code === "SNAPSHOT_STALE") {
+    root = Object.assign(new Error(error.message), error, {
+      code: "SYNC_SNAPSHOT_STALE",
+    });
   }
   // CDS 错误层会把根因剥离后才上 HTTP（wire 上只剩 code/message/retryable）。
   // 在翻译前把边界可见的全部证据（HTTP status / retryable / 原始 message）
