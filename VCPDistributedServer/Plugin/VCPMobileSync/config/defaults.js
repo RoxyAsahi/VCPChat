@@ -50,7 +50,8 @@ function normalizeMemberTags(value) {
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError("memberTags must be an object of string values");
   }
-  return Object.fromEntries(Object.entries(value).map(([agentId, tags]) => {
+
+  const entries = Object.entries(value).map(([agentId, tags]) => {
     if (!agentId || !isUnicodeScalarString(agentId)) {
       throw new TypeError("memberTags keys must be non-empty Unicode strings");
     }
@@ -58,7 +59,8 @@ function normalizeMemberTags(value) {
       throw new TypeError(`memberTags[${JSON.stringify(agentId)}] must be a string`);
     }
     return [agentId, tags];
-  }));
+  });
+  return Object.fromEntries(entries);
 }
 
 function resolveCentralIndexPreference(pluginConfig = {}, chatDataService = null) {
@@ -180,12 +182,11 @@ function createDesktopAttachment(dto, desktopPath, ext, fallbackCreatedAt = 0) {
   const internalFileName = hash ? `${hash}${ext}` : "";
   const desktopSrc = desktopPath ? `file://${desktopPath}` : "";
 
-  return {
+  const attachment = {
     type,
     src: desktopSrc,
     name,
     size,
-    status: dto.status || "ready",
     _fileManagerData: {
       id: `attachment_${hash}`,
       name,
@@ -199,6 +200,8 @@ function createDesktopAttachment(dto, desktopPath, ext, fallbackCreatedAt = 0) {
       imageFrames: dto.imageFrames || null,
     }
   };
+  if (desktopPath) attachment.status = "ready";
+  return attachment;
 }
 
 module.exports = {

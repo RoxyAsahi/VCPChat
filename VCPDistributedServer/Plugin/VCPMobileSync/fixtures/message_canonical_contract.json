@@ -1,6 +1,5 @@
 {
-  "schema": "vcp-sync-protocol-1.2-golden",
-  "wireProtocol": "1.2",
+  "schema": "vcp-sync-message-canonical-contract",
   "validFrames": [
     {
       "name": "flat_nested_null_missing_conflict_unicode_html_empty",
@@ -73,6 +72,7 @@
             "role": "assistant",
             "name": "Nova",
             "agentId": "agent-nova",
+            "avatarColor": "#desktop-local-only",
             "content": "",
             "timestamp": 1700000001,
             "updatedAt": 1700000101
@@ -181,6 +181,22 @@
           "93e09bacfaebdf9bb21f776f1046e06951df5c4e06741331e42eca1b016d5851"
         ]
       }
+    }
+  ],
+  "canonicalHashCases": [
+    {
+      "name": "escaped_dynamic_keys_and_utf8_order",
+      "value": {
+        "memberTags": {
+          "😀": "astral",
+          "": "private-use",
+          "a\":\"x\",\"b": "y",
+          "line\nkey": "control",
+          "slash\\key": "slash"
+        }
+      },
+      "expectedCanonical": "{\"memberTags\":{\"a\\\":\\\"x\\\",\\\"b\":\"y\",\"line\\nkey\":\"control\",\"slash\\\\key\":\"slash\",\"\":\"private-use\",\"😀\":\"astral\"}}",
+      "expectedHash": "ec2a40f5180600d91ea1621b75e00db55cbbdca6ad1db1c23841c426c81e3670"
     }
   ],
   "invalidFrames": [

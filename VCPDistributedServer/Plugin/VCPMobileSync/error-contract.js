@@ -132,12 +132,12 @@ const ERROR_DEFINITIONS = Object.freeze({
   SYNC_PROTOCOL_INVALID: definition("owner_metadata", "protocol", "after_user_action"),
   SYNC_BUDGET_EXCEEDED: definition("messages", "data", "after_user_action"),
   SYNC_INDEX_INVALID: definition("topic_metadata", "storage", "manual"),
-  SYNC_SNAPSHOT_STALE: definition("messages", "data", "manual"),
   SYNC_DB_UNAVAILABLE: definition("startup", "storage", "manual"),
   SYNC_DB_QUERY_FAILED: definition("topic_validation", "storage", "manual"),
   TOPIC_HASH_FAILED: definition("messages", "storage", "manual", "desktop_cds"),
   MESSAGE_MANIFEST_FAILED: definition("messages", "storage", "manual", "desktop_cds"),
   SYNC_OWNER_CONFLICT: definition("topic_metadata", "data", "manual"),
+  SYNC_SNAPSHOT_STALE: definition("messages", "data", "manual"),
   SYNC_ENTITY_NOT_FOUND: definition("owner_metadata", "data", "manual"),
   SYNC_DELETE_INVALID: definition("messages", "protocol", "after_user_action"),
   SYNC_DELETE_FAILED: definition("messages", "storage", "manual"),
@@ -162,14 +162,9 @@ const ERROR_DEFINITIONS = Object.freeze({
   SYNC_MESSAGE_READ_FAILED: definition("messages", "storage", "manual"),
   SYNC_MESSAGE_WRITE_FAILED: definition("messages", "storage", "manual"),
   SYNC_STREAM_FAILED: definition("messages", "connection", "manual"),
-  SYNC_ATTACHMENT_NOT_FOUND: definition("messages", "data", "manual"),
-  SYNC_ATTACHMENT_READ_FAILED: definition("messages", "storage", "manual"),
-  SYNC_ATTACHMENT_WRITE_FAILED: definition("messages", "storage", "manual"),
   SYNC_AVATAR_NOT_FOUND: definition("owner_metadata", "data", "manual"),
   SYNC_AVATAR_READ_FAILED: definition("owner_metadata", "storage", "manual"),
   SYNC_AVATAR_WRITE_FAILED: definition("owner_metadata", "storage", "manual"),
-  SYNC_CHANGE_FEED_UNAVAILABLE: definition("history", "configuration", "after_user_action"),
-  SYNC_CHANGE_FEED_FAILED: definition("history", "storage", "manual"),
 });
 
 function cleanMessage(value, fallback = "Desktop sync failed") {
@@ -385,7 +380,10 @@ function createHttpErrorBody(error, fallback = {}) {
 }
 
 function createStreamErrorFrame(error, fallback = {}) {
-  return { _stream_error: normalizeSyncError(error, fallback) };
+  return {
+    kind: "streamError",
+    error: normalizeSyncError(error, fallback),
+  };
 }
 
 function normalizeFailureResult(result, fallback = {}) {

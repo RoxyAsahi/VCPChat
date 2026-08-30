@@ -7,13 +7,17 @@ const path = require("path");
 const crypto = require("crypto");
 const {
   getDb,
-  getEntityIndex,
-  upsertEntityIndex,
+  getOwnerState,
+  getTopicState,
+  getAvatarIndex,
+  upsertOwnerState,
+  upsertTopicState,
   upsertAttachmentIndex,
   upsertAvatarIndex,
-  upsertEntityTombstone,
-  softDeleteMessageIndex,
+  upsertOwnerTombstone,
+  upsertTopicTombstone,
   softDeleteAvatarIndex,
+  refreshOwnerContentHash,
 } = require("../core/db");
 const {
   computeBinaryHash,
@@ -27,12 +31,12 @@ const {
   createGroupTopic,
 } = require("../config/defaults");
 const { acquireLock } = require("../utils/lock");
+const { getExtensionFromType } = require("../utils/mime");
 const { getLogger } = require("../core/logger");
 const {
-  createSyncError,
   normalizeSyncError,
-  withSyncErrorContext,
 } = require("../error-contract");
+
 const {
   extractAgentDTO,
   applyAgentDTO,
@@ -45,7 +49,6 @@ const {
 } = require("../dto/group.dto");
 const {
   extractTopicDTO,
-  applyTopicDTO,
   extractAgentTopicDTO,
   extractGroupTopicDTO,
   applyAgentTopicDTO,
@@ -54,12 +57,92 @@ const {
   GROUP_TOPIC_SYNC_FIELDS,
 } = require("../dto/topic.dto");
 
-const writeIntentLock = new Set();
+const AVATAR_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+const MAX_AVATAR_BYTES = 20 * 1024 * 1024;
+const AVATAR_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/webp",
+]);
+
+function detectAvatarMime(data) {
+  if (data.length >= 8 && data.subarray(0, 8).equals(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  )) {
+    return "image/png";
+  }
+  if (data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (data.length >= 6) {
+    const signature = data.subarray(0, 6).toString("ascii");
+    if (signature === "GIF87a" || signature === "GIF89a") return "image/gif";
+  }
+  if (
+    data.length >= 12 &&
+    data.subarray(0, 4).toString("ascii") === "RIFF" &&
+    data.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  throw new Error("Avatar upload bytes are not png, jpeg, gif, or webp");
+}
+
+function resolveAvatarMime(rawMimeType, data) {
+  const value = typeof rawMimeType === "string"
+    ? rawMimeType.split(";", 1)[0].trim().toLowerCase()
+    : "";
+  if (!AVATAR_MIME_TYPES.has(value)) {
+    throw new Error("Avatar upload requires png, jpeg, gif, or webp Content-Type");
+  }
+  const requestedMimeType = value === "image/jpg" ? "image/jpeg" : value;
+  const mimeType = detectAvatarMime(data);
+  return {
+    mimeType,
+    extension: getExtensionFromType(mimeType),
+    mimeMismatch: requestedMimeType !== mimeType,
+  };
+}
+
+const writeIntentLock = new Map();
 
 function entityStage(type) {
   return ["topic", "agent_topic", "group_topic"].includes(type)
     ? "topic_metadata"
     : "owner_metadata";
+}
+
+function getEntityState(id, type, ownerType = null, ownerId = null) {
+  if (["topic", "agent_topic", "group_topic"].includes(type)) {
+    return getTopicState({ topicId: id, ownerType, ownerId });
+  }
+  return getOwnerState({ ownerType: type, ownerId: id });
+}
+
+function entityIdentityKey({ id, type, ownerType, ownerId }) {
+  return ["topic", "agent_topic", "group_topic"].includes(type)
+    ? `${ownerType}\0${ownerId}\0${id}`
+    : `${type}\0${id}`;
+}
+
+function addWriteIntent(identity) {
+  const key = entityIdentityKey(identity);
+  writeIntentLock.set(key, (writeIntentLock.get(key) || 0) + 1);
+  return key;
+}
+
+function releaseWriteIntent(key) {
+  setTimeout(() => {
+    const count = writeIntentLock.get(key);
+    if (count === undefined) return;
+    if (count <= 1) {
+      writeIntentLock.delete(key);
+    } else {
+      writeIntentLock.set(key, count - 1);
+    }
+  }, 1000);
 }
 
 function entityFailure(error, fallback, fields = {}) {
@@ -70,71 +153,71 @@ function entityFailure(error, fallback, fields = {}) {
   };
 }
 
-/**
- * 下载实体 - 从桌面端配置提取 DTO
- * @param {object} params
- * @param {string} params.id - 实体 ID
- * @param {string} params.type - 实体类型 (agent/group/topic/avatar)
- * @returns {Promise<object|null>} DTO
- */
-async function downloadEntity({ id, type }) {
-  const db = getDb();
-  const logger = getLogger();
-  if (!db) {
-    throw createSyncError("SYNC_DB_UNAVAILABLE", "Database not initialized", {
-      stage: entityStage(type),
-    });
+function entityResultIdentity(request) {
+  return {
+    id: request.id,
+    type: request.type,
+    ...(request.ownerType === undefined ? {} : { ownerType: request.ownerType }),
+    ...(request.ownerId === undefined ? {} : { ownerId: request.ownerId }),
+  };
+}
+
+function entityDtoHash(dto, type, ownerType = null) {
+  if (["topic", "agent_topic", "group_topic"].includes(type)) {
+    return computeDtoHash(
+      dto,
+      ownerType === "group"
+        ? GROUP_TOPIC_SYNC_FIELDS
+        : AGENT_TOPIC_SYNC_FIELDS,
+    );
   }
+  return computeDtoHash(
+    dto,
+    type === "group" ? GROUP_SYNC_FIELDS : AGENT_SYNC_FIELDS,
+  );
+}
 
-  const safeId = sanitizeId(id);
-  if (
-    !safeId ||
-    safeId !== id ||
-    !["agent", "group", "topic", "agent_topic", "group_topic"].includes(type)
-  ) {
-    throw createSyncError("SYNC_REQUEST_INVALID", "Invalid entity identity", {
-      stage: entityStage(type),
-    });
+function assertEntityDtoMatchesIndex(dto, row, type, id) {
+  const actualHash = entityDtoHash(dto, type, row.owner_type);
+  if (actualHash !== row.config_hash) {
+    throw Object.assign(
+      new Error(
+        `Entity ${row.owner_type}/${row.owner_id}/${id} changed after its manifest was indexed`,
+      ),
+      { code: "SYNC_SNAPSHOT_STALE" },
+    );
   }
-  const phase = (type === "topic" || type === "agent_topic" || type === "group_topic") ? "topic_metadata" : "owner_metadata";
+}
 
-  const row = getEntityIndex(safeId, type);
-
-  if (!row) {
-    logger.logOperation(phase, "download", safeId, "error", `${type} not found in index`);
-    return null;
+function topicDtoMatchingIndex(candidates, topicId, row, type) {
+  const isGroup = row.owner_type === "group";
+  for (const config of [candidates.primary, candidates.backup, candidates.topicBackup]) {
+    const topic = (Array.isArray(config?.topics) ? config.topics : [])
+      .find((value) => value?.id === topicId);
+    if (!topic) continue;
+    const dto = isGroup
+      ? extractGroupTopicDTO(topic, row.owner_id)
+      : extractAgentTopicDTO(topic, row.owner_id);
+    if (entityDtoHash(dto, type, row.owner_type) === row.config_hash) return dto;
   }
+  return null;
+}
 
+function ownerDtoMatchingIndex(candidates, row, type) {
+  for (const config of [candidates.primary, candidates.backup, candidates.topicBackup]) {
+    if (!config) continue;
+    const dto = type === "group" ? extractGroupDTO(config) : extractAgentDTO(config);
+    if (entityDtoHash(dto, type) === row.config_hash) return dto;
+  }
+  return null;
+}
+
+async function isDirectory(directory) {
   try {
-    const content = await fs.readFile(row.file_path, "utf-8");
-    const config = JSON.parse(content);
-    const isGroup = row.file_path.includes("AgentGroups");
-    const ownerId = config.id || path.basename(path.dirname(row.file_path));
-    const ownerType = isGroup ? "group" : "agent";
-
-    if (type === "topic" || type === "agent_topic" || type === "group_topic") {
-      const topic = (config.topics || []).find((t) => t.id === safeId);
-      if (!topic) return null;
-
-      if (isGroup) {
-        return extractGroupTopicDTO(topic, ownerId);
-      } else {
-        return extractAgentTopicDTO(topic, ownerId);
-      }
-    } else if (type === "agent") {
-      logger.logOperation(phase, "download", safeId, "success", `type=${type}`);
-      return extractAgentDTO(config);
-    } else if (type === "group") {
-      logger.logOperation(phase, "download", safeId, "success", `type=${type}`);
-      return extractGroupDTO(config);
-    }
-  } catch (e) {
-    logger.logOperation(phase, "download", safeId, "error", e.message);
-    throw withSyncErrorContext(e, {
-      code: "SYNC_ENTITY_READ_FAILED",
-      stage: phase,
-      failedTopicIds: entityStage(type) === "topic_metadata" ? [safeId] : [],
-    });
+    return (await fs.stat(directory)).isDirectory();
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
   }
 }
 
@@ -146,94 +229,116 @@ async function downloadEntity({ id, type }) {
 async function downloadEntities(requests) {
   if (!Array.isArray(requests)) return [];
 
-  // 按 file_path 分组，每个 config.json 只读取一次
+  // 按 config_path 分组，每个 config.json 只读取一次
   const fileGroups = new Map();
   const results = [];
   const seen = new Set();
   for (const req of requests) {
     const safeId = sanitizeId(req.id);
-    const key = `${req.type || ""}:${safeId}`;
+    const key = entityIdentityKey({ ...req, id: safeId });
     const validType = [
       "agent",
       "group",
-      "topic",
       "agent_topic",
       "group_topic",
     ].includes(req.type);
+    const isTopic = ["agent_topic", "group_topic"].includes(req.type);
+    const validOwner =
+      !isTopic ||
+      (["agent", "group"].includes(req.ownerType) &&
+        typeof req.ownerId === "string" &&
+        sanitizeId(req.ownerId) === req.ownerId &&
+        (req.type !== "agent_topic" || req.ownerType === "agent") &&
+        (req.type !== "group_topic" || req.ownerType === "group"));
     if (
       !safeId ||
       safeId !== req.id ||
       !validType ||
+      !validOwner ||
       seen.has(key)
     ) {
       results.push(entityFailure(
         seen.has(key) ? "duplicate entity request" : "invalid entity identity",
         { code: "SYNC_REQUEST_INVALID", stage: entityStage(req.type) },
-        { id: req.id, type: req.type },
+        entityResultIdentity(req),
       ));
       continue;
     }
     seen.add(key);
-    const row = getEntityIndex(safeId, req.type);
-    if (!row) {
+    const row = getEntityState(
+      safeId,
+      req.type,
+      req.ownerType,
+      req.ownerId,
+    );
+    if (!row || row.deleted_at != null) {
       results.push(entityFailure("entity not found", {
         code: "SYNC_ENTITY_NOT_FOUND",
         stage: entityStage(req.type),
         failedTopicIds:
           entityStage(req.type) === "topic_metadata" ? [safeId] : [],
-      }, { id: req.id, type: req.type }));
+      }, entityResultIdentity(req)));
       continue;
     }
 
-    if (!fileGroups.has(row.file_path)) {
-      fileGroups.set(row.file_path, {
-        isGroup: row.file_path.includes("AgentGroups"),
+    if (!fileGroups.has(row.config_path)) {
+      fileGroups.set(row.config_path, {
+        ownerType: row.owner_type,
         reqs: [],
       });
     }
-    fileGroups.get(row.file_path).reqs.push({ req, safeId });
+    fileGroups.get(row.config_path).reqs.push({ req, safeId, row });
   }
 
   const logger = getLogger();
 
-  for (const [filePath, { isGroup, reqs }] of fileGroups) {
+  for (const [filePath, { ownerType, reqs }] of fileGroups) {
     try {
-      const content = await fs.readFile(filePath, "utf-8");
-      const config = JSON.parse(content);
-      const ownerId = config.id || path.basename(path.dirname(filePath));
+      const candidates = await readConfigForRepair(filePath, ownerType);
 
-      for (const { req, safeId } of reqs) {
+      for (const { req, safeId, row } of reqs) {
         let dto = null;
         const type = req.type;
-        const phase = (type === "topic" || type === "agent_topic" || type === "group_topic") ? "topic_metadata" : "owner_metadata";
+        const phase = (type === "agent_topic" || type === "group_topic")
+          ? "topic_metadata"
+          : "owner_metadata";
 
-        if (type === "topic" || type === "agent_topic" || type === "group_topic") {
-          const topic = (config.topics || []).find((t) => t.id === safeId);
-          if (topic) {
-            dto = isGroup
-              ? extractGroupTopicDTO(topic, ownerId)
-              : extractAgentTopicDTO(topic, ownerId);
-          }
+        if (type === "agent_topic" || type === "group_topic") {
+          dto = topicDtoMatchingIndex(candidates, safeId, row, type);
         } else if (type === "agent") {
           logger.logOperation(phase, "download", safeId, "success", `type=${type}`);
-          dto = extractAgentDTO(config);
+          dto = ownerDtoMatchingIndex(candidates, row, type);
         } else if (type === "group") {
           logger.logOperation(phase, "download", safeId, "success", `type=${type}`);
-          dto = extractGroupDTO(config);
+          dto = ownerDtoMatchingIndex(candidates, row, type);
         }
 
         if (dto) {
-          results.push({ id: req.id, type, success: true, data: dto });
+          try {
+            assertEntityDtoMatchesIndex(dto, row, type, safeId);
+            results.push({
+              ...entityResultIdentity(req),
+              success: true,
+              data: dto,
+            });
+          } catch (error) {
+            results.push(entityFailure(error, {
+              code: "SYNC_ENTITY_READ_FAILED",
+              stage: entityStage(type),
+              failedTopicIds:
+                entityStage(type) === "topic_metadata" ? [safeId] : [],
+            }, entityResultIdentity(req)));
+          }
         } else {
           results.push(entityFailure(
             "entity data was not found in its config",
             {
-              code: "SYNC_ENTITY_NOT_FOUND",
+              code: "SYNC_ENTITY_READ_FAILED",
               stage: entityStage(type),
               failedTopicIds:
                 entityStage(type) === "topic_metadata" ? [safeId] : [],
             },
-            { id: req.id, type },
+            entityResultIdentity(req),
           ));
         }
       }
@@ -245,7 +350,7 @@ async function downloadEntities(requests) {
           stage: entityStage(req.type),
           failedTopicIds:
             entityStage(req.type) === "topic_metadata" ? [req.id] : [],
-        }, { id: req.id, type: req.type }));
+        }, entityResultIdentity(req)));
       }
     }
   }
@@ -268,52 +373,67 @@ async function uploadEntitiesBatch(items, appDataPath) {
   const results = [];
 
   // 1. 预处理：按 configPath 分组
-  const fileGroups = new Map(); // Map<configPath, { isTopic, items: [] }>
+  const fileGroups = new Map(); // Map<configPath, { items: [] }>
   const addedIntentLocks = new Set();
-  const seenIds = new Set();
+  const seenTopics = new Set();
 
   for (const item of items) {
-    const { id, type, data } = item;
+    const { id, type, ownerType, ownerId, data } = item;
     const safeId = sanitizeId(id);
+    const identityKey = entityIdentityKey({ id: safeId, type, ownerType, ownerId });
     if (
       !safeId ||
       safeId !== id ||
-      seenIds.has(safeId) ||
+      seenTopics.has(identityKey) ||
       !["agent_topic", "group_topic"].includes(type) ||
+      !["agent", "group"].includes(ownerType) ||
+      typeof ownerId !== "string" ||
+      sanitizeId(ownerId) !== ownerId ||
+      (type === "agent_topic" && ownerType !== "agent") ||
+      (type === "group_topic" && ownerType !== "group") ||
       !data ||
       typeof data !== "object" ||
       Array.isArray(data) ||
-      typeof data.ownerId !== "string" ||
-      sanitizeId(data.ownerId) !== data.ownerId
+      data.ownerId !== ownerId ||
+      (data.ownerType !== undefined && data.ownerType !== ownerType)
     ) {
       results.push(entityFailure(
-        seenIds.has(safeId)
-          ? "Duplicate entity id"
+        seenTopics.has(identityKey)
+          ? "Duplicate entity identity"
           : "Batch upload only accepts valid agent_topic/group_topic items",
         {
           code: "SYNC_REQUEST_INVALID",
           stage: "topic_metadata",
           failedTopicIds: safeId ? [safeId] : [],
         },
-        { id },
+        entityResultIdentity(item),
       ));
       continue;
     }
-    seenIds.add(safeId);
-    if (safeId) {
-      writeIntentLock.add(safeId);
-      addedIntentLocks.add(safeId);
-    }
-    const isTopic = true;
-
+    seenTopics.add(identityKey);
+    const expectedConfigPath = path.join(
+      appDataPath,
+      ownerType === "group" ? "AgentGroups" : "Agents",
+      ownerId,
+      "config.json",
+    );
     let configPath;
-    let row = getEntityIndex(safeId, type);
+    let row = getTopicState({ topicId: safeId, ownerType, ownerId });
+    const parent = getOwnerState({ ownerType, ownerId });
+
+    if (row?.deleted_at != null || !parent || parent.deleted_at != null) {
+      results.push(entityFailure("Entity or its owner is deleted", {
+        code: "SYNC_ENTITY_NOT_FOUND",
+        stage: "topic_metadata",
+        failedTopicIds: [safeId],
+      }, entityResultIdentity(item)));
+      continue;
+    }
 
     if (row) {
-      configPath = row.file_path;
-    } else if (isTopic && data.ownerId) {
-      const parentBaseDir = (type === "group_topic" || data.ownerType === "group") ? "AgentGroups" : "Agents";
-      configPath = path.join(appDataPath, parentBaseDir, data.ownerId, "config.json");
+      configPath = row.config_path;
+    } else {
+      configPath = expectedConfigPath;
     }
 
     if (!configPath) {
@@ -321,27 +441,34 @@ async function uploadEntitiesBatch(items, appDataPath) {
         code: "SYNC_ENTITY_NOT_FOUND",
         stage: "topic_metadata",
         failedTopicIds: [safeId],
-      }, { id }));
+      }, entityResultIdentity(item)));
       continue;
     }
-    const actualOwnerId = path.basename(path.dirname(configPath));
-    const actualIsGroup = configPath.includes(`${path.sep}AgentGroups${path.sep}`);
-    if (
-      actualOwnerId !== data.ownerId ||
-      actualIsGroup !== (type === "group_topic")
-    ) {
+    if (path.resolve(configPath) !== path.resolve(expectedConfigPath)) {
       results.push(entityFailure("Topic owner identity conflict", {
         code: "SYNC_OWNER_CONFLICT",
         stage: "topic_metadata",
         failedTopicIds: [safeId],
-      }, { id }));
+      }, entityResultIdentity(item)));
       continue;
     }
+    addedIntentLocks.add(addWriteIntent({
+      id: safeId,
+      type,
+      ownerType,
+      ownerId,
+    }));
 
     if (!fileGroups.has(configPath)) {
       fileGroups.set(configPath, { items: [] });
     }
-    fileGroups.get(configPath).items.push({ id: safeId, type, data });
+    fileGroups.get(configPath).items.push({
+      id: safeId,
+      type,
+      ownerType,
+      ownerId,
+      data,
+    });
   }
 
   try {
@@ -362,28 +489,28 @@ async function uploadEntitiesBatch(items, appDataPath) {
         // 依次应用该文件下的所有更新
         for (const item of group.items) {
           const { id, type, data } = item;
-          const isTopic = type === "topic" || type === "agent_topic" || type === "group_topic";
 
           try {
-            if (isTopic) {
-              config = await handleTopicUpload({
-                config,
-                id,
-                entityType: type,
-                data,
-                configPath,
-                appDataPath,
-              });
-            }
+            config = await handleTopicUpload({
+              config,
+              id,
+              entityType: type,
+              data,
+              configPath,
+              appDataPath,
+            });
 
-            results.push({ id, success: true });
+            results.push({
+              ...entityResultIdentity(item),
+              success: true,
+            });
             successfulIds.add(id);
           } catch (e) {
             results.push(entityFailure(e, {
               code: "SYNC_ENTITY_WRITE_FAILED",
               stage: "topic_metadata",
               failedTopicIds: [id],
-            }, { id }));
+            }, entityResultIdentity(item)));
           }
         }
 
@@ -394,46 +521,49 @@ async function uploadEntitiesBatch(items, appDataPath) {
         await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
         await fs.rename(tmpPath, configPath);
 
-        // 批量更新索引
-        for (const item of group.items.filter((item) => successfulIds.has(item.id))) {
-          const { id, type } = item;
-          const isTopic = type === "topic" || type === "agent_topic" || type === "group_topic";
-          if (isTopic) {
-            updateTopicIndex(db, id, configPath, config, type);
-          } else {
-            const dto = type === "agent" ? extractAgentDTO(config) : extractGroupDTO(config);
-            const hash = computeDtoHash(dto, type === "agent" ? AGENT_SYNC_FIELDS : GROUP_SYNC_FIELDS);
-            upsertEntityIndex(id, type, configPath, hash);
+        // 同一父 config 的 Topic 状态先全部提交，再只刷新一次 Owner root。
+        const successfulItems = group.items.filter((item) => successfulIds.has(item.id));
+        const commitIndex = db.transaction(() => {
+          for (const item of successfulItems) {
+            updateTopicStateFromConfig(
+              item.id,
+              config,
+              item.ownerType,
+              item.ownerId,
+              { refreshOwner: false },
+            );
           }
-        }
+          const owner = successfulItems[0];
+          refreshOwnerContentHash({
+            ownerType: owner.ownerType,
+            ownerId: owner.ownerId,
+          });
+        });
+        commitIndex();
       } catch (e) {
-        // 文件级错误，标记该组所有 item 为失败。
-        // 缺口 D：父 config 不存在（ENOENT）时与单条路径（entity.js:497-510）
-        // 对齐为 SYNC_ENTITY_NOT_FOUND——手机端可据此区分"先补建父 Agent"与
-        // 真正的写入失败；其余错误保持 SYNC_ENTITY_BATCH_FAILED。
+        // 文件级错误会让该组所有 item 失败。父 config 不存在时返回
+        // SYNC_ENTITY_NOT_FOUND，手机端可据此区分缺失父 Owner 与普通写入失败。
         const isMissingParent = e && e.code === "ENOENT";
         logger.logOperation("topic_metadata", "batch_upload", configPath, "error", e.message);
-        const groupIds = new Set(group.items.map((item) => item.id));
+        const groupIds = new Set(group.items.map(entityIdentityKey));
         for (let index = results.length - 1; index >= 0; index -= 1) {
-          if (groupIds.has(results[index].id)) results.splice(index, 1);
+          if (groupIds.has(entityIdentityKey(results[index]))) results.splice(index, 1);
         }
         for (const item of group.items) {
           results.push(entityFailure(e, {
             code: isMissingParent ? "SYNC_ENTITY_NOT_FOUND" : "SYNC_ENTITY_BATCH_FAILED",
             stage: "topic_metadata",
             failedTopicIds: [item.id],
-          }, { id: item.id }));
+          }, entityResultIdentity(item)));
         }
       } finally {
         release();
       }
     }
   } finally {
-    setTimeout(() => {
-      for (const id of addedIntentLocks) {
-        writeIntentLock.delete(id);
-      }
-    }, 1000);
+    for (const key of addedIntentLocks) {
+      releaseWriteIntent(key);
+    }
   }
 
   return results;
@@ -448,14 +578,14 @@ async function uploadEntitiesBatch(items, appDataPath) {
  * @param {string} params.appDataPath - AppData 路径
  * @returns {Promise<{success: boolean, error?: object}>}
  */
-async function uploadEntity({ id, type, data, appDataPath }) {
+async function uploadEntity({ id, type, ownerType, ownerId, data, appDataPath }) {
   const db = getDb();
   const logger = getLogger();
   if (!db) {
     return entityFailure("Database not initialized", {
       code: "SYNC_DB_UNAVAILABLE",
       stage: entityStage(type),
-    });
+    }, entityResultIdentity({ id, type, ownerType, ownerId }));
   }
 
   const safeId = sanitizeId(id);
@@ -470,51 +600,95 @@ async function uploadEntity({ id, type, data, appDataPath }) {
     return entityFailure("Invalid entity upload payload", {
       code: "SYNC_REQUEST_INVALID",
       stage: entityStage(type),
-    }, { id });
+    }, entityResultIdentity({ id, type, ownerType, ownerId }));
   }
-  const isTopic =
-    type === "topic" || type === "agent_topic" || type === "group_topic";
-  const isGroup = type === "group";
-  const baseDirName = isGroup ? "AgentGroups" : "Agents";
+  const isTopic = type === "agent_topic" || type === "group_topic";
+  const topicOwnerType = isTopic ? ownerType : type;
+  const topicOwnerId = isTopic ? ownerId : safeId;
+  const resultIdentity = entityResultIdentity({
+    id: safeId,
+    type,
+    ...(isTopic ? { ownerType: topicOwnerType, ownerId: topicOwnerId } : {}),
+  });
+  if (
+    isTopic &&
+    (
+      !["agent", "group"].includes(topicOwnerType) ||
+      typeof topicOwnerId !== "string" ||
+      sanitizeId(topicOwnerId) !== topicOwnerId ||
+      (type === "agent_topic" && topicOwnerType !== "agent") ||
+      (type === "group_topic" && topicOwnerType !== "group") ||
+      data.ownerId !== topicOwnerId ||
+      (data.ownerType !== undefined && data.ownerType !== topicOwnerType)
+    )
+  ) {
+    return entityFailure("Invalid topic owner identity", {
+      code: "SYNC_REQUEST_INVALID",
+      stage: "topic_metadata",
+      failedTopicIds: [safeId],
+    }, resultIdentity);
+  }
   const phase = isTopic ? "topic_metadata" : "owner_metadata";
 
   // 1. 查找现有配置文件路径
-  let row = getEntityIndex(safeId, type);
+  let row = getEntityState(
+    safeId,
+    type,
+    topicOwnerType,
+    topicOwnerId,
+  );
+  if (row?.deleted_at != null) {
+    return entityFailure("Entity is deleted", {
+      code: "SYNC_ENTITY_NOT_FOUND",
+      stage: phase,
+      failedTopicIds: isTopic ? [safeId] : [],
+    }, resultIdentity);
+  }
+  if (isTopic) {
+    const parent = getOwnerState({
+      ownerType: topicOwnerType,
+      ownerId: topicOwnerId,
+    });
+    if (!parent || parent.deleted_at != null) {
+      return entityFailure("Topic owner is missing or deleted", {
+        code: "SYNC_ENTITY_NOT_FOUND",
+        stage: phase,
+        failedTopicIds: [safeId],
+      }, resultIdentity);
+    }
+  }
   let configPath;
   let isNewEntity = false;
+  const expectedConfigPath = path.join(
+    appDataPath,
+    topicOwnerType === "group" ? "AgentGroups" : "Agents",
+    topicOwnerId,
+    "config.json",
+  );
 
   if (!row && !isTopic) {
     // 新建 Agent/Group
-    const newEntityDir = path.join(appDataPath, baseDirName, safeId);
-    configPath = path.join(newEntityDir, "config.json");
+    const newEntityDir = path.dirname(expectedConfigPath);
+    configPath = expectedConfigPath;
     await fs.mkdir(newEntityDir, { recursive: true });
     isNewEntity = true;
   } else if (row) {
-    configPath = row.file_path;
-  } else if (isTopic && data.ownerId) {
+    configPath = row.config_path;
+  } else if (isTopic && topicOwnerId) {
     // 新建 Topic: 根据归属信息反推父级路径
-    const parentBaseDir =
-      type === "group_topic" || data.ownerType === "group"
-        ? "AgentGroups"
-        : "Agents";
-    configPath = path.join(
-      appDataPath,
-      parentBaseDir,
-      data.ownerId,
-      "config.json",
-    );
+    configPath = expectedConfigPath;
     try {
       await fs.access(configPath);
     } catch {
-      logger.logOperation(phase, "upload", safeId, "error", `parent entity ${data.ownerId} not found`);
+      logger.logOperation(phase, "upload", safeId, "error", `parent entity ${topicOwnerId} not found`);
       return entityFailure(
-        `Parent entity ${data.ownerId} not found on desktop`,
+        `Parent entity ${topicOwnerId} not found on desktop`,
         {
           code: "SYNC_ENTITY_NOT_FOUND",
           stage: "topic_metadata",
           failedTopicIds: [safeId],
         },
-        { id: safeId },
+        resultIdentity,
       );
     }
   } else {
@@ -523,27 +697,23 @@ async function uploadEntity({ id, type, data, appDataPath }) {
       code: "SYNC_REQUEST_INVALID",
       stage: "topic_metadata",
       failedTopicIds: [safeId],
-    }, { id: safeId });
+    }, resultIdentity);
   }
 
-  if (isTopic) {
-    const actualOwnerId = path.basename(path.dirname(configPath));
-    const actualIsGroup = configPath.includes(`${path.sep}AgentGroups${path.sep}`);
-    if (
-      typeof data.ownerId !== "string" ||
-      sanitizeId(data.ownerId) !== data.ownerId ||
-      data.ownerId !== actualOwnerId ||
-      actualIsGroup !== (type === "group_topic")
-    ) {
-      return entityFailure("Topic owner identity conflict", {
-        code: "SYNC_OWNER_CONFLICT",
-        stage: "topic_metadata",
-        failedTopicIds: [safeId],
-      }, { id: safeId });
-    }
+  if (path.resolve(configPath) !== path.resolve(expectedConfigPath)) {
+    return entityFailure("Entity owner identity conflict", {
+      code: "SYNC_OWNER_CONFLICT",
+      stage: phase,
+      failedTopicIds: isTopic ? [safeId] : [],
+    }, resultIdentity);
   }
 
-  writeIntentLock.add(safeId);
+  const writeIntentKey = addWriteIntent({
+    id: safeId,
+    type,
+    ownerType: topicOwnerType,
+    ownerId: topicOwnerId,
+  });
 
   const release = await acquireLock(configPath);
   try {
@@ -604,28 +774,38 @@ async function uploadEntity({ id, type, data, appDataPath }) {
 
     // 5. 更新索引 (V2: 使用 DTO 提取以对齐默认值处理)
     if (isTopic) {
-      updateTopicIndex(db, safeId, configPath, config, type);
+      updateTopicStateFromConfig(
+        safeId,
+        config,
+        topicOwnerType,
+        topicOwnerId,
+      );
     } else {
       const dto = type === "agent" ? extractAgentDTO(config) : extractGroupDTO(config);
       const hash = computeDtoHash(
         dto,
         type === "agent" ? AGENT_SYNC_FIELDS : GROUP_SYNC_FIELDS,
       );
-      upsertEntityIndex(safeId, type, configPath, hash);
+      upsertOwnerState({
+        ownerType: type,
+        ownerId: safeId,
+        configPath,
+        configHash: hash,
+      });
     }
 
     logger.logOperation(phase, "upload", safeId, "success", `type=${type}, isNewEntity=${isNewEntity}, fileReadSuccess=${fileReadSuccess}`);
-    return { success: true, id: safeId };
+    return { success: true, ...resultIdentity };
   } catch (e) {
     logger.logOperation(phase, "upload", safeId, "error", e.message);
     return entityFailure(e, {
       code: "SYNC_ENTITY_WRITE_FAILED",
       stage: phase,
       failedTopicIds: isTopic ? [safeId] : [],
-    }, { id: safeId });
+    }, resultIdentity);
   } finally {
     release();
-    setTimeout(() => writeIntentLock.delete(safeId), 1000);
+    releaseWriteIntent(writeIntentKey);
   }
 }
 
@@ -726,21 +906,33 @@ async function handleTopicUpload({
 }
 
 // 内部函数：更新 Topic 索引
-function updateTopicIndex(db, id, configPath, config, entityType) {
-  const isGroupTopic = entityType === "group_topic";
+function updateTopicStateFromConfig(
+  id,
+  config,
+  ownerType,
+  ownerId,
+  { refreshOwner = true } = {},
+) {
+  const isGroupTopic = ownerType === "group";
   const topicObj = (config.topics || []).find((t) => t.id === id);
 
   if (topicObj) {
     // V2: 使用 DTO 提取以对齐默认值处理
-    const parentId = path.basename(path.dirname(configPath));
-    const ownerType = isGroupTopic ? "group" : "agent";
-    const topicDto = extractTopicDTO(topicObj, parentId, ownerType);
+    const topicDto = extractTopicDTO(topicObj, ownerId, ownerType);
     
     const hash = computeDtoHash(
       topicDto,
       isGroupTopic ? GROUP_TOPIC_SYNC_FIELDS : AGENT_TOPIC_SYNC_FIELDS,
     );
-    upsertEntityIndex(id, "topic", configPath, hash);
+    upsertTopicState({
+      ownerType,
+      ownerId,
+      topicId: id,
+      configHash: hash,
+    });
+    if (refreshOwner) {
+      refreshOwnerContentHash({ ownerType, ownerId });
+    }
   }
 }
 
@@ -754,29 +946,25 @@ function parseJsonObject(content, label) {
   return parsed;
 }
 
-async function readConfigForRepair(configPath) {
+async function readOptionalConfig(filePath) {
   try {
-    return {
-      config: parseJsonObject(await fs.readFile(configPath, "utf-8"), configPath),
-      source: "primary",
-    };
-  } catch {}
-
-  const backupPath = `${configPath}.backup`;
-  try {
-    return {
-      config: parseJsonObject(await fs.readFile(backupPath, "utf-8"), backupPath),
-      source: "backup",
-    };
+    return parseJsonObject(await fs.readFile(filePath, "utf-8"), filePath);
   } catch {
-    return {
-      config: null,
-      source: null,
-    };
+    return null;
   }
 }
 
-async function writeJsonAtomic(filePath, value) {
+async function readConfigForRepair(configPath, ownerType) {
+  return {
+    primary: await readOptionalConfig(configPath),
+    backup: await readOptionalConfig(`${configPath}.backup`),
+    topicBackup: ownerType === "agent"
+      ? await readOptionalConfig(path.join(path.dirname(configPath), "config.topic.backup.json"))
+      : null,
+  };
+}
+
+async function writeJsonAtomic(filePath, value, { preserveBackup = false } = {}) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const backupPath = `${filePath}.backup`;
@@ -787,8 +975,10 @@ async function writeJsonAtomic(filePath, value) {
     try {
       expectedCurrent = await fs.readFile(filePath, "utf-8");
       parseJsonObject(expectedCurrent, filePath);
-      await fs.writeFile(backupTemporary, expectedCurrent, "utf-8");
-      await fs.rename(backupTemporary, backupPath);
+      if (!preserveBackup) {
+        await fs.writeFile(backupTemporary, expectedCurrent, "utf-8");
+        await fs.rename(backupTemporary, backupPath);
+      }
     } catch (error) {
       if (
         error.code !== "ENOENT" &&
@@ -827,6 +1017,7 @@ function topicTimestampFromId(topicId) {
 async function recoveryTimestamp(topicId, historyPath) {
   const idTimestamp = topicTimestampFromId(topicId);
   if (idTimestamp !== null) return idTimestamp;
+
   try {
     const stats = await fs.stat(historyPath);
     if (stats.isFile() && Number.isFinite(stats.mtimeMs) && stats.mtimeMs >= 0) {
@@ -836,6 +1027,16 @@ async function recoveryTimestamp(topicId, historyPath) {
     if (error.code !== "ENOENT") throw error;
   }
   return 0;
+}
+
+function isSyntheticRecoveredTopic(topic, topicId) {
+  return topic?.name === `Recovered: ${topicId}`;
+}
+
+async function normalizeRecoveredTimestamp(topic, topicId, historyPath) {
+  if (!isSyntheticRecoveredTopic(topic, topicId)) return topic;
+  const createdAt = await recoveryTimestamp(topicId, historyPath);
+  return topic.createdAt === createdAt ? topic : { ...topic, createdAt };
 }
 
 async function listDirectories(directory) {
@@ -849,29 +1050,20 @@ async function listDirectories(directory) {
   }
 }
 
-function isSyntheticRecoveredTopic(topic, topicId) {
-  return topic?.name === `Recovered: ${topicId}`;
-}
-
-async function normalizeRecoveredTimestamp(topic, topicId, historyPath) {
-  if (!isSyntheticRecoveredTopic(topic, topicId)) return topic;
-  const createdAt = await recoveryTimestamp(topicId, historyPath);
-  return topic.createdAt === createdAt ? topic : { ...topic, createdAt };
-}
-
 async function repairOwnerTopicProjection({
   appDataPath,
   ownerId,
   ownerType,
   physicalTopics,
+  recoverTopics,
 }) {
   const ownerRoot = ownerType === "group" ? "AgentGroups" : "Agents";
   const configPath = path.join(appDataPath, ownerRoot, ownerId, "config.json");
   const release = await acquireLock(configPath);
   try {
-    const recovered = await readConfigForRepair(configPath);
-    let config = recovered.config;
-    let configRecovered = false;
+    const candidates = await readConfigForRepair(configPath, ownerType);
+    let config = candidates.primary || candidates.backup || candidates.topicBackup;
+    let configRecovered = candidates.primary === null;
     if (!config) {
       // 没有任何物理 Topic 时不存在可恢复的数据，保留损坏文件供人工处理。
       if (physicalTopics.size === 0) {
@@ -886,16 +1078,64 @@ async function repairOwnerTopicProjection({
     }
 
     const previousTopics = Array.isArray(config.topics) ? config.topics : [];
+    const topicCandidates = (candidate) => new Map(
+      (Array.isArray(candidate?.topics) ? candidate.topics : [])
+        .filter((topic) =>
+          topic &&
+          typeof topic === "object" &&
+          !Array.isArray(topic) &&
+          typeof topic.id === "string" &&
+          sanitizeId(topic.id) === topic.id &&
+          topic.id.length > 0
+        )
+        .map((topic) => [topic.id, topic]),
+    );
+    const primaryTopics = topicCandidates(candidates.primary);
+    const backupTopics = topicCandidates(candidates.backup);
+    const topicBackupTopics = topicCandidates(candidates.topicBackup);
+    const recoveryTopicIds = [...physicalTopics]
+      .filter((topicId) => !primaryTopics.has(topicId))
+      .sort();
+    const metadataTopicIds = recoveryTopicIds.filter(
+      (topicId) =>
+        !backupTopics.has(topicId) && !topicBackupTopics.has(topicId),
+    );
+    const recoveredTopics = recoverTopics && recoveryTopicIds.length > 0
+      ? await recoverTopics({
+          ownerType,
+          ownerId,
+          topicIds: recoveryTopicIds,
+          metadataTopicIds,
+        })
+      : new Map();
+    if (!(recoveredTopics instanceof Map)) {
+      throw new Error("Topic recovery provider must return a Map");
+    }
+
+    const database = getDb();
+    const isTombstoned = (topicId) => {
+      if (recoveredTopics.get(topicId)?.deleted === true) return true;
+      const indexed = database
+        ? getTopicState({
+            ownerType,
+            ownerId,
+            topicId,
+          })
+        : null;
+      return indexed?.deleted_at != null;
+    };
     const recoveredProjection = [];
-    const defaultProjection = [];
     const existingProjection = [];
     const projectedIds = new Set();
     for (const topic of previousTopics) {
       const topicId = topic?.id;
       if (
         typeof topicId === "string" &&
+        sanitizeId(topicId) === topicId &&
+        physicalTopics.has(topicId) &&
+        !isTombstoned(topicId) &&
         !projectedIds.has(topicId) &&
-        (topicId === "default" || physicalTopics.has(topicId))
+        topicId.length > 0
       ) {
         const historyPath = path.join(
           appDataPath,
@@ -910,9 +1150,7 @@ async function repairOwnerTopicProjection({
           topicId,
           historyPath,
         );
-        if (topicId === "default") {
-          defaultProjection.push(normalizedTopic);
-        } else if (isSyntheticRecoveredTopic(normalizedTopic, topicId)) {
+        if (isSyntheticRecoveredTopic(normalizedTopic, topicId)) {
           recoveredProjection.push(normalizedTopic);
         } else {
           existingProjection.push(normalizedTopic);
@@ -923,7 +1161,7 @@ async function repairOwnerTopicProjection({
 
     let added = 0;
     for (const topicId of [...physicalTopics].sort()) {
-      if (projectedIds.has(topicId)) continue;
+      if (projectedIds.has(topicId) || isTombstoned(topicId)) continue;
       const historyPath = path.join(
         appDataPath,
         "UserData",
@@ -932,34 +1170,46 @@ async function repairOwnerTopicProjection({
         topicId,
         "history.json",
       );
-      const topicData = {
-        id: topicId,
-        name: `Recovered: ${topicId}`,
-        createdAt: await recoveryTimestamp(topicId, historyPath),
-      };
-      recoveredProjection.push(
-        ownerType === "group"
-          ? createGroupTopic(topicData)
-          : createAgentTopic(topicData),
+      let topicData = backupTopics.get(topicId);
+      if (!topicData) {
+        const recoveredTopic = recoveredTopics.get(topicId);
+        if (recoveredTopic?.deleted === false && recoveredTopic.topic) {
+          const { ownerId: _ownerId, ...topic } = recoveredTopic.topic;
+          topicData = topic;
+        }
+      }
+      if (!topicData) topicData = topicBackupTopics.get(topicId);
+      if (!topicData) {
+        const fallback = {
+          id: topicId,
+          name: `Recovered: ${topicId}`,
+          createdAt: await recoveryTimestamp(topicId, historyPath),
+        };
+        topicData = ownerType === "group"
+          ? createGroupTopic(fallback)
+          : createAgentTopic(fallback);
+      }
+      const normalizedTopic = await normalizeRecoveredTimestamp(
+        { ...topicData, id: topicId },
+        topicId,
+        historyPath,
       );
+      recoveredProjection.push(normalizedTopic);
       projectedIds.add(topicId);
       added += 1;
     }
 
-    const projectedTopics = [
-      ...defaultProjection,
-      ...recoveredProjection,
-      ...existingProjection,
-    ];
+    // 恢复项只做稳定分区并整体前置；原有 Topic 的人工顺序保持不变。
+    const projectedTopics = [...recoveredProjection, ...existingProjection];
     const removed = previousTopics.length - (projectedTopics.length - added);
     const changed =
       configRecovered ||
-      recovered.source === "backup" ||
       !Array.isArray(config.topics) ||
       JSON.stringify(previousTopics) !== JSON.stringify(projectedTopics);
     if (changed) {
       config.topics = projectedTopics;
-      await writeJsonAtomic(configPath, config);
+      // 修复写入不能把已知可读的恢复副本替换成刚刚检测到的损坏投影。
+      await writeJsonAtomic(configPath, config, { preserveBackup: true });
     }
     return { changed, added, removed };
   } finally {
@@ -976,17 +1226,20 @@ async function scanPhysicalTopicTree(appDataPath) {
   }
 
   const owners = new Map();
+  const ownersById = new Map();
   for (const [ownerType, rootName] of [
     ["agent", "Agents"],
     ["group", "AgentGroups"],
   ]) {
     for (const ownerId of await listDirectories(path.join(appDataPath, rootName))) {
       if (!ownerId || sanitizeId(ownerId) !== ownerId) continue;
-      const existing = owners.get(ownerId);
-      if (existing && existing.ownerType !== ownerType) {
-        throw new Error(`Physical owner ${ownerId} is ambiguous between agent and group`);
-      }
-      owners.set(ownerId, { ownerType, physicalTopics: new Set() });
+      const owner = {
+        ownerType,
+        ownerId,
+        physicalTopics: new Set(),
+      };
+      owners.set(`${ownerType}\0${ownerId}`, owner);
+      ownersById.set(ownerId, owner);
     }
   }
 
@@ -995,8 +1248,8 @@ async function scanPhysicalTopicTree(appDataPath) {
     if (!ownerId || sanitizeId(ownerId) !== ownerId) continue;
     const topicsPath = path.join(userDataPath, ownerId, "topics");
     const topicIds = (await listDirectories(topicsPath))
-      .filter((topicId) => topicId !== "default" && sanitizeId(topicId) === topicId);
-    const owner = owners.get(ownerId);
+      .filter((topicId) => sanitizeId(topicId) === topicId);
+    const owner = ownersById.get(ownerId);
     if (!owner) {
       if (topicIds.length > 0) {
         getLogger().logOperation(
@@ -1004,7 +1257,7 @@ async function scanPhysicalTopicTree(appDataPath) {
           "repair_projection",
           ownerId,
           "error",
-          "UserData owner has no unambiguous Agents/AgentGroups directory; skipped",
+          "UserData owner has no Agents/AgentGroups directory; skipped",
         );
       }
       continue;
@@ -1012,29 +1265,31 @@ async function scanPhysicalTopicTree(appDataPath) {
     for (const topicId of topicIds) {
       owner.physicalTopics.add(topicId);
     }
-    owners.set(ownerId, owner);
   }
   return owners;
 }
 
 /**
- * 启动 reconcile 前，把 UserData 的物理 Topic 集合投影回 Agent/Group config。
- * 物理目录存在即为 live；旧索引墓碑不参与本步骤。
+ * 启动 reconcile 前把物理 Topic 投影回 config 元数据。当前配置、普通
+ * backup、CDS 已提交值和 TopicSponsor backup 均只提供元数据；物理目录
+ * 与已有墓碑共同决定 Topic 是否存活。
  */
 async function repairTopicProjectionsFromDisk(
   appDataPath,
   physicalOwners = null,
+  recoverTopics = null,
 ) {
   const owners = physicalOwners || await scanPhysicalTopicTree(appDataPath);
 
   const stats = { ownersChanged: 0, topicsAdded: 0, topicsRemoved: 0 };
-  for (const ownerId of [...owners.keys()].sort()) {
-    const owner = owners.get(ownerId);
+  for (const ownerKey of [...owners.keys()].sort()) {
+    const owner = owners.get(ownerKey);
     const result = await repairOwnerTopicProjection({
       appDataPath,
-      ownerId,
+      ownerId: owner.ownerId,
       ownerType: owner.ownerType,
       physicalTopics: owner.physicalTopics,
+      recoverTopics,
     });
     if (result.changed) stats.ownersChanged += 1;
     stats.topicsAdded += result.added;
@@ -1054,8 +1309,8 @@ async function repairTopicProjectionsFromDisk(
 }
 
 /**
- * legacy 索引只保留物理树仍存在的 live 行。删除墓碑在同一事务中级联到消息，
- * 用于收敛“物理删除完成、进程在索引写入前退出”的窗口。
+ * Legacy Owner 与 Topic 均以物理目录为存活事实；config 只提供 Topic 元数据。
+ * 删除墓碑在同一事务中级联到消息，用于收敛删除中断窗口。
  */
 async function reconcileMissingPhysicalIndexes(
   appDataPath,
@@ -1067,113 +1322,136 @@ async function reconcileMissingPhysicalIndexes(
   const owners = physicalOwners || await scanPhysicalTopicTree(appDataPath);
   const liveOwners = new Set();
   const liveTopics = new Map();
-  for (const [ownerId, owner] of owners) {
-    liveOwners.add(`${owner.ownerType}:${ownerId}`);
+  for (const owner of owners.values()) {
+    const ownerKey = `${owner.ownerType}\0${owner.ownerId}`;
+    liveOwners.add(ownerKey);
     for (const topicId of owner.physicalTopics) {
-      const previous = liveTopics.get(topicId);
-      if (previous) {
-        throw new Error(
-          `Physical topic ${topicId} is ambiguous between ${previous.ownerId} and ${ownerId}`,
-        );
-      }
-      liveTopics.set(topicId, { ownerId, ownerType: owner.ownerType });
+      liveTopics.set(`${ownerKey}\0${topicId}`, true);
     }
   }
 
   const ownerRows = database.prepare(
-    `SELECT id, type, file_path, deleted_at FROM entity_index
-     WHERE type = 'agent' OR type = 'group'`,
+    `SELECT owner_type, owner_id, config_path, deleted_at FROM owners`,
   ).all();
   const topicRows = database.prepare(
-    `SELECT id, type, file_path, deleted_at FROM entity_index
-     WHERE id <> 'default'
-       AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')`,
+    `SELECT owner_type, owner_id, topic_id, deleted_at FROM topics`,
   ).all();
   const staleOwners = ownerRows.filter(
-    (row) => !liveOwners.has(`${row.type}:${row.id}`),
+    (row) => !liveOwners.has(`${row.owner_type}\0${row.owner_id}`),
   );
-  const staleOwnerDeletedAtByPath = new Map(
+  const staleOwnerDeletedAt = new Map(
     staleOwners.map((row) => [
-      row.file_path,
+      `${row.owner_type}\0${row.owner_id}`,
       Number.isSafeInteger(row.deleted_at)
         ? Math.min(row.deleted_at, deletedAt)
         : deletedAt,
     ]),
   );
-  const staleOwnerPaths = new Set(
-    staleOwners.map((row) => row.file_path),
-  );
 
   const staleTopicRows = topicRows.filter((row) => {
-    if (staleOwnerPaths.has(row.file_path)) return true;
-    const physical = liveTopics.get(row.id);
-    if (!physical) return true;
-    const normalized = row.file_path.replace(/\\/g, "/");
-    const parts = normalized.split("/").filter(Boolean);
-    const ownerId = parts.at(-2);
-    const ownerType = parts.includes("AgentGroups")
-      ? "group"
-      : parts.includes("Agents")
-        ? "agent"
-        : null;
-    if (!ownerId || !ownerType) {
-      throw new Error(`Topic ${row.id} has an invalid indexed owner path`);
-    }
-    return ownerId !== physical.ownerId || ownerType !== physical.ownerType;
+    const ownerKey = `${row.owner_type}\0${row.owner_id}`;
+    return (
+      staleOwnerDeletedAt.has(ownerKey) ||
+      !liveTopics.has(`${ownerKey}\0${row.topic_id}`)
+    );
   });
+  const affectedLiveOwners = new Map();
+  for (const topic of staleTopicRows) {
+    const ownerKey = `${topic.owner_type}\0${topic.owner_id}`;
+    if (topic.deleted_at === null && !staleOwnerDeletedAt.has(ownerKey)) {
+      affectedLiveOwners.set(ownerKey, {
+        ownerType: topic.owner_type,
+        ownerId: topic.owner_id,
+      });
+    }
+  }
 
   const stats = { ownersDeleted: 0, topicsDeleted: 0, messagesDeleted: 0 };
   database.exec("BEGIN IMMEDIATE");
   try {
     const deleteOwner = database.prepare(
-      `UPDATE entity_index
-       SET deleted_at = ?
-       WHERE id = ? AND type = ? AND deleted_at IS NULL`,
-    );
-    const deleteAvatar = database.prepare(
-      `UPDATE avatar_index
-       SET deleted_at = ?
-       WHERE owner_id = ? AND owner_type = ? AND deleted_at IS NULL`,
+      `UPDATE owners
+       SET content_hash = '', deleted_at = ?
+       WHERE owner_type = ? AND owner_id = ?
+         AND deleted_at IS NULL`,
     );
     const deleteTopic = database.prepare(
-      `UPDATE entity_index
+      `UPDATE topics
        SET deleted_at = ?
-       WHERE id = ? AND type = ? AND deleted_at IS NULL`,
+       WHERE owner_type = ? AND owner_id = ? AND topic_id = ?
+         AND deleted_at IS NULL`,
     );
     const deleteMessages = database.prepare(
-      `UPDATE message_index
+      `UPDATE messages
        SET deleted_at = ?
-       WHERE topic_id = ? AND deleted_at IS NULL`,
+       WHERE owner_type = ? AND owner_id = ? AND topic_id = ?
+         AND deleted_at IS NULL`,
+    );
+    const deleteHistorySource = database.prepare(
+      `DELETE FROM history_source_state
+       WHERE owner_type = ? AND owner_id = ? AND topic_id = ?`,
     );
 
     for (const owner of staleOwners) {
-      const effectiveDeletedAt = staleOwnerDeletedAtByPath.get(owner.file_path);
+      const effectiveDeletedAt = staleOwnerDeletedAt.get(
+        `${owner.owner_type}\0${owner.owner_id}`,
+      );
       stats.ownersDeleted += deleteOwner.run(
         effectiveDeletedAt,
-        owner.id,
-        owner.type,
+        owner.owner_type,
+        owner.owner_id,
       ).changes;
-      deleteAvatar.run(effectiveDeletedAt, owner.id, owner.type);
     }
     for (const topic of staleTopicRows) {
+      const ownerKey = `${topic.owner_type}\0${topic.owner_id}`;
       const effectiveDeletedAt = Math.min(
         Number.isSafeInteger(topic.deleted_at) ? topic.deleted_at : deletedAt,
-        staleOwnerDeletedAtByPath.get(topic.file_path) ?? deletedAt,
+        staleOwnerDeletedAt.get(ownerKey) ?? deletedAt,
       );
       stats.topicsDeleted += deleteTopic.run(
         effectiveDeletedAt,
-        topic.id,
-        topic.type,
+        topic.owner_type,
+        topic.owner_id,
+        topic.topic_id,
       ).changes;
       stats.messagesDeleted += deleteMessages.run(
         effectiveDeletedAt,
-        topic.id,
+        topic.owner_type,
+        topic.owner_id,
+        topic.topic_id,
       ).changes;
+      deleteHistorySource.run(topic.owner_type, topic.owner_id, topic.topic_id);
+    }
+    for (const owner of affectedLiveOwners.values()) {
+      refreshOwnerContentHash(owner, database);
     }
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
     throw error;
+  }
+
+  for (const owner of staleOwners) {
+    softDeleteAvatarIndex(
+      owner.owner_id,
+      owner.owner_type,
+      staleOwnerDeletedAt.get(`${owner.owner_type}\0${owner.owner_id}`),
+    );
+  }
+
+  const {
+    clearHistoryOwnerUnhealthy,
+    clearHistoryTopicUnhealthy,
+  } = require("./message");
+  for (const owner of staleOwners) {
+    clearHistoryOwnerUnhealthy(owner.owner_type, owner.owner_id);
+  }
+  for (const topic of staleTopicRows) {
+    clearHistoryTopicUnhealthy({
+      topicId: topic.topic_id,
+      ownerType: topic.owner_type,
+      ownerId: topic.owner_id,
+    });
   }
 
   return stats;
@@ -1183,12 +1461,10 @@ async function reconcileMissingPhysicalIndexes(
  * 下载头像
  * @param {string} id - 所有者 ID
  * @param {string} type - 所有者类型 (agent/group)
- * @returns {Promise<{filePath: string}|null>}
+ * @returns {Promise<{data: Buffer,mimeType: string}|null>}
  */
-async function downloadAvatar(id, type) {
-  const db = getDb();
+async function downloadAvatar(id, type, centralSync = null) {
   const logger = getLogger();
-  if (!db) return null;
 
   const safeId = sanitizeId(id);
   if (
@@ -1199,27 +1475,30 @@ async function downloadAvatar(id, type) {
   ) {
     throw new Error("Invalid avatar owner identity");
   }
-  const row = db
-    .prepare(
-      "SELECT file_path, hash FROM avatar_index WHERE owner_type = ? AND owner_id = ? AND deleted_at IS NULL",
-    )
-    .get(type, safeId);
-  if (!row) {
+  const row = centralSync
+    ? await centralSync.loadAvatarState(type, safeId)
+    : getAvatarIndex(safeId, type);
+  const filePath = row?.filePath || row?.file_path;
+  const deletedAt = row?.deletedAt ?? row?.deleted_at;
+  if (!row || deletedAt != null || !filePath) {
     logger.logOperation("owner_metadata", "download_avatar", id, "error", `type=${type} not found`);
     return null;
   }
-  const stats = await fs.stat(row.file_path);
-  if (!stats.isFile()) throw new Error("Avatar index does not point to a file");
-  const bytes = await fs.readFile(row.file_path);
-  if (computeBinaryHash(bytes) !== row.hash) {
+  const stats = await fs.stat(filePath);
+  if (!stats.isFile() || stats.size > MAX_AVATAR_BYTES) {
+    throw new Error("Avatar index does not point to a supported file");
+  }
+  const data = await fs.readFile(filePath);
+  if (computeBinaryHash(data) !== row.hash) {
     throw Object.assign(
       new Error("Avatar changed after its manifest was indexed"),
       { code: "SYNC_SNAPSHOT_STALE" },
     );
   }
+  const mimeType = detectAvatarMime(data);
 
   logger.logOperation("owner_metadata", "download_avatar", id, "success", `type=${type}`);
-  return { filePath: row.file_path };
+  return { data, mimeType };
 }
 
 /**
@@ -1229,8 +1508,16 @@ async function downloadAvatar(id, type) {
  * @param {string} params.type - 所有者类型 (agent/group)
  * @param {Buffer} params.data - 头像二进制数据
  * @param {string} params.appDataPath - AppData 路径
+ * @param {string} params.mimeType - HTTP Content-Type
  */
-async function uploadAvatar({ id, type, data, appDataPath }) {
+async function uploadAvatar({
+  id,
+  type,
+  data,
+  appDataPath,
+  mimeType: rawMimeType,
+  centralSync = null,
+}) {
   const logger = getLogger();
   const safeId = sanitizeId(id);
   if (
@@ -1238,26 +1525,38 @@ async function uploadAvatar({ id, type, data, appDataPath }) {
     safeId !== id ||
     !["agent", "group", "user"].includes(type) ||
     !Buffer.isBuffer(data) ||
-    data.length > 20 * 1024 * 1024 ||
+    data.length > MAX_AVATAR_BYTES ||
     (type === "user" && safeId !== "user_avatar")
   ) {
     throw new Error("Avatar upload has an invalid owner or exceeds 20 MiB");
   }
+  const { extension, mimeMismatch } = resolveAvatarMime(rawMimeType, data);
+  if (mimeMismatch) {
+    logger.logOperation(
+      "owner_metadata",
+      "upload_avatar_mime",
+      safeId,
+      "warn",
+      "Content-Type disagreed with avatar bytes; physical format was used",
+    );
+  }
   const isGroup = type === "group";
   const isUser = type === "user";
-  if (!isUser) {
-    const parent = getEntityIndex(safeId, type);
+  if (!isUser && !centralSync) {
+    const parent = getOwnerState({ ownerType: type, ownerId: safeId });
     if (!parent || parent.deleted_at != null) {
       throw new Error(`Avatar owner ${type}/${safeId} is missing or deleted`);
     }
+  }
+  if (!centralSync && getAvatarIndex(safeId, type)?.deleted_at != null) {
+    throw new Error(`Avatar ${type}/${safeId} is deleted`);
   }
   const baseDirName = isGroup ? "AgentGroups" : "Agents";
   const entityDir = isUser
     ? path.join(appDataPath, "UserData")
     : path.join(appDataPath, baseDirName, safeId);
 
-  // 默认保存为 png
-  const avatarFileName = isUser ? "user_avatar.png" : "avatar.png";
+  const avatarFileName = isUser ? "user_avatar.png" : `avatar${extension}`;
   const avatarPath = path.join(entityDir, avatarFileName);
 
   // 确保目录存在
@@ -1274,6 +1573,47 @@ async function uploadAvatar({ id, type, data, appDataPath }) {
   } finally {
     await file.close();
   }
+
+  // Group 的 config.avatar 是业务投影：新二进制尚未发布时先提交投影，
+  // 避免新文件已可见但 config 仍指向旧格式。
+  if (isGroup) {
+    const configPath = path.join(entityDir, "config.json");
+    const writeIntentKey = addWriteIntent({
+      id: safeId,
+      type: "group",
+      ownerType: "group",
+      ownerId: safeId,
+    });
+    const release = await acquireLock(configPath);
+    try {
+      const content = await fs.readFile(configPath, "utf-8");
+      const config = JSON.parse(content);
+      config.avatar = avatarFileName;
+
+      const tmpPath = `${configPath}.tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
+      await fs.rename(tmpPath, configPath);
+
+      if (!centralSync) {
+        // Legacy 的 Owner 提交视图与同一物理配置同步更新。
+        const groupHash = computeDtoHash(extractGroupDTO(config), GROUP_SYNC_FIELDS);
+        upsertOwnerState({
+          ownerType: "group",
+          ownerId: safeId,
+          configPath,
+          configHash: groupHash,
+        });
+      }
+    } catch (e) {
+      logger.logOperation("owner_metadata", "upload_avatar", safeId, "error", `update group config failed: ${e.message}`);
+      await fs.unlink(temporary).catch(() => {});
+      throw e;
+    } finally {
+      release();
+      releaseWriteIntent(writeIntentKey);
+    }
+  }
+
   try {
     await fs.rename(temporary, avatarPath);
     if (process.platform !== "win32") {
@@ -1289,33 +1629,35 @@ async function uploadAvatar({ id, type, data, appDataPath }) {
     throw error;
   }
 
-  const hash = computeBinaryHash(data);
-  upsertAvatarIndex(safeId, type, avatarPath, hash);
-
-  // Group 头像需要额外更新 config.json 的 avatar 字段
-  if (isGroup) {
-    const configPath = path.join(entityDir, "config.json");
-    writeIntentLock.add(safeId);
-    const release = await acquireLock(configPath);
-    try {
-      const content = await fs.readFile(configPath, "utf-8");
-      const config = JSON.parse(content);
-      config.avatar = avatarFileName;
-      
-      const tmpPath = `${configPath}.tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      await fs.writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-      await fs.rename(tmpPath, configPath);
-
-      // 更新实体索引 (V2: 使用 DTO 提取)
-      const groupHash = computeDtoHash(extractGroupDTO(config), GROUP_SYNC_FIELDS);
-      upsertEntityIndex(safeId, "group", configPath, groupHash);
-    } catch (e) {
-      logger.logOperation("owner_metadata", "upload_avatar", safeId, "error", `update group config failed: ${e.message}`);
-      throw e;
-    } finally {
-      release();
-      setTimeout(() => writeIntentLock.delete(safeId), 1000);
+  // 旧格式清理仍属于本次文件提交；索引只在物理视图完整后发布新 Hash。
+  if (!isUser) {
+    for (const oldExtension of AVATAR_EXTENSIONS) {
+      const oldPath = path.join(entityDir, `avatar${oldExtension}`);
+      if (oldPath !== avatarPath) {
+        try {
+          await fs.unlink(oldPath);
+        } catch (error) {
+          if (error.code === "ENOENT") continue;
+          await fs.unlink(avatarPath).catch(() => {});
+          throw error;
+        }
+      }
     }
+  }
+
+  const hash = computeBinaryHash(data);
+  try {
+    if (centralSync) {
+      await centralSync.commitAvatar(type, safeId, hash);
+    } else {
+      const indexed = upsertAvatarIndex(safeId, type, avatarPath, hash);
+      if (indexed?.changes !== 1) {
+        throw new Error(`Avatar ${type}/${safeId} is deleted`);
+      }
+    }
+  } catch (error) {
+    await fs.unlink(avatarPath).catch(() => {});
+    throw error;
   }
 
   logger.logOperation("owner_metadata", "upload_avatar", safeId, "success", `type=${type}`);
@@ -1324,11 +1666,11 @@ async function uploadAvatar({ id, type, data, appDataPath }) {
 
 /**
  * 检查写入意图锁
- * @param {string} id - 实体 ID
+ * @param {object} identity - 完整 Owner 或 Topic 身份
  * @returns {boolean}
  */
-function isWriteLocked(id) {
-  return writeIntentLock.has(sanitizeId(id));
+function isWriteLocked(identity) {
+  return writeIntentLock.has(entityIdentityKey(identity));
 }
 
 /**
@@ -1347,6 +1689,7 @@ async function deleteEntity({
   ownerId = null,
   deletedAt,
   appDataPath,
+  persistAvatarIndex = true,
 }) {
   const db = getDb();
   const logger = getLogger();
@@ -1354,7 +1697,7 @@ async function deleteEntity({
     return entityFailure("Database not initialized", {
       code: "SYNC_DB_UNAVAILABLE",
       stage: entityStage(type),
-    });
+    }, entityResultIdentity({ id, type, ownerType, ownerId }));
   }
 
   const safeId = sanitizeId(id);
@@ -1390,28 +1733,60 @@ async function deleteEntity({
     return entityFailure("Invalid entity deletion payload", {
       code: "SYNC_DELETE_INVALID",
       stage: entityStage(type),
-    }, { id });
+    }, entityResultIdentity({ id, type, ownerType, ownerId }));
   }
   const actualPhase = isTopic ? "topic_metadata" : "owner_metadata";
 
-  if (isTopic) {
-    writeIntentLock.add(safeId);
-  }
+  const writeIntentKey = isTopic
+    ? addWriteIntent({
+        id: safeId,
+        type,
+        ownerType,
+        ownerId: safeOwnerId,
+      })
+    : null;
 
-  const row = getEntityIndex(safeId, type);
-
+  let row = null;
   try {
+    if (type !== "avatar") {
+      row = getEntityState(safeId, type, ownerType, safeOwnerId);
+    }
     if (type === "avatar") {
       if (!["agent", "group", "user"].includes(ownerType)) {
         throw new Error("Avatar deletion requires a valid ownerType");
       }
-      softDeleteAvatarIndex(safeId, ownerType, deletedAt);
+      const indexedAvatar = persistAvatarIndex
+        ? getAvatarIndex(safeId, ownerType)
+        : null;
+      const avatarPaths = ownerType === "user"
+        ? [path.join(appDataPath, "UserData", "user_avatar.png")]
+        : AVATAR_EXTENSIONS.map((extension) =>
+            path.join(
+              appDataPath,
+              ownerType === "group" ? "AgentGroups" : "Agents",
+              safeId,
+              `avatar${extension}`,
+            )
+          );
+      for (const avatarPath of avatarPaths) {
+        await fs.unlink(avatarPath).catch((error) => {
+          if (error.code !== "ENOENT") throw error;
+        });
+      }
+      if (persistAvatarIndex) {
+        softDeleteAvatarIndex(
+          safeId,
+          ownerType,
+          deletedAt,
+          indexedAvatar?.file_path || avatarPaths[0],
+        );
+      }
       logger.logOperation(
         actualPhase,
         "delete",
         safeId,
         "success",
-        "type=avatar, soft deleted",
+        "type=avatar, physical file removed and tombstoned",
       );
       return { success: true, id: safeId };
     }
@@ -1424,8 +1799,8 @@ async function deleteEntity({
         "config.json",
       );
       if (
-        row?.file_path &&
-        path.resolve(row.file_path) !== path.resolve(configPath)
+        row?.config_path &&
+        path.resolve(row.config_path) !== path.resolve(configPath)
       ) {
         throw new Error(`Topic ${safeId} owner identity conflicts with its index`);
       }
@@ -1437,57 +1812,80 @@ async function deleteEntity({
         "topics",
         safeId,
       );
-      await fs.rm(topicDir, { recursive: true, force: true });
-      upsertEntityTombstone(
-        safeId,
-        row?.type || type,
-        configPath,
-        deletedAt,
+      const ownerDir = path.join(
+        appDataPath,
+        ownerType === "group" ? "AgentGroups" : "Agents",
+        safeOwnerId,
       );
+      const targetOwnerLive = await isDirectory(ownerDir);
+      const topicDirExists = await isDirectory(topicDir);
+      const removePhysicalTopic = topicDirExists;
+      if (removePhysicalTopic) {
+        await fs.rm(topicDir, { recursive: true, force: true });
+      }
+      upsertTopicTombstone({
+        ownerType,
+        ownerId: safeOwnerId,
+        topicId: safeId,
+        deletedAt,
+      });
       db.prepare(
-        `UPDATE message_index
+        `UPDATE messages
          SET deleted_at = CASE
            WHEN deleted_at IS NULL THEN ? ELSE MIN(deleted_at, ?) END
-         WHERE topic_id = ?`,
-      ).run(deletedAt, deletedAt, safeId);
+         WHERE owner_type = ? AND owner_id = ? AND topic_id = ?`,
+      ).run(deletedAt, deletedAt, ownerType, safeOwnerId, safeId);
+      const { clearHistoryTopicUnhealthy } = require("./message");
+      clearHistoryTopicUnhealthy({
+        topicId: safeId,
+        ownerType,
+        ownerId: safeOwnerId,
+      });
 
       // config.topics 是被动投影；损坏或暂时不可写都不能反向阻塞物理删除。
-      try {
-        const releaseProjection = await acquireLock(configPath);
+      if (targetOwnerLive) {
         try {
-          const recovered = await readConfigForRepair(configPath);
-          if (recovered.config) {
-            const previousTopics = Array.isArray(recovered.config.topics)
-              ? recovered.config.topics
-              : [];
-            const topics = previousTopics.filter((topic) => topic?.id !== safeId);
-            if (
-              recovered.source === "backup" ||
-              !Array.isArray(recovered.config.topics) ||
-              topics.length !== previousTopics.length
-            ) {
-              recovered.config.topics = topics;
-              await writeJsonAtomic(configPath, recovered.config);
+          const releaseProjection = await acquireLock(configPath);
+          try {
+            const candidates = await readConfigForRepair(configPath, ownerType);
+            const config =
+              candidates.primary || candidates.backup || candidates.topicBackup;
+            const recoveredFromFallback = !candidates.primary && Boolean(config);
+            if (config) {
+              const previousTopics = Array.isArray(config.topics)
+                ? config.topics
+                : [];
+              const topics = previousTopics.filter((topic) => topic?.id !== safeId);
+              if (
+                recoveredFromFallback ||
+                !Array.isArray(config.topics) ||
+                topics.length !== previousTopics.length
+              ) {
+                config.topics = topics;
+                await writeJsonAtomic(configPath, config, {
+                  preserveBackup: recoveredFromFallback,
+                });
+              }
             }
+          } finally {
+            releaseProjection();
           }
-        } finally {
-          releaseProjection();
+        } catch (error) {
+          logger.logOperation(
+            actualPhase,
+            "delete_projection",
+            safeId,
+            "error",
+            error.message,
+          );
         }
-      } catch (error) {
-        logger.logOperation(
-          actualPhase,
-          "delete_projection",
-          safeId,
-          "error",
-          error.message,
-        );
       }
       logger.logOperation(
         actualPhase,
         "delete",
         safeId,
         "success",
-        `type=${type}, physical topic removed before config projection`,
+        `type=${type}, physicalTopicRemoved=${removePhysicalTopic}`,
       );
       return {
         success: true,
@@ -1497,8 +1895,8 @@ async function deleteEntity({
       };
     }
 
-    const entityDir = row?.file_path
-      ? path.dirname(row.file_path)
+    const entityDir = row?.config_path
+      ? path.dirname(row.config_path)
       : path.join(
           appDataPath,
           type === "group" ? "AgentGroups" : "Agents",
@@ -1508,33 +1906,44 @@ async function deleteEntity({
 
     // Owner 目录先形成删除事实；遗留 UserData 即使清理中断也不会被猜测成 Agent。
     await fs.rm(entityDir, { recursive: true, force: true });
-    const configPath = row?.file_path || path.join(entityDir, "config.json");
-    upsertEntityTombstone(safeId, row?.type || type, configPath, deletedAt);
-    softDeleteAvatarIndex(safeId, type, deletedAt);
+    const configPath = row?.config_path || path.join(entityDir, "config.json");
+    upsertOwnerTombstone({
+      ownerType: type,
+      ownerId: safeId,
+      configPath,
+      deletedAt,
+    });
+    if (persistAvatarIndex) {
+      softDeleteAvatarIndex(safeId, type, deletedAt);
+    }
     db.prepare(
-      `UPDATE message_index
+      `UPDATE messages
        SET deleted_at = CASE
          WHEN deleted_at IS NULL THEN ? ELSE MIN(deleted_at, ?) END
-       WHERE topic_id IN (
-         SELECT id FROM entity_index
-         WHERE file_path = ?
-           AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')
-       )`,
-    ).run(deletedAt, deletedAt, configPath);
+       WHERE owner_type = ? AND owner_id = ?`,
+    ).run(deletedAt, deletedAt, type, safeId);
     db.prepare(
-      `UPDATE entity_index
+      `DELETE FROM history_source_state
+       WHERE owner_type = ? AND owner_id = ?`,
+    ).run(type, safeId);
+    db.prepare(
+      `UPDATE topics
        SET deleted_at = CASE
          WHEN deleted_at IS NULL THEN ? ELSE MIN(deleted_at, ?) END
-       WHERE file_path = ?
-         AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')`,
-    ).run(deletedAt, deletedAt, configPath);
-    await fs.rm(userDataDir, { recursive: true, force: true });
+       WHERE owner_type = ? AND owner_id = ?`,
+    ).run(deletedAt, deletedAt, type, safeId);
+    const removePhysicalHistory = await isDirectory(userDataDir);
+    if (removePhysicalHistory) {
+      await fs.rm(userDataDir, { recursive: true, force: true });
+    }
+    const { clearHistoryOwnerUnhealthy } = require("./message");
+    clearHistoryOwnerUnhealthy(type, safeId);
     logger.logOperation(
       actualPhase,
       "delete",
       safeId,
       "success",
-      `type=${type}, physical owner history removed before config projection`,
+      `type=${type}, physicalHistoryRemoved=${removePhysicalHistory}`,
     );
 
     return { success: true, id: safeId };
@@ -1544,11 +1953,13 @@ async function deleteEntity({
       code: "SYNC_DELETE_FAILED",
       stage: actualPhase,
       failedTopicIds: isTopic ? [safeId] : [],
-    });
+    }, entityResultIdentity({
+      id: safeId,
+      type,
+      ...(isTopic ? { ownerType, ownerId: safeOwnerId } : {}),
+    }));
   } finally {
-    if (isTopic) {
-      setTimeout(() => writeIntentLock.delete(safeId), 1000);
-    }
+    if (writeIntentKey) releaseWriteIntent(writeIntentKey);
   }
 }
 
@@ -1560,7 +1971,14 @@ async function deleteEntity({
  * @param {string} [params.topicId] - 话题 ID
  * @returns {Promise<{success: boolean, error?: object}>}
  */
-async function deleteMessage({ msgId, deletedAt, topicId, appDataPath }) {
+async function deleteMessage({
+  msgId,
+  deletedAt,
+  topicId,
+  ownerType,
+  ownerId,
+  appDataPath,
+}) {
   const db = getDb();
   const logger = getLogger();
   if (!db) {
@@ -1580,18 +1998,47 @@ async function deleteMessage({ msgId, deletedAt, topicId, appDataPath }) {
       safeMsgId !== msgId ||
       !safeTopicId ||
       safeTopicId !== topicId ||
+      !["agent", "group"].includes(ownerType) ||
+      typeof ownerId !== "string" ||
+      sanitizeId(ownerId) !== ownerId ||
       !Number.isSafeInteger(deletedAt) ||
       deletedAt < 0
     ) {
       throw new Error("Invalid message deletion payload");
     }
-    softDeleteMessageIndex(safeMsgId, deletedAt, safeTopicId);
+    const topic = getTopicState({
+      ownerType,
+      ownerId,
+      topicId: safeTopicId,
+    });
+    if (!topic || topic.deleted_at != null) {
+      throw new Error(`Message topic ${ownerType}/${ownerId}/${safeTopicId} is missing`);
+    }
+    const { assertHistoryTopicHealthy } = require("./message");
+    assertHistoryTopicHealthy({
+      topicId: safeTopicId,
+      ownerType,
+      ownerId,
+    });
     if (safeTopicId && appDataPath) {
       const { pruneMessageFromPhysicalHistory } = require("./message");
-      await pruneMessageFromPhysicalHistory(safeTopicId, safeMsgId, appDataPath);
+      await pruneMessageFromPhysicalHistory(
+        safeTopicId,
+        safeMsgId,
+        ownerType,
+        ownerId,
+        deletedAt,
+        appDataPath,
+      );
     }
     logger.logOperation("messages", "delete", safeMsgId, "success", `soft deleted in topic ${safeTopicId || 'all'}`);
-    return { success: true, topicId: safeTopicId, msgId: safeMsgId };
+    return {
+      success: true,
+      topicId: safeTopicId,
+      ownerType,
+      ownerId,
+      msgId: safeMsgId,
+    };
   } catch (e) {
     logger.logOperation("messages", "delete", safeMsgId, "error", e.message);
     return entityFailure(e, {
@@ -1611,7 +2058,6 @@ function sanitizeId(id) {
 }
 
 module.exports = {
-  downloadEntity,
   downloadEntities,
   uploadEntity,
   uploadEntitiesBatch,
@@ -1622,7 +2068,8 @@ module.exports = {
   repairTopicProjectionsFromDisk,
   reconcileMissingPhysicalIndexes,
   sanitizeId,
-  writeIntentLock,
+  addWriteIntent,
+  releaseWriteIntent,
   deleteEntity,
   deleteMessage,
 };
