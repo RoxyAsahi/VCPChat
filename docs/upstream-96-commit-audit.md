@@ -66,8 +66,8 @@
 | c81327e4 | fix(cds): persist synchronized hash roots | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
 | b94fc94c | refactor(sync): unify message hash ingestion | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
 | fc252987 | refactor(cds): remove unused blake3 search term | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
-| 6c0eea5d | 补充测试集 | 其他业务；按上游树接收 | 有（tests/scoped-style-code-fence.test.mjs） | 最终树以上游为准；共享文件仅保留 presentation | 上游文件等价检查 |
-| 89e02b77 | fix | 聊天核心；行为以上游，冻结协议 | 有（modules/messageRenderer.js, tests/scoped-style-code-fence.test.mjs） | 局部审计：保留上游行为，不恢复旧状态 | guard:chat-kernel-consumers；相关核心测试 |
+| 6c0eea5d | 补充测试集 | 其他业务；按上游树接收 | 无（测试文件已恢复） | 直接吸收上游回归测试，不改变业务运行时 | `node --test tests/scoped-style-code-fence.test.mjs`（6/6） |
+| 89e02b77 | fix | 聊天核心；行为以上游，冻结协议 | 有（modules/messageRenderer.js；测试文件与上游一致） | 局部审计：保留上游行为并恢复对应 fenced-style 回归测试，不恢复旧状态 | `node --test tests/scoped-style-code-fence.test.mjs`（6/6）；`guard:chat-kernel-consumers` |
 | 60a23e84 | perf(sync): streamline index refresh and ingestion | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
 | ba186996 | perf(sync): streamline desktop ingestion pipeline | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
 | d046a6f9 | fix(cds): preserve ingest recovery invariants | MobileSync/CDS；协议/持久化以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | npm run test:mobile-sync；cargo test（Rust CDS） |
@@ -92,7 +92,7 @@
 | 414049a1 | 优化ui | 设置/UI；仅保留展示适配 | 有（main.html, modules/settingsManager.js, styles/setting/settings-agent-sections.css） | 局部适配：保留上游行为，叠加本地展示/构建增量 | npm run test:uiux；设置保存回归；artifact gate |
 | 6364f03b | fix | TTS；供应商/播放链路以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | 设置 UI 回归；上游 TTS 测试待平台服务证据 |
 | f92f4423 | 优化 | 语音输入/辅助窗口；IPC/生命周期以上游 | 无 | 直接吸收（最终文件与 origin/main 一致） | node --test tests/voice-input-engine.test.js（macOS 缺运行时时跳过） |
-| 741fec3c | 支持clone模式 | TTS；供应商/播放链路以上游 | 有（.gitignore, AppData/mimotts/README.md, AppData/mimotts/aemeath.wav 等） | 最终树以上游为准；共享文件仅保留 presentation | 设置 UI 回归；上游 TTS 测试待平台服务证据 |
+| 741fec3c | 支持clone模式 | TTS；供应商/播放链路以上游 | 无（克隆代码、文档、官方参考音频和 `.gitignore` 例外均已恢复） | 直接吸收上游资源与行为；`node --test tests/mimo-clone-assets.test.mjs`（1/1） |
 | b3ca932a | fix说明 | 设置/UI；仅保留展示适配 | 有（main.html） | 局部适配：保留上游行为，叠加本地展示/构建增量 | npm run test:uiux；设置保存回归；artifact gate |
 | aed9e392 | 迁移系统到electron 44大幅提升稳定性 | Electron/依赖；运行时以上游 | 有（NativeSpalash/src/main.rs, README.md, StartVCPchat.exe 等） | 局部适配：保留上游行为，叠加本地展示/构建增量 | 构建/pack 检查；跨平台证据待对应平台 |
 | 0ecd21dc | 迭代pretext依赖 | Electron/依赖；运行时以上游 | 有（modules/renderer/pretext.bundle.js, modules/renderer/pretext.esm.js, package-lock.json 等） | 局部适配：保留上游行为，叠加本地展示/构建增量 | 构建/pack 检查；跨平台证据待对应平台 |
@@ -119,6 +119,7 @@
 - 已运行的 MobileSync/CDS、UIUX、设置保存和聊天核心门禁见 upstream-priority-integration-audit.md。
 - 语音运行时启动证据仍受 macOS 缺少 darwin-arm64 二进制限制；Windows 需在对应环境补跑。
 - `8fecce4b` 遗漏的 `singleChatRequestOrchestrator` 运行时代码与测试已恢复；VoiceChat 的模块加载依赖现已闭合。
+- `6c0eea5d` 遗漏的 `scoped-style-code-fence` 回归测试已恢复，聊天消息样式围栏的上游行为现有独立证据。
 
 ## 2026-08-31 Select 分组适配补充
 

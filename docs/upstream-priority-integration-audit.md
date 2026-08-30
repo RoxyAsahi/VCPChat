@@ -226,6 +226,8 @@
 
 - `npm run check:uiux`、`npm run build:uiux`、`npm run check:uiux:artifacts`：通过。
 - `npm run test:uiux`：95/95 通过；设置桥接专项测试 24/24 通过，包含 Select `<optgroup>` 分组标题与 remount 时序回归。
+- `node --test tests/single-chat-request-orchestrator.test.js tests/scoped-style-code-fence.test.mjs`：10/10 通过，补齐上游聊天编排与 fenced-style 回归证据。
+- `node --test tests/mimo-clone-assets.test.mjs`：1/1 通过，确认 MiMo 克隆文档、官方参考音频和 Git 分发例外均在最终树中。
 - 设置桥接、全局保存和 UI primitive 聚焦测试：69 项通过。
 - `node scripts/test-settings-wa.mjs`：8/8 设置分类及统一导航通过。
 - `npm run test:mobile-sync`：83 项通过；测试文件内容与 `origin/main` 一致。
