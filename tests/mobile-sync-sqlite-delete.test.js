@@ -1038,6 +1038,26 @@ test("legacy 损坏 Owner 不参与 Manifest，修复后重扫恢复", async (t)
   assert.equal(recovered.data[0].action, "PULL");
 });
 
+test("Owner 配置并发摄取按 config 路径串行", async (t) => {
+  const { database, index } = loadSqliteModules({ captureOnMessage() {} });
+  const db = database.initDb(":memory:");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-sync-config-lock-"));
+  const configPath = path.join(directory, "Agents", "locked-owner", "config.json");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify({ name: "Locked", topics: [] }));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => db.close());
+
+  await Promise.all([
+    index.ingestConfigToDb(configPath, "agent", directory),
+    index.ingestConfigToDb(configPath, "agent", directory),
+  ]);
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM entity_index WHERE type = 'agent'").get().count,
+    1,
+  );
+});
+
 test("中央 Topic 删除错误保持 topic_metadata 阶段和失败 Topic", async (t) => {
   let onMessage = null;
   const { database, index } = loadSqliteModules({

@@ -40,6 +40,7 @@ const {
   deleteEntity,
   deleteMessage,
 } = require("./sync/entity");
+const { acquireLock } = require("./utils/lock");
 const { getLogger, resetLogger } = require("./core/logger");
 const { createPhaseAck, createVersionAck } = require("./protocol");
 const { withSyncErrorContext } = require("./error-contract");
@@ -1034,6 +1035,15 @@ function getTopicIdFromPath(filePath) {
  * 摄取配置文件到索引
  */
 async function ingestConfigToDb(configPath, type, appDataPath) {
+  const release = await acquireLock(configPath);
+  try {
+    return await ingestConfigToDbUnlocked(configPath, type, appDataPath);
+  } finally {
+    release();
+  }
+}
+
+async function ingestConfigToDbUnlocked(configPath, type, appDataPath) {
   const db = getDb();
   if (!db) return;
 
