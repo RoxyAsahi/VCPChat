@@ -116,9 +116,9 @@
 
 这 4 个提交是当前真正需要处理的上游队列；共同祖先到 `origin/main` 的其余历史差异不重复导入。任何“直接 cherry-pick”都必须先满足表中的边界和验证条件。
 
-### 52df169a 之后的存储/协议提交审计
+### 52df169a 之前的存储/协议依赖链审计
 
-这些提交依赖上游后续的 Wire 1.4 或 `owners/topics/messages` 新表，不能在当前 Wire 1.2 与 `entity_index/message_index` 基线上整体接收。保留上游行为意图，先记录可抽取的无协议增量，待端到端迁移批次单独处理：
+以下提交在拓扑上属于 `52df169a` 的前置依赖链（并非待按顺序 cherry-pick 的新队列）。它们依赖上游后续的 Wire 1.4 或 `owners/topics/messages` 新表，不能在当前 Wire 1.2 与 `entity_index/message_index` 基线上整体接收。保留上游行为意图，先记录可抽取的无协议增量，待端到端迁移批次单独处理：
 
 | 提交 | 主要变化 | 与当前基线的冲突 | 决策 |
 | --- | --- | --- | --- |
@@ -129,6 +129,8 @@
 | `12f7315a` | Wire 1.4、严格帧键和 v2 HTTP 端点 | 与当前 Wire 1.2 协议不可混跑 | 暂缓；不得 cherry-pick |
 | `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续抽取锁与快路径思路，映射到本地表后再实现 |
 | `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续局部适配；先不引入新端点 |
+
+`52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
 
 ### 已吸收记录
 
