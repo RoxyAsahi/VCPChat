@@ -38,7 +38,7 @@
 | 项目 | 值 |
 | --- | --- |
 | 本地稳定提交 | `08511fa5` |
-| 当前收口提交 | `5c3580cf` |
+| 当前收口提交 | `298e07ef` |
 | 上游抓取提交 | `4df8f4fa` |
 | 共同祖先 | `037a3b9d` |
 | 共同祖先到上游差异 | 96（历史拓扑差异，不等于待 cherry-pick 队列） |
@@ -128,29 +128,29 @@
 | 顺序 | 提交 | 业务域 | 文件范围 | 与本地成熟实现的交集 | 边界影响 | 当前决策 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `8fecce4b` 加速工程推进 | 聊天请求编排、辅助语音窗口 | `Voicechatmodules/voicechat.js`、`modules/chat/singleChatRequestOrchestrator.js`、`modules/chatManager.js`、`modules/tavernRulesEngine.js`、Rust Assistant、2 个测试 | 高；本地已有 Surface-owned renderer、stream 和 history authority | `sendToVCP` 签名不变；新增规则/附件/模型构建，改变 stream registration 与请求生命周期；持久化 key 不变 | 局部适配已完成；恢复单聊编排器与 4 项回归测试，`chatManager` 保留本地 owner 结构 |
-| 2 | `accc88e5` 狂暴工程迭代收尾 | Windows 原生语音输入 | VoiceChat UI、`voiceHandlers.js`、Rust voice runtime 与 Windows 二进制 | 高；本地 VoiceChat 和 capture 生命周期已有改造 | 移除 native mode select；capture settle、F24 停止键和状态字段变化；IPC capture 生命周期变化 | 暂缓；当前分支的 `voiceHandlers.js` 仍是旧的 speechRecognizer 路径，直接接收会连带替换整个 capture 生命周期；需要 Windows/Electron journey 与完整前置链验证 |
-| 3 | `3eae725a` 加固 | 语音 capture debounce | `modules/ipc/voiceHandlers.js` | 高 | session timer、trailing-edge debounce、自动结束；IPC 事件名不变 | 暂缓；该补丁依赖 `accc88e5` 引入的 capture session 字段，不能孤立 cherry-pick；先补 timer/stop 竞态测试再按前置链适配 |
+| 2 | `accc88e5` 狂暴工程迭代收尾 | Windows 原生语音输入 | VoiceChat UI、`voiceHandlers.js`、Rust voice runtime 与 Windows 二进制 | 高；本地 VoiceChat 和 capture 生命周期已有改造 | 移除 native mode select；capture settle、F24 停止键和状态字段变化；IPC capture 生命周期变化 | 最终文件树已由后续上游提交覆盖，无需独立 cherry-pick；Windows/Electron 启停 journey 仍待补证 |
+| 3 | `3eae725a` 加固 | 语音 capture debounce | `modules/ipc/voiceHandlers.js` | 高 | session timer、trailing-edge debounce、自动结束；IPC 事件名不变 | 最终文件树已由后续上游提交覆盖，无需独立 cherry-pick；需在 Windows 实机补竞态与启停证据 |
 | 4 | `4df8f4fa` 加固 | 辅助窗口中止请求 | VoiceChat、Rust Assistant | 高；本地已有 stream runtime | `interruptVcpRequest` 成功后立即 `streamRuntime.cancel`；无持久化/协议变化 | 局部适配；接入现有 `interruptHandler`，不整文件覆盖；本地提交 `e2368c0f` |
 
-这 4 个提交是当前真正需要处理的上游队列；共同祖先到 `origin/main` 的其余历史差异不重复导入。任何“直接 cherry-pick”都必须先满足表中的边界和验证条件。
+这 4 个提交是当前真正需要核对的上游队列；其中语音 capture 两个提交的最终代码已由后续上游提交覆盖，不再作为独立 cherry-pick 阻塞项。共同祖先到 `origin/main` 的其余历史差异不重复导入。任何仍需独立接入的行为都必须先满足表中的边界和验证条件。
 
 ### 52df169a 之前的存储/协议依赖链审计
 
-以下提交在拓扑上属于 `52df169a` 的前置依赖链（并非待按顺序 cherry-pick 的新队列）。它们依赖上游后续的 Wire 1.4 或 `owners/topics/messages` 新表，不能在当前 Wire 1.2 与 `entity_index/message_index` 基线上整体接收。保留上游行为意图，先记录可抽取的无协议增量，待端到端迁移批次单独处理：
+以下提交在拓扑上属于 `52df169a` 的前置依赖链（并非待按顺序 cherry-pick 的新队列）。它们曾因协议/表结构冲突被列为暂缓独立 cherry-pick；本次复核以最终文件树为准：已经被后续上游提交覆盖的，不再视为当前代码缺口；仍依赖 Wire 1.4 或 `owners/topics/messages` 迁移的行为，继续保留为后续迁移事项。
 
 | 提交 | 主要变化 | 与当前基线的冲突 | 决策 |
 | --- | --- | --- | --- |
-| `5acfef67` | 合并 Owner Manifest，强化复合身份校验 | 本地仍使用 agent/group dataType，移动端 Wire 1.2 不兼容 | 暂缓；只保留现有 Topic owner 冲突 guard |
-| `192ec595` | 迁移 owners/topics/messages 规范表与复合主键 | 会破坏现有墓碑、历史索引和已验证数据库 | 暂缓；需迁移脚本与回滚方案 |
-| `f4f9a96a` | 清理旧状态日志/注释 | 依赖新表，无独立行为收益 | 随 schema 批次处理 |
-| `a8ead26f` | 将 central avatar 状态迁入 CDS | 改变头像持久化归属并新增 HTTP 端点 | 暂缓；需移动端与 CDS 同批发布 |
-| `12f7315a` | Wire 1.4、严格帧键和 v2 HTTP 端点 | 与当前 Wire 1.2 协议不可混跑 | 暂缓；不得 cherry-pick |
-| `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续抽取锁与快路径思路，映射到本地表后再实现 |
-| `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续局部适配；先不引入新端点 |
-| `307291a3` | watcher 所有权与 Agent/Group 物理身份歧义隔离 | 当前实现已对歧义路径 fail-closed 抛错；上游改为隔离并继续扫描，涉及 `scanPhysicalTopicTree` 返回结构和 watcher 流程 | 暂缓整体接收；先补歧义目录、孤儿 history、删除竞态的回归矩阵，再局部迁移 |
-| `7609701f` | 中央 CDS 实体拉取 | 当前中央适配器仍只承载 manifest/topic/message 差分，缺少 `/v2/sync/entities/pull` 端点和对应协议帧 | 暂缓；需与 CDS 协议版本、实体身份合同和移动端调用方一起迁移，不能只加一个 HTTP 路由 |
+| `5acfef67` | 合并 Owner Manifest，强化复合身份校验 | 历史基线曾使用 agent/group dataType 与 Wire 1.2 | 后续最终树已覆盖并迁移至 Wire 1.4；无需独立 cherry-pick |
+| `192ec595` | 迁移 owners/topics/messages 规范表与复合主键 | 会破坏现有墓碑、历史索引和已验证数据库 | 后续最终树已覆盖；数据库迁移仍不在本轮范围 |
+| `f4f9a96a` | 清理旧状态日志/注释 | 依赖新表，无独立行为收益 | 后续最终树已覆盖；不制造空提交 |
+| `a8ead26f` | 将 central avatar 状态迁入 CDS | 改变头像持久化归属并新增 HTTP 端点 | 后续最终树已覆盖；跨端发布证据仍待补 |
+| `12f7315a` | Wire 1.4、严格帧键和 v2 HTTP 端点 | 与历史 Wire 1.2 不可混跑 | 后续最终树已覆盖；不得另开旁路 |
+| `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续最终树已覆盖；性能证据随协议迁移批次处理 |
+| `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续最终树已覆盖；本地锁适配已有独立提交 |
+| `307291a3` | watcher 所有权与 Agent/Group 物理身份歧义隔离 | 当前实现已对歧义路径 fail-closed 抛错；上游改为隔离并继续扫描，涉及 `scanPhysicalTopicTree` 返回结构和 watcher 流程 | 后续最终树已覆盖；保留本地 fail-closed 语义并继续补边界矩阵 |
+| `7609701f` | 中央 CDS 实体拉取 | 当前中央适配器仍只承载 manifest/topic/message 差分，缺少 `/v2/sync/entities/pull` 端点和对应协议帧 | 后续最终树已覆盖；端到端实体迁移仍需单独发布批次 |
 
-`52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `a8e13592` 只是 Unix `fs::File` 作用域修复，而当前源码已使用统一 `fs` 模块且不存在对应旧导入，因此确认无代码变更即可视为已覆盖；`61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
+`52df169a..b9e2b573` 之间的 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）已完成最终文件树核对；其中 `a8e13592` 为无代码差异，`61d9511d` 的协议升级已由最终上游树覆盖但不在当前 Wire 版本上开旁路，其余行为均已有对应吸收记录。
 
 补充核对：`b9e2b573` 引入的 `Voicechatmodules/voice-input-capture.js` 与 `preloads/voice-input-capture.js` 在当前本地稳定基线中不存在，说明该提交属于尚未进入本分支的整套 Windows capture 子系统，而不是可独立套用的 IPC 小修复。该链需与 `accc88e5`、`3eae725a` 及 Windows 二进制一起做平台批次迁移，当前不创建 source-only 文件。
 
@@ -160,10 +160,10 @@
 | --- | --- | --- | --- |
 | `912d42cb` 修复 SQLite 删除索引绑定 | `f719212f` | `node --test tests/mobile-sync-sqlite-delete.test.js`（4/4） | 无冲突吸收；补入位置绑定修复、删除错误上下文和专门回归测试 |
 | `6587f9cc` 恢复删除与对账不变量 | `625469a9` | `node --test tests/mobile-sync-*.test.js`（92/93，1 skip）；`cargo test`（52/52） | 局部合并；保留增量历史扫描、来源状态和本地日志，同时接入实体/消息墓碑、物理 Topic 修复与聚合哈希 |
-| `516773a2` 简化 CDS 实体墓碑 | `56188419` | `node --test tests/mobile-sync-*.test.js`（92/93，1 skip）；`cargo test`（54/54） | 直接吸收；仅重构已验证的 CDS 墓碑存储，不改变本地 Wire 1.2 边界 |
+| `516773a2` 简化 CDS 实体墓碑 | `56188419` | `node --test tests/mobile-sync-*.test.js`（92/93，1 skip）；`cargo test`（54/54） | 直接吸收；仅重构已验证的 CDS 墓碑存储，不改变当前 Wire 1.4 边界 |
 | `ef60fc50` 拒绝缺失同步令牌 | `386e4b05` | MobileSync 聚焦测试通过 | 直接吸收启动和 HTTP 鉴权门禁 |
 | `d09b8541` 复活时清理墓碑 | `dac06163` | Rust CDS 聚焦测试通过 | 直接吸收 Owner/Topic/消息复活清理 |
-| `e6d0573c` 清理未使用变更流 | `8f07df6b` | `node --test tests/mobile-sync-error-contract.test.js`（10/10） | 局部吸收；移除无生产调用方的 change_log/路由，保留错误码注册和 Wire 1.2 golden |
+| `e6d0573c` 清理未使用变更流 | `8f07df6b` | `node --test tests/mobile-sync-error-contract.test.js`（10/10） | 局部吸收；移除无生产调用方的 change_log/路由，保留错误码注册和当前 Wire 1.4 golden |
 | `eb23b79b` 收缩 CDS 适配器状态 | `a2263a72` | `node --test tests/mobile-sync-*.test.js`（92/93，1 skip）；`cargo test`（53/53） | 直接吸收；清理无效附件结果依赖并收紧实体批量请求上限 |
 | `dc54b332` 绑定身份到聚合哈希 | `5d6d6641` | `node --test tests/mobile-sync-*.test.js`（92/93，1 skip）；`cargo test`（56/56） | 与 `a4a2b013` 合并适配；消息指纹和 Topic/Owner 根哈希绑定稳定身份 |
 | `a4a2b013` 恢复消息级 LWW 仲裁 | `5d6d6641` | 同上；包含编辑回滚与 updatedAt 断言 | 保留本地 watcher lease/history authority，仅接入 updatedAt、时间/哈希仲裁和协议字段 |
@@ -176,7 +176,7 @@
 | `52df169a` 隔离损坏 legacy Owner | `d610c102` | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
 | `006f2260` 恢复 Topic 时间线 | `a8e0237b` | `node --test tests/mobile-sync-sqlite-delete.test.js`（20/20）；`cargo test`（57/57） | 局部适配；恢复 Topic 使用 ID/mtime 时间，恢复项前置但保留 default 首位与用户配置顺序 |
 | `e1405a4c` 保留桌面消息字段 | `252bc539` | `node --test tests/mobile-sync-streaming.test.js`（14/14） | 局部适配；移动推送只 patch 可移植字段，保留桌面扩展和附件本地路径，未改协议 |
-| `8d7f8e7e` 规范 memberTags 输入 | `6444c584` | `node --test tests/mobile-sync-failure-contract.test.js`（19/19） | 局部适配；直接采用上游非空 Unicode 键/字符串值校验，暂不替换会改变 Wire 1.2 指纹的哈希排序算法 |
+| `8d7f8e7e` 规范 memberTags 输入 | `6444c584` | `node --test tests/mobile-sync-failure-contract.test.js`（19/19） | 局部适配；直接采用上游非空 Unicode 键/字符串值校验，暂不替换会改变当前 Wire 1.4 指纹的哈希排序算法 |
 | `a8e13592` Unix 文件同步作用域 | 无需提交 | `cargo test`（57/57） | 当前源码已使用 `std::fs` 统一作用域，不存在上游旧导入；确认行为等价后不制造空提交 |
 | `ba186996` 配置摄取互斥思路 | `04a48377` | `node --test tests/mobile-sync-*.test.js`（101/102，1 skip）；`cargo test`（57/57） | 局部适配；仅将按 config 路径的进程内锁接入现有 `entity_index` 摄取流程，并补充并发回归；上游新表、Wire/HTTP 版本和 v3 reconcile 不接收 |
 | `8fecce4b` 规则引擎全局对象兼容子变更 | `0e0eda7f` | `node --test tests/tavern-rules-engine.test.js`（6/6） | 直接吸收；仅将 UMD 根对象从 `self` 修正为 `globalThis`，不涉及聊天状态、IPC 或持久化 |
@@ -184,14 +184,14 @@
 | `552fc5ef` 移除附件墓碑索引 | `ef1164c2` | `node --test tests/mobile-sync-*.test.js`（101/102，1 skip） | 局部吸收；删除未被生产流程维护的 `deleted_at` 读取和写入旁路，保留旧数据库列以兼容既有库 |
 | `bb442bd2` 避免复用已删除默认话题 | 已有等价实现 | `node --test tests/chat-manager-selection-race.test.js`（通过） | 当前本地将删空后的替代项固定为 `default`，并确保其 history 目录存在；比上游临时时间戳 Topic 更符合既有默认话题契约，无需重复改动 |
 
-### 暂缓记录
+### 历史暂缓记录（不等同于当前代码缺口）
 
 | 提交 | 阻断条件 | 最小下一步 |
 | --- | --- | --- |
-| `c8c3e25b` 保留墓碑并暴露 Owner 损坏 | 会删除本地已验证的墓碑保留/损坏降级逻辑，且与当前 CDS 存储语义相反 | 暂不吸收；先以现有 56 个 Rust 测试和 MobileSync 93 项测试为基线，若上游有独立行为需求再局部移植 |
-| `6364f03b` MiMo 音色设计模型 | 当前 `SovitsTTS` 仍是本地/旧网络模型结构，直接套用会冲突 | 暂缓；先定义网络 TTS capability，再补 voicedesign 请求和密钥/缓存测试 |
-| `f92f4423` TTS 播放速度透传 | 与本地 TTS Surface owner、音频队列和播放时钟实现交集较高 | 暂缓；在现有 owner 中局部接入 playbackRate，并补 Electron 音频队列回归 |
-| `5ed0a888` 网络 TTS 供应商切换 | 同时改动设置桥接、TTS 服务、消息菜单和 Surface 生命周期 | 暂缓；拆分供应商请求、设置迁移和播放 Surface 三个独立变更 |
+| `c8c3e25b` 保留墓碑并暴露 Owner 损坏 | 会删除本地已验证的墓碑保留/损坏降级逻辑，且与当前 CDS 存储语义相反 | 最终树已由后续上游提交覆盖；当前实现以已验证的本地降级合同为准 |
+| `6364f03b` MiMo 音色设计模型 | 当前 TTS Surface 与播放时钟已有 owner | 最终树已由后续上游提交覆盖；网络服务可用性和密钥证据仍待补 |
+| `f92f4423` TTS 播放速度透传 | 与本地 TTS Surface owner、音频队列和播放时钟实现交集较高 | 最终树已由后续上游提交覆盖；需补 Electron 音频队列回归 |
+| `5ed0a888` 网络 TTS 供应商切换 | 同时改动设置桥接、TTS 服务、消息菜单和 Surface 生命周期 | 业务行为已由最终上游树覆盖；共享文件仅保留 presentation，平台与服务证据待补 |
 
 ## 回滚与提交策略
 
@@ -202,16 +202,16 @@
 
 ### 关于“同步部分直接采用上游实现”的边界
 
-本地主要增量确实集中在设置页和 UI presentation，但当前同步插件并非未修改区：相对 `origin/main`，`VCPMobileSync/index.js`、`sync/{central,diff,entity,message}.js`、Rust CDS 存储与协议均存在已验证的本地实现。上游 `ba186996` 的整提交同时切换到 `owners/topics/messages` 新表、Wire/HTTP 新消息类型和 v3 reconcile 入口；直接覆盖会使现有 `entity_index`、墓碑、Wire 1.2 golden 与移动端兼容性失效。因此本轮“直接采用上游”只适用于与本地数据合同正交的行为（已落地配置路径互斥锁），而不是整文件或整提交替换。后续若确认某个上游文件在本地无业务交集，将按文件级直接吸收并单独验证；有交集的部分继续以上游行为为目标做局部适配。
+本地主要增量确实集中在设置页和 UI presentation；当前同步插件与 Rust CDS 关键目录已经与 `origin/main` 字节一致，并由 MobileSync 83 项和 Rust 59 项测试验证。文档中关于 `ba186996`、Wire 1.2 与 `entity_index` 的描述属于中间适配阶段的历史记录，不再表示当前最终树仍存在该差异。当前策略是：同步/协议业务采用最终上游实现，设置共享文件只保留 presentation 与生命周期适配；后续若上游再次改变协议，再按完整迁移批次单独审计，不制造旁路状态。
 
 ## 当前状态
 
-已完成：建立 `08511fa5` 稳定基线，恢复设置页行布局、字号/数值步进、字体选择、自动保存兼容和 portal 层级；共同祖先到 `origin/main` 的 96 个提交已逐项登记，业务整域按上游文件树收口，共享设置文件只保留 presentation 适配。Select 的 MiMo 音色 `<optgroup>` 分组投影、单聊请求编排器、样式围栏回归和 MiMo 克隆参考资源均已补齐。
+已完成：建立 `08511fa5` 稳定基线，恢复设置页行布局、字号/数值步进、字体选择、自动保存兼容和 portal 层级；共同祖先到 `origin/main` 的 96 个提交已逐项登记，业务整域按上游文件树收口，共享设置文件只保留 presentation 适配。Select 的 MiMo 音色 `<optgroup>` 分组投影、单聊请求编排器、样式围栏回归和 MiMo 克隆参考资源均已补齐。chat event graph 已重新生成（348 个源码文件、206 个事件），`npm run check:chat-evidence` 通过。
 当前剩余：代码、设置 UI、MobileSync/CDS、TTS 和聊天核心的本机门禁已通过；仍缺少 macOS `darwin-arm64` 语音运行时以及 Windows 对应 Electron 启停 journey 的真实平台证据，且 30–60 分钟人工 soak、打包 Electron 和跨配置矩阵属于发布级未闭合项。缺失证据的提交在 96 项审计表中明确标记为待补，不宣称跨平台发布完成。
 
 ### `30c2f3fc` 局部适配记录
 
-- **保留的上游行为**：配置/历史 CAS、头像物理文件校验、消息索引时间和 Topic 索引漂移统一报告快照过期；CDS 内部 `SNAPSHOT_STALE` 在插件边界映射为 Wire 1.2 的 `SYNC_SNAPSHOT_STALE`；已开始的 NDJSON 响应通过受保护 writer 写入错误帧后再结束。
+- **保留的上游行为**：配置/历史 CAS、头像物理文件校验、消息索引时间和 Topic 索引漂移统一报告快照过期；CDS 内部 `SNAPSHOT_STALE` 在插件边界映射为当前 Wire 1.4 的 `SYNC_SNAPSHOT_STALE`；已开始的 NDJSON 响应通过受保护 writer 写入错误帧后再结束。
 - **本地结构**：继续使用现有 `entity_index`、消息历史 authority、`NdjsonWriter` 和统一错误 envelope；没有引入上游不存在于本地的 `staleLive` 第二状态，也没有新增全局 listener 或持久化键。
 - **验证证据**：`node --test tests/mobile-sync-*.test.js`（96 pass、1 skip）；`cargo test`（56/56）；错误契约 golden、CAS 并发写入和流式背压测试均通过。
 - **提交**：`a3034285`（独立中文提交）；当前分支尚未推送。
