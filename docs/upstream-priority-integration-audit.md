@@ -130,6 +130,7 @@
 | `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续抽取锁与快路径思路，映射到本地表后再实现 |
 | `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续局部适配；先不引入新端点 |
 | `307291a3` | watcher 所有权与 Agent/Group 物理身份歧义隔离 | 当前实现已对歧义路径 fail-closed 抛错；上游改为隔离并继续扫描，涉及 `scanPhysicalTopicTree` 返回结构和 watcher 流程 | 暂缓整体接收；先补歧义目录、孤儿 history、删除竞态的回归矩阵，再局部迁移 |
+| `7609701f` | 中央 CDS 实体拉取 | 当前中央适配器仍只承载 manifest/topic/message 差分，缺少 `/v2/sync/entities/pull` 端点和对应协议帧 | 暂缓；需与 CDS 协议版本、实体身份合同和移动端调用方一起迁移，不能只加一个 HTTP 路由 |
 
 `52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `a8e13592` 只是 Unix `fs::File` 作用域修复，而当前源码已使用统一 `fs` 模块且不存在对应旧导入，因此确认无代码变更即可视为已覆盖；`61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
 
