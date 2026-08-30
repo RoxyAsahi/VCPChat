@@ -1,0 +1,16 @@
+{
+  "primitive": "Pill",
+  "source": "packages/client/ui-primitives/src/Pill.module.css",
+  "sourceKind": "harness-atom-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Pill.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; paired real-source computed-style and strict same-engine fixture RGB evidence recorded (non-passing); VCP production consumer remains absent",
+  "selectors": {
+    ".pill": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "height": "24px", "padding": "0 8px", "borderRadius": "12px", "fontSize": "12px", "lineHeight": "18px" },
+    ".interactive:hover": { "background": "var(--dsw-alias-interactive-bg-hover)" },
+    ".active": { "background": "var(--dsw-alias-button-ghost-active-fill)", "borderColor": "var(--dsw-alias-button-ghost-active-border)" }
+  },
+  "root": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "height": "24px", "padding": "0 8px", "borderRadius": "12px", "fontSize": "12px", "lineHeight": "18px" },
+  "tokens": ["--dsw-alias-label-secondary", "--dsw-alias-bg-layer-2", "--dsw-alias-interactive-bg-hover", "--dsw-alias-button-ghost-active-fill", "--dsw-alias-button-ghost-active-border"],
+  "states": ["static", "interactive", "hover", "active", "dispose-restore"]
+}

@@ -1,0 +1,16 @@
+{
+  "primitive": "AttachmentRail",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/AttachmentRail.module.css",
+  "selectors": {
+    ".root": { "position": "relative", "minWidth": "0" },
+    ".rail": { "display": "flex", "gap": "10px", "overflowX": "auto", "overflowY": "hidden" },
+    ".item": { "position": "relative", "flex": "0 0 64px", "width": "64px", "height": "64px" },
+    ".thumbnail": { "width": "64px", "height": "64px", "padding": "0", "borderRadius": "16px" },
+    ".remove": { "top": "4px", "right": "4px", "width": "18px", "height": "18px", "borderRadius": "50%", "opacity": "0" },
+    ".arrow": { "top": "50%", "width": "24px", "height": "24px", "borderRadius": "999px" },
+    ".arrowLeft": { "left": "4px" },
+    ".arrowRight": { "right": "4px" }
+  },
+  "tokens": ["--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-alias-border-l2-darkmode-thin", "--dsw-alias-interactive-bg-hover", "--dsw-alias-button-contrast-fill", "--dsw-alias-label-primary-inverted", "--dsw-specific-input-major", "--dsw-alias-label-secondary", "--dsw-shadow-lv2"],
+  "candidateStatus": "source-only; no VCP attachment consumer or paired visual capture"
+}

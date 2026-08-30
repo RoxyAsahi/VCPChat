@@ -1,0 +1,32 @@
+/* Clipped from Harness: packages/client/ui-settings-general/src/client/SettingsRoot.module.css */
+.panel {
+  width: 800px;
+  height: min(800px, calc(100vh - 48px));
+  max-width: calc(100vw - 48px);
+  border-radius: 24px;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+}
+
+.nav {
+  width: 188px;
+  padding: 22px 12px 0;
+  gap: 18px;
+}
+
+.navCell {
+  height: 40px;
+  padding: 9px 16px 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.header {
+  height: 54px;
+  padding: 20px 14px 8px 10px;
+}
+
+.close { width: 28px; height: 28px; border-radius: 28px; }
+.options { padding: 0 24px 24px; }

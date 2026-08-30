@@ -1,0 +1,17 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/locale/src/client/LanguageRow.module.css",
+  "tokens": [
+    "--dsw-alias-border-l2",
+    "--dsw-alias-label-primary",
+    "--dsw-alias-bg-module-platform",
+    "--dsw-alias-interactive-bg-hover"
+  ],
+  "candidateStatus": "reference-only; Harness production settings consumer audited, but VCP has no locale capability or paired visual capture",
+  "selectors": {
+    ".row": { "display": "flex", "alignItems": "center", "gap": "8px", "padding": "16px 0", "borderBottom": "1px solid var(--dsw-alias-border-l2)" },
+    ".rowText": { "flex": "1", "minWidth": "0" },
+    ".title": { "fontSize": "14px", "lineHeight": "22px" },
+    ".selector": { "display": "inline-flex", "gap": "12px", "height": "36px", "padding": "0 14px", "borderRadius": "18px" }
+  },
+  "vcpEvidence": { "viewport": { "width": 800, "height": 600, "devicePixelRatio": 1 }, "engine": "Electron Chromium", "status": "candidate-source-only" }
+}

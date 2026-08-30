@@ -1,0 +1,24 @@
+{
+  "source": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer and paired pixel diff pending",
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-quaternary", "--dsw-alias-label-caption"],
+  "selectors": {
+    ".seat": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "maxWidth": "min(100%, 240px)", "minHeight": "28px", "padding": "0 8px", "borderRadius": "16px", "fontSize": "13px", "lineHeight": "20px", "fontWeight": "500" },
+    ".seat:hover, .seat[aria-expanded=true]": { "background": "var(--dsw-alias-interactive-bg-hover)" },
+    ".seat:disabled": { "cursor": "default", "color": "var(--dsw-alias-label-quaternary)" },
+    ".item": { "display": "flex", "flexDirection": "column", "gap": "2px", "maxWidth": "280px" },
+    ".itemName": { "fontSize": "13px", "lineHeight": "20px", "color": "var(--dsw-alias-label-primary)" },
+    ".itemDesc": { "fontSize": "12px", "lineHeight": "16px", "color": "var(--dsw-alias-label-caption)" }
+  },
+  "intentionalGap": "Harness introduce-cue animation is not replicated in the Candidate; ui-theme does not define the upstream disabled label-quaternary token, so the Candidate keeps that unresolved token name rather than inventing a visual value.",
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/agent-preset-seat.candidate.png",
+    "report": "fixtures/vcp/agent-preset-seat.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

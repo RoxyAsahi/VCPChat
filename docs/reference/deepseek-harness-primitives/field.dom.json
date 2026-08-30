@@ -1,0 +1,36 @@
+{
+  "source": "Harness ui-settings-plugins ValueField production consumer",
+  "sourceKind": "harness-production-consumer-contract",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-settings-plugins/src/client/fields.tsx",
+      "packages/client/ui-settings-plugins/src/client/fields.module.css"
+    ],
+    "selectionRule": "Use ValueField markup and fields.module.css as the production baseline; do not substitute a different settings consumer."
+  },
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-source-only; Harness ValueField baseline captured; no VCP production consumer or paired visual capture",
+  "root": {
+    "tag": "div",
+    "class": "field",
+    "children": ["div.head", "input", "p.hint|invalid"]
+  },
+  "head": {
+    "tag": "div",
+    "class": "head",
+    "children": ["label.label", "span.badges? > span.badge|badgeMuted", "button.reset?"]
+  },
+  "control": {
+    "tag": "input",
+    "id": "stable field id",
+    "labelFor": "label.htmlFor = input.id",
+    "ariaInvalid": "true when invalid"
+  },
+  "description": "p.hint (normal) or p.invalid (invalid copy)",
+  "contract": {
+    "required": ["label", "control", "hint|invalid"],
+    "lightDom": true,
+    "aria": ["label-for", "invalid"],
+    "states": ["default", "overridden", "disabled", "invalid", "focus"]
+  }
+}

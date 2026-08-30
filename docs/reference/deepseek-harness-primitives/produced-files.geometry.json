@@ -1,0 +1,16 @@
+{
+  "primitive": "ProducedFiles",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-deliverables/src/client/ProducedFiles.module.css",
+  "selectors": {
+    ".root": { "position": "relative", "display": "grid", "gridTemplateColumns": "max-content minmax(0, 1fr)", "alignItems": "center", "columnGap": "8px", "rowGap": "6px", "marginTop": "16px", "fontSize": "13px", "lineHeight": "22px" },
+    ".label": { "gridColumn": "1", "gridRow": "1", "color": "var(--dsw-alias-label-tertiary)" },
+    ".row": { "gridColumn": "2", "gridRow": "1", "display": "flex", "flexWrap": "nowrap", "alignItems": "center", "gap": "8px", "minWidth": "0", "overflow": "hidden" },
+    ".file": { "flex": "0 0 auto", "maxWidth": "320px", "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap", "padding": "0 8px", "borderRadius": "6px", "font": "inherit" },
+    ".more": { "flex": "0 0 auto", "whiteSpace": "nowrap", "color": "var(--dsw-alias-label-tertiary)" },
+    ".showFolder": { "gridColumn": "2", "gridRow": "2", "justifySelf": "start", "padding": "0 2px", "borderRadius": "4px", "lineHeight": "20px" },
+    ".measure": { "position": "absolute", "width": "0", "height": "0", "overflow": "hidden", "visibility": "hidden", "pointerEvents": "none", "contain": "strict" }
+  },
+  "tokens": ["--dsw-alias-label-tertiary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-secondary", "--dsw-alias-label-primary", "--dsw-alias-border-l3"],
+  "geometryInvariants": ["row remains a single no-wrap lane", "file chips cap at 320px and ellipsize", "measurement probes have zero layout footprint", "overflow action occupies the second grid row"],
+  "candidateStatus": "source-only frozen chat deliverables; no VCP production consumer or paired visual capture"
+}

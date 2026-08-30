@@ -1,0 +1,14 @@
+{
+  "primitive": "AppFrame",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-layout/src/client/AppFrame.module.css",
+  "selectors": {
+    ".frame": { "position": "relative", "display": "grid", "gridTemplateRows": "100%", "height": "100%", "overflow": "hidden" },
+    ".sidebarCol": { "minWidth": "0", "overflow": "hidden", "borderRight": "1px solid var(--dsw-alias-border-l1)" },
+    ".centerCol": { "minWidth": "0", "display": "flex", "flexDirection": "column", "overflow": "hidden" },
+    ".detailsCol": { "minWidth": "0", "overflow": "hidden", "borderLeft": "1px solid var(--dsw-alias-border-l2)" },
+    ".handle": { "position": "absolute", "top": "0", "bottom": "0", "width": "8px", "marginLeft": "-4px", "zIndex": "2", "touchAction": "none" },
+    ".overlayLayer": { "position": "absolute", "inset": "0", "zIndex": "20", "pointerEvents": "none" }
+  },
+  "tokens": ["--dsw-alias-bg-base", "--dsw-specific-sidebar-fill", "--dsw-alias-border-l1", "--dsw-alias-border-l2", "--ds-transition-duration-slow", "--ds-ease-in-out", "--dsw-alias-button-floating-fill", "--dsw-alias-border-l2-darkmode-thin", "--dsw-alias-button-floating-hover", "--dsw-alias-border-l3"],
+  "candidateStatus": "source-only; no VCP shell consumer or paired visual capture"
+}

@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-08-28T07:07:07.557Z",
+  "comparison": "same Chromium engine, real Harness icons/index.tsx versus VCP SemanticIcon Candidate",
+  "semanticFixture": {
+    "id": "four-semantic-icons-current-color",
+    "pass": true
+  },
+  "icons": [
+    {
+      "name": "warning",
+      "tag": true,
+      "viewBox": false,
+      "size": true,
+      "aria": false,
+      "pathCount": true,
+      "paint": false,
+      "glyphLength": false
+    },
+    {
+      "name": "close",
+      "tag": true,
+      "viewBox": false,
+      "size": true,
+      "aria": false,
+      "pathCount": true,
+      "paint": false,
+      "glyphLength": false
+    },
+    {
+      "name": "check",
+      "tag": true,
+      "viewBox": false,
+      "size": true,
+      "aria": false,
+      "pathCount": true,
+      "paint": false,
+      "glyphLength": false
+    },
+    {
+      "name": "chevron-down",
+      "tag": true,
+      "viewBox": false,
+      "size": true,
+      "aria": false,
+      "pathCount": true,
+      "paint": false,
+      "glyphLength": false
+    }
+  ],
+  "structuralPass": false,
+  "glyphGeometryPass": false,
+  "pixel": {
+    "status": "pending-strict-rgb-comparator",
+    "pass": false
+  },
+  "pass": false,
+  "missingEvidence": [
+    "VCP production SemanticIcon consumer",
+    "strict decoded RGB pixel comparator"
+  ],
+  "note": "Harness uses exact filled SVG paths; Candidate delegates to Lucide stroke glyphs. Same semantic name and box do not imply glyph parity."
+}

@@ -1,0 +1,25 @@
+{
+  "source": "packages/client/ui-settings-general/src/client/SettingsRoot.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-settings-general/src/client/SettingsRoot.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-settings-general/src/client/SettingsRoot.tsx",
+      "packages/client/ui-settings-general/src/client/SettingsRoot.module.css"
+    ],
+    "selectionRule": "Use the Harness SettingsRoot shell and its module CSS as the structural baseline; VCP production adoption remains outside this reference slice."
+  },
+  "candidateStatus": "source-only; no paired Harness/VCP browser capture or production consumer claim",
+  "reference": "SettingsRoot / SettingsPanel",
+  "contract": {
+    "trigger": { "tag": "button", "type": "button", "aria-haspopup": "dialog", "aria-expanded": "boolean" },
+    "overlay": { "tag": "div", "role": "presentation", "children": ["mask", "panel"] },
+    "panel": { "tag": "div", "role": "dialog", "aria-modal": "true", "children": ["nav", "content"] },
+    "nav": { "children": ["navTitle", "navList"] },
+    "navList": { "children": ["navCell*"] },
+    "navCell": { "tag": "button", "type": "button", "aria-current": "true|absent" },
+    "content": { "children": ["header", "options"] },
+    "close": { "tag": "button", "type": "button", "hiddenLabel": true },
+    "options": { "children": ["active section"] }
+  }
+}

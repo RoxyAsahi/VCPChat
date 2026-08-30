@@ -1,0 +1,32 @@
+{
+  "source": "packages/client/ui-primitives/src/Tooltip.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Tooltip.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Tooltip.tsx",
+      "packages/client/ui-primitives/src/Tooltip.module.css"
+    ],
+    "selectionRule": "Use the Harness Tooltip clone-element anchor contract and fixed bubble CSS; Candidate interaction evidence does not imply production parity."
+  },
+  "candidateStatus": "candidate-interaction-active; paired real-source interaction and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
+  "productionConsumers": [
+    "packages/client/ui-goal/src/client/GoalBar.tsx",
+    "packages/client/ui-sidebar/src/client/SidebarRoot.tsx",
+    "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+    "packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx"
+  ],
+  "contract": {
+    "anchor": "existing child element; no wrapper",
+    "bubble": "anchor sibling span[role=tooltip][data-side] with fixed positioning",
+    "triggers": ["delayed mouseenter", "immediate focus", "mouseleave", "blur", "disabled-mid-open"],
+    "label": "string or lazy resolver evaluated only while visible",
+    "sides": ["right", "bottom", "top"]
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/tooltip.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}

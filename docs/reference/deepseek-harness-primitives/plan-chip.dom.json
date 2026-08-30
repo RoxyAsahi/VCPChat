@@ -1,0 +1,25 @@
+{
+  "primitive": "PlanChip",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-plan/src/client/PlanModeControl.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-plan/src/client/PlanModeControl.module.css"
+  },
+  "root": { "tag": "span", "class": "wrap", "children": ["button.chip", "span.error[role=status]?"] },
+  "projection": { "hidden": "plan is undefined or effective target is false", "target": "plan.pending ? !plan.active : plan.active" },
+  "trigger": {
+    "tag": "button",
+    "class": "chip",
+    "type": "button",
+    "literalText": "Plan",
+    "ariaLabel": "localized chip.on.aria",
+    "title": "localized chip.on.title",
+    "disabled": "locked || leaving"
+  },
+  "exit": { "action": "exitPlanMode()", "failure": "localized-independent status copy", "lateResult": "ignored after owner dispose" },
+  "states": ["hidden-undefined", "hidden-off", "active", "locked-disabled", "leaving-disabled", "exit-failure", "dispose"],
+  "interaction": ["click starts leaving state", "successful exit clears leaving", "rejected exit exposes role=status", "dispose prevents late state publication"],
+  "aria": ["chip is a native button", "close glyph is aria-hidden", "failure copy uses role=status"],
+  "vcpDeviation": "PlanChip occupies the frozen Composer plan slot; this contract is Harness source-only and must not be wired into VCP Composer or chat consumers."
+}

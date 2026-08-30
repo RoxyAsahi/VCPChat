@@ -1,0 +1,9 @@
+/* Source provenance: deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.module.css */
+.root { position: relative; min-width: 0; }
+.trigger { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 220px; height: 28px; padding: 0 4px 0 8px; border: none; border-radius: 24px; background: transparent; font-size: 13px; line-height: 20px; font-weight: 500; }
+.menu { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; display: flex; flex-direction: column; width: min(240px, calc(100vw - 32px)); max-height: min(360px, calc(100vh - 96px)); overflow: hidden; padding: 4px; border: 1px solid var(--dsw-alias-border-inverted); border-radius: 12px; background: var(--dsw-specific-menu); box-shadow: var(--dsw-shadow-lv3); }
+.cell { display: flex; align-items: center; gap: 8px; width: 100%; height: 40px; padding: 0 10px; border: none; border-radius: 10px; background: transparent; font-size: 14px; line-height: 22px; text-align: left; }
+.option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 6px 8px; border: none; border-radius: 10px; background: transparent; text-align: left; }
+.option:hover:not(:disabled), .option:focus-visible, .cell:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.option:disabled { color: var(--dsw-alias-label-dimmed); }
+.groupTitle { padding: 5px 8px 3px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; font-weight: 500; }

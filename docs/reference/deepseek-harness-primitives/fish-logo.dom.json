@@ -1,0 +1,14 @@
+{
+  "primitive": "FishLogo",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/FishLogo.tsx"
+    ]
+  },
+  "root": { "tag": "svg", "viewBox": "0 0 23.16 17.04", "fill": "none", "ariaHidden": true },
+  "children": [{ "tag": "path", "fill": "currentColor", "role": "decorative mark" }],
+  "sizing": { "defaultWidth": "24px", "heightFormula": "size * 17.04 / 23.16", "nativeRatio": "23.16:17.04" },
+  "states": ["default", "custom-size", "custom-class", "dispose"],
+  "aria": ["decorative SVG uses aria-hidden=true", "no focusable descendants"],
+  "vcpDeviation": "No VCP Candidate capture is declared; this source-only contract must not be treated as a production branding integration."
+}

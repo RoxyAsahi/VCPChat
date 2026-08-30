@@ -1,0 +1,46 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "primitive": "AgentPresetRow",
+  "state": "open-selected-busy-error-picked-closed",
+  "closed": {
+    "height": "36px",
+    "padding": "0px 14px",
+    "borderRadius": "18px",
+    "gap": "12px",
+    "background": "rgb(245, 246, 247)",
+    "fontSize": "14px",
+    "lineHeight": "22px",
+    "ariaExpanded": "false",
+    "hasPopup": "menu",
+    "label": "Standard mode",
+    "rowBorderBottomWidth": "1px",
+    "rowGap": "8px",
+    "titleFontSize": "14px",
+    "titleLineHeight": "22px",
+    "descFontSize": "12px",
+    "descLineHeight": "18px",
+    "descRole": null
+  },
+  "open": {
+    "alignEnd": true,
+    "itemCount": 3,
+    "items": [
+      "Standard mode",
+      "Research draft · Custom",
+      "Minimal mode"
+    ],
+    "portalToBody": true
+  },
+  "picks": [
+    "draft"
+  ],
+  "pickedLabel": "Research draft",
+  "pickedClosed": true,
+  "busyDisabled": true,
+  "errorRole": "alert"
+}

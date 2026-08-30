@@ -1,0 +1,26 @@
+{
+  "primitive": "SidebarRoot",
+  "source": "packages/client/ui-sidebar/src/client/SidebarRoot.module.css",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-sidebar/src/client/SidebarRoot.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "source-only; Harness sidebar geometry and animation ownership documented, no VCP same-semantic capture or pixel diff",
+  "selectors": {
+    ".root": { "display": "flex", "flexDirection": "column", "height": "100%", "padding": "6px var(--dsh-sidebar-inline-padding)", "fontSize": "14px", "background": "var(--dsw-specific-sidebar-fill)" },
+    ".root.collapsed": { "padding": "18px 10px 6px" },
+    ".logoRow": { "display": "flex", "height": "60px", "gap": "8px", "padding": "8px 0 8px 4px", "marginBottom": "8px" },
+    ".collapsed .logoRow": { "height": "36px", "padding": "0", "marginBottom": "12px" },
+    ".iconButton": { "width": "28px", "height": "28px", "borderRadius": "50%" },
+    ".collapsed .iconButton": { "width": "36px", "height": "36px" },
+    ".newSession": { "height": "38px", "padding": "8px 16px", "margin": "0 2px 8px", "gap": "6px", "borderRadius": "12px", "fontSize": "14px", "lineHeight": "22px" },
+    ".collapsed .newSession": { "width": "36px", "height": "36px", "padding": "0", "margin": "0 0 12px", "gap": "0" },
+    ".regionArea": { "flex": "1", "minHeight": "0", "paddingLeft": "4px", "overflow": "hidden" },
+    ".fading > *": { "opacity": "0", "transition": "opacity 150ms var(--ds-ease-in-out)" }
+  },
+  "tokens": ["--dsh-sidebar-inline-padding", "--dsh-scrollbar-thumb", "--dsh-scrollbar-thumb-hover", "--ds-ease-in-out", "--dsw-specific-sidebar-fill", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-border-l2", "--dsw-alias-button-elevated-fill", "--dsw-alias-button-floating-hover", "--dsw-alias-interactive-bg-hover", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2"],
+  "states": ["wide", "collapse-fading", "collapsed-rail", "rail-enter", "quiet-scrollbars", "hover-scrollbars", "reduced-motion"],
+  "evidence": {
+    "sourceTests": ["packages/client/ui-sidebar/tests/sidebar-root.client.spec.tsx", "packages/client/ui-sidebar/tests/pointer-scrollbars.client.spec.tsx"],
+    "vcpCapture": "pending; VCP shell consumer is out of scope"
+  }
+}

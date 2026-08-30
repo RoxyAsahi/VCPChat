@@ -1,0 +1,43 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "open-ready-highlight",
+  "card": {
+    "parentIsHost": true,
+    "ariaLabel": "/model options",
+    "bottom": "80px",
+    "padding": "4px",
+    "borderRadius": "12px",
+    "minWidth": "min(220px, 100%)",
+    "zIndex": "100"
+  },
+  "focusIsSearch": true,
+  "rows": [
+    {
+      "label": "Balanced",
+      "selected": "true"
+    },
+    {
+      "label": "Careful",
+      "selected": "false"
+    }
+  ],
+  "lifecycle": {
+    "riskVisible": true,
+    "selected": [
+      "careful"
+    ],
+    "consumed": [
+      {
+        "via": "enter",
+        "token": "/model"
+      }
+    ],
+    "focused": 1,
+    "closed": true
+  }
+}

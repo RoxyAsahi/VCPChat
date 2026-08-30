@@ -1,0 +1,16 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "source": "generated-artifact-electron",
+  "implementation": "modules/uiux/generated/primitives/disclosure-row.js",
+  "harnessSource": "packages/client/ui-primitives/src/DisclosureRow.tsx",
+  "state": "row-click-open-keep-content",
+  "rect": { "x": 89, "y": 121, "width": 470, "height": 24 },
+  "root": { "display": "flex", "flexDirection": "column", "width": "470px", "minWidth": "0px" },
+  "row": { "display": "flex", "alignItems": "center", "height": "24px", "overflow": "hidden", "role": "button", "tabIndex": 0, "ariaExpanded": "true" },
+  "leading": { "tag": "SPAN", "width": "16px", "height": "16px", "marginRight": "6px", "padding": "0px", "borderWidth": "0px", "chevron": true },
+  "title": { "text": "Terminal", "fontSize": "14px", "lineHeight": "24px" },
+  "summaryVisible": true,
+  "bodyVisible": true,
+  "status": "candidate-interaction-active",
+  "pixelDiff": "pending-same-semantic-harness-fixture"
+}

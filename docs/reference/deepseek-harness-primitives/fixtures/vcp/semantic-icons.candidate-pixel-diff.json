@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-08-28T07:07:07.587Z",
+  "component": "semantic-icon",
+  "comparison": "strict same-engine decoded RGB fixture pixel comparison",
+  "harness": {
+    "sha256": "a6336a96e10c54448d77a29de968bcc84655ba110592c17eebf97b1e4952a191",
+    "width": 800,
+    "height": 66
+  },
+  "vcp": {
+    "sha256": "d8d1f527c5aa8b99bcb48680ed1b167483ad7a29ab9b07551931ee3907dc08ec",
+    "width": 800,
+    "height": 69
+  },
+  "comparable": false,
+  "differentPixels": null,
+  "totalPixels": null,
+  "pixelRatio": null,
+  "totalChannelDelta": null,
+  "exactPixelPass": false,
+  "pass": false,
+  "note": "Measured independently from structural/glyph contract; no production consumer implied."
+}

@@ -1,0 +1,19 @@
+{
+  "source": "packages/client/ui-settings-plugins/src/client/fields.module.css",
+  "styleSource": "packages/client/ui-settings-plugins/src/client/fields.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-source-only; Harness ValueField baseline captured; no VCP production consumer or paired visual capture",
+  "selectors": {
+    ".field": { "display": "flex", "flexDirection": "column", "gap": "6px", "padding": "12px 0" },
+    ".head": { "display": "flex", "alignItems": "center", "gap": "8px" },
+    ".label": { "fontSize": "13px", "fontWeight": "500", "lineHeight": "1.5", "flex": "1", "minWidth": "0" },
+    ".input": { "height": "34px", "padding": "0 12px", "border": "1px solid var(--dsw-alias-border-l2)", "borderRadius": "8px", "fontSize": "13px", "lineHeight": "1.5" },
+    ".input:focus-visible": { "outline": "none", "borderColor": "var(--dsw-alias-brand-primary)" },
+    ".input:disabled": { "color": "var(--dsw-alias-label-tertiary)", "cursor": "default" },
+    ".inputInvalid": { "borderColor": "var(--dsw-alias-label-error)" },
+    ".hint,.invalid": { "margin": "0", "fontSize": "12px", "lineHeight": "1.5" },
+    ".field + .field": { "borderTop": "1px solid var(--dsw-alias-border-l2)" }
+  },
+  "tokens": ["--dsw-alias-border-l2", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-label-error", "--dsw-alias-bg-module-platform", "--dsw-alias-bg-layer-3", "--dsw-alias-brand-primary"],
+  "states": ["default", "hover", "focus", "disabled", "overridden", "invalid"]
+}

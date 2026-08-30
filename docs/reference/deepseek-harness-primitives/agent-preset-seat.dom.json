@@ -1,0 +1,34 @@
+{
+  "source": [
+    "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
+    "packages/client/ui-agent-preset/src/client/PresetMenu.tsx"
+  ],
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
+      "packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+      "packages/client/ui-agent-preset/src/client/AgentPresetSeat.module.css"
+    ],
+    "selectionRule": "Use the Harness new-session seat plus PresetMenu portal contract; the VCP assistantAgent/chat switching chain remains frozen."
+  },
+  "candidateStatus": "candidate-interaction-active; no VCP production consumer and paired pixel diff pending",
+  "productionConsumers": [
+    "packages/client/ui-conversation/src/client/hero/NewConversationHero.tsx"
+  ],
+  "harnessContract": {
+    "tree": "Menu(portal=true, align=start) > button.seat[aria-haspopup=menu][aria-expanded] > agent-preset-outline svg[aria-hidden=true] + staged label + chevron svg[aria-hidden=true]; menu item > name + description",
+    "stateOwner": "calling surface owns open, selectedId, busy, roster and error; Menu only projects presentation",
+    "states": ["closed", "open", "selected", "hover", "focus", "busy-disabled", "error-title", "empty-description", "roster-rebuild"],
+    "dispose": "the surface owner retracts the portal/listeners and restores the supplied trigger"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/agent-preset-seat.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionConsumer": "none; the VCP assistantAgent/chat switching chain is frozen and intentionally untouched",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

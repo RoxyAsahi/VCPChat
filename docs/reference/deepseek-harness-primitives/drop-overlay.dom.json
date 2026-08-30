@@ -1,0 +1,20 @@
+{
+  "primitive": "DropOverlay",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/DropOverlay.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/DropOverlay.module.css",
+  "root": { "tag": "div", "class": "mask", "role": "status", "portal": "document.body" },
+  "children": [
+    { "tag": "div", "class": "wrap", "children": ["illustration", "title", "desc?"] },
+    { "tag": "div", "class": "illustration", "ariaHidden": true, "svg": "115x84" },
+    { "tag": "div", "class": "title", "text": "labels.title" },
+    { "tag": "div", "class": "desc", "text": "labels.desc", "optionalWhen": "disabled" }
+  ],
+  "states": ["accepting", "disabled", "reduced-motion", "dispose"],
+  "interaction": ["pointer-events none preserves document drag targeting", "body portal avoids transformed ancestors"],
+  "aria": ["status role exposes drop availability text", "illustration is aria-hidden"],
+  "vcpDeviation": "No VCP Candidate or attachment consumer is declared; this is a Harness source contract only and remains outside chat rendering."
+}

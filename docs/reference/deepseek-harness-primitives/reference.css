@@ -1,0 +1,7 @@
+/* Reference provenance only. Values mirror Harness source files listed in
+   the adjacent JSON contracts. VCP colors must map through semantic tokens. */
+.harness-reference-settings-panel { border-radius: 24px; }
+.harness-reference-settings-nav { width: 188px; padding: 22px 12px 0; gap: 18px; }
+.harness-reference-settings-nav-cell { height: 40px; padding: 9px 16px 9px 12px; gap: 8px; border-radius: 12px; font: 400 14px/22px inherit; }
+.harness-reference-menu { padding: 4px; border-radius: 12px; }
+.harness-reference-menu-item { min-height: 40px; padding: 8px 10px; gap: 8px; border-radius: 10px; font: 400 14px/22px inherit; }

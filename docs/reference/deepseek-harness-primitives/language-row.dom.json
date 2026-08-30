@@ -1,0 +1,36 @@
+{
+  "source": [
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/locale/src/client/LanguageRow.tsx",
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx"
+  ],
+  "sourceKind": "harness-production-consumer-contract",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/locale/src/client/LanguageRow.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/locale/src/client/LanguageRow.tsx",
+      "packages/client/locale/src/client/LanguageRow.module.css",
+      "packages/client/ui-primitives/src/Menu.tsx"
+    ],
+    "selectionRule": "Use Harness's registered General settings locale row and its selector/Menu composition as the source contract. VCPChat has no locale capability or persisted UI-language key, so this remains reference-only and cannot justify a production consumer."
+  },
+  "candidateStatus": "reference-only; Harness production settings consumer audited, but VCP has no locale capability or paired visual capture",
+  "productionConsumers": ["packages/client/locale/src/client/index.ts -> settings.general.item"],
+  "harnessContract": {
+    "tree": "div.row > div.rowText > div.title + button.selector[aria-haspopup=menu][aria-expanded] + Menu portal",
+    "states": ["closed", "open", "selected", "disabled", "unknown-active", "long-label"],
+    "owner": "locale snapshot/command owner controls active locale and menu disposal",
+    "dispose": "remove portal/listeners and restore host children",
+    "asyncLifecycle": {
+      "setOptions": "serialized owner-bound rebuild queue",
+      "staleGeneration": "completed cleanup cannot publish a replacement menu",
+      "disposeRace": "invalidate generation and await queued rebuild quiescence before host restoration"
+    }
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/language-row.ts",
+    "maturity": "candidate-source-only",
+    "productionConsumer": "none; VCP has no locale capability or persisted UI-language key",
+    "stableApi": false,
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

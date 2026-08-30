@@ -1,0 +1,30 @@
+{
+  "source": "packages/client/ui-primitives/src/HoverCard.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/HoverCard.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/HoverCard.tsx",
+      "packages/client/ui-primitives/src/HoverCard.module.css"
+    ],
+    "selectionRule": "Use the Harness HoverCard pointer-grace/copy lifecycle and module CSS; Candidate evidence is not production parity."
+  },
+  "candidateStatus": "candidate-interaction-active; paired real-source lifecycle and strict ROI evidence recorded (non-passing); VCP production consumer remains absent",
+  "productionConsumers": [
+    "packages/client/ui-workspace/src/client/rows/Rows.tsx"
+  ],
+  "contract": {
+    "tree": "root span containing the anchor; portaled card is appended to document.body",
+    "open": "pointer dwell, default 500ms",
+    "close": "200ms pointer grace; anchor press; disabled; dispose",
+    "tracking": ["capture-phase scroll", "resize", "bottom-edge clamp"],
+    "copyable": "role=button, tabindex=0, click/Enter/Space, selection guard, status live region, 1000ms feedback",
+    "async": "copy epoch and owner activity revoke late feedback"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/hover-card.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}

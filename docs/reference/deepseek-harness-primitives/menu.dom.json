@@ -1,0 +1,25 @@
+{
+  "source": "packages/client/ui-primitives/src/Menu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Menu.tsx",
+      "packages/client/ui-primitives/src/Menu.module.css"
+    ],
+    "selectionRule": "Use the Harness Menu implementation and CSS as the shared dropdown contract; paired VCP capture remains candidate-only."
+  },
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine real-source Harness/VCP DOM/ARIA, computed-style, portal/submenu/outside/Escape/unmount-dispose evidence and strict same-semantic ROI measurement recorded; trigger ARIA remains Candidate-owned and the 218x287 Harness versus 218x290 Candidate ROI is non-comparable",
+  "productionConsumers": [
+    "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+    "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
+    "packages/client/locale/src/client/LanguageRow.tsx"
+  ],
+  "contract": { "roles": ["menu", "menuitem", "separator", "presentation"], "portal": "optional", "submenu": "optional", "footer": "optional", "owner": "setOpen/setSelected/dispose" },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/menu.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}

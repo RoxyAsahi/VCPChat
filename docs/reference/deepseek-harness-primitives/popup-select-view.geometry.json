@@ -1,0 +1,15 @@
+{
+  "primitive": "PopupSelectView",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-commands/src/client/PopupSelectView.module.css",
+  "selectors": {
+    ".card": { "position": "absolute", "bottom": "calc(100% + 4px)", "left": "0", "zIndex": "100", "padding": "4px", "display": "flex", "flexDirection": "column", "minWidth": "min(220px, 100%)", "maxWidth": "100%", "maxHeight": "320px", "borderRadius": "12px" },
+    ".viewport": { "display": "flex", "flexDirection": "column", "minHeight": "0", "overflowY": "auto" },
+    ".row": { "display": "flex", "alignItems": "center", "gap": "8px", "padding": "6px 8px", "borderRadius": "8px", "fontSize": "13px" },
+    ".status": { "padding": "8px 10px", "fontSize": "13px" },
+    ".search": { "margin": "2px 2px 4px", "padding": "6px 8px", "borderRadius": "8px", "fontSize": "13px" },
+    ".error": { "display": "flex", "alignItems": "center", "gap": "8px", "padding": "6px 8px", "fontSize": "12px" },
+    ".retry": { "padding": "2px 8px", "borderRadius": "6px", "fontSize": "12px" }
+  },
+  "tokens": ["--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-alias-border-inverted", "--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-primary", "--dsw-alias-label-tertiary", "--dsw-alias-state-error-primary"],
+  "candidateStatus": "source-only; Candidate PopupSelect capture exists separately and no production consumer is implied"
+}

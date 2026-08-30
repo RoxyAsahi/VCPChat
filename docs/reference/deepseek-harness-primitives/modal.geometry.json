@@ -1,0 +1,24 @@
+{
+  "source": "packages/client/ui-primitives/src/Modal.module.css",
+  "styleSource": "packages/client/ui-primitives/src/Modal.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; standard same-engine source/Candidate geometry and strict RGB ROI comparison recorded (382x221 comparable, non-passing); headless branch interaction replay also recorded, with no VCP production consumer",
+  "selectors": {
+    ".root": { "position": "fixed", "inset": "0", "zIndex": "1000", "padding": "24px" },
+    ".mask": { "background": "var(--dsw-alias-bg-mask-1)", "backdropFilter": "var(--dsw-mask-blur)" },
+    ".dialog": { "width": "min(380px, 100%)", "padding": "0 0 24px", "gap": "20px", "borderRadius": "24px" },
+    ".header": { "padding": "22px 14px 12px 24px", "gap": "8px" },
+    ".title": { "fontSize": "16px", "lineHeight": "24px", "fontWeight": "500" },
+    ".footer": { "padding": "0 24px", "gap": "8px", "justifyContent": "flex-end" }
+  },
+  "tokens": ["--dsw-alias-bg-mask-1", "--dsw-mask-blur", "--dsw-alias-border-inverted", "--dsw-alias-bg-layer-2", "--dsw-shadow-lv3", "--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-interactive-bg-hover"],
+  "states": ["closed", "standard-open", "headless-open", "mask-close", "escape-close", "close-button", "reopen", "dispose"],
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/modal.candidate.png",
+    "report": "fixtures/vcp/modal.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

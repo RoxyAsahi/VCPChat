@@ -1,0 +1,19 @@
+{
+  "source": "packages/client/ui-primitives/src/Menu.module.css",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "candidate-interaction-active; open/focus menu geometry equivalent, closed trigger mismatch, busy trigger captured only on Harness production route",
+  "selectors": {
+    ".list": { "minWidth": "218px", "padding": "4px", "borderRadius": "12px" },
+    ".item": { "minHeight": "40px", "padding": "8px 10px", "gap": "8px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".compactList .item": { "minHeight": "26px", "padding": "3px 7px", "borderRadius": "5px", "fontSize": "12px", "lineHeight": "18px" }
+  },
+  "tokens": ["--dsw-alias-border-inverted", "--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-alias-border-l2", "--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-tertiary", "--dsw-alias-state-error-primary"],
+  "states": ["closed-trigger", "open", "hover", "focus", "busy-trigger-disabled", "selected", "outside-dismissed", "escape-dismissed", "destroyed"],
+  "evidence": {
+    "open": "reports/harness-vcp-geometry-diff.json and reports/harness-vcp-select-pixel-diff.json",
+    "focus": "reports/harness-vcp-focus-geometry-diff.json and reports/harness-vcp-focus-pixel-diff.json",
+    "busy-trigger-disabled": "reports/harness-select-trigger-busy.json; VCP side blocked by consumer boundary",
+    "closed-trigger": "reports/harness-vcp-select-trigger-geometry-diff.json; dimension mismatch remains"
+  }
+}

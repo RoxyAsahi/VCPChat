@@ -1,0 +1,27 @@
+{
+  "source": "packages/client/ui-primitives/src/Menu.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Menu.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Menu.tsx",
+      "packages/client/ui-primitives/src/Menu.module.css",
+      "apps/web/tests/agent-preset-selection.e2e.ts"
+    ],
+    "selectionRule": "Use Harness Menu plus the AgentPresetSeat production E2E for open, focus, and busy trigger states; VCP comparison remains candidate-only where no legal AgentPreset consumer exists."
+  },
+  "candidateStatus": "candidate-interaction-active; open/focus paired capture exists, closed trigger geometry mismatches, busy trigger has no in-scope VCP AgentPreset consumer",
+  "reference": "Menu used as Select popup contract",
+  "productionConsumers": [
+    "packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
+    "apps/web/tests/agent-preset-selection.e2e.ts"
+  ],
+  "contract": {
+    "anchor": { "tag": "span", "class": "root" },
+    "list": { "tag": "div", "class": "list|portal", "children": ["viewport"] },
+    "viewport": { "class": "viewport", "children": ["itemWrap*"] },
+    "item": { "tag": "button", "type": "button", "class": "item", "disabled": "native", "selected": "check marker" },
+    "dismiss": ["outside pointer", "Escape"],
+    "keyboard": ["ArrowUp", "ArrowDown", "Home", "End", "Enter", "Space"]
+  }
+}

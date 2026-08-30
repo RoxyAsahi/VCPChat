@@ -1,0 +1,32 @@
+{
+  "source": "packages/client/ui-primitives/src/Toast.tsx",
+  "sourceKind": "harness-primitive-source-only",
+  "styleSource": "packages/client/ui-primitives/src/Toast.module.css",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-primitives/src/Toast.tsx",
+      "packages/client/ui-primitives/src/Toast.module.css"
+    ],
+    "selectionRule": "Use the Harness body-portal alert and timed animation contract; production consumers remain outside this Candidate slice."
+  },
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine source/Candidate DOM/ARIA, anchor-resize, teardown and strict same-semantic ROI evidence recorded; no VCP production consumer",
+  "productionConsumers": [
+    "packages/client/ui-conversation/src/client/skeleton/InputBar.tsx",
+    "packages/client/ui-model-selection/src/client/ModelSelect.tsx"
+  ],
+  "contract": {
+    "tree": "document.body > div[role=alert] > icon[aria-hidden]? + text",
+    "portal": "document.body",
+    "lifetime": { "holdMs": 3000, "fadeMs": 1000, "onDoneAtMs": 4000 },
+    "placement": "viewport center by default; optional anchor horizontal center with resize remeasure",
+    "interaction": "pointer-events none; no actions, close button, queue or durable state",
+    "repeat": "owner remounts with a per-show sequence to restart an identical message"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/toast.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionIntegration": "InputBar is frozen; ModelSelect future consumer remains pending"
+  }
+}
