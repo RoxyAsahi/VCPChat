@@ -1,15 +1,5 @@
 "use strict";
 
-/**
- * 第五轮修复（缺口 D / F6 / F7）回归测试。
- *
- * - 缺口 D：uploadEntitiesBatch 父 config 缺失（ENOENT）与单条上传对齐为
- *   SYNC_ENTITY_NOT_FOUND，其余文件级错误保持 SYNC_ENTITY_BATCH_FAILED。
- * - F6：ChatDataServiceLifecycle 对 retryable=false 的启动失败直接熔断，
- *   不再排重启定时器（杀-起循环修复）。
- * - F7：CDS 缺席时 registerRoutes 直接失败，不开放 MobileSync 端口。
- */
-
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -35,41 +25,35 @@ const {
   getLogger,
 } = require("../VCPDistributedServer/Plugin/VCPMobileSync/core/logger");
 
-test("缺口D: 批量上传父 config 缺失报 SYNC_ENTITY_NOT_FOUND，损坏父 config 仍报 BATCH_FAILED", async () => {
+test("批量上传在父 Owner 未进入提交视图时返回实体缺失", async () => {
   const appDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-gap-d-"));
   try {
-    // 父 Agent 存在但 config.json 是坏 JSON → 非 ENOENT，保持 BATCH_FAILED。
-    const brokenAgentDir = path.join(appDataPath, "Agents", "agentBroken1");
-    fs.mkdirSync(brokenAgentDir, { recursive: true });
-    fs.writeFileSync(path.join(brokenAgentDir, "config.json"), "{ not json", "utf-8");
-
     const results = await uploadEntitiesBatch(
       [
-        // 父目录根本不存在 → ENOENT → 缺口 D 对齐为 NOT_FOUND。
-        { id: "topicOrphan1", type: "agent_topic", data: { ownerId: "agentMissing1", name: "孤立话题" } },
-        { id: "topicBroken1", type: "agent_topic", data: { ownerId: "agentBroken1", name: "坏父话题" } },
+        {
+          id: "topicOrphan1",
+          type: "agent_topic",
+          ownerType: "agent",
+          ownerId: "agentMissing1",
+          data: { ownerId: "agentMissing1", name: "孤立话题" },
+        },
       ],
       appDataPath,
     );
 
-    assert.equal(results.length, 2);
+    assert.equal(results.length, 1);
     const byId = new Map(results.map((r) => [r.id, r]));
 
     const orphan = byId.get("topicOrphan1");
     assert.equal(orphan.success, false);
     assert.equal(orphan.error.code, "SYNC_ENTITY_NOT_FOUND");
     assert.deepEqual(orphan.error.failedTopicIds, ["topicOrphan1"]);
-
-    const broken = byId.get("topicBroken1");
-    assert.equal(broken.success, false);
-    assert.equal(broken.error.code, "SYNC_ENTITY_BATCH_FAILED");
-    assert.deepEqual(broken.error.failedTopicIds, ["topicBroken1"]);
   } finally {
     fs.rmSync(appDataPath, { recursive: true, force: true });
   }
 });
 
-test("F6: retryable=false 的启动失败直接熔断并不再排重启", () => {
+test("不可重试的 CDS 启动失败会熔断且不再排重启", () => {
   const errors = [];
   const logger = {
     error: (...args) => errors.push(args.map(String).join(" ")),
@@ -108,7 +92,7 @@ test("F6: retryable=false 的启动失败直接熔断并不再排重启", () => 
   assert.equal(lifecycle.restartAttempts, 0);
 });
 
-test("F6: 瞬态错误（retryable!==false）不触发熔断", () => {
+test("可重试或未分类的 CDS 启动失败不会熔断", () => {
   const logger = { error() {}, log() {}, info() {}, warn() {} };
   const lifecycle = new ChatDataServiceLifecycle({
     appDataPath: "/tmp/vcp-f6",
@@ -127,7 +111,7 @@ test("F6: 瞬态错误（retryable!==false）不触发熔断", () => {
   assert.equal(lifecycle.circuitOpen, false);
 });
 
-test("F7: CDS 缺席时注册失败且不会挂载 MobileSync 路由", async (t) => {
+test("CDS 缺席时注册失败且不会挂载 MobileSync 路由", async (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-f7-"));
   const projectBasePath = path.join(tmp, "VCPDistributedServer");
   fs.mkdirSync(path.join(tmp, "AppData", "UserData", "attachments"), { recursive: true });

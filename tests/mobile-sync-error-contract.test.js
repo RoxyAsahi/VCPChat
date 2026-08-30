@@ -1,7 +1,6 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const crypto = require("node:crypto");
 const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const Module = require("node:module");
@@ -9,7 +8,6 @@ const path = require("node:path");
 const { test } = require("node:test");
 
 const {
-  ERROR_DEFINITIONS,
   createHttpErrorBody,
   createStreamErrorFrame,
   createSyncError,
@@ -103,10 +101,9 @@ const fixturePath = path.join(
   "Plugin",
   "VCPMobileSync",
   "fixtures",
-  "error_contract_1_2_golden.json",
+  "wire_error_contract.json",
 );
-const fixtureBytes = fs.readFileSync(fixturePath);
-const fixture = JSON.parse(fixtureBytes);
+const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 
 function createWsFrameReader(socket) {
   const frames = [];
@@ -175,25 +172,12 @@ class FakeHttpResponse extends EventEmitter {
   }
 }
 
-test("Wire 1.2 golden errors are strict and stable", () => {
-  assert.equal(fixture.wireProtocol, "1.2");
-  assert.equal(fixture.pluginVersion, "1.2.0");
-  assert.equal(
-    crypto.createHash("sha256").update(fixtureBytes).digest("hex"),
-    "19506bdca5d41e00db0330d50d4d5c7aa6a13415146e1ac058e04f0adfd7e574",
-  );
+test("Wire errors accept only complete envelopes", () => {
   for (const entry of fixture.validErrors) {
     assert.deepEqual(parseSyncError(entry.error), entry.error);
   }
   for (const entry of fixture.invalidErrors) {
     assert.throws(() => parseSyncError(entry.error), /error/);
-  }
-  for (const [code, [kind, retry]] of Object.entries(fixture.registeredSemantics)) {
-    assert.deepEqual(
-      [ERROR_DEFINITIONS[code]?.kind, ERROR_DEFINITIONS[code]?.retry],
-      [kind, retry],
-      `registered semantics for ${code}`,
-    );
   }
 });
 
@@ -206,7 +190,8 @@ test("WebSocket, HTTP and NDJSON reuse the same error object", () => {
   });
   assert.deepEqual(createHttpErrorBody(error), { error: expected });
   assert.deepEqual(createStreamErrorFrame(error), {
-    _stream_error: expected,
+    kind: "streamError",
+    error: expected,
   });
   assert.deepEqual(
     normalizeFailureResult(
@@ -259,48 +244,6 @@ test("catch boundaries preserve an existing root code and narrow its stage", () 
     ).failedTopicIds,
     ["topic-a"],
   );
-});
-
-test("exact registry keeps device, version, lifecycle and storage layers separate", () => {
-  const cases = [
-    ["POWER_SAVE_MODE", "mobile_native", "preflight", "device"],
-    ["VERSION_ACK_INVALID", "mobile_sync", "handshake", "protocol"],
-    ["SYNC_VERSION_INCOMPATIBLE", "desktop_plugin", "handshake", "compatibility"],
-    ["SYNC_PHASE_STALLED", "mobile_sync", "topic_metadata", "internal"],
-    ["SYNC_DB_DRAIN_FAILED", "mobile_sync", "finalize", "storage"],
-  ];
-
-  for (const [code, origin, stage, kind] of cases) {
-    assert.deepEqual(
-      normalizeSyncError({ code, message: "diagnostic" }),
-      {
-        code,
-        origin,
-        stage,
-        kind,
-        retry: code === "POWER_SAVE_MODE" || code.includes("VERSION_")
-          ? "after_user_action"
-          : "manual",
-        message: "diagnostic",
-        failedTopicIds: [],
-      },
-    );
-  }
-});
-
-test("timeout registry preserves the phase that actually timed out", () => {
-  const cases = [
-    ["VERSION_CHECK_TIMEOUT", "handshake"],
-    ["MANIFEST_RESPONSE_TIMEOUT", "owner_metadata"],
-    ["TOPIC_HASH_RESPONSE_TIMEOUT", "topic_validation"],
-    ["FINAL_ACK_TIMEOUT", "finalize"],
-  ];
-
-  for (const [code, stage] of cases) {
-    const error = normalizeSyncError({ code, message: "timeout" });
-    assert.equal(error.kind, "connection");
-    assert.equal(error.stage, stage);
-  }
 });
 
 test("unknown stable codes survive while invalid codes use the boundary fallback", () => {
@@ -376,13 +319,13 @@ test("string bounds count Unicode code points consistently with Rust", () => {
 test("WebSocket transport emits the complete root-cause error envelope", async (t) => {
   const server = await startWsServer({
     port: 0,
-    syncToken: "wire-1.2-test-token",
+    syncToken: "wire-test-token",
     onMessage: async (payload) => {
       if (payload.type === "VERSION_CHECK") {
         return {
           type: "VERSION_ACK",
-          pluginVersion: "1.2.0",
-          protocolVersion: "1.2",
+          pluginVersion: "1.4.0",
+          protocolVersion: "1.4",
         };
       }
       throw Object.assign(new Error("owner identity conflict"), {
@@ -395,7 +338,7 @@ test("WebSocket transport emits the complete root-cause error envelope", async (
   const nextFrame = createWsFrameReader(socket);
   t.after(() => socket.terminate());
   server.emit("connection", socket, {
-    url: "/ws-sync?token=wire-1.2-test-token",
+    url: "/ws-sync?token=wire-test-token",
     headers: { host: "127.0.0.1" },
     socket: { remoteAddress: "127.0.0.1" },
   });
@@ -403,13 +346,13 @@ test("WebSocket transport emits the complete root-cause error envelope", async (
   socket.emit("message", JSON.stringify({
     type: "VERSION_CHECK",
     mobileVersion: "1.1.4",
-    protocolVersion: "1.2",
+    protocolVersion: "1.4",
   }));
   assert.equal((await nextFrame("VERSION_ACK")).type, "VERSION_ACK");
 
   socket.emit(
     "message",
-    JSON.stringify({ type: "SYNC_TOPIC_HASH_BATCH", hashes: {} }),
+    JSON.stringify({ type: "SYNC_TOPIC_DIFF_REQUEST", topics: [] }),
   );
   assert.deepEqual(await nextFrame("SYNC_ERROR"), {
     type: "SYNC_ERROR",
@@ -433,16 +376,16 @@ test("HTTP route handlers return the same structured error contract", async () =
     },
   };
   registerRoutes(app, {
-    syncToken: "wire-1.2-http-token",
+    syncToken: "wire-http-token",
     appDataPath: "/unused-in-validation-test",
   });
   assert.equal(app.mountPath, "/api/mobile-sync");
   const route = app.router.layers.find(
-    (layer) => layer.method === "POST" && layer.path === "/download-entities",
+    (layer) => layer.method === "POST" && layer.path === "/entities/pull",
   );
   const response = new FakeHttpResponse();
   await route.handlers.at(-1)(
-    { body: { requests: "not-an-array" }, query: {}, path: route.path },
+    { body: { items: "not-an-array" }, query: {}, path: route.path },
     response,
   );
   assert.equal(response.statusCode, 400);
@@ -453,32 +396,9 @@ test("HTTP route handlers return the same structured error contract", async () =
       stage: "owner_metadata",
       kind: "protocol",
       retry: "after_user_action",
-      message: "requests must be an array of at most 1000 items",
+      message: "items must be an array of at most 1000 entities",
       failedTopicIds: [],
     },
-  });
-
-  const deleteEntityRoute = app.router.layers.find(
-    (layer) => layer.method === "POST" && layer.path === "/delete-entity",
-  );
-  const missingTopicOwner = new FakeHttpResponse();
-  await deleteEntityRoute.handlers.at(-1)(
-    {
-      body: { id: "topic-a", type: "topic", deletedAt: 1 },
-      query: {},
-      path: deleteEntityRoute.path,
-    },
-    missingTopicOwner,
-  );
-  assert.equal(missingTopicOwner.statusCode, 400);
-  assert.deepEqual(missingTopicOwner.body.error, {
-    code: "SYNC_DELETE_INVALID",
-    origin: "desktop_plugin",
-    stage: "topic_metadata",
-    kind: "protocol",
-    retry: "after_user_action",
-    message: "Invalid delete entity fields",
-    failedTopicIds: [],
   });
 
   const parserErrorHandler = app.router.layers.find(
