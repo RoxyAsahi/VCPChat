@@ -1,0 +1,11 @@
+/* Classic Agent control fallback. Generated Harness primitives own their
+ * inner controls and are intentionally excluded from these selectors. */
+#agentSettingsContainer input[type="text"]:not(.input):not(:is(.vcp-uiux-color-pair > input)),
+#agentSettingsContainer input[type="number"]:not(.input),
+#agentSettingsContainer textarea:not(.vcp-uiux-input-wrap > textarea) {
+  box-sizing: border-box;
+}
+
+#agentSettingsContainer select:not(.vcp-harness-select-native) {
+  min-height: 32px;
+}

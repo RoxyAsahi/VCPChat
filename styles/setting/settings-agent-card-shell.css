@@ -163,6 +163,12 @@ body:not(.light-theme) #agentSettingsContainer .strip-regex-container:hover {
   margin-top: 2px;
 }
 
+/* Generated primitive ownership boundaries. */
+#agentSettingsContainer select:not(.vcp-harness-select-native) { min-height: 32px; }
+/* input[type="text"]:not(.input):not(:is(.vcp-uiux-color-pair > input)) */
+/* body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native) */
+/* body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native) */
+
 #agentSettingsForm > .agent-settings-card-shell,
 #agentSettingsContainer .agent-identity-container,
 #agentSettingsContainer .agent-params-collapsible-container,
