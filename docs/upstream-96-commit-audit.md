@@ -3,7 +3,7 @@
 更新日期：2026-08-31  
 上游基线：origin/main=4df8f4fa  
 本地稳定对照：08511fa5  
-当前收口提交：8811bed2
+当前收口提交：a715dfe3（Select 分组适配与专项回归测试随后追加）
 
 ## 使用说明
 
@@ -119,3 +119,6 @@
 - 已运行的 MobileSync/CDS、UIUX、设置保存和聊天核心门禁见 upstream-priority-integration-audit.md。
 - 语音运行时启动证据仍受 macOS 缺少 darwin-arm64 二进制限制；Windows 需在对应环境补跑。
 
+## 2026-08-31 Select 分组适配补充
+
+为保留上游 MiMo 音色的 preset/voicedesign/voiceclone 分组，Select presentation 现支持原生 `<optgroup>`：分组标题以 `role="presentation"` 投影，不能污染 `role="menuitem"` 数量或原生 option 索引；选中标记、禁用项、点击写回、Escape 关闭和 owner dispose 均继续作用于原生 `<select>`。新增 `tests/uiux-primitives.test.mjs` 专项回归，验证分组标题、索引稳定性和 teardown。该改动仅属 presentation，不改变 TTS 业务状态、IPC 或持久化键。

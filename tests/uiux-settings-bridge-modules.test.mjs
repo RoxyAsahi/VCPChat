@@ -493,7 +493,13 @@ test('Select option rebuild turns are owned and retract cleanly with the present
         assert.equal(mounts, 1, 'initial native select receives one projection');
 
         select.append(new dom.window.Option('Three', 'three'));
-        await new Promise(resolve => setTimeout(resolve, 30));
+        // The observer -> owned timer -> child-scope dispose -> remount path
+        // crosses several task turns.  Poll to a bounded deadline instead of
+        // assuming a fixed delay, so a busy CI worker cannot report a false
+        // negative while still preserving a real timeout failure.
+        for (let attempt = 0; attempt < 50 && mounts < 2; attempt += 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
         assert.equal(mounts, 2, 'option-list change remounts exactly one projection');
         assert.equal(form.dataset.vcpSelectRebuilding, undefined, 'rebuild guard releases after the owned continuation');
 

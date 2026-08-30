@@ -1824,6 +1824,53 @@ test('Harness Select interaction sequence matches keyboard and ownership contrac
     }
 });
 
+test('Harness Select projects optgroup headings without changing option order', async () => {
+    const dom = new JSDOM('<!doctype html><main><select id="voices"><option value="default">默认</option><optgroup label="预设音色"><option value="preset-a">预设 A</option><option value="preset-b" disabled>预设 B</option></optgroup><optgroup label="克隆音色"><option value="clone-a" selected>克隆 A</option></optgroup></select></main>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('select-optgroup-test'));
+        const select = document.getElementById('voices');
+        const release = mountSelect(select, { label: 'Voice' }, scope);
+        const trigger = document.querySelector('.vcp-harness-select-trigger');
+        trigger.click();
+
+        const menu = document.querySelector('[role="menu"]');
+        const headings = [...menu.querySelectorAll('.vcp-harness-menu-group-label')];
+        assert.deepEqual(
+            headings.map(node => ({ text: node.textContent, role: node.getAttribute('role') })),
+            [
+                { text: '预设音色', role: 'presentation' },
+                { text: '克隆音色', role: 'presentation' },
+            ],
+            'optgroup labels are presentation-only headings',
+        );
+
+        const items = [...menu.querySelectorAll('[role="menuitem"]')];
+        assert.equal(items.length, select.options.length, 'headings must not alter native option indexing');
+        assert.deepEqual(items.map(item => item.textContent), ['默认', '预设 A', '预设 B', '克隆 A']);
+        assert.equal(items[3].getAttribute('data-selected'), 'true');
+        assert.equal(items[3].querySelector('.vcp-harness-menu-item-check') !== null, true);
+        assert.equal(items[2].disabled, true);
+
+        items[1].click();
+        assert.equal(select.value, 'preset-a');
+        assert.equal(trigger.textContent, '预设 A');
+        assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+        await release?.();
+        await scope.dispose('select-optgroup-complete');
+        assert.equal(document.querySelector('.vcp-harness-select'), null);
+        assert.equal(select.parentElement.tagName, 'MAIN');
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});
+
 test('Harness Select external snapshot sync is presentation-only and owner-bound', async () => {
     const dom = new JSDOM('<!doctype html><select id="density"><option>Comfortable</option><option>Compact</option></select>');
     const previousDocument = globalThis.document;
