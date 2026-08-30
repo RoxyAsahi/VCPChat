@@ -198,14 +198,29 @@ window.electronAPI.onAssistantData(async (data) => {
             const interruptHandler = {
                 interrupt: async (messageId) => {
                     console.log(`[Assistant] Interrupting via handler for message: ${messageId}`);
-                    if (activeStreamingMessageId === messageId) {
-                        // Notify the main process to stop the VCP request.
-                        // The main process should then send an 'end' or 'error' stream event,
-                        // which will publish the coordinator-owned terminal outcome.
-                        await window.electronAPI.interruptVcpRequest({ messageId });
-                        return { success: true };
+                    if (activeStreamingMessageId !== messageId) {
+                        return { success: false, error: '消息当前没有正在进行的请求。' };
                     }
-                    return { success: false, error: "Message not actively streaming." };
+                    if (typeof window.electronAPI.interruptVcpRequest !== 'function') {
+                        return { success: false, error: '中止请求接口不可用。' };
+                    }
+
+                    try {
+                        // 只有主进程确认中止后，辅助窗口才提交本地终态。
+                        // 这样不会把失败的中止误报为成功，也不依赖可能缺失的 socket 终止帧。
+                        const result = await window.electronAPI.interruptVcpRequest({ messageId });
+                        if (!result?.success) {
+                            return {
+                                success: false,
+                                error: result?.error || '主进程未能中止请求。',
+                            };
+                        }
+                        await streamRuntime?.cancel(messageId, 'user-interrupt');
+                        return result;
+                    } catch (error) {
+                        console.error(`[Assistant] Failed to interrupt request ${messageId}:`, error);
+                        return { success: false, error: error.message || String(error) };
+                    }
                 }
             };
 
