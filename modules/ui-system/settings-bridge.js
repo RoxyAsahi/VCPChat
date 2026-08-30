@@ -944,11 +944,17 @@ function enhanceGlobalSettings(root, form) {
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
+    // Mount row-style controls before the generic Select projection.  These
+    // rows are the intentional presentation owner for appearance/font fields
+    // (the native select remains canonical); the generic pass must therefore
+    // see their mounted marker and leave them alone.  Reversing this order
+    // silently produced an inert-looking duplicate Select shell and prevented
+    // the capsule trigger from receiving the real menu controller.
     mountAppearanceFontSizeRow(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceLanguageRows(form, window.VCPUIUX, ensurePresentationScope());
     mountChatFontRows(form, window.VCPUIUX, ensurePresentationScope());
-    mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     mountAppearanceRadiusLanguageRow(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
     mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
     mountChoiceControls(form, window.VCPUIUX, ensurePresentationScope());

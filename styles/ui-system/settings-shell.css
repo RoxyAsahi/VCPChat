@@ -713,6 +713,24 @@
        Zero it at matching strength. */
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(.vcp-uiux-input-wrap, .vcp-uiux-color-pair) > :is(input, textarea) {
         margin: 0;
+        box-sizing: border-box;
+        align-self: center;
+    }
+
+    /* Keep placeholder and entered text optically centered after the legacy
+       modal control rules are layered over the generated Input primitive. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(.vcp-uiux-input-wrap, .vcp-uiux-color-pair) > input:not([type="color"]) {
+        display: block;
+        height: 22px;
+        min-height: 22px;
+        padding-block: 0 !important;
+        line-height: 22px !important;
+    }
+
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm .vcp-uiux-input-wrap > textarea {
+        min-height: 22px;
+        line-height: 22px;
+        padding-block: 0;
     }
 
     /* The avatar file picker is driven by its overlay label; the raw native
