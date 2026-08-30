@@ -171,7 +171,9 @@ impl Reconciler {
             .iter()
             .map(|topic| topic.topic_id.as_str())
             .collect::<HashSet<_>>();
-        let mut topics = configured_owner
+        let mut default_topics = Vec::new();
+        let mut configured_topics = Vec::new();
+        for mut topic in configured_owner
             .topics
             .iter()
             .filter(|topic| {
@@ -179,14 +181,32 @@ impl Reconciler {
                     || physical_topic_id_set.contains(topic.topic_id.as_str())
             })
             .cloned()
-            .collect::<Vec<_>>();
-        let mut next_ordinal = configured_owner
-            .topics
-            .iter()
-            .map(|topic| topic.ordinal)
-            .max()
-            .unwrap_or(-1)
-            + 1;
+        {
+            if topic.topic_id != "default"
+                && is_synthetic_recovered_topic(&topic)
+            {
+                let created_at = self.recovery_timestamp(
+                    &configured_owner.key.owner_id,
+                    &topic.topic_id,
+                )?;
+                topic.created_at = Some(created_at);
+                if let Some(metadata) = topic.metadata.as_object_mut() {
+                    metadata.insert("createdAt".to_string(), Value::Number(created_at.into()));
+                }
+                let key = TopicKey {
+                    owner_type: configured_owner.key.owner_type,
+                    owner_id: configured_owner.key.owner_id.clone(),
+                    topic_id: topic.topic_id.clone(),
+                };
+                topic.config_hash = mobile_topic_config_hash(&key, &topic.metadata);
+            }
+            if topic.topic_id == "default" {
+                default_topics.push(topic);
+            } else {
+                configured_topics.push(topic);
+            }
+        }
+        let mut recovered_topics = Vec::new();
 
         for topic_id in physical_topic_ids {
             if configured_topic_ids.contains(topic_id.as_str()) {
@@ -201,20 +221,54 @@ impl Reconciler {
                 "orphanHistory": true,
                 "compatibilityStatus": "history_not_listed_in_config"
             });
-            topics.push(TopicDefinition {
-                topic_id,
+            recovered_topics.push(TopicDefinition {
+                topic_id: topic_id.clone(),
                 display_name: None,
-                created_at: None,
-                ordinal: next_ordinal,
+                created_at: Some(self.recovery_timestamp(&configured_owner.key.owner_id, &topic_id)?),
+                ordinal: 0,
                 config_hash: mobile_topic_config_hash(&key, &metadata),
                 metadata,
             });
-            next_ordinal += 1;
+        }
+
+        // 恢复项统一前置；配置中已有 Topic 的人工顺序保持不变。
+        recovered_topics.extend(configured_topics);
+        let mut topics = default_topics;
+        topics.extend(recovered_topics);
+        for (ordinal, topic) in topics.iter_mut().enumerate() {
+            topic.ordinal = ordinal as i64;
         }
 
         let mut effective = configured_owner.clone();
         effective.topics = topics;
         Ok(effective)
+    }
+
+    fn recovery_timestamp(&self, owner_id: &str, topic_id: &str) -> Result<i64> {
+        if let Some(timestamp) = topic_timestamp_from_id(topic_id) {
+            return Ok(timestamp);
+        }
+        let history_path = self
+            .config
+            .user_data_dir
+            .join(owner_id)
+            .join("topics")
+            .join(topic_id)
+            .join("history.json");
+        let metadata = match fs::metadata(&history_path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(error.into()),
+        };
+        if !metadata.is_file() {
+            return Ok(0);
+        }
+        Ok(metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|duration| duration.as_millis().min(i64::MAX as u128) as i64)
+            .unwrap_or(0))
     }
 
     fn physical_topic_ids(&self, owner_id: &str) -> Result<Vec<String>> {
@@ -419,6 +473,23 @@ impl Reconciler {
             )
             .map(Some)
     }
+}
+
+fn topic_timestamp_from_id(topic_id: &str) -> Option<i64> {
+    ["topic_", "group_topic_"]
+        .into_iter()
+        .find_map(|prefix| topic_id.strip_prefix(prefix))
+        .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
+        .and_then(|value| value.parse::<i64>().ok())
+        .filter(|value| (0..=((1_i64 << 53) - 1)).contains(value))
+}
+
+fn is_synthetic_recovered_topic(topic: &TopicDefinition) -> bool {
+    topic
+        .display_name
+        .as_deref()
+        .map(|name| name == format!("Recovered: {}", topic.topic_id))
+        .unwrap_or(false)
 }
 
 pub fn parse_owner_config(
@@ -748,7 +819,9 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{normalize_history, parse_owner_config, sha256_hex, Reconciler};
+    use super::{
+        normalize_history, parse_owner_config, sha256_hex, topic_timestamp_from_id, Reconciler,
+    };
     use crate::{
         config::{Cli, ServiceConfig},
         domain::{OwnerKey, OwnerType, TopicKey},
@@ -782,6 +855,14 @@ mod tests {
         let database = Database::open(&config.database_path).expect("open database");
         let reconciler = Reconciler::new(config.clone(), database.clone());
         (temp, config, database, reconciler)
+    }
+
+    #[test]
+    fn recovery_timestamp_parses_topic_id_variants() {
+        assert_eq!(topic_timestamp_from_id("topic_1700000000123"), Some(1_700_000_000_123));
+        assert_eq!(topic_timestamp_from_id("group_topic_1700000000456"), Some(1_700_000_000_456));
+        assert_eq!(topic_timestamp_from_id("legacy-topic"), None);
+        assert_eq!(topic_timestamp_from_id("topic_12_extra"), None);
     }
 
     fn write_owner(

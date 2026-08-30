@@ -466,7 +466,7 @@ test("启动 repair 以物理目录补 Topic，并移除不存在的非-default 
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
 
   const ownerId = "agent-repair";
-  const topicId = "topic-repair";
+  const topicId = "topic_42";
   const agentDir = path.join(directory, "Agents", ownerId);
   const configPath = path.join(agentDir, "config.json");
   const topicDir = path.join(directory, "UserData", ownerId, "topics", topicId);
@@ -644,6 +644,45 @@ test("启动 repair 只在 Owner 类型可证明时重建缺失 config", async (
     fs.existsSync(path.join(directory, "AgentGroups", unknownId, "config.json")),
     false,
   );
+});
+
+test("启动 repair 为恢复 Topic 使用 ID/mtime 时间并将恢复项前置", async (t) => {
+  const { entity } = loadSqliteModules();
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-sync-recovery-chronology-"));
+  const ownerId = "agent-chronology";
+  const configPath = path.join(directory, "Agents", ownerId, "config.json");
+  const topicsRoot = path.join(directory, "UserData", ownerId, "topics");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.mkdirSync(topicsRoot, { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify({
+    id: ownerId,
+    name: "Chronology",
+    topics: [
+      { id: "configured-first", name: "User order", createdAt: 42 },
+      { id: "topic_1700000000789", name: "Recovered: topic_1700000000789", createdAt: 0 },
+    ],
+  }));
+  for (const topicId of ["configured-first", "topic_1700000000789", "topic_1700000000123", "legacy-topic"]) {
+    fs.mkdirSync(path.join(topicsRoot, topicId), { recursive: true });
+    fs.writeFileSync(path.join(topicsRoot, topicId, "history.json"), "[]");
+  }
+  const legacyHistory = path.join(topicsRoot, "legacy-topic", "history.json");
+  fs.utimesSync(legacyHistory, new Date(1_700_000_004_321), new Date(1_700_000_004_321));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+
+  const result = await entity.repairTopicProjectionsFromDisk(directory);
+  assert.equal(result.ownersChanged, 1);
+  const repaired = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  assert.deepEqual(repaired.topics.map((topic) => topic.id), [
+    "topic_1700000000789",
+    "legacy-topic",
+    "topic_1700000000123",
+    "configured-first",
+  ]);
+  assert.equal(repaired.topics[0].createdAt, 1700000000789);
+  assert.equal(repaired.topics[1].createdAt, 1700000004321);
+  assert.equal(repaired.topics[2].createdAt, 1700000000123);
+  assert.equal(repaired.topics[3].createdAt, 42);
 });
 
 test("legacy reconcile 把物理已消失的 Owner/Topic 及消息收敛为墓碑", async (t) => {

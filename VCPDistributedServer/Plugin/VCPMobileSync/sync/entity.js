@@ -817,12 +817,25 @@ async function writeJsonAtomic(filePath, value) {
   }
 }
 
-function recoveryTimestamp(history) {
-  return history.reduce((oldest, message) => {
-    const timestamp = message?.timestamp;
-    if (!Number.isSafeInteger(timestamp) || timestamp < 0) return oldest;
-    return oldest === null || timestamp < oldest ? timestamp : oldest;
-  }, null) ?? Date.now();
+function topicTimestampFromId(topicId) {
+  const match = /^(?:group_)?topic_(\d+)$/.exec(topicId);
+  if (!match) return null;
+  const timestamp = Number(match[1]);
+  return Number.isSafeInteger(timestamp) && timestamp >= 0 ? timestamp : null;
+}
+
+async function recoveryTimestamp(topicId, historyPath) {
+  const idTimestamp = topicTimestampFromId(topicId);
+  if (idTimestamp !== null) return idTimestamp;
+  try {
+    const stats = await fs.stat(historyPath);
+    if (stats.isFile() && Number.isFinite(stats.mtimeMs) && stats.mtimeMs >= 0) {
+      return Math.trunc(stats.mtimeMs);
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return 0;
 }
 
 async function listDirectories(directory) {
@@ -836,13 +849,14 @@ async function listDirectories(directory) {
   }
 }
 
-async function readRecoveryHistory(historyPath) {
-  try {
-    const parsed = JSON.parse(await fs.readFile(historyPath, "utf-8"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function isSyntheticRecoveredTopic(topic, topicId) {
+  return topic?.name === `Recovered: ${topicId}`;
+}
+
+async function normalizeRecoveredTimestamp(topic, topicId, historyPath) {
+  if (!isSyntheticRecoveredTopic(topic, topicId)) return topic;
+  const createdAt = await recoveryTimestamp(topicId, historyPath);
+  return topic.createdAt === createdAt ? topic : { ...topic, createdAt };
 }
 
 async function repairOwnerTopicProjection({
@@ -872,7 +886,9 @@ async function repairOwnerTopicProjection({
     }
 
     const previousTopics = Array.isArray(config.topics) ? config.topics : [];
-    const projectedTopics = [];
+    const recoveredProjection = [];
+    const defaultProjection = [];
+    const existingProjection = [];
     const projectedIds = new Set();
     for (const topic of previousTopics) {
       const topicId = topic?.id;
@@ -881,7 +897,26 @@ async function repairOwnerTopicProjection({
         !projectedIds.has(topicId) &&
         (topicId === "default" || physicalTopics.has(topicId))
       ) {
-        projectedTopics.push(topic);
+        const historyPath = path.join(
+          appDataPath,
+          "UserData",
+          ownerId,
+          "topics",
+          topicId,
+          "history.json",
+        );
+        const normalizedTopic = await normalizeRecoveredTimestamp(
+          topic,
+          topicId,
+          historyPath,
+        );
+        if (topicId === "default") {
+          defaultProjection.push(normalizedTopic);
+        } else if (isSyntheticRecoveredTopic(normalizedTopic, topicId)) {
+          recoveredProjection.push(normalizedTopic);
+        } else {
+          existingProjection.push(normalizedTopic);
+        }
         projectedIds.add(topicId);
       }
     }
@@ -889,22 +924,20 @@ async function repairOwnerTopicProjection({
     let added = 0;
     for (const topicId of [...physicalTopics].sort()) {
       if (projectedIds.has(topicId)) continue;
-      const history = await readRecoveryHistory(
-        path.join(
-          appDataPath,
-          "UserData",
-          ownerId,
-          "topics",
-          topicId,
-          "history.json",
-        ),
+      const historyPath = path.join(
+        appDataPath,
+        "UserData",
+        ownerId,
+        "topics",
+        topicId,
+        "history.json",
       );
       const topicData = {
         id: topicId,
         name: `Recovered: ${topicId}`,
-        createdAt: recoveryTimestamp(history),
+        createdAt: await recoveryTimestamp(topicId, historyPath),
       };
-      projectedTopics.push(
+      recoveredProjection.push(
         ownerType === "group"
           ? createGroupTopic(topicData)
           : createAgentTopic(topicData),
@@ -913,6 +946,11 @@ async function repairOwnerTopicProjection({
       added += 1;
     }
 
+    const projectedTopics = [
+      ...defaultProjection,
+      ...recoveredProjection,
+      ...existingProjection,
+    ];
     const removed = previousTopics.length - (projectedTopics.length - added);
     const changed =
       configRecovered ||

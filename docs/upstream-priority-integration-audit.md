@@ -152,6 +152,8 @@
 | `5b0114d3` 修复 CI YAML | `adfc9684` | `git diff --check` | 直接吸收；仅调整工作流命令块格式 |
 | `30c2f3fc` 加固瞬态失败恢复 | `a3034285` | `node --test tests/mobile-sync-*.test.js`（96/96，1 skip）；`cargo test`（56/56） | 局部适配；统一 `SYNC_SNAPSHOT_STALE`、CAS/物理文件校验和流式错误终止，保留本地索引与 writer 生命周期 |
 | `52df169a` 隔离损坏 legacy Owner | `d610c102` | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
+| `006f2260` 恢复 Topic 时间线 | 待提交 | `node --test tests/mobile-sync-sqlite-delete.test.js`（20/20）；`cargo test`（57/57） | 局部适配；恢复 Topic 使用 ID/mtime 时间，恢复项前置但保留 default 首位与用户配置顺序 |
+| `e1405a4c` 保留桌面消息字段 | `252bc539` | `node --test tests/mobile-sync-streaming.test.js`（14/14） | 局部适配；移动推送只 patch 可移植字段，保留桌面扩展和附件本地路径，未改协议 |
 
 ### 暂缓记录
 
@@ -172,7 +174,7 @@
 ## 当前状态
 
 已完成：建立 `08511fa5` 稳定基线，恢复设置页行布局、字号/数值步进、字体选择、自动保存兼容和 portal 层级。  
-进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97`、`30c2f3fc` 和 `52df169a` 的可验证子集；其余历史差异继续逐项审计。
+进行中：按拓扑顺序吸收 MobileSync/CDS 协议修复，当前已完成 `912d42cb` 至 `b4d7cd97`、`30c2f3fc`、`52df169a`、`006f2260` 和 `e1405a4c` 的可验证子集；其余历史差异继续逐项审计。
 未完成：`c8c3e25b` 及依赖协议/数据库迁移的提交仍暂缓；语音、TTS、Electron/依赖和设置 UI 专项适配及跨平台证据仍需按受影响范围补齐。
 
 ### `30c2f3fc` 局部适配记录
