@@ -46,6 +46,7 @@ test('Harness ConnectionBanner owns reconnecting projection and restores host on
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
+const { mountNumericStepperRow } = await import('../modules/uiux/primitives/numeric-stepper-row.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountDiffBlock } = await import('../modules/uiux/primitives/diff-block.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
@@ -1846,6 +1847,34 @@ test('Harness Select external snapshot sync is presentation-only and owner-bound
         assert.equal(document.querySelector('.vcp-harness-select-trigger'), null);
         assert.equal(changes, 0);
         await scope.dispose('sync-complete');
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});
+
+test('Harness NumericStepperRow external snapshot sync is presentation-only and owner-bound', async () => {
+    const dom = new JSDOM('<!doctype html><div id="row"><input id="size" type="range" min="0" max="100" step="1" value="10"></div>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('stepper-sync'));
+        const input = document.getElementById('size');
+        let changes = 0;
+        input.addEventListener('change', () => { changes += 1; });
+        mountNumericStepperRow(document.getElementById('row'), input, { title: 'Size' }, scope);
+        const value = () => document.querySelector('.vcp-harness-numeric-stepper-row-value')?.textContent;
+        assert.equal(value(), '10');
+        input.value = '42';
+        input.dispatchEvent(new dom.window.Event('vcp-uiux-sync'));
+        assert.equal(value(), '42');
+        assert.equal(changes, 0);
+        await scope.dispose('sync-complete');
+        assert.equal(document.querySelector('.vcp-harness-numeric-stepper-row-value'), null);
+        assert.equal(document.getElementById('size')?.parentElement?.id, 'row', 'dispose restores the canonical range input');
     } finally {
         globalThis.document = previousDocument;
         globalThis.window = previousWindow;

@@ -38,7 +38,11 @@ export function mountAppearanceLanguageRows(form, api, scope) {
             select.value = value;
             select.dispatchEvent(new select.ownerDocument.defaultView.Event('change', { bubbles: true }));
         } }, scope);
+        // Snapshot replay writes the canonical select programmatically and
+        // signals it with vcp-uiux-sync; without this mirror the pill keeps
+        // its mount-time label while the native select moves on.
         scope.listen(select, 'change', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync`);
+        scope.listen(select, 'vcp-uiux-sync', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync-replay`);
         scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-language-row-marker`, 'ui-primitive');
     });
 }
@@ -70,6 +74,7 @@ export function mountChatFontRows(form, api, scope) {
             select.dispatchEvent(new select.ownerDocument.defaultView.Event('change', { bubbles: true }));
         } }, scope);
         scope.listen(select, 'change', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync`);
+        scope.listen(select, 'vcp-uiux-sync', () => row.setActive(select.value), undefined, `typed-${id}-language-row-sync-replay`);
         scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-language-row-marker`, 'ui-primitive');
     });
 }
@@ -92,6 +97,7 @@ export function mountAppearanceRadiusLanguageRow(form, api, scope) {
     }, scope);
     host.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.listen(select, 'change', () => row.setActive(select.value), undefined, 'typed-radius-language-row-sync');
+    scope.listen(select, 'vcp-uiux-sync', () => row.setActive(select.value), undefined, 'typed-radius-language-row-sync-replay');
     scope.own(() => { delete host.dataset.vcpTypedPrimitiveMounted; delete select.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-language-row-marker', 'ui-primitive');
     scope.own(() => row.dispose(), 'typed-radius-language-row', 'ui-primitive');
 }

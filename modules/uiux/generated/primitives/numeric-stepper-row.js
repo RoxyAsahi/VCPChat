@@ -54,8 +54,11 @@ export function mountNumericStepperRow(host, input, props, scope) {
     host.replaceChildren(row);
     const sync = () => { const n = Number(input.value); value.textContent = input.value; up.disabled = n >= Number(input.max); down.disabled = n <= Number(input.min); };
     const change = (delta) => { const n = Math.max(Number(input.min), Math.min(Number(input.max), Number(input.value) + delta * Number(input.step || 1))); input.value = String(n); input.dispatchEvent(new input.ownerDocument.defaultView.Event('input', { bubbles: true })); input.dispatchEvent(new input.ownerDocument.defaultView.Event('change', { bubbles: true })); sync(); };
+    // vcp-uiux-sync mirrors host-driven programmatic value writes (snapshot
+    // replay) into the stepper display, matching the Select primitive contract.
     scope.listen(input, 'input', sync);
     scope.listen(input, 'change', sync);
+    scope.listen(input, 'vcp-uiux-sync', sync);
     scope.listen(up, 'click', () => change(1));
     scope.listen(down, 'click', () => change(-1));
     sync();

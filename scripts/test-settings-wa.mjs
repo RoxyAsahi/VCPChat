@@ -49,6 +49,13 @@ document.getElementById('modal-container').appendChild(modal);
 
 // Load the design system + settings bridge from the Classic home layout. The
 // global dialog must preserve the upstream presentation until Next is selected.
+// lifecycle-scope.js defines window.VCPLifecycle; the production shell loads it
+// before any bridge consumer (main.html), and without it bridgeScope is null so
+// scope-owned mounts (DisclosureRow semantics) silently no-op.
+await import(`${pathToFileURL(`${root}/modules/ui-system/lifecycle-scope.js`).href}?settings-wa=1`);
+// The module attaches to the Node globalThis under jsdom; the bridge reads it
+// off the JSDOM window like the production shell does.
+window.VCPLifecycle = globalThis.VCPLifecycle;
 await import(`${pathToFileURL(`${root}/modules/ui-system/vcp-ui.js`).href}?settings-wa=1`);
 await import(`${pathToFileURL(`${root}/modules/ui-system/settings-bridge.js`).href}?settings-wa=1`);
 
@@ -169,7 +176,6 @@ assert.ok(document.getElementById('homeVisualTagline'), 'home tagline text contr
 assert.ok(document.getElementById('appearanceSidebarRowHeight'), 'navigation row height range exists');
 assert.ok(document.getElementById('appearanceSidebarAvatarSize'), 'sidebar avatar size range exists');
 assert.ok(document.getElementById('appearanceSidebarRadius'), 'sidebar radius select exists');
-assert.ok(!document.getElementById('appearanceSidebarRadius'), 'retired hidden sidebar radius compatibility control stays deleted');
 assert.ok(document.getElementById('appearanceCustomRadius'), 'custom radius range exists');
 
 // ---- 0. Unified Harness SettingsRoot ----

@@ -23,10 +23,18 @@ assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*class="[^"]*vc
     'model trigger must retain the canonical button id and model-picker presentation');
 assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*aria-label="选择模型"/,
     'model trigger must expose an explicit accessible name');
-assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
-    'Agent save action must remain a native submit button with Harness Button presentation');
-assert.match(report.dom, /<button[^>]*id="deleteAgentBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
-    'Agent delete action must retain its canonical button id and Harness Button presentation');
+// Autosave owns the commit, so the canonical submit stays hidden and must NOT
+// carry a generated Button (mounting one would restore its obsolete display).
+assert.match(report.dom, /<button[^>]*type="submit"[^>]*hidden/,
+    'Agent save action remains the canonical hidden native submit under autosave');
+assert.doesNotMatch(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button/,
+    'the hidden submit must not receive Harness Button presentation');
+// Delete is authored hidden (it only applies to a persisted agent) and
+// mountTypedAgentButtons skips hidden controls, so it keeps its native class.
+assert.match(report.dom, /<button[^>]*id="deleteAgentBtn"[^>]*hidden/,
+    'Agent delete action retains its canonical id and stays hidden until an agent exists');
+assert.doesNotMatch(report.dom, /<button[^>]*id="deleteAgentBtn"[^>]*class="[^"]*vcp-harness-button/,
+    'the hidden delete action must not receive Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'TTS refresh action must retain its canonical button id and Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="resetAvatarColorsBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
@@ -47,8 +55,8 @@ assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*type=
     'Avatar color reset action must remain a non-submitting native button');
 assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*style="[^"]*display:\s*inline-flex\s*!important[^"]*")[^>]*>/,
     'Avatar color reset action must retain the Harness inline-flex geometry declaration');
-assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
-    'Agent save action must retain submit semantics after Button mounting');
+assert.match(report.dom, /<button[^>]*type="submit"[^>]*hidden/,
+    'Agent save action retains submit semantics as the hidden autosave canonical submit');
 
 assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 9, 'typed Agent Input evidence is incomplete');
 assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 9, 'native Agent Input style evidence is incomplete');
@@ -102,6 +110,14 @@ for (const button of report.promptButtons) {
 }
 for (const action of report.actions) {
     if (action.controlId === 'openModelSelectBtn') continue;
+    // The autosave submit (no id) and the authored-hidden delete action are
+    // excluded from Button mounting; their hidden native contracts are
+    // asserted against the DOM above.
+    if (action.controlId === null || action.controlId === 'deleteAgentBtn') {
+        assert.doesNotMatch(action.class, /vcp-harness-button/,
+            `hidden Agent action ${action.controlId ?? 'submit'} must not receive Harness Button presentation`);
+        continue;
+    }
     assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
     assert.ok(Array.isArray(action.style?.authored?.matchedRules), `Agent action ${action.controlId} must report authored CSS rules`);
     assert.ok(action.style.authored.matchedRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.declarations?.display === 'inline-flex'),
