@@ -214,8 +214,7 @@ function upsertAttachmentIndex(hash, filePath, updatedAt = Date.now()) {
       VALUES (?, ?, ?)
       ON CONFLICT(hash) DO UPDATE SET
         file_path = excluded.file_path,
-        updated_at = excluded.updated_at,
-        deleted_at = NULL
+        updated_at = excluded.updated_at
     `,
   ).run(hash, filePath, updatedAt);
 }
