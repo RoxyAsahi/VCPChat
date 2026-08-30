@@ -800,7 +800,7 @@ test("legacy Topic root 仅在内容哈希变化时推进 updated_at", () => {
 
 test("legacy Owner root 和 Topic 空根回填都排除 default", () => {
   const { database, index } = loadSqliteModules({ captureOnMessage() {} });
-  const { computeAggregatedHash } = require(
+  const { computeAggregatedHash, computeTopicLeafHash } = require(
     path.join(ROOT, "VCPDistributedServer", "Plugin", "VCPMobileSync", "core", "hash.js"),
   );
   const db = database.initDb(":memory:");
@@ -817,7 +817,9 @@ test("legacy Owner root 和 Topic 空根回填都排除 default", () => {
     ).run("a".repeat(64), "b".repeat(64), "topic-live");
 
     index.computeAggregatedHashes(db, silentLogger);
-    const expected = computeAggregatedHash(["a".repeat(64), "b".repeat(64)]);
+    const expected = computeAggregatedHash([
+      computeTopicLeafHash("topic-live", "a".repeat(64), "b".repeat(64)),
+    ]);
     assert.equal(entityRow(db, "agent-root", "agent").aggregated_hash, expected);
     assert.equal(entityRow(db, "default", "topic").aggregated_hash, null);
 
