@@ -560,3 +560,88 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
     border-top: 0 !important;
     padding-top: 0 !important;
 }
+
+/* Restore the compact-tab guards from the pre-sync workspace. */
+#tabContentSettings .settings-header-bar,
+#tabContentSettings #globalSettingsBtn {
+    display: none !important;
+}
+
+#agentSettingsContainer .agent-settings-section-header {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    align-content: start;
+}
+
+#tabContentSettings #agentSettingsForm > .agent-settings-section {
+    overflow: visible !important;
+}
+
+#agentSettingsContainer .agent-settings-collapsible-container.collapsed .agent-settings-section-header {
+    min-height: 42px !important;
+    padding-top: 3px !important;
+    padding-bottom: 5px !important;
+}
+
+#agentSettingsContainer .agent-settings-collapsible-container.collapsed .agent-settings-section-summary {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 20px !important;
+    max-height: none !important;
+    overflow: visible !important;
+    clip: auto !important;
+    clip-path: none !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+}
+
+#agentSettingsContainer #identitySummary.summary-with-avatar {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 46px !important;
+    margin-top: 6px !important;
+    box-sizing: border-box !important;
+    background: var(--vcp-ui-bg-1, var(--input-bg)) !important;
+    background-image: none !important;
+    border: 1px solid var(--vcp-ui-border, var(--border-color)) !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+#agentSettingsContainer .slider-container > .vcp-uiux-range,
+#agentSettingsContainer .slider-container {
+    min-width: 0 !important;
+}
+
+#agentSettingsContainer .slider-container > #agentTtsSpeed,
+#agentSettingsContainer .slider-container > input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    appearance: none;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--vcp-color-brand, var(--button-bg));
+}
+
+#agentSettingsContainer .slider-container > #agentTtsSpeed::-webkit-slider-runnable-track,
+#agentSettingsContainer .slider-container > input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--vcp-color-border, var(--border-color));
+}
+
+#agentSettingsContainer .slider-container > #agentTtsSpeed::-webkit-slider-thumb,
+#agentSettingsContainer .slider-container > input[type="range"]::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    appearance: none;
+    border: 2px solid var(--vcp-color-brand, var(--button-bg));
+    border-radius: 50%;
+    background: var(--vcp-color-surface, var(--input-bg));
+}

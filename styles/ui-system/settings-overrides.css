@@ -716,3 +716,51 @@
         padding-top: 0 !important;
     }
 }
+
+/* Restored row rhythm for ordinary Global Settings fields. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    column-gap: 24px !important;
+    row-gap: 4px !important;
+    min-width: 0 !important;
+    padding: 16px 0 !important;
+    border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .1)) !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > .vcp-harness-field-head {
+    display: block !important;
+    min-width: 0 !important;
+    padding-right: 48px !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > .vcp-harness-field-label,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > label.vcp-harness-field-label {
+    min-width: 0 !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > :is(.vcp-harness-select, .vcp-uiux-input-wrap, input, select, textarea, .vcp-uiux-range, .vcp-uiux-toggle) {
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    min-width: 132px !important;
+    max-width: min(100%, 320px) !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > .vcp-harness-field-description,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-field > .vcp-harness-field-error {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    min-width: 0 !important;
+}
+
+/* Appearance settings are a vertical list; hide legacy range tracks when
+   their stepped row presentation is mounted. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .appearance-settings-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .appearance-settings-grid > [id$="Row"] {
+    width: 100% !important;
+    min-width: 0 !important;
+}
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .appearance-sidebar-geometry-section input[type="range"] {
+    display: none !important;
+}
