@@ -60,6 +60,23 @@ const settingsManager = (() => {
     let openModelSelectBtn, modelSelectModal, modelList, modelSearchInput, refreshModelsBtn;
     let topicSummaryModelInput, openTopicSummaryModelSelectBtn; // New elements for topic summary model
     let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider;
+    let agentTtsDirectorPromptInput, addAgentTtsDirectorPromptBtn, fillAgentTtsDirectorTemplateBtn, agentTtsDirectorPromptsContainer;
+    let currentAgentTtsDirectorPrompts = [];
+    const ttsDirectorDisposers = [];
+    const TTS_DIRECTOR_TEMPLATE = `【角色】
+写清人物的身份、年龄、性格底色、外形气质与说话习惯。
+
+【场景】
+交代此刻发生了什么、和谁说话、情绪处在什么位置。
+
+【指导】
+像导演一样下达演绎要领：
+- 语速与顿挫：
+- 气息与虚实：
+- 停顿与重音：
+- 共鸣位置：
+- 音色质感：
+- 情绪起伏：`;
     let stripRegexListContainer;
 
     // --- New Regex Modal Elements ---
@@ -94,6 +111,14 @@ const settingsManager = (() => {
         form?.dispatchEvent(new CustomEvent('vcp-settings-delete-result', {
             detail: { success: Boolean(success), cancelled: Boolean(cancelled), error }
         }));
+    }
+
+    function clearTtsDirectorListeners() {
+        while (ttsDirectorDisposers.length) {
+            try { ttsDirectorDisposers.pop()(); } catch (error) {
+                console.warn('[SettingsManager] Failed to dispose TTS director listener:', error);
+            }
+        }
     }
 
     /**
@@ -266,8 +291,20 @@ const settingsManager = (() => {
         // Populate bilingual TTS settings
         await populateTtsModels(agentConfig.ttsVoicePrimary, agentConfig.ttsVoiceSecondary);
 
+        // Voice lookup is asynchronous.  A newer Agent selection owns the
+        // shared form, so a stale lookup must not write prompts, regexes, or
+        // speed into the replacement Agent's canonical controls.
+        if (populateToken !== agentSettingsPopulateToken) {
+            console.debug(`[SettingsManager] Aborting stale TTS settings render for agent ${agentId}.`);
+            return { stale: true };
+        }
+
         agentTtsRegexPrimaryInput.value = agentConfig.ttsRegexPrimary || '';
         agentTtsRegexSecondaryInput.value = agentConfig.ttsRegexSecondary || '';
+        currentAgentTtsDirectorPrompts = Array.isArray(agentConfig.ttsDirectorPrompts)
+            ? agentConfig.ttsDirectorPrompts.map(item => String(item || '').trim()).filter(Boolean)
+            : [];
+        renderTtsDirectorPrompts();
 
         agentTtsSpeedSlider.value = agentConfig.ttsSpeed !== undefined ? agentConfig.ttsSpeed : 1.0;
 
@@ -355,6 +392,7 @@ const settingsManager = (() => {
             ttsRegexPrimary: agentTtsRegexPrimaryInput.value.trim(),
             ttsVoiceSecondary: agentTtsVoiceSecondarySelect.value,
             ttsRegexSecondary: agentTtsRegexSecondaryInput.value.trim(),
+            ttsDirectorPrompts: [...currentAgentTtsDirectorPrompts],
             ttsSpeed: parseFloat(agentTtsSpeedSlider.value),
             stripRegexes: currentAgentRegexes,
             avatarBorderColor: agentAvatarBorderColorInput.value,
@@ -565,11 +603,15 @@ const settingsManager = (() => {
         const isNetworkMode = globalSettings.voiceMode === 'network';
         const commitOptions = (select, options, selectedValue = '') => {
             const current = [...select.options];
-            const sameStructure = current.length === options.length
-                && options.every((option, index) => (
+            const nextFlatOptions = options.flatMap(node => (
+                node.tagName === 'OPTGROUP' ? [...node.querySelectorAll('option')] : [node]
+            ));
+            const sameStructure = current.length === nextFlatOptions.length
+                && nextFlatOptions.every((option, index) => (
                     current[index]?.value === option.value
                     && current[index]?.textContent === option.textContent
                     && current[index]?.disabled === option.disabled
+                    && current[index]?.parentElement?.label === option.parentElement?.label
                 ));
             if (!sameStructure) select.replaceChildren(...options);
             select.value = selectedValue || '';
@@ -622,20 +664,40 @@ const settingsManager = (() => {
                 option.selected = selected;
                 return option;
             };
-            const primaryOptions = [createOption('', '不使用语音')];
-            const secondaryOptions = [createOption('', '不使用')];
-            if (optionList.length > 0) {
-                optionList.forEach(item => {
-                    const optionValue = item.voice || item.id;
-                    const optionLabel = item.displayName || item.voice || item.id;
-                    primaryOptions.push(createOption(optionValue, optionLabel, {
-                        selected: optionValue === currentPrimaryVoice
-                    }));
-                    secondaryOptions.push(createOption(optionValue, optionLabel, {
-                        selected: optionValue === currentSecondaryVoice
-                    }));
+            const createOptionGroups = (emptyLabel, selectedValue) => {
+                const nodes = [createOption('', emptyLabel)];
+                if (!isNetworkMode) {
+                    optionList.forEach(item => {
+                        const optionValue = item.voice || item.id;
+                        nodes.push(createOption(optionValue, item.displayName || optionValue, {
+                            selected: optionValue === selectedValue
+                        }));
+                    });
+                    return nodes;
+                }
+                const groupDefinitions = [
+                    ['preset', 'MiMo 预置音色'],
+                    ['voicedesign', 'MiMo 自然语言控制'],
+                    ['voiceclone', 'MiMo 克隆音色（AppData/mimotts）']
+                ];
+                groupDefinitions.forEach(([type, label]) => {
+                    const items = optionList.filter(item => item.type === type);
+                    if (!items.length) return;
+                    const group = document.createElement('optgroup');
+                    group.label = label;
+                    items.forEach(item => {
+                        const optionValue = item.voice || item.id;
+                        group.appendChild(createOption(optionValue, item.displayName || optionValue, {
+                            selected: optionValue === selectedValue
+                        }));
+                    });
+                    nodes.push(group);
                 });
-            } else {
+                return nodes;
+            };
+            const primaryOptions = createOptionGroups('不使用语音', currentPrimaryVoice);
+            const secondaryOptions = createOptionGroups('不使用', currentSecondaryVoice);
+            if (optionList.length === 0) {
                 const emptyLabel = isNetworkMode ? '未找到 MiMo 音色' : '未找到模型,请启动Sovits';
                 primaryOptions.push(createOption('', emptyLabel, { disabled: true }));
                 secondaryOptions.push(createOption('', emptyLabel, { disabled: true }));
@@ -657,6 +719,91 @@ const settingsManager = (() => {
             commitOptions(agentTtsVoiceSecondarySelect, [secondaryErrorOption]);
             uiHelper.showToastNotification(isNetworkMode ? '获取网络音色失败' : '获取Sovits语音模型失败', 'error');
         }
+    }
+
+    function resizeTtsDirectorEditor(editor, expanded = editor === document.activeElement) {
+        if (!editor) return;
+        if (!expanded) {
+            editor.style.height = '';
+            editor.rows = 1;
+            return;
+        }
+        editor.rows = 4;
+        editor.style.height = 'auto';
+        editor.style.height = `${Math.min(Math.max(editor.scrollHeight, 132), 360)}px`;
+    }
+
+    function bindTtsDirectorEditor(editor, onInput) {
+        const onFocus = () => {
+            editor.closest('.tts-director-item, .tts-director-composer')?.classList.add('is-editing');
+            resizeTtsDirectorEditor(editor, true);
+            scheduleStickyButtonsRefresh();
+        };
+        const onInputEvent = () => {
+            onInput?.(editor.value);
+            resizeTtsDirectorEditor(editor, true);
+            updateSectionSummary('tts');
+            scheduleStickyButtonsRefresh();
+        };
+        const onBlur = () => {
+            editor.closest('.tts-director-item, .tts-director-composer')?.classList.remove('is-editing');
+            resizeTtsDirectorEditor(editor, false);
+            scheduleStickyButtonsRefresh();
+        };
+        editor.addEventListener('focus', onFocus);
+        editor.addEventListener('input', onInputEvent);
+        editor.addEventListener('blur', onBlur);
+    }
+
+    function renderTtsDirectorPrompts() {
+        if (!agentTtsDirectorPromptsContainer) return;
+        agentTtsDirectorPromptsContainer.replaceChildren();
+        currentAgentTtsDirectorPrompts.forEach((prompt, index) => {
+            const row = document.createElement('div');
+            row.className = 'tts-director-item';
+            const editor = document.createElement('textarea');
+            editor.className = 'tts-director-editor';
+            editor.rows = 1;
+            editor.value = prompt;
+            editor.setAttribute('aria-label', `导演提示词 ${index + 1}`);
+            bindTtsDirectorEditor(editor, value => { currentAgentTtsDirectorPrompts[index] = value; });
+            editor.addEventListener('blur', () => {
+                const value = editor.value.trim();
+                if (value) currentAgentTtsDirectorPrompts[index] = value;
+                else {
+                    currentAgentTtsDirectorPrompts.splice(index, 1);
+                    renderTtsDirectorPrompts();
+                }
+            });
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'small-button tts-director-action-button';
+            removeButton.textContent = '−';
+            removeButton.title = '删除该导演提示词';
+            removeButton.setAttribute('aria-label', `删除导演提示词 ${index + 1}`);
+            removeButton.addEventListener('mousedown', event => event.preventDefault());
+            removeButton.addEventListener('click', () => {
+                currentAgentTtsDirectorPrompts.splice(index, 1);
+                renderTtsDirectorPrompts();
+            });
+            row.append(editor, removeButton);
+            agentTtsDirectorPromptsContainer.appendChild(row);
+        });
+        updateSectionSummary('tts');
+        scheduleStickyButtonsRefresh();
+    }
+
+    function addTtsDirectorPrompt() {
+        const prompt = agentTtsDirectorPromptInput?.value?.trim() || '';
+        if (!prompt) {
+            uiHelper.showToastNotification('请先填写自然语言导演提示词。', 'warning');
+            agentTtsDirectorPromptInput?.focus();
+            return;
+        }
+        currentAgentTtsDirectorPrompts.push(prompt);
+        agentTtsDirectorPromptInput.value = '';
+        renderTtsDirectorPrompts();
+        agentTtsDirectorPromptInput.focus();
     }
 
     /**
@@ -775,6 +922,10 @@ const settingsManager = (() => {
             agentTtsRegexSecondaryInput = document.getElementById('agentTtsRegexSecondary');
             refreshTtsModelsBtn = document.getElementById('refreshTtsModelsBtn');
             agentTtsSpeedSlider = options.elements.agentTtsSpeedSlider;
+            agentTtsDirectorPromptInput = document.getElementById('agentTtsDirectorPromptInput');
+            addAgentTtsDirectorPromptBtn = document.getElementById('addAgentTtsDirectorPromptBtn');
+            fillAgentTtsDirectorTemplateBtn = document.getElementById('fillAgentTtsDirectorTemplateBtn');
+            agentTtsDirectorPromptsContainer = document.getElementById('agentTtsDirectorPromptsContainer');
 
             // 🟢 监听模态框就绪事件，动态绑定延迟加载的元素
             document.addEventListener('modal-ready', (e) => {
@@ -930,6 +1081,7 @@ const settingsManager = (() => {
             window.addEventListener('pagehide', () => {
                 modelsUpdatedDisposer?.();
                 modelsUpdatedDisposer = null;
+                clearTtsDirectorListeners();
                 promptManager?.destroy?.();
                 promptManager = null;
             }, { once: true });
@@ -949,6 +1101,29 @@ const settingsManager = (() => {
                     }
                 });
             }
+
+            clearTtsDirectorListeners();
+            const ownTtsDirectorListener = (target, type, handler, options) => {
+                if (!target) return;
+                target.addEventListener(type, handler, options);
+                ttsDirectorDisposers.push(() => target.removeEventListener(type, handler, options));
+            };
+            ownTtsDirectorListener(addAgentTtsDirectorPromptBtn, 'mousedown', event => event.preventDefault());
+            ownTtsDirectorListener(addAgentTtsDirectorPromptBtn, 'click', addTtsDirectorPrompt);
+            ownTtsDirectorListener(fillAgentTtsDirectorTemplateBtn, 'click', () => {
+                const existing = agentTtsDirectorPromptInput?.value?.trim() || '';
+                if (!agentTtsDirectorPromptInput) return;
+                agentTtsDirectorPromptInput.value = existing
+                    ? `${existing}\n\n${TTS_DIRECTOR_TEMPLATE}`
+                    : TTS_DIRECTOR_TEMPLATE;
+                agentTtsDirectorPromptInput.focus();
+                resizeTtsDirectorEditor(agentTtsDirectorPromptInput, true);
+            });
+            ownTtsDirectorListener(agentTtsDirectorPromptInput, 'keydown', event => {
+                if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
+                event.preventDefault();
+                addTtsDirectorPrompt();
+            });
 
 
             // 创建正则设置UI
@@ -1054,6 +1229,7 @@ const settingsManager = (() => {
                 ttsRegexPrimary: agentTtsRegexPrimaryInput.value.trim(),
                 ttsVoiceSecondary: agentTtsVoiceSecondarySelect.value,
                 ttsRegexSecondary: agentTtsRegexSecondaryInput.value.trim(),
+                ttsDirectorPrompts: [...currentAgentTtsDirectorPrompts],
                 ttsSpeed: parseFloat(agentTtsSpeedSlider.value),
                 stripRegexes: currentAgentRegexes
             };
@@ -1910,13 +2086,15 @@ function setupParamsCollapsible() {
             || '不使用';
         const secondaryRegex = agentTtsRegexSecondaryInput?.value?.trim() || '无';
         const speed = agentTtsSpeedSlider?.value || '1.0';
+        const directorCount = currentAgentTtsDirectorPrompts.length;
 
         return [
             `主语言: ${primaryVoice}`,
             `主语言正则: ${primaryRegex}`,
             `副语言: ${secondaryVoice}`,
             `副语言正则: ${secondaryRegex}`,
-            `语速: ${speed}`
+            `语速: ${speed}`,
+            `导演提示词: ${directorCount ? `${directorCount} 条` : '无'}`
         ].join('\n');
     }
 

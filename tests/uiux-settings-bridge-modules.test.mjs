@@ -302,6 +302,25 @@ test('Agent TTS Voice Select keeps business option loading while one typed proje
     assert.ok(/body(?::not\(\.light-theme\)|\[data-vcp-theme="dark"\]) \[id="agentSettingsContainer"\] select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'dark Select CSS must exclude the typed native node');
 });
 
+test('上游 MiMo 导演提示词保留 canonical 数组并由 SettingsManager 管理生命周期', () => {
+    const html = read(path.join(root, 'main.html'));
+    const manager = read(path.join(root, 'modules', 'settingsManager.js'));
+    const tts = read(path.join(root, 'modules', 'SovitsTTS.js'));
+    for (const id of [
+        'agentTtsDirectorPromptInput',
+        'addAgentTtsDirectorPromptBtn',
+        'fillAgentTtsDirectorTemplateBtn',
+        'agentTtsDirectorPromptsContainer',
+    ]) {
+        assert.match(html, new RegExp(`id="${id}"`), `MiMo director control ${id} must remain in the Agent form`);
+    }
+    assert.match(manager, /agentConfig\.ttsDirectorPrompts/, 'population must read the upstream persisted prompt array');
+    assert.match(manager, /ttsDirectorPrompts: \[\.\.\.currentAgentTtsDirectorPrompts\]/, 'save paths must write the canonical prompt array');
+    assert.match(manager, /TTS_DIRECTOR_TEMPLATE/, 'the upstream director template action must remain available');
+    assert.match(manager, /clearTtsDirectorListeners\(\)/, 'static director listeners must retract on pagehide');
+    assert.match(tts, /options\.directorPrompts/, 'the runtime consumer must continue receiving the saved prompt array');
+});
+
 test('Agent shell CSS leaves typed primitive inner controls to their own presentation owner', () => {
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
     const legacyControlsCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));

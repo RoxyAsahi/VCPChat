@@ -17,6 +17,8 @@
 
 共享文件（设置入口、设置桥接、TTS/语音设置字段、页面装配和 `package.json`）不能整文件覆盖：业务节点、IPC、持久化键和 canonical state 以上游为准；本地只重新挂载已有的设置行、字号步进、Select/Menu、Input、Range、Toggle、portal/focus/dispose 及其 UI 测试。不得复制旧 listener 或 durable state。
 
+完整的 96 个提交逐项表见 [upstream-96-commit-audit.md](upstream-96-commit-audit.md)。该表以最终文件树和实际测试为证据，合并节点不重复 cherry-pick。
+
 ## 目标
 
 在不重写旧开发历史、不整体覆盖本地成熟实现的前提下，逐项吸收上游新增能力。代码与业务行为发生冲突时，保留行为更完整、生命周期更安全的一方；上游新增能力必须纳入，但应适配到本地已有的 owner、Surface、状态和测试边界。
@@ -230,3 +232,4 @@
 - `cargo test --manifest-path rust_chat_data_service/Cargo.toml --locked`：59/59 通过。
 - `node --test tests/voice-input-engine.test.js`：6 项通过、2 项跳过。当前 macOS `darwin-arm64` 未提供上游发布的语音运行时二进制；Windows `win32-x64` 产物仍保留，需在对应平台运行启动/停止 journey 后补齐证据。
 - 网络 TTS 设置默认端点已与上游 `https://www.dmxapi.cn/v1` 对齐；不再把已退役的 SiliconFlow/WebIndexTTS2 目录作为运行时或展示默认。
+- Agent TTS 的 MiMo 音色分组、导演提示词模板/增删/持久化和异步切换淘汰保护已恢复；Select 与 Range 仍由设置 UI 的单一 presentation owner 接管，未恢复重复监听。
