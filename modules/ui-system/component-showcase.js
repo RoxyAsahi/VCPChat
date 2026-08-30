@@ -3,6 +3,7 @@ import { register } from './next-ui-apps.js';
 import { mountWebAwesomeComparison } from './webawesome-comparison.js';
 
 const CATEGORIES = [
+    { id: 'harness', label: 'Harness Lab', icon: 'science' },
     { id: 'foundation', label: '基础', icon: 'foundation' },
     { id: 'actions', label: '操作', icon: 'ads_click' },
     { id: 'forms', label: '表单', icon: 'edit_note' },
@@ -119,9 +120,14 @@ function mountShowcase(container, context = {}) {
         const h3 = document.createElement('h3');
         h3.textContent = title;
         const meta = VCPUI.getComponentMeta(name);
+        const maturity = meta?.harnessMaturity || 'unclassified';
+        element.dataset.harnessMaturity = maturity;
+        const productionReady = meta?.productionEligible === true && maturity === 'verified-candidate';
+        const candidateLab = maturity !== 'legacy-compatibility';
+        element.dataset.showcaseStatus = productionReady ? 'production-ready' : candidateLab ? 'candidate-lab' : 'legacy-showcase';
         const status = create('Badge', {
-            label: meta?.status === 'stable' ? 'Stable' : 'Candidate',
-            variant: meta?.status === 'stable' ? 'neutral' : 'warning'
+            label: productionReady ? 'Production Ready' : candidateLab ? 'Candidate Lab' : 'Legacy Showcase',
+            variant: productionReady ? 'success' : candidateLab ? 'warning' : 'neutral'
         });
         titleRow.append(h3, status.element);
         const p = document.createElement('p');
@@ -146,6 +152,46 @@ function mountShowcase(container, context = {}) {
         }
         host.append(group);
         return group;
+    }
+
+    const gate = document.createElement('section');
+    gate.className = 'vcp-ui-showcase-section vcp-ui-showcase-gate';
+    gate.dataset.component = 'harness maturity production eligibility';
+    gate.innerHTML = `
+        <header><div class="vcp-ui-showcase-section-title"><h3>Harness 生产接入门禁</h3><span class="vcp-ui-showcase-gate-status">白名单制</span></div>
+        <p>只有同时具备 Harness DOM/CSS/交互证据、真实 VCP consumer、Electron journey 和 legacy deletion 的 <code>verified-candidate</code> 控件，才允许进入真实 Surface。组件库展示和 VCP API stable 不等于 Harness 等价。</p></header>
+        <div class="vcp-ui-showcase-gate-grid">
+            <div><strong>Harness Verified</strong><span>可申请生产接入，仍需逐 Surface 验收</span></div>
+            <div><strong>Candidate Lab</strong><span>只用于复刻、对照和证据建设</span></div>
+            <div><strong>Legacy / Compatibility</strong><span>旧组件继续保留，不得作为 Harness 等价实现扩散</span></div>
+        </div>`;
+    content.append(gate);
+    sections.push(gate);
+
+    categoryHeading('harness', 'Harness Candidate Lab', '按 DeepSeek Harness 源码复刻的 Light-DOM 候选控件；展示通过不代表生产晋级。');
+    const harnessSection = document.createElement('section');
+    harnessSection.className = 'vcp-ui-showcase-section';
+    harnessSection.dataset.component = 'harness primitive lab candidate button input field select menu';
+    harnessSection.dataset.harnessMaturity = 'candidate-lab';
+    const harnessHeader = document.createElement('header');
+    const harnessTitleRow = document.createElement('div');
+    harnessTitleRow.className = 'vcp-ui-showcase-section-title';
+    const harnessTitle = document.createElement('h3');
+    harnessTitle.textContent = 'Harness Primitive Lab';
+    const harnessStatus = create('Badge', { label: 'Candidate', variant: 'warning' });
+    harnessTitleRow.append(harnessTitle, harnessStatus.element);
+    const harnessDescription = document.createElement('p');
+    harnessDescription.textContent = '固定状态矩阵与源码 provenance 的候选控件实验室。';
+    harnessHeader.append(harnessTitleRow, harnessDescription);
+    const harnessLab = document.createElement('div');
+    harnessLab.className = 'vcp-ui-showcase-demo';
+    harnessSection.append(harnessHeader, harnessLab);
+    content.append(harnessSection);
+    sections.push(harnessSection);
+    if (scope && window.VCPUIUX?.mountPrimitiveLabFromScope) {
+        disposers.push(window.VCPUIUX.mountPrimitiveLabFromScope(harnessLab, scope));
+    } else {
+        harnessLab.textContent = 'UIUX generated artifact unavailable.';
     }
 
     categoryHeading('foundation', '基础', '语义状态、内容容器与空态表达。');
@@ -450,7 +496,7 @@ function mountShowcase(container, context = {}) {
     disposers.push(mountWebAwesomeComparison(comparisonHost, { create, on }));
 
     function updateThemeStatus() {
-        const isLight = document.body.classList.contains('light-theme');
+        const isLight = document.body.dataset.vcpTheme === 'light';
         const wallpaper = getComputedStyle(document.documentElement).getPropertyValue('--custom-background-image').trim();
         themeStatus.textContent = `${isLight ? '浅色' : '深色'}${wallpaper && wallpaper !== 'none' ? ' · 壁纸' : ''}`;
     }
