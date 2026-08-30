@@ -135,7 +135,7 @@
 | `c54f7cb3` 修复设置保存导入 | `2ab75855` | 设置桥接与全局保存回归测试通过 | 直接吸收；补齐消息布局函数导入，未改变设置状态或持久化键 |
 | `5b0114d3` 修复 CI YAML | `adfc9684` | `git diff --check` | 直接吸收；仅调整工作流命令块格式 |
 | `30c2f3fc` 加固瞬态失败恢复 | `7ed9f97a` | `node --test tests/mobile-sync-*.test.js`（96/96，1 skip）；`cargo test`（56/56） | 局部适配；统一 `SYNC_SNAPSHOT_STALE`、CAS/物理文件校验和流式错误终止，保留本地索引与 writer 生命周期 |
-| `52df169a` 隔离损坏 legacy Owner | 待提交 | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
+| `52df169a` 隔离损坏 legacy Owner | `d610c102` | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
 
 ### 暂缓记录
 
@@ -164,8 +164,8 @@
 - **保留的上游行为**：配置/历史 CAS、头像物理文件校验、消息索引时间和 Topic 索引漂移统一报告快照过期；CDS 内部 `SNAPSHOT_STALE` 在插件边界映射为 Wire 1.2 的 `SYNC_SNAPSHOT_STALE`；已开始的 NDJSON 响应通过受保护 writer 写入错误帧后再结束。
 - **本地结构**：继续使用现有 `entity_index`、消息历史 authority、`NdjsonWriter` 和统一错误 envelope；没有引入上游不存在于本地的 `staleLive` 第二状态，也没有新增全局 listener 或持久化键。
 - **验证证据**：`node --test tests/mobile-sync-*.test.js`（96 pass、1 skip）；`cargo test`（56/56）；错误契约 golden、CAS 并发写入和流式背压测试均通过。
-- **提交**：本地适配将在独立中文提交中提交，当前分支尚未推送。
+- **提交**：`7ed9f97a`（独立中文提交）；当前分支尚未推送。
 
 ### `52df169a` 后续手工适配说明
 
-该提交的 `unhealthyLegacyOwners` 隔离机制不能直接 cherry-pick：当前分支使用 `entity_index` + `scanEntities`，而上游版本依赖另一套 owner-state。后续若纳入，将只在 legacy 非 central manifest 路径增加 owner 级隔离，区分配置解析失败与事务失败，并在成功重扫后清理标记；central CDS 路径不维护第二份状态。适配前先补“损坏 Owner 不阻塞其他 Owner、物理目录消失清理标记、恢复后重新纳入 manifest”的回归测试。
+该提交的 `unhealthyLegacyOwners` 隔离机制已按本地 `entity_index` + `scanEntities` 架构局部适配：仅在 legacy 非 central manifest 路径增加进程内 owner 级隔离，区分配置解析失败与事务失败，并在成功重扫或物理目录消失后清理标记；central CDS 路径不维护第二份状态。回归测试覆盖损坏 Owner 不阻塞其他清单、修复后重新纳入 Manifest，且使用真实 `registerRoutes` 消息处理器验证过滤层。
