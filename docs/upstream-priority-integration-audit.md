@@ -112,7 +112,7 @@
 | 1 | `8fecce4b` 加速工程推进 | 聊天请求编排、辅助语音窗口 | `Voicechatmodules/voicechat.js`、`modules/chat/singleChatRequestOrchestrator.js`、`modules/chatManager.js`、`modules/tavernRulesEngine.js`、Rust Assistant、2 个测试 | 高；本地已有 Surface-owned renderer、stream 和 history authority | `sendToVCP` 签名不变；新增规则/附件/模型构建，改变 stream registration 与请求生命周期；持久化 key 不变 | 局部适配；先审阅 orchestrator 行为和测试，不整提交接收 |
 | 2 | `accc88e5` 狂暴工程迭代收尾 | Windows 原生语音输入 | VoiceChat UI、`voiceHandlers.js`、Rust voice runtime 与 Windows 二进制 | 高；本地 VoiceChat 和 capture 生命周期已有改造 | 移除 native mode select；capture settle、F24 停止键和状态字段变化；IPC capture 生命周期变化 | 暂缓；需要 Windows/Electron journey，先补生命周期测试 |
 | 3 | `3eae725a` 加固 | 语音 capture debounce | `modules/ipc/voiceHandlers.js` | 高 | session timer、trailing-edge debounce、自动结束；IPC 事件名不变 | 暂缓；先补 timer/stop 竞态测试 |
-| 4 | `4df8f4fa` 加固 | 辅助窗口中止请求 | VoiceChat、Rust Assistant | 高；本地已有 stream runtime | `interruptVcpRequest` 成功后立即 `streamRuntime.cancel`；无持久化/协议变化 | 局部适配；接入现有 `interruptHandler`，不整文件覆盖 |
+| 4 | `4df8f4fa` 加固 | 辅助窗口中止请求 | VoiceChat、Rust Assistant | 高；本地已有 stream runtime | `interruptVcpRequest` 成功后立即 `streamRuntime.cancel`；无持久化/协议变化 | 局部适配；接入现有 `interruptHandler`，不整文件覆盖；本地提交 `e2368c0f` |
 
 这 4 个提交是当前真正需要处理的上游队列；共同祖先到 `origin/main` 的其余历史差异不重复导入。任何“直接 cherry-pick”都必须先满足表中的边界和验证条件。
 
