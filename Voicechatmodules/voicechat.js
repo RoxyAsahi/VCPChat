@@ -7,6 +7,7 @@ import { createWindowStreamRuntime } from '../modules/renderer/windowStreamRunti
 import { createMessageRenderer } from '../modules/messageRenderer.js';
 import { createStreamProjection } from '../modules/renderer/streamManager.js';
 import { createStreamTransientHistory } from '../modules/chat/streamTransientHistory.js';
+import { createTtsSurfaceOwner } from '../modules/renderer/ttsSurfaceOwner.js';
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -17,39 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendMessageBtn = document.getElementById('sendMessageBtn');
     const agentAvatarImg = document.getElementById('agentAvatar');
     const agentNameSpan = document.getElementById('currentChatAgentName');
+    const voiceInputShortcutStatus = document.getElementById('voiceInputShortcutStatus');
     const closeBtn = document.getElementById('close-btn-voicechat');
     const toggleInputModeBtn = document.getElementById('toggleInputModeBtn');
+    const nativeVoiceInputMode = document.getElementById('nativeVoiceInputMode');
     const keyboardIcon = document.getElementById('keyboard-icon');
     const micIcon = document.getElementById('mic-icon');
     let historyMutationAuthority = null;
+    let ttsSurfaceOwner = null;
 
-    // Initialize audio context on first user gesture
-    function initAudioContext() {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('[VoiceChat] Audio context initialized');
-        }
-        if (audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-    }
-
-    // Detect user gestures to enable audio playback
+    // Detect user gestures to unlock the shared Web Audio playback surface.
     function detectUserGesture() {
-        if (!userGestureDetected) {
-            userGestureDetected = true;
-            initAudioContext();
-            console.log('[VoiceChat] User gesture detected, audio playback enabled');
-
-            // Remove any existing hints or errors
-            document.querySelectorAll('.audio-playback-hint, .audio-playback-error').forEach(el => el.remove());
-
-            // Try to restart audio queue if there are pending items
-            if (audioQueue.length > 0 && !isPlaying) {
-                console.log('[VoiceChat] Restarting audio queue after user gesture');
-                setTimeout(() => processAudioQueue(), 100);
-            }
-        }
+        ttsSurfaceOwner?.ensureAudioContext();
+        document.querySelectorAll('.audio-playback-hint, .audio-playback-error').forEach(el => el.remove());
     }
 
     // Add gesture listeners to enable audio
@@ -67,8 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let streamRuntime = null;
     let inputMode = 'text'; // 'text' or 'voice'
     const markedInstance = new window.marked.Marked({ gfm: true, breaks: true });
-    let speechRecognitionTimeout = null;
-    const SPEECH_TIMEOUT_DURATION = 3000; // 3 seconds
 
     // Local UI Helper for this window
     const uiHelperFunctions = {
@@ -93,6 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await saveVoiceChatToHistory();
         } finally {
+            await ttsSurfaceOwner?.dispose();
+            ttsSurfaceOwner = null;
             await streamRuntime?.dispose();
             await streamManager.dispose();
             await messageRenderer.disposeRootResources(chatMessagesDiv);
@@ -194,7 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
             sendMessage(messageInput.value);
         }
     });
-    toggleInputModeBtn.addEventListener('click', toggleMode);
+    toggleInputModeBtn.disabled = true;
+    toggleInputModeBtn.title = '请使用全局按住说话快捷键';
 
     // --- Initialization ---
     // 等待 electronAPI 加载完成
@@ -221,11 +203,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getVoiceRuntimeSettings(settings = {}) {
         return {
-            voiceMode: settings.voiceMode || 'local',
-            speechRecognizerBrowserPath: settings.speechRecognizerBrowserPath || '',
-            speechRecognizerPagePath: settings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html',
-            voiceNetworkSettings: settings.voiceNetworkSettings || { sovitsUrl: '', sovitsKey: '' },
-            voiceLocalSettings: settings.voiceLocalSettings || { providerUrl: '', providerKey: '' }
+            voiceMode: settings.voiceMode === 'network' ? 'network' : 'local',
+            voiceInputMode: ['windows_voice_typing', 'right_alt_hold'].includes(settings.voiceInputMode)
+                ? settings.voiceInputMode
+                : 'windows_voice_typing',
+            voiceInputShortcut: settings.voiceInputShortcut || 'F7',
+            voiceNetworkSettings: settings.voiceNetworkSettings || { providerUrl: '', providerKey: '' },
+            voiceLocalSettings: settings.voiceLocalSettings || { sovitsUrl: '', sovitsKey: '' }
         };
     }
 
@@ -254,6 +238,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.body.classList.toggle('light-theme', theme === 'light');
         document.body.classList.toggle('dark-theme', theme === 'dark');
+        nativeVoiceInputMode.value = globalSettings.voiceInputMode;
+        const nativeStatus = await window.electronAPI.getNativeVoiceInputStatus?.();
+        renderVoiceInputShortcutStatus(
+            nativeStatus?.shortcut?.registered
+                ? {
+                    success: true,
+                    registered: true,
+                    shortcut: nativeStatus.shortcut.value || globalSettings.voiceInputShortcut,
+                }
+                : {
+                    success: false,
+                    registered: false,
+                    error: `快捷键 ${globalSettings.voiceInputShortcut} 未注册`,
+                }
+        );
         agentAvatarImg.src = agentConfig.avatarUrl || '../assets/default_avatar.png';
         agentNameSpan.textContent = `${agentConfig.name} - ${getVoiceModeLabel(globalSettings)}`;
 
@@ -315,6 +314,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 summarizeTopicFromMessages: window.summarizeTopicFromMessages || (async () => ""),
                 handleCreateBranch: () => {} // Stub
             });
+            ttsSurfaceOwner = createTtsSurfaceOwner({
+                subscribePlay: callback => window.electronAPI.onPlayTtsAudio(callback),
+                subscribeStop: callback => window.electronAPI.onStopTtsAudio(callback),
+                createAudioContext: () => new (window.AudioContext || window.webkitAudioContext)(),
+                decodeBase64: value => Uint8Array.from(
+                    atob(value),
+                    character => character.charCodeAt(0)
+                ).buffer,
+                updateSpeakingIndicator: (messageId, active) => {
+                    const messageItem = chatMessagesDiv.querySelector(
+                        `.message-item[data-message-id="${messageId}"]`
+                    );
+                    if (!messageItem) return;
+                    const avatar = messageItem.querySelector('.chat-avatar');
+                    messageItem.classList.toggle('speaking-active', active);
+                    avatar?.classList.toggle('speaking', active);
+                    if (avatar) {
+                        avatar.title = active ? '正在朗读，点击头像停止' : '';
+                        avatar.setAttribute('aria-label', active ? '停止朗读' : 'Agent 头像');
+                    }
+                },
+                showError: message => console.error(`[VoiceChat] ${message}`),
+            });
+            ttsSurfaceOwner.mount();
+
             streamRuntime = createWindowStreamRuntime({
                 root: chatMessagesDiv,
                 streamProjection: streamManager,
@@ -339,26 +363,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function toggleMode() {
-        if (inputMode === 'text') {
-            inputMode = 'voice';
-            keyboardIcon.style.display = 'none';
-            micIcon.style.display = 'block';
-            messageInput.placeholder = `正在聆听... (${getVoiceModeLabel(globalSettings)})`;
-            messageInput.value = '';
-            window.electronAPI.startSpeechRecognition();
-        } else {
-            inputMode = 'text';
-            keyboardIcon.style.display = 'block';
-            micIcon.style.display = 'none';
-            messageInput.placeholder = '输入消息...';
-            window.electronAPI.stopSpeechRecognition();
-            clearTimeout(speechRecognitionTimeout);
-        }
+    function applyNativeCapturePresentation(active) {
+        inputMode = active ? 'voice' : 'text';
+        keyboardIcon.style.display = active ? 'none' : 'block';
+        micIcon.style.display = active ? 'block' : 'none';
+        nativeVoiceInputMode.disabled = active;
+        toggleInputModeBtn.setAttribute('aria-pressed', String(active));
+        messageInput.placeholder = active
+            ? `正在使用 ${nativeVoiceInputMode.selectedOptions[0]?.textContent || '系统听写'}...`
+            : '输入消息...';
     }
 
+    function renderVoiceInputShortcutStatus(status, state = null) {
+        if (!voiceInputShortcutStatus) return;
+        voiceInputShortcutStatus.classList.remove('is-ready', 'is-active', 'is-error');
+
+        if (state === 'active') {
+            voiceInputShortcutStatus.classList.add('is-active');
+            voiceInputShortcutStatus.textContent = `${status?.shortcut || globalSettings.voiceInputShortcut || '快捷键'} 已触发`;
+            return;
+        }
+
+        if (status?.success && status?.registered !== false) {
+            voiceInputShortcutStatus.classList.add('is-ready');
+            voiceInputShortcutStatus.textContent = `${status.shortcut || globalSettings.voiceInputShortcut || '快捷键'} 已注册`;
+            return;
+        }
+
+        const error = status?.error || '快捷键未注册';
+        voiceInputShortcutStatus.classList.add('is-error');
+        voiceInputShortcutStatus.textContent = error;
+        voiceInputShortcutStatus.title = error;
+    }
+
+    window.electronAPI.onVoiceInputShortcutStatus?.((status) => {
+        applyNativeCapturePresentation(status?.active === true);
+        renderVoiceInputShortcutStatus(status, status?.active === true ? 'active' : null);
+        if (status?.success) return;
+        const error = status?.error || '语音输入快捷键注册失败';
+        console.warn('[VoiceChat] Voice input shortcut unavailable:', error);
+        if (inputMode === 'text') {
+            messageInput.placeholder = `快捷键不可用：${error}`;
+        }
+    });
+
+    window.electronAPI.onVoiceInputCapturedText?.((payload) => {
+        const text = String(payload?.text || '').trim();
+        applyNativeCapturePresentation(false);
+        if (!text) return;
+        messageInput.value = text;
+        sendMessage(text).catch(error => {
+            console.error('[VoiceChat] Failed to send captured voice text:', error);
+            messageInput.disabled = false;
+            sendMessageBtn.disabled = false;
+            messageInput.value = text;
+        });
+    });
+
     const sendMessage = async (messageContent) => {
-        clearTimeout(speechRecognitionTimeout); // Stop any pending auto-send
         if (!messageContent.trim() || !agentConfig || !messageRenderer) return;
 
         const userMessage = { role: 'user', content: messageContent, timestamp: Date.now(), id: `user_msg_${Date.now()}` };
@@ -505,8 +567,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log(`[VoiceChat] Requesting TTS for message ${msgId}`, {
             voiceMode: globalSettings.voiceMode || 'local',
-            networkSovitsUrl: globalSettings.voiceNetworkSettings?.sovitsUrl || '',
-            localProviderUrl: globalSettings.voiceLocalSettings?.providerUrl || ''
+            networkProviderUrl: globalSettings.voiceNetworkSettings?.providerUrl || '',
+            localSovitsUrl: globalSettings.voiceLocalSettings?.sovitsUrl || ''
         });
         window.electronAPI.sovitsSpeak({
             text: text,
@@ -514,122 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
             speed: agentConfig.ttsSpeed,
             msgId: msgId,
             ttsRegex: agentConfig.ttsRegexPrimary,
+            directorPrompts: agentConfig.ttsDirectorPrompts,
             voiceSecondary: agentConfig.ttsVoiceSecondary,
             ttsRegexSecondary: agentConfig.ttsRegexSecondary
         });
     }
-
-    // --- TTS Audio Playback Logic ---
-    let currentAudio = null;
-    let audioQueue = []; // Queue for pending audio clips
-    let isPlaying = false;
-    let audioContext = null;
-    let userGestureDetected = false;
-
-    function processAudioQueue() {
-        if (isPlaying || audioQueue.length === 0) {
-            return; // Don't start a new audio if one is already playing or queue is empty
-        }
-
-        isPlaying = true;
-        const { audioData, msgId } = audioQueue.shift(); // Get the next audio from the queue
-
-        console.log(`[VoiceChat] Processing audio from queue for msgId ${msgId}`);
-
-        const byteCharacters = atob(audioData);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        currentAudio = new Audio(audioUrl);
-
-        // Check if user gesture has been detected
-        if (!userGestureDetected) {
-            console.warn('[VoiceChat] No user gesture detected, audio may be blocked');
-            // Show user a hint
-            const messageElement = document.querySelector(`[data-message-id="${msgId}"]`);
-            if (messageElement) {
-                const hint = document.createElement('div');
-                hint.className = 'audio-playback-hint';
-                hint.textContent = '点击任意位置以启用语音播放';
-                hint.style.cssText = 'color: var(--warning-color); font-size: 0.8em; margin-top: 5px; cursor: pointer;';
-                hint.addEventListener('click', detectUserGesture);
-                messageElement.appendChild(hint);
-
-                // Remove hint after 5 seconds
-                setTimeout(() => {
-                    if (hint.parentNode) {
-                        hint.remove();
-                    }
-                }, 5000);
-            }
-        }
-
-        currentAudio.play().then(() => {
-            console.log(`[VoiceChat] Audio playback started for msgId ${msgId}`);
-        }).catch(e => {
-            console.error("Audio playback failed:", e);
-
-            // Show error message to user
-            const messageElement = document.querySelector(`[data-message-id="${msgId}"]`);
-            if (messageElement) {
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'audio-playback-error';
-                errorMsg.textContent = '语音播放失败，请点击页面任意位置后重试';
-                errorMsg.style.cssText = 'color: var(--danger-color); font-size: 0.8em; margin-top: 5px; cursor: pointer;';
-                errorMsg.addEventListener('click', () => {
-                    detectUserGesture();
-                    errorMsg.remove();
-                    // Retry playing this audio
-                    audioQueue.unshift({ audioData, msgId });
-                    processAudioQueue();
-                });
-                messageElement.appendChild(errorMsg);
-
-                // Remove error after 10 seconds
-                setTimeout(() => {
-                    if (errorMsg.parentNode) {
-                        errorMsg.remove();
-                    }
-                }, 10000);
-            }
-
-            isPlaying = false; // Reset flag on error
-            processAudioQueue(); // Try to play the next one
-        });
-
-        currentAudio.onended = () => {
-            console.log(`[VoiceChat] Audio for msgId ${msgId} finished playing.`);
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-            isPlaying = false;
-            processAudioQueue(); // Play the next item in the queue
-        };
-    }
-
-    window.electronAPI.onPlayTtsAudio((data) => {
-        const { audioData, msgId } = data;
-        console.log(`[VoiceChat] Queued audio for msgId ${msgId}`);
-        audioQueue.push({ audioData, msgId });
-        processAudioQueue(); // Attempt to process the queue
-    });
-
-    // Listen for stop command from main process
-    window.electronAPI.onStopTtsAudio(() => {
-        console.log('[VoiceChat] Received stop TTS command. Clearing queue and stopping current audio.');
-        audioQueue = []; // Clear the pending audio queue
-        if (currentAudio) {
-            currentAudio.pause();
-            URL.revokeObjectURL(currentAudio.src);
-            currentAudio = null;
-        }
-        isPlaying = false;
-    });
-
 
     // Listen for theme updates from the main process
     window.electronAPI.onThemeUpdated((theme) => {
@@ -638,19 +589,4 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.toggle('dark-theme', theme !== 'light');
     });
 
-    // --- Speech Recognition IPC Listener ---
-    window.electronAPI.onSpeechRecognitionResult((text) => {
-        messageInput.value = text;
-
-        // Reset the timeout every time new text is received
-        clearTimeout(speechRecognitionTimeout);
-        if (messageInput.value.trim() !== '') {
-            speechRecognitionTimeout = setTimeout(() => {
-                if (messageInput.value.trim()) {
-                    console.log('Speech unchanged for 3 seconds, sending message.');
-                    sendMessage(messageInput.value);
-                }
-            }, SPEECH_TIMEOUT_DURATION);
-        }
-    });
 });

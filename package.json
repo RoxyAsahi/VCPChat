@@ -24,7 +24,7 @@
     "evidence:managed": "node scripts/vcpchat-release-evidence.mjs",
     "start:desktop": "electron . --desktop-only",
     "start:rag-observer": "electron . --rag-observer-only",
-    "build": "node rust_chat_data_service/build-runtime.js",
+    "build": "node rust_chat_data_service/build-runtime.js && node rust_voice_input_engine/build-runtime.js",
     "lint:ui-system": "stylelint \"styles/ui-system/**/*.css\" --config stylelint.ui-system.config.cjs",
     "check:uiux": "tsc --project tsconfig.uiux.json --pretty false",
     "check:uiux:artifacts": "node scripts/check-uiux-artifacts.mjs",
@@ -155,7 +155,7 @@
     "test:electron-stability": "npm run test:electron-ui-apps && npm run test:electron-main-chat-sequences && npm run test:electron-lifecycle-stress",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "test:mobile-sync": "node --test tests/mobile-sync-protocol.test.js tests/mobile-sync-error-contract.test.js tests/mobile-sync-central-adapter.test.js tests/mobile-sync-canonical.test.js tests/mobile-sync-failure-contract.test.js tests/mobile-sync-streaming.test.js tests/mobile-sync-package.test.js",
+    "test:mobile-sync": "node --test tests/mobile-sync-protocol.test.js tests/mobile-sync-error-contract.test.js tests/mobile-sync-central-adapter.test.js tests/mobile-sync-canonical.test.js tests/mobile-sync-failure-contract.test.js tests/mobile-sync-sqlite-delete.test.js tests/mobile-sync-streaming.test.js tests/mobile-sync-degraded-mode.test.js tests/mobile-sync-package.test.js",
     "test:cds": "cargo test --manifest-path rust_chat_data_service/Cargo.toml --locked",
     "check:cds:fmt": "cargo fmt --manifest-path rust_chat_data_service/Cargo.toml -- --check",
     "check:cds:clippy": "cargo clippy --manifest-path rust_chat_data_service/Cargo.toml --locked --all-targets -- -D warnings"
@@ -172,19 +172,20 @@
   "devDependencies": {
     "@awesome.me/webawesome": "3.11.0",
     "@electron/rebuild": "^4.0.3",
-    "electron": "^41.7.1",
+    "electron": "^44.0.0",
     "electron-builder": "^26.0.12",
+    "node-abi": "^4.35.0",
     "node-addon-api": "^8.3.1",
     "node-gyp": "^11.4.2",
     "typescript": "^5.9.3"
   },
   "dependencies": {
     "@3d-dice/dice-box": "^1.1.4",
-    "@chenglou/pretext": "^0.0.7",
+    "@chenglou/pretext": "^0.0.8",
     "@xterm/headless": "^6.0.0",
     "animejs": "^4.0.2",
     "axios": "^1.10.0",
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^13.0.3",
     "cheerio": "^1.1.2",
     "child_process": "^1.0.2",
     "chokidar": "^4.0.3",
@@ -218,7 +219,7 @@
     "pdf-parse": "^1.1.1",
     "pdf-poppler": "^0.2.1",
     "portfinder": "^1.0.37",
-    "puppeteer": "^24.15.0",
+    "puppeteer": "^25.9.0",
     "sharp": "^0.35.3",
     "stylelint": "^16.25.0",
     "superdoc": "^1.45.0",
@@ -240,7 +241,8 @@
     "asarUnpack": [
       "modules/services/chatDataService/bin/**/*",
       "audio_engine/**/*",
-      "rust_assistant_engine/runtime/**/*"
+      "rust_assistant_engine/runtime/**/*",
+      "rust_voice_input_engine/runtime/**/*"
     ],
     "files": [
       "main.js",
@@ -269,6 +271,7 @@
       "Tavernmodules/**/*",
       "rust_assistant_engine/ui/**/*",
       "rust_assistant_engine/runtime/**/*",
+      "rust_voice_input_engine/runtime/**/*",
       "Notemodules/**/*",
       "Translatormodules/**/*",
       "vendor/**/*",
