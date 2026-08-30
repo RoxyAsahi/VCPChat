@@ -1,47 +1,463 @@
-// settings-bridge — Next UI enhancement bridge for the settings surfaces.
+// settings-bridge — unified VCPUI enhancement bridge for settings surfaces.
 //
 // The sidebar settings forms (agent/group) and the global settings modal keep
 // their original business DOM, form ids, defaults and IPC; this module only
 // layers the VCPUI presentation on top of the canonical main-window shell.
 //
-// Global settings (R5.1): in Next, the modal is rebuilt into a
-// SettingsShell-style layout — left rail with a VCPUI-enhanced search field and
-// a VCPUI List category navigation, the original form as the content area, and
-// the existing footer as the fixed save bar.
+// Global settings: the modal is rebuilt into one Harness SettingsRoot-style
+// layout — native nav cells in the left rail, a header/options content column,
+// the original form as the business source, and autosave status in the header.
+
+import { createSelectProjection } from './settings/select-projection.js';
+import { mountSettingsAutosave, flushLegacyAutosave, teardownLegacyAutosave } from './settings/autosave.js';
+import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './settings/canonical-rows.js';
+import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
+import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
+import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
+import { mountAppearanceSelects, mountAppearanceLanguageRows, mountChatFontRows, mountAppearanceRadiusLanguageRow, mountAppearanceFontSizeRow } from './settings/appearance-controls.js';
+import { mountAppearanceRanges } from './settings/appearance-ranges.js';
+import { mountAppearanceToggles } from './settings/appearance-toggles.js';
+import { mountHomeTaglineInput } from './settings/home-controls.js';
+import { mountIdentityColorPairs } from './settings/identity-controls.js';
+import { mountChoiceControls } from './settings/choice-controls.js';
+import { mountForumCredentialInputs } from './settings/forum-controls.js';
+import { mountAgentSectionDisclosures } from './settings/agent-disclosures.js';
+import { createAgentModelPickerDirectory } from './settings/agent-model-picker-directory.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
-const injectedNodes = new Set();
-// Per-modal shell state: { layout, nav, listHost, originalNavHtml, meta,
-// active, query, list } keyed by the modal root so teardown can restore the
-// exact original navigation markup. WeakMap cannot be iterated, so built
-// roots are tracked separately.
+// Per-modal shell state is keyed by modal root so teardown can restore the
+// exact original business nodes/classes after the canonical tree is removed.
+// WeakMap cannot be iterated, so built roots are tracked separately.
 const shellState = new WeakMap();
 const shellRoots = new Set();
+// Every non-typed select is projected by the real library Select primitive
+// (window.VCPUIUX.mountSelect): the native select stays the sole business node
+// while the primitive owns trigger/menu presentation.  Keyed by select so a
+// dynamic option-list change can dispose and remount exactly one projection.
+const typedFieldStates = new Set();
+const typedForumFieldStates = new Set();
+const disclosureStates = new Set();
+const agentSectionDisclosureStates = new Set();
+const agentModelPickerReleases = new Map();
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
-// restores the original Lucide-style paths (classic must not lose them).
+// restores the original upstream paths during teardown.
 const iconReplacements = new Set();
 let refreshQueued = false;
 const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
-const bridgeScope = LifecycleScope ? new LifecycleScope('next:settings-bridge-controller') : null;
+const bridgeScope = LifecycleScope ? new LifecycleScope('settings-bridge-controller') : null;
 const settingsHost = document.getElementById('tabContentSettings');
 let presentationScope = null;
 let destroyed = false;
 let destroyPromise = null;
+let typedSettingsService = null;
+let typedSettingsRegistry = null;
+let typedRustAssistantService = null;
+let typedForumConfigService = null;
+let typedAssistantRuntimeService = null;
+let typedSettingsState = Object.freeze({});
+let typedSettingsExternalRelease = null;
+let typedSettingsSaveChain = Promise.resolve();
+let typedSettingsSaveGeneration = 0;
+let typedSettingsDisposed = false;
+
+function addTypedNetworkPathInput(root, path = '') {
+    const container = root?.querySelector?.('#networkNotesPathsContainer');
+    if (!container) return false;
+    // Resolve the owner before binding any dynamic-row listener.  Rows can be
+    // created after the Settings surface mounted; their controls must still
+    // retract with the same presentation scope instead of leaving an ambient
+    // listener on a detached row during a close/reopen cycle.
+    const inputScope = ensurePresentationScope();
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'network-path-input-group vcp-settings-row';
+    inputGroup.dataset.vcpSettingsRow = 'true';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'networkNotesPath';
+    input.placeholder = '例如 \\NAS\\Shared\\Notes';
+    input.value = path;
+    // Rows created after the typed field owner mounted belong to it; mark
+    // them immediately so an input between the helper call and the next
+    // delegation pass can never fall back onto the legacy chain.
+    if (document.getElementById('globalSettingsForm')?.dataset.vcpTypedFieldOwnerMounted === 'true') {
+        input.dataset.vcpTypedFieldOwner = 'true';
+    }
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '删除';
+    removeBtn.className = 'sidebar-button small-button danger-button';
+    // A silent row removal previously skipped every dirty chain; announce it
+    // so the owning owner recomputes the serialized list.
+    const removeRow = () => {
+        inputGroup.remove();
+        container.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    if (inputScope) inputScope.listen(removeBtn, 'click', removeRow, { once: true });
+    else removeBtn.addEventListener('click', removeRow, { once: true });
+    inputGroup.append(input, removeBtn);
+    container.appendChild(inputGroup);
+    // Dynamic rows adopt the same real Input primitive as static fields; a
+    // bare input keeps the native control contract when the runtime or the
+    // presentation scope is unavailable.
+    const inputApi = window.VCPUIUX;
+    if (inputApi?.mountInput && inputScope) {
+        try {
+            inputApi.mountInput(input, {}, inputScope);
+            input.closest('.vcp-uiux-input-wrap')?.classList.add('vcp-harness-input-fill');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount network path Input primitive:', error);
+        }
+    }
+    return true;
+}
+
+function ensureTypedSettingsService() {
+    if (typedSettingsService || !window.VCPUIUX?.createSettingsUiService) return typedSettingsService;
+    const externalListeners = new Set();
+    const publishExternal = settings => {
+        if (typedSettingsDisposed) return;
+        typedSettingsState = Object.freeze({ ...typedSettingsState, ...(settings || {}) });
+        externalListeners.forEach(listener => listener(typedSettingsState));
+    };
+    const onExternalSettings = event => publishExternal(event.detail?.settings);
+    if (bridgeScope) bridgeScope.listen(window, 'global-settings-updated', onExternalSettings, undefined, 'typed-settings-external-update');
+    else window.addEventListener('global-settings-updated', onExternalSettings);
+    typedSettingsExternalRelease = () => {
+        if (!bridgeScope) window.removeEventListener('global-settings-updated', onExternalSettings);
+        externalListeners.clear();
+        typedSettingsExternalRelease = null;
+    };
+    typedSettingsService = window.VCPUIUX.createSettingsUiService({
+        get: () => typedSettingsState,
+        save: patch => {
+            const generation = ++typedSettingsSaveGeneration;
+            const run = async () => {
+                const next = Object.freeze({ ...typedSettingsState, ...patch });
+                const result = await window.chatAPI?.saveSettings?.(next);
+                if (result?.success && generation === typedSettingsSaveGeneration) publishExternal(next);
+                return result?.success ? { success: true } : { success: false, error: result?.error || '设置保存失败' };
+            };
+            const result = typedSettingsSaveChain.then(run, run);
+            typedSettingsSaveChain = result.catch(() => {});
+            return result;
+        },
+        cancelPendingSaves: () => {
+            typedSettingsSaveGeneration += 1;
+            // Do not let a timed-out IPC hold retry behind an unbounded chain.
+            // The old request may still settle in the main process, but it has
+            // lost publication rights and the next retry starts immediately.
+            typedSettingsSaveChain = Promise.resolve();
+        },
+        subscribe: listener => {
+            externalListeners.add(listener);
+            return () => externalListeners.delete(listener);
+        },
+    });
+    void window.chatAPI?.loadSettings?.().then(settings => publishExternal(settings)).catch(() => {});
+    if (window.VCPUIUX?.createUiServiceRegistryFromScope && bridgeScope && window.VCPUIUX?.settingsUiDefinition) {
+        typedSettingsRegistry = window.VCPUIUX.createUiServiceRegistryFromScope(bridgeScope);
+        const definition = window.VCPUIUX.settingsUiDefinition;
+        typedSettingsRegistry.install(definition, context => definition.provide({
+            ...context,
+            services: { ...context.services, settings: typedSettingsService },
+        }));
+    } else {
+        // Compatibility fallback while the typed browser entry is unavailable.
+        bridgeScope?.own(() => typedSettingsService?.dispose?.(), 'typed-settings-service', 'ui-service');
+    }
+    bridgeScope?.own(() => {
+        typedSettingsDisposed = true;
+        typedSettingsExternalRelease?.();
+    }, 'typed-settings-events', 'ui-service');
+    return typedSettingsService;
+}
+
+function mountTypedSettingsConsumer(root) {
+    const fallbackService = ensureTypedSettingsService();
+    const service = typedSettingsRegistry?.get('settings-ui') || fallbackService;
+    if (!service || !root) return;
+    const form = root.querySelector('#globalSettingsForm');
+    const apply = (_value, snapshot) => {
+        if (!form) return;
+        root.dataset.vcpSettingsRevision = String(snapshot.revision);
+        root.dataset.vcpSettingsSource = snapshot.source;
+        // The typed service owns durable projection reads for migrated fields.
+        // Never overwrite a user's dirty draft or an in-flight submission.
+        if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+        const settings = snapshot.value || {};
+        const projection = [
+            // The retired userUseThemeColorsInChat row never wrote anything:
+            // the persisted key has no control inside #globalSettingsForm (its
+            // namesake checkbox lives in the per-agent agentSettingsForm), so
+            // that lookup resolved to null on every projection pass.
+            ['vcpServerUrl', 'vcpServerUrl'],
+            ['vcpApiKey', 'vcpApiKey'],
+            ['fileKey', 'fileKey'],
+            ['vcpLogUrl', 'vcpLogUrl'],
+            ['vcpLogKey', 'vcpLogKey'],
+            ['topicSummaryModel', 'topicSummaryModel'],
+            ['assistantAgent', 'assistantAgent'],
+            ['voiceModeLocal', 'voiceMode', 'checked-value', 'local'],
+            ['voiceModeNetwork', 'voiceMode', 'checked-value', 'network'],
+            ['speechRecognizerBrowserPath', 'speechRecognizerBrowserPath'],
+            ['speechRecognizerPagePath', 'speechRecognizerPagePath'],
+            ['voiceLocalSovitsUrl', 'voiceLocalSettings.sovitsUrl'],
+            ['voiceLocalSovitsKey', 'voiceLocalSettings.sovitsKey'],
+            ['voiceNetworkProviderUrl', 'voiceNetworkSettings.providerUrl'],
+            ['voiceNetworkProviderKey', 'voiceNetworkSettings.providerKey'],
+            ['enableDistributedServer', 'enableDistributedServer', 'checked'],
+            ['agentMusicControl', 'agentMusicControl', 'checked'],
+            ['enableVcpToolInjection', 'enableVcpToolInjection', 'checked'],
+            ['enableThoughtChainInjection', 'enableThoughtChainInjection', 'checked'],
+            ['enableContextSanitizer', 'enableContextSanitizer', 'checked'],
+            ['contextSanitizerDepth', 'contextSanitizerDepth'],
+            ['enableAiMessageButtons', 'enableAiMessageButtons', 'checked'],
+            ['flowlockContinueDelay', 'flowlockContinueDelay'],
+            ['enableMiddleClickQuickAction', 'enableMiddleClickQuickAction', 'checked'],
+            ['middleClickQuickAction', 'middleClickQuickAction'],
+            ['enableMiddleClickAdvanced', 'enableMiddleClickAdvanced', 'checked'],
+            ['middleClickAdvancedDelay', 'middleClickAdvancedDelay'],
+            ['enableRegenerateConfirmation', 'enableRegenerateConfirmation', 'checked'],
+            ['chatPresentationModeBubble', 'chatPresentationMode', 'checked-value', 'bubble'],
+            ['chatPresentationModePanel', 'chatPresentationMode', 'checked-value', 'panel'],
+            ['chatPresentationModeImmersive', 'chatPresentationMode', 'checked-value', 'immersive'],
+            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
+            ['showUserMetaInChatBubbleUi', 'showUserMetaInChatBubbleUi', 'checked'],
+            ['chatBubbleMaxWidthWideDefault', 'chatBubbleMaxWidthWideDefault'],
+            ['chatBubbleMaxWidthWideNotifications', 'chatBubbleMaxWidthWideNotifications'],
+            ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
+            ['minChunkBufferSize', 'minChunkBufferSize'],
+            ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
+            ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
+        ];
+        projection.forEach(([id, path, mode, expected]) => {
+            const control = form.querySelector(`#${id}`);
+            if (!control) return;
+            const value = path.split('.').reduce((current, key) => current?.[key], settings);
+            if (value === undefined || value === null) return;
+            if (mode === 'checked-value') control.checked = String(value) === expected;
+            else if (mode === 'checked-inverse') control.checked = value !== true;
+            else if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
+            else if (mode === 'px-output') {
+                control.value = `${value}px`;
+                control.textContent = `${value}px`;
+            }
+            else control.value = String(value);
+        });
+        // Display defaults ported from the retired startup fallback
+        // (handoff retirement batch): the typed state stores raw persisted
+        // data, but these two voice controls keep their first-open display
+        // defaults exactly as the fallback used to fill them.
+        [['speechRecognizerPagePath', 'Voicechatmodules/recognizer.html'], ['voiceNetworkProviderUrl', 'https://api.siliconflow.cn']]
+            .forEach(([id, displayDefault]) => {
+                const control = form.querySelector(`#${id}`);
+                if (control && !control.value) control.value = displayDefault;
+            });
+        if (Object.prototype.hasOwnProperty.call(settings, 'userAvatarUrl')) {
+            const preview = form.querySelector('#userAvatarPreview');
+            const wrapper = preview?.closest('.agent-avatar-wrapper');
+            const avatarUrl = String(settings.userAvatarUrl || '');
+            if (preview) {
+                if (avatarUrl) {
+                    preview.src = avatarUrl;
+                    preview.style.display = 'block';
+                    wrapper?.classList.remove('no-avatar');
+                } else {
+                    preview.src = '#';
+                    preview.style.display = 'none';
+                    wrapper?.classList.add('no-avatar');
+                }
+            }
+        }
+        const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
+        const sanitizerEnabled = settings.enableContextSanitizer === true;
+        if (sanitizerContainer) sanitizerContainer.style.display = sanitizerEnabled ? 'block' : 'none';
+        const middleClickEnabled = settings.enableMiddleClickQuickAction === true;
+        const quickActionContainer = form.querySelector('#middleClickQuickActionContainer');
+        const advancedContainer = form.querySelector('#middleClickAdvancedContainer');
+        const advancedSettings = form.querySelector('#middleClickAdvancedSettings');
+        if (quickActionContainer) quickActionContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedContainer) advancedContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedSettings) advancedSettings.style.display = settings.enableMiddleClickAdvanced === true ? 'block' : 'none';
+        const mode = settings.chatPresentationMode || 'bubble';
+        const bubbleWidthSettings = form.querySelector('#chatBubbleWidthSettings');
+        if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
+        const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
+        if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
+    };
+    const release = service.state.subscribe(apply);
+    const consumerScope = ensurePresentationScope();
+    if (consumerScope) {
+        consumerScope.own(() => {
+            release?.();
+            delete root.dataset.vcpSettingsRevision;
+            delete root.dataset.vcpSettingsSource;
+        }, 'typed-settings-consumer', 'ui-presentation');
+    } else {
+        // No presentation scope (destroyed bridge): the subscription would
+        // fire apply() against a torn-down form forever, so retract it now.
+        release?.();
+    }
+    const assistantSelect = form?.querySelector('#assistantAgent');
+    if (assistantSelect && window.MutationObserver) {
+        const observer = new MutationObserver(() => {
+            const snapshot = service.state.getSnapshot();
+            apply(snapshot.value, snapshot);
+        });
+        observer.observe(assistantSelect, { childList: true });
+        ensurePresentationScope()?.own(() => observer.disconnect(), 'typed-assistant-options-consumer', 'ui-presentation');
+    }
+    const rustService = ensureRustAssistantUiService();
+    if (rustService) {
+        const applyRust = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const rust = snapshot.value || {};
+            const check = (id, value) => { const control = form.querySelector(`#${id}`); if (control) control.checked = Boolean(value); };
+            const set = (id, value) => { const control = form.querySelector(`#${id}`); if (control && value !== undefined && value !== null) control.value = String(value); };
+            check('rustUseAssistant', rust.useRustAssistant === true);
+            check('rustDebugMode', rust.debugMode === true);
+            const thresholds = rust.runtimeThresholds || {};
+            const custom = Object.entries({ minEventIntervalMs: 80, minDistance: 0, screenshotSuspendMs: 3000, clipboardConflictSuspendMs: 1000, clipboardCheckIntervalMs: 500 })
+                .some(([key, fallback]) => Number(thresholds[key] ?? fallback) !== fallback);
+            check('rustEnableCustomThresholds', custom);
+            set('rustMinEventIntervalMs', thresholds.minEventIntervalMs);
+            set('rustMinDistance', thresholds.minDistance);
+            set('rustScreenshotSuspendMs', thresholds.screenshotSuspendMs);
+            set('rustClipboardConflictSuspendMs', thresholds.clipboardConflictSuspendMs);
+            set('rustClipboardCheckIntervalMs', thresholds.clipboardCheckIntervalMs);
+            set('rustWhitelistKeywords', Array.isArray(rust.whitelist) ? rust.whitelist.join('\n') : '');
+            set('rustBlacklistKeywords', Array.isArray(rust.blacklist) ? rust.blacklist.join('\n') : '');
+            set('rustScreenshotApps', Array.isArray(rust.screenshotApps) ? rust.screenshotApps.join('\n') : '');
+            const ruleMode = Array.isArray(rust.whitelist) && rust.whitelist.length
+                ? 'whitelist'
+                : (Array.isArray(rust.blacklist) && rust.blacklist.length ? 'blacklist' : 'none');
+            set('rustRuleMode', ruleMode);
+            syncRustAssistantVisibility(form);
+        };
+        const release = rustService.state.subscribe(applyRust);
+        const rustScope = ensurePresentationScope();
+        if (rustScope) rustScope.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
+        else release?.();
+        syncRustAssistantVisibility(form);
+        ['change', 'input'].forEach(type => {
+            const onChange = () => syncRustAssistantVisibility(form);
+            if (rustScope) rustScope.listen(form, type, onChange);
+            else form.addEventListener(type, onChange);
+        });
+        void rustService.refresh.execute();
+    }
+    const forumService = ensureForumConfigUiService();
+    if (forumService) {
+        const applyForum = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const forum = snapshot.value || {};
+            const username = form.querySelector('#adminUsername');
+            const password = form.querySelector('#adminPassword');
+            if (username && forum.username !== undefined) username.value = String(forum.username || '');
+            if (password && forum.password !== undefined) password.value = String(forum.password || '');
+        };
+        const release = forumService.state.subscribe(applyForum);
+        const forumScope = ensurePresentationScope();
+        if (forumScope) forumScope.own(release, 'typed-forum-config-consumer', 'ui-presentation');
+        else release?.();
+        void forumService.refresh.execute();
+    }
+    const runtimeService = ensureAssistantRuntimeUiService();
+    if (runtimeService) {
+        const applyRuntime = (_value, snapshot) => {
+            const runtime = snapshot.value || {};
+            const modeText = runtime.mode === 'rust' ? 'Rust' : (runtime.mode === 'disabled' ? 'Disabled' : runtime.mode || 'Unknown');
+            const desiredText = runtime.desiredMode === 'rust' ? 'Rust' : (runtime.desiredMode === 'disabled' ? 'Disabled' : runtime.desiredMode || 'Unknown');
+            const setText = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.textContent = String(value ?? '无'); };
+            setText('assistantRuntimeMode', modeText);
+            setText('assistantRuntimeDesiredMode', desiredText);
+            setText('assistantRuntimeActive', runtime.active === true ? '运行中' : '未运行');
+            setText('assistantRuntimeDebugReason', runtime.debugReason || '无');
+            setText('assistantRuntimeForwardedCount', runtime.integrationTrace?.forwardedCount ?? 0);
+            setText('assistantRuntimeSidecarActive', runtime.sidecarActive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessAlive', runtime.adapterProcessAlive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessPid', runtime.adapterProcessPid || '无');
+            setText('assistantRuntimeAutoFallbackCount', runtime.runtimeFallbackTrace?.autoFallbackCount ?? 0);
+            setText('assistantRuntimeAutoFallbackReason', runtime.runtimeFallbackTrace?.lastAutoFallbackReason || '无');
+            setText('assistantRuntimeReceivedCount', runtime.integrationTrace?.receivedSelectionCount ?? 0);
+            setText('assistantRuntimeShowAttemptCount', runtime.integrationTrace?.showAttemptCount ?? 0);
+            setText('assistantRuntimeShowError', runtime.integrationTrace?.lastShowError || '无');
+        };
+        const release = runtimeService.state.subscribe(applyRuntime);
+        const runtimeScope = ensurePresentationScope();
+        if (runtimeScope) runtimeScope.own(release, 'typed-assistant-runtime-consumer', 'ui-presentation');
+        else release?.();
+        void runtimeService.refresh.execute();
+    }
+}
+
+function ensureRustAssistantUiService() {
+    if (typedRustAssistantService || !typedSettingsRegistry || !window.VCPUIUX?.createRustAssistantUiService) return typedRustAssistantService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getRustAssistantConfig || !chatAPI?.saveRustAssistantConfig) return null;
+    const adapter = window.VCPUIUX.createRustAssistantUiService({
+        get: () => chatAPI.getRustAssistantConfig(),
+        save: patch => chatAPI.saveRustAssistantConfig(patch),
+    });
+    const definition = window.VCPUIUX.rustAssistantUiDefinition;
+    typedRustAssistantService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, rustAssistantAdapter: adapter },
+    }));
+    return typedRustAssistantService;
+}
+
+function ensureForumConfigUiService() {
+    if (typedForumConfigService || !typedSettingsRegistry || !window.VCPUIUX?.createForumConfigUiService) return typedForumConfigService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.loadForumConfig || !chatAPI?.saveForumConfig) return null;
+    const adapter = window.VCPUIUX.createForumConfigUiService({
+        get: () => chatAPI.loadForumConfig(),
+        save: patch => chatAPI.saveForumConfig(patch),
+    });
+    const definition = window.VCPUIUX.forumConfigUiDefinition;
+    typedForumConfigService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, forumConfigAdapter: adapter },
+    }));
+    return typedForumConfigService;
+}
+
+function ensureAssistantRuntimeUiService() {
+    if (typedAssistantRuntimeService || !typedSettingsRegistry || !window.VCPUIUX?.createAssistantRuntimeUiService) return typedAssistantRuntimeService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getAssistantRuntimeStatus) return null;
+    const adapter = window.VCPUIUX.createAssistantRuntimeUiService({ get: () => chatAPI.getAssistantRuntimeStatus() });
+    const definition = window.VCPUIUX.assistantRuntimeUiDefinition;
+    typedAssistantRuntimeService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, assistantRuntimeAdapter: adapter },
+    }));
+    return typedAssistantRuntimeService;
+}
 
 function ensurePresentationScope() {
     if (destroyed) return null;
     if (!presentationScope) {
-        presentationScope = bridgeScope?.child('next:settings-presentation') || null;
+        presentationScope = bridgeScope?.child('settings-presentation') || null;
     }
     return presentationScope;
 }
 
-function isNextUi() {
-    return settingsHost?.dataset.settingsPresentation !== 'classic';
+// The single Select projection over the generated primitive; the bridge
+// injects the presentation scope so the module never reaches back up here.
+const selectProjection = createSelectProjection({ ensurePresentationScope });
+
+function shouldEnhanceSidebarSettings() {
+    // Global settings has one presentation contract.  The data attribute is
+    // retained only as bootstrap metadata; it never selects a second layout.
+    return Boolean(settingsHost);
 }
 
-function isGlobalSettingsNextUi() {
+function hasGlobalSettingsSurface() {
+    // Global settings has one canonical surface.  Keep this helper as a
+    // compatibility seam for callers, but never branch its presentation mode.
     return Boolean(document.getElementById('globalSettingsModal'));
 }
 
@@ -49,7 +465,9 @@ function syncGlobalSettingsHost() {
     const modal = document.getElementById('globalSettingsModal');
     const active = Boolean(modal?.classList.contains('active'));
     document.documentElement.classList.toggle('vcp-global-settings-host', active);
-    modal?.classList.add('vcp-global-settings-next');
+    // Keep the historical marker as a non-branching compatibility alias for
+    // automation/tests; all styling is owned by the unified surface marker.
+    modal?.classList.add('vcp-global-settings-surface');
     return modal;
 }
 
@@ -67,17 +485,89 @@ function enhance(name, element, options = {}) {
     }
 }
 
+// The sidebar entry is a routine text action, so it can use the same generated
+// Button contract as the other high-frequency Settings actions.  Its existing
+// click handler stays outside this bridge: this owner changes only the visual
+// presentation and retracts it with the Settings surface scope.
+function mountGlobalSettingsEntryButton() {
+    const button = document.getElementById('globalSettingsBtn');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!button || !api?.mountButton || !scope || button.dataset.vcpTypedGlobalSettingsEntry === 'true') return;
+    try {
+        api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
+        button.dataset.vcpTypedGlobalSettingsEntry = 'true';
+        scope.own(() => {
+            delete button.dataset.vcpTypedGlobalSettingsEntry;
+        }, 'typed-global-settings-entry-marker', 'ui-presentation');
+    } catch (error) {
+        // The existing native button and listener remain fully operational if
+        // the optional presentation artifact cannot mount.
+        console.warn('[VCPUI SettingsBridge] Could not mount global Settings entry Button:', error);
+    }
+}
+
+// The network-path add action is a routine, non-destructive Settings command.
+// Keep its existing event handler and canonical form mutation, while adopting
+// the same generated Button owner as the Settings entry itself.
+function mountGlobalSettingsPathAction(root) {
+    const button = root?.querySelector?.('#addNetworkPathBtn');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!button || !api?.mountButton || !scope || button.dataset.vcpTypedNetworkPathAction === 'true') return;
+    try {
+        api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
+        button.dataset.vcpTypedNetworkPathAction = 'true';
+        scope.own(() => {
+            delete button.dataset.vcpTypedNetworkPathAction;
+        }, 'typed-network-path-action-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount network-path action Button:', error);
+    }
+}
+
 function enhanceForm(form) {
-    form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
+    mountTypedAgentIdentityInput(form);
+    mountTypedAgentModelInput(form);
+    mountTypedAgentTemperatureInput(form);
+    mountTypedAgentNumericInputs(form);
+    mountTypedAgentRegexInputs(form);
+    mountTypedAgentStreamChoice(form);
+    mountTypedAgentTtsSpeedRange(form);
+    mountTypedAgentColorPairs(form);
+    mountTypedAgentButtons(form);
+    mountTypedAgentModelPicker(form);
+    mountTypedAgentPromptModeButtons(form);
+    const typedAgentSectionOwners = mountAgentSectionDisclosures(form, window.VCPUIUX, ensurePresentationScope(), window.settingsManager, agentSectionDisclosureStates);
+    selectProjection.mount(form);
+    // A successfully adopted Agent section is directly owned by the generated
+    // DisclosureRow controller.  If the generated artifact did not load (or
+    // an individual canonical section is incomplete), retain the established
+    // SettingsSection controller for that *one* section.  This is a deliberate
+    // per-section fallback, never two presentation owners on one header.
+    form.querySelectorAll('.agent-settings-section').forEach(section => {
+        if (!typedAgentSectionOwners.has(section)) enhance('SettingsSection', section);
+    });
+    // Group sections are not part of this migration slice.
+    form.querySelectorAll('.group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
+        if (['agentNameInput', 'agentModel', 'agentTemperature', 'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentTopP', 'agentTopK', 'agentTtsRegexPrimary', 'agentTtsRegexSecondary'].includes(input.id)) return;
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
-    form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
-    form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    form.querySelectorAll('select').forEach(select => {
+        if (!select.closest('.vcp-harness-select')) enhance('Select', select, { kernel: 'native' });
+    });
+    form.querySelectorAll('input[type="range"]').forEach(range => {
+        if (!range.closest('.vcp-uiux-range')) enhance('Range', range);
+    });
+    mountHarnessSwitches(form);
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
+        disclosure.dataset.settingPrimitive = 'disclosure';
+        disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
+    });
     form.querySelectorAll('.agent-name-wrapper, .group-name-wrapper, .group-settings-field-shell, .style-control-item, .params-content > div:not(.form-group-inline)').forEach(field => {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
@@ -86,9 +576,351 @@ function enhanceForm(form) {
     });
 }
 
+// The Agent form is canonical business DOM: section content can contain a
+// live PromptManager, dynamically recreated regex rows and native form
+// controls.  Mount the generated DisclosureRow at its header only, while the
+// manager remains the sole owner of uiCollapseStates, summaries and config
+// persistence.  This is deliberately a real Surface adapter, not a second
+// collapse-state projection or a hidden-DOM click proxy.
+
+// The Agent inputs differ in business semantics (identity, free-form model,
+// numeric limits and TTS regexes), but their presentation lifecycle is the
+// same: a generated Input owns the Light-DOM wrap while the native input
+// stays canonical.  Keep that small contract in one private helper instead
+// of growing nine independent marker/restore paths.
+function mountTypedAgentInput(form, { id, marker, ownerKey, placeholder = false, restoreClass = false }) {
+    const input = form?.querySelector?.(`#${id}`);
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !api?.mountInput || !scope || input.dataset[marker] === 'true') return;
+
+    const originalClass = restoreClass ? input.className : null;
+    const props = placeholder ? { placeholder: input.getAttribute('placeholder') || undefined } : {};
+    try {
+        api.mountInput(input, props, scope);
+        input.dataset[marker] = 'true';
+        scope.own(() => {
+            delete input.dataset[marker];
+            if (restoreClass && input.isConnected && input.className !== originalClass) input.className = originalClass;
+        }, ownerKey, 'ui-presentation');
+    } catch (error) {
+        console.warn(`[VCPUI SettingsBridge] Could not mount typed ${id} Input:`, error);
+    }
+}
+
+function mountTypedAgentRegexInputs(form) {
+    ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'].forEach(id => {
+        mountTypedAgentInput(form, {
+            id,
+            marker: 'vcpTypedPrimitiveMounted',
+            ownerKey: `typed-${id}-marker`,
+        });
+    });
+}
+
+// The model picker owns the model trigger's presentation and lifecycle. Keep
+// that trigger out of the generic Button batch below so one node never has
+// two presentation owners.
+function mountTypedAgentButtons(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountButton || !scope) return;
+    const buttons = [
+        ['#refreshTtsModelsBtn', 'outline', 'agent-tts-refresh'],
+        ['#resetAvatarColorsBtn', 'outline', 'agent-reset-colors'],
+        ['.form-actions button[type="submit"]', 'primary', 'agent-save'],
+        ['#deleteAgentBtn', 'outline', 'agent-delete'],
+    ];
+    buttons.forEach(([selector, variant, key]) => {
+        const button = form?.querySelector?.(selector);
+        const marker = `vcpTyped${key.replace(/(^|-)(\w)/g, (_, __, value) => value.toUpperCase())}`;
+        // Submit/delete remain canonical compatibility commands, but their
+        // controls are intentionally hidden while Agent autosave is active.
+        // Do not mount a generated Button on a hidden node: the primitive's
+        // geometry contract would correctly restore display and make the
+        // obsolete action visible again.
+        if (!button || button.hidden || button.dataset[marker] === 'true') return;
+        try {
+            const size = key.includes('refresh') ? 'sm' : 'md';
+            api.mountButton(button, { variant, size }, scope);
+            // Legacy action-bar rules still carry a 37px min-height. Once the
+            // typed Button owns this node, that minimum becomes a geometry
+            // override (md contract is 36px). Keep the correction owner-bound
+            // and restore the exact declaration during teardown.
+            const minHeight = size === 'sm' ? '28px' : '36px';
+            const originalMinHeight = [button.style.getPropertyValue('min-height'), button.style.getPropertyPriority('min-height')];
+            button.style.setProperty('min-height', minHeight, 'important');
+            scope.own(() => {
+                if (originalMinHeight[0]) button.style.setProperty('min-height', originalMinHeight[0], originalMinHeight[1]);
+                else button.style.removeProperty('min-height');
+                delete button.dataset[marker];
+            }, `${key}-button-marker`, 'ui-presentation');
+            button.dataset[marker] = 'true';
+            // mountButton already binds its disposer to this scope. Registering
+            // its returned release again would retain a duplicate lifecycle
+            // resource and run teardown twice.
+        } catch (error) {
+            console.warn(`[VCPUI SettingsBridge] Could not mount typed Agent ${key} Button:`, error);
+        }
+    });
+}
+
+// The Agent model picker is the first production consumer of the Harness
+// model-selection candidate.  The native #agentModel input remains the sole
+// business/persistence node; this bridge only supplies model discovery and
+// writes the same input/change events that the retired modal callback used.
+// The Agent consumer now projects hot/favorite sections and injected directory
+// actions. The legacy modal remains for topicSummaryModel and until the
+// production parity evidence in the audit closes its separate retirement path.
+function mountTypedModelPicker(form, {
+    inputId = 'agentModel',
+    triggerId = 'openModelSelectBtn',
+    marker = 'vcpTypedAgentModelPicker',
+    scopeLabel = 'agent-model-picker-production',
+    eventKind = 'agent',
+} = {}) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    const input = form?.querySelector?.(`#${inputId}`);
+    const trigger = form?.querySelector?.(`#${triggerId}`);
+    const host = trigger?.closest?.('.model-input-container') || input?.closest?.('.model-input-container');
+    const electronAPI = window.chatAPI;
+    if (!api?.mountAgentModelPicker || !scope || !host || !input || !trigger
+        || trigger.dataset[marker] === 'true') return;
+
+    // Agent Settings can retain the previous section bank in the connected
+    // DOM while replacing the active form. Treat the picker as a single
+    // surface owner so a connected-but-hidden trigger cannot retain a child
+    // scope across form generations.
+    for (const [previousTrigger, release] of agentModelPickerReleases) {
+        if (previousTrigger === trigger) continue;
+        void release().catch(error => {
+            console.error('[VCPUI SettingsBridge] Failed to release replaced Agent model picker:', error);
+        });
+    }
+
+    // The directory is an injected, short-lived capability. The primitive
+    // owns popup/focus lifecycle; this adapter owns only the chatAPI boundary.
+    const modelDirectory = createAgentModelPickerDirectory({ electronAPI, input });
+
+    const originalTriggerInline = {};
+    ['position', 'right', 'top', 'transform', 'width', 'min-width', 'max-width', 'height', 'padding',
+        'border-radius', 'border', 'background', 'background-color', 'display', 'justify-content'].forEach(property => {
+        originalTriggerInline[property] = [trigger.style.getPropertyValue(property), trigger.style.getPropertyPriority(property)];
+    });
+    let picker = null;
+    const pickerScope = scope.child(scopeLabel);
+    try {
+        picker = api.mountAgentModelPicker(host, {
+            trigger,
+            label: inputId === 'agentModel' ? '选择模型' : '选择话题总结模型',
+            selectedId: input.value || undefined,
+            options: modelDirectory.options,
+            directory: modelDirectory,
+            grouped: true,
+            onSelect: option => {
+                if (input.disabled) return;
+                input.value = option.id;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            },
+        }, pickerScope);
+
+        // The model-input container is positioned; keep the popup and trigger
+        // in the same anchored strip while the native input keeps its width.
+        picker.root.style.setProperty('position', 'absolute', 'important');
+        picker.root.style.setProperty('right', '5px', 'important');
+        picker.root.style.setProperty('top', '50%', 'important');
+        picker.root.style.setProperty('transform', 'translateY(-50%)', 'important');
+        picker.root.style.setProperty('z-index', '2', 'important');
+        trigger.style.setProperty('position', 'static', 'important');
+        trigger.style.setProperty('right', 'auto', 'important');
+        trigger.style.setProperty('top', 'auto', 'important');
+        trigger.style.setProperty('transform', 'none', 'important');
+        trigger.style.setProperty('width', 'auto', 'important');
+        trigger.style.setProperty('min-width', '0', 'important');
+        trigger.style.setProperty('max-width', '220px', 'important');
+        trigger.style.setProperty('height', '28px', 'important');
+        trigger.style.setProperty('padding', '0 4px 0 8px', 'important');
+        trigger.style.setProperty('border-radius', '24px', 'important');
+        trigger.style.setProperty('border', '0', 'important');
+        trigger.style.setProperty('background', 'transparent', 'important');
+        trigger.style.setProperty('display', 'inline-flex', 'important');
+        trigger.style.setProperty('justify-content', 'center', 'important');
+        trigger.dataset[marker] = 'true';
+
+        pickerScope.listen(input, 'input', () => picker?.setSelected(input.value || undefined));
+        pickerScope.listen(input, 'change', () => picker?.setSelected(input.value || undefined));
+        pickerScope.listen(document, 'vcp-settings-surface-updated', event => {
+            if (event.detail?.root === form || event.detail?.kind === eventKind) picker?.setSelected(input.value || undefined);
+        });
+        const release = scope.own(async () => {
+            delete trigger.dataset[marker];
+            for (const [property, [value, priority]] of Object.entries(originalTriggerInline)) {
+                if (value) trigger.style.setProperty(property, value, priority);
+                else trigger.style.removeProperty(property);
+            }
+            // `pickerScope` owns the primitive's child scope. Disposing the
+            // controller first and then its parent created two synonymous
+            // cleanup requests on every Settings surface swap; one parent
+            // scope disposal reaches quiescence and preserves exact restore.
+            await pickerScope.dispose(`${scopeLabel}-released`);
+            agentModelPickerReleases.delete(trigger);
+        }, scopeLabel, 'ui-primitive');
+        agentModelPickerReleases.set(trigger, release);
+    } catch (error) {
+        void picker?.dispose?.();
+        void pickerScope.dispose(`${scopeLabel}-failed`);
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model picker:', error);
+    }
+}
+
+function mountTypedAgentModelPicker(form) {
+    mountTypedModelPicker(form);
+}
+
+function mountTypedTopicSummaryModelPicker(form) {
+    mountTypedModelPicker(form, {
+        inputId: 'topicSummaryModel',
+        triggerId: 'openTopicSummaryModelSelectBtn',
+        marker: 'vcpTypedTopicSummaryModelPicker',
+        scopeLabel: 'topic-summary-model-picker-production',
+        eventKind: 'topic-summary',
+    });
+}
+
+function mountTypedAgentPromptModeButtons(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountButton) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    form?.querySelectorAll?.('.prompt-mode-button').forEach((button, index) => {
+        if (!(button instanceof HTMLButtonElement) || button.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
+        button.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete button.dataset.vcpTypedPrimitiveMounted; }, `typed-agent-prompt-mode-${index}-marker`, 'ui-primitive');
+    });
+}
+
+// The agent editor keeps the native input as its canonical form/business node;
+// only the visual wrapper is owned by the typed Harness candidate. This is a
+// narrow migration slice and deliberately excludes chat-side assistant
+// switching and the remaining agent fields.
+function mountTypedAgentIdentityInput(form) {
+    mountTypedAgentInput(form, {
+        id: 'agentNameInput',
+        marker: 'vcpTypedAgentIdentity',
+        ownerKey: 'agent-name-input-marker',
+        placeholder: true,
+        restoreClass: true,
+    });
+}
+
+// Agent model remains a free-form native value with a separate legacy model
+// picker button/modal. Upgrade only the input presentation; the picker and
+// persistence semantics stay owned by the existing Agent settings flow.
+function mountTypedAgentModelInput(form) {
+    mountTypedAgentInput(form, {
+        id: 'agentModel',
+        marker: 'vcpTypedAgentModel',
+        ownerKey: 'agent-model-input-marker',
+        placeholder: true,
+    });
+}
+
+// Temperature remains a native number input because min/max/step and the
+// settings manager's numeric parsing are part of the canonical business
+// contract. Only its presentation is upgraded to the typed Harness Input.
+function mountTypedAgentTemperatureInput(form) {
+    mountTypedAgentInput(form, {
+        id: 'agentTemperature',
+        marker: 'vcpTypedAgentTemperature',
+        ownerKey: 'agent-temperature-input-marker',
+        restoreClass: true,
+    });
+}
+
+// These fields are all canonical numeric settings. Keep their native number
+// semantics and constraints while sharing the same typed Input presentation
+// owner used by the identity/model/temperature slices.
+function mountTypedAgentNumericInputs(form) {
+    const fields = [
+        ['agentContextTokenLimit', 'vcpTypedAgentContextLimit', 'agentContextTokenLimit-input-marker'],
+        ['agentMaxOutputTokens', 'vcpTypedAgentMaxOutput', 'agentMaxOutputTokens-input-marker'],
+        ['agentTopP', 'vcpTypedAgentTopP', 'agentTopP-input-marker'],
+        ['agentTopK', 'vcpTypedAgentTopK', 'agentTopK-input-marker'],
+    ];
+    fields.forEach(([id, marker, ownerKey]) => {
+        mountTypedAgentInput(form, { id, marker, ownerKey, restoreClass: true });
+    });
+}
+
+// The stream output pair is a presentation-only Choice primitive over the
+// existing native radio controls.  settingsManager remains the sole source
+// of the persisted boolean and chatManager keeps its existing consumption.
+function mountTypedAgentStreamChoice(form) {
+    const group = form?.querySelector?.('#agentStreamOutputTrue')?.closest('.form-group-inline');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!group || !api?.mountChoice || !scope || group.dataset.vcpTypedAgentStreamChoice === 'true') return;
+    try {
+        api.mountChoice(group, scope);
+        group.dataset.vcpTypedAgentStreamChoice = 'true';
+        scope.own(() => { delete group.dataset.vcpTypedAgentStreamChoice; }, 'agent-stream-choice-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent stream Choice:', error);
+    }
+}
+
+// TTS speed is a stable native range with an existing output node.  The typed
+// Range owns only the visual wrapper and output synchronization; settings
+// manager remains responsible for reading/writing the persisted numeric value.
+function mountTypedAgentTtsSpeedRange(form) {
+    const input = form?.querySelector?.('#agentTtsSpeed');
+    const output = form?.querySelector?.('#ttsSpeedValue');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !output || !api?.mountRange || !scope || input.dataset.vcpTypedAgentTtsSpeed === 'true') return;
+    try {
+        // Keep the existing persisted-number display contract ("1.0") while
+        // making the generated Range the sole owner of user-driven output
+        // synchronization.  The native input remains the canonical save node.
+        api.mountRange(input, { output, format: value => Number.parseFloat(value).toFixed(1) }, scope);
+        input.dataset.vcpTypedAgentTtsSpeed = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedAgentTtsSpeed; }, 'agent-tts-speed-range-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent TTS speed Range:', error);
+    }
+}
+
+function mountTypedAgentColorPairs(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountColorPair) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    [
+        ['#agentAvatarBorderColor', '#agentAvatarBorderColorText', 'agent-avatar-border-color', true],
+        ['#agentNameTextColor', '#agentNameTextColorText', 'agent-name-text-color', false],
+    ].forEach(([colorSelector, textSelector, key, updatesAvatarPreview]) => {
+        const color = form?.querySelector?.(colorSelector);
+        const text = form?.querySelector?.(textSelector);
+        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        api.mountColorPair(color, text, scope, {
+            onValueChange: value => {
+                if (!updatesAvatarPreview) return;
+                const preview = form.querySelector('#agentAvatarPreview');
+                if (preview) preview.style.borderColor = value;
+            },
+            onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
+        });
+        color.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${key}-marker`, 'ui-primitive');
+    });
+}
+
 // Lucide icon names for the global settings categories. Icons are always
 // rendered through VCPUI (`.vcp-ui-icon` -> lucide-adapter); no inline SVG,
-// emoji or text arrows on this surface in next mode.
+// emoji or text arrows on this surface.
 const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'user-identity': 'user',
     'server-connection': 'server',
@@ -100,34 +932,604 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'quick-actions': 'zap',
 });
 
-// Global settings modal: control enhancement, VCP save bar on the footer and a
-// SettingsShell-style layout (search + category List in the left rail).
+// Global settings modal: control enhancement, autosave status, and the
+// source-equivalent SettingsRoot shell.
 function enhanceGlobalSettings(root, form) {
-    form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
-        enhance('Input', input);
+    mountCanonicalSettingsRows(form);
+    removeLegacySubsectionHeadings(form);
+    mountHarnessInputs(form);
+    // The legacy VCPUI native-kernel Input/Textarea class enhancement is
+    // retired here: the real library Input primitive above owns single-line
+    // input presentation, and textareas keep the bare-control contract.
+    // Short enumerations remain native/segmented controls. Long enumerations
+    // get a Harness-style popover, but the native select is retained as the
+    // one authoritative business node.
+    mountAppearanceFontSizeRow(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceLanguageRows(form, window.VCPUIUX, ensurePresentationScope());
+    mountChatFontRows(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceRadiusLanguageRow(form, window.VCPUIUX, ensurePresentationScope());
+    selectProjection.mount(form);
+    mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
+    mountChoiceControls(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
+    mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
+    mountForumCredentialInputs(form, window.VCPUIUX, ensurePresentationScope());
+    // Reuse the production AgentModelPicker contract for the topic-summary
+    // field.  The native input remains canonical; the legacy modal template
+    // stays available until its shared business callers are fully retired.
+    mountTypedTopicSummaryModelPicker(form);
+    mountTypedForumFieldOwner(root, form);
+    form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
+    mountHarnessSwitches(form);
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
+        disclosure.dataset.settingPrimitive = 'disclosure';
+        disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
     });
-    form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    // The canonical global settings modal is a real Next surface; its Select
-    // controls use the Web Awesome kernel like the other VCPUI controls. Do
-    // not lock them into VCPUI's native fallback while the lazy runtime is
-    // still loading; vcp-main-ui-runtime refreshes this bridge once ready.
-    if (window.VCPWebAwesome?.isLoaded?.('select')) {
-        form.querySelectorAll('select').forEach(select => enhance('Select', select));
-    }
-    form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
-    form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    mountHarnessDisclosures(form);
     form.querySelectorAll('.agent-name-wrapper').forEach(field => {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
-    const footer = root.querySelector('.global-settings-footer');
-    if (footer) enhance('SettingsActionBar', footer, { form });
     mountSettingsShell(root);
+    mountSettingsAutosave(root, form, ensurePresentationScope());
+    mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
 }
 
+
+
+
+
+
+// Forum credentials are presentation-only in this phase.  The existing
+// ForumConfigUiService/global submit path remains the command owner until its
+// dirty/autosave seam is migrated; this primitive only establishes the
+// Harness Light-DOM geometry and scope-owned teardown contract.
+
+function mountTypedForumFieldOwner(root, form) {
+    if (!root || !form || form.dataset.vcpTypedForumFieldOwnerMounted === 'true') return;
+    const service = typedSettingsRegistry?.get('forum-config-ui') || ensureForumConfigUiService();
+    if (!service?.save?.execute) return;
+    const controls = ['adminUsername', 'adminPassword'].map(id => form.querySelector(`#${id}`)).filter(Boolean);
+    if (controls.length !== 2) return;
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
+    const state = { form, timer: null, pending: false, inFlight: null, disposed: false, failed: false };
+    const status = () => root.querySelector('.vcp-settings-autosave-status');
+    const run = async () => {
+        state.timer = null;
+        if (state.disposed || !state.pending || state.inFlight) return;
+        state.pending = false;
+        const username = form.querySelector('#adminUsername')?.value?.trim() || '';
+        const password = form.querySelector('#adminPassword')?.value || '';
+        state.inFlight = service.save.execute({ username, password, rememberCredentials: true });
+        status()?.setAttribute('data-state', 'saving');
+        if (status()) status().textContent = '保存中…';
+        try {
+            const result = await state.inFlight;
+            if (state.disposed) return;
+            if (!result?.success) {
+                state.failed = true;
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: result?.error || '论坛配置保存失败', owner: 'typed-forum-field-owner' } }));
+            } else {
+                state.failed = false;
+                if (!state.pending) delete form.dataset.vcpSettingsDirty;
+                status()?.setAttribute('data-state', 'saved');
+                if (status()) status().textContent = '已保存';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true, owner: 'typed-forum-field-owner' } }));
+            }
+        } catch (error) {
+            if (!state.disposed) {
+                state.failed = true;
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: error?.message || String(error), owner: 'typed-forum-field-owner' } }));
+            }
+        } finally { state.inFlight = null; if (state.pending) schedule(); }
+    };
+    const schedule = () => {
+        if (state.disposed) return;
+        state.pending = true;
+        form.dataset.vcpSettingsDirty = 'true';
+        status()?.setAttribute('data-state', 'dirty');
+        if (status()) status().textContent = '未保存';
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(run, 400);
+    };
+    const onInput = event => { if (controls.includes(event.target)) schedule(); };
+    // Retry clicks belong to whichever owner produced the current error.
+    // Routing them unconditionally turns a legacy autosave failure into a
+    // spurious forum save instead of retrying the failed field.
+    const ownsError = () => state.failed && status()?.dataset.state === 'error';
+    const onStatusClick = () => { if (ownsError()) schedule(); };
+    state.run = run;
+    ownerScope.listen(controls[0], 'input', onInput);
+    ownerScope.listen(controls[1], 'input', onInput);
+    ownerScope.listen(controls[0], 'change', onInput);
+    ownerScope.listen(controls[1], 'change', onInput);
+    const statusNode = status();
+    if (statusNode) ownerScope.listen(statusNode, 'click', onStatusClick);
+    controls.forEach(control => { control.dataset.vcpTypedForumFieldOwner = 'true'; });
+    form.dataset.vcpTypedForumFieldOwnerMounted = 'true';
+    typedForumFieldStates.add(state);
+    ownerScope.own(() => {
+        state.disposed = true;
+        if (state.timer) clearTimeout(state.timer);
+        controls.forEach(control => { delete control.dataset.vcpTypedForumFieldOwner; });
+        typedForumFieldStates.delete(state);
+        delete form.dataset.vcpTypedForumFieldOwnerMounted;
+    }, 'typed-forum-field-owner', 'ui-presentation');
+}
+
+
+// Single-line text inputs are projected by the real library Input primitive
+// (window.VCPUIUX.mountInput): the native input stays the sole business node
+// while the primitive wrap owns the border/focus surface.  Textareas are
+// deliberately excluded — the primitive wrap is a fixed 32px single-line
+// frame, and the form's bare-control contract already gives textareas their
+// multiline geometry (contract gap reported to thread A).  The typed mounts
+// (home tagline, forum credentials, color pair) own their own controls.
+let settingsKeySeed = 0;
+function uniqueSettingsKey() {
+    settingsKeySeed += 1;
+    return `anon-${settingsKeySeed}`;
+}
+
+// Switch labels adopt the real library Toggle primitive per checkbox: the
+// native input stays the authoritative node while the primitive wrap draws
+// the track/knob and hides the retired local `.slider` span.  The typed home
+// visual toggles keep their own mounts, and the legacy VCPUI native-kernel
+// switch stays as the degraded presentation when the primitive runtime or
+// the presentation scope is unavailable.
+function mountHarnessSwitches(form) {
+    if (!form) return;
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    form.querySelectorAll('label.switch').forEach(control => {
+        if (control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) return;
+        const input = control.querySelector('input[type="checkbox"]');
+        if (!input || input.dataset.vcpHarnessToggleMounted === 'true') return;
+        if (!api?.mountToggle || !scope) {
+            enhance('Switch', control);
+            return;
+        }
+        try {
+            const release = api.mountToggle(input, scope);
+            if (!release) return;
+            input.dataset.vcpHarnessToggleMounted = 'true';
+            scope.own(() => { delete input.dataset.vcpHarnessToggleMounted; }, `harness-toggle-${input.id || control.querySelector('input[name]')?.name || uniqueSettingsKey()}`, 'ui-presentation');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount Harness Toggle primitive:', error);
+        }
+    });
+}
+
+function mountHarnessInputs(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountInput || !scope) return;
+    const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])';
+    form.querySelectorAll(selector).forEach(control => {
+        if (control.dataset.vcpHarnessInputPrimitive === 'true') return;
+        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText' || control.id === 'userNameTextColorText' || control.id === 'adminUsername' || control.id === 'adminPassword') return;
+        if (control.closest('.vcp-uiux-input-wrap')) return;
+        try {
+            const release = api.mountInput(control, {}, scope);
+            if (!release) return;
+            control.dataset.vcpHarnessInputPrimitive = 'true';
+            control.closest('.vcp-uiux-input-wrap')?.classList.add('vcp-harness-input-fill');
+            scope.own(() => { delete control.dataset.vcpHarnessInputPrimitive; }, `harness-input-${control.id || control.name || uniqueSettingsKey()}`, 'ui-presentation');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount Harness Input primitive:', error);
+        }
+    });
+}
+
+function mountHarnessDisclosures(form) {
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(container => {
+        // disclosureStates stores state records, not raw containers.  Using
+        // Set.has(container) here silently missed the existing record and
+        // re-bound click/keydown listeners on every Settings refresh.
+        if ([...disclosureStates].some(state => state.container === container)) return;
+        const header = container.querySelector('.style-collapse-header');
+        const content = container.querySelector('.agent-style-controls');
+        if (!header || !content) return;
+        const originalHeaderClass = header.className;
+        const originalHeaderAttrs = {
+            role: header.getAttribute('role'),
+            tabindex: header.getAttribute('tabindex'),
+            ariaControls: header.getAttribute('aria-controls'),
+            ariaExpanded: header.getAttribute('aria-expanded'),
+        };
+        const originalContentId = content.id;
+        if (!content.id) content.id = `${container.id || 'settings-disclosure'}-content`;
+        header.classList.add('vcp-harness-disclosure-row');
+        header.setAttribute('role', 'button');
+        header.tabIndex = header.tabIndex >= 0 ? header.tabIndex : 0;
+        header.setAttribute('aria-controls', content.id);
+        const sync = () => header.setAttribute('aria-expanded', String(!container.classList.contains('collapsed')));
+        const toggle = event => {
+            if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            container.classList.toggle('collapsed');
+            sync();
+        };
+        ownerScope.listen(header, 'click', toggle);
+        ownerScope.listen(header, 'keydown', toggle);
+        const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
+        observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
+        sync();
+        const state = { container, header, observer, cleaned: false, cleanup: () => {
+            if (state.cleaned) return;
+            state.cleaned = true;
+            observer?.disconnect();
+            header.removeAttribute('aria-controls');
+            header.removeAttribute('aria-expanded');
+            if (originalHeaderAttrs.role === null) header.removeAttribute('role');
+            else header.setAttribute('role', originalHeaderAttrs.role);
+            if (originalHeaderAttrs.tabindex === null) header.removeAttribute('tabindex');
+            else header.setAttribute('tabindex', originalHeaderAttrs.tabindex);
+            if (originalHeaderAttrs.ariaControls === null) header.removeAttribute('aria-controls');
+            else header.setAttribute('aria-controls', originalHeaderAttrs.ariaControls);
+            if (originalHeaderAttrs.ariaExpanded === null) header.removeAttribute('aria-expanded');
+            else header.setAttribute('aria-expanded', originalHeaderAttrs.ariaExpanded);
+            header.className = originalHeaderClass;
+            if (originalContentId) content.id = originalContentId;
+            else content.removeAttribute('id');
+            disclosureStates.delete(state);
+        }};
+        disclosureStates.add(state);
+        ownerScope.own(state.cleanup, `harness-disclosure-${container.id || uniqueSettingsKey()}`, 'ui-presentation');
+    });
+}
+
+// R2-02C: these controls have a single draft/save owner. They continue to
+// use the canonical business nodes and persisted keys, but no longer enter
+// the legacy form-submit/autosave chain.
+const TYPED_FIELD_DEFINITIONS = Object.freeze({
+    userAvatarBorderColor: { path: 'userAvatarBorderColor', kind: 'string' },
+    userAvatarBorderColorText: { path: 'userAvatarBorderColor', kind: 'string' },
+    // Name color mirrors the avatar pair: two controls, one persisted key.
+    userNameTextColor: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
+    userNameTextColorText: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
+    userName: { path: 'userName', kind: 'string', trimValue: true, fallback: '用户' },
+    continueWritingPrompt: { path: 'continueWritingPrompt', kind: 'string', trimValue: true, fallback: '请继续' },
+    showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
+    showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
+    homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
+    // Wide layout is one boolean behind a radio pair; the Normal radio owns
+    // the inverted value so both half-states flow through the same draft.
+    chatLayoutModeWide: { path: 'enableWideChatLayout', kind: 'boolean' },
+    chatLayoutModeNormal: { path: 'enableWideChatLayout', kind: 'inverse-boolean' },
+    // Chat typography presets/customs: selects and text inputs keep their
+    // canonical nodes; visual application stays with the settings snapshot
+    // consumers (chat renderer semantics untouched).
+    chatFontPreset: { path: 'chatFontPreset', kind: 'string' },
+    chatFontCustom: { path: 'chatFontCustom', kind: 'string' },
+    chatCodeFontPreset: { path: 'chatCodeFontPreset', kind: 'string' },
+    chatCodeFontCustom: { path: 'chatCodeFontCustom', kind: 'string' },
+    chatDiaryFontPreset: { path: 'chatDiaryFontPreset', kind: 'string' },
+    chatDiaryFontCustom: { path: 'chatDiaryFontCustom', kind: 'string' },
+    chatToolFontPreset: { path: 'chatToolFontPreset', kind: 'string' },
+    chatToolFontCustom: { path: 'chatToolFontCustom', kind: 'string' },
+    appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
+    appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
+    appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
+    appearanceFontScale: { path: 'appearanceProfile.fontScale', kind: 'string' },
+    appearanceContentWidth: { path: 'appearanceProfile.contentWidth', kind: 'string' },
+    appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
+    appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
+    appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
+    appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
+    appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
+    // The model-selection button still uses the shared legacy modal, but the
+    // canonical text value can already use the single typed save owner.
+    topicSummaryModel: { path: 'topicSummaryModel', kind: 'string' },
+});
+
+function readTypedFieldPatch(control, service, pendingPatch) {
+    const definition = TYPED_FIELD_DEFINITIONS[control?.id];
+    if (!definition) return null;
+    const raw = control.type === 'checkbox' || control.type === 'radio' ? control.checked : control.value;
+    let value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'inverse-boolean' ? Boolean(raw) !== true : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
+    // Keep the legacy whole-form collect contract for fields whose persisted
+    // semantics depend on it (trim + default fill), so the save command line
+    // cannot diverge from what the legacy chain used to persist.
+    if (definition.trimValue && typeof value === 'string') value = value.trim();
+    if (definition.fallback !== undefined && typeof value === 'string' && !value) value = definition.fallback;
+    if (definition.path.startsWith('appearanceProfile.')) {
+        // Build the full-profile snapshot on top of the accumulated draft, not
+        // bare service state: every later event in one debounce window would
+        // otherwise revert earlier drafts of sibling appearance fields.
+        const current = {
+            ...(service.state.get()?.appearanceProfile || {}),
+            ...(pendingPatch?.appearanceProfile || {}),
+        };
+        const key = definition.path.slice('appearanceProfile.'.length);
+        return { appearanceProfile: { ...current, [key]: value } };
+    }
+    return { [definition.path]: value };
+}
+
+function mountTypedFieldOwner(root, form) {
+    if (!root || !form || form.dataset.vcpTypedFieldOwnerMounted === 'true') return;
+    const service = typedSettingsRegistry?.get('settings-ui') || ensureTypedSettingsService();
+    if (!service?.save?.execute) return;
+    const ownerScope = ensurePresentationScope();
+    if (!ownerScope) return;
+    const controls = Object.keys(TYPED_FIELD_DEFINITIONS)
+        .map(id => form.querySelector(`#${id}`))
+        .filter(Boolean);
+    if (!controls.length) return;
+    const state = { root, form, timer: null, pendingPatch: null, inFlight: null, disposed: false, cleanups: [], run: null };
+    // Dynamic path rows cannot be expressed as one control per definition id:
+    // every row shares the networkNotesPaths key.  The container becomes the
+    // owned unit and delegation covers rows added after mount.
+    const pathsContainer = form.querySelector('#networkNotesPathsContainer');
+    const collectNetworkNotesPaths = () => [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')]
+        .map(input => input.value.trim())
+        .filter(Boolean);
+    const project = snapshot => {
+        if (state.disposed || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+        const settings = snapshot?.value || {};
+        const appearance = settings.appearanceProfile || {};
+        const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) { const next = String(value); if (node.value !== next) { node.value = next; const EventCtor = node.ownerDocument.defaultView?.CustomEvent ?? CustomEvent; node.dispatchEvent(new EventCtor('vcp-uiux-sync')); } } };
+        const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
+        set('userAvatarBorderColor', settings.userAvatarBorderColor || '#3d5a80');
+        set('userAvatarBorderColorText', settings.userAvatarBorderColor || '#3d5a80');
+        set('appearanceDensity', appearance.density || 'comfortable');
+        set('appearanceRadius', appearance.radius || 'small');
+        set('appearanceTypography', appearance.typography || 'system');
+        set('appearanceFontScale', appearance.fontScale || 'normal');
+        set('appearanceContentWidth', appearance.contentWidth || 'full');
+        set('appearanceSurface', appearance.surface || 'translucent');
+        set('appearanceSidebarRowHeight', appearance.sidebarRowHeight ?? 46);
+        set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
+        set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
+        set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
+        set('appearanceCustomRadius', appearance.customRadius ?? 10);
+        set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
+        set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
+        check('chatLayoutModeWide', settings.enableWideChatLayout === true);
+        check('chatLayoutModeNormal', settings.enableWideChatLayout !== true);
+        check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
+        check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
+        set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
+        // Name cluster owns its snapshot reads now; the color mirror keeps
+        // both controls on one persisted key like the avatar pair.  The
+        // legacy userUseThemeColorsInChat key has no control inside the
+        // Settings form (the visible useThemeColorsInChat checkbox belongs
+        // to the per-agent form), so there is nothing to project for it.
+        set('userName', settings.userName);
+        set('userNameTextColor', settings.userNameTextColor || '#ffffff');
+        set('userNameTextColorText', settings.userNameTextColor || '#ffffff');
+        set('continueWritingPrompt', settings.continueWritingPrompt);
+        // Chat typography owns its fallbacks here now that the generic
+        // snapshot projection no longer writes these nodes.
+        set('chatFontPreset', settings.chatFontPreset || 'system');
+        set('chatFontCustom', settings.chatFontCustom || '');
+        set('chatCodeFontPreset', settings.chatCodeFontPreset || 'consolas');
+        set('chatCodeFontCustom', settings.chatCodeFontCustom || '');
+        set('chatDiaryFontPreset', settings.chatDiaryFontPreset || 'serif');
+        set('chatDiaryFontCustom', settings.chatDiaryFontCustom || '');
+        set('chatToolFontPreset', settings.chatToolFontPreset || 'system');
+        set('chatToolFontCustom', settings.chatToolFontCustom || '');
+        syncRenderSettingsVisibility(form);
+        // Network notes rows: the typed field owner is their single writer;
+        // the generic consumer projection no longer rebuilds them.
+        if (pathsContainer) {
+            const paths = Array.isArray(settings.networkNotesPaths)
+                ? settings.networkNotesPaths.map(path => String(path || '')).filter(Boolean)
+                : [];
+            const current = collectNetworkNotesPaths();
+            if (current.join('\u0000') !== paths.join('\u0000')) {
+                pathsContainer.replaceChildren();
+                const addPath = path => addTypedNetworkPathInput(root, path)
+                    || window.uiHelperFunctions?.addNetworkPathInput?.(path);
+                if (typeof addPath === 'function') {
+                    (paths.length ? paths : ['']).forEach(path => addPath(path));
+                    pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { input.dataset.vcpTypedFieldOwner = 'true'; });
+                }
+            }
+        }
+    };
+    // Conditional rows are presentation-owned. Keep their immediate response
+    // local to this Settings owner so the ambient event-listeners module does
+    // not compete with snapshot projection or survive modal teardown.
+    const syncConditionalRows = () => syncAdvancedSettingsVisibility(form);
+    syncConditionalRows();
+    ['change', 'input'].forEach(type => {
+        const onChange = () => syncConditionalRows();
+        ownerScope.listen(form, type, onChange);
+    });
+    const status = () => root.querySelector('.vcp-settings-autosave-status');
+    const publish = (success, error = '') => {
+        form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success, error: error || undefined, owner: 'typed-settings-field-owner' } }));
+    };
+    const run = async () => {
+        state.timer = null;
+        if (state.disposed || !state.pendingPatch || state.inFlight) return;
+        const patch = state.pendingPatch;
+        state.pendingPatch = null;
+        state.inFlight = service.save.execute(patch);
+        status()?.setAttribute('data-state', 'saving');
+        if (status()) status().textContent = '保存中…';
+        try {
+            const result = await state.inFlight;
+            if (state.disposed) return;
+            if (!result?.success) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                publish(false, result?.error || '设置保存失败');
+                return;
+            }
+            if (!state.pendingPatch) delete form.dataset.vcpSettingsDirty;
+            status()?.setAttribute('data-state', 'saved');
+            if (status()) status().textContent = '已保存';
+            publish(true);
+            if (state.pendingPatch) schedule();
+        } catch (error) {
+            if (!state.disposed) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                publish(false, error?.message || String(error));
+            }
+        } finally {
+            state.inFlight = null;
+        }
+    };
+    const schedule = () => {
+        if (state.disposed) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(run, 400);
+    };
+    state.run = run;
+    const markDirty = () => {
+        form.dataset.vcpSettingsDirty = 'true';
+        status()?.setAttribute('data-state', 'dirty');
+        if (status()) status().textContent = '未保存';
+    };
+    const normalizeMiddleClickDelay = control => {
+        if (!control) return false;
+        const value = Number.parseInt(control.value, 10);
+        if (Number.isFinite(value) && value >= 1000) return false;
+        control.value = '1000';
+        window.uiHelperFunctions?.showToastNotification?.('快捷环出现延迟不能小于1000ms，已自动调整', 'info');
+        return true;
+    };
+    const onInput = event => {
+        const control = event.target;
+        if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
+        if (control.id === 'middleClickAdvancedDelay') normalizeMiddleClickDelay(control);
+        const patch = readTypedFieldPatch(control, service, state.pendingPatch) || {};
+        if (patch.appearanceProfile) {
+            state.pendingPatch = {
+                ...(state.pendingPatch || {}),
+                appearanceProfile: {
+                    ...(state.pendingPatch?.appearanceProfile || service.state.get()?.appearanceProfile || {}),
+                    ...patch.appearanceProfile,
+                },
+            };
+        } else {
+            state.pendingPatch = { ...(state.pendingPatch || {}), ...patch };
+        }
+        markDirty();
+        schedule();
+    };
+    controls.forEach(control => {
+        control.dataset.vcpTypedFieldOwner = 'true';
+        ownerScope.listen(control, 'input', onInput);
+        ownerScope.listen(control, 'change', onInput);
+        state.cleanups.push(() => {
+            delete control.dataset.vcpTypedFieldOwner;
+        });
+    });
+    const renderPresetIds = ['chatFontPreset', 'chatCodeFontPreset', 'chatDiaryFontPreset', 'chatToolFontPreset'];
+    renderPresetIds.forEach(id => {
+        const select = form.querySelector(`#${id}`);
+        if (!select) return;
+        const onRenderPresetChange = () => syncRenderSettingsVisibility(form);
+        ownerScope.listen(select, 'change', onRenderPresetChange);
+    });
+    const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
+    if (middleClickAdvancedDelay) {
+        const onBlur = () => {
+            if (normalizeMiddleClickDelay(middleClickAdvancedDelay)) {
+                middleClickAdvancedDelay.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
+        ownerScope.listen(middleClickAdvancedDelay, 'blur', onBlur);
+    }
+    if (pathsContainer) {
+        const onRowsDirty = () => {
+            // Row removal, row addition and typing all reduce to "recollect
+            // the current list"; empty rows drop out like the legacy save.
+            state.pendingPatch = { ...(state.pendingPatch || {}), networkNotesPaths: collectNetworkNotesPaths() };
+            markDirty();
+            schedule();
+        };
+        ownerScope.listen(pathsContainer, 'input', onRowsDirty);
+        ownerScope.listen(pathsContainer, 'change', onRowsDirty);
+        pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { input.dataset.vcpTypedFieldOwner = 'true'; });
+        state.cleanups.push(() => {
+            pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { delete input.dataset.vcpTypedFieldOwner; });
+        });
+    }
+    const release = service.state.subscribe((_value, snapshot) => project(snapshot));
+    state.cleanups.push(() => release?.());
+    state.cleanups.push(() => {
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        state.pendingPatch = null;
+        state.disposed = true;
+        service.cancelPendingSaves?.();
+        delete form.dataset.vcpTypedFieldOwnerMounted;
+    });
+    form.dataset.vcpTypedFieldOwnerMounted = 'true';
+    typedFieldStates.add(state);
+    ensurePresentationScope()?.own(() => {
+        state.cleanups.forEach(cleanup => cleanup());
+        typedFieldStates.delete(state);
+    }, 'typed-settings-field-owner', 'ui-presentation');
+}
+
+function flushSettingsAutosave() {
+    flushLegacyAutosave();
+    typedFieldStates.forEach(state => {
+        if (state.disposed || !state.pendingPatch || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        // The field owner intentionally starts its own command and does not
+        // route through form.requestSubmit(), which would re-enter legacy
+        // presentation and close the modal.
+        void state.run?.();
+    });
+    typedForumFieldStates.forEach(state => {
+        if (state.disposed || !state.pending || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        void state.run?.();
+    });
+}
+
+function flushTypedForumFields() {
+    typedForumFieldStates.forEach(state => {
+        if (state.disposed || !state.pending || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        void state.run?.();
+    });
+}
+
+function teardownSettingsAutosave() {
+    teardownLegacyAutosave();
+    [...typedFieldStates].forEach(state => {
+        state.cleanups.forEach(cleanup => cleanup());
+        typedFieldStates.delete(state);
+    });
+    [...typedForumFieldStates].forEach(state => {
+        state.disposed = true;
+        if (state.timer) clearTimeout(state.timer);
+        typedForumFieldStates.delete(state);
+    });
+}
+
+function teardownHarnessDisclosures() {
+    [...disclosureStates].forEach(state => state.cleanup());
+}
+
 // Replaces the handful of hand-inlined Lucide paths inside the global form
-// with VCPUI icon nodes (rendered by lucide-adapter in next mode). Originals
-// are kept so classic mode and teardown can restore them exactly.
+// with VCPUI icon nodes (rendered by lucide-adapter). Originals are kept for
+// deterministic teardown and business-DOM restoration.
 function normalizeFormIcons(root) {
     if (root.dataset.vcpSettingsIconsNormalized) return;
     const replaced = [];
@@ -141,8 +1543,8 @@ function normalizeFormIcons(root) {
         svg.replaceWith(icon);
         // lucide-adapter replaces this temporary span with an SVG. Retaining
         // the span in the restoration record keeps an already-detached node
-        // alive for the whole Next surface lifetime and, across repeated mode
-        // round-trips, makes Chromium report a linear detached-node chain.
+        // alive for the whole surface lifetime and, across repeated round-trips,
+        // makes Chromium report a linear detached-node chain.
         // Restoration only needs the container and upstream SVG.
         replaced.push({ container, original: svg });
     };
@@ -163,194 +1565,257 @@ function restoreFormIcons(root) {
     delete root.dataset.vcpSettingsIconsNormalized;
 }
 
-// SettingsShell build: replaces the legacy <ul> category nav with a VCPUI List
-// and pins a VCPUI-enhanced search above it. The original form sections are the
-// content area; switching categories only toggles the `active` class so
-// unsaved values in hidden sections stay in the DOM.
+// SettingsShell build: assemble a live Harness SettingsRoot primitive tree.
+// The original form sections remain the business source of truth; only the
+// shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
-    if (root.querySelector('.vcp-ui-settings-shell')) return;
-    const layout = root.querySelector('.global-settings-layout');
-    const nav = root.querySelector('.global-settings-nav');
-    const listHost = nav?.querySelector('.settings-nav-list');
-    if (!layout || !nav || !listHost) {
-        mountLegacySearch(root);
+    if (root.querySelector('.vcp-harness-settings-panel')) {
+        reconcileSettingsShell(root);
+        return;
+    }
+    mountTypedSettingsConsumer(root);
+    const shellScope = ensurePresentationScope();
+    const panel = root.querySelector('.vcp-settings-source-panel');
+    const layout = root.querySelector('.vcp-settings-source-layout');
+    const nav = root.querySelector('.vcp-settings-source-nav');
+    const listHost = nav?.querySelector('.vcp-settings-source-list');
+    const content = root.querySelector('.vcp-settings-source-content');
+    const form = root.querySelector('#globalSettingsForm');
+    const title = root.querySelector('.vcp-settings-source-title');
+    const close = root.querySelector('.close-button');
+    if (!panel || !layout || !nav || !content || !form || !title || !close) {
         return;
     }
 
-    const meta = [...listHost.querySelectorAll('.settings-nav-item')].map(item => ({
-        value: item.dataset.section,
-        label: (item.querySelector('span')?.textContent || '').trim() || item.textContent.trim(),
-        icon: GLOBAL_CATEGORY_ICONS[item.dataset.section] || 'circle',
-        selected: item.classList.contains('active'),
-    }));
+    let meta = [];
+    try {
+        const sourceMeta = JSON.parse(nav.dataset.settingsSections || '[]');
+        meta = sourceMeta.map(item => ({ ...item, icon: GLOBAL_CATEGORY_ICONS[item.value] || 'circle', selected: item.value === 'user-identity' }));
+    } catch (error) {
+        console.error('[VCPUI SettingsBridge] Invalid settings section metadata', error);
+        return;
+    }
+    if (!meta.length) return;
     const initial = meta.find(item => item.selected)?.value || meta[0]?.value;
     if (!initial || !document.getElementById(`section-${initial}`)) {
-        mountLegacySearch(root);
         return;
     }
 
+
     const state = {
+        panel,
         layout,
         nav,
-        listHost,
-        // Keep the original Classic nodes alive instead of rebuilding them
-        // from HTML on teardown. Their event listeners are owned by the
-        // Classic settings controller and must survive a Next preview.
-        originalNavNodes: [...listHost.childNodes],
+        content,
+        form,
+        close,
+        listHost: null,
+        originalNavHost: listHost || null,
+        title,
+        header: null,
+        options: null,
+        sectionHost: null,
+        sectionBank: null,
+        sections: new Map(),
+        navList: null,
+        cleanups: [],
         meta,
         active: initial,
         query: '',
-        list: null,
-        listRelease: null,
     };
     shellState.set(root, state);
     shellRoots.add(root);
-    layout.classList.add('vcp-ui-settings-shell');
+    root.classList.add('vcp-harness-settings-root', 'vcp-global-settings-surface');
+    panel.classList.add('vcp-harness-settings-panel');
+    nav.classList.add('vcp-harness-settings-nav');
+    content.classList.add('vcp-harness-settings-content');
+    // Legacy presentation selectors must not participate in the live tree.
+    // The classes are restored only when the bridge is torn down.
+    nav.classList.remove('vcp-settings-source-nav');
+    content.classList.remove('vcp-settings-source-content');
+    panel.classList.remove('vcp-settings-source-panel');
+    title.classList.remove('vcp-settings-source-title');
 
-    const sectionText = (value) => document.getElementById(`section-${value}`)?.textContent.toLowerCase() || '';
-    const visibleItems = () => {
-        const q = state.query.trim().toLowerCase();
-        if (!q) return state.meta;
-        return state.meta.filter(item =>
-            item.label.toLowerCase().includes(q) || sectionText(item.value).includes(q)
-        );
-    };
+    // Harness owns the settings title in the nav rail, not as a second
+    // content heading. Move the canonical node and restore its exact parent
+    // and sibling on teardown.
+    nav.prepend(title);
+    title.classList.add('vcp-harness-settings-nav-title');
+    title.id ||= 'vcpSettingsNavTitle';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-labelledby', title.id);
+    nav.setAttribute('aria-label', '全局设置');
 
-    const renderList = () => {
-        const items = visibleItems().map(item => ({
-            value: item.value,
-            icon: item.icon,
-            label: item.label,
-            selected: item.value === state.active,
-            onClick: () => activateSection(item.value),
-        }));
-        if (state.list) state.list.update({ items });
-        else {
-            state.list = window.VCPUI.create('List', { items });
-            state.listRelease = ensurePresentationScope()?.own(() => state.list?.destroy(), 'settings-navigation-list', 'ui-registration') || null;
-            state.listHost.replaceChildren(state.list.element);
-            state.list.element.setAttribute('role', 'tablist');
-            state.list.element.setAttribute('aria-label', '全局设置分类');
-            state.list.element.setAttribute('aria-orientation', 'vertical');
-            const onKeyDown = event => {
-                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-                const rows = [...state.list.element.querySelectorAll('.vcp-ui-list-item[role="tab"]')];
-                const current = rows.indexOf(document.activeElement);
-                if (current < 0) return;
-                event.preventDefault();
-                const next = event.key === 'Home' ? 0
-                    : event.key === 'End' ? rows.length - 1
-                        : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
-                const row = rows[next];
-                if (!row) return;
-                activateSection(row.dataset.section);
-                [...state.list.element.querySelectorAll('.vcp-ui-list-item[role="tab"]')]
-                    .find(candidate => candidate.dataset.section === row.dataset.section)?.focus();
-            };
-            if (ensurePresentationScope()) presentationScope.listen(state.list.element, 'keydown', onKeyDown, undefined, 'settings-navigation-keyboard');
-            else state.list.element.addEventListener('keydown', onKeyDown);
+    // Compose the Harness header/options primitives around the existing form;
+    // the form remains the business owner, while the new nodes own chrome.
+    const header = document.createElement('header');
+    header.className = 'vcp-harness-settings-header';
+    header.setAttribute('data-setting-primitive', 'header');
+    const actions = document.createElement('div');
+    actions.className = 'vcp-harness-settings-actions';
+    const options = document.createElement('div');
+    options.className = 'vcp-harness-settings-options';
+    options.setAttribute('data-setting-primitive', 'options');
+    state.header = header;
+    state.options = options;
+    options.append(...[...content.childNodes]);
+    // Harness owns an icon-only 28px close primitive with an accessible text
+    // seat. Replace the legacy text glyph once, while preserving the same
+    // business button and close listener.
+    if (!close.dataset.vcpHarnessClose) {
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon vcp-harness-settings-close-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'x';
+        const hiddenLabel = document.createElement('span');
+        hiddenLabel.className = 'vcp-harness-settings-close-label';
+        hiddenLabel.textContent = close.getAttribute('aria-label') || '关闭';
+        close.replaceChildren(icon, hiddenLabel);
+        close.classList.add('vcp-harness-settings-close');
+        close.dataset.vcpHarnessClose = 'true';
+    }
+    actions.append(close);
+    header.append(actions);
+    content.replaceChildren(header, options);
+
+    // Harness renders only the selected section into Options. Keep the
+    // remaining business fields connected to the same form in a hidden bank
+    // so legacy id/name queries, form serialization and IPC handlers remain
+    // authoritative without leaving inactive settings in the visible tree.
+    const sectionHost = document.createElement('div');
+    sectionHost.className = 'vcp-harness-active-section';
+    sectionHost.dataset.settingPrimitive = 'section';
+    const sectionBank = document.createElement('div');
+    sectionBank.className = 'vcp-harness-section-bank';
+    sectionBank.hidden = true;
+    sectionBank.setAttribute('aria-hidden', 'true');
+    state.sectionHost = sectionHost;
+    state.sectionBank = sectionBank;
+    [...form.children].filter(child => child.matches('.settings-section')).forEach(section => {
+        const value = section.id.replace(/^section-/, '');
+        state.sections.set(value, section);
+        section.classList.remove('active');
+        sectionBank.append(section);
+    });
+    form.prepend(sectionHost, sectionBank);
+    const initialSection = state.sections.get(initial);
+    if (initialSection) {
+        sectionHost.append(initialSection);
+        initialSection.classList.add('active');
+    }
+    const canonicalNav = document.createElement('div');
+    canonicalNav.className = 'vcp-harness-settings-nav-list';
+    canonicalNav.setAttribute('aria-label', '全局设置分类');
+    state.navList = canonicalNav;
+    state.listHost = canonicalNav;
+    listHost?.replaceWith(canonicalNav);
+    nav.replaceChildren(title, canonicalNav);
+    // The legacy grid wrapper no longer owns live layout.  Keep it detached so
+    // business nodes can be restored atomically by teardown.
+    panel.replaceChildren(nav, content);
+
+    const rows = state.meta.map(item => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'vcp-harness-settings-nav-cell';
+        row.dataset.section = item.value;
+        row.dataset.vcpCanonicalNav = 'true';
+        row.id = `vcpSettingsTab-${item.value}`;
+        const icon = document.createElement('span');
+        icon.className = 'vcp-harness-settings-nav-icon vcp-ui-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = item.icon;
+        const copy = document.createElement('span');
+        copy.className = 'vcp-harness-settings-nav-copy';
+        const label = document.createElement('strong');
+        label.textContent = item.label;
+        copy.append(label);
+        row.append(icon, copy);
+        const onClick = () => activateSection(item.value);
+        const onKeydown = event => {
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const current = rows.indexOf(row);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+            rows[next]?.focus();
+            if (rows[next]) activateSection(rows[next].dataset.section);
+        };
+        if (shellScope) {
+            shellScope.listen(row, 'click', onClick);
+            shellScope.listen(row, 'keydown', onKeydown);
+        } else {
+            row.addEventListener('click', onClick);
+            row.addEventListener('keydown', onKeydown);
         }
-        const rows = [...state.list.element.querySelectorAll('.vcp-ui-list-item')];
+        state.listHost.append(row);
+        return row;
+    });
+    const renderList = () => {
+        state.listHost.setAttribute('aria-label', '全局设置分类');
         rows.forEach(row => {
-            const value = row.dataset.section || row.dataset.value;
+            const value = row.dataset.section;
             const item = state.meta.find(candidate => candidate.value === value);
             if (!item) return;
-            row.dataset.section = item.value;
-            row.setAttribute('role', 'tab');
-            row.id = `vcpSettingsTab-${item.value}`;
-            row.setAttribute('aria-selected', String(item.value === state.active));
-            row.tabIndex = item.value === state.active ? 0 : -1;
-            row.setAttribute('aria-controls', `section-${item.value}`);
+            const selected = item.value === state.active;
+            row.classList.toggle('is-active', selected);
+            row.classList.toggle('active', selected);
+            row.dataset.state = selected ? 'selected' : 'idle';
+            row.tabIndex = selected ? 0 : -1;
         });
         state.meta.forEach(item => {
-            const section = root.querySelector(`#section-${item.value}`);
+            const section = state.sections.get(item.value) || root.querySelector(`#section-${item.value}`);
             if (!section) return;
-            section.setAttribute('role', 'tabpanel');
-            section.setAttribute('aria-labelledby', `vcpSettingsTab-${item.value}`);
-            section.setAttribute('aria-hidden', String(item.value !== state.active));
+            // The active section is derived from the same state as the nav.
+            // Re-assert it on every render so stale classes from a reused
+            // modal or a bootstrap refresh cannot leave the two columns out
+            // of sync.
+            section.classList.toggle('active', item.value === state.active);
+            section.removeAttribute('role');
+            section.removeAttribute('aria-labelledby');
+            section.removeAttribute('aria-hidden');
         });
     };
 
     const activateSection = (value) => {
-        if (value === state.active) return;
-        root.querySelectorAll('.settings-section').forEach(section => {
-            section.classList.remove('active', 'switching-out', 'switching-in');
-        });
-        const target = document.getElementById(`section-${value}`);
-        if (target) target.classList.add('active');
+        if (!state.meta.some(item => item.value === value)) return;
         state.active = value;
-        renderList();
-    };
-
-    const onQuery = (query) => {
-        state.query = query;
-        renderList();
-        if (query.trim()) {
-            const first = visibleItems().find(item => item.value !== state.active) || visibleItems()[0];
-            if (first) activateSection(first.value);
+        const next = state.sections.get(value);
+        if (next && state.sectionHost && next.parentNode !== state.sectionHost) {
+            const current = state.sectionHost.querySelector('.settings-section');
+            if (current) state.sectionBank.append(current);
+            state.sectionHost.append(next);
         }
+        renderList();
     };
-
-    // VCPUI-enhanced search field, pinned to the top of the left rail.
-    const search = document.createElement('div');
-    search.className = 'vcp-ui-settings-search';
-    const searchIcon = document.createElement('span');
-    searchIcon.className = 'vcp-ui-icon';
-    searchIcon.setAttribute('aria-hidden', 'true');
-    searchIcon.textContent = 'search';
-    const searchInput = document.createElement('input');
-    searchInput.type = 'search';
-    searchInput.placeholder = '搜索设置项';
-    searchInput.setAttribute('aria-label', '搜索设置项');
-    search.append(searchIcon, searchInput);
-    enhance('Input', searchInput);
-    nav.prepend(search);
-    injectedNodes.add(search);
-    const onInput = () => onQuery(searchInput.value);
-    if (ensurePresentationScope()) presentationScope.listen(searchInput, 'input', onInput, undefined, 'settings-search-input');
-    else searchInput.addEventListener('input', onInput);
 
     renderList();
 }
 
-// Legacy fallback used only when the modal has no category nav (kept for the
-// contract fixture and defensive coverage): injects the search into the content
-// column and filters `.settings-nav-item` nodes by hiding them.
-function mountLegacySearch(root) {
-    const content = root.querySelector('.global-settings-content');
-    const navItems = [...root.querySelectorAll('.settings-nav-item')];
-    if (!content || content.querySelector('.vcp-ui-settings-search')) return;
-
-    const search = document.createElement('div');
-    search.className = 'vcp-ui-settings-search';
-    const icon = document.createElement('span');
-    icon.className = 'vcp-ui-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = 'search';
-    const input = document.createElement('input');
-    input.type = 'search';
-    input.placeholder = '搜索设置项';
-    input.setAttribute('aria-label', '搜索设置项');
-    search.append(icon, input);
-    content.prepend(search);
-    injectedNodes.add(search);
-
-    const handleInput = () => {
-        const query = input.value.trim().toLowerCase();
-        navItems.forEach(item => {
-            const section = root.querySelector(`#section-${item.dataset.section}`);
-            const hit = !query
-                || (section && section.textContent.toLowerCase().includes(query))
-                || item.textContent.toLowerCase().includes(query);
-            item.hidden = !hit;
-        });
-        if (query) {
-            const firstVisible = navItems.find(item => !item.hidden);
-            if (firstVisible) firstVisible.click();
-        }
-    };
-    if (ensurePresentationScope()) presentationScope.listen(input, 'input', handleInput, undefined, 'legacy-settings-search-input');
-    else input.addEventListener('input', handleInput);
+// Reconcile a previously mounted shell after modal reopen or section-bank
+// churn.  The form remains canonical; this only restores the active section's
+// physical host and presentation markers when an earlier close/reopen turn
+// left a stale active class behind.
+function reconcileSettingsShell(root) {
+    const state = shellState.get(root);
+    if (!state?.sectionHost || !state.sectionBank || !state.form) return;
+    const activeSection = state.sections.get(state.active);
+    if (!activeSection) return;
+    if (activeSection.parentNode !== state.sectionHost) {
+        const current = state.sectionHost.querySelector('.settings-section');
+        if (current && current !== activeSection) state.sectionBank.append(current);
+        state.sectionHost.append(activeSection);
+    }
+    state.sections.forEach((section, value) => {
+        section.classList.toggle('active', value === state.active);
+    });
+    state.listHost?.querySelectorAll?.('[data-section]')?.forEach(row => {
+        const selected = row.dataset.section === state.active;
+        row.classList.toggle('is-active', selected);
+        row.classList.toggle('active', selected);
+        row.dataset.state = selected ? 'selected' : 'idle';
+        row.tabIndex = selected ? 0 : -1;
+    });
 }
 
 function cleanupDisconnectedControllers() {
@@ -362,6 +1827,12 @@ function cleanupDisconnectedControllers() {
         controllerReleases.delete(controller);
         controllers.delete(controller);
     });
+    for (const [trigger, release] of agentModelPickerReleases) {
+        if (trigger.isConnected) continue;
+        void release().catch(error => {
+            console.error('[VCPUI SettingsBridge] Failed to release disconnected Agent model picker:', error);
+        });
+    }
 }
 
 function refresh() {
@@ -369,11 +1840,13 @@ function refresh() {
     if (destroyed) return;
     ensurePresentationScope();
     cleanupDisconnectedControllers();
+    mountGlobalSettingsEntryButton();
     const globalSettingsModal = syncGlobalSettingsHost();
-    if (isNextUi()) {
+    mountGlobalSettingsPathAction(globalSettingsModal);
+    if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
-    if (isGlobalSettingsNextUi()) {
+    if (hasGlobalSettingsSurface()) {
         const form = globalSettingsModal?.querySelector('#globalSettingsForm');
         if (globalSettingsModal && form) enhanceGlobalSettings(globalSettingsModal, form);
     }
@@ -389,7 +1862,7 @@ function teardown() {
     const scope = presentationScope;
     presentationScope = null;
     // Retract enhanced controller identity synchronously before a rapid
-    // Classic -> Next round-trip can schedule the next refresh.  The Scope
+    // A rapid surface round-trip can schedule another refresh.  The Scope
     // disposal below still owns error isolation and all non-controller
     // resources, but must not leave stale VCPUI proxies visible to the next
     // presentation generation.
@@ -408,38 +1881,31 @@ function teardown() {
     }
     controllers.clear();
     controllerReleases.clear();
-    injectedNodes.forEach(node => node.remove());
-    injectedNodes.clear();
+    for (const release of agentModelPickerReleases.values()) void release();
+    agentModelPickerReleases.clear();
+    teardownSettingsAutosave();
+    teardownHarnessDisclosures();
+    selectProjection.teardown();
     [...shellRoots].forEach(root => {
         const state = shellState.get(root);
         if (!state) return;
-        state.layout.classList.remove('vcp-ui-settings-shell');
-        if (state.listRelease) void state.listRelease();
-        else state.list?.destroy();
-        const activeSection = state.active || root.querySelector('.settings-section.active')?.id?.replace(/^section-/, '');
-        state.originalNavNodes
-            .filter(node => node.nodeType === 1 && node.matches('.settings-nav-item'))
-            .forEach(node => node.classList.toggle('active', node.dataset.section === activeSection));
-        state.meta.forEach(item => {
-            const section = root.querySelector(`#section-${item.value}`);
-            section?.removeAttribute('role');
-            section?.removeAttribute('aria-labelledby');
-            section?.removeAttribute('aria-hidden');
-        });
-        state.listHost.replaceChildren(...state.originalNavNodes);
+        state.cleanups?.forEach(cleanup => cleanup());
+        state.cleanups = [];
+        // The unified Surface is canonical for the renderer lifetime. Teardown
+        // releases listeners/controllers but does not resurrect retired DOM.
         shellState.delete(root);
-        document.dispatchEvent(new CustomEvent('vcp-settings-navigation-restored', {
-            detail: { root }
-        }));
     });
     shellRoots.clear();
     document.querySelectorAll('#globalSettingsModal[data-vcp-settings-icons-normalized]').forEach(restoreFormIcons);
-    document.getElementById('globalSettingsModal')?.classList.remove('vcp-global-settings-next');
+    document.getElementById('globalSettingsModal')?.classList.remove('vcp-global-settings-surface');
     document.documentElement.classList.remove('vcp-global-settings-host');
 }
 
 const handleModalVisibility = event => {
-    if (event.detail?.modalId === 'globalSettingsModal') scheduleRefresh();
+    if (event.detail?.modalId === 'globalSettingsModal') {
+        if (event.detail?.active === false) flushSettingsAutosave();
+        scheduleRefresh();
+    }
 };
 const handleSurfaceUpdated = () => scheduleRefresh();
 if (bridgeScope) bridgeScope.listen(document, 'modal-visibility-changed', handleModalVisibility, undefined, 'settings-modal-visibility');
@@ -455,10 +1921,37 @@ scheduleRefresh();
 
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
+    flush: flushSettingsAutosave,
+    flushForum: flushTypedForumFields,
+    addNetworkPathInput(path = '') {
+        if (destroyed) return false;
+        const root = document.getElementById('globalSettingsModal');
+        return addTypedNetworkPathInput(root, path)
+            || window.uiHelperFunctions?.addNetworkPathInput?.(path)
+            || false;
+    },
+    getTypedService() {
+        return ensureTypedSettingsService();
+    },
+    getRustAssistantService() {
+        ensureTypedSettingsService();
+        return ensureRustAssistantUiService();
+    },
+    getForumConfigService() {
+        ensureTypedSettingsService();
+        return ensureForumConfigUiService();
+    },
+    getAssistantRuntimeService() {
+        ensureTypedSettingsService();
+        return ensureAssistantRuntimeUiService();
+    },
     destroy() {
         if (destroyPromise) return destroyPromise;
         destroyed = true;
+        typedSettingsDisposed = true;
         if (!bridgeScope) {
+            typedSettingsService?.dispose?.();
+            typedSettingsExternalRelease?.();
             document.removeEventListener('modal-visibility-changed', handleModalVisibility);
             document.removeEventListener('modal-ready', handleModalVisibility);
             document.removeEventListener('vcp-settings-surface-updated', handleSurfaceUpdated);
