@@ -1,0 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const read = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+const geometry = read('reports/harness-vcp-geometry-diff.json');
+const pixels = read('reports/harness-vcp-pixel-diff.json');
+const policy = read('docs/reference/deepseek-harness-primitives/pixel-policy.json');
+const errors = [];
+if (typeof geometry.pass !== 'boolean' || typeof geometry.status !== 'string') errors.push('geometry report must expose an explicit boolean pass and status');
+if (geometry.pass === true && (!Array.isArray(geometry.selectGeometry) || !geometry.selectGeometry.length || geometry.selectGeometry.some(item => item.pass !== true))) errors.push('geometry pass requires complete passing cross-page Select checks');
+if (typeof pixels.pass !== 'boolean' || typeof pixels.status !== 'string') errors.push('pixel report must expose an explicit boolean pass and status');
+if (pixels.pass === true && (geometry.pass !== true || pixels.comparable !== true || pixels.differingRatio > policy.maxDifferingRatio || pixels.meanChannelDelta > policy.maxMeanChannelDelta)) errors.push('pixel pass requires equivalent geometry and policy-compliant metrics');
+if (policy.semanticFixtureRequired !== true || policy.maxDifferingRatio <= 0) errors.push('pixel policy is invalid');
+if (!Array.isArray(geometry.missingEvidence)) errors.push('geometry missingEvidence must be an array');
+if (errors.length) throw new Error(`[harness-evidence-schema] ${errors.join('; ')}`);
+console.log('Harness/VCP evidence schema passed (pending states are explicit and policy is present).');
