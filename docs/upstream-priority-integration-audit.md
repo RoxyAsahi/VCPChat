@@ -116,6 +116,20 @@
 
 这 4 个提交是当前真正需要处理的上游队列；共同祖先到 `origin/main` 的其余历史差异不重复导入。任何“直接 cherry-pick”都必须先满足表中的边界和验证条件。
 
+### 52df169a 之后的存储/协议提交审计
+
+这些提交依赖上游后续的 Wire 1.4 或 `owners/topics/messages` 新表，不能在当前 Wire 1.2 与 `entity_index/message_index` 基线上整体接收。保留上游行为意图，先记录可抽取的无协议增量，待端到端迁移批次单独处理：
+
+| 提交 | 主要变化 | 与当前基线的冲突 | 决策 |
+| --- | --- | --- | --- |
+| `5acfef67` | 合并 Owner Manifest，强化复合身份校验 | 本地仍使用 agent/group dataType，移动端 Wire 1.2 不兼容 | 暂缓；只保留现有 Topic owner 冲突 guard |
+| `192ec595` | 迁移 owners/topics/messages 规范表与复合主键 | 会破坏现有墓碑、历史索引和已验证数据库 | 暂缓；需迁移脚本与回滚方案 |
+| `f4f9a96a` | 清理旧状态日志/注释 | 依赖新表，无独立行为收益 | 随 schema 批次处理 |
+| `a8ead26f` | 将 central avatar 状态迁入 CDS | 改变头像持久化归属并新增 HTTP 端点 | 暂缓；需移动端与 CDS 同批发布 |
+| `12f7315a` | Wire 1.4、严格帧键和 v2 HTTP 端点 | 与当前 Wire 1.2 协议不可混跑 | 暂缓；不得 cherry-pick |
+| `60a23e84` | source hash 快路径、prepared statement、reconcile 锁 | 依赖新 schema/字段 | 后续抽取锁与快路径思路，映射到本地表后再实现 |
+| `ba186996` | ingest 事务锁、批量 Topic 更新、avatar path cache | 依赖新 schema 与 v3 reconcile 端点 | 后续局部适配；先不引入新端点 |
+
 ### 已吸收记录
 
 | 提交 | 本地提交 | 验证 | 备注 |
@@ -134,7 +148,7 @@
 | `074da2cd` CDS 刷新时序 | `0b48d186` | `node --test tests/mobile-sync-sqlite-delete.test.js`（18/18） | 局部适配；在 owner_metadata Phase ACK 前等待一次 reconcile，保留本地阶段 owner |
 | `c54f7cb3` 修复设置保存导入 | `2ab75855` | 设置桥接与全局保存回归测试通过 | 直接吸收；补齐消息布局函数导入，未改变设置状态或持久化键 |
 | `5b0114d3` 修复 CI YAML | `adfc9684` | `git diff --check` | 直接吸收；仅调整工作流命令块格式 |
-| `30c2f3fc` 加固瞬态失败恢复 | `7ed9f97a` | `node --test tests/mobile-sync-*.test.js`（96/96，1 skip）；`cargo test`（56/56） | 局部适配；统一 `SYNC_SNAPSHOT_STALE`、CAS/物理文件校验和流式错误终止，保留本地索引与 writer 生命周期 |
+| `30c2f3fc` 加固瞬态失败恢复 | `a3034285` | `node --test tests/mobile-sync-*.test.js`（96/96，1 skip）；`cargo test`（56/56） | 局部适配；统一 `SYNC_SNAPSHOT_STALE`、CAS/物理文件校验和流式错误终止，保留本地索引与 writer 生命周期 |
 | `52df169a` 隔离损坏 legacy Owner | `d610c102` | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
 
 ### 暂缓记录
@@ -164,7 +178,7 @@
 - **保留的上游行为**：配置/历史 CAS、头像物理文件校验、消息索引时间和 Topic 索引漂移统一报告快照过期；CDS 内部 `SNAPSHOT_STALE` 在插件边界映射为 Wire 1.2 的 `SYNC_SNAPSHOT_STALE`；已开始的 NDJSON 响应通过受保护 writer 写入错误帧后再结束。
 - **本地结构**：继续使用现有 `entity_index`、消息历史 authority、`NdjsonWriter` 和统一错误 envelope；没有引入上游不存在于本地的 `staleLive` 第二状态，也没有新增全局 listener 或持久化键。
 - **验证证据**：`node --test tests/mobile-sync-*.test.js`（96 pass、1 skip）；`cargo test`（56/56）；错误契约 golden、CAS 并发写入和流式背压测试均通过。
-- **提交**：`7ed9f97a`（独立中文提交）；当前分支尚未推送。
+- **提交**：`a3034285`（独立中文提交）；当前分支尚未推送。
 
 ### `52df169a` 后续手工适配说明
 
