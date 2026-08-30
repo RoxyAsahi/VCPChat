@@ -132,6 +132,8 @@
 
 `52df169a..b9e2b573` 之间仍有 6 个同步提交（`8d7f8e7e`、`a8e13592`、`006f2260`、`91c9a86b`、`e1405a4c`、`61d9511d`）待逐项检查；其中 `a8e13592` 只是 Unix `fs::File` 作用域修复，而当前源码已使用统一 `fs` 模块且不存在对应旧导入，因此确认无代码变更即可视为已覆盖；`61d9511d` 已知涉及 CDS schema/protocol 版本升级，先按迁移批次暂缓，其余提交不因拓扑邻近而直接接收。
 
+补充核对：`b9e2b573` 引入的 `Voicechatmodules/voice-input-capture.js` 与 `preloads/voice-input-capture.js` 在当前本地稳定基线中不存在，说明该提交属于尚未进入本分支的整套 Windows capture 子系统，而不是可独立套用的 IPC 小修复。该链需与 `accc88e5`、`3eae725a` 及 Windows 二进制一起做平台批次迁移，当前不创建 source-only 文件。
+
 ### 已吸收记录
 
 | 提交 | 本地提交 | 验证 | 备注 |
