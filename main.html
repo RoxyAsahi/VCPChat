@@ -693,7 +693,11 @@
                                             step="0.1" value="1.0">
                                         <span id="ttsSpeedValue">1.0</span>
                                     </div>
+                                    <small data-vcp-style="4">
+                                        本地 SoVITS 使用该语速；网络模式按模型原生节奏合成，可用下方自然语言提示词描述语速。
+                                    </small>
                                 </div>
+
                             </div>
                         </div>
 
@@ -1632,6 +1636,30 @@
                                                 min="1" value="100" data-vcp-style="19">
                                         </div>
                                     </div>
+                                    <div class="vcp-settings-row" id="streamAnimationSettingsRow">
+                                        <label for="streamAnimationPreset">流式内容动效:</label>
+                                        <select id="streamAnimationPreset" name="streamAnimationPreset">
+                                            <option value="slide-left">右侧滑入（经典）</option>
+                                            <option value="fade">纯淡入</option>
+                                            <option value="rise">柔和上浮</option>
+                                            <option value="scale">轻微缩放</option>
+                                            <option value="none">关闭动画</option>
+                                            <option value="custom">自定义 CSS</option>
+                                        </select>
+                                    </div>
+                                    <div class="vcp-settings-row" id="streamAnimationDurationRow">
+                                        <label for="streamAnimationDurationMs">动画时长:</label>
+                                        <div class="slider-container">
+                                            <input type="range" id="streamAnimationDurationMs" name="streamAnimationDurationMs"
+                                                min="100" max="2000" step="50" value="500">
+                                            <output id="streamAnimationDurationValue" for="streamAnimationDurationMs">500ms</output>
+                                        </div>
+                                    </div>
+                                    <div class="vcp-settings-row" id="streamAnimationCustomRow" hidden>
+                                        <label for="streamAnimationCustomCss">自定义动画 CSS:</label>
+                                        <textarea id="streamAnimationCustomCss" name="streamAnimationCustomCss" rows="4"
+                                            spellcheck="false" placeholder="opacity: 0;\ntransform: translateY(12px) scale(0.98);"></textarea>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1842,20 +1870,22 @@
                                     </div>
 
                                     <div class="vcp-settings-row">
-                                        <label for="speechRecognizerBrowserPath">STT 浏览器路径:</label>
-                                        <input type="text" id="speechRecognizerBrowserPath" name="speechRecognizerBrowserPath"
-                                            placeholder="留空自动探测系统 Chrome / Puppeteer Chromium">
+                                        <label for="voiceInputMode">语音输入模式:</label>
+                                        <select id="voiceInputMode" name="voiceInputMode">
+                                            <option value="windows_voice_typing">Windows 语音键入（Win+H）</option>
+                                            <option value="right_alt_hold">输入法语音（按住右 Alt）</option>
+                                        </select>
                                         <small data-vcp-style="4">
-                                            用于反代网页获取 STT 功能时启动浏览器。支持自定义 Chrome / Chromium 可执行文件路径。
+                                            选择系统听写适配方式。语音捕获窗口和输入注入由上游语音链路负责。
                                         </small>
                                     </div>
 
                                     <div class="vcp-settings-row">
-                                        <label for="speechRecognizerPagePath">STT 浏览器识别页路径:</label>
-                                        <input type="text" id="speechRecognizerPagePath" name="speechRecognizerPagePath"
-                                            placeholder="默认: Voicechatmodules/recognizer.html">
+                                        <label for="voiceInputShortcut">语音输入快捷键:</label>
+                                        <input type="text" id="voiceInputShortcut" name="voiceInputShortcut"
+                                            value="F7" placeholder="当前支持 F1 - F24">
                                         <small data-vcp-style="4">
-                                            可配置用于浏览器语音识别的本地 HTML 页面相对路径，默认使用内置识别页。
+                                            全局按住说话键。当前支持 F1 - F24 单键；按下开始听写，松开结束听写。
                                         </small>
                                     </div>
                                 </div>

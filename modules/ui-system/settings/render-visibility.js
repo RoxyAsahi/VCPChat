@@ -11,4 +11,10 @@ export function syncRenderSettingsVisibility(form) {
         const row = form.querySelector(`#${rowId}`);
         if (select && row) row.style.display = select.value === 'custom' ? 'block' : 'none';
     });
+    const streamPreset = form.querySelector('#streamAnimationPreset');
+    const streamCustomRow = form.querySelector('#streamAnimationCustomRow');
+    if (streamPreset && streamCustomRow) streamCustomRow.hidden = streamPreset.value !== 'custom';
+    const duration = form.querySelector('#streamAnimationDurationMs');
+    const durationOutput = form.querySelector('#streamAnimationDurationValue');
+    if (duration && durationOutput) durationOutput.textContent = `${duration.value}ms`;
 }

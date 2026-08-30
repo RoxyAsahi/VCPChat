@@ -76,14 +76,14 @@ const mainChatSettingsOwner = createMainChatSettingsOwner({ initial: {
     enableUserChatBubbleUi: true,
     showUserMetaInChatBubbleUi: true,
     voiceMode: 'local',
-    speechRecognizerBrowserPath: '',
-    speechRecognizerPagePath: 'Voicechatmodules/recognizer.html',
+    voiceInputMode: 'windows_voice_typing',
+    voiceInputShortcut: 'F7',
     voiceLocalSettings: {
         sovitsUrl: '',
         sovitsKey: ''
     },
     voiceNetworkSettings: {
-        providerUrl: 'https://api.siliconflow.cn',
+        providerUrl: 'https://www.dmxapi.cn/v1',
         providerKey: ''
     }
 } });
@@ -844,6 +844,7 @@ mainChatSettingsPresentationOwner.configureStartup({
                 agentTtsVoiceSelect: document.getElementById('agentTtsVoice'),
                 refreshTtsModelsBtn: document.getElementById('refreshTtsModelsBtn'),
                 agentTtsSpeedSlider: document.getElementById('agentTtsSpeed'),
+                ttsSpeedValueSpan: document.getElementById('ttsSpeedValue'),
             },
             mainRendererFunctions: {
                 setCroppedFile: uiHelperFunctions.setCroppedFile,

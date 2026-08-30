@@ -578,37 +578,18 @@ const settingsManager = (() => {
         try {
             let optionList = [];
 
-            if (isNetworkMode && electronAPI.loadWebindexModels) {
-                const webindexPayload = await electronAPI.loadWebindexModels();
-
-                if (Array.isArray(webindexPayload?.mergedVoiceOptions) && webindexPayload.mergedVoiceOptions.length) {
-                    optionList = webindexPayload.mergedVoiceOptions;
-                } else if (Array.isArray(webindexPayload?.models) && webindexPayload.models.length) {
-                    const firstItem = webindexPayload.models[0];
-                    if (firstItem && Array.isArray(firstItem?.mergedVoiceOptions)) {
-                        optionList = webindexPayload.models.flatMap(model => Array.isArray(model?.mergedVoiceOptions) ? model.mergedVoiceOptions : []);
-                    } else {
-                        optionList = webindexPayload.models;
-                    }
-                } else {
-                    const defaults = Array.isArray(webindexPayload?.defaults) ? webindexPayload.defaults : [];
-                    const remoteVoices = Array.isArray(webindexPayload?.remoteVoices) ? webindexPayload.remoteVoices : [];
-                    optionList = [...defaults, ...remoteVoices];
-                }
-            } else {
-                const localModels = await electronAPI.sovitsGetModels();
-                if (Array.isArray(localModels)) {
-                    optionList = localModels;
-                } else {
-                    optionList = localModels && typeof localModels === 'object'
-                        ? Object.keys(localModels).map(modelName => ({
-                            id: modelName,
-                            voice: modelName,
-                            displayName: modelName,
-                            type: 'local'
-                        }))
-                        : [];
-                }
+            // Both local and network modes use the upstream TTS capability.
+            // The retired WebIndexTTS2 catalog is no longer part of the runtime.
+            const models = await electronAPI.sovitsGetModels();
+            if (Array.isArray(models)) {
+                optionList = models;
+            } else if (models && typeof models === 'object') {
+                optionList = Object.keys(models).map(modelName => ({
+                    id: modelName,
+                    voice: modelName,
+                    displayName: modelName,
+                    type: isNetworkMode ? 'preset' : 'local'
+                }));
             }
 
             const seenVoices = new Set();
@@ -655,9 +636,7 @@ const settingsManager = (() => {
                     }));
                 });
             } else {
-                const emptyLabel = isNetworkMode
-                    ? '未找到网络音色，请先获取列表并刷新 webindexmodel.json'
-                    : '未找到模型,请启动Sovits';
+                const emptyLabel = isNetworkMode ? '未找到 MiMo 音色' : '未找到模型,请启动Sovits';
                 primaryOptions.push(createOption('', emptyLabel, { disabled: true }));
                 secondaryOptions.push(createOption('', emptyLabel, { disabled: true }));
             }
@@ -970,6 +949,7 @@ const settingsManager = (() => {
                     }
                 });
             }
+
 
             // 创建正则设置UI
             createStripRegexUI();

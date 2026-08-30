@@ -152,8 +152,8 @@ const populateForm = (settings) => {
     set('rustScreenshotApps', (settings.rustConfig?.screenshotApps || []).join('\n'));
     check('voiceModeNetwork', (settings.voiceMode || 'local') === 'network');
     check('voiceModeLocal', (settings.voiceMode || 'local') !== 'network');
-    set('speechRecognizerBrowserPath', settings.speechRecognizerBrowserPath || '');
-    set('speechRecognizerPagePath', settings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
+    set('voiceInputMode', settings.voiceInputMode || 'windows_voice_typing');
+    set('voiceInputShortcut', settings.voiceInputShortcut || 'F7');
     set('voiceLocalSovitsUrl', settings.voiceLocalSettings?.sovitsUrl || '');
     set('voiceNetworkProviderUrl', settings.voiceNetworkSettings?.providerUrl || '');
     check('enableDistributedServer', Boolean(settings.enableDistributedServer));
@@ -306,17 +306,17 @@ const categories = [
     },
     {
         name: '语音设置', key: 'voice-settings',
-        initial: { voiceMode: 'local', speechRecognizerBrowserPath: '', speechRecognizerPagePath: 'Voicechatmodules/recognizer.html' },
+        initial: { voiceMode: 'local', voiceInputMode: 'windows_voice_typing', voiceInputShortcut: 'F7' },
         assertLoaded: () => document.getElementById('voiceModeNetwork').checked === false,
         modify: () => {
             const network = document.getElementById('voiceModeNetwork');
             network.checked = true;
             network.dispatchEvent(new Event('change', { bubbles: true }));
-            setField('speechRecognizerBrowserPath', 'C:\\chrome.exe');
+            setField('voiceInputShortcut', 'F8');
         },
         savedKey: 'voiceMode', expected: 'network',
         assertRestored: () => document.getElementById('voiceModeNetwork').checked === true
-            && document.getElementById('speechRecognizerBrowserPath').value === 'C:\\chrome.exe',
+            && document.getElementById('voiceInputShortcut').value === 'F8',
     },
     {
         name: '高级功能', key: 'advanced-features',

@@ -288,16 +288,11 @@ try {
             topicSummaryModel: s.topicSummaryModel || '',
             continueWritingPrompt: s.continueWritingPrompt || '请继续',
             flowlockContinueDelay: s.flowlockContinueDelay ?? 5,
-            speechRecognizerBrowserPath: s.speechRecognizerBrowserPath || '',
-            // Owner-divergence note (handoff E4): these two display defaults
-            // live in the renderer default-settings universe (renderer.js)
-            // and reach the screen through the startup fallback fill; the
-            // typed state stores raw persisted data where the keys may be
-            // unset.  The oracle mirrors the actual first-open outcome.
-            speechRecognizerPagePath: s.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html',
+            voiceInputMode: s.voiceInputMode || 'windows_voice_typing',
+            voiceInputShortcut: s.voiceInputShortcut || 'F7',
             voiceLocalSovitsUrl: s.voiceLocalSettings?.sovitsUrl || '',
             voiceLocalSovitsKey: s.voiceLocalSettings?.sovitsKey || '',
-            voiceNetworkProviderUrl: s.voiceNetworkSettings?.providerUrl || 'https://api.siliconflow.cn',
+            voiceNetworkProviderUrl: s.voiceNetworkSettings?.providerUrl || 'https://www.dmxapi.cn/v1',
             voiceNetworkProviderKey: s.voiceNetworkSettings?.providerKey || '',
             enableSmoothStreaming: s.enableSmoothStreaming === true,
             voiceModeLocal: (s.voiceMode || 'local') !== 'network',
@@ -816,8 +811,8 @@ try {
                 vcpLogUrl: 'ws://typed-log:6006',
                 vcpLogKey: 'typed-log-key',
                 voiceMode: 'network',
-                speechRecognizerBrowserPath: '/typed/chrome',
-                speechRecognizerPagePath: '/typed/recognizer.html',
+                voiceInputMode: 'right_alt_hold',
+                voiceInputShortcut: 'F8',
                 voiceLocalSettings: { sovitsUrl: 'http://typed-local:9880', sovitsKey: 'typed-local-key' },
                 voiceNetworkSettings: { providerUrl: 'https://typed-voice.example/api', providerKey: 'typed-network-key' },
                 enableDistributedServer: true,
@@ -908,8 +903,8 @@ try {
     assert.equal(await page.$eval('#vcpLogKey', node => node.value), 'typed-log-key', 'clean VCPLog key consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceModeNetwork', node => node.checked), true, 'clean voice mode consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceModeLocal', node => node.checked), false, 'clean local voice mode consumes typed Settings snapshot');
-    assert.equal(await page.$eval('#speechRecognizerBrowserPath', node => node.value), '/typed/chrome', 'clean STT browser path consumes typed Settings snapshot');
-    assert.equal(await page.$eval('#speechRecognizerPagePath', node => node.value), '/typed/recognizer.html', 'clean STT page path consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceInputMode', node => node.value), 'right_alt_hold', 'clean voice input mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceInputShortcut', node => node.value), 'F8', 'clean voice input shortcut consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceLocalSovitsUrl', node => node.value), 'http://typed-local:9880', 'clean local voice URL consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceLocalSovitsKey', node => node.value), 'typed-local-key', 'clean local voice key consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceNetworkProviderUrl', node => node.value), 'https://typed-voice.example/api', 'clean network voice URL consumes typed Settings snapshot');
@@ -1450,8 +1445,8 @@ try {
         enableSmoothStreaming: document.getElementById('enableSmoothStreaming')?.checked,
         voiceModeLocal: document.getElementById('voiceModeLocal')?.checked,
         voiceModeNetwork: document.getElementById('voiceModeNetwork')?.checked,
-        speechRecognizerBrowserPath: document.getElementById('speechRecognizerBrowserPath')?.value,
-        speechRecognizerPagePath: document.getElementById('speechRecognizerPagePath')?.value,
+        voiceInputMode: document.getElementById('voiceInputMode')?.value,
+        voiceInputShortcut: document.getElementById('voiceInputShortcut')?.value,
         voiceLocalSovitsUrl: document.getElementById('voiceLocalSovitsUrl')?.value,
         voiceLocalSovitsKey: document.getElementById('voiceLocalSovitsKey')?.value,
         voiceNetworkProviderUrl: document.getElementById('voiceNetworkProviderUrl')?.value,
@@ -1501,8 +1496,8 @@ try {
     assert.equal(restored.enableSmoothStreaming, false, 'restore covers the smooth streaming fallback id');
     assert.equal(restored.voiceModeNetwork, true, 'restore covers the network voice radio fallback id');
     assert.equal(restored.voiceModeLocal, false, 'restore covers the local voice radio fallback id');
-    assert.equal(restored.speechRecognizerBrowserPath, '/typed/chrome', 'restore covers the STT browser path fallback id');
-    assert.equal(restored.speechRecognizerPagePath, '/typed/recognizer.html', 'restore covers the STT page path fallback id');
+    assert.equal(restored.voiceInputMode, 'right_alt_hold', 'restore covers the voice input mode fallback id');
+    assert.equal(restored.voiceInputShortcut, 'F8', 'restore covers the voice input shortcut fallback id');
     assert.equal(restored.voiceLocalSovitsUrl, 'http://typed-local:9880', 'restore covers the local sovits url fallback id');
     assert.equal(restored.voiceLocalSovitsKey, 'typed-local-key', 'restore covers the local sovits key fallback id');
     assert.equal(restored.voiceNetworkProviderUrl, 'https://typed-voice.example/api', 'restore covers the network provider url fallback id');

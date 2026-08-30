@@ -200,8 +200,8 @@ function mountTypedSettingsConsumer(root) {
             ['assistantAgent', 'assistantAgent'],
             ['voiceModeLocal', 'voiceMode', 'checked-value', 'local'],
             ['voiceModeNetwork', 'voiceMode', 'checked-value', 'network'],
-            ['speechRecognizerBrowserPath', 'speechRecognizerBrowserPath'],
-            ['speechRecognizerPagePath', 'speechRecognizerPagePath'],
+            ['voiceInputMode', 'voiceInputMode'],
+            ['voiceInputShortcut', 'voiceInputShortcut'],
             ['voiceLocalSovitsUrl', 'voiceLocalSettings.sovitsUrl'],
             ['voiceLocalSovitsKey', 'voiceLocalSettings.sovitsKey'],
             ['voiceNetworkProviderUrl', 'voiceNetworkSettings.providerUrl'],
@@ -230,6 +230,9 @@ function mountTypedSettingsConsumer(root) {
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
             ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
+            ['streamAnimationPreset', 'streamAnimationPreset'],
+            ['streamAnimationDurationMs', 'streamAnimationDurationMs'],
+            ['streamAnimationCustomCss', 'streamAnimationCustomCss'],
         ];
         projection.forEach(([id, path, mode, expected]) => {
             const control = form.querySelector(`#${id}`);
@@ -249,7 +252,7 @@ function mountTypedSettingsConsumer(root) {
         // (handoff retirement batch): the typed state stores raw persisted
         // data, but these two voice controls keep their first-open display
         // defaults exactly as the fallback used to fill them.
-        [['speechRecognizerPagePath', 'Voicechatmodules/recognizer.html'], ['voiceNetworkProviderUrl', 'https://api.siliconflow.cn']]
+        [['voiceInputMode', 'windows_voice_typing'], ['voiceInputShortcut', 'F7'], ['voiceNetworkProviderUrl', 'https://www.dmxapi.cn/v1']]
             .forEach(([id, displayDefault]) => {
                 const control = form.querySelector(`#${id}`);
                 if (control && !control.value) control.value = displayDefault;
@@ -1232,6 +1235,11 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     // The model-selection button still uses the shared legacy modal, but the
     // canonical text value can already use the single typed save owner.
     topicSummaryModel: { path: 'topicSummaryModel', kind: 'string' },
+    voiceInputMode: { path: 'voiceInputMode', kind: 'string', fallback: 'windows_voice_typing' },
+    voiceInputShortcut: { path: 'voiceInputShortcut', kind: 'string', fallback: 'F7', trimValue: true },
+    streamAnimationPreset: { path: 'streamAnimationPreset', kind: 'string', fallback: 'slide-left' },
+    streamAnimationDurationMs: { path: 'streamAnimationDurationMs', kind: 'number', fallback: 500 },
+    streamAnimationCustomCss: { path: 'streamAnimationCustomCss', kind: 'string' },
 });
 
 function readTypedFieldPatch(control, service, pendingPatch) {
@@ -1321,6 +1329,12 @@ function mountTypedFieldOwner(root, form) {
         set('chatDiaryFontCustom', settings.chatDiaryFontCustom || '');
         set('chatToolFontPreset', settings.chatToolFontPreset || 'system');
         set('chatToolFontCustom', settings.chatToolFontCustom || '');
+        set('voiceInputMode', settings.voiceInputMode || 'windows_voice_typing');
+        set('voiceInputShortcut', settings.voiceInputShortcut || 'F7');
+        set('streamAnimationPreset', settings.streamAnimationPreset || 'slide-left');
+        set('streamAnimationDurationMs', settings.streamAnimationDurationMs ?? 500);
+        set('streamAnimationDurationValue', `${settings.streamAnimationDurationMs ?? 500}ms`);
+        set('streamAnimationCustomCss', settings.streamAnimationCustomCss || '');
         syncRenderSettingsVisibility(form);
         // Network notes rows: the typed field owner is their single writer;
         // the generic consumer projection no longer rebuilds them.
@@ -1439,6 +1453,12 @@ function mountTypedFieldOwner(root, form) {
         if (!select) return;
         const onRenderPresetChange = () => syncRenderSettingsVisibility(form);
         ownerScope.listen(select, 'change', onRenderPresetChange);
+    });
+    ['streamAnimationPreset', 'streamAnimationDurationMs'].forEach(id => {
+        const control = form.querySelector(`#${id}`);
+        if (!control) return;
+        ownerScope.listen(control, 'input', () => syncRenderSettingsVisibility(form));
+        ownerScope.listen(control, 'change', () => syncRenderSettingsVisibility(form));
     });
     const middleClickAdvancedDelay = form.querySelector('#middleClickAdvancedDelay');
     if (middleClickAdvancedDelay) {

@@ -34,7 +34,7 @@ const agentGroupSectionsCss = read('styles/setting/settings-group-sections.css')
 const agentSidebarTabsCss = read('styles/setting/settings-sidebar-tabs.css');
 const agentPromptCss = read('styles/setting/settings-agent-prompt.css');
 const agentPromptEditorCss = read('styles/setting/agent/agent-prompt-editor.css');
-const agentCardShellCss = read('styles/setting/settings-agent-card-shell.css');
+const agentCardControlsCss = read('styles/setting/agent/agent-card-controls.css');
 const promptModulesCss = read('Promptmodules/prompt-modules.css');
 const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
@@ -75,8 +75,9 @@ for (const page of embeddedPages) {
 assert.match(html, /data-ui-mode="next"/, 'main.html must declare the canonical next uiMode statically');
 assert.doesNotMatch(presentationOwner, /typedSettingsProjectionActive/, 'the retired startup fallback guard must stay deleted');
 assert.doesNotMatch(presentationOwner, /safeSet\('userName'|safeSet\('vcpServerUrl'|safeSet\('chatFontPreset'/, 'the retired fallback projection branches must stay deleted');
-assert.match(bridge, /speechRecognizerPagePath', 'Voicechatmodules\/recognizer\.html'/, 'the ported speech page-path display default must live in the typed projection');
-assert.match(bridge, /voiceNetworkProviderUrl', 'https:\/\/api\.siliconflow\.cn'/, 'the ported provider-url display default must live in the typed projection');
+assert.match(bridge, /voiceInputMode', 'windows_voice_typing'/, 'the upstream voice input mode default must live in the typed projection');
+assert.match(bridge, /voiceInputShortcut', 'F7'/, 'the upstream voice input shortcut default must live in the typed projection');
+assert.match(bridge, /voiceNetworkProviderUrl', 'https:\/\/www\.dmxapi\.cn\/v1'/, 'the upstream provider-url display default must live in the typed projection');
 const FALLBACK_TOUCHERS = {
     userName: ['modules/global-settings-manager.js'],
     userAvatarBorderColor: ['modules/event-listeners.js', 'modules/global-settings-manager.js'],
@@ -91,8 +92,8 @@ const FALLBACK_TOUCHERS = {
     topicSummaryModel: ['modules/global-settings-manager.js', 'modules/settingsManager.js', 'renderer.js'],
     continueWritingPrompt: ['modules/global-settings-manager.js'],
     flowlockContinueDelay: ['modules/global-settings-manager.js'],
-    speechRecognizerBrowserPath: ['modules/global-settings-manager.js'],
-    speechRecognizerPagePath: ['modules/global-settings-manager.js'],
+    voiceInputMode: ['modules/global-settings-manager.js'],
+    voiceInputShortcut: ['modules/global-settings-manager.js'],
     voiceLocalSovitsUrl: ['modules/global-settings-manager.js'],
     voiceLocalSovitsKey: ['modules/global-settings-manager.js'],
     voiceNetworkProviderUrl: ['modules/global-settings-manager.js'],
@@ -230,7 +231,8 @@ assert.match(selectProjection, /scheduleScopeContinuation\(scope, 'select-projec
 assert.doesNotMatch(selectProjection, /__vcpSelectRebuildTimer|__vcpSelectMountTimer/,
     'select rebuild timers must not escape through ad-hoc form properties');
 assert.doesNotMatch(settingsModules, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
-assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
+assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap/, 'retired local select/choice CSS must be deleted');
+assert.match(css, /vcp-harness-menu-portal/, 'generated Menu portal class must remain available for primitive z-index management');
 
 // The Agent ColorPair is a real typed production consumer. Its historic
 // 37px/pill selectors remain available only to unwrapped native fallbacks;
@@ -355,7 +357,7 @@ for (const [label, source] of Object.entries({
     shell: css,
     prompt: agentPromptCss,
     promptEditor: agentPromptEditorCss,
-    cardShell: agentCardShellCss,
+    cardControls: agentCardControlsCss,
     promptModules: promptModulesCss,
 })) {
     assert.doesNotMatch(source, /\.prompt-mode-button(?:\.|:|\s|,|\{)(?![^\{]*vcp-harness-button)/,

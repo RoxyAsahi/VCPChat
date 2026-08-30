@@ -77,13 +77,6 @@
     flex: none;
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-settings-nav-label {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-settings-header {
     display: flex;
     flex: none;
@@ -121,8 +114,4 @@
     min-height: 0;
     padding: 0 24px 24px;
     overflow-y: auto;
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-settings-footer-compat {
-    display: none;
 }

@@ -4,6 +4,19 @@
 当前本地稳定基线：`08511fa5`  其中包含恢复后的设置页 UI 增量。  
 当前上游基线：`origin/main`（当前抓取到 `4df8f4fa`）。
 
+## 最新决策（2026-08-30）
+
+本轮交付采用“业务整域以上游为准、共享设置只保留展示层”的边界。以下领域不再保留本地业务增强或旧协议：
+
+- MobileSync/CDS 与 Rust Chat Data Service；
+- TTS 供应商、播放、配置链路；
+- 语音输入 capture、辅助窗口、preload、IPC 和 Rust 引擎；
+- 对应 Electron 原生依赖、平台二进制、协议、数据结构和领域测试。
+
+这些内容已从 `origin/main` 整域同步到当前分支，旧的局部适配仍可在备份历史中追溯，但不属于最终设置 UI 交付。
+
+共享文件（设置入口、设置桥接、TTS/语音设置字段、页面装配和 `package.json`）不能整文件覆盖：业务节点、IPC、持久化键和 canonical state 以上游为准；本地只重新挂载已有的设置行、字号步进、Select/Menu、Input、Range、Toggle、portal/focus/dispose 及其 UI 测试。不得复制旧 listener 或 durable state。
+
 ## 目标
 
 在不重写旧开发历史、不整体覆盖本地成熟实现的前提下，逐项吸收上游新增能力。代码与业务行为发生冲突时，保留行为更完整、生命周期更安全的一方；上游新增能力必须纳入，但应适配到本地已有的 owner、Surface、状态和测试边界。
@@ -13,7 +26,7 @@
 ## 不变边界
 
 - 不改写 `codex/vcpchat-settings-harness-all-workspace-20260824` 的既有历史；`backup/pre-upstream-priority-20260830` 继续作为回滚对照。
-- 不整体替换 StreamCoordinator、StreamProjection、MessageRenderer、ChatDomRenderer、聊天协议、IPC、持久化、Plugin Loader、动态壁纸和聊天内容渲染。
+- 聊天内容、消息协议和持久化语义仍以当前上游合同为准；本地只保留不改变这些语义的 presentation/lifecycle 增量。
 - 设置页只允许改变 presentation、适配层、样式和对应测试；canonical business node、persisted key 和保存语义保持不变。
 - 不引入 React、Vue、Cordis 或第二份 durable UI state。
 - 所有 listener、observer、timer、portal、异步任务和临时 DOM 必须由明确 owner 管理，并在 dispose 时达到 quiescence。
@@ -29,7 +42,9 @@
 | 计划队列（`b9e2b573..4df8f4fa`） | 4 个 first-parent 提交 |
 | 本地历史领先量 | 约 1000+，不作为逐项重放队列 |
 | 设置恢复提交 | `f45f7fd5`、`1e477e7d`、`15ca4203`、`08511fa5` |
-| 未提交工作区 | 仅 `.codebuddy/`，不纳入本方案 |
+| 业务整域同步提交 | `041bfd01` |
+| 运行时与依赖同步提交 | `8c048049` |
+| 未提交工作区 | 设置 UI/桥接适配、UIUX 回归测试、上游 MobileSync 测试同步和语音运行时回归测试；`.codebuddy/` 等环境文件不纳入本方案 |
 
 ## 逐项审计记录
 
@@ -202,3 +217,15 @@
 ### `52df169a` 后续手工适配说明
 
 该提交的 `unhealthyLegacyOwners` 隔离机制已按本地 `entity_index` + `scanEntities` 架构局部适配：仅在 legacy 非 central manifest 路径增加进程内 owner 级隔离，区分配置解析失败与事务失败，并在成功重扫或物理目录消失后清理标记；central CDS 路径不维护第二份状态。回归测试覆盖损坏 Owner 不阻塞其他清单、修复后重新纳入 Manifest，且使用真实 `registerRoutes` 消息处理器验证过滤层。
+
+> 历史记录说明：本节之前关于“同步局部适配、协议兼容和暂缓整域迁移”的内容描述的是同步前状态。它们保留用于追溯，不得覆盖“最新决策”中的整域上游边界。当前代码事实以 `041bfd01`、`8c048049` 及其后的共享设置适配提交为准。
+
+## 最新验证记录（2026-08-31）
+
+- `npm run check:uiux`、`npm run build:uiux`、`npm run check:uiux:artifacts`：通过。
+- 设置桥接、全局保存和 UI primitive 聚焦测试：69 项通过。
+- `node scripts/test-settings-wa.mjs`：8/8 设置分类及统一导航通过。
+- `npm run test:mobile-sync`：83 项通过；测试文件内容与 `origin/main` 一致。
+- `cargo test --manifest-path rust_chat_data_service/Cargo.toml --locked`：59/59 通过。
+- `node --test tests/voice-input-engine.test.js`：6 项通过、2 项跳过。当前 macOS `darwin-arm64` 未提供上游发布的语音运行时二进制；Windows `win32-x64` 产物仍保留，需在对应平台运行启动/停止 journey 后补齐证据。
+- 网络 TTS 设置默认端点已与上游 `https://www.dmxapi.cn/v1` 对齐；不再把已退役的 SiliconFlow/WebIndexTTS2 目录作为运行时或展示默认。

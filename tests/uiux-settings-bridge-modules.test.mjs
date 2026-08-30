@@ -274,7 +274,7 @@ test('Agent TTS Voice Select keeps business option loading while one typed proje
     const entry = read(bridgeEntry);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
     const selectProjection = read(path.join(settingsDir, 'select-projection.js'));
-    const agentCss = read(path.join(root, 'styles', 'setting', 'settings-agent-card-shell.css'));
+    const agentCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));
     const enhanceForm = entry.slice(entry.indexOf('function enhanceForm(form)'), entry.indexOf('function mountHarnessSwitches', entry.indexOf('function enhanceForm(form)')));
 
     assert.match(enhanceForm, /selectProjection\.mount\(form\)/,
@@ -297,14 +297,13 @@ test('Agent TTS Voice Select keeps business option loading while one typed proje
         'the refresh command remains on the native TTS model path');
     assert.doesNotMatch(manager, /agentTtsVoice(?:Primary|Secondary)Select\.addEventListener\(/,
         'SettingsManager must not register a competing TTS Select presentation listener');
-    assert.ok(agentCss.includes('#agentSettingsContainer select:not(.vcp-harness-select-native)'), 'legacy Select CSS must exclude the typed native node');
-    assert.ok(/body(?:\.light-theme|\[data-vcp-theme="light"\]) #agentSettingsContainer select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'light Select CSS must exclude the typed native node');
-    assert.ok(/body(?::not\(\.light-theme\)|\[data-vcp-theme="dark"\]) #agentSettingsContainer select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'dark Select CSS must exclude the typed native node');
+    assert.ok(agentCss.includes('[id="agentSettingsContainer"] select:not(.vcp-harness-select-native)'), 'legacy Select CSS must exclude the typed native node');
+    assert.ok(/body(?:\.light-theme|\[data-vcp-theme="light"\]) \[id="agentSettingsContainer"\] select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'light Select CSS must exclude the typed native node');
+    assert.ok(/body(?::not\(\.light-theme\)|\[data-vcp-theme="dark"\]) \[id="agentSettingsContainer"\] select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'dark Select CSS must exclude the typed native node');
 });
 
 test('Agent shell CSS leaves typed primitive inner controls to their own presentation owner', () => {
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
-    const cardCss = read(path.join(root, 'styles', 'setting', 'settings-agent-card-shell.css'));
     const legacyControlsCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));
     const paramsCss = read(path.join(root, 'styles', 'setting', 'settings-agent-params.css'));
     for (const selector of [
@@ -317,10 +316,8 @@ test('Agent shell CSS leaves typed primitive inner controls to their own present
     }
     assert.match(shellCss, /Generated primitives own the inner native control's geometry and focus/,
         'the ownership boundary must remain explicit rather than relying on cascade order');
-    assert.match(cardCss, /input\[type="text"\][\s\S]*?:not\(\.input\):not\(:is\(\.vcp-uiux-color-pair > input\)\)/,
-        'legacy Agent card text rules must exclude generated Input and ColorPair inner nodes');
     assert.match(legacyControlsCss, /input\[type="text"\][\s\S]*?:not\(\.input\):not\(:is\(\.vcp-uiux-color-pair > input\)\)/,
-        'the still-loaded Agent control fallback must also exclude generated Input and ColorPair inner nodes');
+        'the still-loaded Agent control fallback must exclude generated Input and ColorPair inner nodes');
     assert.match(legacyControlsCss, /select:not\(\.vcp-harness-select-native\)/,
         'the still-loaded Agent control fallback must not style a typed Select native node');
     assert.match(paramsCss, /\.params-content input\[type="number"\]:not\(\.input\)/,
