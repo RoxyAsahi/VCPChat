@@ -154,6 +154,7 @@
 | `52df169a` 隔离损坏 legacy Owner | `d610c102` | `node --test tests/mobile-sync-sqlite-delete.test.js`（19/19） | 局部适配；进程内 Owner 隔离只作用于 legacy Manifest，成功重扫清理标记，central CDS 不读取 |
 | `006f2260` 恢复 Topic 时间线 | `a8e0237b` | `node --test tests/mobile-sync-sqlite-delete.test.js`（20/20）；`cargo test`（57/57） | 局部适配；恢复 Topic 使用 ID/mtime 时间，恢复项前置但保留 default 首位与用户配置顺序 |
 | `e1405a4c` 保留桌面消息字段 | `252bc539` | `node --test tests/mobile-sync-streaming.test.js`（14/14） | 局部适配；移动推送只 patch 可移植字段，保留桌面扩展和附件本地路径，未改协议 |
+| `8d7f8e7e` 规范 memberTags 输入 | 待提交 | `node --test tests/mobile-sync-failure-contract.test.js`（19/19） | 局部适配；直接采用上游非空 Unicode 键/字符串值校验，暂不替换会改变 Wire 1.2 指纹的哈希排序算法 |
 
 ### 暂缓记录
 

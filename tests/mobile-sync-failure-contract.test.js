@@ -8,6 +8,7 @@ const { test } = require("node:test");
 
 const {
   resolveCentralIndexPreference,
+  normalizeMemberTags,
 } = require("../VCPDistributedServer/Plugin/VCPMobileSync/config/defaults");
 const entityDatabase = require("../VCPDistributedServer/Plugin/VCPMobileSync/core/db");
 const issue20EntityIndex = new Map();
@@ -792,4 +793,16 @@ test("history 原子提交在 source hash 变化时保留并发写入", async (t
     fs.readdirSync(directory).some((name) => name.includes("mobile-sync")),
     false,
   );
+});
+
+test("Group memberTags 只接受非空 Unicode 键和字符串值", () => {
+  assert.deepEqual(normalizeMemberTags({ alpha: "主持", "成员😀": "旁白" }), {
+    alpha: "主持",
+    "成员😀": "旁白",
+  });
+  assert.deepEqual(normalizeMemberTags(null), {});
+  assert.throws(() => normalizeMemberTags([]), /object of string values/);
+  assert.throws(() => normalizeMemberTags({ "": "tag" }), /non-empty Unicode/);
+  assert.throws(() => normalizeMemberTags({ alpha: 1 }), /must be a string/);
+  assert.throws(() => normalizeMemberTags({ "\ud800": "tag" }), /non-empty Unicode/);
 });
