@@ -7,7 +7,7 @@ const read = name => fs.readFile(path.join(root, 'reports', name), 'utf8').then(
 const [harness, vcp] = await Promise.all([read('harness-button-welcome-production.json'), read('vcp-button-welcome-projection.json')]);
 const actual = vcp.cases?.[0];
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
-const styleKeys = ['display', 'alignItems', 'gap', 'padding', 'borderWidth', 'borderRadius', 'backgroundColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'boxShadow', 'cursor', 'opacity'];
+const styleKeys = ['display', 'alignItems', 'justifyContent', 'gap', 'padding', 'border', 'borderWidth', 'borderStyle', 'borderColor', 'borderRadius', 'boxSizing', 'appearance', 'outline', 'backgroundColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'boxShadow', 'cursor', 'opacity'];
 const normalizeStyle = (key, value) => key === 'fontFamily' && typeof value === 'string'
   ? value.replace(/"(system-ui)"/g, '$1')
   : value;
@@ -18,6 +18,7 @@ const checks = [
   ['borderRadius', harness.style?.borderRadius, actual?.style?.borderRadius, harness.style?.borderRadius === actual?.style?.borderRadius],
   ['padding', harness.style?.padding, actual?.style?.padding, harness.style?.padding === actual?.style?.padding],
   ['width', harness.rect?.width, actual?.rect?.width, Math.abs((harness.rect?.width ?? 0) - (actual?.rect?.width ?? 0)) <= 0.5],
+  ['authored.display', harness.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || harness.authored?.inline?.display === 'inline-flex', actual?.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || actual?.authored?.inline?.display === 'inline-flex', (harness.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || harness.authored?.inline?.display === 'inline-flex') && (actual?.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || actual?.authored?.inline?.display === 'inline-flex')],
   ...styleKeys.map(key => {
     const expected = harness.style?.[key] ?? null;
     const actualValue = actual?.style?.[key] ?? null;

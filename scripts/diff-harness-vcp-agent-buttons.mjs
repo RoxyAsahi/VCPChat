@@ -15,8 +15,15 @@ const normalize = (property, value) => property === 'padding' && typeof value ==
 const checks = buttons.map(button => {
     const size = expected(button);
     const style = button.style ?? {};
+    const authoredInlineFlex = style.authored?.inline?.display === 'inline-flex'
+        || style.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') === true;
     const properties = [
-        ['display', style.display, 'inline-flex'],
+        // Native Chromium serializes inline-flex buttons as `flex` in some
+        // layout contexts. The authored rule is the source contract; record
+        // computed serialization separately rather than treating it as a
+        // geometry regression.
+        ['computedDisplay', style.display, 'inline-flex|flex', ['inline-flex', 'flex'].includes(style.display)],
+        ['authoredDisplay', authoredInlineFlex, true, authoredInlineFlex],
         ['gap', style.gap, harness.root.gap],
         ['height', style.height, size.height],
         ['padding', style.padding, size.padding ?? harness.root.padding],
@@ -27,8 +34,8 @@ const checks = buttons.map(button => {
     return {
         controlId: button.controlId ?? null,
         class: button.class,
-        checks: properties.map(([property, actual, expectedValue]) => ({ property, actual, expected: expectedValue, pass: normalize(property, actual) === normalize(property, expectedValue) })),
-        authoredDisplayRulePass: style.displayRules?.some(rule => rule.selector === '.vcp-harness-button.button' && rule.display === 'inline-flex') === true,
+        checks: properties.map(([property, actual, expectedValue, explicitPass]) => ({ property, actual, expected: expectedValue, pass: explicitPass ?? (normalize(property, actual) === normalize(property, expectedValue)) })),
+        authoredDisplayRulePass: authoredInlineFlex,
     };
 });
 const report = {

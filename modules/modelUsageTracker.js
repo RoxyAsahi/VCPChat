@@ -8,7 +8,12 @@
 const fs = require('fs-extra');
 const path = require('path');
 
-const APP_DATA_ROOT = path.join(__dirname, '..', 'AppData');
+// Production keeps the historical repository-level AppData location. Tests
+// may provide an isolated root so Electron IPC journeys can exercise hot and
+// favorite model semantics without mutating a developer's real data.
+const APP_DATA_ROOT = process.env.VCPCHAT_MODEL_USAGE_DATA_DIR
+    ? path.resolve(process.env.VCPCHAT_MODEL_USAGE_DATA_DIR)
+    : path.join(__dirname, '..', 'AppData');
 const STATS_FILE = path.join(APP_DATA_ROOT, 'model_usage_stats.json');
 
 let usageCache = null; // 内存缓存: { "model-id": count, ... }

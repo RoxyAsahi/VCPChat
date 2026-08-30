@@ -11,12 +11,13 @@ const [harness, vcp] = await Promise.all([
 const actual = vcp.cases?.[0];
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
 const normalize = (key, value) => key === 'fontFamily' && typeof value === 'string' ? value.replace(/"(system-ui)"/g, '$1') : value;
-const styleKeys = ['display', 'alignItems', 'gap', 'padding', 'borderWidth', 'borderRadius', 'backgroundColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'boxShadow', 'cursor', 'opacity'];
+const styleKeys = ['display', 'alignItems', 'justifyContent', 'gap', 'padding', 'border', 'borderWidth', 'borderStyle', 'borderColor', 'borderRadius', 'boxSizing', 'appearance', 'outline', 'backgroundColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'boxShadow', 'cursor', 'opacity'];
 const checks = [
   ['semanticFixture', harness.semanticFixture, vcp.semanticFixture, harness.semanticFixture === vcp.semanticFixture],
   ['text', harness.text, actual?.dom?.match(/>([^<]*)<\/button>/)?.[1] ?? null, harness.text === actual?.dom?.match(/>([^<]*)<\/button>/)?.[1]],
   ['height', harness.rect?.height, actual?.rect?.height, harness.rect?.height === actual?.rect?.height],
   ['width', harness.rect?.width, actual?.rect?.width, Math.abs((harness.rect?.width ?? 0) - (actual?.rect?.width ?? 0)) <= 0.5],
+  ['authored.display', harness.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || harness.authored?.inline?.display === 'inline-flex', actual?.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || actual?.authored?.inline?.display === 'inline-flex', (harness.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || harness.authored?.inline?.display === 'inline-flex') && (actual?.authored?.matchedRules?.some(rule => rule.declarations?.display === 'inline-flex') || actual?.authored?.inline?.display === 'inline-flex')],
   ...styleKeys.map(key => { const expected = harness.style?.[key] ?? null; const value = actual?.style?.[key] ?? null; return [`style.${key}`, expected, value, normalize(key, expected) === normalize(key, value)]; }),
 ];
 const [left, right] = await Promise.all([

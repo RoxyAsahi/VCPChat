@@ -510,13 +510,13 @@ export function setupEventListeners(deps) {
         if (!modal) return;
         const closeButton = modal.querySelector('.close-button');
         if (closeButton && !closeButton.dataset.closeBound) {
-            closeButton.addEventListener('click', () => uiHelperFunctions.closeModal('globalSettingsModal'));
+            addListener(closeButton, 'click', () => uiHelperFunctions.closeModal('globalSettingsModal'));
             closeButton.dataset.closeBound = 'true';
         }
 
         const form = modal.querySelector('#globalSettingsForm');
         if (form && !form.dataset.globalSettingsSaveBound) {
-            form.addEventListener('submit', (ev) => {
+            addListener(form, 'submit', (ev) => {
                 Promise.resolve(handleSaveGlobalSettings(ev, deps)).catch((error) => {
                     console.error('[GlobalSettings] Unexpected save failure:', error);
                     form.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
@@ -536,13 +536,13 @@ export function setupEventListeners(deps) {
 
         const avatarInput = modal.querySelector('#userAvatarInput');
         if (avatarInput && !avatarInput.dataset.globalSettingsBound) {
-            setupUserAvatarListener(avatarInput);
+            setupUserAvatarListener(avatarInput, addListener);
             avatarInput.dataset.globalSettingsBound = 'true';
         }
 
         const resetBtn = modal.querySelector('#resetUserAvatarColorsBtn');
         if (resetBtn && !resetBtn.dataset.globalSettingsBound) {
-            setupResetUserColorsListener(resetBtn);
+            setupResetUserColorsListener(resetBtn, addListener);
             resetBtn.dataset.globalSettingsBound = 'true';
         }
 
@@ -574,11 +574,11 @@ export function setupEventListeners(deps) {
         .filter(Boolean)
         .forEach((trigger) => {
             if (trigger.dataset.globalSettingsOpenBound) return;
-            trigger.addEventListener('click', openGlobalSettings);
+            addListener(trigger, 'click', openGlobalSettings);
             trigger.dataset.globalSettingsOpenBound = 'true';
         });
 
-    document.addEventListener('modal-ready', (e) => {
+    addListener(document, 'modal-ready', (e) => {
         if (e.detail?.modalId === 'globalSettingsModal') bindGlobalSettingsModal();
     });
 
@@ -653,11 +653,14 @@ export function setupEventListeners(deps) {
     }
     document.addEventListener('vcp-settings-navigation-restored', setupGlobalSettingsNavigation);
 
-    function setupUserAvatarListener(input) {
-        input.addEventListener('change', (event) => {
+    function setupUserAvatarListener(input, listen = addListener) {
+        let generation = 0;
+        listen(input, 'change', (event) => {
+            const currentGeneration = ++generation;
             const file = event.target.files[0];
             if (file) {
                 uiHelperFunctions.openAvatarCropper(file, (croppedFile) => {
+                    if (currentGeneration !== generation || !input.isConnected) return;
                     setCroppedFile('user', croppedFile);
                     const userAvatarPreview = document.getElementById('userAvatarPreview');
                     if (userAvatarPreview) {
@@ -667,6 +670,9 @@ export function setupEventListeners(deps) {
 
                         if (window.getDominantAvatarColor) {
                             window.getDominantAvatarColor(previewUrl).then((avgColor) => {
+                                const modal = input.closest('#globalSettingsModal');
+                                if (currentGeneration !== generation || !input.isConnected
+                                    || !modal?.isConnected || !modal.classList.contains('active')) return;
                                 const userAvatarBorderColorInput = document.getElementById('userAvatarBorderColor');
                                 const userAvatarBorderColorTextInput = document.getElementById('userAvatarBorderColorText');
                                 const userNameTextColorInput = document.getElementById('userNameTextColor');
@@ -702,8 +708,8 @@ export function setupEventListeners(deps) {
         });
     }
 
-    function setupResetUserColorsListener(btn) {
-        btn.addEventListener('click', () => {
+    function setupResetUserColorsListener(btn, listen = addListener) {
+        listen(btn, 'click', () => {
             const userAvatarPreview = document.getElementById('userAvatarPreview');
             if (!userAvatarPreview || !userAvatarPreview.src || userAvatarPreview.src.includes('default_user_avatar.png')) {
                 uiHelperFunctions.showToastNotification('请先上传头像后再重置颜色', 'warning');
@@ -737,11 +743,11 @@ export function setupEventListeners(deps) {
             const text = document.getElementById(textId);
             const preview = previewId ? document.getElementById(previewId) : null;
             if (picker && text) {
-                picker.addEventListener('input', (e) => {
+                addListener(picker, 'input', (e) => {
                     text.value = e.target.value;
                     if (preview) preview.style.borderColor = e.target.value;
                 });
-                text.addEventListener('input', (e) => {
+                addListener(text, 'input', (e) => {
                     if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
                         picker.value = e.target.value;
                         if (preview) preview.style.borderColor = e.target.value;
@@ -769,7 +775,7 @@ export function setupEventListeners(deps) {
             const toggleRustGuardRules = () => {
                 rustGuardRulesContainer.style.display = rustUseAssistantCheckbox.checked ? 'block' : 'none';
             };
-            rustUseAssistantCheckbox.addEventListener('change', toggleRustGuardRules);
+            addListener(rustUseAssistantCheckbox, 'change', toggleRustGuardRules);
             // 初始化时设置一次
             toggleRustGuardRules();
         }
@@ -782,7 +788,7 @@ export function setupEventListeners(deps) {
             const toggleThresholdsPanel = () => {
                 rustCustomThresholdsPanel.style.display = rustEnableCustomThresholdsCheckbox.checked ? 'block' : 'none';
             };
-            rustEnableCustomThresholdsCheckbox.addEventListener('change', toggleThresholdsPanel);
+            addListener(rustEnableCustomThresholdsCheckbox, 'change', toggleThresholdsPanel);
             // 初始化时设置一次
             toggleThresholdsPanel();
         }
@@ -798,7 +804,7 @@ export function setupEventListeners(deps) {
                 rustWhitelistPanel.style.display = mode === 'whitelist' ? 'block' : 'none';
                 rustBlacklistPanel.style.display = mode === 'blacklist' ? 'block' : 'none';
             };
-            rustRuleModeSelect.addEventListener('change', updateRulePanels);
+            addListener(rustRuleModeSelect, 'change', updateRulePanels);
             // 初始化时设置一次
             updateRulePanels();
         }

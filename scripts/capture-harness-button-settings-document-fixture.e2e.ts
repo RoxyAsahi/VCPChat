@@ -34,7 +34,23 @@ describe('Harness SettingsDocumentAction Button fixture', () => {
     await button.waitFor({ timeout: 15_000 })
     const evidence = await button.evaluate(element => {
       const rect = element.getBoundingClientRect(); const style = getComputedStyle(element)
-      return { source: 'Harness production SettingsDocumentAction', sourcePath: 'packages/client/ui-settings-general/src/client/SettingsDocumentAction.tsx', semanticFixture: 'settings-general/document-action/open-document/outline-sm/enabled', text: element.textContent?.trim(), dom: element.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { display: style.display, alignItems: style.alignItems, gap: style.gap, padding: style.padding, borderWidth: style.borderWidth, borderRadius: style.borderRadius, backgroundColor: style.backgroundColor, color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, boxShadow: style.boxShadow, cursor: style.cursor, opacity: style.opacity } }
+      const properties = ['display', 'align-items', 'justify-content', 'gap', 'padding', 'border', 'border-width', 'border-style', 'border-color', 'border-radius', 'box-sizing', 'appearance', '-webkit-appearance', 'outline', 'font-size', 'line-height']
+      const matchedRules: Array<{ selector: string; declarations: Record<string, string> }> = []
+      for (const sheet of [...document.styleSheets]) {
+        let rules: CSSRuleList
+        try { rules = sheet.cssRules } catch { continue }
+        for (const rule of [...rules]) {
+          if (!(rule instanceof CSSStyleRule) || !element.matches(rule.selectorText)) continue
+          const declarations = Object.fromEntries(properties
+            .map(property => [property, rule.style.getPropertyValue(property)] as const)
+            .filter(([, value]) => value))
+          if (Object.keys(declarations).length) matchedRules.push({ selector: rule.selectorText, declarations })
+        }
+      }
+      const inline = Object.fromEntries(properties
+        .map(property => [property, element instanceof HTMLElement ? element.style.getPropertyValue(property) : ''] as const)
+        .filter(([, value]) => value))
+      return { source: 'Harness production SettingsDocumentAction', sourcePath: 'packages/client/ui-settings-general/src/client/SettingsDocumentAction.tsx', semanticFixture: 'settings-general/document-action/open-document/outline-sm/enabled', text: element.textContent?.trim(), dom: element.outerHTML, authored: { inline, matchedRules }, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { display: style.display, alignItems: style.alignItems, justifyContent: style.justifyContent, gap: style.gap, padding: style.padding, border: style.border, borderWidth: style.borderWidth, borderStyle: style.borderStyle, borderColor: style.borderColor, borderRadius: style.borderRadius, boxSizing: style.boxSizing, appearance: style.appearance, outline: style.outline, backgroundColor: style.backgroundColor, color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, boxShadow: style.boxShadow, cursor: style.cursor, opacity: style.opacity } }
     })
     await writeFile(join(root, 'reports/harness-button-settings-document-production.json'), `${JSON.stringify({ viewport, ...evidence }, null, 2)}\n`)
     await button.screenshot({ path: join(root, 'reports/harness-button-settings-document-production.png') })

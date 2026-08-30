@@ -1012,8 +1012,15 @@ const settingsManager = (() => {
                     topicSummaryModelInput = document.getElementById('topicSummaryModel');
                     openTopicSummaryModelSelectBtn = document.getElementById('openTopicSummaryModelSelectBtn');
 
-                    if (openTopicSummaryModelSelectBtn && !(topicSummaryModelInput?.dataset.vcpTypedTopicSummaryModelPicker === 'true')) {
-                        openTopicSummaryModelSelectBtn.addEventListener('click', () => handleOpenModelSelect(topicSummaryModelInput));
+                    if (openTopicSummaryModelSelectBtn) {
+                        openTopicSummaryModelSelectBtn.addEventListener('click', () => {
+                            // The generated picker is the active presentation
+                            // owner when its marker is present. Keep this
+                            // legacy modal binding only as the no-runtime
+                            // fallback; do not let it race the typed owner.
+                            if (openTopicSummaryModelSelectBtn.dataset.vcpTypedTopicSummaryModelPicker === 'true') return;
+                            handleOpenModelSelect(topicSummaryModelInput);
+                        });
                     }
                 }
             });
@@ -1097,9 +1104,14 @@ const settingsManager = (() => {
                 });
             }
 
-            // compatibility fallback for Classic/bootstrap paths only
-            if (openModelSelectBtn && !(agentModelInput?.dataset.vcpTypedAgentModelPicker === 'true')) {
-                openModelSelectBtn.addEventListener('click', () => handleOpenModelSelect(agentModelInput));
+            if (openModelSelectBtn) {
+                openModelSelectBtn.addEventListener('click', () => {
+                    // AgentModelPicker owns this trigger whenever the typed
+                    // runtime is available. The legacy modal remains a
+                    // compatibility fallback for Classic/bootstrap paths.
+                    if (openModelSelectBtn.dataset.vcpTypedAgentModelPicker === 'true') return;
+                    handleOpenModelSelect(agentModelInput);
+                });
             }
             if (modelSearchInput) {
                 modelSearchInput.addEventListener('input', filterModels);

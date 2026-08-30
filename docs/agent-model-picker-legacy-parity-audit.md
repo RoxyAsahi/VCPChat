@@ -49,12 +49,64 @@ modal 的删除资格。
 挂载唯一测试 owner；不会重写不可变的 `window.chatAPI` context bridge，也不更改 IPC、持久化、
 legacy modal 或业务 input。
 
+### 2026-08-28：default bridge 的真实 refresh IPC 证据
+
+`npm run test:electron-agent-model-picker` 现在保留 default `VCPUISettingsBridge` 和
+immutable `window.chatAPI`，在真实 Agent Settings 中点击 default-mounted picker 的
+`Refresh models`。临时 HTTP 服务返回 `probe-model` / `probe-secondary`，证明
+`settings-bridge → chatAPI.refreshModels → main refresh-models → models-updated →
+AgentModelPicker` 能经历 busy、settled 和当前 popup 的目录重投影，且 refresh 不会写
+canonical `#agentModel`；随后原有 filter/select/reopen/Escape/focus/dispose 与 lifecycle
+checkpoint 继续通过。
+
+该测试不能声明热门/收藏的完整 default parity：`getHotModels` / `getFavoriteModels` 的上游
+`modelUsageTracker` 当前读仓库级 `AppData`，而不是这个 test 的临时 Electron profile。热门或
+收藏 section 因此可合法令同一服务返回行重复出现，测试只断言每个投影行来自这两个真实响应 ID。
+可控的三分区排序、favorite mutation、empty/failure 和 close-race 仍由前述 injected-capability
+Electron test 覆盖；二者合起来仍不构成 legacy modal 删除授权。
+
 覆盖结果：热门/收藏/全部三组的顺序和重复投影；收藏 mutation 不写 `#agentModel`；refresh 的
 `Refreshing…` busy、成功、空列表和 owner-bound failure Toast；打开期间恰好一次
 `subscribeUpdated`、关闭时释放；refresh 的迟到成功在 close 和 explicit dispose 后均不重新创建
 popup/row，也没有遗留 picker scope。此项是 **真实 production form + generated primitive 的
 capability-contract Electron evidence**，不是 `settings-bridge → immutable chatAPI` 真实目录数据
 的端到端 IPC 证据，也不构成 `modelSelectModal` 的删除授权。
+
+本次复测结果（`npm run test:electron-agent-model-picker-directory-parity`，2026-08-28）仍为
+通过：`groups` 三分区顺序与重复策略一致，`favorite.after === favorite.before`，refresh 的
+成功/空/失败状态均保持在同一 popup owner 内，`closeRace` 与 `disposeRace` 均为零残留；最终
+`pickerScopes=[]`、`cards=0`。该结果确认此前证据可重复，但没有扩大删除条件：`topicSummaryModel`
+的真实 directory parity、两个 caller 的 default-data parity 以及 legacy modal 的完整退役链仍缺失。
+
+Global Settings 的真实 Electron journey 也已覆盖 `topicSummaryModel`：generated
+`AgentModelPicker` 能打开空目录状态并由 Escape/trigger 关闭，空目录不改 canonical
+native input，且不会唤起 `modelSelectModal`；测试环境提供目录行时会进一步验证首项选择、
+popup 关闭和 trigger focus restore。该证据确认 Topic Summary 已成为真实 production
+consumer，但仍不足以授权删除共享 legacy modal。
+
+### Default hot/favorite parity 的可复现阻断（2026-08-28）
+
+进一步核对 main-process IPC 后确认，`get-hot-models` / `get-favorite-models` 委托的
+`modules/modelUsageTracker.js` 将数据固定读写到仓库级 `AppData/model_usage_stats.json`
+与 `AppData/model_favorites.json`，没有使用测试的 `VCPCHAT_APP_DATA_DIR` 临时 profile。
+因此当前 Electron 测试可以隔离模型目录和 Settings 持久化，却不能安全隔离热门/收藏状态；
+直接写入仓库 AppData 会污染开发者真实数据，也不能作为删除 `modelSelectModal` 的可靠证据。
+
+最小后续方案是为测试/运行时提供显式的 tracker data-root capability，并在不改变生产默认
+路径的前提下，用临时 root 重跑两个 caller 的真实 IPC parity；在该能力落地前，继续采用
+注入 capability 的三分区/收藏/刷新证据，并保留 legacy modal。
+
+本轮已落地 `VCPCHAT_MODEL_USAGE_DATA_DIR`：默认未设置时仍使用原有仓库 `AppData`，
+Electron 测试设置后会把统计与收藏文件写入临时 profile，已消除“测试会污染开发者数据”
+这一层阻断。当前剩余问题已收窄为模型目录 cache fetch 的启动时序/服务响应：Settings
+journey 能稳定启动隔离 tracker，但临时目录在首次打开时仍可能为空，因此热门/收藏的
+真实 IPC 排序与 mutation 证据继续 pending，不能据此删除 `modelSelectModal`。
+
+随后 Settings Electron journey 已确认隔离 IPC 数据源本身可用：`refresh-models` 返回三条
+probe models，`getHotModels()` 返回 `probe-hot`、`probe-secondary`，`getFavoriteModels()`
+返回 `probe-hot`。当前仍未把该结果升级为 picker UI parity，因为首次 root → model pane
+切换时可见目录行的异步投影尚未稳定；这属于 primitive 投影时序问题，后续应单独修正并
+补充选择/favorite/reopen 证据。
 
 ## 迁移设计约束
 
@@ -72,8 +124,9 @@ capability-contract Electron evidence**，不是 `settings-bridge → immutable 
 ## 当前结论
 
 `AgentModelPicker` 是 `production-consumer-active`，但不是 legacy modal 的完整替代，
-更不是 Stable。热门/收藏分区、收藏 mutation 和显式刷新已经有 source/generated focused 与
-capability-contract Electron 成功/失败/close-race evidence；仍缺真实
-`settings-bridge → immutable chatAPI` 目录数据的端到端证据，且 `topicSummaryModel` 仍使用
+更不是 Stable。default `settings-bridge → immutable chatAPI` 的真实 cache/refresh/updated
+目录链现已有 Electron 证据；热门/收藏分区、收藏 mutation和 refresh 的成功/失败/close-race
+仍分别有 source/generated focused 与 capability-contract Electron 证据。仍缺 default IPC 下可
+隔离的热门/收藏排序与收藏 mutation、Harness 同语义视觉 reference，且 `topicSummaryModel` 仍使用
 legacy modal。因此当前继续双轨；任何删除 `modelSelectModal`
 或其 `settingsManager` 行为的改动都应被视为 P0 边界违规。

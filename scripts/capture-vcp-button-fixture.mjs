@@ -13,7 +13,7 @@ const fixtureMode = process.env.VCP_BUTTON_FIXTURE || 'variants';
 const welcomeMode = fixtureMode === 'welcome' || fixtureMode === 'welcome-projection';
 const settingsDocumentMode = fixtureMode === 'settings-document';
 const consumerProjection = fixtureMode === 'welcome-projection';
-const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#fff}body{font-family:-apple-system,system-ui,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#0f1115}.fixture{display:flex;gap:12px;align-items:center;padding:24px}.fixture.welcome,.fixture.settings-document{position:fixed;left:552px;top:384px;padding:0}.fixture.welcome-projection,.fixture.settings-document{--dsw-alias-button-primary-fill:rgb(15,17,21);--dsw-alias-label-primary-foreground:#fff;--dsw-alias-border-l2:rgb(229,229,229)}.fixture.welcome-projection>button{min-width:120px}</style><script type="module" src="/modules/uiux/generated/browser-entry.js"></script></head><body><div class="fixture${welcomeMode ? ' welcome' : ''}${settingsDocumentMode ? ' settings-document' : ''}${consumerProjection ? ' welcome-projection' : ''}"></div></body></html>`;
+const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#fff}body{font-family:-apple-system,system-ui,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#0f1115}.fixture{display:flex;gap:12px;align-items:center;padding:24px}.fixture.welcome,.fixture.settings-document{position:fixed;left:552px;top:384px;padding:0}.fixture.welcome-projection,.fixture.settings-document{--dsw-alias-button-primary-fill:rgb(15,17,21);--dsw-alias-label-primary-foreground:#fff;--dsw-alias-border-l2:rgba(0,0,0,.1)}.fixture.welcome-projection>button{min-width:120px}</style><script type="module" src="/modules/uiux/generated/browser-entry.js"></script></head><body><div class="fixture${welcomeMode ? ' welcome' : ''}${settingsDocumentMode ? ' settings-document' : ''}${consumerProjection ? ' welcome-projection' : ''}"></div></body></html>`;
 const server = http.createServer(async (request, response) => {
     try {
         const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
@@ -33,6 +33,25 @@ try {
     await page.waitForFunction(() => Boolean(globalThis.VCPUIUX));
     const evidence = await page.evaluate(({ isWelcomeMode, settingsDocumentMode, isConsumerProjection }) => {
         const host = document.querySelector('.fixture');
+        const captureAuthored = element => {
+            const properties = ['display', 'align-items', 'justify-content', 'gap', 'padding', 'border', 'border-width', 'border-style', 'border-color', 'border-radius', 'box-sizing', 'appearance', '-webkit-appearance', 'outline', 'font-size', 'line-height'];
+            const matchedRules = [];
+            for (const sheet of [...document.styleSheets]) {
+                let rules;
+                try { rules = [...(sheet.cssRules || [])]; } catch { continue; }
+                for (const rule of rules) {
+                    if (rule.type !== CSSRule.STYLE_RULE || !element.matches(rule.selectorText)) continue;
+                    const declarations = Object.fromEntries(properties
+                        .map(property => [property, rule.style.getPropertyValue(property)])
+                        .filter(([, value]) => value));
+                    if (Object.keys(declarations).length) matchedRules.push({ selector: rule.selectorText, declarations });
+                }
+            }
+            const inline = Object.fromEntries(properties
+                .map(property => [property, element.style.getPropertyValue(property)])
+                .filter(([, value]) => value));
+            return { inline, matchedRules };
+        };
         if (isConsumerProjection) {
             host.style.setProperty('--dsw-alias-button-primary-fill', 'rgb(15, 17, 21)');
             host.style.setProperty('--dsw-alias-label-primary-foreground', 'rgb(255, 255, 255)');
@@ -55,7 +74,7 @@ try {
             if (isConsumerProjection) button.style.minWidth = '120px';
             const rect = button.getBoundingClientRect();
             const style = getComputedStyle(button);
-            return { name, dom: button.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { display: style.display, alignItems: style.alignItems, gap: style.gap, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, backgroundColor: style.backgroundColor, color: style.color, boxShadow: style.boxShadow, cursor: style.cursor, opacity: style.opacity } };
+            return { name, dom: button.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, authored: captureAuthored(button), style: { display: style.display, alignItems: style.alignItems, justifyContent: style.justifyContent, gap: style.gap, border: style.border, borderWidth: style.borderWidth, borderStyle: style.borderStyle, borderColor: style.borderColor, borderRadius: style.borderRadius, boxSizing: style.boxSizing, appearance: style.appearance, outline: style.outline, padding: style.padding, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, backgroundColor: style.backgroundColor, color: style.color, boxShadow: style.boxShadow, cursor: style.cursor, opacity: style.opacity } };
         });
         window.__vcpButtonFixtureReleases = releases;
         return { source: 'VCP generated artifact Candidate Lab', semanticFixture: isWelcomeMode ? 'settings-onboarding/welcome-notice/continue/primary-md/enabled' : settingsDocumentMode ? 'settings-general/document-action/open-document/outline-sm/enabled' : 'portable-button/all-variants-and-disabled', consumerProjection: isConsumerProjection ? 'WelcomeNotice.module.css .primary min-width plus resolved primary token, fixture-only' : null, viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, cases: nodes, ownerRegistrations: releases.length };
