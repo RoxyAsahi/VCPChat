@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Agent model picker trigger cascade repro</title>
+<style>
+  :root { color-scheme: light; font: 14px system-ui, sans-serif; }
+  body { margin: 24px; color: #20242b; background: #f6f8fb; }
+  .model-input-container { position: relative; display: flex; align-items: center; gap: 8px; width: 420px; }
+  /* Legacy rule from settings-model-select.css before the trigger exclusion. */
+  #agentSettingsForm .model-input-container button { display: flex; width: 38px; height: 38px; padding: 0; border: 1px solid #b8bec8; border-radius: 6px; }
+  /* Harness candidate contract. */
+  .vcp-harness-button.button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 28px; padding: 0 10px; border: 0; border-radius: 14px; }
+  .vcp-harness-agent-model-picker-trigger { display: inline-flex; height: 28px; padding: 0 4px 0 8px; border: 0; border-radius: 24px; }
+  .vcp-harness-agent-model-picker-trigger[aria-expanded="true"] { outline: 2px solid #1677ff; }
+  .picker-card { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; width: 240px; padding: 4px; border: 1px solid #c7ccd5; border-radius: 12px; background: #fff; box-shadow: 0 12px 32px rgb(0 0 0 / 14%); }
+  .picker-card[hidden] { display: none; }
+</style>
+<form id="agentSettingsForm">
+  <div class="model-input-container">
+    <input id="agentModel" value="stress-model" aria-label="Model id">
+    <button id="openModelSelectBtn" type="button" class="small-button vcp-harness-button button outline sm vcp-harness-agent-model-picker-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="model-menu">Select model</button>
+    <div id="model-menu" class="picker-card" role="menu" hidden>Model picker menu</div>
+  </div>
+</form>
+<script>
+  const trigger = document.querySelector('#openModelSelectBtn');
+  const menu = document.querySelector('#model-menu');
+  trigger.addEventListener('click', () => {
+    const open = menu.hidden;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', String(open));
+  });
+</script>
