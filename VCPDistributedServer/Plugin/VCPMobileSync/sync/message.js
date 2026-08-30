@@ -280,6 +280,25 @@ async function downloadMessagesStreamRaw(requests, appDataPath, res) {
           );
         }
       }
+      const indexedTimes = new Map(
+        db
+          .prepare(
+            "SELECT msg_id, updated_at FROM message_index WHERE topic_id = ? AND deleted_at IS NULL",
+          )
+          .all(safeTopicId)
+          .map((indexRow) => [indexRow.msg_id, indexRow.updated_at]),
+      );
+      for (const message of messages) {
+        const updatedAt = indexedTimes.get(message.id);
+        if (!Number.isSafeInteger(updatedAt) || updatedAt < 0) {
+          throw createSyncError(
+            "SYNC_INDEX_INVALID",
+            `message index timestamp is invalid for ${safeTopicId}/${message.id}`,
+            { stage: "messages", failedTopicIds: [safeTopicId] },
+          );
+        }
+        message.updatedAt = updatedAt;
+      }
       await writer.write({
         topicId: safeTopicId,
         ownerType: actualOwnerType,
@@ -561,6 +580,15 @@ async function uploadMessagesBatchRaw(req, appDataPath, res) {
  * reconcile 调用方可传入已读取的 history 与 stat，避免同一文件先校验、
  * 后摄取时发生第二次完整读取。普通 watcher/push 调用仍保持向后兼容。
  */
+function resolveMessageUpdatedAt(message, hash, previous, detectedAt) {
+  if (Number.isSafeInteger(message.updatedAt) && message.updatedAt >= 0) {
+    return message.updatedAt;
+  }
+  if (!previous) return message.timestamp;
+  if (previous.hash === hash) return previous.updated_at;
+  return detectedAt;
+}
+
 async function ingestHistoryToDb(
   filePath,
   topicId,
@@ -598,12 +626,15 @@ async function ingestHistoryToDb(
     const applyIndex = db.transaction(() => {
       const existing = db
         .prepare(
-          "SELECT msg_id FROM message_index WHERE topic_id = ? AND deleted_at IS NULL",
+          "SELECT msg_id, hash, updated_at FROM message_index WHERE topic_id = ? AND deleted_at IS NULL",
         )
         .all(topicId);
+      const existingById = new Map(existing.map((row) => [row.msg_id, row]));
       for (const m of validMessages) {
         const hash = computeMessageFingerprint(m);
-        upsertMessageIndex(m.id, topicId, hash, now);
+        const previous = existingById.get(m.id);
+        const updatedAt = resolveMessageUpdatedAt(m, hash, previous, now);
+        upsertMessageIndex(m.id, topicId, hash, updatedAt);
         fingerprints.push(computeMessageLeafHash(m.id, hash));
 
         if (Array.isArray(m.attachments)) {
@@ -635,7 +666,7 @@ async function ingestHistoryToDb(
       }
 
       const topicRootHash = computeAggregatedHash(fingerprints);
-      const updated = updateTopicAggregatedHash(topicId, topicRootHash, now);
+      const updated = updateTopicAggregatedHash(topicId, topicRootHash);
       if (updated.changes !== 1) {
         // 区分 0 行（孤儿话题：磁盘历史在、config 索引缺席）与 >1 行（跨 owner 歧义）
         const matches = db
@@ -878,6 +909,7 @@ module.exports = {
   uploadAttachment,
   uploadAttachmentStream,
   downloadAttachment,
+  resolveMessageUpdatedAt,
   ingestHistoryToDb,
   pruneMessageFromPhysicalHistory,
   readHistoryStrict,

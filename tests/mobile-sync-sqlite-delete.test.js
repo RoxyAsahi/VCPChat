@@ -780,7 +780,7 @@ test("运行时 config 摄取不会从 stale 投影复活物理已删除 Topic",
   }
 });
 
-test("legacy Topic root 仅在内容哈希变化时推进 updated_at", () => {
+test("legacy Topic root 内容变化不推进配置 updated_at", () => {
   const { database } = loadSqliteModules();
   const db = database.initDb(":memory:");
   try {
@@ -792,7 +792,7 @@ test("legacy Topic root 仅在内容哈希变化时推进 updated_at", () => {
     database.updateTopicAggregatedHash("topic-root", "a".repeat(64), 200);
     assert.equal(entityRow(db, "topic-root", "topic").updated_at, 100);
     database.updateTopicAggregatedHash("topic-root", "b".repeat(64), 300);
-    assert.equal(entityRow(db, "topic-root", "topic").updated_at, 300);
+    assert.equal(entityRow(db, "topic-root", "topic").updated_at, 100);
   } finally {
     db.close();
   }
@@ -815,12 +815,16 @@ test("legacy Owner root 和 Topic 空根回填都排除 default", () => {
     db.prepare(
       "UPDATE entity_index SET hash = ?, aggregated_hash = ?, updated_at = 20 WHERE id = ? AND type = 'topic'",
     ).run("a".repeat(64), "b".repeat(64), "topic-live");
+    db.prepare(
+      "UPDATE entity_index SET updated_at = 30 WHERE id = 'agent-root' AND type = 'agent'",
+    ).run();
 
     index.computeAggregatedHashes(db, silentLogger);
     const expected = computeAggregatedHash([
       computeTopicLeafHash("topic-live", "a".repeat(64), "b".repeat(64)),
     ]);
     assert.equal(entityRow(db, "agent-root", "agent").aggregated_hash, expected);
+    assert.equal(entityRow(db, "agent-root", "agent").updated_at, 30);
     assert.equal(entityRow(db, "default", "topic").aggregated_hash, null);
 
     db.prepare(
@@ -828,9 +832,102 @@ test("legacy Owner root 和 Topic 空根回填都排除 default", () => {
     ).run("e".repeat(64), "f".repeat(64));
     index.computeAggregatedHashes(db, silentLogger);
     assert.equal(entityRow(db, "agent-root", "agent").aggregated_hash, expected);
+    assert.equal(entityRow(db, "agent-root", "agent").updated_at, 30);
   } finally {
     db.close();
   }
+});
+
+test("legacy watcher 与全量扫描共用 DTO 默认值", async (t) => {
+  const { database, index } = loadSqliteModules({ captureOnMessage() {} });
+  const { extractAgentDTO, extractTopicDTO, AGENT_SYNC_FIELDS, AGENT_TOPIC_SYNC_FIELDS } =
+    require(path.join(ROOT, "VCPDistributedServer", "Plugin", "VCPMobileSync", "dto"));
+  const { computeDtoHash } = require(
+    path.join(ROOT, "VCPDistributedServer", "Plugin", "VCPMobileSync", "core", "hash.js"),
+  );
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-sync-watcher-dto-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const ownerId = "agent-defaults";
+  const topicId = "topic-defaults";
+  const configPath = path.join(directory, "Agents", ownerId, "config.json");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.mkdirSync(path.join(directory, "UserData", ownerId, "topics", topicId), {
+    recursive: true,
+  });
+  const config = {
+    name: "Defaults",
+    temperature: "0.704",
+    contextTokenLimit: "1000",
+    maxOutputTokens: "2000",
+    topics: [{ id: topicId, name: "Topic", createdAt: "3" }],
+  };
+  fs.writeFileSync(configPath, JSON.stringify(config));
+  const db = database.initDb(":memory:");
+  t.after(() => db.close());
+
+  await index.ingestConfigToDb(configPath, "agent", directory);
+
+  assert.equal(
+    entityRow(db, ownerId, "agent").hash,
+    computeDtoHash(extractAgentDTO(config), AGENT_SYNC_FIELDS),
+  );
+  assert.equal(
+    entityRow(db, topicId, "topic").hash,
+    computeDtoHash(
+      extractTopicDTO(config.topics[0], ownerId, "agent"),
+      AGENT_TOPIC_SYNC_FIELDS,
+    ),
+  );
+});
+
+test("中央 Owner Phase 在 ACK 前刷新 CDS 提交视图", async (t) => {
+  let onMessage = null;
+  let reconcileCalls = 0;
+  let releaseReconcile;
+  const gate = new Promise((resolve) => { releaseReconcile = resolve; });
+  const { database, index } = loadSqliteModules({ captureOnMessage(handler) { onMessage = handler; } });
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "vcp-sync-phase-barrier-"));
+  const projectBasePath = path.join(directory, "VCPDistributedServer");
+  fs.mkdirSync(projectBasePath, { recursive: true });
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.after(() => releaseReconcile?.());
+
+  await index.registerRoutes(
+    { use() {} },
+    { MobileSyncToken: "phase-barrier-test-token", MobileSyncPort: "15976", MobileSyncUseCentralIndex: true },
+    projectBasePath,
+    {
+      chatDataService: {
+        client: {
+          async reconcile() {
+            reconcileCalls += 1;
+            if (reconcileCalls === 2) await gate;
+            return { stats: {} };
+          },
+        },
+        mobileSyncUseCentralIndex: true,
+      },
+    },
+  );
+  assert.equal(typeof onMessage, "function");
+  assert.equal(reconcileCalls, 1);
+  const db = database.getDb();
+  t.after(() => db.close());
+
+  const phaseAck = onMessage({ type: "PHASE_START", phase: "owner_metadata" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reconcileCalls, 2);
+  assert.equal(await Promise.race([
+    phaseAck.then(() => "settled"),
+    new Promise((resolve) => setImmediate(() => resolve("pending"))),
+  ]), "pending");
+  releaseReconcile();
+  assert.deepEqual(await phaseAck, { type: "PHASE_ACK", phase: "owner_metadata" });
+  assert.deepEqual(await onMessage({ type: "PHASE_START", phase: "topic_metadata" }), {
+    type: "PHASE_ACK",
+    phase: "topic_metadata",
+  });
+  assert.equal(reconcileCalls, 2);
 });
 
 test("中央 Topic 删除错误保持 topic_metadata 阶段和失败 Topic", async (t) => {

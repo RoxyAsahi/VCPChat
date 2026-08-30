@@ -193,7 +193,7 @@ function upsertMessageIndex(msgId, topicId, hash, updatedAt = Date.now()) {
     VALUES (?, ?, ?, ?)
     ON CONFLICT(topic_id, msg_id) DO UPDATE SET 
       hash = excluded.hash,
-      updated_at = CASE WHEN message_index.hash <> excluded.hash THEN excluded.updated_at ELSE message_index.updated_at END,
+      updated_at = excluded.updated_at,
       deleted_at = NULL
   `,
   ).run(msgId, topicId, hash, updatedAt);
@@ -496,20 +496,16 @@ function softDeleteAvatarIndex(ownerId, ownerType, deletedAt = Date.now()) {
     .run(deletedAt, deletedAt, ownerId, ownerType);
 }
 
-function updateTopicAggregatedHash(topicId, aggregatedHash, updatedAt = Date.now()) {
+function updateTopicAggregatedHash(topicId, aggregatedHash) {
   if (!db) throw new Error("Database not initialized");
 
   return db.prepare(
     `UPDATE entity_index
-     SET updated_at = CASE
-           WHEN aggregated_hash IS NOT ? THEN ?
-           ELSE updated_at
-         END,
-         aggregated_hash = ?
+     SET aggregated_hash = ?
      WHERE id = ?
        AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')
        AND deleted_at IS NULL`,
-  ).run(aggregatedHash, updatedAt, aggregatedHash, topicId);
+  ).run(aggregatedHash, topicId);
 }
 
 /**

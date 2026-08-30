@@ -172,8 +172,19 @@ async function registerRoutes(app, pluginConfig, projectBasePath, services = {})
           const phase = payload.phase || "owner_metadata";
           logger.startPhase(phase, 0);
 
-          // 所有 manifest 已在 SYNC_MANIFEST 阶段由手机端主动发送并处理完毕。
-          // PHASE_START 仅作为阶段确认，不再返回冗余的 PHASE_MANIFESTS。
+          // Mobile 会在首批 Owner Manifest 前发送 owner_metadata PHASE_START。
+          // 在 ACK 前刷新 CDS 提交视图，确保后续 Manifest 读取到桌面业务的最新状态。
+          if (centralSync && phase === "owner_metadata") {
+            try {
+              await centralSync.reconcile();
+            } catch (error) {
+              throw withSyncErrorContext(error, {
+                origin: "desktop_cds",
+                stage: "owner_metadata",
+              });
+            }
+          }
+
           return createPhaseAck(payload);
         }
         case "PHASE_COMPLETED": {
@@ -816,8 +827,8 @@ function computeAggregatedHashes(db, logger) {
 
       if (rootHash !== e.aggregated_hash) {
         db.prepare(
-          "UPDATE entity_index SET aggregated_hash = ?, updated_at = ? WHERE id = ? AND type = ?",
-        ).run(rootHash, Date.now(), e.id, e.type);
+          "UPDATE entity_index SET aggregated_hash = ? WHERE id = ? AND type = ?",
+        ).run(rootHash, e.id, e.type);
         updatedCount++;
       }
     }
@@ -837,8 +848,8 @@ function computeAggregatedHashes(db, logger) {
     for (const t of nullTopics) {
       if (t.aggregated_hash !== emptyContentHash) {
         db.prepare(
-          "UPDATE entity_index SET aggregated_hash = ?, updated_at = ? WHERE id = ? AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')",
-        ).run(emptyContentHash, Date.now(), t.id);
+          "UPDATE entity_index SET aggregated_hash = ? WHERE id = ? AND (type = 'topic' OR type = 'agent_topic' OR type = 'group_topic')",
+        ).run(emptyContentHash, t.id);
         updatedCount++;
       }
     }
@@ -978,8 +989,9 @@ async function ingestConfigToDb(configPath, type, appDataPath) {
     );
 
     // 索引主实体
+    const dto = type === "agent" ? extractAgentDTO(config) : extractGroupDTO(config);
     const hash = computeDtoHash(
-      config,
+      dto,
       type === "agent" ? AGENT_SYNC_FIELDS : GROUP_SYNC_FIELDS,
     );
     upsertEntityIndex(id, type, configPath, hash, now);
@@ -996,8 +1008,9 @@ async function ingestConfigToDb(configPath, type, appDataPath) {
         ) {
           continue;
         }
+        const topicDto = extractTopicDTO(topic, id, type);
         const topicHash = computeDtoHash(
-          topic,
+          topicDto,
           type === "group" ? GROUP_TOPIC_SYNC_FIELDS : AGENT_TOPIC_SYNC_FIELDS,
         );
         upsertEntityIndex(topic.id, "topic", configPath, topicHash, now);
