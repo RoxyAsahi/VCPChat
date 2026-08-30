@@ -599,7 +599,7 @@ function fieldEnhancer(element, options = {}) {
 }
 
 function settingsActionBarEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
-    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar, .global-settings-footer')) {
+    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar')) {
         throw new TypeError('VCPUI SettingsActionBar enhancement received an incompatible element.');
     }
     const form = options.form || element.closest('form');
@@ -1814,6 +1814,7 @@ function modalFactory(options = {}) {
     }
     const overlay = document.createElement('div');
     overlay.className = 'vcp-ui-modal-overlay';
+    overlay.dataset.motion = 'enter';
     const dialog = document.createElement('section');
     dialog.className = 'vcp-ui-modal';
     dialog.setAttribute('role', 'dialog');
@@ -2375,6 +2376,10 @@ const VCPUI = Object.freeze({
     getComponentMeta(name) {
         const normalized = String(name).toLowerCase();
         return COMPONENT_MANIFEST.find(item => item.name.toLowerCase() === normalized || item.aliases.some(alias => alias.toLowerCase() === normalized)) || null;
+    },
+    isHarnessProductionEligible(name) {
+        return this.getComponentMeta(name)?.productionEligible === true
+            && this.getComponentMeta(name)?.harnessMaturity === 'verified-candidate';
     },
     manifest: COMPONENT_MANIFEST,
     components: Object.freeze([...COMPONENTS.keys()])

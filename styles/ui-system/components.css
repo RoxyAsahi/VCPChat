@@ -179,7 +179,7 @@
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-tooltip[data-state="open"][data-placement="right"] .vcp-ui-tooltip-bubble { transform: translate(0, -50%); }
 
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton { display: grid; width: 100%; gap: var(--vcp-ui-space-2); }
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton-line { display: block; width: 100%; height: 12px; border-radius: var(--vcp-ui-radius-sm); background: linear-gradient(90deg, var(--vcp-ui-fill-1), var(--vcp-ui-fill-2), var(--vcp-ui-fill-1)); background-size: 220% 100%; animation: vcp-ui-skeleton 1.4s ease-in-out infinite; }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton-line { display: block; width: 100%; height: 12px; border-radius: var(--vcp-ui-radius-sm); background: linear-gradient(90deg, var(--vcp-ui-fill-1), var(--vcp-ui-fill-2), var(--vcp-ui-fill-1)); background-size: 220% 100%; animation: vcp-ui-skeleton 1.4s var(--vcp-motion-ease-standard) infinite; }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton-line:last-child:not(:first-child) { width: 68%; }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton[data-variant="rect"] .vcp-ui-skeleton-line { height: 88px; }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-skeleton[data-variant="circle"] { width: var(--vcp-ui-control-lg); }
@@ -236,7 +236,7 @@
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-loading-layer { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: var(--vcp-ui-space-2); color: var(--vcp-ui-text-primary); background: var(--vcp-ui-backdrop); backdrop-filter: blur(4px); }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-loading-layer[hidden] { display: none; }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-spinner { animation: vcp-ui-spin 900ms linear infinite; }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-spinner { animation: vcp-ui-spin 900ms var(--vcp-motion-ease-linear) infinite; }
 
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .vcp-ui-range {
         width: 100%;

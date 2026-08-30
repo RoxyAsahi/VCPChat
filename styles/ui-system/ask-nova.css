@@ -274,7 +274,7 @@
         height: 6px;
         border-radius: var(--vcp-ui-radius-full);
         background: var(--vcp-ui-accent);
-        animation: ask-nova-pulse 900ms ease-in-out infinite alternate;
+            animation: ask-nova-pulse 900ms var(--vcp-motion-ease-standard) infinite alternate;
     }
 
     html .vcp-ui-scope.ask-nova-scope .ask-nova-modal-host .ask-nova-thinking span:nth-child(2) {

@@ -1,0 +1,97 @@
+# DeepSeek Harness UI 控件复刻清单
+
+> 状态：动态 inventory，2026-08-27 首次建立。
+> 真源：`/Users/asahi/Documents/Codex/deepseek-harness/packages/client/`。
+> VCP fixture host：主窗口内置 `UI 组件库 → Harness Candidate Lab`。
+> 规则：实验室中的实现一律为 `Candidate`；只有真实业务 consumer、legacy presentation 删除和 Electron 证据闭合后才能晋级 `Stable`。
+
+## 成熟度模型
+
+| 等级 | 含义 | 必需证据 |
+| --- | --- | --- |
+| inventoried | 已定位 Harness source 与生产调用面 | source path、consumer path、分类、状态列表 |
+| candidate | 已在组件实验室复刻 | Light DOM/ARIA、tokens/geometry、interaction states、owner/dispose、generated artifact、固定 viewport fixture |
+| verified-candidate | Harness/VCP 双页面等价链通过 | DOM structural、computed style/geometry、same-engine pixel、keyboard/focus |
+| stable | 已接管 VCP 真实 Surface | canonical business state、Electron journey、legacy deletion、reload/stress、平台证据 |
+
+`Candidate` 可以没有 VCP 生产 consumer，但不得导出为稳定公共业务 API。展示页不能作为生产 consumer 计数。
+
+## Portable primitives
+
+| 控件 | Harness source / production use | VCP 状态 | 批次 |
+| --- | --- | --- | --- |
+| Button | `ui-primitives/src/Button.tsx`；Settings、Workspace、Question/Approval、Conversation shell | candidate-lab-active | B1 |
+| Input | `ui-primitives/src/Input.tsx`；当前仅 atom test/export | candidate-lab-active，source-only truth | B1 |
+| Pill | `ui-primitives/src/Pill.tsx`；view switcher tabs、filters、badges | candidate-interaction-active；静态/interactive/active Light-DOM 与 teardown 已建立，Harness pixel fixture pending | B1 |
+| Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；`label: ReactNode` 合同已对齐并补 focused test；同语义 label/separator/danger/submenu pixel diff pending | B1 |
+| Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
+| Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
+| DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | candidate-interaction-active；VCP chat integration frozen，同语义 Harness pixel diff pending | B1 |
+| StateDot | `ui-primitives/src/StateDot.tsx`；Chat、Tool、Skill、Job、Subagent、Workspace | candidate-interaction-active；四态 geometry/animation evidence active，pixel diff pending | B1 |
+| Toast | `ui-primitives/src/Toast.tsx`；Composer、Model selection | candidate-interaction-active；Composer integration frozen，ModelSelect adoption/pixel diff pending | B1 |
+| RiskConfirmation | `ui-primitives/src/RiskConfirmation.tsx`；Permission、Command selection | candidate-interaction-active；VCP 无同语义非冻结 consumer，pixel diff pending | B1 |
+| Semantic icon slots | `ui-primitives/src/icons/index.tsx`；RiskConfirmation/Modal/Menu/Disclosure | candidate-interaction-active；仅覆盖 warning/close/check/chevron-down，复用现有 VCPIcons，非公共 catalog | B1 |
+| JsonTree | `ui-primitives/src/JsonTree.tsx`；Trajectory | inventoried | B2 |
+| Terminal/Read/Diff/Search/Web Block | matching `ui-primitives/src/*Block.tsx`；Tool details/rows | inventoried | B2 |
+| MarkdownText / MessageText / CodeBlock / JsonBlock | `ui-primitives/src/markdown/`；Chat、Tool、Deliverables、Trajectory | inventoried；VCP production integration frozen | B4 |
+| BrandWordmark / FishLogo / icons | `ui-primitives/src/` and `src/icons/`；app-wide assets | inventoried | B1 |
+| DiffBlock | `ui-primitives/src/DiffBlock.tsx`；file-mutation/tool detail presentation | inventoried；portable diff rows、copy、collapse/expand 与 distinct-file footer 已确认；VCP tool-result/structured message production 接入受冻结边界约束 | B4 |
+| JsonTree | `ui-primitives/src/JsonTree.tsx`；trajectory/tool inspection | inventoried；递归 disclosure 与 copy/expand contract 待建立；VCP structured-data production 接入受冻结边界约束 | B4 |
+| ProducedFiles | `ui-deliverables/src/client/ProducedFiles.tsx`；turn-tail produced-file chips | inventoried；host capability、responsive chip fitting、open-file 与 overflow contract 已确认；不得接入 VCP 聊天消息尾部 | B4 |
+| PlanChip | `ui-plan/src/client/PlanModeControl.tsx`；conversation input plan slot | inventoried；projection-driven transient chip 与 async exit/error lifecycle 已确认；VCP chat/composer production 接入冻结 | B4 |
+| ConnectionBanner | `ui-primitives/src/ConnectionBanner.tsx`；连接重试提示 | candidate-interaction-active；reconnecting/hidden、aria-live、owner teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
+| OnboardingSurface | `ui-primitives/src/OnboardingSurface.tsx`；首运行 takeover | candidate-interaction-active；body portal、mask/stage、root inert 与 teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
+| LanguageRow | `locale/src/client/LanguageRow.tsx`；locale plugin 的 General settings row | candidate-source-only；Light-DOM row + 36px selector + Menu portal、snapshot 更新和 teardown 已建立；VCP 无 locale capability/persisted key，Harness 同语义 pixel fixture pending | B2 |
+| FontSizeRow | `ui-theme/src/client/FontSizeRow.tsx`；theme plugin 的 General settings row | production-consumer-active；标题/说明、36px stepper pill、键盘可达增减按钮、owner teardown 已建立。VCP 继续使用既有 `appearanceProfile.fontScale` 的 small/normal/large durable key，并映射为 13/14/16px 显示；尚非 Harness 的 12-17px 连续持久化轴 | B2 |
+| PermissionRow | `ui-permission-presets/src/client/PermissionRow.tsx`；new-session permission default settings row | inventoried；source provenance、DOM/ARIA、36px selector geometry、loading/saving/error/read-only 与 Full access acknowledgement state matrix 已登记；VCP 无 permission-settings consumer，未接入 Settings bridge 或持久化链 | B2 |
+
+## Jobs surface references
+
+| 控件 | Harness source / production use | VCP 状态 | 批次 |
+| --- | --- | --- | --- |
+| JobListAction | `ui-jobs/src/client/JobListAction.tsx`；live/settled job status action | inventoried；live-first/newest-settled ordering、portal menu、outside-dismiss、Escape focus restore、ticking interval 与 dispose contract 已登记；无 VCP jobs consumer 或 paired visual capture | B3 |
+
+## Real consumer migration ledger
+
+| Surface / field | Canonical source | Current owner | Legacy path | Deletion condition | Evidence | Gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home tagline / `homeVisualTagline` | existing Settings snapshot + persisted key | `typed-settings-field-owner` + generated Light-DOM Input | generic `mountHarnessInputWrappers` is already skipped for this id; remaining Settings dirty/autosave orchestration is shared legacy infrastructure | remove the field-specific compatibility projection only after generated Input default/placeholder/focus/disabled/error DOM, computed-style, geometry, pixel, artifact-only Electron and reload/teardown evidence pass | `scripts/test-settings-wa-electron.mjs`, `scripts/capture-vcp-dom-fixtures.mjs`, `scripts/check-harness-field-visual-evidence.mjs` | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Appearance font size / `appearanceProfile.fontScale` | existing appearance snapshot + `small`/`normal`/`large` persisted key | `settings-bridge` presentation scope + generated Light-DOM `FontSizeRow`; canonical native select remains the single business node | prior generic Field/Select projection is skipped; no per-field legacy presentation owner remains | retain the three durable scale values unless a separately approved settings migration introduces a numeric theme axis; add Electron screenshot and theme/reload evidence before calling visual parity verified | `modules/uiux/primitives/font-size-row.ts`, `modules/ui-system/settings/appearance-controls.js`, `tests/uiux-primitives.test.mjs` | `production-consumer-active / visual-equivalence-pending`; not `stable` |
+| Agent identity / `agentNameInput` | existing `agentSettingsForm` native field + agent persistence path | `settings-bridge` presentation scope + generated Light-DOM Input (first narrow Agent Settings slice) | generic `enhanceForm` Input pass is skipped for this id; all other Agent fields remain legacy-owned | add Agent Settings Input default/focus/disabled/error geometry/pixel and reload/teardown evidence, then remove field-specific legacy CSS/projection and expand only this field's owner | `modules/ui-system/settings-bridge.js`, `scripts/test-ui-system.mjs`; Electron evidence pending | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent model / `agentModel` | existing `agentSettingsForm` native free-form model id + `saveAgentConfig` persistence | `settings-bridge` presentation scope + generated Light-DOM Input; legacy model picker remains separate | generic `enhanceForm` Input pass is skipped for this id; `openModelSelectBtn`/`modelSelectModal` remain legacy by design | prove Input states plus picker interaction/reload/teardown, then retire only field-specific legacy presentation; do not replace free-form model semantics with Select | `modules/ui-system/settings-bridge.js`; Electron evidence pending | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent model picker / `AgentModelPicker` | Harness `ui-model-selection` picker contract; VCP model capability is injected from `chatAPI` | `settings-bridge` production consumer over generated Light-DOM `AgentModelPicker` + owner-bound `PopupSelect`; native `#agentModel` remains canonical | legacy `modelSelectModal` still provides hot/favorite sections and explicit refresh; its presentation path remains a migration gap and is not invoked through a hidden proxy; evidence is split into `harness-equivalent` (search disabled, grouped `menuitemradio`) and `vcp-enhanced` (search/favorite/disabled extensions) | complete same-engine DOM/computed-style/geometry/pixel comparison for `harness-equivalent`, reload/teardown evidence, and then retire only the field-specific legacy modal path after feature parity is proven; preserve IPC/persistence and free-form model id semantics | `modules/ui-system/settings-bridge.js`, `modules/uiux/primitives/agent-model-picker.ts`, `modules/uiux/primitives/popup-select.ts`, `scripts/test-electron-lifecycle-stress.mjs`, `scripts/check-agent-settings-production-evidence.mjs`, `docs/reference/deepseek-harness-primitives/model-picker.{dom,geometry,css}`; production interaction proves open/root/model/search/select/close/reopen/Escape/focus restore | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` or `stable` |
+| Agent temperature / `agentTemperature` | existing native number field + `settingsManager` numeric parsing and agent persistence path | `settings-bridge` presentation scope + generated Light-DOM Input; native `type=number` remains canonical | generic `enhanceForm` Input pass is skipped for this id; min/max/step and save semantics remain legacy/business-owned | prove number Input states plus reload/teardown and field-specific legacy CSS deletion; preserve numeric semantics and do not replace with Range | `modules/ui-system/settings-bridge.js`, `main.html`, `modules/settingsManager.js`; Electron evidence pending | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent numeric parameters / `agentContextTokenLimit`, `agentMaxOutputTokens`, `agentTopP`, `agentTopK` | existing native number fields + `settingsManager` parsing/defaults and chat request assembly | `settings-bridge` presentation scope + generated Light-DOM Input; native number controls remain canonical | generic `enhanceForm` Input pass is skipped for these ids; existing labels, constraints, persistence and request keys remain unchanged | prove field-specific default/focus/invalid/reload/teardown evidence, then delete only their legacy presentation selectors; do not replace with Range or duplicate state | `modules/ui-system/settings-bridge.js`, `main.html`, `modules/settingsManager.js`, `modules/chatManager.js`; Electron evidence pending | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent TTS regex inputs / `agentTtsRegexPrimary`, `agentTtsRegexSecondary` | existing native text fields + `settingsManager` TTS regex persistence and matching semantics | `settings-bridge` presentation scope + generated Light-DOM Input; native text inputs remain canonical | generic legacy Input enhancer is skipped for these ids; regex parsing, persistence and TTS matching remain `settingsManager`-owned | add field-specific placeholder/focus/invalid/reload/teardown and same-engine geometry/pixel evidence, then remove only regex presentation selectors | `modules/ui-system/settings-bridge.js`, `modules/settingsManager.js`, `scripts/check-agent-settings-production-evidence.mjs`; production capture verifies both canonical ids | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent action controls / `openModelSelectBtn`, submit, `deleteAgentBtn`, `refreshTtsModelsBtn`, `resetAvatarColorsBtn` | existing Agent Settings button handlers, `SettingsActionBar` state machine, TTS refresh capability and avatar color reset behavior | `settings-bridge` presentation scope + generated Light-DOM Button; native buttons and action-bar remain canonical | Button owns class/style/dispose only; click handlers, dirty/saving/deleting/error states, model modal, TTS refresh and color reset remain legacy/business-owned | add per-button default/disabled/busy/focus/reload/teardown and same-engine geometry/pixel evidence, then remove only field/button-specific legacy selectors after action-bar behavior remains covered | `modules/ui-system/settings-bridge.js`, `modules/ui-system/vcp-ui.js`, `scripts/check-agent-settings-production-evidence.mjs`; current production DOM gate verifies canonical ids, native type and Harness classes | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent prompt mode controls / `.prompt-mode-button` (text/module/preset) | existing `systemPromptContainer` mode switch handlers and prompt editor state | `settings-bridge` presentation scope + generated Light-DOM Button; prompt mode command semantics remain `settingsManager`-owned | Button owns class/style/dispose only; mode selection, active state, prompt editor replacement and persistence remain legacy/business-owned | add active/disabled/focus/keyboard/reload/teardown and same-engine geometry/pixel evidence, then remove prompt-specific legacy button selectors only after mode switching remains covered | `modules/ui-system/settings-bridge.js`, `modules/settingsManager.js`, `scripts/check-agent-settings-production-evidence.mjs`; production capture verifies three no-id prompt buttons and Harness classes | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
+| Agent section disclosure / `.agent-settings-section-header` + `.agent-settings-toggle-btn` | `settingsManager.createSectionController()`; collapse summaries, persisted `uiCollapseStates`, and summary observers | legacy `settingsManager` owner + VCPUI `SettingsSection` enhancer; no typed DisclosureRow consumer yet | section click binding, collapse state persistence, async summary rebuild and MutationObserver remain one legacy owner; direct DisclosureRow wrapping would duplicate these responsibilities | define one typed section owner that preserves `uiCollapseStates`, summary generation, async cancellation and observer teardown; then capture keyboard/ARIA/geometry/reload evidence before deleting `SettingsSection` path | `modules/settingsManager.js`, `modules/ui-system/settings-bridge.js`; audit confirms legacy ownership is still canonical | `legacy-owned / migration-not-started`; not `production-consumer-active` |
+
+## Interaction patterns and composites
+
+| Pattern | Harness source | Lab states | 批次 |
+| --- | --- | --- | --- |
+| Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | candidate-interaction-active（seat form 与 row form 均已复刻并有 geometry/screenshot fixture：seat 28px pill + hero chip 合同；row = title/desc 列（error 时 desc `role="alert"`）+ 36px PresetMenu pill，portal menu align-end、string label、trust==='user' 时 `· Custom` 后缀、disabled=busy‖!writable‖empty、loading/`name ?? id` label 回退链；仅 introduce-cue 动画仍未复刻；`--dsw-alias-label-quaternary` 上游未定义的 token 缺口已如实记录；VCP 无合法 production consumer，禁止 Stable） | B2 |
+| Command / mention popup | `ui-input-trigger/src/client/`, `ui-commands/.../PopupSelectView.tsx` | candidate-interaction-active：`popup-select` Lab-only shell 已覆盖 load/filter/highlight/Enter/Escape/risk acknowledgement/focus restore/dispose，并有 800×600 Electron fixture；仅注入本地 callback，绝不接入 VCP Composer、input machine、token/command business chain；同语义 Harness pixel diff 与合法 production consumer pending | B2 |
+| Model / permission picker | `ui-model-selection/`, `ui-permission-presets/` | loading/selected/risk/error/dismiss | B2 |
+| Settings fields/cards | `ui-settings-plugins/src/client/` | description/invalid/disabled/secret/loading | B2 |
+| Model editor | `ui-settings-models/src/client/` | provider/key/list/empty/error/dialog | B3 |
+| Directory flow | `ui-directory-picker-native/`, `ui-directory-picker-browse/` | foundation-electron-active：Light-DOM Miller browser 已使用 injected listing/create/open/close capabilities，覆盖 single/two pane、hidden entries、abort/close/reopen/dispose，并有 800×600 Electron fixture；breadcrumb → submission-only path editor、local draft prefix filter、separator-debounced injected draft preview、two-leg selected landing（200ms timeout + late upgrade）、nested create dialog（parent inert、Escape retract、创建后选中）和 300ms slow-scan gate 已有 artifact/Electron 证据。绝不接入 VCP directory IPC、Workspace persistence 或 dynamic-wallpaper path selection。pixel diff 与 VCP production consumer pending | B2 |
+| Attachment flow | `ui-attachment/src/` | rail/drop/image/lightbox/error | B3 |
+| Tool-call presentation | `ui-tool/src/client/tool/` | queued/running/success/failure/collapsed | B3 |
+| Question / plan review | `ui-user-questions/src/client/` | unanswered/selected/review/submitting/error | B3 |
+| Workflow run | `ui-workflow-run/src/client/WorkflowRunPanel.tsx` | member states/disclosure/progress/failure | B3 |
+
+## Surface references
+
+AppFrame、Sidebar、Workspace、Settings、Theme、Locale、Goal、Jobs、Skill、Subagent、Deliverables 和 Trajectory 都进入后续 inventory。Conversation/chat nodes、composer internals、markdown/tool-result 可以在实验室复刻，但 VCP 的生产接入继续受聊天与流式冻结边界约束。
+
+## 执行批次
+
+1. **B0 Lab substrate**：generated artifact mount、Candidate registry、fixture route、状态矩阵与截图入口。
+2. **B1 Portable controls**：Button、Input、Menu、Modal、Tooltip/HoverCard、Disclosure、StateDot、Toast、RiskConfirmation、icons。
+3. **B2 Interaction composites**：Agent Preset、Command/Permission/Model picker、Settings fields、Directory flow。
+4. **B3 Structural patterns**：Settings cards、Workspace、Sidebar、Shell、Attachment、Tool details。
+5. **B4 Frozen-domain references**：Conversation、markdown/tool-result、workflow/subagent/trajectory。允许实验室复刻，禁止借此改写 VCP chat kernel 或协议。
+
+每个控件必须先登记 Harness source provenance 和 states，再写实现；不得为了填满页面而创建无法追溯的近似控件。

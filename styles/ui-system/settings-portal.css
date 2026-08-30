@@ -1,0 +1,20 @@
+
+/* Body-level portal menus must stack above the settings overlay.  The
+   generated select primitive appends its open menu (.vcp-uiux-primitive-menu)
+   to document.body with a hard-coded z-index (1100), while the unified
+   settings overlay sits at var(--vcp-ui-z-overlay) (1400) — with the modal
+   open every menu rendered invisibly behind it ("selects cannot be opened").
+   Lift body-level menus above the overlay only while the settings host is
+   active; in-modal portals already inherit the overlay's stacking context
+   and need no lift.  No var() fallback is needed any more: the vcp-ui tokens
+   are declared on :root (tokens.css), so body-level elements resolve them. */
+:is(html, html.vcp-global-settings-host) > body .vcp-uiux-primitive-menu {
+    z-index: calc(var(--vcp-ui-z-overlay) + 10);
+}
+
+/* LanguageRow and Menu primitives use the Harness class directly. Their
+   portal is appended to body too, so it must share the same top-layer lift;
+   otherwise the menu is painted behind Global Settings and appears inert. */
+:is(html, html.vcp-global-settings-host) > body .vcp-harness-menu-portal {
+    z-index: calc(var(--vcp-ui-z-overlay) + 20) !important;
+}

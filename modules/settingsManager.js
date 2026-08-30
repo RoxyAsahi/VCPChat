@@ -59,7 +59,7 @@ const settingsManager = (() => {
     let promptManager = null; // PromptManager instance
     let openModelSelectBtn, modelSelectModal, modelList, modelSearchInput, refreshModelsBtn;
     let topicSummaryModelInput, openTopicSummaryModelSelectBtn; // New elements for topic summary model
-    let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider, ttsSpeedValueSpan;
+    let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider;
     let agentTtsDirectorPromptInput, addAgentTtsDirectorPromptBtn, fillAgentTtsDirectorTemplateBtn, agentTtsDirectorPromptsContainer;
     let currentAgentTtsDirectorPrompts = [];
     let agentTtsPrimarySelectController = null;
@@ -101,15 +101,6 @@ const settingsManager = (() => {
         modular: '模块',
         preset: '预置'
     };
-
-    function syncRangeProgress(rangeInput) {
-        if (!rangeInput) return;
-        const min = Number(rangeInput.min || 0);
-        const max = Number(rangeInput.max || 100);
-        const value = Number(rangeInput.value || min);
-        const progress = max > min ? ((value - min) / (max - min)) * 100 : 0;
-        rangeInput.style.setProperty('--vcp-ui-range-progress', `${Math.max(0, Math.min(100, progress))}%`);
-    }
 
     function reportSettingsSaveResult(form, success, error = '') {
         form?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
@@ -317,8 +308,8 @@ const settingsManager = (() => {
         renderTtsDirectorPrompts();
 
         agentTtsSpeedSlider.value = agentConfig.ttsSpeed !== undefined ? agentConfig.ttsSpeed : 1.0;
-        ttsSpeedValueSpan.textContent = parseFloat(agentTtsSpeedSlider.value).toFixed(1);
-        syncRangeProgress(agentTtsSpeedSlider);
+        // Range presentation is owned by the Harness adapter; the native input
+        // remains the canonical value node consumed by persistence.
 
         // Load and render regex rules
         currentAgentRegexes = JSON.parse(JSON.stringify(agentConfig.stripRegexes || [])); // Deep copy
@@ -916,7 +907,18 @@ const settingsManager = (() => {
     }
 
     // --- Public API ---
+    function toggleAgentSettingsSection(key) {
+        const controller = sectionControllers.get(key);
+        if (!controller) return false;
+        controller.setCollapsed(!controller.container.classList.contains('collapsed'));
+        updateSectionSummary(key);
+        persistCollapseStatesForCurrentSelection();
+        scheduleStickyButtonsRefresh();
+        return true;
+    }
+
     return {
+        toggleAgentSettingsSection: (key) => toggleAgentSettingsSection(key),
         configureCapabilities: ({ settings = null } = {}) => {
             getGlobalSettings = typeof settings?.get === 'function'
                 ? () => settings.get() || {}
@@ -968,7 +970,6 @@ const settingsManager = (() => {
             agentTtsRegexSecondaryInput = document.getElementById('agentTtsRegexSecondary');
             refreshTtsModelsBtn = document.getElementById('refreshTtsModelsBtn');
             agentTtsSpeedSlider = options.elements.agentTtsSpeedSlider;
-            ttsSpeedValueSpan = options.elements.ttsSpeedValueSpan;
             agentTtsDirectorPromptInput = document.getElementById('agentTtsDirectorPromptInput');
             addAgentTtsDirectorPromptBtn = document.getElementById('addAgentTtsDirectorPromptBtn');
             fillAgentTtsDirectorTemplateBtn = document.getElementById('fillAgentTtsDirectorTemplateBtn');
@@ -1011,7 +1012,7 @@ const settingsManager = (() => {
                     topicSummaryModelInput = document.getElementById('topicSummaryModel');
                     openTopicSummaryModelSelectBtn = document.getElementById('openTopicSummaryModelSelectBtn');
 
-                    if (openTopicSummaryModelSelectBtn) {
+                    if (openTopicSummaryModelSelectBtn && !(topicSummaryModelInput?.dataset.vcpTypedTopicSummaryModelPicker === 'true')) {
                         openTopicSummaryModelSelectBtn.addEventListener('click', () => handleOpenModelSelect(topicSummaryModelInput));
                     }
                 }
@@ -1096,7 +1097,8 @@ const settingsManager = (() => {
                 });
             }
 
-            if (openModelSelectBtn) {
+            // compatibility fallback for Classic/bootstrap paths only
+            if (openModelSelectBtn && !(agentModelInput?.dataset.vcpTypedAgentModelPicker === 'true')) {
                 openModelSelectBtn.addEventListener('click', () => handleOpenModelSelect(agentModelInput));
             }
             if (modelSearchInput) {
@@ -1132,13 +1134,6 @@ const settingsManager = (() => {
                 promptManager = null;
             }, { once: true });
 
-            if (agentTtsSpeedSlider && ttsSpeedValueSpan) {
-                agentTtsSpeedSlider.addEventListener('input', () => {
-                    ttsSpeedValueSpan.textContent = parseFloat(agentTtsSpeedSlider.value).toFixed(1);
-                    syncRangeProgress(agentTtsSpeedSlider);
-                });
-                syncRangeProgress(agentTtsSpeedSlider);
-            }
 
             if (addAgentTtsDirectorPromptBtn) {
                 addAgentTtsDirectorPromptBtn.addEventListener('mousedown', event => event.preventDefault());
@@ -1195,7 +1190,7 @@ const settingsManager = (() => {
             setupMouseShortcuts();
 
             // Setup color picker synchronization
-            setupColorPickerSync();
+            if (!window.VCPUIUX?.mountColorPair) setupColorPickerSyncFallback();
 
             // Setup unified collapsible sections
             setupAgentSettingsSections();
@@ -1990,19 +1985,19 @@ function createStripRegexUI() {
     /**
      * 设置颜色选择器与文本输入框的同步
      */
-    function setupColorPickerSync() {
+    function setupColorPickerSyncFallback() {
         // 头像边框颜色同步
         if (agentAvatarBorderColorInput && agentAvatarBorderColorTextInput) {
             agentAvatarBorderColorInput.addEventListener('input', (e) => {
                 agentAvatarBorderColorTextInput.value = e.target.value;
-                updateAvatarPreviewStyle();
+                updateAvatarPreviewStyleFallback();
             });
 
             agentAvatarBorderColorTextInput.addEventListener('input', (e) => {
                 const color = e.target.value.trim();
                 if (/^#[0-9A-F]{6}$/i.test(color)) {
                     agentAvatarBorderColorInput.value = color;
-                    updateAvatarPreviewStyle();
+                    updateAvatarPreviewStyleFallback();
                 }
             });
 
@@ -2043,7 +2038,7 @@ function createStripRegexUI() {
     /**
      * 更新头像预览的样式
      */
-    function updateAvatarPreviewStyle() {
+    function updateAvatarPreviewStyleFallback() {
         if (agentAvatarPreview && agentAvatarBorderColorInput) {
             agentAvatarPreview.style.borderColor = agentAvatarBorderColorInput.value;
         }
@@ -2107,17 +2102,6 @@ function setupParamsCollapsible() {
                 this.container.classList.toggle('collapsed', !!collapsed);
             }
         };
-
-        if (!header.dataset.collapsibleBound) {
-            header.addEventListener('click', (event) => {
-                event.preventDefault();
-                controller.setCollapsed(!controller.container.classList.contains('collapsed'));
-                updateSectionSummary(key);
-                persistCollapseStatesForCurrentSelection();
-                scheduleStickyButtonsRefresh();
-            });
-            header.dataset.collapsibleBound = 'true';
-        }
 
         sectionControllers.set(key, controller);
         return controller;

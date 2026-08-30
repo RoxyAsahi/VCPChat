@@ -265,6 +265,40 @@
         flex-wrap: wrap;
         gap: var(--vcp-ui-space-2);
     }
+    html .vcp-ui-scope .vcp-ui-showcase-gate {
+        border: 1px solid color-mix(in srgb, var(--vcp-ui-warning) 38%, transparent);
+        background: color-mix(in srgb, var(--vcp-ui-warning) 7%, var(--vcp-ui-surface));
+    }
+    html .vcp-ui-scope .vcp-ui-showcase-gate-status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        color: var(--vcp-ui-warning);
+        font-size: var(--vcp-ui-font-size-xs);
+        font-weight: 650;
+    }
+    html .vcp-ui-scope .vcp-ui-showcase-gate-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: 0 18px 18px;
+    }
+    html .vcp-ui-scope .vcp-ui-showcase-gate-grid > div {
+        display: grid;
+        gap: 4px;
+        padding: 12px;
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: 6px;
+        background: var(--vcp-ui-surface);
+    }
+    html .vcp-ui-scope .vcp-ui-showcase-gate-grid span {
+        color: var(--vcp-ui-text-secondary);
+        font-size: var(--vcp-ui-font-size-xs);
+        line-height: 1.4;
+    }
 
     html .vcp-ui-scope .vcp-ui-showcase-demo {
         display: grid;

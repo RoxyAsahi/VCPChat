@@ -1,0 +1,29 @@
+{
+  "primitive": "ModelSelect",
+  "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "styleSource": "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
+  "status": "candidate-reference",
+  "candidateStatus": "production-consumer-active / Candidate Lab ready-selected, keyboard-focus and pointer-hover same-engine static-source-reference pixel baselines pass; the hover baseline requires true pointer hover with no focus and measures 148/35500 (0.417%) at 250x142 under 1%/2 policy. A Harness production image-history -> text-only selection failure now captures the real Toast geometry/style, menu-open/no-Retry and unchanged-selection state at 800x600; it remains a source capture, not a VCP visual comparison. root/model/effort lifecycle, keyboard/disabled, load-error-retry and selection-error Toast are replayable as generated-artifact evidence. locked is replayable as native disabled/no popup/no load and selecting as submitting/aria-busy/disabled-row state evidence, sourced from ModelSelect.tsx; cross-source locked/selecting visual proof and legacy retirement remain pending",
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "selectors": {
+    ".root": { "position": "relative", "minWidth": "0" },
+    ".trigger": { "height": "28px", "maxWidth": "220px", "padding": "0 4px 0 8px", "gap": "4px", "borderRadius": "24px", "fontSize": "13px", "lineHeight": "20px" },
+    ".menu": { "width": "min(240px, calc(100vw - 32px))", "maxHeight": "min(360px, calc(100vh - 96px))", "padding": "4px", "borderRadius": "12px", "offset": "bottom calc(100% + 8px)" },
+    ".cell": { "height": "40px", "padding": "0 10px", "gap": "8px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".option": { "minHeight": "38px", "padding": "6px 8px", "gap": "8px", "borderRadius": "10px" },
+    ".groupTitle": { "padding": "5px 8px 3px", "fontSize": "12px", "lineHeight": "18px" },
+    ".status": { "padding": "10px", "fontSize": "13px", "lineHeight": "20px" },
+    ".empty": { "padding": "10px", "fontSize": "13px", "lineHeight": "20px" },
+    ".error": { "gap": "8px", "padding": "7px 8px", "borderRadius": "8px", "fontSize": "12px", "lineHeight": "18px" },
+    ".warning": { "gap": "8px", "padding": "7px 8px", "borderRadius": "8px", "fontSize": "12px", "lineHeight": "18px" }
+  },
+  "tokens": ["--dsw-alias-label-secondary", "--dsw-alias-label-caption", "--dsw-alias-label-dimmed", "--dsw-alias-label-tertiary", "--dsw-alias-label-primary", "--dsw-alias-interactive-bg-hover", "--dsw-alias-interactive-bg-hover-danger", "--dsw-alias-state-error-primary", "--dsw-alias-state-warn-label", "--dsw-alias-bg-module-platform", "--dsw-alias-border-l3", "--dsw-alias-border-inverted", "--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2"],
+  "states": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked"],
+  "vcpCandidateEvidence": {
+    "screenshot": "../../reports/vcp-agent-model-picker-candidate.png",
+    "report": "../../reports/vcp-agent-model-picker-candidate.json",
+    "status": "candidate-interaction-active",
+    "productionConsumer": false
+  }
+}

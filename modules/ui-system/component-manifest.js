@@ -1,5 +1,17 @@
-const stable = (name, category, aliases = []) => Object.freeze({ name, category, aliases, status: 'stable', since: '1.0.0' });
-const candidate = (name, category) => Object.freeze({ name, category, aliases: [], status: 'candidate', since: '1.1.0' });
+// `status` describes the VCP component API. `harnessMaturity` is a separate
+// evidence gate: a stable VCP API is not automatically Harness-equivalent.
+const stable = (name, category, aliases = [], options = {}) => Object.freeze({
+    name, category, aliases, status: 'stable', since: '1.0.0',
+    harnessMaturity: options.harnessMaturity || 'legacy-compatibility',
+    productionEligible: options.productionEligible === true,
+    ...options
+});
+const candidate = (name, category, aliases = [], options = {}) => Object.freeze({
+    name, category, aliases, status: 'candidate', since: '1.1.0',
+    harnessMaturity: options.harnessMaturity || 'candidate-lab',
+    productionEligible: false,
+    ...options
+});
 
 export const COMPONENT_MANIFEST = Object.freeze([
     stable('Button', 'actions'),
@@ -18,7 +30,11 @@ export const COMPONENT_MANIFEST = Object.freeze([
     candidate('Card', 'foundation'),
     candidate('Tabs', 'navigation'),
     candidate('Toolbar', 'actions'),
-    stable('List', 'navigation', ['ListItem']),
+    // Demoted from stable (2026-08-27): the production consumer was removed by
+    // 10e0adb0 and no next-architecture surface mounts List anymore; its stale
+    // consumer-evidence record pointed at deleted markers. Re-promote only
+    // together with a real production consumer + Electron evidence record.
+    candidate('List', 'navigation', ['ListItem']),
     candidate('TableFrame', 'data'),
     candidate('EmptyState', 'foundation'),
     stable('Modal', 'feedback'),

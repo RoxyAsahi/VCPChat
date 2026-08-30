@@ -121,8 +121,8 @@
         display: grid;
         gap: var(--vcp-ui-space-2);
     }
-    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-preset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-density-grid, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-font-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-preset-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-density-grid, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-font-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-radius-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-tile, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-option, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-mode-grid button {
         min-width: 0;
@@ -354,7 +354,7 @@
         border-radius: var(--vcp-ui-radius-card);
         background: linear-gradient(100deg, var(--vcp-ui-fill-0) 20%, var(--vcp-ui-fill-2) 45%, var(--vcp-ui-fill-0) 70%);
         background-size: 220% 100%;
-        animation: vcp-appearance-theme-loading 1.2s ease-in-out infinite;
+        animation: vcp-appearance-theme-loading 1.2s var(--vcp-motion-ease-standard) infinite;
     }
     @keyframes vcp-appearance-theme-loading {
         from { background-position: 100% 0; }
@@ -1238,7 +1238,7 @@
         border: 0;
         background: transparent;
     }
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-home-tagline-setting .settings-form-group { margin: 0; }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-home-tagline-setting .vcp-settings-row { margin: 0; }
 
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-tagline-editor {
         margin-top: var(--vcp-ui-space-4);
@@ -1281,26 +1281,80 @@
         justify-content: space-between;
         gap: var(--vcp-ui-space-3);
     }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-settings-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-settings-grid > [id$="Row"] {
+        width: 100%;
+    }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-range-heading output {
         color: var(--vcp-ui-text-2);
         font-size: var(--vcp-ui-font-caption);
         font-variant-numeric: tabular-nums;
     }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-sidebar-geometry-controls {
-        display: grid;
-        gap: var(--vcp-ui-space-4);
+        display: flex;
+        flex-direction: column;
+        gap: 0;
     }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-geometry-control {
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-4);
         width: 100%;
         margin: 0;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, .1));
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-geometry-control .appearance-range-heading {
+        flex: 1;
+        min-width: 0;
+        padding-right: 48px;
     }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-geometry-control input[type="range"] {
-        width: 100%;
+        flex: 0 1 220px;
+        width: 220px;
         min-width: 0;
         padding: 0;
         border: 0;
         accent-color: var(--vcp-ui-accent);
         cursor: pointer;
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-control {
+        display: grid;
+        grid-template-columns: minmax(132px, 0.34fr) minmax(0, 1fr);
+        align-items: start;
+        gap: var(--vcp-ui-space-4);
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-label {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        padding-top: var(--vcp-ui-space-2);
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-label strong {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 500;
+        line-height: var(--vcp-ui-line-body);
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-label small {
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-micro);
+        line-height: var(--vcp-ui-line-body);
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-control .appearance-radius-choice-grid {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+    }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-control .appearance-radius-choice-grid label {
+        flex: 0 1 auto;
     }
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-geometry-helper {
         display: block;
@@ -1318,6 +1372,8 @@
         :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .appearance-workbench-card { grid-template-columns: 82px minmax(0, 1fr); }
         :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .appearance-workbench-open { grid-column: 1 / -1; width: 100%; }
         :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-layout-options { grid-template-columns: 1fr; }
+        :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-control { grid-template-columns: 1fr; gap: var(--vcp-ui-space-2); }
+        :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .appearance-radius-choice-label { padding-top: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
         :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope.vcp-appearance-studio-overlay, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-studio, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-tile, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-option { transition: none; }
