@@ -171,8 +171,8 @@
     position: relative;
     z-index: 1;
     display: flex;
-    width: 800px;
-    height: min(800px, calc(100vh - 48px));
+    width: min(1080px, calc(100vw - 96px));
+    height: min(720px, calc(100vh - 96px));
     max-width: calc(100vw - 48px);
     min-height: 0;
     padding: 0;
