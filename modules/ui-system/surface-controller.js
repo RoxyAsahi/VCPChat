@@ -28,9 +28,7 @@
         chooseKernel() {
             if (this.kernelPreference === 'native' || this.kernelPreference === 'web-awesome') return this.kernelPreference;
             const runtime = this.window.VCPWebAwesome?.getRuntimeState?.();
-            return this.document.documentElement.dataset.uiMode === 'next' && runtime?.state === 'ready'
-                ? 'web-awesome'
-                : 'native';
+            return runtime?.state === 'ready' ? 'web-awesome' : 'native';
         }
 
         _createScope(label = this.label) {

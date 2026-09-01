@@ -609,7 +609,7 @@ const settingsManager = (() => {
      * @param {string} currentSecondaryVoice - The currently selected secondary voice.
      */
     function ensureThemedTtsSelects() {
-        if (!window.VCPUI || document.documentElement.dataset.uiMode !== 'next') return;
+        if (!window.VCPUI) return;
         try {
             agentTtsPrimarySelectController = window.VCPUI.enhance(
                 'Select',

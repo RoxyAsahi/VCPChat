@@ -144,7 +144,7 @@ test('动态壁纸插件在 Next 复用标题栏控件并通过原生 IPC 选目
     dom.window.close();
 });
 
-test('动态壁纸插件切换 Classic/Next 时保持同一标题栏控件和状态', async () => {
+test('动态壁纸插件保持同一标题栏控件和状态', async () => {
     const dom = new JSDOM(`<!doctype html><html data-ui-mode="classic"><body>
         <header class="chat-header">
             <h3 id="currentChatAgentName">Agent A</h3>
@@ -211,23 +211,6 @@ test('动态壁纸插件切换 Classic/Next 时保持同一标题栏控件和状
     const previousMuted = plugin.state.muted;
     classicPanel.querySelector('[data-action="mute"]').click();
     assert.equal(plugin.state.muted, !previousMuted);
-
-    window.document.documentElement.dataset.uiMode = 'next';
-    window.dispatchEvent(new window.CustomEvent('ui-mode-changed', {
-        detail: { mode: 'next', previousMode: 'classic' }
-    }));
-    assert.equal(window.document.getElementById('vchat-wallpaper-title-group'), titleGroup,
-        'switching to Next must keep the shared title group');
-    assert.equal(window.document.getElementById('vchat-dynamic-wallpaper-panel'), classicPanel,
-        'switching to Next must not rebuild or move the plugin controls');
-    assert.equal(window.document.getElementById('vchatDynamicWallpaperMenuButton'), null);
-
-    window.document.documentElement.dataset.uiMode = 'classic';
-    window.dispatchEvent(new window.CustomEvent('ui-mode-changed', {
-        detail: { mode: 'classic', previousMode: 'next' }
-    }));
-    assert.equal(window.document.getElementById('vchat-dynamic-wallpaper-panel'), classicPanel);
-    assert.equal(classicVisible.checked, true, 'the shared visibility state must survive mode changes');
 
     plugin.destroy();
     assert.deepEqual(Array.from(header.children), [title, window.document.querySelector('.chat-actions')]);

@@ -35,7 +35,7 @@ function check(name, fn) {
 }
 
 check('exposes the VCP-shaped API', () => {
-    for (const key of ['loadComponents', 'create', 'on', 'awaitUpdate', 'applyTokens', 'registerTheme', 'destroy', 'isNextUi', 'getRuntimeState']) {
+    for (const key of ['loadComponents', 'create', 'on', 'awaitUpdate', 'applyTokens', 'registerTheme', 'destroy', 'getRuntimeState']) {
         assert.equal(typeof adapter[key], 'function', `missing ${key}`);
     }
     assert.equal(typeof adapterWin.VCPWebAwesome, 'object');
@@ -97,28 +97,6 @@ check('registerTheme is ref-counted', () => {
     assert.equal(link, null, 'link removed at zero owners');
 });
 
-check('isNextUi reflects the current ui mode', () => {
-    assert.equal(adapter.isNextUi(), true);
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
-    assert.equal(adapter.isNextUi(), false);
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
-});
-
-check('applyTokens is a no-op outside next mode', () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
-    const root = scopeRoot();
-    const release = adapter.applyTokens(root);
-    assert.equal(root.hasAttribute('data-wa-scope'), false);
-    release();
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
-});
-
-check('loadComponents refuses to run outside next mode', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
-    await assert.rejects(adapter.loadComponents(['button']), /next/);
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
-});
-
 check('destroy clears theme ref-count nodes', () => {
     adapter.registerTheme();
     adapter.destroy();
@@ -147,7 +125,6 @@ check('translateEvent re-dispatches a wa event as a VCP event', () => {
 });
 
 check('mountScope applies tokens and theme together and releases both', () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
     const root = scopeRoot();
     const release = adapter.mountScope(root);
     assert.equal(root.dataset.waScope, 'true');
@@ -199,7 +176,6 @@ await checkAsync('mounted scope follows runtime light and dark theme changes', a
 });
 
 await checkAsync('loadComponents failure is deterministic and observable', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
     const events = [];
     const onLoaded = event => events.push(['loaded', event.detail?.tags]);
     const onFailed = event => events.push(['failed', event.detail?.tags]);
@@ -227,7 +203,6 @@ await checkAsync('loadComponents failure is deterministic and observable', async
 });
 
 await checkAsync('failed runtime ignores irreversible custom element registrations', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
     class FakeWaButton extends adapterWin.HTMLElement {}
     if (!adapterWin.customElements.get('wa-button')) {
         adapterWin.customElements.define('wa-button', FakeWaButton);

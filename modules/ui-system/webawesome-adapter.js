@@ -44,14 +44,7 @@ let runtimeState = 'idle';
 let runtimePromise = null;
 let runtimeError = null;
 
-function isNextUi() {
-    return document.documentElement.dataset.uiMode === 'next';
-}
-
 async function loadComponents(tags) {
-    if (!isNextUi()) {
-        throw new Error('WebAwesomeAdapter: components require html[data-ui-mode="next"]');
-    }
     const requested = [...new Set((tags || CORE_COMPONENTS).map(tag => String(tag).toLowerCase()))];
     const unsupported = requested.filter(tag => !CORE_COMPONENTS.includes(tag));
     if (unsupported.length) {
@@ -173,10 +166,10 @@ async function awaitUpdate(element) {
 }
 
 // Maps the current VCP design tokens onto Web Awesome's --wa-* contract for a
-// specific scope root. Only runs in next UI mode; the actual mapping lives in
+// specific scope root. The actual mapping lives in
 // styles/ui-system/webawesome-adapter.css (kept as the single visual authority).
 function applyTokens(scopeRoot) {
-    if (!isNextUi() || !scopeRoot) return () => {};
+    if (!scopeRoot) return () => {};
     const hadLightClass = scopeRoot.classList.contains('wa-light');
     const hadDarkClass = scopeRoot.classList.contains('wa-dark');
     const syncTheme = () => {
@@ -240,8 +233,7 @@ window.VCPWebAwesome = Object.freeze({
     awaitUpdate,
     applyTokens,
     registerTheme,
-    destroy,
-    isNextUi
+    destroy
 });
 
 window.dispatchEvent(new CustomEvent('vcp-webawesome-adapter-ready'));
@@ -258,6 +250,5 @@ export default {
     awaitUpdate,
     applyTokens,
     registerTheme,
-    destroy,
-    isNextUi
+    destroy
 };

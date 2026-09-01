@@ -85,11 +85,6 @@ function createWebAwesomeButton(label, attributes = {}) {
 }
 
 export function mountWebAwesomeComparison(host, { create, on }) {
-    if (document.documentElement.dataset.uiMode !== 'next') {
-        host.append(createElement('p', { class: 'vcp-ui-wa-error' }, 'Web Awesome 对照仅在 新版 UI 模式下可用。'));
-        return () => host.replaceChildren();
-    }
-
     const disposers = [];
     const root = createElement('div', { class: 'vcp-ui-wa-comparison wa-dark' });
     const intro = createElement('div', { class: 'vcp-ui-wa-intro' });

@@ -16,7 +16,7 @@ test('appearance and theme expose explicit authoritative subscriptions', async (
     window.eval(source('modules/ui-system/appearance-engine.js'));
     const appearances = [];
     const unsubscribeAppearance = window.VCPAppearance.subscribe(state => appearances.push(state.revision));
-    window.VCPAppearance.commit({ density: 'compact' }, { uiMode: 'next', source: 'test' });
+    window.VCPAppearance.commit({ density: 'compact' }, { source: 'test' });
     assert.deepEqual(appearances, [0, 1]);
     unsubscribeAppearance();
 

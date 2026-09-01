@@ -25,11 +25,9 @@ test('lifecycle inspector reports ownership metadata without payload content', a
         () => window.VCPLifecycleInspector.setStreamDiagnosticsProvider(() => null),
         /already registered/
     );
-    window.dispatchEvent(new window.CustomEvent('ui-mode-transition-state', { detail: { phase: 'settled', mode: 'next', generation: 3 } }));
     const renderer = window.VCPLifecycleInspector.snapshot();
     const main = await window.VCPLifecycleInspector.snapshotMain();
     assert.equal(renderer.mode, 'next');
-    assert.equal(renderer.transitions[0].generation, 3);
     assert.equal(renderer.performance[0].name, 'next.mount');
     assert.equal(renderer.streams.activeMessageId, 'safe-stream');
     assert.equal(main.tasks[0].operation, 'embedded:create');

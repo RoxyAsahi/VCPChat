@@ -429,13 +429,14 @@ assert.equal(dynamicSelectRoot.querySelectorAll('wa-select.vcp-ui-select-proxy')
 assert.equal(dynamicSelect.hidden, false, 'observer teardown restores native Select visibility');
 dynamicSelectRoot.remove();
 
-document.documentElement.dataset.uiMode = 'classic';
 const lateUpgradeSelect = document.createElement('select');
 lateUpgradeSelect.add(new Option('Late', 'late'));
 scope.append(lateUpgradeSelect);
+const realIsDefined = window.VCPWebAwesome.isDefined;
+window.VCPWebAwesome = Object.freeze({ ...window.VCPWebAwesome, isDefined: () => false });
 const nativeSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
 assert.equal(nativeSelectController.kernel, 'native');
-document.documentElement.dataset.uiMode = 'next';
+window.VCPWebAwesome = Object.freeze({ ...window.VCPWebAwesome, isDefined: realIsDefined });
 const upgradedSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(upgradedSelectController.kernel, 'webawesome-proxy', 'native Select upgrades after WA becomes available');

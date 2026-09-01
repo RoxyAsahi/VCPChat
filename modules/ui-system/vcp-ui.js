@@ -732,11 +732,10 @@ function setCommon(element, state, variants, sizes = ['sm', 'md', 'lg']) {
 }
 
 // Builds a Web Awesome-backed control when the component bundle has been lazily
-// registered (the consuming surface preloads it through VCPWebAwesome) and the
-// adapter is available in next mode. Falls back to null so factories use the
-// native DOM control; business pages keep the VCPUI API either way.
+// registered (the consuming surface preloads it through VCPWebAwesome). Falls
+// back to null so factories use the native DOM control; business pages keep
+// the VCPUI API either way.
 function waControl(tag, attrs = {}) {
-    if (document.documentElement.dataset.uiMode !== 'next') return null;
     if (!window.VCPWebAwesome?.isDefined?.(tag)) return null;
     return window.VCPWebAwesome.create(tag, attrs);
 }
@@ -2290,7 +2289,6 @@ function observeControls(root = document, options = {}) {
         });
     };
     const enhanceTree = candidate => {
-        if (document.documentElement.dataset.uiMode !== 'next') return;
         const scope = candidate?.nodeType === 1 ? candidate : root;
         const selects = [];
         if (kinds.has('Select')) {
@@ -2344,7 +2342,6 @@ const VCPUI = Object.freeze({
         if (existing) {
             const canUpgradeSelect = normalized === 'select'
                 && existing.kernel === 'native'
-                && document.documentElement.dataset.uiMode === 'next'
                 && window.VCPWebAwesome?.isDefined?.('select');
             if (!canUpgradeSelect) return existing.update(options);
             existing.destroy();

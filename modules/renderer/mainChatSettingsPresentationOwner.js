@@ -62,7 +62,7 @@ export function createMainChatSettingsPresentationOwner({
         startupThemeGateCapability.release({ mode: globalSettings.currentThemeMode });
         const appearanceProfile = getAppearance()?.commit(
             globalSettings.appearanceProfile,
-            { uiMode: 'next', source: 'settings-load' }
+            { source: 'settings-load' }
         ) || globalSettings.appearanceProfile;
         const filterEnabled = globalSettings.filterEnabled
             ?? globalSettings.doNotDisturbLogMode

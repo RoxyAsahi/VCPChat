@@ -317,7 +317,7 @@ async function saveGlobalSettings(deps, settingsForm) {
         try {
             newSettings.appearanceProfile = getAppearance()?.commit(
                 newSettings.appearanceProfile,
-                { uiMode: 'next', source: 'settings-save' }
+                { source: 'settings-save' }
             ) || newSettings.appearanceProfile;
             const committedSettings = { ...currentSettings, ...newSettings };
             refs.globalSettings.set?.(committedSettings);
