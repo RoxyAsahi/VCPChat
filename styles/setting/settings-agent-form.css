@@ -1,4 +1,0 @@
-/* Agent form geometry is owned by settings-schema-surface.css. */
-#agentSettingsForm .form-actions button[type="submit"] {
-    color: var(--highlight-text);
-}

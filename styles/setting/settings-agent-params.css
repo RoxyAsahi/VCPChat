@@ -1,8 +1,0 @@
-/* Generated numeric inputs own their presentation; native fallback remains scoped. */
-.params-content input[type="number"]:not(.input) {
-    width: 100%;
-    height: var(--vcp-ui-control-height);
-    min-height: var(--vcp-ui-control-height);
-    box-sizing: border-box;
-    border-radius: var(--vcp-ui-radius-sm);
-}

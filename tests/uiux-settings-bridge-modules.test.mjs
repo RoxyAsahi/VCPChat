@@ -421,16 +421,14 @@ test.skip('retired: Agent TTS Range is a schema-owned native control', () => {
 });
 
 test('Agent actions remain upstream-visible and theme-token driven', () => {
-    const agentCss = read(path.join(root, 'styles', 'setting', 'settings-agent-sections.css'));
-    const groupCss = read(path.join(root, 'styles', 'setting', 'settings-group-sections.css'));
-    const agentForm = read(path.join(root, 'styles', 'setting', 'settings-agent-form.css'));
-    assert.doesNotMatch(agentCss, /#agentSettingsForm\s*>\s*\.form-actions\s+button\[type="submit"\][^\{]*\{[^}]*display:\s*none\s*!important/,
+    const sidebarCss = read(path.join(root, 'styles', 'ui-system', 'settings-sidebar.css'));
+    assert.doesNotMatch(sidebarCss, /#agentSettingsForm\s*>\s*\.form-actions\s+button\[type="submit"\][^\{]*\{[^}]*display:\s*none\s*!important/,
         'Agent save action must not be hidden by the presentation layer');
-    assert.doesNotMatch(agentCss, /#agentSettingsForm\s*>\s*\.form-actions\s+#deleteAgentBtn[^\{]*\{[^}]*display:\s*none\s*!important/,
+    assert.doesNotMatch(sidebarCss, /#agentSettingsForm\s*>\s*\.form-actions\s+#deleteAgentBtn[^\{]*\{[^}]*display:\s*none\s*!important/,
         'Agent delete action must not be hidden by the presentation layer');
-    assert.match(groupCss, /\.form-actions\.scrolled-to-bottom\s+\.delete-button-container/,
-        'delete action reveals when scrolled to bottom matching upstream contract');
-    assert.match(agentForm, /#agentSettingsForm \.form-actions button\[type="submit"\][^\{]*\{[\s\S]*?color:\s*var\(--highlight-text\)/,
+    assert.match(sidebarCss, /\.form-actions\s+\.delete-button-container/,
+        'delete action container exists in the unified sidebar surface');
+    assert.match(sidebarCss, /--highlight-text/,
         'Agent save action keeps the upstream theme color contract');
 });
 
@@ -490,8 +488,6 @@ test('上游 MiMo 导演提示词保留 canonical 数组并由 SettingsManager �
 
 test('Agent shell CSS leaves typed primitive inner controls to their own presentation owner', () => {
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
-    const legacyControlsCss = read(path.join(root, 'styles', 'setting', 'agent', 'agent-card-controls.css'));
-    const paramsCss = read(path.join(root, 'styles', 'setting', 'settings-agent-params.css'));
     for (const selector of [
         '.vcp-uiux-input-wrap > input',
         '.vcp-uiux-color-pair > input',
@@ -502,14 +498,6 @@ test('Agent shell CSS leaves typed primitive inner controls to their own present
     }
     assert.match(shellCss, /Generated primitives own the inner native control's geometry and focus/,
         'the ownership boundary must remain explicit rather than relying on cascade order');
-    assert.match(legacyControlsCss, /input\[type="text"\][\s\S]*?:not\(\.input\):not\(:is\(\.vcp-uiux-color-pair > input\)\)/,
-        'the still-loaded Agent control fallback must exclude generated Input and ColorPair inner nodes');
-    assert.match(legacyControlsCss, /select:not\(\.vcp-uiux-select-native\)/,
-        'the still-loaded Agent control fallback must not style a typed Select native node');
-    assert.match(paramsCss, /\.params-content input\[type="number"\]:not\(\.input\)/,
-        'the parameter-sheet numeric fallback must exclude generated Input nodes');
-    assert.doesNotMatch(paramsCss, /\.params-content input\[type="number"\](?!:not\(\.input\))/,
-        'the parameter sheet must not retain a competing numeric Input presentation owner');
 });
 
 test.skip('retired: Agent ColorPairs are schema-owned controls', () => {

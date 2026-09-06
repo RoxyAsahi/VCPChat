@@ -11,8 +11,7 @@ const settingsCss = fs.readFileSync(path.join(repoRoot, 'styles/settings.css'), 
 const sidebarListCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-sidebar-list.css'), 'utf8');
 const sidebarTabsCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-sidebar-tabs.css'), 'utf8');
 const searchCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-search.css'), 'utf8');
-const identityCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-agent-identity.css'), 'utf8');
-const groupSectionsCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-group-sections.css'), 'utf8');
+const sidebarCss = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/settings-sidebar.css'), 'utf8');
 const schema = await import(pathToFileURL(path.join(repoRoot, 'modules/settings/schema/sidebar-surfaces.js')).href);
 const surfaceModule = await import(pathToFileURL(path.join(repoRoot, 'modules/ui-system/settings/settings-sidebar-surface.js')).href);
 
@@ -156,11 +155,10 @@ test('基础信息头像与名字框外观结构契约测试：保持头像边�
     assert.ok(nameWrapper, '必须具备 .agent-name-wrapper 容器');
     assert.ok(nameInput, '必须具备 #agentNameInput 输入框');
 
-    // 样式规范验证（恢复自 settings-agent-identity.css）
-    assert.match(identityCss, /\.agent-avatar-wrapper[\s\S]*?position:\s*relative/, '头像容器必须声明 relative 布局以承载悬浮遮罩');
-    assert.match(identityCss, /\.avatar-upload-overlay[\s\S]*?opacity:\s*0/, '上传遮罩默认必须半透明隐藏');
-    assert.match(identityCss, /\.agent-avatar-wrapper:hover\s+\.avatar-upload-overlay[\s\S]*?opacity:\s*1/, '鼠标悬停头像时遮罩必须平滑呈现');
-    assert.match(identityCss, /\.agent-name-wrapper[\s\S]*?flex:\s*1/, '名字输入框必须自适应填满右侧空间');
+    // 样式规范验证（收敛至 settings-sidebar.css）
+    assert.match(sidebarCss, /\.agent-avatar-wrapper[\s\S]*?position:\s*relative/, '头像容器必须声明 relative 布局以承载悬浮遮罩');
+    assert.match(sidebarCss, /\.avatar-upload-overlay[\s\S]*?position:\s*absolute/, '上传徽章必须使用绝对定位挂载于头像右下角');
+    assert.match(sidebarCss, /\.agent-identity-main[\s\S]*?grid-template-columns:\s*76px\s+minmax\(0,\s*1fr\)/, '身份主网格必须自适应填满右侧名字空间');
 });
 
 test('侧边栏独立滚动与列表容器测试：列表区域独立滚动，不破坏侧边栏结构', () => {
@@ -295,10 +293,9 @@ test('侧边栏表面物理卸载（Unmount）机制测试：非激活时 DOM �
 });
 
 test('非激活设置面板绝对不能在 Agent 列表上方创建碰撞区（防遮挡防线）', () => {
-    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?display:\s*none !important;/);
-    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?pointer-events:\s*none !important;/);
-    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?visibility:\s*hidden !important;/);
-    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?z-index:\s*-1 !important;/);
+    assert.match(sidebarCss, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?display:\s*none;/);
+    assert.match(sidebarCss, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?pointer-events:\s*none;/);
+    assert.match(sidebarCss, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?visibility:\s*hidden;/);
 });
 
 test('正则分区由 schema 独占渲染：DOM 锚点齐备且按钮委托给业务层', () => {
@@ -360,12 +357,10 @@ test('集成碰撞：schema 与 manager 共存时点击只翻转一次（防双�
     delete document.defaultView.settingsManager;
 });
 
-test('样式入口引用完备性核验：settings.css 完整导入 18 个核心子样式表', () => {
+test('样式入口引用完备性核验：settings.css 完整导入 5 个核心保留子样式表', () => {
     assert.match(settingsCss, /@import url\('\.\/setting\/settings-sidebar-tabs\.css'\);/);
     assert.match(settingsCss, /@import url\('\.\/setting\/settings-sidebar-list\.css'\);/);
     assert.match(settingsCss, /@import url\('\.\/setting\/settings-search\.css'\);/);
-    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-identity\.css'\);/);
-    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-sections\.css'\);/);
-    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-prompt\.css'\);/);
-    assert.match(settingsCss, /@import url\('\.\/setting\/settings-group-sections\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-model-select\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-regex\.css'\);/);
 });
