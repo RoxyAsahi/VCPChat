@@ -1065,9 +1065,6 @@ const settingsManager = (() => {
             // Setup unified collapsible sections
             setupAgentSettingsSections();
 
-            // Setup style collapsible
-            setupStyleCollapsible();
-
             // Setup reset colors button
             if (resetAvatarColorsBtn) {
                 resetAvatarColorsBtn.addEventListener('click', handleResetAvatarColors);
@@ -1129,6 +1126,7 @@ const settingsManager = (() => {
         // remains the only place that knows how the current Agent, summaries
         // and persisted uiCollapseStates fit together.
         toggleAgentSettingsSection: (key) => toggleAgentSettingsSection(key),
+        persistCollapseStatesForCurrentSelection: () => persistCollapseStatesForCurrentSelection(),
         // Regex business actions.  The schema surface owns the buttons and the
         // listeners; the manager owns what a click actually does.  Exposed as
         // narrow commands so no presentation owner needs to reach into the
@@ -1795,20 +1793,6 @@ function resolveRegexSlots() {
 
 
     /**
-     * 设置参数容器的折叠功能
-     */
-function setupParamsCollapsible() {
-        setupAgentSettingsSections();
-    }
-
-    /**
-     * 设置语音设置容器的折叠功能
-     */
-    function setupTtsCollapsible() {
-        setupAgentSettingsSections();
-    }
-
-    /**
      * 获取当前所有折叠区域的状态
      */
     function getCurrentCollapseStates() {
@@ -2154,30 +2138,6 @@ function setupParamsCollapsible() {
         updateAllSectionSummaries();
 
         console.log('[SettingsManager] Collapse states restored:', states);
-    }
-
-    /**
-     * 设置自定义样式容器的折叠功能
-     */
-    function setupStyleCollapsible() {
-        const styleContainer = document.querySelector('.agent-style-collapsible-container');
-        const styleHeader = document.getElementById('styleCollapseHeader');
-
-        if (!styleContainer || !styleHeader) {
-            console.warn('[SettingsManager] Style collapsible elements not found');
-            return;
-        }
-
-        if (!styleHeader.dataset.collapsibleBound) {
-            styleHeader.addEventListener('click', () => {
-                styleContainer.classList.toggle('collapsed');
-                persistCollapseStatesForCurrentSelection();
-                scheduleStickyButtonsRefresh();
-            });
-            styleHeader.dataset.collapsibleBound = 'true';
-        }
-
-        console.log('[SettingsManager] Style collapsible setup complete.');
     }
 
     /**

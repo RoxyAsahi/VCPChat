@@ -152,14 +152,6 @@ window.GroupRenderer = (() => {
             }
         };
 
-        if (!header.dataset.collapsibleBound) {
-            header.addEventListener('click', (event) => {
-                event.preventDefault();
-                controller.setCollapsed(!controller.container.classList.contains('collapsed'));
-            });
-            header.dataset.collapsibleBound = 'true';
-        }
-
         groupSectionControllers.set(key, controller);
         return controller;
     }
