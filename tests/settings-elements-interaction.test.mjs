@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 
 const repoRoot = '/Users/asahi/Documents/Codex/vcpchat-exp-schema';
 const css = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/settings-sidebar.css'), 'utf8');
+const sidebarCss = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/sidebar.css'), 'utf8');
 const schema = await import(pathToFileURL(path.join(repoRoot, 'modules/settings/schema/sidebar-surfaces.js')).href);
 const surfaceModule = await import(pathToFileURL(path.join(repoRoot, 'modules/ui-system/settings/settings-sidebar-surface.js')).href);
 
@@ -51,6 +52,9 @@ test('schema-rendered Agent surface exposes every business anchor and all contro
     assert.equal(form.querySelectorAll('.agent-settings-section-title-row').length, sections.length);
     assert.equal(form.querySelector('[data-section-key="prompt"] .agent-settings-section-title-row > .agent-settings-section-title')?.textContent, '系统提示词');
     assert.equal(form.querySelector('#refreshTtsModelsBtn .vcp-ui-icon')?.textContent, 'refresh');
+    const avatarOverlay = form.querySelector('.avatar-upload-overlay');
+    assert.ok(avatarOverlay?.querySelector('svg.avatar-upload-icon'), 'avatar upload control must contain a real SVG node');
+    assert.doesNotMatch(avatarOverlay?.textContent || '', /<svg|aria-hidden|<path/, 'SVG source must not leak as visible text');
     const sectionEvents = [];
     sections.forEach(section => section.querySelector('.agent-settings-section-header').addEventListener('click', () => sectionEvents.push(section.dataset.sectionKey)));
     sections.forEach(section => section.querySelector('.agent-settings-section-header').click());
@@ -81,6 +85,9 @@ test('schema-rendered Group surface preserves dynamic slots and dependency state
         'groupUnifiedModelInput', 'openGroupModelSelectBtn', 'groupPrompt', 'invitePrompt', 'deleteGroupBtn']) {
         assert.ok(document.getElementById(id), `schema surface missing #${id}`);
     }
+    const groupAvatarOverlay = form.querySelector('.group-avatar-wrapper .avatar-upload-overlay');
+    assert.ok(groupAvatarOverlay?.querySelector('svg.avatar-upload-icon'), 'group avatar upload control must contain a real SVG node');
+    assert.doesNotMatch(groupAvatarOverlay?.textContent || '', /<svg|aria-hidden|<path/, 'group avatar SVG source must not leak as visible text');
     const mode = document.getElementById('groupChatMode');
     const sequential = document.getElementById('sequentialOrderContainer');
     const tags = document.getElementById('memberTagsContainer');
@@ -122,4 +129,10 @@ test('inactive settings tab cannot create a hit area over the Agent list', () =>
     assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?display:\s*none/);
     assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?pointer-events:\s*none/);
     assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?visibility:\s*hidden/);
+});
+
+test('sidebar list rows keep avatar and label in one responsive flex row', () => {
+    assert.match(sidebarCss, /\.agent-list li,[\s\S]*?\.topic-list \.topic-item \{[\s\S]*?display:\s*flex/);
+    assert.match(sidebarCss, /\.agent-list \.agent-name,[\s\S]*?\.topic-list \.topic-title-display,[\s\S]*?flex:\s*1 1 auto/);
+    assert.match(sidebarCss, /\.agent-list img\.avatar,[\s\S]*?\.topic-list \.topic-item img\.avatar,[\s\S]*?flex:\s*0 0 auto/);
 });

@@ -5,7 +5,6 @@
 // a descriptor, and dynamic business modules receive stable ids/slots.
 
 const SVG_TOGGLE = '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
-const SVG_CAMERA = '<svg class="avatar-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>';
 
 const field = (id, type, label, options = {}) => Object.freeze({
     id,
@@ -68,6 +67,23 @@ function el(doc, tag, attributes = {}, ...children) {
         node.append(child.nodeType ? child : doc.createTextNode(String(child)));
     });
     return node;
+}
+
+function buildCameraIcon(doc) {
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    setAttributes(svg, {
+        class: 'avatar-upload-icon',
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '2',
+        'aria-hidden': 'true',
+    });
+    svg.append(
+        el(doc, 'path', { d: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z' }),
+        el(doc, 'circle', { cx: '12', cy: '13', r: '4' }),
+    );
+    return svg;
 }
 
 function labelFor(doc, spec) {
@@ -148,7 +164,7 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
 function renderAgentIdentity(doc) {
     const avatar = el(doc, 'div', { class: 'agent-avatar-wrapper' },
         el(doc, 'img', { id: 'agentAvatarPreview', src: 'assets/default_avatar.png', alt: '头像预览', class: 'agent-avatar-display', width: 76, height: 76 }),
-        el(doc, 'label', { for: 'agentAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换头像' }, SVG_CAMERA),
+        el(doc, 'label', { for: 'agentAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换头像' }, buildCameraIcon(doc)),
         el(doc, 'input', { id: 'agentAvatarInput', name: 'avatar', type: 'file', accept: 'image/png, image/jpeg, image/gif', hidden: true }));
     const identityMain = el(doc, 'div', { class: 'agent-identity-main' }, avatar, renderField(doc, agentFields[0], 'agent-name-wrapper'));
     const style = el(doc, 'div', { class: 'agent-style-collapsible-container collapsed', 'data-schema-section': 'style' });
@@ -239,7 +255,7 @@ function renderGroupSectionContent(doc, key) {
     if (key === 'identity') {
         return el(doc, 'div', { class: 'group-settings-identity-shell' },
             el(doc, 'div', { class: 'agent-identity-main group-identity-main' },
-                el(doc, 'div', { class: 'agent-avatar-wrapper group-avatar-wrapper' }, el(doc, 'img', { id: 'groupAvatarPreview', src: 'assets/default_group_avatar.png', alt: '群组头像预览', class: 'agent-avatar-display group-avatar-display', width: 76, height: 76 }), el(doc, 'label', { for: 'groupAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换群组头像' }, SVG_CAMERA), el(doc, 'input', { id: 'groupAvatarInput', type: 'file', accept: 'image/*', hidden: true })),
+                el(doc, 'div', { class: 'agent-avatar-wrapper group-avatar-wrapper' }, el(doc, 'img', { id: 'groupAvatarPreview', src: 'assets/default_group_avatar.png', alt: '群组头像预览', class: 'agent-avatar-display group-avatar-display', width: 76, height: 76 }), el(doc, 'label', { for: 'groupAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换群组头像' }, buildCameraIcon(doc)), el(doc, 'input', { id: 'groupAvatarInput', type: 'file', accept: 'image/*', hidden: true })),
                 renderField(doc, groupFields[0], 'agent-name-wrapper group-name-wrapper')),
             el(doc, 'div', { class: 'group-settings-field-shell' }, el(doc, 'label', { for: 'groupMembersList' }, '群组成员'), el(doc, 'div', { id: 'groupMembersList', class: 'group-members-list-container' })));
     }
