@@ -207,7 +207,7 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     if (!host || !doc) return null;
     host.replaceChildren();
     host.dataset.settingsView = 'agent';
-    host.classList.add('settings-sidebar-surface-view');
+    host.classList.add('settings-sidebar-surface-view', 'vcp-settings-schema-surface');
     const title = el(doc, 'h3', { id: 'agentSettingsContainerTitle' }, '助手设置: ', el(doc, 'span', { id: 'selectedAgentNameForSettings' }));
     const form = el(doc, 'form', { id: 'agentSettingsForm', novalidate: true });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingAgentId', name: 'agentId' }));
@@ -250,7 +250,7 @@ export function renderGroupSettingsSurface(host, doc = host?.ownerDocument || do
     if (!host || !doc) return null;
     host.replaceChildren();
     host.dataset.settingsView = 'group';
-    host.classList.add('settings-sidebar-surface-view');
+    host.classList.add('settings-sidebar-surface-view', 'vcp-settings-schema-surface');
     const form = el(doc, 'form', { id: 'groupSettingsForm' });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingGroupId' }));
     [['identity', '基础信息', 'groupIdentitySummary'], ['mode', '群聊模式', 'groupModeSummary'], ['model', '模型设置', 'groupModelSummary'], ['prompt', '系统提示词', 'groupPromptSummary']].forEach(([key, title, summaryId]) => form.append(renderSection(doc, { kind: 'group', key, title, summaryId, content: d => renderGroupSectionContent(d, key) })));

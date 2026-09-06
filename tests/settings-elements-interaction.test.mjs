@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const repoRoot = '/Users/asahi/Documents/Codex/vcpchat-exp-schema';
-const css = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-group-sections.css'), 'utf8');
+const css = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/settings-sidebar.css'), 'utf8');
 const schema = await import(pathToFileURL(path.join(repoRoot, 'modules/settings/schema/sidebar-surfaces.js')).href);
 const surfaceModule = await import(pathToFileURL(path.join(repoRoot, 'modules/ui-system/settings/settings-sidebar-surface.js')).href);
 
@@ -119,7 +119,7 @@ test('sidebar surface physically unmounts inactive settings and rejects stale as
 });
 
 test('inactive settings tab cannot create a hit area over the Agent list', () => {
-    assert.match(css, /#tabContentSettings:not\(\.active\)[\s\S]*?display:\s*none\s*!important/);
-    assert.match(css, /#tabContentSettings:not\(\.active\)[\s\S]*?pointer-events:\s*none\s*!important/);
-    assert.match(css, /#tabContentSettings:not\(\.active\)[\s\S]*?visibility:\s*hidden\s*!important/);
+    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?display:\s*none/);
+    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?pointer-events:\s*none/);
+    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?visibility:\s*hidden/);
 });
