@@ -99,14 +99,20 @@ window.GroupRenderer = (() => {
         if (!groupSettingsContainer) {
             groupSettingsContainer = document.createElement('div');
             groupSettingsContainer.id = 'groupSettingsContainer';
-            groupSettingsContainer.style.display = 'none'; // Initially hidden
+            groupSettingsContainer.className = 'settings-sidebar-surface-view';
             settingsTab.appendChild(groupSettingsContainer);
             console.log("[GroupRenderer] groupSettingsContainer created.");
         }
 
-        // 使用模块化的 HTML 模板
-        groupSettingsContainer.innerHTML = window.GroupSettingsMarkup.renderGroupSettingsMarkup();
-        console.log("[GroupRenderer] groupSettingsContainer innerHTML set.");
+        // Schema renderer owns the group DOM. Render once, then register the
+        // host with the sidebar surface so inactive settings are physically
+        // detached from the tab tree.
+        if (!groupSettingsContainer.dataset.schemaRendered) {
+            window.GroupSettingsMarkup.renderGroupSettingsSurface(groupSettingsContainer);
+            groupSettingsContainer.dataset.schemaRendered = 'true';
+        }
+        window.VCPSettingsSidebar?.register?.('group', groupSettingsContainer);
+        console.log("[GroupRenderer] schema-driven group settings surface ready.");
         // Now that DOM is ensured and populated, get element references
         return getGroupSettingsElements(); // Return true if elements are successfully retrieved
     }
@@ -427,6 +433,9 @@ window.GroupRenderer = (() => {
     async function displayGroupSettingsPage(groupId) {
         console.log('[GroupRenderer] displayGroupSettingsPage called for groupId:', groupId);
 
+        const settingsSurface = window.VCPSettingsSidebar;
+        const viewToken = settingsSurface?.show?.('group', { id: groupId });
+
         // Use the module-level specific references that were set during init
         // const localSelectPrompt = selectAgentPromptForSettingsElementFromRenderer; // No longer needed if mainRendererElements is used directly
         // const localAgentSettingsContainer = agentSettingsContainerFromRenderer; // No longer needed
@@ -441,46 +450,21 @@ window.GroupRenderer = (() => {
         }
 
         const groupConfig = await electronAPI.getAgentGroupConfig(groupId);
+        if (settingsSurface && !settingsSurface.isCurrent(viewToken)) return;
         if (!groupConfig || groupConfig.error) {
             alert(`加载群组配置失败: ${groupConfig?.error || '未知错误'}`);
-            if (groupSettingsContainer) groupSettingsContainer.style.display = 'none';
+            settingsSurface?.show?.('prompt', { message: `加载群组 ${groupId} 配置失败。` });
             if (selectAgentPromptForSettingsElementFromRenderer) { // Use direct module-level ref
                 selectAgentPromptForSettingsElementFromRenderer.textContent = `加载群组 ${groupId} 配置失败。`;
-                selectAgentPromptForSettingsElementFromRenderer.style.display = 'block';
             } else {
                 console.error('[GroupRenderer] selectAgentPromptForSettingsElementFromRenderer is undefined when trying to show error for groupConfig load failure.');
             }
             return;
         }
 
-        // Hide agent-specific settings container (using the specific ref from renderer)
-        if (agentSettingsContainerFromRenderer && typeof agentSettingsContainerFromRenderer.style !== 'undefined') {
-            agentSettingsContainerFromRenderer.style.display = 'none';
-        } else {
-            // Fallback if the reference from renderer.js wasn't correctly passed or is not a DOM element
-            const fallbackAgentSettings = document.getElementById('agentSettingsContainer');
-            if (fallbackAgentSettings) fallbackAgentSettings.style.display = 'none';
-            else console.warn('[GroupRenderer] agentSettingsContainerFromRenderer (and fallback) is undefined, cannot hide agent settings.');
-        }
-
-        // Show group-specific settings container (this is managed within GroupRenderer)
-        if (groupSettingsContainer && typeof groupSettingsContainer.style !== 'undefined') {
-            groupSettingsContainer.style.display = '';
-        }
-
-        // Hide the "select item" prompt (using the specific ref from renderer)
-        if (selectAgentPromptForSettingsElementFromRenderer) { // Use direct module-level ref
-            selectAgentPromptForSettingsElementFromRenderer.style.display = 'none';
-        } else {
-            console.error('[GroupRenderer] selectAgentPromptForSettingsElementFromRenderer is undefined when trying to hide it.');
-            const fallbackPrompt = document.getElementById('selectAgentPromptForSettings'); // Fallback
-            if (fallbackPrompt) {
-                console.warn('[GroupRenderer] Fallback: Hiding selectAgentPromptForSettings using direct getElementById.');
-                fallbackPrompt.style.display = 'none';
-            } else {
-                console.error('[GroupRenderer] CRITICAL: selectAgentPromptForSettings element not found even with direct getElementById.');
-            }
-        }
+        // The surface owns view attachment/detachment. Keep the historical
+        // references only for text compatibility with upstream callers.
+        settingsSurface?.show?.('group', { id: groupId });
 
         // Use the specific module-level reference for selectedItemNameForSettingsElementFromRenderer
         if (selectedItemNameForSettingsElementFromRenderer) {
@@ -498,7 +482,7 @@ window.GroupRenderer = (() => {
         document.getElementById('editingGroupId').value = groupId;
 
         groupNameInput.value = groupConfig.name || '';
-        groupAvatarPreview.style.display = 'block';
+        groupAvatarPreview.hidden = false;
         groupAvatarPreview.src = groupConfig.avatarUrl
             ? `${groupConfig.avatarUrl}?t=${Date.now()}`
             : 'assets/default_group_avatar.png';
@@ -518,12 +502,12 @@ window.GroupRenderer = (() => {
         // 新增：处理统一模型UI
         groupUseUnifiedModel.checked = groupConfig.useUnifiedModel === true;
         groupUnifiedModelInput.value = groupConfig.unifiedModel || '';
-        groupUnifiedModelContainer.style.display = groupUseUnifiedModel.checked ? 'block' : 'none';
+        groupUnifiedModelContainer.hidden = !groupUseUnifiedModel.checked;
 
         setupGroupSettingsSections();
 
         groupUseUnifiedModel.onchange = () => {
-            groupUnifiedModelContainer.style.display = groupUseUnifiedModel.checked ? 'block' : 'none';
+            groupUnifiedModelContainer.hidden = !groupUseUnifiedModel.checked;
             updateGroupSectionSummary('model');
         };
 
@@ -569,7 +553,7 @@ window.GroupRenderer = (() => {
                 mainRendererFunctions.setCroppedFile('group', croppedFile); // Use renderer's central cropped file store
                 if (groupAvatarPreview) {
                     groupAvatarPreview.src = URL.createObjectURL(croppedFile);
-                    groupAvatarPreview.style.display = 'block';
+                    groupAvatarPreview.hidden = false;
                 }
                 updateGroupSectionSummary('identity');
             });
@@ -802,10 +786,10 @@ window.GroupRenderer = (() => {
 
     function toggleModeSettingsVisibility(mode) {
         if (sequentialOrderContainer) {
-            sequentialOrderContainer.style.display = mode === 'sequential' ? 'flex' : 'none';
+            sequentialOrderContainer.hidden = mode !== 'sequential';
         }
         if (memberTagsContainer) {
-            memberTagsContainer.style.display = mode === 'naturerandom' ? 'flex' : 'none';
+            memberTagsContainer.hidden = mode !== 'naturerandom';
         }
         updateGroupSectionSummary('mode');
     }
@@ -1041,19 +1025,12 @@ window.GroupRenderer = (() => {
                         }
                         clearInviteAgentButtons(); // Clear invite buttons on delete
 
-                        // 显式重置设置区域的UI状态
-                        if (groupSettingsContainer) { // 这是本模块管理的群组设置容器
-                            groupSettingsContainer.style.display = 'none';
-                        }
-                        // 确保Agent设置容器也隐藏 (如果之前是显示的)
-                        // agentSettingsContainerFromRenderer 是从 renderer.js 传入的 Agent 设置容器
-                        if (agentSettingsContainerFromRenderer && agentSettingsContainerFromRenderer.style) {
-                            agentSettingsContainerFromRenderer.style.display = 'none';
-                        }
+                        // Reset the owned settings surface. It physically
+                        // detaches the active form and releases its hit area.
+                        window.VCPSettingsSidebar?.show?.('prompt', { message: '请选择一个Agent或群组进行设置。' });
                         // selectAgentPromptForSettingsElementFromRenderer 是从 renderer.js 传入的提示元素
-                        if (selectAgentPromptForSettingsElementFromRenderer && selectAgentPromptForSettingsElementFromRenderer.style) {
+                        if (selectAgentPromptForSettingsElementFromRenderer) {
                             selectAgentPromptForSettingsElementFromRenderer.textContent = '请选择一个Agent或群组进行设置。';
-                            selectAgentPromptForSettingsElementFromRenderer.style.display = 'block';
                         }
                         // selectedItemNameForSettingsElementFromRenderer 是从 renderer.js 传入的显示名称的元素
                         if (selectedItemNameForSettingsElementFromRenderer) {

@@ -509,25 +509,31 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 6px;
     margin-bottom: 7px;
+    white-space: nowrap;
 }
 
 #agentSettingsContainer .tts-director-heading > label {
     margin: 0;
+    font-size: 12px;
+    white-space: nowrap;
 }
 
 #agentSettingsContainer .tts-director-template-button {
     flex: 0 0 auto;
-    min-height: 28px;
-    padding: 4px 10px;
-    border: 1px solid color-mix(in srgb, var(--highlight-text) 28%, var(--border-color));
-    border-radius: 999px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--highlight-text) 30%, var(--border-color));
+    border-radius: 5px;
     background: color-mix(in srgb, var(--highlight-text) 8%, transparent);
     color: var(--highlight-text);
     font: inherit;
-    font-size: 0.86em;
+    font-size: 11px;
+    line-height: 20px;
     cursor: pointer;
+    white-space: nowrap;
     transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 
@@ -541,10 +547,12 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
 #agentSettingsContainer .tts-director-template-button:active {
     transform: translateY(1px);
 }
+
 #agentSettingsContainer .tts-director-composer,
 #agentSettingsContainer .tts-director-item {
-    position: relative;
-    display: block;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 28px;
+    align-items: center;
     gap: 6px;
     min-width: 0;
 }
@@ -556,80 +564,108 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
     margin-top: 8px;
 }
 
+/* Collapsed state (default): exact 32px height, single line with ellipsis, unified with all sidebar inputs */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-editor,
 #agentSettingsContainer .tts-director-editor {
-    box-sizing: border-box;
-    display: block;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    min-height: 100px;
-    padding: 5px 10px;
-    overflow-y: auto;
-    resize: vertical !important;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: var(--primary-text);
-    font: inherit;
-    line-height: 20px;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    text-overflow: clip;
-    transition: color 0.18s ease;
+    box-sizing: border-box !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    padding: 5px 10px !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    background: color-mix(in srgb, var(--input-bg, var(--secondary-bg)) 94%, transparent) !important;
+    color: var(--primary-text) !important;
+    font: inherit !important;
+    font-size: 12px !important;
+    line-height: 20px !important;
+    white-space: nowrap !important;
+    text-overflow: ellipsis !important;
+    overflow: hidden !important;
+    resize: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transition:
+        min-height 0.2s ease,
+        max-height 0.2s ease,
+        height 0.2s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease;
 }
 
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-editor:hover,
 #agentSettingsContainer .tts-director-editor:hover {
-    border-color: transparent;
+    border-color: color-mix(in srgb, var(--highlight-text) 36%, var(--border-color)) !important;
 }
 
-#agentSettingsContainer .tts-director-editor:focus {
-    overflow: auto;
-    white-space: pre-wrap;
-    text-overflow: clip;
-    border-color: transparent;
-    background: transparent;
-    outline: none;
-    box-shadow: none;
-}
-
-#agentSettingsContainer .tts-director-composer {
-    min-height: 0;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    transition: none;
-}
-
-#agentSettingsContainer .tts-director-composer:focus-within {
-    background: transparent;
-}
-
-#agentSettingsContainer .tts-director-editor {
-    padding: 6px 2px !important;
-}
-
-#agentSettingsContainer .tts-director-editor:focus {
-    padding-left: 2px !important;
+/* Expanded state on focus or active editing */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-editor:focus,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-editor.is-editing,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-composer.is-editing .tts-director-editor,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .tts-director-item.is-editing .tts-director-editor,
+#agentSettingsContainer .tts-director-editor:focus,
+#agentSettingsContainer .tts-director-editor.is-editing,
+#agentSettingsContainer .tts-director-composer.is-editing .tts-director-editor,
+#agentSettingsContainer .tts-director-item.is-editing .tts-director-editor {
+    box-sizing: border-box !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 84px !important;
+    max-height: 240px !important;
+    padding: 6px 10px !important;
+    border: 1px solid var(--highlight-text) !important;
+    border-radius: 8px !important;
+    background: var(--input-bg, var(--secondary-bg)) !important;
+    color: var(--primary-text) !important;
+    font: inherit !important;
+    font-size: 12px !important;
+    line-height: 20px !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-y: auto !important;
+    resize: none !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--highlight-text) 14%, transparent) !important;
+    transition:
+        min-height 0.2s ease,
+        max-height 0.2s ease,
+        height 0.2s ease,
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease;
 }
 
 #agentSettingsContainer .tts-director-composer.is-editing,
 #agentSettingsContainer .tts-director-item.is-editing {
     margin-bottom: 3px;
+    align-items: start;
 }
+
+#agentSettingsContainer .tts-director-composer.is-editing .tts-director-action-button,
+#agentSettingsContainer .tts-director-item.is-editing .tts-director-action-button {
+    margin-top: 2px;
+}
+
 #agentSettingsContainer .tts-director-action-button {
-    position: absolute !important;
-    right: 8px !important;
-    bottom: 6px !important;
-    z-index: 2;
-    align-self: auto;
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
-    max-width: 32px;
-    max-height: 32px;
+    position: static !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    max-width: 28px !important;
+    max-height: 28px !important;
     padding: 0 !important;
     border: 1px solid color-mix(in srgb, var(--secondary-text) 24%, transparent) !important;
     border-radius: 50% !important;
@@ -639,62 +675,29 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
     box-shadow: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    font: 500 17px/1 system-ui, sans-serif;
-    opacity: 0;
-    pointer-events: none;
-    transform: none;
+    font: 500 17px/1 system-ui, sans-serif !important;
+    opacity: 0.76 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    transform: none !important;
     transition:
         color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard),
         border-color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard),
         background-color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard),
-        opacity var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard);
-}
-
-#agentSettingsContainer .tts-director-template-button {
-    position: absolute !important;
-    right: 48px !important;
-    bottom: 6px !important;
-    min-height: 32px;
-    padding: 0 10px;
-    border: 1px solid color-mix(in srgb, var(--secondary-text) 24%, transparent);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--secondary-text);
-    font-size: 12px;
-    opacity: 0;
-    pointer-events: none;
-}
-
-#agentSettingsContainer .tts-director-composer:hover .tts-director-template-button,
-#agentSettingsContainer .tts-director-composer:focus-within .tts-director-template-button,
-#agentSettingsContainer .tts-director-template-button:focus-visible {
-    opacity: 0.82;
-    pointer-events: auto;
-}
-
-#agentSettingsContainer .tts-director-template-button:hover,
-#agentSettingsContainer .tts-director-template-button:focus-visible {
-    color: var(--highlight-text);
-    background: color-mix(in srgb, var(--highlight-text) 10%, transparent);
-    outline: none;
+        opacity var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard) !important;
 }
 
 #agentSettingsContainer .tts-director-action-button:hover,
 #agentSettingsContainer .tts-director-action-button:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
+    opacity: 1 !important;
     color: var(--highlight-text) !important;
     border-color: color-mix(in srgb, var(--highlight-text) 48%, transparent) !important;
     background: color-mix(in srgb, var(--highlight-text) 9%, transparent) !important;
-    outline: none;
+    outline: none !important;
 }
 
-#agentSettingsContainer .tts-director-composer:hover .tts-director-action-button,
-#agentSettingsContainer .tts-director-composer:focus-within .tts-director-action-button,
-#agentSettingsContainer .tts-director-item:hover .tts-director-action-button,
-#agentSettingsContainer .tts-director-item:focus-within .tts-director-action-button {
-    opacity: 0.76;
-    pointer-events: auto;
+#agentSettingsContainer .tts-director-action-button:active {
+    transform: translateY(1px) !important;
 }
 
 #agentSettingsContainer .tts-director-item .tts-director-action-button {
@@ -717,35 +720,12 @@ body[data-vcp-theme="light"] #agentSettingsContainer .agent-settings-toggle-btn:
     line-height: 1.5;
 }
 
-body.light-theme #agentSettingsContainer .tts-director-editor {
-    background: color-mix(in srgb, white 76%, var(--user-bubble-bg));
+body.light-theme #agentSettingsContainer .tts-director-editor:not(:focus):not(.is-editing) {
+    background: color-mix(in srgb, white 85%, var(--input-bg, var(--secondary-bg))) !important;
 }
 
-body:not(.light-theme) #agentSettingsContainer .tts-director-editor {
-    background: color-mix(in srgb, var(--secondary-bg) 86%, black);
-}
-
-#agentSettingsContainer .tts-director-editor,
-#agentSettingsContainer .tts-director-editor:hover,
-#agentSettingsContainer .tts-director-editor:focus,
-body.light-theme #agentSettingsContainer .tts-director-editor,
-body:not(.light-theme) #agentSettingsContainer .tts-director-editor {
-    min-height: 100px;
-    max-height: none !important;
-    resize: vertical !important;
-    overflow-y: auto !important;
-    border: 1px solid transparent !important;
-    border-left: 2.5px solid transparent !important;
-    border-radius: 4px !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-#agentSettingsContainer .tts-director-editor:focus {
-    min-height: 140px;
-    border-color: transparent !important;
-    border-left-color: transparent !important;
-    padding-left: 2px !important;
+body:not(.light-theme) #agentSettingsContainer .tts-director-editor:not(:focus):not(.is-editing) {
+    background: color-mix(in srgb, var(--secondary-bg) 86%, black) !important;
 }
 
 
@@ -1265,6 +1245,10 @@ body[data-vcp-theme="dark"] #agentSettingsContainer .slider-container #ttsSpeedV
     justify-content: center !important;
     width: 15px !important;
     height: 15px !important;
+    min-width: 15px !important;
+    max-width: 15px !important;
+    min-height: 15px !important;
+    max-height: 15px !important;
     margin-left: 6px !important;
     border-radius: 50% !important;
     border: 1px solid currentColor !important;

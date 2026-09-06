@@ -128,22 +128,21 @@ const settingsManager = (() => {
     async function displaySettingsForItem() {
         const currentSelectedItem = refs.currentSelectedItemRef.get();
 
+        const settingsSurface = window.VCPSettingsSidebar;
+
         const agentSettingsExists = agentSettingsContainer && typeof agentSettingsContainer.style !== 'undefined';
         const groupSettingsExists = groupSettingsContainer && typeof groupSettingsContainer.style !== 'undefined';
 
         if (currentSelectedItem.id) {
-            selectItemPromptForSettings.style.display = 'none';
             selectedItemNameForSettingsSpan.textContent = currentSelectedItem.name || currentSelectedItem.id;
 
             if (currentSelectedItem.type === 'agent') {
-                if (agentSettingsExists) agentSettingsContainer.style.display = '';
-                if (groupSettingsExists) groupSettingsContainer.style.display = 'none';
+                const viewToken = settingsSurface?.show?.('agent', { id: currentSelectedItem.id });
                 itemSettingsContainerTitle.textContent = 'Agent 设置: ';
                 deleteItemBtn.textContent = '删除此 Agent';
-                await populateAgentSettingsForm(currentSelectedItem.id, (currentSelectedItem.config || currentSelectedItem));
+                await populateAgentSettingsForm(currentSelectedItem.id, (currentSelectedItem.config || currentSelectedItem), viewToken);
             } else if (currentSelectedItem.type === 'group') {
-                if (agentSettingsExists) agentSettingsContainer.style.display = 'none';
-                if (groupSettingsExists) groupSettingsContainer.style.display = 'block';
+                settingsSurface?.show?.('group', { id: currentSelectedItem.id });
                 itemSettingsContainerTitle.textContent = '群组设置: ';
                 deleteItemBtn.textContent = '删除此群组';
                 if (window.GroupRenderer && typeof window.GroupRenderer.displayGroupSettingsPage === 'function') {
@@ -154,10 +153,8 @@ const settingsManager = (() => {
                 }
             }
         } else {
-            if (agentSettingsExists) agentSettingsContainer.style.display = 'none';
-            if (groupSettingsExists) groupSettingsContainer.style.display = 'none';
+            settingsSurface?.show?.('prompt', { message: '请先在左侧选择一个 Agent 或群组以查看或修改其设置。' });
             selectItemPromptForSettings.textContent = '请先在左侧选择一个 Agent 或群组以查看或修改其设置。';
-            selectItemPromptForSettings.style.display = 'block';
             itemSettingsContainerTitle.textContent = '设置';
             selectedItemNameForSettingsSpan.textContent = '';
         }
@@ -168,7 +165,7 @@ const settingsManager = (() => {
      * @param {string} agentId - The ID of the agent.
      * @param {object} agentConfig - The configuration object for the agent.
      */
-    function populateAgentSettingsForm(agentId, agentConfig) {
+    function populateAgentSettingsForm(agentId, agentConfig, viewToken = null) {
         const populateToken = ++agentSettingsPopulateToken;
 
         // 新增提示词编辑器只是尚未提交到列表的临时草稿，不属于 Agent 配置。
@@ -188,14 +185,14 @@ const settingsManager = (() => {
                 return { stale: true };
             }
 
-            if (groupSettingsContainer) groupSettingsContainer.style.display = 'none';
-            if (agentSettingsContainer) agentSettingsContainer.style.display = '';
+            if (viewToken && !window.VCPSettingsSidebar?.isCurrent?.(viewToken)) {
+                return { stale: true };
+            }
 
             if (!agentConfig || agentConfig.error) {
                 uiHelper.showToastNotification(`加载Agent配置失败: ${agentConfig?.error || '未知错误'}`, 'error');
-                if (agentSettingsContainer) agentSettingsContainer.style.display = 'none';
+                window.VCPSettingsSidebar?.show?.('prompt', { message: `加载 ${agentId} 配置失败。` });
                 selectItemPromptForSettings.textContent = `加载 ${agentId} 配置失败。`;
-                selectItemPromptForSettings.style.display = 'block';
                 return;
             }
 
@@ -226,6 +223,10 @@ const settingsManager = (() => {
                 return { stale: true };
             }
 
+            if (viewToken && !window.VCPSettingsSidebar?.isCurrent?.(viewToken)) {
+                return { stale: true };
+            }
+
             // 只有提示词上下文已成功切到目标 Agent 后，才发布表单所代表的 Agent ID。
             editingAgentIdInput.value = agentId;
             agentNameInput.value = agentConfig.name || agentId;
@@ -246,7 +247,7 @@ const settingsManager = (() => {
 
         if (agentConfig.avatarUrl) {
             agentAvatarPreview.src = `${agentConfig.avatarUrl}${agentConfig.avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
-            agentAvatarPreview.style.display = 'block';
+            agentAvatarPreview.hidden = false;
             // 有头像时移除 no-avatar 类
             if (avatarWrapper) {
                 avatarWrapper.classList.remove('no-avatar');
@@ -254,7 +255,7 @@ const settingsManager = (() => {
         } else {
             // 头像为空时显示默认头像，不进行颜色提取
             agentAvatarPreview.src = 'assets/default_avatar.png';
-            agentAvatarPreview.style.display = 'block';
+            agentAvatarPreview.hidden = false;
             // 无头像时添加 no-avatar 类，确保相机图标始终显示
             if (avatarWrapper) {
                 avatarWrapper.classList.add('no-avatar');
@@ -772,13 +773,15 @@ const settingsManager = (() => {
             editor.rows = 1;
             return;
         }
-        editor.rows = 4;
+        editor.rows = 3;
         editor.style.height = 'auto';
-        editor.style.height = `${Math.min(Math.max(editor.scrollHeight, 132), 360)}px`;
+        editor.style.height = `${Math.min(Math.max(editor.scrollHeight, 84), 240)}px`;
     }
 
     function bindTtsDirectorEditor(editor, onInput) {
+        if (!editor) return;
         const onFocus = () => {
+            editor.classList.add('is-editing');
             editor.closest('.tts-director-item, .tts-director-composer')?.classList.add('is-editing');
             resizeTtsDirectorEditor(editor, true);
             scheduleStickyButtonsRefresh();
@@ -790,6 +793,7 @@ const settingsManager = (() => {
             scheduleStickyButtonsRefresh();
         };
         const onBlur = () => {
+            editor.classList.remove('is-editing');
             editor.closest('.tts-director-item, .tts-director-composer')?.classList.remove('is-editing');
             resizeTtsDirectorEditor(editor, false);
             scheduleStickyButtonsRefresh();
@@ -1177,6 +1181,7 @@ const settingsManager = (() => {
                 event.preventDefault();
                 addTtsDirectorPrompt();
             });
+            bindTtsDirectorEditor(agentTtsDirectorPromptInput);
 
 
             // 创建正则设置UI
@@ -1208,6 +1213,9 @@ const settingsManager = (() => {
             }
 
             console.log('settingsManager initialized.');
+            document.dispatchEvent(new CustomEvent('vcp-settings-surface-updated', {
+                detail: { kind: 'agent', root: agentSettingsForm }
+            }));
 
             // --- Global Settings Enhancements ---
             const vcpServerUrlInput = document.getElementById('vcpServerUrl');
@@ -1305,35 +1313,20 @@ const settingsManager = (() => {
 
                 if (!isSettingsVisible) {
                     console.log('[SettingsManager] Settings tab not visible, performing silent config reload');
-
                     try {
-                        // 方案1：直接重新加载配置并填充表单，不切换标签
                         const config = await electronAPI.getAgentConfig(agentId);
-                        if (config && !config.error) {
-                            // 临时激活设置标签内容（不改变按钮状态）
-                            const originalDisplay = settingsTab.style.display;
-                            settingsTab.style.display = 'block';
-                            settingsTab.classList.add('active');
-
-                            // 等待 DOM 准备好
-                            await new Promise(resolve => setTimeout(resolve, 50));
-
-                            // 重新填充表单
-                            await populateAgentSettingsForm(agentId, config);
-                            console.log('[SettingsManager] Agent settings reloaded silently');
-
-                            // 恢复原始显示状态
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                            settingsTab.classList.remove('active');
-                            if (originalDisplay !== 'block') {
-                                settingsTab.style.display = originalDisplay;
-                            }
-
-                            return { success: true, silent: true };
-                        } else {
+                        if (!config || config.error) {
                             console.error('[SettingsManager] Failed to load config for silent reload:', config?.error);
                             return await performFullTabSwitch(agentId);
                         }
+                        // The Surface keeps the canonical form detached while the
+                        // tab is inactive. Populate it in place without changing
+                        // tab classes or creating a temporary hit area.
+                        const viewToken = window.VCPSettingsSidebar?.show?.('agent', { id: agentId });
+                        const result = await populateAgentSettingsForm(agentId, config, viewToken);
+                        if (result?.stale) return result;
+                        console.log('[SettingsManager] Agent settings reloaded silently');
+                        return { success: true, silent: true };
                     } catch (error) {
                         console.error('[SettingsManager] Error during silent reload:', error);
                         return await performFullTabSwitch(agentId);
@@ -1344,7 +1337,8 @@ const settingsManager = (() => {
                 const config = await electronAPI.getAgentConfig(agentId);
                 if (config && !config.error) {
                     await new Promise(resolve => setTimeout(resolve, 50));
-                    await populateAgentSettingsForm(agentId, config);
+                    const viewToken = window.VCPSettingsSidebar?.show?.('agent', { id: agentId });
+                    await populateAgentSettingsForm(agentId, config, viewToken);
                     console.log('[SettingsManager] Agent settings reloaded successfully');
                     sessionStorage.removeItem('pendingAgentReload');
                     return { success: true };

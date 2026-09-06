@@ -449,6 +449,11 @@ const uiManager = (() => {
             });
         }
 
+        // Settings is an owned surface. Leaving the tab physically detaches
+        // its form from the sidebar, so sticky actions and focusable controls
+        // cannot overlap or intercept the Agent list.
+        window.VCPSettingsSidebar?.setPanelActive?.(targetTab === 'settings');
+
         if (sidebarTabButtons) {
             sidebarTabButtons.forEach(btn => {
                 const isActive = btn.dataset.tab === targetTab;
@@ -556,6 +561,9 @@ const uiManager = (() => {
                 initializeDigitalClock();
                 setupSidebarTabs();
                 setupCompactSidebarNavigation();
+                if (!document.querySelector('.sidebar-tab-button.active[data-tab="settings"]')) {
+                    window.VCPSettingsSidebar?.setPanelActive?.(false);
+                }
             } finally {
                 releaseCapturedListeners();
             }

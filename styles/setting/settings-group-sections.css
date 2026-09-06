@@ -887,10 +887,28 @@ body[data-vcp-theme="light"] #groupSettingsForm .form-actions {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.92) 28%, rgba(255, 255, 255, 0.98) 100%) !important;
 }
 
-#tabContentSettings,
 #agentSettingsContainer,
 #groupSettingsContainer {
-    padding-bottom: 120px !important;
+    padding-bottom: 0;
+}
+
+#tabContentSettings:not(.active) {
+    display: none !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    z-index: -1 !important;
+}
+
+#tabContentSettings:not(.active) .form-actions,
+#tabContentSettings:not(.active) #agentSettingsForm .form-actions,
+#tabContentSettings:not(.active) #groupSettingsForm .form-actions {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 #agentSettingsForm .form-actions .delete-button-container,

@@ -131,7 +131,7 @@ if (!componentCss.includes(':focus-visible')) report(path.join(styleDir, 'compon
 const inlineStyleCompatibilityAllowlist = new Set([
     path.join(moduleDir, 'vcp-ui.js'), // Per-instance Range progress cannot be expressed as a static token.
     path.join(moduleDir, 'next-shell', 'next-shell-controller.js'), // Measured native-view bounds require a runtime sidebar width token.
-    path.join(moduleDir, 'agent-settings-bridge.js'), // Agent settings controls retain canonical geometry and preview colors.
+    path.join(moduleDir, 'settings', 'settings-sidebar-runtime.js'), // Sidebar controls retain canonical geometry and preview colors.
     path.join(moduleDir, 'settings', 'dependent-rows.js'), // Visibility projection writes the canonical row display state.
     path.join(moduleDir, 'settings', 'identity-controls.js'), // ColorPair preview mirrors the canonical color value.
     path.join(moduleDir, 'settings', 'render-visibility.js'), // Legacy custom typography row visibility is an owned projection.

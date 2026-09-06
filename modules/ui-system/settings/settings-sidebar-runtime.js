@@ -1,16 +1,15 @@
-// agent-settings-bridge — the Agent/Group sidebar settings domain.  The
-// sidebar forms keep their original business DOM, form ids, defaults and IPC;
-// this module only layers the VCPUI presentation (typed Input/Range/Choice/
-// ColorPair/Button mounts, the production model picker and the section
-// disclosure fallback) on top of the canonical sidebar shell.
-import { ensurePresentationScope, enhance, mountUiuxSwitches, selectProjection } from './settings/bridge-shared.js';
-import { mountAgentSectionDisclosures } from './settings/agent-disclosures.js';
-import { createAgentModelPickerDirectory } from './settings/agent-model-picker-directory.js';
+// settings-sidebar-runtime — presentation behavior for schema-rendered Agent
+// and Group sidebar forms. Business state, persistence and dynamic slots stay
+// owned by SettingsManager/GroupRenderer; this module only mounts short-lived
+// VCPUI primitives and model picker capabilities into the active schema DOM.
+import { ensurePresentationScope, enhance, mountUiuxSwitches, selectProjection } from './bridge-shared.js';
+import { mountAgentSectionDisclosures } from './agent-disclosures.js';
+import { createAgentModelPickerDirectory } from './agent-model-picker-directory.js';
 
 const agentSectionDisclosureStates = new Set();
 const agentModelPickerReleases = new Map();
 
-function enhanceForm(form) {
+function mountSettingsSidebarForm(form) {
     mountTypedAgentIdentityInput(form);
     mountTypedAgentModelInput(form);
     mountTypedAgentTemperatureInput(form);
@@ -42,7 +41,7 @@ function enhanceForm(form) {
         if (['agentNameInput', 'agentModel', 'agentTemperature', 'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentTopP', 'agentTopK', 'agentTtsRegexPrimary', 'agentTtsRegexSecondary'].includes(input.id)) return;
         enhance('Input', input);
     });
-    form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
+    form.querySelectorAll('textarea:not(.tts-director-editor)').forEach(textarea => enhance('Textarea', textarea));
     form.querySelectorAll('select').forEach(select => {
         if (!select.closest('.vcp-uiux-select')) enhance('Select', select, { kernel: 'native' });
     });
@@ -459,10 +458,12 @@ function mountAgentSettingsTooltips(form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
     if (!api?.mountTooltip || !scope) return;
+    const viewportWidth = Number(window.innerWidth) || 1024;
+    const tooltipMaxWidth = Math.max(0, Math.min(280, viewportWidth - 24));
 
     const items = [
         {
-            select: () => form.querySelector('.agent-settings-section[data-section-key="prompt"] .agent-settings-section-title'),
+            select: () => form.querySelector('.agent-settings-section[data-section-key="prompt"] .agent-settings-section-title-row'),
             text: '三个模块独立编辑后，注意保存以生效。支持文本、模块与预制三种模式切换。',
             key: 'prompt-title',
             side: 'top',
@@ -513,7 +514,7 @@ function mountAgentSettingsTooltips(form) {
             badge.focus();
         });
         host.appendChild(badge);
-        api.mountTooltip(badge, { label: text, side: side || 'top', delayMs: 60, maxWidth: 280 }, scope);
+        api.mountTooltip(badge, { label: text, side: side || 'top', delayMs: 60, maxWidth: tooltipMaxWidth }, scope);
         scope.own(() => {
             badge.remove();
         }, `agent-tooltip-badge-${key}`, 'ui-presentation');
@@ -537,7 +538,7 @@ function releaseAllAgentModelPickers() {
 }
 
 export {
-    enhanceForm,
+    mountSettingsSidebarForm,
     mountTypedTopicSummaryModelPicker,
     cleanupDisconnectedAgentModelPickers,
     releaseAllAgentModelPickers,
