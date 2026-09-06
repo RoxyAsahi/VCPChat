@@ -307,6 +307,19 @@
     text-overflow: ellipsis;
 }
 
+/* The legacy shell keeps an ellipsis on section titles. The schema title row
+   owns the badge as a separate flex item, so the text may shrink while the
+   help affordance remains fully visible. */
+#tabContentSettings .vcp-settings-schema-surface .agent-settings-section-title,
+#tabContentSettings .vcp-settings-schema-surface .group-settings-section-title {
+    overflow: hidden;
+}
+
+#tabContentSettings .vcp-settings-schema-surface .agent-settings-section-title-row,
+#tabContentSettings .vcp-settings-schema-surface .group-settings-section-title-row {
+    overflow: visible;
+}
+
 .vcp-settings-schema-surface .agent-settings-section-summary,
 .vcp-settings-schema-surface .group-settings-section-summary {
     grid-area: summary;
@@ -615,6 +628,17 @@
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+}
+
+/* settings-shell.css adds a paint-gutter inset for older controls. Schema
+   surfaces already own the complete content box, so both actions share one
+   edge and cannot be clipped on the right. */
+#tabContentSettings .vcp-settings-schema-surface .form-actions > button,
+#tabContentSettings .vcp-settings-schema-surface .form-actions > .delete-button-container,
+#tabContentSettings .vcp-settings-schema-surface .form-actions > .delete-button-container > button {
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .vcp-settings-schema-surface .form-actions .delete-button-container {

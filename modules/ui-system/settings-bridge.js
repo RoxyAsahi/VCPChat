@@ -27,7 +27,7 @@ import { mountForumCredentialInputs } from './settings/forum-controls.js';
 import { applySchemaSurface } from '../settings/schema-surface.js';
 import { renderAgentSettingsSurface } from '../settings/schema/sidebar-surfaces.js';
 import { ensureSettingsSidebarSurface } from './settings/settings-sidebar-surface.js';
-import { mountSettingsSidebarForm, mountTypedTopicSummaryModelPicker, cleanupDisconnectedAgentModelPickers, releaseAllAgentModelPickers } from './settings/settings-sidebar-runtime.js';
+import { mountSettingsSidebarForm } from './settings/settings-sidebar-runtime.js';
 import { addTypedNetworkPathInput, ensureTypedSettingsService, ensureRustAssistantUiService, ensureForumConfigUiService, ensureAssistantRuntimeUiService, mountTypedSettingsConsumer, mountTypedForumFieldOwner, mountTypedFieldOwner, flushTypedOwners, flushTypedForumFields, teardownTypedOwners, disposeTypedSettings } from './typed-field-owners.js';
 
 // Per-modal shell state is keyed by modal root so teardown can restore the
@@ -308,14 +308,6 @@ function enhanceGlobalSettings(root, form) {
                 // M5-c pass2：步进器行结构已由渲染器直出，这里只激活行为。
                 mountGlobalSteppers(form, api(), scope());
             },
-        },
-        {
-            name: 'topic-summary-picker',
-            // Reuse the production AgentModelPicker contract for the
-            // topic-summary field.  The native input remains canonical; the
-            // legacy modal template stays available until its shared business
-            // callers are fully retired.
-            run: () => mountTypedTopicSummaryModelPicker(form),
         },
         { name: 'forum-field-owner', run: () => mountTypedForumFieldOwner(root, form) },
         // M5-c pass6：折叠区的静态标记（settingPrimitive + disclosure-row
@@ -819,7 +811,6 @@ function reconcileSettingsShell(root) {
 
 function cleanupDisconnectedControllers() {
     releaseDisconnectedControllers();
-    cleanupDisconnectedAgentModelPickers();
 }
 
 function refresh() {
@@ -869,7 +860,6 @@ async function teardown() {
         try { await scope.dispose('settings-presentation-teardown'); }
         catch (error) { console.error('[VCPUI SettingsBridge] Failed to dispose presentation:', error); }
     }
-    releaseAllAgentModelPickers();
     teardownUiuxDisclosures();
     selectProjection.teardown();
     [...shellRoots].forEach(root => {

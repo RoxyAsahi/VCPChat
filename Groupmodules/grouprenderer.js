@@ -464,10 +464,18 @@ window.GroupRenderer = (() => {
             updateGroupSectionSummary('model');
         };
 
-        // The settings bridge owns the Group model trigger and mounts the same
-        // AgentModelPicker primitive used by Agent and topic-summary fields.
-        // groupUnifiedModelInput remains the canonical persisted value; its
-        // existing input/change summary bindings observe primitive selections.
+        if (openGroupModelSelectBtn) {
+            if (openGroupModelSelectBtn._modelSelectListenerAttached) {
+                openGroupModelSelectBtn.removeEventListener('click', openGroupModelSelectBtn._modelSelectListenerAttached);
+            }
+            const openGroupModelSelect = event => {
+                event.preventDefault();
+                event.stopPropagation();
+                window.settingsManager?.openModelSelectForInput?.(groupUnifiedModelInput);
+            };
+            openGroupModelSelectBtn.addEventListener('click', openGroupModelSelect);
+            openGroupModelSelectBtn._modelSelectListenerAttached = openGroupModelSelect;
+        }
 
         groupChatModeSelect.onchange = () => {
             toggleModeSettingsVisibility(groupChatModeSelect.value);

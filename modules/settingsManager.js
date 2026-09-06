@@ -60,9 +60,7 @@ const settingsManager = (() => {
     let openModelSelectBtn, modelSelectModal, modelList, modelSearchInput, refreshModelsBtn;
     let topicSummaryModelInput, openTopicSummaryModelSelectBtn; // New elements for topic summary model
     let agentTtsVoicePrimarySelect, agentTtsRegexPrimaryInput, agentTtsVoiceSecondarySelect, agentTtsRegexSecondaryInput, refreshTtsModelsBtn, agentTtsSpeedSlider;
-    let agentTtsDirectorPromptInput, addAgentTtsDirectorPromptBtn, fillAgentTtsDirectorTemplateBtn, agentTtsDirectorPromptsContainer;
     let currentAgentTtsDirectorPrompts = [];
-    const ttsDirectorDisposers = [];
     const TTS_DIRECTOR_TEMPLATE = `【角色】
 写清人物的身份、年龄、性格底色、外形气质与说话习惯。
 
@@ -111,14 +109,6 @@ const settingsManager = (() => {
         form?.dispatchEvent(new CustomEvent('vcp-settings-delete-result', {
             detail: { success: Boolean(success), cancelled: Boolean(cancelled), error }
         }));
-    }
-
-    function clearTtsDirectorListeners() {
-        while (ttsDirectorDisposers.length) {
-            try { ttsDirectorDisposers.pop()(); } catch (error) {
-                console.warn('[SettingsManager] Failed to dispose TTS director listener:', error);
-            }
-        }
     }
 
     /**
@@ -171,10 +161,8 @@ const settingsManager = (() => {
         // 新增提示词编辑器只是尚未提交到列表的临时草稿，不属于 Agent 配置。
         // 表单 DOM 会被所有 Agent 复用，因此切换 Agent 时必须立即清空，否则 A 的
         // 草稿会继续显示在 B 的设置中，并可能被误添加、误保存到 B。
-        if (agentTtsDirectorPromptInput && editingAgentIdInput?.value !== agentId) {
-            agentTtsDirectorPromptInput.value = '';
-            agentTtsDirectorPromptInput.closest('.tts-director-composer')?.classList.remove('is-editing');
-            resizeTtsDirectorEditor(agentTtsDirectorPromptInput, false);
+        if (editingAgentIdInput?.value !== agentId) {
+            window.VCPSettingsSlots?.mimoDirector?.clearDraft?.();
         }
 
         // 所有 Agent 共用同一套表单和 PromptManager。串行切换上下文，并让较新的请求淘汰
@@ -325,7 +313,7 @@ const settingsManager = (() => {
         currentAgentTtsDirectorPrompts = Array.isArray(agentConfig.ttsDirectorPrompts)
             ? agentConfig.ttsDirectorPrompts.map(item => String(item || '').trim()).filter(Boolean)
             : [];
-        renderTtsDirectorPrompts();
+        window.VCPSettingsSlots?.mimoDirector?.setPrompts?.(currentAgentTtsDirectorPrompts);
 
         agentTtsSpeedSlider.value = agentConfig.ttsSpeed !== undefined ? agentConfig.ttsSpeed : 1.0;
         signalPresentationSync(agentTtsSpeedSlider);
@@ -766,94 +754,6 @@ const settingsManager = (() => {
         }
     }
 
-    function resizeTtsDirectorEditor(editor, expanded = editor === document.activeElement) {
-        if (!editor) return;
-        if (!expanded) {
-            editor.style.height = '';
-            editor.rows = 1;
-            return;
-        }
-        editor.rows = 3;
-        editor.style.height = 'auto';
-        editor.style.height = `${Math.min(Math.max(editor.scrollHeight, 84), 240)}px`;
-    }
-
-    function bindTtsDirectorEditor(editor, onInput) {
-        if (!editor) return;
-        const onFocus = () => {
-            editor.classList.add('is-editing');
-            editor.closest('.tts-director-item, .tts-director-composer')?.classList.add('is-editing');
-            resizeTtsDirectorEditor(editor, true);
-            scheduleStickyButtonsRefresh();
-        };
-        const onInputEvent = () => {
-            onInput?.(editor.value);
-            resizeTtsDirectorEditor(editor, true);
-            updateSectionSummary('tts');
-            scheduleStickyButtonsRefresh();
-        };
-        const onBlur = () => {
-            editor.classList.remove('is-editing');
-            editor.closest('.tts-director-item, .tts-director-composer')?.classList.remove('is-editing');
-            resizeTtsDirectorEditor(editor, false);
-            scheduleStickyButtonsRefresh();
-        };
-        editor.addEventListener('focus', onFocus);
-        editor.addEventListener('input', onInputEvent);
-        editor.addEventListener('blur', onBlur);
-    }
-
-    function renderTtsDirectorPrompts() {
-        if (!agentTtsDirectorPromptsContainer) return;
-        agentTtsDirectorPromptsContainer.replaceChildren();
-        currentAgentTtsDirectorPrompts.forEach((prompt, index) => {
-            const row = document.createElement('div');
-            row.className = 'tts-director-item';
-            const editor = document.createElement('textarea');
-            editor.className = 'tts-director-editor';
-            editor.rows = 1;
-            editor.value = prompt;
-            editor.setAttribute('aria-label', `导演提示词 ${index + 1}`);
-            bindTtsDirectorEditor(editor, value => { currentAgentTtsDirectorPrompts[index] = value; });
-            editor.addEventListener('blur', () => {
-                const value = editor.value.trim();
-                if (value) currentAgentTtsDirectorPrompts[index] = value;
-                else {
-                    currentAgentTtsDirectorPrompts.splice(index, 1);
-                    renderTtsDirectorPrompts();
-                }
-            });
-            const removeButton = document.createElement('button');
-            removeButton.type = 'button';
-            removeButton.className = 'small-button tts-director-action-button';
-            removeButton.textContent = '−';
-            removeButton.title = '删除该导演提示词';
-            removeButton.setAttribute('aria-label', `删除导演提示词 ${index + 1}`);
-            removeButton.addEventListener('mousedown', event => event.preventDefault());
-            removeButton.addEventListener('click', () => {
-                currentAgentTtsDirectorPrompts.splice(index, 1);
-                renderTtsDirectorPrompts();
-            });
-            row.append(editor, removeButton);
-            agentTtsDirectorPromptsContainer.appendChild(row);
-        });
-        updateSectionSummary('tts');
-        scheduleStickyButtonsRefresh();
-    }
-
-    function addTtsDirectorPrompt() {
-        const prompt = agentTtsDirectorPromptInput?.value?.trim() || '';
-        if (!prompt) {
-            uiHelper.showToastNotification('请先填写自然语言导演提示词。', 'warning');
-            agentTtsDirectorPromptInput?.focus();
-            return;
-        }
-        currentAgentTtsDirectorPrompts.push(prompt);
-        agentTtsDirectorPromptInput.value = '';
-        renderTtsDirectorPrompts();
-        agentTtsDirectorPromptInput.focus();
-    }
-
     /**
      * 设置鼠标快捷键事件监听器
      */
@@ -970,11 +870,6 @@ const settingsManager = (() => {
             agentTtsRegexSecondaryInput = document.getElementById('agentTtsRegexSecondary');
             refreshTtsModelsBtn = document.getElementById('refreshTtsModelsBtn');
             agentTtsSpeedSlider = options.elements.agentTtsSpeedSlider;
-            agentTtsDirectorPromptInput = document.getElementById('agentTtsDirectorPromptInput');
-            addAgentTtsDirectorPromptBtn = document.getElementById('addAgentTtsDirectorPromptBtn');
-            fillAgentTtsDirectorTemplateBtn = document.getElementById('fillAgentTtsDirectorTemplateBtn');
-            agentTtsDirectorPromptsContainer = document.getElementById('agentTtsDirectorPromptsContainer');
-
             // 🟢 监听模态框就绪事件，动态绑定延迟加载的元素
             document.addEventListener('modal-ready', (e) => {
                 const { modalId } = e.detail;
@@ -1138,7 +1033,6 @@ const settingsManager = (() => {
             window.addEventListener('pagehide', () => {
                 modelsUpdatedDisposer?.();
                 modelsUpdatedDisposer = null;
-                clearTtsDirectorListeners();
                 promptManager?.destroy?.();
                 promptManager = null;
             }, { once: true });
@@ -1158,31 +1052,6 @@ const settingsManager = (() => {
                     }
                 });
             }
-
-            clearTtsDirectorListeners();
-            const ownTtsDirectorListener = (target, type, handler, options) => {
-                if (!target) return;
-                target.addEventListener(type, handler, options);
-                ttsDirectorDisposers.push(() => target.removeEventListener(type, handler, options));
-            };
-            ownTtsDirectorListener(addAgentTtsDirectorPromptBtn, 'mousedown', event => event.preventDefault());
-            ownTtsDirectorListener(addAgentTtsDirectorPromptBtn, 'click', addTtsDirectorPrompt);
-            ownTtsDirectorListener(fillAgentTtsDirectorTemplateBtn, 'click', () => {
-                const existing = agentTtsDirectorPromptInput?.value?.trim() || '';
-                if (!agentTtsDirectorPromptInput) return;
-                agentTtsDirectorPromptInput.value = existing
-                    ? `${existing}\n\n${TTS_DIRECTOR_TEMPLATE}`
-                    : TTS_DIRECTOR_TEMPLATE;
-                agentTtsDirectorPromptInput.focus();
-                resizeTtsDirectorEditor(agentTtsDirectorPromptInput, true);
-            });
-            ownTtsDirectorListener(agentTtsDirectorPromptInput, 'keydown', event => {
-                if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
-                event.preventDefault();
-                addTtsDirectorPrompt();
-            });
-            bindTtsDirectorEditor(agentTtsDirectorPromptInput);
-
 
             // 创建正则设置UI
             createStripRegexUI();
@@ -1244,6 +1113,17 @@ const settingsManager = (() => {
         openModelSelectForInput: async (targetInputElement) => {
             await handleOpenModelSelect(targetInputElement);
         },
+        // The MiMo director editor is a dynamic settings slot. Keep its
+        // canonical array and persistence contract in the manager while the
+        // slot owns rows, shortcuts and editor geometry.
+        getTtsDirectorPrompts: () => [...currentAgentTtsDirectorPrompts],
+        setTtsDirectorPrompts: (prompts) => {
+            currentAgentTtsDirectorPrompts = Array.isArray(prompts)
+                ? prompts.map(prompt => String(prompt ?? '').trim()).filter(Boolean)
+                : [];
+            updateSectionSummary('tts');
+        },
+        getTtsDirectorTemplate: () => TTS_DIRECTOR_TEMPLATE,
         // Presentation owners must use this narrow command rather than
         // reproducing the collapse-state projection themselves.  The manager
         // remains the only place that knows how the current Agent, summaries

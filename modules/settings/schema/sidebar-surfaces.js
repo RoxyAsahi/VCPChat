@@ -122,8 +122,22 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
         'aria-expanded': 'false',
     });
     toggle.innerHTML = SVG_TOGGLE;
-    const titleRow = el(doc, 'div', { class: `${prefix}-settings-section-title-row` },
-        el(doc, 'span', { class: `${prefix}-settings-section-title` }, title));
+    const titleChildren = [el(doc, 'span', { class: `${prefix}-settings-section-title` }, title)];
+    if (kind === 'agent' && key === 'prompt') {
+        const helpBadge = el(doc, 'button', {
+            type: 'button',
+            class: 'vcp-settings-info-badge',
+            'aria-label': '提示说明',
+            'data-tooltip': '三个模块独立编辑后，注意保存以生效。支持文本、模块与预制三种模式切换。',
+            title: '三个模块独立编辑后，注意保存以生效。支持文本、模块与预制三种模式切换。',
+        }, '?');
+        helpBadge.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+        });
+        titleChildren.push(helpBadge);
+    }
+    const titleRow = el(doc, 'div', { class: `${prefix}-settings-section-title-row` }, titleChildren);
     header.append(titleRow, summary, toggle);
     const contentNode = el(doc, 'div', { class: `${prefix}-settings-section-content`, id: `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}Content` });
     contentNode.append(content(doc));

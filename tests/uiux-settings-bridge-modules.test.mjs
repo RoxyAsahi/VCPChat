@@ -106,9 +106,10 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof shared.mountUiuxSwitches, 'function', 'agent 设置面仍经共享挂载方收编开关');
     const agent = await import(pathToFileURL(sidebarRuntime).href);
     assert.deepEqual(Object.keys(agent).sort(), [
-        'cleanupDisconnectedAgentModelPickers', 'mountSettingsSidebarForm',
-        'mountTypedTopicSummaryModelPicker', 'releaseAllAgentModelPickers',
+        'MimoDirectorSlot', 'SequentialSpeakerSlot', 'mountSettingsSidebarForm',
     ]);
+    assert.equal(typeof agent.MimoDirectorSlot, 'function');
+    assert.equal(typeof agent.SequentialSpeakerSlot, 'function');
     const owners = await import(pathToFileURL(typedOwners).href);
     assert.deepEqual(Object.keys(owners).sort(), [
         'addTypedNetworkPathInput', 'disposeTypedSettings', 'ensureAssistantRuntimeUiService',
@@ -161,7 +162,7 @@ test('each extracted function has exactly one home (entry or module, never both)
         'composeCanonicalRowSlots',
         'mountSettingsAutosave', 'flushLegacyAutosave', 'teardownLegacyAutosave',
         // 2026-08-31 domain split homes.
-        'mountSettingsSidebarForm', 'mountTypedModelPicker', 'mountTypedSettingsConsumer', 'mountTypedFieldOwner',
+        'mountSettingsSidebarForm', 'mountTypedSettingsConsumer', 'mountTypedFieldOwner',
         'mountTypedForumFieldOwner', 'addTypedNetworkPathInput', 'ensureTypedSettingsService',
         'mountUiuxSwitches', 'mountUiuxDisclosures',
         'enhance', 'uniqueSettingsKey', 'mountSettingsShell', 'flushTypedOwners',
@@ -285,7 +286,7 @@ test('render preset listeners retract with the typed field owner', () => {
     assert.doesNotMatch(owner, /select\.addEventListener\('change', onRenderPresetChange\)/);
 });
 
-test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
+test.skip('retired: typed Agent Inputs were ordinary schema controls', () => {
     const agent = read(sidebarRuntime);
     const helper = agent.match(/function mountTypedAgentInput\(form, \{ id, marker, ownerKey, placeholder = false, restoreClass = false \}\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
     assert.match(helper, /api\.mountInput\(input, props, scope\)/, 'the helper must mount on the injected presentation owner');
@@ -306,6 +307,17 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
+test('settings sidebar runtime only owns the two dynamic business slots', () => {
+    const runtime = read(sidebarRuntime);
+    const slots = read(path.join(settingsDir, 'settings-sidebar-slots.js'));
+    assert.match(runtime, /new MimoDirectorSlot\(\{ form, scope \}\)\.mount\(\)/);
+    assert.match(runtime, /new SequentialSpeakerSlot\(\{ form, scope \}\)\.mount\(\)/);
+    assert.doesNotMatch(runtime, /enhance\(|mountInput|mountSelect|mountRange|mountColorPair|mountAgentModelPicker/);
+    assert.doesNotMatch(runtime, /!important/);
+    assert.match(slots, /class MimoDirectorSlot/);
+    assert.match(slots, /class SequentialSpeakerSlot/);
+});
+
 test('global network-path add action uses the generated Button owner', () => {
     const entry = read(bridgeEntry);
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
@@ -319,7 +331,7 @@ test('global network-path add action uses the generated Button owner', () => {
         'legacy Settings action CSS must exclude generated Buttons');
 });
 
-test('Agent section disclosures use one generated presentation owner and preserve manager-owned collapse state', () => {
+test.skip('retired: Agent sections are schema-owned', () => {
     const agent = read(sidebarRuntime);
     const disclosureModule = read(path.join(settingsDir, 'agent-disclosures.js'));
     assert.doesNotMatch(disclosureModule, /chatAPI|saveSettings|loadSettings/, 'Agent disclosure helper must not cross the business boundary');
@@ -351,7 +363,7 @@ test('Agent section disclosures use one generated presentation owner and preserv
         'Agent sections must not be bulk-enhanced alongside a typed owner');
 });
 
-test('Agent TTS Range has one presentation output owner and no manager-side listener', () => {
+test.skip('retired: Agent TTS Range is a schema-owned native control', () => {
     const agent = read(sidebarRuntime);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
     const rangeOwner = agent.match(/function mountTypedAgentTtsSpeedRange\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
@@ -382,7 +394,7 @@ test('Agent actions remain upstream-visible and theme-token driven', () => {
         'Agent save action keeps the upstream theme color contract');
 });
 
-test('Agent TTS Voice Select keeps business option loading while one typed projection owns presentation', () => {
+test.skip('retired: Agent TTS Voice Select is a schema-owned native control', () => {
     const agent = read(sidebarRuntime);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
     const selectProjection = read(path.join(settingsDir, 'select-projection.js'));
@@ -429,7 +441,10 @@ test('上游 MiMo 导演提示词保留 canonical 数组并由 SettingsManager �
     assert.match(manager, /agentConfig\.ttsDirectorPrompts/, 'population must read the upstream persisted prompt array');
     assert.match(manager, /ttsDirectorPrompts: \[\.\.\.currentAgentTtsDirectorPrompts\]/, 'save paths must write the canonical prompt array');
     assert.match(manager, /TTS_DIRECTOR_TEMPLATE/, 'the upstream director template action must remain available');
-    assert.match(manager, /clearTtsDirectorListeners\(\)/, 'static director listeners must retract on pagehide');
+    assert.match(manager, /getTtsDirectorPrompts:/, 'the manager exposes the canonical director array to the slot');
+    assert.match(manager, /setTtsDirectorPrompts:/, 'the manager owns slot updates and persistence state');
+    assert.match(read(path.join(settingsDir, 'settings-sidebar-slots.js')), /scope\.own\([\s\S]*mimo-director-slot/,
+        'slot listeners retract with the presentation scope');
     assert.match(tts, /options\.directorPrompts/, 'the runtime consumer must continue receiving the saved prompt array');
 });
 
@@ -457,7 +472,7 @@ test('Agent shell CSS leaves typed primitive inner controls to their own present
         'the parameter sheet must not retain a competing numeric Input presentation owner');
 });
 
-test('Agent ColorPairs have one generated synchronization owner and preserve canonical color controls', () => {
+test.skip('retired: Agent ColorPairs are schema-owned controls', () => {
     const agent = read(sidebarRuntime);
     const manager = read(path.join(root, 'modules', 'settingsManager.js'));
     const owner = agent.match(/function mountTypedAgentColorPairs\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
@@ -677,11 +692,12 @@ test('enhanceGlobalSettings 声明挂载步骤并保留关键顺序约束', () =
     assert.match(entry, /import \{ runSettingsPipeline \} from '\.\/settings\/pipeline\.js';/,
         'the entry executes the shared declarative pipeline runner');
     for (const name of [
-        'global-pill-steppers', 'global-typed-primitives', 'topic-summary-picker',
+        'global-pill-steppers', 'global-typed-primitives',
         'forum-field-owner', 'uiux-disclosures',
         'agent-name-fields', 'settings-shell', 'save-coordinator', 'autosave', 'typed-field-owner']) {
         assert.match(fn, new RegExp(`name: '${name}'`), `mount step ${name} must stay declared`);
     }
+    assert.doesNotMatch(fn, /topic-summary-picker/, 'topic summary model selection stays on the native SettingsManager path');
     // M5-c pass2：legacy-range-pass 退役——全局设置面仅有的四条 range 全部
     // 被步进器/外观原语收编，Range enhance 扫描无可增强对象，pass 随 pass2 删除。
     assert.doesNotMatch(fn, /name: 'legacy-range-pass'/,
@@ -1003,7 +1019,7 @@ test('统一 surface 投影失败必须关闭 CSS 门并恢复 legacy 类钩子'
 });
 
 
-test('话题总结模型复用 Agent 下拉并将 body portal 提升到全局设置遮罩之上', () => {
+test.skip('retired: 话题总结模型选择器由 SettingsManager 兼容路径负责', () => {
     const owner = read(sidebarRuntime);
     const picker = read(path.join(root, 'modules', 'uiux', 'generated', 'primitives', 'agent-model-picker.js'));
 
