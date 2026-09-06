@@ -122,9 +122,15 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
         'data-section-key': key,
         'data-schema-section': key,
     });
+    const headerId = kind === 'agent'
+        ? `${key}ToggleHeader`
+        : `group${key[0].toUpperCase()}${key.slice(1)}ToggleHeader`;
+    const toggleId = kind === 'agent'
+        ? `${key}ToggleBtn`
+        : `group${key[0].toUpperCase()}${key.slice(1)}ToggleBtn`;
     const header = el(doc, 'div', {
         class: `${prefix}-settings-section-header`,
-        id: `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}ToggleHeader`,
+        id: headerId,
         role: 'button',
         tabindex: '0',
         'aria-expanded': 'false',
@@ -133,7 +139,7 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
     const toggle = el(doc, 'button', {
         type: 'button',
         class: `${prefix}-settings-toggle-btn`,
-        id: `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}ToggleBtn`,
+        id: toggleId,
         'aria-label': `展开或收起${title}`,
         'aria-expanded': 'false',
     });
@@ -158,6 +164,36 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
     const contentNode = el(doc, 'div', { class: `${prefix}-settings-section-content`, id: `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}Content` });
     contentNode.append(content(doc));
     section.append(header, contentNode);
+
+    const toggleSection = (event) => {
+        if (event?.target?.closest('.vcp-settings-info-badge')) return;
+        const manager = doc.defaultView?.settingsManager || globalThis.window?.settingsManager;
+        let handled = false;
+        if (manager?.toggleAgentSettingsSection && kind === 'agent') {
+            try {
+                const result = manager.toggleAgentSettingsSection(key);
+                if (result !== false) handled = true;
+            } catch (_) {}
+        }
+        if (!handled) {
+            section.classList.toggle('collapsed');
+        }
+        const isCollapsed = section.classList.contains('collapsed');
+        const expanded = !isCollapsed;
+        header.setAttribute('aria-expanded', String(expanded));
+        toggle.setAttribute('aria-expanded', String(expanded));
+    };
+    header.addEventListener('click', toggleSection);
+    header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleSection(e);
+        }
+    });
+    toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleSection(e);
+    });
     return section;
 }
 
@@ -168,8 +204,28 @@ function renderAgentIdentity(doc) {
         el(doc, 'input', { id: 'agentAvatarInput', name: 'avatar', type: 'file', accept: 'image/png, image/jpeg, image/gif', hidden: true }));
     const identityMain = el(doc, 'div', { class: 'agent-identity-main' }, avatar, renderField(doc, agentFields[0], 'agent-name-wrapper'));
     const style = el(doc, 'div', { class: 'agent-style-collapsible-container collapsed', 'data-schema-section': 'style' });
-    const styleHeader = el(doc, 'div', { class: 'style-collapse-header', id: 'styleCollapseHeader', role: 'button', tabindex: '0' },
-        el(doc, 'span', { class: 'style-collapse-icon' }, '>'), el(doc, 'span', { class: 'style-collapse-title' }, '自定义样式设置'));
+    const styleIcon = el(doc, 'span', { class: 'style-collapse-icon' }, '>');
+    const styleHeader = el(doc, 'div', { class: 'style-collapse-header', id: 'styleCollapseHeader', role: 'button', tabindex: '0', 'aria-expanded': 'false' },
+        styleIcon, el(doc, 'span', { class: 'style-collapse-title' }, '自定义样式设置'));
+
+    const toggleStyle = () => {
+        const isCollapsed = style.classList.toggle('collapsed');
+        const expanded = !isCollapsed;
+        styleHeader.setAttribute('aria-expanded', String(expanded));
+        styleIcon.textContent = expanded ? 'v' : '>';
+        const manager = doc.defaultView?.settingsManager || globalThis.window?.settingsManager;
+        if (manager?.persistCollapseStatesForCurrentSelection) {
+            try { manager.persistCollapseStatesForCurrentSelection(); } catch (_) {}
+        }
+    };
+    styleHeader.addEventListener('click', toggleStyle);
+    styleHeader.dataset.collapsibleBound = 'true';
+    styleHeader.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleStyle();
+        }
+    });
     const controls = el(doc, 'div', { class: 'agent-style-controls' });
     [['disableCustomColors', '助手页面中使用主题默认颜色'], ['useThemeColorsInChat', '会话界面中使用主题默认颜色']].forEach(([id, text]) => {
         const checkbox = el(doc, 'input', { id, type: 'checkbox', name: id });

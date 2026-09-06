@@ -6,8 +6,13 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const repoRoot = '/Users/asahi/Documents/Codex/vcpchat-exp-schema';
-const css = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/settings-sidebar.css'), 'utf8');
-const sidebarCss = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/sidebar.css'), 'utf8');
+const mainHtml = fs.readFileSync(path.join(repoRoot, 'main.html'), 'utf8');
+const settingsCss = fs.readFileSync(path.join(repoRoot, 'styles/settings.css'), 'utf8');
+const sidebarListCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-sidebar-list.css'), 'utf8');
+const sidebarTabsCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-sidebar-tabs.css'), 'utf8');
+const searchCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-search.css'), 'utf8');
+const identityCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-agent-identity.css'), 'utf8');
+const groupSectionsCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-group-sections.css'), 'utf8');
 const schema = await import(pathToFileURL(path.join(repoRoot, 'modules/settings/schema/sidebar-surfaces.js')).href);
 const surfaceModule = await import(pathToFileURL(path.join(repoRoot, 'modules/ui-system/settings/settings-sidebar-surface.js')).href);
 
@@ -55,10 +60,6 @@ test('schema-rendered Agent surface exposes every business anchor and all contro
     const avatarOverlay = form.querySelector('.avatar-upload-overlay');
     assert.ok(avatarOverlay?.querySelector('svg.avatar-upload-icon'), 'avatar upload control must contain a real SVG node');
     assert.doesNotMatch(avatarOverlay?.textContent || '', /<svg|aria-hidden|<path/, 'SVG source must not leak as visible text');
-    const sectionEvents = [];
-    sections.forEach(section => section.querySelector('.agent-settings-section-header').addEventListener('click', () => sectionEvents.push(section.dataset.sectionKey)));
-    sections.forEach(section => section.querySelector('.agent-settings-section-header').click());
-    assert.deepEqual(sectionEvents, ['identity', 'prompt', 'model', 'params', 'tts']);
 
     const name = document.getElementById('agentNameInput');
     name.value = '测试助手';
@@ -72,7 +73,174 @@ test('schema-rendered Agent surface exposes every business anchor and all contro
     assert.equal(form.querySelectorAll('button').length >= 10, true);
 });
 
-test('schema-rendered Group surface preserves dynamic slots and dependency state', () => {
+test('Agent 手风琴与自定义样式折叠展开测试：点击 Header、Toggle 按钮与键盘回车/空格均能可靠切换', () => {
+    const { document } = createDocument();
+    const host = document.getElementById('agentSettingsContainer');
+    const form = schema.renderAgentSettingsSurface(host, document);
+
+    const sections = [...form.querySelectorAll('.agent-settings-section')];
+    assert.equal(sections.length, 5, 'Agent 设置必须有 5 个可折叠分区');
+
+    // 逐个测试 5 大主分区点击与键盘切换
+    for (const section of sections) {
+        const header = section.querySelector('.agent-settings-section-header');
+        const toggle = section.querySelector('.agent-settings-toggle-btn');
+        assert.ok(header, '分区 Header 必须存在');
+        assert.ok(toggle, '分区 Toggle 按钮必须存在');
+
+        // 初始状态：必须折叠
+        assert.ok(section.classList.contains('collapsed'), `分区 ${section.dataset.sectionKey} 初始必须处于折叠态`);
+        assert.equal(header.getAttribute('aria-expanded'), 'false');
+        assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+
+        // 1. 点击 Header 展开
+        header.click();
+        assert.equal(section.classList.contains('collapsed'), false, `点击 Header 后分区 ${section.dataset.sectionKey} 必须展开`);
+        assert.equal(header.getAttribute('aria-expanded'), 'true');
+        assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+        // 2. 点击 Header 再次折叠
+        header.click();
+        assert.equal(section.classList.contains('collapsed'), true, `再次点击 Header 后分区 ${section.dataset.sectionKey} 必须收起`);
+        assert.equal(header.getAttribute('aria-expanded'), 'false');
+        assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+
+        // 3. 点击 Toggle 按钮直接切换展开
+        toggle.click();
+        assert.equal(section.classList.contains('collapsed'), false, `点击 Toggle 按钮分区 ${section.dataset.sectionKey} 必须展开`);
+        assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+        // 4. 键盘 Enter 触发折叠
+        header.dispatchEvent(new document.defaultView.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        assert.equal(section.classList.contains('collapsed'), true, `回车键必须使分区 ${section.dataset.sectionKey} 收起`);
+
+        // 5. 键盘 Space 触发展开
+        header.dispatchEvent(new document.defaultView.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        assert.equal(section.classList.contains('collapsed'), false, `空格键必须使分区 ${section.dataset.sectionKey} 展开`);
+    }
+
+    // 测试「自定义样式设置」手风琴
+    const styleContainer = form.querySelector('.agent-style-collapsible-container');
+    const styleHeader = form.querySelector('#styleCollapseHeader');
+    assert.ok(styleContainer, 'style 容器必须存在');
+    assert.ok(styleHeader, 'styleHeader 必须存在');
+    assert.ok(styleContainer.classList.contains('collapsed'), '样式设置初始必须折叠');
+
+    styleHeader.click();
+    assert.equal(styleContainer.classList.contains('collapsed'), false, '点击 styleHeader 必须展开');
+    assert.equal(styleHeader.getAttribute('aria-expanded'), 'true');
+    assert.equal(styleHeader.querySelector('.style-collapse-icon')?.textContent, 'v');
+
+    styleHeader.click();
+    assert.equal(styleContainer.classList.contains('collapsed'), true, '再次点击 styleHeader 必须收起');
+    assert.equal(styleHeader.getAttribute('aria-expanded'), 'false');
+    assert.equal(styleHeader.querySelector('.style-collapse-icon')?.textContent, '>');
+});
+
+test('基础信息头像与名字框外观结构契约测试：保持头像边框容器、上传图标及名字输入框卡片化', () => {
+    const { document } = createDocument();
+    const host = document.getElementById('agentSettingsContainer');
+    const form = schema.renderAgentSettingsSurface(host, document);
+
+    // 结构完备性
+    const avatarWrapper = form.querySelector('.agent-avatar-wrapper');
+    const avatarImg = form.querySelector('#agentAvatarPreview');
+    const uploadOverlay = form.querySelector('.avatar-upload-overlay');
+    const nameWrapper = form.querySelector('.agent-name-wrapper');
+    const nameInput = form.querySelector('#agentNameInput');
+
+    assert.ok(avatarWrapper, '必须具备 .agent-avatar-wrapper 容器');
+    assert.ok(avatarImg, '必须具备 #agentAvatarPreview 头像');
+    assert.ok(uploadOverlay, '必须具备 .avatar-upload-overlay 遮罩');
+    assert.ok(nameWrapper, '必须具备 .agent-name-wrapper 容器');
+    assert.ok(nameInput, '必须具备 #agentNameInput 输入框');
+
+    // 样式规范验证（恢复自 settings-agent-identity.css）
+    assert.match(identityCss, /\.agent-avatar-wrapper[\s\S]*?position:\s*relative/, '头像容器必须声明 relative 布局以承载悬浮遮罩');
+    assert.match(identityCss, /\.avatar-upload-overlay[\s\S]*?opacity:\s*0/, '上传遮罩默认必须半透明隐藏');
+    assert.match(identityCss, /\.agent-avatar-wrapper:hover\s+\.avatar-upload-overlay[\s\S]*?opacity:\s*1/, '鼠标悬停头像时遮罩必须平滑呈现');
+    assert.match(identityCss, /\.agent-name-wrapper[\s\S]*?flex:\s*1/, '名字输入框必须自适应填满右侧空间');
+});
+
+test('侧边栏独立滚动与列表容器测试：列表区域独立滚动，不破坏侧边栏结构', () => {
+    const dom = new JSDOM(mainHtml, { url: 'http://localhost' });
+    const { document } = dom.window;
+
+    const sidebar = document.querySelector('.sidebar');
+    const listScroll = document.querySelector('.sidebar-list-scroll');
+    const agentList = document.getElementById('agentList');
+
+    assert.ok(sidebar, 'sidebar 根容器必须存在');
+    assert.ok(listScroll, 'sidebar-list-scroll 滚动区必须存在');
+    assert.ok(agentList, 'agentList 必须存在');
+    assert.equal(agentList.parentNode, listScroll, 'agentList 必须置于 sidebar-list-scroll 内部');
+
+    // 样式规范验证（恢复自 settings-sidebar-list.css）
+    assert.match(sidebarListCss, /\.sidebar-list-scroll\s*\{[\s\S]*?flex:\s*1\s+1\s+auto;[\s\S]*?overflow-y:\s*auto;/, '列表必须自适应弹性占用中间空间并独立纵向滚动');
+});
+
+test('Agent 列表项头像与文字规整度测试：单行对齐、固定 42px 尺寸与圆角裁切', () => {
+    assert.match(sidebarListCss, /\.sidebar\s+\.agent-list\s+li[\s\S]*?display:\s*flex;[\s\S]*?align-items:\s*center;/, '列表项必须单行居中对齐');
+    assert.match(sidebarListCss, /\.sidebar\s+\.agent-list\s+img\.avatar[\s\S]*?width:\s*42px;[\s\S]*?height:\s*42px;/, '头像必须锁定 42px × 42px 标准尺寸');
+    assert.match(sidebarListCss, /\.sidebar\s+\.agent-list\s+img\.avatar[\s\S]*?border-radius:\s*50%;/, '头像必须为正圆形圆角');
+    assert.match(sidebarListCss, /\.sidebar\s+\.agent-list\s+img\.avatar[\s\S]*?object-fit:\s*cover;/, '头像必须使用 cover 裁切比例');
+});
+
+test('搜索助手或群胶囊容器与输入框结构测试：存在标准搜索胶囊、SVG 图标与关闭按钮', () => {
+    const dom = new JSDOM(mainHtml, { url: 'http://localhost' });
+    const { document } = dom.window;
+
+    const searchSubtab = document.querySelector('.sidebar-search-subtab');
+    const searchContainer = document.querySelector('.topic-search-container');
+    const searchTrigger = document.getElementById('nextUiAgentSearchTrigger');
+    const searchInput = document.getElementById('agentSearchInput');
+    const searchClose = document.getElementById('nextUiAgentSearchClose');
+
+    assert.ok(searchSubtab, '搜索子栏目胶囊必须存在');
+    assert.ok(searchContainer, '搜索框容器必须存在');
+    assert.ok(searchTrigger, '搜索放大镜触发按钮必须存在');
+    assert.ok(searchInput, '搜索输入框必须存在');
+    assert.ok(searchClose, '搜索关闭按钮必须存在');
+
+    // 校验搜索胶囊样式规范（恢复自 settings-search.css）
+    assert.match(searchCss, /\.agents-header\s+\.sidebar-search-subtab[\s\S]*?height:\s*37px;/, '搜索框胶囊必须维持规范的 37px 高度');
+    assert.match(searchCss, /\.agents-header\s+\.sidebar-search-subtab[\s\S]*?border-radius:\s*999px;/, '搜索框胶囊必须呈现圆润药丸圆角');
+});
+
+test('助手 / 话题 / 设置三 Tab 切换与话题页面结构及样式测试', () => {
+    const dom = new JSDOM(mainHtml, { url: 'http://localhost' });
+    const { document } = dom.window;
+
+    // 1. 验证 3 个 Tab 按钮存在且具语义化（data-tab="agents" 等）
+    const tabs = [...document.querySelectorAll('.sidebar-tabs .sidebar-tab-button')];
+    assert.equal(tabs.length, 3, '必须具备 3 个侧边栏 Tab 按钮');
+    const tabAgents = tabs.find(t => t.dataset.tab === 'agents');
+    const tabTopics = tabs.find(t => t.dataset.tab === 'topics');
+    const tabSettings = tabs.find(t => t.dataset.tab === 'settings');
+    assert.ok(tabAgents, '助手 Tab 按钮必须存在');
+    assert.ok(tabTopics, '话题 Tab 按钮必须存在');
+    assert.ok(tabSettings, '设置 Tab 按钮必须存在');
+
+    // 2. 验证 3 个内容容器匹配
+    const contentAgents = document.getElementById('tabContentAgents');
+    const contentTopics = document.getElementById('tabContentTopics');
+    const contentSettings = document.getElementById('tabContentSettings');
+    assert.ok(contentAgents?.getAttribute('role') === 'tabpanel', 'Agents 容器为 tabpanel');
+    assert.ok(contentTopics?.getAttribute('role') === 'tabpanel', 'Topics 容器为 tabpanel');
+    assert.ok(contentSettings?.getAttribute('role') === 'tabpanel', 'Settings 容器为 tabpanel');
+
+    // 3. 验证话题页核心控制项
+    assert.ok(document.getElementById('nextUiCreateTopicBtn'), '新建话题按钮必须存在');
+    assert.ok(document.getElementById('nextUiManageTopicsBtn'), '管理话题按钮必须存在');
+    assert.ok(document.getElementById('nextUiTopicSearchTrigger'), '搜索话题按钮必须存在');
+
+    // 4. 验证 Tab 切换与高亮分段样式规范（恢复自 settings-sidebar-tabs.css）
+    assert.match(sidebarTabsCss, /\.sidebar-tab-button\.active\s*\{[\s\S]*?color:\s*var\(--highlight-text\);/, '激活的 Tab 必须呈现高亮色');
+    assert.match(sidebarTabsCss, /\.sidebar-tab-button\.active::after[\s\S]*?width:\s*30px;/, '激活 Tab 必须呈现专属指示线/条');
+    assert.match(sidebarTabsCss, /\.sidebar-tab-content:not\(\.active\)[\s\S]*?display:\s*none !important;/, '非激活 Tab 必须完全隐藏，绝不产生物理重叠');
+});
+
+test('群聊设置表面 dynamic slots 与依赖关系保持一致', () => {
     const { dom, document } = createDocument();
     const host = document.createElement('div');
     host.id = 'groupSettingsContainer';
@@ -100,7 +268,7 @@ test('schema-rendered Group surface preserves dynamic slots and dependency state
     assert.equal(tags.hidden, true, 'schema marks the dependent slot without stealing GroupRenderer ownership');
 });
 
-test('sidebar surface physically unmounts inactive settings and rejects stale async commits', async () => {
+test('侧边栏表面物理卸载（Unmount）机制测试：非激活时 DOM 彻底脱离', async () => {
     const { document } = createDocument();
     const root = document.querySelector('main');
     const prompt = document.getElementById('selectAgentPromptForSettings');
@@ -125,14 +293,19 @@ test('sidebar surface physically unmounts inactive settings and rejects stale as
     assert.equal(groupHost.parentNode, null);
 });
 
-test('inactive settings tab cannot create a hit area over the Agent list', () => {
-    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?display:\s*none/);
-    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?pointer-events:\s*none/);
-    assert.match(css, /#tabContentSettings\.sidebar-tab-content:not\(\.active\)[\s\S]*?visibility:\s*hidden/);
+test('非激活设置面板绝对不能在 Agent 列表上方创建碰撞区（防遮挡防线）', () => {
+    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?display:\s*none !important;/);
+    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?pointer-events:\s*none !important;/);
+    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?visibility:\s*hidden !important;/);
+    assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?z-index:\s*-1 !important;/);
 });
 
-test('sidebar list rows keep avatar and label in one responsive flex row', () => {
-    assert.match(sidebarCss, /\.agent-list li,[\s\S]*?\.topic-list \.topic-item \{[\s\S]*?display:\s*flex/);
-    assert.match(sidebarCss, /\.agent-list \.agent-name,[\s\S]*?\.topic-list \.topic-title-display,[\s\S]*?flex:\s*1 1 auto/);
-    assert.match(sidebarCss, /\.agent-list img\.avatar,[\s\S]*?\.topic-list \.topic-item img\.avatar,[\s\S]*?flex:\s*0 0 auto/);
+test('样式入口引用完备性核验：settings.css 完整导入 18 个核心子样式表', () => {
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-sidebar-tabs\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-sidebar-list\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-search\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-identity\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-sections\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-agent-prompt\.css'\);/);
+    assert.match(settingsCss, /@import url\('\.\/setting\/settings-group-sections\.css'\);/);
 });

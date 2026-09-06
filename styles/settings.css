@@ -1,3 +1,27 @@
-/* Legacy entry retained for upstream stylesheet loading order.
-   The Agent/Group settings sidebar is owned by ui-system/settings-sidebar.css;
-   global settings is owned by ui-system/settings.css. */
+/* styles/settings.css - Settings Entry Point */
+
+@import url('./setting/settings-sidebar-tabs.css');
+@import url('./setting/settings-sidebar-list.css');
+@import url('./setting/settings-search.css');
+@import url('./setting/settings-agent-form.css');
+@import url('./setting/settings-group-form.css');
+@import url('./setting/settings-form-controls.css');
+@import url('./setting/settings-invite.css');
+@import url('./setting/settings-model-select.css');
+@import url('./setting/settings-regex.css');
+/* Global settings is owned exclusively by styles/ui-system/settings.css. */
+@import url('./setting/settings-agent-params.css');
+
+/* Agent 卡片外壳 - 拆分后的模块 */
+@import url('./setting/agent/agent-card-base.css');
+@import url('./setting/agent/agent-card-uiux.css');
+@import url('./setting/agent/agent-card-layout.css');
+@import url('./setting/agent/agent-card-controls.css');
+@import url('./setting/agent/agent-prompt-editor.css');
+
+@import url('./setting/settings-agent-identity.css');
+@import url('./setting/settings-agent-sections.css');
+@import url('./setting/settings-agent-prompt.css');
+@import url('./setting/settings-agent-style-collapse.css');
+@import url('./setting/settings-group-sections.css');
+@import url('./setting/settings-schema-surface.css');
