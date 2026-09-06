@@ -291,10 +291,10 @@
         if (!container) return;
         clear(container);
         if (!membersConfigs?.length || !groupConfig || groupConfig.mode !== 'invite_only') {
-            container.style.display = 'none';
+            container.hidden = true;
             return;
         }
-        container.style.display = 'grid';
+        container.hidden = false;
         const doc = container.ownerDocument;
         membersConfigs.filter(member => member && !member.error).forEach(member => {
             const button = doc.createElement('button');
@@ -317,7 +317,7 @@
     function clearInviteButtons(container) {
         if (!container) return;
         clear(container);
-        container.style.display = 'none';
+        container.hidden = true;
     }
 
     global.VCPGroupSettingsSlots = Object.freeze({

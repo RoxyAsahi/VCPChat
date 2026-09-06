@@ -3,41 +3,35 @@
    business ids remain stable for SettingsManager and GroupRenderer, while all
    geometry and control styling is expressed through semantic descendants. */
 
-:root {
+html .vcp-ui-scope #tabContentSettings {
     --vcp-settings-control-height: 32px;
     --vcp-settings-control-height-compact: 28px;
-    --vcp-settings-radius: 8px;
-    --vcp-settings-gap: 12px;
-    --vcp-settings-field-gap: 6px;
-    --vcp-settings-pad: 8px;
-    --vcp-settings-border: var(--vcp-ui-border, var(--border-color, rgba(127, 138, 155, 0.24)));
-    --vcp-settings-surface: var(--vcp-ui-bg-1, var(--secondary-bg, rgba(255, 255, 255, 0.04)));
-    --vcp-settings-input: var(--vcp-ui-bg-1, var(--input-bg, rgba(255, 255, 255, 0.06)));
-    --vcp-settings-text: var(--vcp-ui-text-0, var(--primary-text, #f5f7fa));
-    --vcp-settings-muted: var(--vcp-ui-text-1, var(--secondary-text, #9aa4b2));
-    --vcp-settings-accent: var(--vcp-ui-accent, var(--highlight-text, #5b9cff));
-    --vcp-settings-danger: var(--vcp-ui-danger, var(--danger-color, #ef6262));
+    --vcp-settings-radius: var(--vcp-ui-radius-sm, 8px);
+    --vcp-settings-gap: var(--vcp-ui-space-3, 12px);
+    --vcp-settings-field-gap: var(--vcp-ui-space-2, 6px);
+    --vcp-settings-pad: var(--vcp-ui-space-2, 8px);
+    --vcp-settings-border: var(--vcp-ui-border, var(--border-color, var(--vcp-ui-fill-2)));
+    --vcp-settings-surface: var(--vcp-ui-bg-1, var(--secondary-bg, var(--vcp-ui-fill-0)));
+    --vcp-settings-input: var(--vcp-ui-bg-1, var(--input-bg, var(--vcp-ui-fill-1)));
+    --vcp-settings-text: var(--vcp-ui-text-0, var(--primary-text, var(--vcp-ui-text-0)));
+    --vcp-settings-muted: var(--vcp-ui-text-2, var(--secondary-text, var(--vcp-ui-text-2)));
+    --vcp-settings-accent: var(--vcp-ui-accent, var(--highlight-text, var(--vcp-ui-accent)));
+    --vcp-settings-danger: var(--vcp-ui-danger, var(--danger-color, var(--vcp-ui-danger)));
 }
 
-/* The legacy theme switcher publishes `body.light-theme` while the shared UI
-   token sheet also keeps its derived values on :root.  A custom property is
-   resolved where it is declared, so the sidebar aliases above would otherwise
-   retain the dark theme's computed colors.  Re-derive the aliases at the same
-   element that owns the light palette. */
-body.light-theme,
-body[data-vcp-theme="light"] {
-    --vcp-settings-border: var(--border-color, rgba(127, 138, 155, 0.24));
-    --vcp-settings-surface: var(--secondary-bg, rgba(255, 255, 255, 0.04));
-    --vcp-settings-input: var(--input-bg, rgba(255, 255, 255, 0.06));
-    --vcp-settings-text: var(--primary-text, #f5f7fa);
-    --vcp-settings-muted: var(--secondary-text, #9aa4b2);
-    --vcp-settings-accent: var(--highlight-text, #5b9cff);
-    --vcp-settings-danger: var(--danger-color, #ef6262);
+html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope #tabContentSettings {
+    --vcp-settings-border: var(--border-color, var(--vcp-ui-border));
+    --vcp-settings-surface: var(--secondary-bg, var(--vcp-ui-fill-0));
+    --vcp-settings-input: var(--input-bg, var(--vcp-ui-fill-1));
+    --vcp-settings-text: var(--primary-text, var(--vcp-ui-text-0));
+    --vcp-settings-muted: var(--secondary-text, var(--vcp-ui-text-2));
+    --vcp-settings-accent: var(--highlight-text, var(--vcp-ui-accent));
+    --vcp-settings-danger: var(--danger-color, var(--vcp-ui-danger));
 }
 
 /* Sidebar shell geometry has one owner. The scroll container supplies the
    gutter; schema surfaces consume the content box without compensating math. */
-#tabContentSettings.sidebar-tab-content.active {
+html .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -52,13 +46,13 @@ body[data-vcp-theme="light"] {
     scrollbar-gutter: stable;
 }
 
-#tabContentSettings.sidebar-tab-content:not(.active) {
+html .vcp-ui-scope #tabContentSettings.sidebar-tab-content:not(.active) {
     display: none;
     visibility: hidden;
     pointer-events: none;
 }
 
-#tabContentSettings > .vcp-settings-schema-surface {
+html .vcp-ui-scope #tabContentSettings > .vcp-settings-schema-surface {
     display: block;
     width: 100%;
     min-width: 0;
@@ -68,23 +62,23 @@ body[data-vcp-theme="light"] {
     box-sizing: border-box;
 }
 
-.vcp-settings-schema-surface[hidden],
-.vcp-settings-schema-surface:not([data-settings-mounted="true"]) {
+html .vcp-ui-scope .vcp-settings-schema-surface[hidden],
+html .vcp-ui-scope .vcp-settings-schema-surface:not([data-settings-mounted="true"]) {
     display: none;
 }
 
 /* Schema form contract. */
-.vcp-settings-schema-surface > h3 {
+html .vcp-ui-scope .vcp-settings-schema-surface > h3 {
     min-width: 0;
-    margin: 0 0 8px;
+    margin: 0 0 var(--vcp-ui-space-2, 8px);
     color: var(--vcp-settings-text);
-    font-size: 15px;
+    font-size: var(--vcp-ui-font-emphasis);
     font-weight: 600;
-    line-height: 1.4;
+    line-height: var(--vcp-ui-line-compact, 1.4);
     overflow-wrap: anywhere;
 }
 
-.vcp-settings-schema-surface > form {
+html .vcp-ui-scope .vcp-settings-schema-surface > form {
     display: flex;
     flex-direction: column;
     gap: var(--vcp-settings-gap);
@@ -95,27 +89,27 @@ body[data-vcp-theme="light"] {
     box-sizing: border-box;
 }
 
-.vcp-settings-schema-surface [data-schema-field],
-.vcp-settings-schema-surface .group-settings-field-shell,
-.vcp-settings-schema-surface .settings-form-group {
+html .vcp-ui-scope .vcp-settings-schema-surface [data-schema-field],
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-field-shell,
+html .vcp-ui-scope .vcp-settings-schema-surface .settings-form-group {
     display: flex;
     flex-direction: column;
     gap: var(--vcp-settings-field-gap);
     min-width: 0;
 }
 
-.vcp-settings-schema-surface label,
-.vcp-settings-schema-surface .group-settings-field-label {
+html .vcp-ui-scope .vcp-settings-schema-surface label,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-field-label {
     min-width: 0;
     color: var(--vcp-settings-muted);
-    font-size: 12px;
+    font-size: var(--vcp-ui-font-caption);
     line-height: 1.35;
     overflow-wrap: anywhere;
 }
 
-.vcp-settings-schema-surface input:not([type="checkbox"]):not([type="radio"]),
-.vcp-settings-schema-surface select,
-.vcp-settings-schema-surface textarea {
+html .vcp-ui-scope .vcp-settings-schema-surface input:not([type="checkbox"]):not([type="radio"]),
+html .vcp-ui-scope .vcp-settings-schema-surface select,
+html .vcp-ui-scope .vcp-settings-schema-surface textarea {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -126,49 +120,49 @@ body[data-vcp-theme="light"] {
     font: inherit;
 }
 
-.vcp-settings-schema-surface input:not([type="checkbox"]):not([type="radio"]),
-.vcp-settings-schema-surface select {
+html .vcp-ui-scope .vcp-settings-schema-surface input:not([type="checkbox"]):not([type="radio"]),
+html .vcp-ui-scope .vcp-settings-schema-surface select {
     min-height: var(--vcp-settings-control-height);
     height: var(--vcp-settings-control-height);
     padding: 0 10px;
 }
 
-.vcp-settings-schema-surface textarea {
+html .vcp-ui-scope .vcp-settings-schema-surface textarea {
     min-height: 80px;
     padding: 8px 10px;
     resize: vertical;
     line-height: 1.5;
 }
 
-.vcp-settings-schema-surface input:focus-visible,
-.vcp-settings-schema-surface select:focus-visible,
-.vcp-settings-schema-surface textarea:focus-visible,
-.vcp-settings-schema-surface button:focus-visible {
+html .vcp-ui-scope .vcp-settings-schema-surface input:focus-visible,
+html .vcp-ui-scope .vcp-settings-schema-surface select:focus-visible,
+html .vcp-ui-scope .vcp-settings-schema-surface textarea:focus-visible,
+html .vcp-ui-scope .vcp-settings-schema-surface button:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--vcp-settings-accent) 55%, transparent);
     outline-offset: 1px;
 }
 
-.vcp-settings-schema-surface small,
-.vcp-settings-schema-surface .settings-schema-hint,
-.vcp-settings-schema-surface .group-settings-helper-text,
-.vcp-settings-schema-surface .tts-director-help {
+html .vcp-ui-scope .vcp-settings-schema-surface small,
+html .vcp-ui-scope .vcp-settings-schema-surface .settings-schema-hint,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-helper-text,
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-help {
     color: var(--vcp-settings-muted);
-    font-size: 11px;
+    font-size: var(--vcp-ui-font-size-xs);
     line-height: 1.45;
     overflow-wrap: anywhere;
 }
 
 /* Collapsible schema sections. */
-.vcp-settings-schema-surface .agent-settings-section,
-.vcp-settings-schema-surface .group-settings-section {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     min-width: 0;
     border-bottom: 1px solid var(--vcp-settings-border);
 }
 
-.vcp-settings-schema-surface .agent-settings-section-header,
-.vcp-settings-schema-surface .group-settings-section-header {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-header,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: 28px auto;
@@ -184,61 +178,48 @@ body[data-vcp-theme="light"] {
     cursor: pointer;
 }
 
-.vcp-settings-schema-surface .agent-settings-section-title-row,
-.vcp-settings-schema-surface .group-settings-section-title-row {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title-row,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title-row {
     display: flex;
     grid-area: title;
     align-items: center;
-    height: 28px !important;
-    min-height: 28px !important;
+    height: 28px;
+    min-height: 28px;
     min-width: 0;
     gap: 5px;
-    align-self: center !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    align-self: center;
+    margin: 0;
+    padding: 0;
 }
 
-.vcp-settings-schema-surface .agent-settings-section-title,
-.vcp-settings-schema-surface .group-settings-section-title {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title {
     min-width: 0;
     flex: 1 1 auto;
     color: var(--vcp-settings-text);
-    font-size: 13px;
+    font-size: var(--vcp-ui-font-helper);
     font-weight: 600;
-    line-height: 1 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    align-self: center !important;
+    line-height: 1;
+    margin: 0;
+    padding: 0;
+    align-self: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* The legacy shell keeps an ellipsis on section titles. The schema title row
-   owns the badge as a separate flex item, so the text may shrink while the
-   help affordance remains fully visible. */
-#tabContentSettings .vcp-settings-schema-surface .agent-settings-section-title,
-#tabContentSettings .vcp-settings-schema-surface .group-settings-section-title {
-    overflow: hidden;
-}
-
-#tabContentSettings .vcp-settings-schema-surface .agent-settings-section-title-row,
-#tabContentSettings .vcp-settings-schema-surface .group-settings-section-title-row {
-    overflow: visible;
-}
-
-.vcp-settings-schema-surface .agent-settings-section-summary,
-.vcp-settings-schema-surface .group-settings-section-summary {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-summary,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-summary {
     grid-area: summary;
     min-width: 0;
     color: var(--vcp-settings-muted);
-    font-size: 11px;
+    font-size: var(--vcp-ui-font-size-xs);
     line-height: 1.3;
     overflow-wrap: anywhere;
 }
 
-.vcp-settings-schema-surface .agent-settings-toggle-btn,
-.vcp-settings-schema-surface .group-settings-toggle-btn {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-toggle-btn,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-toggle-btn {
     display: inline-flex;
     grid-area: toggle;
     align-items: center;
@@ -255,26 +236,26 @@ body[data-vcp-theme="light"] {
     cursor: pointer;
 }
 
-.vcp-settings-schema-surface .agent-settings-section-content,
-.vcp-settings-schema-surface .group-settings-section-content {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-content,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content {
     display: none;
     min-width: 0;
     padding: 4px 0 12px;
 }
 
-.vcp-settings-schema-surface .agent-settings-section:not(.collapsed) .agent-settings-section-content,
-.vcp-settings-schema-surface .group-settings-section:not(.collapsed) .group-settings-section-content {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section:not(.collapsed) .agent-settings-section-content,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section:not(.collapsed) .group-settings-section-content {
     display: block;
 }
 
-.vcp-settings-schema-surface .agent-settings-section-content > *,
-.vcp-settings-schema-surface .group-settings-section-content > * {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-content > *,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content > * {
     min-width: 0;
 }
 
 /* Agent identity, parameter and TTS custom slots. */
-.vcp-settings-schema-surface .agent-identity-main,
-.vcp-settings-schema-surface .group-identity-main {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-main,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-identity-main {
     display: grid;
     grid-template-columns: 76px minmax(0, 1fr);
     align-items: start;
@@ -282,14 +263,14 @@ body[data-vcp-theme="light"] {
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .agent-avatar-wrapper {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper {
     position: relative;
     width: 76px;
     height: 76px;
     flex: 0 0 76px;
 }
 
-.vcp-settings-schema-surface .agent-avatar-display {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-display {
     display: block;
     width: 76px;
     height: 76px;
@@ -298,7 +279,7 @@ body[data-vcp-theme="light"] {
     object-fit: cover;
 }
 
-.vcp-settings-schema-surface .avatar-upload-overlay {
+html .vcp-ui-scope .vcp-settings-schema-surface .avatar-upload-overlay {
     position: absolute;
     right: 2px;
     bottom: 2px;
@@ -309,16 +290,16 @@ body[data-vcp-theme="light"] {
     height: 24px;
     border-radius: 6px;
     color: var(--vcp-settings-text);
-    background: color-mix(in srgb, var(--vcp-settings-surface) 86%, #000 14%);
+    background: color-mix(in srgb, var(--vcp-settings-surface) 86%, black 14%);
     cursor: pointer;
 }
 
-.vcp-settings-schema-surface .agent-avatar-wrapper > input[type="file"] {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper > input[type="file"] {
     display: none;
 }
 
-.vcp-settings-schema-surface .agent-settings-card-shell,
-.vcp-settings-schema-surface .group-settings-card-shell {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-card-shell,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-card-shell {
     display: flex;
     flex-direction: column;
     gap: var(--vcp-settings-gap);
@@ -326,25 +307,25 @@ body[data-vcp-theme="light"] {
     padding: 8px 0;
 }
 
-.vcp-settings-schema-surface .params-content,
-.vcp-settings-schema-surface .agent-style-controls {
+html .vcp-ui-scope .vcp-settings-schema-surface .params-content,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-controls {
     display: grid;
     gap: var(--vcp-settings-gap);
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .agent-style-collapsible-container.collapsed .agent-style-controls {
-    display: none !important;
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container.collapsed .agent-style-controls {
+    display: none;
 }
 
-.vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .agent-style-controls {
-    display: grid !important;
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .agent-style-controls {
+    display: grid;
     gap: var(--vcp-settings-gap);
 }
 
-.vcp-settings-schema-surface .form-group-inline,
-.vcp-settings-schema-surface .agent-stream-mode-group,
-.vcp-settings-schema-surface .group-settings-switch-row {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-group-inline,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-group,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-switch-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -352,34 +333,34 @@ body[data-vcp-theme="light"] {
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .agent-stream-mode-option,
-.vcp-settings-schema-surface .style-toggle-row,
-.vcp-settings-schema-surface .agent-stream-mode-title {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option,
+html .vcp-ui-scope .vcp-settings-schema-surface .style-toggle-row,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-title {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     color: var(--vcp-settings-muted);
 }
 
-.vcp-settings-schema-surface .model-input-container,
-.vcp-settings-schema-surface .tts-director-composer {
+html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container,
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-composer {
     display: flex;
     align-items: center;
     min-width: 0;
     gap: 6px;
 }
 
-.vcp-settings-schema-surface .model-input-container > :first-child,
-.vcp-settings-schema-surface .tts-director-composer > textarea {
+html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > :first-child,
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-composer > textarea {
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.vcp-settings-schema-surface .small-button,
-.vcp-settings-schema-surface .tts-director-template-button,
-.vcp-settings-schema-surface .reset-colors-btn,
-.vcp-settings-schema-surface .sequential-order-move-btn,
-.vcp-settings-schema-surface .form-actions button {
+html .vcp-ui-scope .vcp-settings-schema-surface .small-button,
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-template-button,
+html .vcp-ui-scope .vcp-settings-schema-surface .reset-colors-btn,
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-order-move-btn,
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button {
     min-height: var(--vcp-settings-control-height);
     box-sizing: border-box;
     border: 1px solid var(--vcp-settings-border);
@@ -391,7 +372,7 @@ body[data-vcp-theme="light"] {
     font: inherit;
 }
 
-.vcp-settings-schema-surface #refreshTtsModelsBtn {
+html .vcp-ui-scope .vcp-settings-schema-surface #refreshTtsModelsBtn {
     display: inline-flex;
     flex: 0 0 var(--vcp-settings-control-height);
     align-items: center;
@@ -401,7 +382,7 @@ body[data-vcp-theme="light"] {
     padding: 0;
 }
 
-.vcp-settings-schema-surface .vcp-ui-icon {
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-ui-icon {
     display: inline-flex;
     width: 16px;
     height: 16px;
@@ -410,19 +391,19 @@ body[data-vcp-theme="light"] {
     line-height: 1;
 }
 
-.vcp-settings-schema-surface .slider-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .slider-container {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .slider-container input[type="range"] {
+html .vcp-ui-scope .vcp-settings-schema-surface .slider-container input[type="range"] {
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.vcp-settings-schema-surface .tts-director-heading {
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -430,39 +411,39 @@ body[data-vcp-theme="light"] {
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .tts-director-heading label {
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-heading label {
     flex: 1 1 auto;
 }
 
-.vcp-settings-schema-surface .tts-director-editor {
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-editor {
     min-height: 42px;
 }
 
-.vcp-settings-schema-surface .tts-director-prompts-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-prompts-container {
     display: grid;
     gap: 6px;
     min-width: 0;
 }
 
 /* Group custom slots. */
-.vcp-settings-schema-surface .group-settings-identity-shell,
-.vcp-settings-schema-surface .group-settings-card-shell {
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-card-shell {
     display: grid;
     gap: var(--vcp-settings-gap);
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .group-members-list-container,
-.vcp-settings-schema-surface .sequential-speaker-order-list,
-.vcp-settings-schema-surface #memberTagsInputs {
+html .vcp-ui-scope .vcp-settings-schema-surface .group-members-list-container,
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-list,
+html .vcp-ui-scope .vcp-settings-schema-surface #memberTagsInputs {
     display: grid;
     gap: 6px;
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .group-member-item,
-.vcp-settings-schema-surface .member-tag-input-item,
-.vcp-settings-schema-surface .sequential-speaker-order-item {
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item,
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item,
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item {
     display: flex;
     align-items: center;
     min-width: 0;
@@ -474,15 +455,15 @@ body[data-vcp-theme="light"] {
     background: color-mix(in srgb, var(--vcp-settings-surface) 82%, transparent);
 }
 
-.vcp-settings-schema-surface .group-member-item label,
-.vcp-settings-schema-surface .member-tag-input-item label,
-.vcp-settings-schema-surface .sequential-speaker-name {
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item label,
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item label,
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-name {
     min-width: 0;
     flex: 1 1 auto;
     color: var(--vcp-settings-text);
 }
 
-.vcp-settings-schema-surface .avatar-small {
+html .vcp-ui-scope .vcp-settings-schema-surface .avatar-small {
     width: 24px;
     height: 24px;
     flex: 0 0 24px;
@@ -490,25 +471,25 @@ body[data-vcp-theme="light"] {
     object-fit: cover;
 }
 
-.vcp-settings-schema-surface .sequential-speaker-drag-handle {
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-drag-handle {
     flex: 0 0 auto;
     color: var(--vcp-settings-muted);
     cursor: grab;
 }
 
-.vcp-settings-schema-surface .sequential-speaker-order-controls {
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-controls {
     display: inline-flex;
     flex: 0 0 auto;
     gap: 4px;
 }
 
-.vcp-settings-schema-surface .sequential-speaker-order-empty {
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-empty {
     padding: 8px;
     color: var(--vcp-settings-muted);
-    font-size: 12px;
+    font-size: var(--vcp-ui-font-caption);
 }
 
-.vcp-settings-schema-surface .vcp-settings-info-badge {
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-settings-info-badge {
     display: inline-flex;
     flex: 0 0 16px;
     align-items: center;
@@ -521,13 +502,13 @@ body[data-vcp-theme="light"] {
     color: var(--vcp-settings-muted);
     background: transparent;
     cursor: help;
-    font-size: 10px;
+    font-size: var(--vcp-ui-font-micro);
     line-height: 1;
 }
 
 /* The action bar owns the bottom rhythm; each command fills the same content
    box as the form and the delete wrapper does not introduce a second gutter. */
-.vcp-settings-schema-surface .form-actions {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions {
     position: sticky;
     bottom: 0;
     z-index: 2;
@@ -537,118 +518,109 @@ body[data-vcp-theme="light"] {
     min-width: 0;
     margin: 16px 0 0;
     padding: 8px 0 16px;
-    background: transparent !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border: none !important;
-    box-shadow: none !important;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: none;
+    box-shadow: none;
 }
 
-.vcp-settings-schema-surface .form-actions > button,
-.vcp-settings-schema-surface .form-actions > .delete-button-container,
-.vcp-settings-schema-surface .form-actions > .delete-button-container > button {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions > button,
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions > .delete-button-container,
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions > .delete-button-container > button {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
-}
-
-/* settings-shell.css adds a paint-gutter inset for older controls. Schema
-   surfaces already own the complete content box, so both actions share one
-   edge and cannot be clipped on the right. */
-#tabContentSettings .vcp-settings-schema-surface .form-actions > button,
-#tabContentSettings .vcp-settings-schema-surface .form-actions > .delete-button-container,
-#tabContentSettings .vcp-settings-schema-surface .form-actions > .delete-button-container > button {
-    width: 100%;
     margin-left: 0;
     margin-right: 0;
 }
 
-.vcp-settings-schema-surface .form-actions .delete-button-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions .delete-button-container {
     display: grid;
     min-width: 0;
 }
 
-.vcp-settings-schema-surface .form-actions .danger-button {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button {
     color: var(--vcp-settings-danger);
     border-color: color-mix(in srgb, var(--vcp-settings-danger) 44%, var(--vcp-settings-border));
 }
 
 @media (max-width: 420px) {
-    .vcp-settings-schema-surface .agent-identity-main,
-    .vcp-settings-schema-surface .group-identity-main {
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-main,
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-identity-main {
         grid-template-columns: 60px minmax(0, 1fr);
         gap: 8px;
     }
 
-    .vcp-settings-schema-surface .agent-avatar-wrapper,
-    .vcp-settings-schema-surface .agent-avatar-display {
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper,
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-display {
         width: 60px;
         height: 60px;
     }
 }
 
 /* --- Regex Section Controls (Migrated from settings-regex.css) --- */
-.vcp-settings-schema-surface .strip-regex-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-container {
     display: flex;
     flex-direction: column;
     gap: 2px;
     margin-top: 8px;
 }
 
-.vcp-settings-schema-surface .strip-regex-list-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-list-container {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.vcp-settings-schema-surface .strip-regex-row {
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     padding: 8px 12px;
-    border-radius: var(--vcp-settings-radius, 8px);
-    background-color: var(--vcp-settings-input, var(--input-bg));
-    border: 1px solid var(--vcp-settings-border, var(--border-color));
+    border-radius: var(--vcp-settings-radius);
+    background-color: var(--vcp-settings-input);
+    border: 1px solid var(--vcp-settings-border);
 }
 
-.vcp-settings-schema-surface .strip-regex-input {
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-input {
     flex-grow: 1;
     padding: 9px 10px;
-    border-radius: var(--vcp-settings-radius, 8px);
-    border: 1px solid var(--vcp-settings-border, var(--border-color));
-    background-color: var(--vcp-settings-input, var(--input-bg));
-    color: var(--vcp-settings-text, var(--primary-text));
-    font-size: 0.95em;
+    border-radius: var(--vcp-settings-radius);
+    border: 1px solid var(--vcp-settings-border);
+    background-color: var(--vcp-settings-input);
+    color: var(--vcp-settings-text);
+    font-size: var(--vcp-ui-font-helper);
     font-family: monospace;
 }
 
-.vcp-settings-schema-surface .strip-regex-input::placeholder {
-    color: var(--vcp-settings-muted, var(--placeholder-text));
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-input::placeholder {
+    color: var(--vcp-settings-muted);
     opacity: 0.7;
     font-family: monospace;
 }
 
-.vcp-settings-schema-surface .strip-regex-title {
+html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-title {
     font-weight: 500;
-    color: var(--vcp-settings-text, var(--primary-text));
-    font-size: 0.95em;
+    color: var(--vcp-settings-text);
+    font-size: var(--vcp-ui-font-helper);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
 }
 
-.vcp-settings-schema-surface .custom-select-container {
+html .vcp-ui-scope .vcp-settings-schema-surface .custom-select-container {
     position: relative;
     flex-shrink: 0;
 }
 
-.vcp-settings-schema-surface .custom-select-button {
+html .vcp-ui-scope .vcp-settings-schema-surface .custom-select-button {
     padding: 0;
-    background-color: var(--button-bg);
-    border: 1px solid var(--button-bg);
-    color: var(--text-on-accent);
+    background-color: var(--vcp-ui-fill-1, var(--button-bg));
+    border: 1px solid var(--vcp-settings-border);
+    color: var(--vcp-ui-text-0, var(--text-on-accent));
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -661,43 +633,43 @@ body[data-vcp-theme="light"] {
     transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
-.vcp-settings-schema-surface .custom-select-button:hover {
-    background-color: var(--button-hover-bg);
-    border-color: var(--button-hover-bg);
+html .vcp-ui-scope .vcp-settings-schema-surface .custom-select-button:hover {
+    background-color: var(--vcp-ui-fill-2, var(--button-hover-bg));
+    border-color: var(--vcp-settings-accent);
 }
 
-.vcp-settings-schema-surface .custom-select-button.has-selection::after {
+html .vcp-ui-scope .vcp-settings-schema-surface .custom-select-button.has-selection::after {
     content: '';
     position: absolute;
     width: 6px;
     height: 6px;
-    background-color: var(--user-bubble-bg);
+    background-color: var(--vcp-settings-accent);
     border-radius: 50%;
     top: 4px;
     right: 4px;
 }
 
-.vcp-settings-schema-surface .custom-dropdown {
+html .vcp-ui-scope .vcp-settings-schema-surface .custom-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
     margin-top: 4px;
-    background-color: var(--panel-bg);
-    border: 1px solid var(--border-color);
+    background-color: var(--vcp-settings-surface);
+    border: 1px solid var(--vcp-settings-border);
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--vcp-ui-elevation-3, 0 4px 12px transparent);
     z-index: 10000;
     overflow: visible;
     min-width: 120px;
 }
 
-body[data-vcp-theme="light"] .vcp-settings-schema-surface .custom-dropdown {
-    background-color: var(--secondary-bg);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .custom-dropdown {
+    background-color: var(--vcp-settings-surface);
+    box-shadow: var(--vcp-ui-elevation-2, 0 4px 12px transparent);
 }
 
-.vcp-settings-schema-surface .dropdown-option {
+html .vcp-ui-scope .vcp-settings-schema-surface .dropdown-option {
     padding: 8px 12px;
     display: flex;
     align-items: center;
@@ -706,27 +678,27 @@ body[data-vcp-theme="light"] .vcp-settings-schema-surface .custom-dropdown {
     transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
-.vcp-settings-schema-surface .dropdown-option:hover {
-    background-color: var(--accent-bg);
+html .vcp-ui-scope .vcp-settings-schema-surface .dropdown-option:hover {
+    background-color: var(--vcp-ui-fill-1);
 }
 
-.vcp-settings-schema-surface .dropdown-option input[type="checkbox"] {
+html .vcp-ui-scope .vcp-settings-schema-surface .dropdown-option input[type="checkbox"] {
     margin: 0;
     width: 16px;
     height: 16px;
-    accent-color: var(--user-bubble-bg);
+    accent-color: var(--vcp-settings-accent);
     cursor: pointer;
 }
 
-.vcp-settings-schema-surface .dropdown-option label {
+html .vcp-ui-scope .vcp-settings-schema-surface .dropdown-option label {
     margin: 0;
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: var(--vcp-ui-font-caption);
     flex-grow: 1;
     user-select: none;
 }
 
-.vcp-settings-schema-surface .btn-add-regex {
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex {
     position: relative;
     isolation: isolate;
     overflow: hidden;
@@ -737,50 +709,50 @@ body[data-vcp-theme="light"] .vcp-settings-schema-surface .custom-dropdown {
     height: 32px;
     min-height: 32px;
     padding: 0 12px;
-    font-size: 13px;
+    font-size: var(--vcp-ui-font-helper);
     font-weight: 500;
     line-height: 1;
     border-radius: 8px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
+    border: 1px solid var(--vcp-settings-border);
     cursor: pointer;
-    background: var(--dsw-alias-bg-layer-1, #ffffff);
-    color: var(--highlight-text);
+    background: var(--vcp-settings-surface);
+    color: var(--vcp-settings-accent);
     box-sizing: border-box;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     transition:
         background var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard),
         border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard),
         color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
-.vcp-settings-schema-surface .btn-add-regex:hover {
-    background: var(--dsw-alias-interactive-bg-hover, #f3f4f6);
-    border-color: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.22));
-    color: var(--highlight-text);
-    box-shadow: none !important;
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex:hover {
+    background: var(--vcp-ui-fill-1);
+    border-color: var(--vcp-settings-accent);
+    color: var(--vcp-settings-accent);
+    box-shadow: none;
 }
 
-.vcp-settings-schema-surface .btn-add-regex + .btn-add-regex {
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex + .btn-add-regex {
     margin-top: 6px;
 }
 
-.vcp-settings-schema-surface .btn-add-regex.btn-add-regex-secondary {
-    color: color-mix(in srgb, var(--primary-text) 75%, var(--secondary-text) 25%);
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex.btn-add-regex-secondary {
+    color: color-mix(in srgb, var(--vcp-settings-text) 75%, var(--vcp-settings-muted) 25%);
 }
 
-.vcp-settings-schema-surface .btn-add-regex.btn-add-regex-secondary:hover {
-    color: var(--primary-text);
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex.btn-add-regex-secondary:hover {
+    color: var(--vcp-settings-text);
 }
 
-.vcp-settings-schema-surface .btn-delete-regex {
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-delete-regex {
     height: 38px;
     width: 38px;
     padding: 0;
-    background-color: var(--danger-color);
-    border: 1px solid var(--danger-color);
-    color: white;
+    background-color: var(--vcp-settings-danger);
+    border: 1px solid var(--vcp-settings-danger);
+    color: var(--vcp-ui-text-0);
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -790,19 +762,19 @@ body[data-vcp-theme="light"] .vcp-settings-schema-surface .custom-dropdown {
     transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), transform var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard);
 }
 
-.vcp-settings-schema-surface .btn-delete-regex:hover {
-    background-color: var(--danger-hover-bg);
-    border-color: var(--danger-hover-bg);
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-delete-regex:hover {
+    background-color: color-mix(in srgb, var(--vcp-settings-danger) 80%, black 20%);
+    border-color: color-mix(in srgb, var(--vcp-settings-danger) 80%, black 20%);
     transform: scale(1.05);
 }
 
-.vcp-settings-schema-surface .btn-edit-regex {
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-edit-regex {
     height: 32px;
     width: 32px;
     padding: 0;
-    background-color: var(--button-bg);
-    border: 1px solid var(--button-bg);
-    color: var(--text-on-accent);
+    background-color: var(--vcp-ui-fill-1);
+    border: 1px solid var(--vcp-settings-border);
+    color: var(--vcp-settings-accent);
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -812,35 +784,35 @@ body[data-vcp-theme="light"] .vcp-settings-schema-surface .custom-dropdown {
     transition: background-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard), border-color var(--vcp-motion-duration-normal) var(--vcp-motion-ease-standard);
 }
 
-.vcp-settings-schema-surface .btn-edit-regex:hover {
-    background-color: var(--button-hover-bg);
-    border-color: var(--button-hover-bg);
+html .vcp-ui-scope .vcp-settings-schema-surface .btn-edit-regex:hover {
+    background-color: var(--vcp-ui-fill-2);
+    border-color: var(--vcp-settings-accent);
 }
 
-body[data-vcp-theme="light"] .vcp-settings-schema-surface .btn-add-regex {
-    background: color-mix(in srgb, var(--user-bubble-bg, #f3ede2) 85%, rgba(255, 255, 255, 0.7));
-    border: 1px solid var(--dsw-alias-border-l2, rgba(0, 0, 0, 0.12));
-    color: var(--highlight-text);
-    box-shadow: none !important;
+html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex {
+    background: color-mix(in srgb, var(--vcp-settings-surface) 85%, transparent);
+    border: 1px solid var(--vcp-settings-border);
+    color: var(--vcp-settings-accent);
+    box-shadow: none;
 }
 
-body[data-vcp-theme="light"] .vcp-settings-schema-surface .btn-add-regex:hover {
-    background: color-mix(in srgb, var(--user-bubble-bg, #f3ede2) 95%, rgba(0, 0, 0, 0.08));
-    border-color: var(--dsw-alias-border-l1, rgba(0, 0, 0, 0.22));
-    color: var(--highlight-text);
-    box-shadow: none !important;
+html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex:hover {
+    background: var(--vcp-ui-fill-1);
+    border-color: var(--vcp-settings-accent);
+    color: var(--vcp-settings-accent);
+    box-shadow: none;
 }
 
-body[data-vcp-theme="dark"] .vcp-settings-schema-surface .btn-add-regex {
-    background: var(--dsw-alias-bg-layer-2, #262628);
-    border: 1px solid var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.12));
-    color: var(--highlight-text);
-    box-shadow: none !important;
+html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex {
+    background: var(--vcp-settings-surface);
+    border: 1px solid var(--vcp-settings-border);
+    color: var(--vcp-settings-accent);
+    box-shadow: none;
 }
 
-body[data-vcp-theme="dark"] .vcp-settings-schema-surface .btn-add-regex:hover {
-    background: var(--dsw-alias-interactive-bg-hover, #323235);
-    border-color: var(--dsw-alias-border-l1, rgba(255, 255, 255, 0.24));
-    color: #ffffff;
-    box-shadow: none !important;
+html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .btn-add-regex:hover {
+    background: var(--vcp-ui-fill-1);
+    border-color: var(--vcp-settings-accent);
+    color: var(--vcp-ui-text-0);
+    box-shadow: none;
 }
