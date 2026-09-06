@@ -23,7 +23,7 @@ function createDocument() {
 
 test('schema contract declares both settings domains, validation, dependency and tooltip metadata', () => {
     const { settingsSidebarSchema } = schema;
-    assert.deepEqual(settingsSidebarSchema.agent.sections, ['identity', 'prompt', 'model', 'params', 'tts']);
+    assert.deepEqual(settingsSidebarSchema.agent.sections, ['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
     assert.deepEqual(settingsSidebarSchema.group.sections, ['identity', 'mode', 'model', 'prompt']);
     const temperature = settingsSidebarSchema.agent.fields.find(field => field.id === 'agentTemperature');
     assert.deepEqual(temperature.validation, { min: 0, max: 2 });
@@ -48,12 +48,13 @@ test('schema-rendered Agent surface exposes every business anchor and all contro
         'agentTtsVoicePrimary', 'refreshTtsModelsBtn', 'agentTtsRegexPrimary', 'agentTtsVoiceSecondary',
         'agentTtsRegexSecondary', 'agentTtsSpeed', 'ttsSpeedValue', 'agentTtsDirectorPromptInput',
         'fillAgentTtsDirectorTemplateBtn', 'addAgentTtsDirectorPromptBtn', 'agentTtsDirectorPromptsContainer',
-        'deleteAgentBtn'
+        'deleteAgentBtn',
+        'regexToggleHeader', 'regexToggleBtn', 'regexSummary', 'regexContent', 'stripRegexListContainer'
     ];
     for (const id of expectedIds) assert.ok(document.getElementById(id), `schema surface missing #${id}`);
 
     const sections = [...form.querySelectorAll('[data-schema-section][data-section-key]')];
-    assert.deepEqual(sections.map(section => section.dataset.sectionKey), ['identity', 'prompt', 'model', 'params', 'tts']);
+    assert.deepEqual(sections.map(section => section.dataset.sectionKey), ['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
     assert.equal(form.querySelectorAll('.agent-settings-section-title-row').length, sections.length);
     assert.equal(form.querySelector('[data-section-key="prompt"] .agent-settings-section-title-row > .agent-settings-section-title')?.textContent, '系统提示词');
     assert.equal(form.querySelector('#refreshTtsModelsBtn .vcp-ui-icon')?.textContent, 'refresh');
@@ -79,9 +80,9 @@ test('Agent 手风琴与自定义样式折叠展开测试：点击 Header、Togg
     const form = schema.renderAgentSettingsSurface(host, document);
 
     const sections = [...form.querySelectorAll('.agent-settings-section')];
-    assert.equal(sections.length, 5, 'Agent 设置必须有 5 个可折叠分区');
+    assert.equal(sections.length, 6, 'Agent 设置必须有 6 个可折叠分区（含正则设置）');
 
-    // 逐个测试 5 大主分区点击与键盘切换
+    // 逐个测试 6 大主分区点击与键盘切换
     for (const section of sections) {
         const header = section.querySelector('.agent-settings-section-header');
         const toggle = section.querySelector('.agent-settings-toggle-btn');
@@ -298,6 +299,65 @@ test('非激活设置面板绝对不能在 Agent 列表上方创建碰撞区（�
     assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?pointer-events:\s*none !important;/);
     assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?visibility:\s*hidden !important;/);
     assert.match(groupSectionsCss, /#tabContentSettings:not\(\.active\)[\s\S]*?z-index:\s*-1 !important;/);
+});
+
+test('正则分区由 schema 独占渲染：DOM 锚点齐备且按钮委托给业务层', () => {
+    const { document } = createDocument();
+    const host = document.getElementById('agentSettingsContainer');
+    const form = schema.renderAgentSettingsSurface(host, document);
+
+    const section = form.querySelector('[data-section-key="regex"]');
+    assert.ok(section, '正则分区必须由 schema 渲染');
+    assert.ok(section.classList.contains('agent-settings-collapsible-container'), '必须保留 legacy 容器类以继承既有样式');
+    assert.ok(section.classList.contains('strip-regex-container'), '必须保留 strip-regex-container 类');
+    assert.ok(section.classList.contains('collapsed'), '正则分区默认折叠');
+    assert.equal(section.querySelector('#regexContent')?.id, 'regexContent');
+    assert.ok(section.querySelector('#stripRegexListContainer'), '业务列表槽位必须存在');
+
+    const addBtn = section.querySelector('.btn-add-regex');
+    const importBtn = section.querySelector('.btn-add-regex-secondary');
+    assert.equal(addBtn?.textContent, '添加正则');
+    assert.equal(importBtn?.textContent, '导入正则');
+
+    const calls = [];
+    document.defaultView.settingsManager = {
+        openRegexModal: (...args) => calls.push(['openRegexModal', ...args]),
+        handleImportRegex: (...args) => calls.push(['handleImportRegex', ...args]),
+    };
+    addBtn.click();
+    importBtn.click();
+    assert.deepEqual(calls, [['openRegexModal'], ['handleImportRegex']], '按钮必须把业务动作委托给 manager');
+    delete document.defaultView.settingsManager;
+});
+
+test('集成碰撞：schema 与 manager 共存时点击只翻转一次（防双重监听抵消）', () => {
+    const { document } = createDocument();
+    const host = document.getElementById('agentSettingsContainer');
+    const form = schema.renderAgentSettingsSurface(host, document);
+
+    // 模拟旧管家也在监听同一个 header：它只能读取状态，不得再次翻转 class。
+    let managerToggleCalls = 0;
+    document.defaultView.settingsManager = {
+        toggleAgentSettingsSection: (key) => {
+            managerToggleCalls += 1;
+            const target = form.querySelector(`[data-section-key="${key}"]`);
+            target.classList.toggle('collapsed');
+            return true;
+        },
+    };
+
+    const section = form.querySelector('[data-section-key="regex"]');
+    const header = section.querySelector('#regexToggleHeader');
+    header.click();
+    assert.equal(section.classList.contains('collapsed'), false, '点击一次必须展开');
+    assert.equal(managerToggleCalls, 1, 'manager 命令只能被调用一次');
+    assert.equal(header.getAttribute('aria-expanded'), 'true');
+
+    header.click();
+    assert.equal(section.classList.contains('collapsed'), true, '再次点击必须收起');
+    assert.equal(managerToggleCalls, 2);
+    assert.equal(header.getAttribute('aria-expanded'), 'false');
+    delete document.defaultView.settingsManager;
 });
 
 test('样式入口引用完备性核验：settings.css 完整导入 18 个核心子样式表', () => {

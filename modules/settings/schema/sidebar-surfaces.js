@@ -43,7 +43,7 @@ const groupFields = Object.freeze([
 export const settingsSidebarSchema = Object.freeze({
     version: 1,
     agent: Object.freeze({
-        sections: Object.freeze(['identity', 'prompt', 'model', 'params', 'tts']),
+        sections: Object.freeze(['identity', 'prompt', 'model', 'params', 'tts', 'regex']),
         fields: agentFields,
     }),
     group: Object.freeze({
@@ -115,10 +115,10 @@ function renderField(doc, spec, className = 'settings-schema-field') {
     return row;
 }
 
-function renderSection(doc, { kind, key, title, summaryId, content }) {
+function renderSection(doc, { kind, key, title, summaryId, content, contentId, sectionClass }) {
     const prefix = kind === 'agent' ? 'agent' : 'group';
     const section = el(doc, 'section', {
-        class: `${prefix}-settings-collapsible-container ${prefix}-settings-section collapsed`,
+        class: `${prefix}-settings-collapsible-container ${prefix}-settings-section collapsed${sectionClass ? ' ' + sectionClass : ''}`,
         'data-section-key': key,
         'data-schema-section': key,
     });
@@ -161,7 +161,7 @@ function renderSection(doc, { kind, key, title, summaryId, content }) {
     }
     const titleRow = el(doc, 'div', { class: `${prefix}-settings-section-title-row` }, titleChildren);
     header.append(titleRow, summary, toggle);
-    const contentNode = el(doc, 'div', { class: `${prefix}-settings-section-content`, id: `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}Content` });
+    const contentNode = el(doc, 'div', { class: `${prefix}-settings-section-content`, id: contentId || `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}Content` });
     contentNode.append(content(doc));
     section.append(header, contentNode);
 
@@ -289,6 +289,24 @@ function renderAgentTts(doc) {
     return el(doc, 'div', { class: 'agent-settings-card-shell' }, content);
 }
 
+function renderRegexSection(doc) {
+    const invokeManager = (action, ...args) => {
+        const manager = doc.defaultView?.settingsManager || globalThis.window?.settingsManager;
+        if (typeof manager?.[action] === 'function') {
+            try { manager[action](...args); } catch (_) { /* business action owns its own errors */ }
+        }
+    };
+    const addBtn = el(doc, 'button', { type: 'button', class: 'btn-add-regex' }, '添加正则');
+    const importBtn = el(doc, 'button', { type: 'button', class: 'btn-add-regex btn-add-regex-secondary' }, '导入正则');
+    addBtn.addEventListener('click', () => invokeManager('openRegexModal'));
+    importBtn.addEventListener('click', () => invokeManager('handleImportRegex'));
+    const content = el(doc, 'div', { class: 'agent-settings-card-shell' },
+        el(doc, 'div', { id: 'stripRegexListContainer', class: 'strip-regex-list-container' }),
+        addBtn,
+        importBtn);
+    return renderSection(doc, { kind: 'agent', key: 'regex', title: '正则设置', summaryId: 'regexSummary', contentId: 'regexContent', sectionClass: 'strip-regex-container', content: () => content });
+}
+
 export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || document) {
     if (!host || !doc) return null;
     host.replaceChildren();
@@ -302,6 +320,7 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     form.append(renderSection(doc, { kind: 'agent', key: 'model', title: '模型设置', summaryId: 'modelSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell agent-settings-model-shell' }, el(d, 'div', { class: 'model-input-container' }, renderControl(d, agentFields[1]), el(d, 'button', { type: 'button', id: 'openModelSelectBtn', class: 'small-button', title: '选择模型', 'aria-label': '选择模型' }, '选择'))) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'params', title: '模型参数配置', summaryId: 'paramsSummary', content: renderAgentParams }));
     form.append(renderSection(doc, { kind: 'agent', key: 'tts', title: '语音设置 (本地 SoVITS / 网络 MiMo)', summaryId: 'ttsSummary', content: renderAgentTts }));
+    form.append(renderRegexSection(doc));
     form.append(el(doc, 'div', { class: 'form-actions' }, el(doc, 'button', { type: 'submit' }, '保存Agent设置'), el(doc, 'div', { class: 'delete-button-container' }, el(doc, 'button', { type: 'button', id: 'deleteAgentBtn', class: 'danger-button' }, '删除此Agent'))));
     host.append(title, form);
     return form;

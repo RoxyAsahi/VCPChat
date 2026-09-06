@@ -1054,7 +1054,7 @@ const settingsManager = (() => {
             }
 
             // 创建正则设置UI
-            createStripRegexUI();
+            resolveRegexSlots();
 
             // 添加Agent设置滚动条粘性按钮逻辑
             setupAgentSettingsStickyButtons();
@@ -1129,6 +1129,12 @@ const settingsManager = (() => {
         // remains the only place that knows how the current Agent, summaries
         // and persisted uiCollapseStates fit together.
         toggleAgentSettingsSection: (key) => toggleAgentSettingsSection(key),
+        // Regex business actions.  The schema surface owns the buttons and the
+        // listeners; the manager owns what a click actually does.  Exposed as
+        // narrow commands so no presentation owner needs to reach into the
+        // regex DOM or duplicate the modal/import flow.
+        openRegexModal: (ruleData = null) => openRegexModal(ruleData),
+        handleImportRegex: () => handleImportRegex(),
         triggerAgentSave: async (overrideAgentId) => {
             // 触发Agent设置保存（不含头像）。override 只能用于验证当前上下文，
             // 不能把当前共享 DOM 的内容强行写入一个已切走的 Agent。
@@ -1535,107 +1541,14 @@ const settingsManager = (() => {
      */
     // --- Regex Settings V2 ---
 
-function createStripRegexUI() {
-        const ttsCollapsibleContainer = getSectionContainer('tts');
-        if (!ttsCollapsibleContainer || !ttsCollapsibleContainer.parentNode) {
-            console.warn('[SettingsManager] TTS collapsible container not found for regex UI insertion');
+function resolveRegexSlots() {
+        const section = getSectionContainer('regex');
+        if (!section) {
+            console.warn('[SettingsManager] regex section slot not found; the schema surface must render it');
+            stripRegexListContainer = null;
             return;
         }
-
-        const existingContainer = getSectionContainer('regex');
-        if (existingContainer) {
-            stripRegexListContainer = existingContainer.querySelector('#stripRegexListContainer');
-            return;
-        }
-
-        const section = document.createElement('div');
-        section.className = 'agent-settings-collapsible-container agent-settings-section strip-regex-container collapsed';
-        section.dataset.sectionKey = 'regex';
-
-        const header = document.createElement('div');
-        header.className = 'agent-settings-section-header';
-        header.id = 'regexToggleHeader';
-
-        const title = document.createElement('span');
-        title.className = 'agent-settings-section-title';
-        title.textContent = '正则设置';
-
-        const titleRow = document.createElement('div');
-        titleRow.className = 'agent-settings-section-title-row';
-        titleRow.appendChild(title);
-        header.appendChild(titleRow);
-
-        const summary = document.createElement('div');
-        summary.className = 'agent-settings-section-summary';
-        summary.id = 'regexSummary';
-        header.appendChild(summary);
-
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'agent-settings-toggle-btn';
-        toggleBtn.id = 'regexToggleBtn';
-        toggleBtn.setAttribute('aria-label', '展开或收起正则设置');
-        toggleBtn.setAttribute('aria-expanded', 'false');
-        toggleBtn.innerHTML = `
-            <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-        `;
-        header.appendChild(toggleBtn);
-
-        const toggleRegexSection = (event) => {
-            const isCollapsed = section.classList.toggle('collapsed');
-            const expanded = !isCollapsed;
-            header.setAttribute('aria-expanded', String(expanded));
-            toggleBtn.setAttribute('aria-expanded', String(expanded));
-            try {
-                const controller = sectionControllers.get('regex');
-                if (controller) {
-                    controller.setCollapsed(isCollapsed);
-                    void updateSectionSummary('regex');
-                }
-            } catch (_) {}
-        };
-        header.addEventListener('click', toggleRegexSection);
-        toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            toggleRegexSection(e);
-        });
-
-        const content = document.createElement('div');
-        content.className = 'agent-settings-section-content';
-        content.id = 'regexContent';
-
-        const shell = document.createElement('div');
-        shell.className = 'agent-settings-card-shell';
-
-        stripRegexListContainer = document.createElement('div');
-        stripRegexListContainer.id = 'stripRegexListContainer';
-        stripRegexListContainer.className = 'strip-regex-list-container';
-        shell.appendChild(stripRegexListContainer);
-
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.textContent = '添加正则';
-        addBtn.className = 'btn-add-regex';
-        addBtn.addEventListener('click', () => openRegexModal());
-        shell.appendChild(addBtn);
-
-        const importBtn = document.createElement('button');
-        importBtn.type = 'button';
-        importBtn.textContent = '导入正则';
-        importBtn.className = 'btn-add-regex btn-add-regex-secondary';
-        importBtn.addEventListener('click', () => handleImportRegex());
-        shell.appendChild(importBtn);
-
-        content.appendChild(shell);
-        section.appendChild(header);
-        section.appendChild(content);
-
-        ttsCollapsibleContainer.parentNode.insertBefore(section, ttsCollapsibleContainer.nextSibling);
-
-        console.log('[SettingsManager] Regex UI created after TTS collapsible container');
+        stripRegexListContainer = section.querySelector('#stripRegexListContainer');
     }
 
     function renderRegexList() {
