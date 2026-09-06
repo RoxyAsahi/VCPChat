@@ -19,6 +19,21 @@
     --vcp-settings-danger: var(--vcp-ui-danger, var(--danger-color, #ef6262));
 }
 
+/* The legacy theme switcher publishes `body.light-theme` while the shared UI
+   token sheet also keeps its derived values on :root.  A custom property is
+   resolved where it is declared, so the sidebar aliases above would otherwise
+   retain the dark theme's computed colors.  Re-derive the aliases at the same
+   element that owns the light palette. */
+body.light-theme {
+    --vcp-settings-border: var(--border-color, rgba(127, 138, 155, 0.24));
+    --vcp-settings-surface: var(--secondary-bg, rgba(255, 255, 255, 0.04));
+    --vcp-settings-input: var(--input-bg, rgba(255, 255, 255, 0.06));
+    --vcp-settings-text: var(--primary-text, #f5f7fa);
+    --vcp-settings-muted: var(--secondary-text, #9aa4b2);
+    --vcp-settings-accent: var(--highlight-text, #5b9cff);
+    --vcp-settings-danger: var(--danger-color, #ef6262);
+}
+
 /* Sidebar shell geometry has one owner. The scroll container supplies the
    gutter; schema surfaces consume the content box without compensating math. */
 #tabContentSettings.sidebar-tab-content.active {

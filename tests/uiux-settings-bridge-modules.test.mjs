@@ -318,6 +318,46 @@ test('settings sidebar runtime only owns the two dynamic business slots', () => 
     assert.match(slots, /class SequentialSpeakerSlot/);
 });
 
+test('MimoDirectorSlot owns dynamic rows while SettingsManager owns the prompt array', async () => {
+    const { MimoDirectorSlot } = await import(pathToFileURL(path.join(settingsDir, 'settings-sidebar-slots.js')).href);
+    const dom = new JSDOM(`<form id="agentSettingsForm"><div class="tts-director-settings">
+        <textarea id="agentTtsDirectorPromptInput"></textarea>
+        <button type="button" id="fillAgentTtsDirectorTemplateBtn"></button>
+        <button type="button" id="addAgentTtsDirectorPromptBtn"></button>
+        <div id="agentTtsDirectorPromptsContainer"></div>
+    </div></form>`);
+    const disposers = [];
+    const makeScope = () => ({
+        own(dispose) { disposers.push(dispose); return dispose; },
+        listen(target, type, handler, options) {
+            target.addEventListener(type, handler, options);
+            const dispose = () => target.removeEventListener(type, handler, options);
+            disposers.push(dispose);
+            return dispose;
+        },
+        child: makeScope,
+        dispose: async () => {},
+    });
+    const prompts = [];
+    const manager = {
+        getTtsDirectorPrompts: () => prompts,
+        setTtsDirectorPrompts: values => { prompts.splice(0, prompts.length, ...values); },
+        getTtsDirectorTemplate: () => '模板内容',
+    };
+    const form = dom.window.document.querySelector('form');
+    const slot = new MimoDirectorSlot({ form, scope: makeScope(), manager }).mount();
+    const input = form.querySelector('#agentTtsDirectorPromptInput');
+    input.value = '第一条';
+    form.querySelector('#addAgentTtsDirectorPromptBtn').click();
+    assert.deepEqual(prompts, ['第一条']);
+    assert.equal(form.querySelectorAll('.tts-director-item').length, 1);
+    form.querySelector('.tts-director-action-button').click();
+    assert.deepEqual(prompts, []);
+    assert.equal(slot.host.dataset.vcpSettingsSlot, 'mimo-director');
+    disposers.forEach(dispose => dispose());
+    assert.equal(slot.host, null);
+});
+
 test('global network-path add action uses the generated Button owner', () => {
     const entry = read(bridgeEntry);
     const shellCss = read(path.join(root, 'styles', 'ui-system', 'settings-shell.css'));
