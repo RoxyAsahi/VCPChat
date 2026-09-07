@@ -92,6 +92,8 @@ const settingsManager = (() => {
     let scheduleStickyButtonsRefresh = () => { };
     let agentSettingsPopulateToken = 0;
     let agentSettingsPopulateQueue = Promise.resolve();
+    let isAgentSettingsDirty = false;
+    let agentSettingsAutosaveTimer = null;
     const initializedCollapseStateAgents = new Set();
     const promptModeFallbackLabels = {
         original: '文本',
@@ -222,6 +224,19 @@ const settingsManager = (() => {
                 return { stale: true };
             }
 
+            // Check for uncommitted dirty edits on the previous agent before populating new one
+            if (isAgentSettingsDirty && editingAgentIdInput?.value && editingAgentIdInput.value !== agentId) {
+                const prevId = editingAgentIdInput.value;
+                clearTimeout(agentSettingsAutosaveTimer);
+                try {
+                    console.log(`[SettingsManager] Flushing uncommitted dirty changes for previous agent ${prevId} before loading ${agentId}`);
+                    await saveCurrentAgentSettings();
+                } catch (e) {
+                    console.warn(`[SettingsManager] Failed to flush dirty edits for ${prevId}:`, e);
+                }
+                isAgentSettingsDirty = false;
+            }
+
             // 只有提示词上下文已成功切到目标 Agent 后，才发布表单所代表的 Agent ID。
             editingAgentIdInput.value = agentId;
             agentNameInput.value = agentConfig.name || agentId;
@@ -337,6 +352,9 @@ const settingsManager = (() => {
             restoreCollapseStates(agentConfig);
             updateAllSectionSummaries();
             scheduleStickyButtonsRefresh();
+            if (typeof globalThis.vcpUpdateFormStateDot === 'function') {
+                globalThis.vcpUpdateFormStateDot('done');
+            }
             document.dispatchEvent(new CustomEvent('vcp-settings-surface-updated', {
                 detail: { kind: 'agent', root: agentSettingsForm }
             }));
@@ -365,7 +383,9 @@ const settingsManager = (() => {
      * @param {Event} event - The form submission event.
      */
     async function saveCurrentAgentSettings(event) {
-        event.preventDefault();
+        if (event?.preventDefault) {
+            event.preventDefault();
+        }
         const agentId = editingAgentIdInput.value;
         if (!agentId) {
             console.error("[SettingsManager] Cannot save agent settings: agentId is missing.");
@@ -551,7 +571,38 @@ const settingsManager = (() => {
         const itemTypeDisplay = currentSelectedItem.type === 'group' ? '群组' : 'Agent';
         const itemName = currentSelectedItem.name || '当前选中的项目';
 
-        const confirmed = await uiHelper.showConfirmDialog(`您确定要删除 ${itemTypeDisplay} "${itemName}" 吗？其所有聊天记录和设置都将被删除，此操作不可撤销！`, '删除确认', '删除', '取消', true);
+        let confirmed = false;
+        if (window.VCPUIUX?.mountRiskConfirmation) {
+            confirmed = await new Promise(resolve => {
+                const scope = {
+                    child: () => ({ own: () => {}, listen: () => {}, dispose: () => {} }),
+                    own: () => {},
+                    listen: () => {},
+                    dispose: () => {}
+                };
+                let settled = false;
+                const modal = window.VCPUIUX.mountRiskConfirmation({
+                    title: `删除 ${itemTypeDisplay}`,
+                    description: `确定要删除 ${itemTypeDisplay} "${itemName}" 吗？该操作将永久清除其所有聊天记录与设置，不可撤销。`,
+                    acknowledgeLabel: `我已知晓并确认删除该 ${itemTypeDisplay}`,
+                    cancelLabel: '取消',
+                    confirmLabel: `确认删除`,
+                    open: true,
+                    onCancel: () => {
+                        if (!settled) { settled = true; resolve(false); }
+                    }
+                }, scope);
+                const confirmBtn = document.querySelector('.vcp-uiux-risk-confirm-action');
+                if (confirmBtn) {
+                    confirmBtn.addEventListener('click', () => {
+                        if (!settled) { settled = true; modal.setOpen(false); resolve(true); }
+                    }, { once: true });
+                }
+            });
+        } else {
+            confirmed = await uiHelper.showConfirmDialog(`您确定要删除 ${itemTypeDisplay} "${itemName}" 吗？其所有聊天记录和设置都将被删除，此操作不可撤销！`, '删除确认', '删除', '取消', true);
+        }
+
         if (!confirmed) {
             reportSettingsDeleteResult(agentSettingsForm, false, { cancelled: true });
             return;
@@ -925,7 +976,59 @@ const settingsManager = (() => {
 
             // Event Listeners for always-present elements
             if (agentSettingsForm) {
-                agentSettingsForm.addEventListener('submit', saveCurrentAgentSettings);
+                const updateStateDotIndicator = (state = 'done') => {
+                    const indicator = document.getElementById('formSaveStateIndicator');
+                    const dotHost = document.getElementById('formStateDotHost');
+                    const label = document.getElementById('formStateDotLabel');
+                    if (!indicator || !dotHost || !label) return;
+                    indicator.dataset.state = state;
+                    label.textContent = state === 'warning' ? '未保存更改' : (state === 'ongoing' ? '保存中...' : '已保存');
+                    dotHost.replaceChildren();
+                    if (window.VCPUIUX?.mountStateDot) {
+                        try {
+                            window.VCPUIUX.mountStateDot(dotHost, { state, size: 7 }, {
+                                own: () => {},
+                                child: () => ({ own: () => {}, listen: () => {}, dispose: () => {} }),
+                                listen: () => {},
+                                dispose: () => {}
+                            });
+                        } catch (_) {}
+                    }
+                };
+                globalThis.vcpUpdateFormStateDot = updateStateDotIndicator;
+
+                agentSettingsForm.addEventListener('submit', (ev) => {
+                    clearTimeout(agentSettingsAutosaveTimer);
+                    isAgentSettingsDirty = false;
+                    updateStateDotIndicator('ongoing');
+                    saveCurrentAgentSettings(ev);
+                    setTimeout(() => updateStateDotIndicator('done'), 200);
+                });
+                const markDirtyAndDebounceAutosave = () => {
+                    isAgentSettingsDirty = true;
+                    updateStateDotIndicator('warning');
+                    clearTimeout(agentSettingsAutosaveTimer);
+                    agentSettingsAutosaveTimer = setTimeout(async () => {
+                        if (!isAgentSettingsDirty || !editingAgentIdInput?.value) return;
+                        try {
+                            console.log('[SettingsManager] Autosaving dirty agent settings for:', editingAgentIdInput.value);
+                            updateStateDotIndicator('ongoing');
+                            await window.settingsManager?.triggerAgentSave(editingAgentIdInput.value);
+                            isAgentSettingsDirty = false;
+                            updateStateDotIndicator('done');
+                        } catch (err) {
+                            console.debug('[SettingsManager] Autosave deferred:', err);
+                        }
+                    }, 500);
+                };
+                agentSettingsForm.addEventListener('input', (ev) => {
+                    if (ev.target?.type === 'file') return;
+                    markDirtyAndDebounceAutosave();
+                });
+                agentSettingsForm.addEventListener('change', (ev) => {
+                    if (ev.target?.type === 'file') return;
+                    markDirtyAndDebounceAutosave();
+                });
             }
             if (deleteItemBtn) {
                 deleteItemBtn.addEventListener('click', handleDeleteCurrentItem);
@@ -1935,38 +2038,48 @@ function resolveRegexSlots() {
         const maxOutput = agentMaxOutputTokensInput?.value || '未设置';
         const topP = agentTopPInput?.value || '未设置';
         const topK = agentTopKInput?.value || '未设置';
-        const streamOutput = document.getElementById('agentStreamOutputTrue')?.checked ? '流式' : '非流式';
+        const isStream = document.getElementById('agentStreamOutputTrue')?.checked;
 
-        return [
-            `Temperature: ${temperature}`,
-            `上下文: ${contextLimit}`,
-            `最大输出: ${maxOutput}`,
-            `Top P: ${topP}`,
-            `Top K: ${topK}`,
-            `输出: ${streamOutput}`
-        ].join('\n');
+        const formatTokens = val => {
+            const num = parseInt(val, 10);
+            if (!Number.isFinite(num)) return val;
+            if (num >= 1000000) return `${(num / 1000000).toFixed(num % 1000000 === 0 ? 0 : 1)}M`;
+            if (num >= 1000) return `${(num / 1000).toFixed(num % 1000 === 0 ? 0 : 1)}k`;
+            return String(num);
+        };
+
+        const pills = [
+            { label: `Temp: ${temperature}`, active: temperature !== '未设置' },
+            { label: `上下文: ${formatTokens(contextLimit)}` },
+            { label: `输出: ${formatTokens(maxOutput)}` },
+            { label: isStream ? '流式' : '非流式', active: isStream }
+        ];
+
+        return {
+            kind: 'pills',
+            pills,
+            text: `Temperature: ${temperature} 上下文: ${contextLimit} 输出: ${isStream ? '流式' : '非流式'}`
+        };
     }
 
     function buildTtsSummary() {
         const primaryVoice = agentTtsVoicePrimarySelect?.selectedOptions?.[0]?.textContent?.trim()
             || agentTtsVoicePrimarySelect?.value
             || '不使用语音';
-        const primaryRegex = agentTtsRegexPrimaryInput?.value?.trim() || '全部';
-        const secondaryVoice = agentTtsVoiceSecondarySelect?.selectedOptions?.[0]?.textContent?.trim()
-            || agentTtsVoiceSecondarySelect?.value
-            || '不使用';
-        const secondaryRegex = agentTtsRegexSecondaryInput?.value?.trim() || '无';
         const speed = agentTtsSpeedSlider?.value || '1.0';
         const directorCount = currentAgentTtsDirectorPrompts.length;
 
-        return [
-            `主语言: ${primaryVoice}`,
-            `主语言正则: ${primaryRegex}`,
-            `副语言: ${secondaryVoice}`,
-            `副语言正则: ${secondaryRegex}`,
-            `语速: ${speed}`,
-            `导演提示词: ${directorCount ? `${directorCount} 条` : '无'}`
-        ].join('\n');
+        const pills = [
+            { label: `音色: ${primaryVoice}`, active: primaryVoice !== '不使用语音' },
+            { label: `语速: ${speed}x` },
+            { label: directorCount ? `导演词: ${directorCount}条` : '无导演词', active: directorCount > 0 }
+        ];
+
+        return {
+            kind: 'pills',
+            pills,
+            text: `主语言: ${primaryVoice} 语速: ${speed}`
+        };
     }
 
     function buildRegexSummary() {
@@ -2046,27 +2159,44 @@ function resolveRegexSlots() {
 
         const summaryValue = await Promise.resolve(controller.buildSummary());
 
-        if (summaryValue && typeof summaryValue === 'object' && summaryValue.kind === 'identity') {
-            controller.summary.classList.add('summary-with-avatar');
-            controller.summary.innerHTML = '';
+        if (summaryValue && typeof summaryValue === 'object') {
+            if (summaryValue.kind === 'identity') {
+                controller.summary.classList.add('summary-with-avatar');
+                controller.summary.classList.remove('summary-pills-row');
+                controller.summary.innerHTML = '';
 
-            const avatar = document.createElement('img');
-            avatar.className = 'agent-settings-summary-avatar';
-            avatar.src = summaryValue.avatarSrc || 'assets/default_avatar.png';
-            avatar.alt = '';
-            avatar.width = 30;
-            avatar.height = 30;
+                const avatar = document.createElement('img');
+                avatar.className = 'agent-settings-summary-avatar';
+                avatar.src = summaryValue.avatarSrc || 'assets/default_avatar.png';
+                avatar.alt = '';
+                avatar.width = 30;
+                avatar.height = 30;
 
-            const label = document.createElement('span');
-            label.className = 'agent-settings-summary-label';
-            label.textContent = summaryValue.text || '未命名 Agent';
+                const label = document.createElement('span');
+                label.className = 'agent-settings-summary-label';
+                label.textContent = summaryValue.text || '未命名 Agent';
 
-            controller.summary.appendChild(avatar);
-            controller.summary.appendChild(label);
-            return;
+                controller.summary.appendChild(avatar);
+                controller.summary.appendChild(label);
+                return;
+            }
+
+            if (summaryValue.kind === 'pills') {
+                controller.summary.classList.remove('summary-with-avatar');
+                controller.summary.classList.add('summary-pills-row');
+                controller.summary.innerHTML = '';
+
+                summaryValue.pills.forEach(item => {
+                    const pill = document.createElement('span');
+                    pill.className = `vcp-uiux-pill pill${item.active ? ' active' : ''}`;
+                    pill.textContent = item.label;
+                    controller.summary.appendChild(pill);
+                });
+                return;
+            }
         }
 
-        controller.summary.classList.remove('summary-with-avatar');
+        controller.summary.classList.remove('summary-with-avatar', 'summary-pills-row');
         controller.summary.textContent = typeof summaryValue === 'string' ? summaryValue : '';
     }
 

@@ -137,6 +137,26 @@ function makeHelpBadge(doc, tooltipText) {
         event.preventDefault();
         event.stopPropagation();
     });
+    // Mount DeepSeek Harness HoverCard if available in runtime
+    if (typeof globalThis.window !== 'undefined') {
+        const mount = () => {
+            if (badge.dataset.hoverCardMounted === 'true' || !badge.isConnected) return;
+            if (globalThis.window?.VCPUIUX?.mountHoverCard) {
+                try {
+                    const cardContent = document.createElement('div');
+                    cardContent.className = 'vcp-settings-hover-card-content';
+                    cardContent.textContent = tooltipText;
+                    globalThis.window.VCPUIUX.mountHoverCard(badge, {
+                        content: cardContent,
+                        openDelayMs: 150,
+                        copyable: true
+                    }, { own: () => {}, child: () => ({ own: () => {}, listen: () => {}, dispose: () => {} }) });
+                    badge.dataset.hoverCardMounted = 'true';
+                } catch (_) {}
+            }
+        };
+        badge.addEventListener('mouseenter', mount, { once: true });
+    }
     return badge;
 }
 
@@ -273,8 +293,9 @@ function renderAgentParams(doc) {
     agentFields.slice(2, 7).forEach(spec => content.append(renderField(doc, spec)));
     const stream = el(doc, 'div', { class: 'form-group-inline agent-stream-mode-group' },
         el(doc, 'span', { class: 'agent-stream-mode-title' }, '输出模式:'),
-        el(doc, 'label', { class: 'agent-stream-mode-option', for: 'agentStreamOutputTrue' }, el(doc, 'input', { id: 'agentStreamOutputTrue', type: 'radio', name: 'streamOutput', value: 'true', checked: true }), '流式'),
-        el(doc, 'label', { class: 'agent-stream-mode-option', for: 'agentStreamOutputFalse' }, el(doc, 'input', { id: 'agentStreamOutputFalse', type: 'radio', name: 'streamOutput', value: 'false' }), '非流式'));
+        el(doc, 'div', { class: 'agent-stream-mode-segmented' },
+            el(doc, 'label', { class: 'agent-stream-mode-option', for: 'agentStreamOutputTrue' }, el(doc, 'input', { id: 'agentStreamOutputTrue', type: 'radio', name: 'streamOutput', value: 'true', checked: true }), '流式'),
+            el(doc, 'label', { class: 'agent-stream-mode-option', for: 'agentStreamOutputFalse' }, el(doc, 'input', { id: 'agentStreamOutputFalse', type: 'radio', name: 'streamOutput', value: 'false' }), '非流式')));
     content.append(stream);
     return el(doc, 'div', { class: 'agent-settings-card-shell' }, content);
 }
@@ -346,7 +367,13 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     form.append(renderSection(doc, { kind: 'agent', key: 'params', title: '模型参数配置', summaryId: 'paramsSummary', content: renderAgentParams }));
     form.append(renderSection(doc, { kind: 'agent', key: 'tts', title: '语音设置', summaryId: 'ttsSummary', content: renderAgentTts }));
     form.append(renderRegexSection(doc));
-    form.append(el(doc, 'div', { class: 'form-actions' }, el(doc, 'button', { type: 'submit' }, '保存Agent设置'), el(doc, 'div', { class: 'delete-button-container' }, el(doc, 'button', { type: 'button', id: 'deleteAgentBtn', class: 'danger-button' }, '删除此Agent'))));
+    form.append(el(doc, 'div', { class: 'form-actions' },
+        el(doc, 'div', { class: 'form-save-state-indicator', id: 'formSaveStateIndicator', title: '保存状态' },
+            el(doc, 'span', { id: 'formStateDotHost', class: 'form-state-dot-host' }),
+            el(doc, 'span', { id: 'formStateDotLabel', class: 'form-state-label' }, '已保存')),
+        el(doc, 'button', { type: 'submit' }, '保存Agent设置'),
+        el(doc, 'div', { class: 'delete-button-container' },
+            el(doc, 'button', { type: 'button', id: 'deleteAgentBtn', class: 'danger-button' }, '删除此Agent'))));
     host.append(title, form);
     return form;
 }

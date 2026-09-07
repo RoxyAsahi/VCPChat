@@ -374,14 +374,105 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-summary 
 }
 
 /* Subtle frosted capsule tags for raw text summaries */
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-summary:not(.summary-with-avatar),
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-summary:not(.summary-with-avatar) {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-summary:not(.summary-with-avatar):not(.summary-pills-row),
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-summary:not(.summary-with-avatar):not(.summary-pills-row) {
     margin: 2px 10px 6px 12px;
     padding: 4px 8px;
     background: color-mix(in srgb, var(--vcp-settings-surface) 60%, transparent);
     border: 1px solid color-mix(in srgb, var(--vcp-settings-border) 45%, transparent);
     border-radius: 7px;
     box-sizing: border-box;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-summary.summary-pills-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin: 3px 10px 6px 12px;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .summary-pills-row .vcp-uiux-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 22px;
+    color: var(--secondary-text);
+    background: color-mix(in srgb, var(--vcp-settings-surface) 75%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .summary-pills-row .vcp-uiux-pill.active {
+    color: var(--highlight-text);
+    border-color: color-mix(in srgb, var(--highlight-text) 40%, transparent);
+    background: color-mix(in srgb, var(--highlight-text) 10%, var(--vcp-settings-surface));
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 6px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-title {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--secondary-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-segmented {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--vcp-settings-input) 85%, transparent);
+    border: 1px solid var(--vcp-settings-border);
+    gap: 2px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--secondary-text);
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option:hover {
+    color: var(--primary-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option:has(input[type="radio"]:checked) {
+    background: var(--highlight-text);
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section:not(.collapsed) :is(#identitySummary, .agent-settings-section-summary),
@@ -949,6 +1040,73 @@ html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > #refres
     color: var(--highlight-text);
     border-color: var(--highlight-text);
     background: color-mix(in srgb, var(--highlight-text) 12%, var(--vcp-settings-surface));
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-select {
+    display: flex;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-select-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--vcp-settings-border);
+    border-radius: var(--vcp-settings-radius, 8px);
+    background: var(--vcp-settings-input);
+    color: var(--vcp-settings-text);
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 32px;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-select-trigger:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--vcp-settings-accent) 55%, transparent);
+    outline-offset: 1px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-select-trigger::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-right: 1.6px solid currentColor;
+    border-bottom: 1.6px solid currentColor;
+    transform: rotate(45deg);
+    margin-right: 2px;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-menu-list,
+.vcp-uiux-primitive-menu {
+    border-radius: 10px;
+    border: 1px solid var(--vcp-settings-border);
+    background: var(--secondary-bg, #1c2024);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-menu-item {
+    min-height: 32px;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .vcp-uiux-menu-item:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--highlight-text) 14%, transparent);
+    color: var(--highlight-text);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > #refreshTtsModelsBtn:active {
@@ -1534,6 +1692,62 @@ html .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
     html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-display {
         width: 60px;
         height: 60px;
+    }
+}
+
+/* --- Container Queries: Narrow Sidebar Protection (max-width: 215px) --- */
+@container sidebar (max-width: 215px) {
+    html .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
+        padding: 6px 4px 0 4px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title-row,
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title-row {
+        padding-left: 6px;
+        gap: 4px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title,
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title {
+        font-size: 12.5px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-summary:not(.summary-with-avatar),
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-summary:not(.summary-with-avatar) {
+        margin: 2px 4px 6px 6px;
+        padding: 3px 6px;
+        font-size: 10.5px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-content,
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content {
+        padding: 4px 6px 12px 6px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .form-actions {
+        padding: 8px 6px 14px 6px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-main,
+    html .vcp-ui-scope .vcp-settings-schema-surface .group-identity-main {
+        grid-template-columns: 48px minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper,
+    html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-display {
+        width: 48px;
+        height: 48px;
+        min-width: 48px;
+        max-width: 48px;
+        min-height: 48px;
+        max-height: 48px;
+        border-radius: 12px;
+    }
+
+    html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-floating-actions {
+        right: 4px;
+        bottom: 4px;
     }
 }
 
