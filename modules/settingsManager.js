@@ -1,6 +1,6 @@
 /**
  * settingsManager.js
- * 
+ *
  * Manages the settings panel for both Agents and Groups.
  * Handles displaying, populating, saving, and deleting items.
  */
@@ -111,11 +111,14 @@ const settingsManager = (() => {
         }));
     }
 
+    let settingsDisplayToken = 0;
+
     /**
      * Displays the appropriate settings view (agent, group, or default prompt)
      * based on the currently selected item.
      */
     async function displaySettingsForItem() {
+        const displayToken = ++settingsDisplayToken;
         const currentSelectedItem = refs.currentSelectedItemRef.get();
 
         const settingsSurface = window.VCPSettingsSidebar;
@@ -136,11 +139,15 @@ const settingsManager = (() => {
                 itemSettingsContainerTitle.textContent = '群组设置: ';
                 deleteItemBtn.textContent = '删除此群组';
                 if (window.GroupRenderer && typeof window.GroupRenderer.displayGroupSettingsPage === 'function') {
-                    window.GroupRenderer.displayGroupSettingsPage(currentSelectedItem.id);
+                    await window.GroupRenderer.displayGroupSettingsPage(currentSelectedItem.id);
                 } else {
                     console.error("GroupRenderer or displayGroupSettingsPage not available.");
                     if (groupSettingsExists) groupSettingsContainer.innerHTML = "<p>无法加载群组设置界面。</p>";
                 }
+            }
+            if (displayToken !== settingsDisplayToken) {
+                console.debug(`[SettingsManager] Stale displaySettingsForItem completed for item ${currentSelectedItem.id}, discarded.`);
+                return;
             }
         } else {
             settingsSurface?.show?.('prompt', { message: '请先在左侧选择一个 Agent 或群组以查看或修改其设置。' });
@@ -317,6 +324,10 @@ const settingsManager = (() => {
 
         agentTtsSpeedSlider.value = agentConfig.ttsSpeed !== undefined ? agentConfig.ttsSpeed : 1.0;
         signalPresentationSync(agentTtsSpeedSlider);
+        const speedValueDisplay = document.getElementById('ttsSpeedValue');
+        if (speedValueDisplay) {
+            speedValueDisplay.textContent = Number(agentTtsSpeedSlider.value).toFixed(1);
+        }
 
         // Load and render regex rules
         currentAgentRegexes = JSON.parse(JSON.stringify(agentConfig.stripRegexes || [])); // Deep copy
@@ -486,7 +497,7 @@ const settingsManager = (() => {
                 const currentSelectedItem = refs.currentSelectedItemRef.get();
                 if (currentSelectedItem.id === agentId && currentSelectedItem.type === 'agent') {
                     const updatedAgentConfig = await electronAPI.getAgentConfig(agentId);
-                
+
                     // ⚠️ 检查是否返回错误对象
                     if (updatedAgentConfig && updatedAgentConfig.error) {
                         console.error(`[SettingsManager] Failed to get updated agent config:`, updatedAgentConfig.error);
@@ -607,23 +618,10 @@ const settingsManager = (() => {
      * @param {string} currentSecondaryVoice - The currently selected secondary voice.
      */
     function ensureThemedTtsSelects() {
-        if (!window.VCPUI || document.documentElement.dataset.uiMode !== 'next') return;
-        try {
-            agentTtsPrimarySelectController = window.VCPUI.enhance(
-                'Select',
-                agentTtsVoicePrimarySelect,
-                { label: '主语言模型', size: 'md' }
-            );
-            agentTtsSecondarySelectController = window.VCPUI.enhance(
-                'Select',
-                agentTtsVoiceSecondarySelect,
-                { label: '副语言模型', size: 'md' }
-            );
-            agentTtsPrimarySelectController?.refresh?.();
-            agentTtsSecondarySelectController?.refresh?.();
-        } catch (error) {
-            console.warn('[SettingsManager] Failed to apply themed TTS Select proxy:', error);
-        }
+        // Completely stop injecting WebAwesome into the sidebar TTS selects.
+        // Sidebar selects are exclusively styled by styles/ui-system/settings-sidebar.css
+        // with strict 32px height, 8px radius, and unified borders identical to adjacent inputs.
+        return;
     }
 
     async function populateTtsModels(currentPrimaryVoice, currentSecondaryVoice) {
@@ -1070,6 +1068,38 @@ const settingsManager = (() => {
                 resetAvatarColorsBtn.addEventListener('click', handleResetAvatarColors);
             }
 
+            // Setup real-time two-way sync for avatar border color and name text color
+            const syncColorPair = (picker, textInput, onColorChange) => {
+                if (!picker || !textInput) return;
+                picker.addEventListener('input', () => {
+                    textInput.value = picker.value;
+                    onColorChange?.(picker.value);
+                });
+                textInput.addEventListener('input', () => {
+                    let val = textInput.value.trim();
+                    if (!val.startsWith('#') && /^[0-9a-fA-F]{6}$/.test(val)) {
+                        val = '#' + val;
+                    }
+                    if (/^#[0-9a-fA-F]{6}$/i.test(val)) {
+                        picker.value = val;
+                        onColorChange?.(val);
+                    }
+                });
+            };
+
+            syncColorPair(agentAvatarBorderColorInput, agentAvatarBorderColorTextInput, (hex) => {
+                if (agentAvatarPreview) {
+                    agentAvatarPreview.style.borderColor = hex;
+                }
+            });
+
+            syncColorPair(agentNameTextColorInput, agentNameTextColorTextInput, (hex) => {
+                const nameInput = document.getElementById('agentNameInput');
+                if (nameInput) {
+                    nameInput.style.color = hex;
+                }
+            });
+
             // Setup card CSS input real-time preview
             const agentCardCssInput = document.getElementById('agentCardCss');
             if (agentCardCssInput) {
@@ -1464,32 +1494,25 @@ const settingsManager = (() => {
     }
 
     /**
-     * Filters the model list based on the search input.
+     * Filters the legacy model list case-insensitively. Whitespace-separated
+     * terms use AND semantics, matching the shared typed model picker.
      */
     function filterModels() {
-        const filter = modelSearchInput.value.toLowerCase();
+        const terms = modelSearchInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const hasFilter = terms.length > 0;
         const items = modelList.getElementsByTagName('li');
+
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            // 分区标题跟随其子项的可见性
+            // 搜索时隐藏分区标题以得到扁平化结果；无搜索时恢复分区标题。
             if (item.classList.contains('model-section-title')) {
-                // 先隐藏标题，后面根据子项可见性再决定
-                item.style.display = filter ? 'none' : '';
+                item.style.display = hasFilter ? 'none' : '';
                 continue;
             }
-            const txtValue = item.textContent || item.innerText;
-            if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
-            }
-        }
-        // 搜索时隐藏所有分区标题以得到扁平化结果
-        // 无搜索时恢复分区标题
-        if (!filter) {
-            for (let i = 0; i < items.length; i++) {
-                items[i].style.display = '';
-            }
+            const searchableText = (item.textContent || item.innerText || '').toLowerCase();
+            item.style.display = !hasFilter || terms.every(term => searchableText.includes(term))
+                ? ''
+                : 'none';
         }
     }
 
@@ -1751,7 +1774,7 @@ function resolveRegexSlots() {
 
             // 检测是否到达底部（引入滞后性/Hysteresis逻辑以消除抖动）
             const distanceToBottom = settingsTab.scrollHeight - settingsTab.scrollTop - settingsTab.clientHeight;
-            
+
             // 判定逻辑：
             // 1. 如果当前未显示（isCurrentlyAtBottom = false），则在距离底部 < 10px 时触发显示
             // 2. 如果当前已显示（isCurrentlyAtBottom = true），则只有在向上滚动超过 60px 时才隐藏
@@ -1819,7 +1842,7 @@ function resolveRegexSlots() {
 
         const header = container.querySelector('.agent-settings-section-header');
         const summary = container.querySelector('.agent-settings-section-summary');
-        const toggleBtn = container.querySelector('.agent-settings-toggle-btn');
+        const toggleBtn = container.querySelector('.agent-settings-toggle-btn, .agent-settings-section-toggle');
         if (!header || !summary || !toggleBtn) {
             console.warn(`[SettingsManager] Missing collapsible controls for section "${key}"`);
             return null;

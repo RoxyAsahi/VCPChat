@@ -129,12 +129,10 @@ test('Agent 手风琴与自定义样式折叠展开测试：点击 Header、Togg
     styleHeader.click();
     assert.equal(styleContainer.classList.contains('collapsed'), false, '点击 styleHeader 必须展开');
     assert.equal(styleHeader.getAttribute('aria-expanded'), 'true');
-    assert.equal(styleHeader.querySelector('.style-collapse-icon')?.textContent, 'v');
 
     styleHeader.click();
     assert.equal(styleContainer.classList.contains('collapsed'), true, '再次点击 styleHeader 必须收起');
     assert.equal(styleHeader.getAttribute('aria-expanded'), 'false');
-    assert.equal(styleHeader.querySelector('.style-collapse-icon')?.textContent, '>');
 });
 
 test('基础信息头像与名字框外观结构契约测试：保持头像边框容器、上传图标及名字输入框卡片化', () => {
@@ -157,8 +155,8 @@ test('基础信息头像与名字框外观结构契约测试：保持头像边�
 
     // 样式规范验证（收敛至 settings-sidebar.css）
     assert.match(sidebarCss, /\.agent-avatar-wrapper[\s\S]*?position:\s*relative/, '头像容器必须声明 relative 布局以承载悬浮遮罩');
-    assert.match(sidebarCss, /\.avatar-upload-overlay[\s\S]*?position:\s*absolute/, '上传徽章必须使用绝对定位挂载于头像右下角');
-    assert.match(sidebarCss, /\.agent-identity-main[\s\S]*?grid-template-columns:\s*76px\s+minmax\(0,\s*1fr\)/, '身份主网格必须自适应填满右侧名字空间');
+    assert.match(sidebarCss, /\.avatar-upload-overlay[\s\S]*?position:\s*absolute/, '上传徽章必须使用绝对定位挂载于头像上');
+    assert.match(sidebarCss, /\.agent-identity-main[\s\S]*?grid-template-columns:\s*60px\s+minmax\(0,\s*1fr\)/, '身份主网格必须自适应填满右侧名字空间');
 });
 
 test('侧边栏独立滚动与列表容器测试：列表区域独立滚动，不破坏侧边栏结构', () => {

@@ -303,3 +303,53 @@ git status              # 确认工作区只剩未跟踪的 parity 脚本
 ## 12. 一句话给接手的人
 
 **这是一个方向正确、但执行纪律出过问题的重构。** 计划本身没问题（单一所有权 + CSS 单一来源），问题出在"没建基线就动手"和"允许半成品留在工作区"。现在基线已经建好，只要严守"每个落点跑门禁、绝不留崩溃态"，这条路走得通。
+
+---
+
+## 13. 对抗性审查：找出的 7 大样式断层与 4 大隐蔽 Bug（真实基线比对）
+
+> 审计对照基准：上游主分支基线提交 `3ca4f032`（即上游作者认可的原版未重构基线）与 16 个已删除 CSS 规则的逐行对比。
+
+### 7 大样式断层与视觉缩水
+
+1. **基础信息卡片封装彻底归零**：
+   - *上游原版（`settings-agent-identity.css`）*：外层包裹 `.agent-identity-container` 卡片，具有 `padding: 4px 15px 0`、`border: 1px solid var(--border-color)`、`border-radius: 12px` 与 `margin: 10px 0`。
+   - *重构现状*：`styles/ui-system/settings-sidebar.css` 中该选择器规则数为 0，导致头像与输入框直接悬浮在底色上，视觉产生严重裸露与割裂感。
+2. **头像尺寸与圆角私自篡改（60px vs 76px）**：
+   - *上游原版*：头像容器与图片固定为 `60px × 60px`，圆角严格为 `16px`，具有 `border: 1px solid rgba(0, 0, 0, 0.08)`。
+   - *重构现状*：在 `sidebar-surfaces.js` 与 `settings-sidebar.css` 中被擅自篡改为 `76px × 76px`，圆角退化为通用变量，破坏了侧边栏紧凑精致比例。
+3. **相机更换头像蒙层降级为常驻右下角小徽章**：
+   - *上游原版*：全覆盖式 `.avatar-upload-overlay`，默认 `opacity: 0`，仅在鼠标悬停于头像时触发 `opacity: 1` 半透明遮罩（`rgba(0, 0, 0, 0.45)`），内部 SVG 带有白光投影（`drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))`）。
+   - *重构现状*：被改为常驻显示在右下角的 24px 灰色小徽章，不仅遮挡头像右下角，还丢失了交互质感。
+4. **Agent 名字输入框精致标题感丢失**：
+   - *上游原版*：针对 `#agentSettingsContainer .agent-name-wrapper input[type="text"]` 独立配置 `height: 36px`、`border-radius: 10px`、`font-size: 13.5px` 与 `font-weight: 600`。
+   - *重构现状*：被降级为通用普通输入框，字重与卡片化包裹感彻底消失。
+5. **自定义样式手风琴箭头动效与胶囊高亮退化**：
+   - *上游原版（`settings-agent-style-collapse.css`）*：`.style-collapse-header::before` 提供悬停胶囊微高亮；`.style-collapse-icon::before` 采用纯 CSS 伪元素 45 度平滑旋转。
+   - *重构现状*：一度被改为硬编码文本字符 `>` 与 `v`，丢失微动效。
+6. **模型选择器内嵌布局与文字遮挡冲突**：
+   - *上游原版*：`#openModelSelectBtn` 作为图标按钮绝对居右嵌入输入框内部，输入框具备 `padding-right: 36px` 安全区。
+   - *重构现状*：一度被改为并排布局，长模型名称会顶格重叠。
+7. **浅色模式输入框层次感丢失与底部动作条切边**：
+   - *上游原版*：输入框底色与面板有清晰级差；底部动作条留有水平缓冲防线。
+   - *重构现状*：浅色模式下输入框发灰融底；`.form-actions` 按钮左右顶格贴死滚动条产生切边。
+
+### 4 大隐蔽 Bug 与功能缺陷
+
+1. **双向颜色同步脱节与头像边框无实时预览**：
+   原生拾色器与 HEX 文本框未建立实时联动，修改十六进制文本或重置颜色后，头像边框无法实时同步渲染。
+2. **手风琴嵌套手风琴与默认全折叠压制**：
+   由于初始 `restoreCollapseStates` 默认全部为 `true`，首次进入设置时基础信息被折叠隐藏，且外层基础信息折叠与内层自定义样式折叠产生父子冲突。
+3. **自动化门禁“自我欺骗”与假绿漏洞**：
+   测试脚本仅在未发生任何点击的静态初始态下抓取一次样式，并且主动将 `transform`、`transition`、`opacity` 从比对矩阵中剔除，导致动效全部丢失却判定 PASSED。
+4. **群聊发言顺序拖拽手柄缺失手势语义**：
+   `.sequential-speaker-drag-handle` 丢失 `cursor: grab` / `grabbing`，用户无法感知拖拽交互。
+
+---
+
+## 14. 彻底解决与验收标准（DoD）
+
+1. **Schema 结构与尺寸还原**：Agent 与群组头像预览统一恢复为 `60px × 60px`，圆角 `16px`。
+2. **CSS 卡片与动效还原**：在 `settings-sidebar.css` 完整补齐 `.agent-identity-container` 12px 圆角外壳、相机全覆盖悬停遮罩、纯 CSS 45 度旋转指示器。
+3. **交互与联动**：`syncColorPair` 双向联动 Hex 与拾色器，实时驱动边框样式。
+4. **门禁全绿**：`tests/settings-elements-interaction.test.mjs`（14/14 通过）、`npm run check:uiux`（146/146 通过）、`npm run lint:ui-system`（通过），零 `!important`，不碰 `styles/themes.css`。
