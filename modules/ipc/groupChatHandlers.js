@@ -53,23 +53,23 @@ function initialize(mainWindow, context) {
     ipcMain.handle('create-agent-group', async (event, groupName, initialConfig) => {
         return await groupChat.createAgentGroup(groupName, initialConfig);
     });
-    
+
     ipcMain.handle('get-agent-groups', async () => {
         return await groupChat.getAgentGroups();
     });
-    
+
     ipcMain.handle('get-agent-group-config', async (event, groupId) => {
         return await groupChat.getAgentGroupConfig(groupId);
     });
-    
+
     ipcMain.handle('save-agent-group-config', async (event, groupId, configData) => {
         return await groupChat.saveAgentGroupConfig(groupId, configData);
     });
-    
+
     ipcMain.handle('delete-agent-group', async (event, groupId) => {
         return await groupChat.deleteAgentGroup(groupId);
     });
-    
+
     ipcMain.handle('save-agent-group-avatar', async (event, groupId, avatarData) => {
         const listenerWasActive = getSelectionListenerStatus();
         if (listenerWasActive) {
@@ -86,27 +86,31 @@ function initialize(mainWindow, context) {
             }
         }
     });
-    
+
     ipcMain.handle('get-group-topics', async (event, groupId, searchTerm) => {
         return await groupChat.getGroupTopics(groupId, searchTerm);
     });
-    
+
     ipcMain.handle('create-new-topic-for-group', async (event, groupId, topicName) => {
         return await groupChat.createNewTopicForGroup(groupId, topicName);
     });
-    
+
     ipcMain.handle('delete-group-topic', async (event, groupId, topicId) => {
         return await groupChat.deleteGroupTopic(groupId, topicId);
     });
-    
+
     ipcMain.handle('save-group-topic-title', async (event, groupId, topicId, newTitle) => {
         return await groupChat.saveGroupTopicTitle(groupId, topicId, newTitle);
     });
-    
+
+    ipcMain.handle('regenerate-group-topic-title', async (event, groupId, topicId) => {
+        return await groupChat.regenerateGroupTopicTitle(groupId, topicId);
+    });
+
     ipcMain.handle('get-group-chat-history', async (event, groupId, topicId) => {
         return await groupChat.getGroupChatHistory(groupId, topicId);
     });
-    
+
     ipcMain.handle('save-group-chat-history', async (event, groupId, topicId, history) => {
         if (!groupId || !topicId || !Array.isArray(history)) {
             const errorMsg = `保存群组 ${groupId} 话题 ${topicId} 聊天历史失败: 参数无效。`;
@@ -129,7 +133,7 @@ function initialize(mainWindow, context) {
             return { success: false, error: error.message };
         }
     });
-    
+
     ipcMain.handle('send-group-chat-message', async (event, groupId, topicId, userMessage) => {
         // The actual VCP call and streaming will be handled within groupChat.handleGroupChatMessage
         // It needs a way to send stream chunks back to the renderer.
@@ -141,10 +145,10 @@ function initialize(mainWindow, context) {
                     mainWindow.webContents.send('vcp-stream-event', data);
                 }
             };
-    
+
             // Await the group chat handler to ensure any errors within it are caught by this try...catch block.
             await groupChat.handleGroupChatMessage(groupId, topicId, userMessage, sendStreamChunkToRenderer, getAgentConfigById);
-            
+
             return { success: true, message: "Group chat message processing started and completed." };
         } catch (error) {
             console.error(`[Main IPC] Error in send-group-chat-message handler for Group ${groupId}:`, error);
@@ -180,7 +184,7 @@ function initialize(mainWindow, context) {
 
             // This new function will be created in groupchat.js
             await groupChat.redoGroupChatMessage(groupId, topicId, messageId, agentId, sendStreamChunkToRenderer, getAgentConfigById);
-            
+
             return { success: true, message: "Redo group chat message processing started." };
         } catch (error) {
             console.error(`[Main IPC] Error in redo-group-chat-message handler for Group ${groupId}, Message ${messageId}:`, error);
