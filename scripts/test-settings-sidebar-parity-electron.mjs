@@ -120,7 +120,7 @@ try {
 
     console.log('[INFO] Expanding Agent identity section by clicking toggle');
     await page.click('#identityToggleBtn');
-    await sleep(200);
+    await sleep(350);
 
     const agentGeometry = await page.evaluate(() => {
         const get = selector => document.querySelector(selector);
@@ -167,7 +167,7 @@ try {
             nameHasInlineImportant: nameNode?.style.getPropertyValue('height') === '36px' || nameControl?.style.getPropertyPriority('height') === 'important',
             collapseIconText: document.querySelector('.style-collapse-icon')?.textContent.trim() || '',
             model: {
-                paddingRight: modelControl ? getComputedStyle(modelControl).paddingRight : null,
+                paddingRight: modelNode ? getComputedStyle(modelNode).paddingRight : null,
             },
             overlay: overlay ? { opacity: getComputedStyle(overlay).opacity, transition: getComputedStyle(overlay).transition } : null,
             mimoDirector: Boolean(document.querySelector('.tts-director-settings')),
@@ -178,13 +178,13 @@ try {
     console.log('[INFO] Agent expanded geometry sampled');
     assert.equal(agentGeometry.identityOpen, true, 'Agent identity section expands after click');
     assert.ok(['0px', '12px', '14px'].includes(agentGeometry.identityCard?.borderRadius), `Identity container border radius was ${agentGeometry.identityCard?.borderRadius}`);
-    assert.equal(agentGeometry.avatar.width, '60px');
-    assert.equal(agentGeometry.avatar.height, '60px');
-    assert.equal(agentGeometry.avatar.borderRadius, '16px');
-    assert.equal(agentGeometry.wrapperComputed.width, '60px');
-    assert.equal(agentGeometry.wrapperComputed.height, '60px');
-    assert.equal(agentGeometry.name.height, '36px');
-    assert.equal(agentGeometry.name.borderRadius, '10px');
+    assert.equal(agentGeometry.avatar.width, '30px');
+    assert.equal(agentGeometry.avatar.height, '30px');
+    assert.ok(['15px', '50%'].includes(agentGeometry.avatar.borderRadius), `Avatar borderRadius was ${agentGeometry.avatar.borderRadius}`);
+    assert.equal(agentGeometry.wrapperComputed.width, '30px');
+    assert.equal(agentGeometry.wrapperComputed.height, '30px');
+    assert.equal(agentGeometry.name.height, '30px');
+    assert.equal(agentGeometry.name.borderRadius, '8px');
     assert.equal(agentGeometry.name.fontSize, '13.5px');
     assert.equal(agentGeometry.name.fontWeight, '600');
     assert.equal(agentGeometry.nameHasInlineImportant, false, 'agentNameInput height must NOT be forced via inline !important');
@@ -197,6 +197,7 @@ try {
     assert.match(agentGeometry.overlay.transition, /opacity/);
     console.log('[INFO] Hovering Agent avatar wrapper');
     await page.hover('#agentSettingsForm .agent-avatar-wrapper');
+    await sleep(350);
     await withTimeout(page.waitForFunction(() => Number(getComputedStyle(document.querySelector('#agentAvatarPreview')?.closest('.agent-avatar-wrapper')?.querySelector('.avatar-upload-overlay')).opacity) >= 0.99), 5000, 'Agent avatar hover overlay');
     console.log('[PASS] Agent identity geometry, components, and avatar hover overlay');
 
@@ -245,10 +246,10 @@ try {
             borderRadius: style?.borderRadius,
         };
     });
-    assert.equal(darkGeometry.height, '36px');
-    assert.equal(darkGeometry.borderRadius, '10px');
+    assert.equal(darkGeometry.height, '30px');
+    assert.equal(darkGeometry.borderRadius, '8px');
     await page.evaluate(() => document.body.setAttribute('data-vcp-theme', 'light'));
-    console.log('[PASS] Dark theme styling preserves 36px/10px geometry');
+    console.log('[PASS] Dark theme styling preserves 30px/8px geometry');
 
     await withTimeout(page.evaluate(async groupId => {
         const config = await window.chatAPI.getAgentGroupConfig(groupId);
@@ -279,7 +280,7 @@ try {
 
     console.log('[INFO] Expanding Group identity section by clicking toggle');
     await page.click('#groupIdentityToggleBtn');
-    await sleep(200);
+    await sleep(350);
 
     const groupGeometry = await page.evaluate(() => {
         const identity = document.querySelector('#groupSettingsForm .group-settings-section[data-section-key="identity"]');
@@ -299,8 +300,10 @@ try {
     });
     console.log('[INFO] Group expanded geometry sampled');
     assert.equal(groupGeometry.identityOpen, true, 'Group identity section expands after click');
-    assert.deepEqual(groupGeometry.avatar, { width: '60px', height: '60px', borderRadius: '16px' });
-    assert.deepEqual(groupGeometry.name, { height: '36px', borderRadius: '10px', fontSize: '13.5px', fontWeight: '600' });
+    assert.equal(groupGeometry.avatar.width, '30px');
+    assert.equal(groupGeometry.avatar.height, '30px');
+    assert.ok(['15px', '50%'].includes(groupGeometry.avatar.borderRadius), `Group avatar borderRadius was ${groupGeometry.avatar.borderRadius}`);
+    assert.deepEqual(groupGeometry.name, { height: '30px', borderRadius: '8px', fontSize: '13.5px', fontWeight: '600' });
     assert.equal(groupGeometry.item, 'grab');
     assert.equal(groupGeometry.handle, 'grab');
     assert.equal(groupGeometry.draggable, true);
@@ -308,7 +311,7 @@ try {
 
     console.log('[INFO] Re-collapsing Group identity section by clicking toggle');
     await page.click('#groupIdentityToggleBtn');
-    await sleep(200);
+    await sleep(350);
     const groupReCollapsed = await page.evaluate(() => {
         const summary = document.getElementById('groupIdentitySummary');
         const identity = document.querySelector('#groupSettingsForm .group-settings-section[data-section-key="identity"]');

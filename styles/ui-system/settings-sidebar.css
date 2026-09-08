@@ -584,7 +584,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-summary-copy
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-summary-label, .group-settings-summary-label) {
-    font-size: 1.18em;
+    font-size: 13.5px;
     font-weight: 600;
     line-height: 1.2;
     color: var(--vcp-settings-text, var(--primary-text));
@@ -857,7 +857,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group
     border: 0.5px solid var(--vcp-settings-border);
     background: color-mix(in srgb, var(--vcp-settings-surface) 85%, var(--vcp-settings-input));
     color: var(--vcp-settings-text, var(--primary-text));
-    font-size: 1.18em;
+    font-size: 13.5px;
     font-weight: 600;
     line-height: 28px;
     box-sizing: border-box;
@@ -874,7 +874,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group
     border-color: var(--vcp-settings-accent, var(--highlight-text, #3b82f6));
     background-color: var(--vcp-settings-surface);
     outline: none;
-    box-shadow: none;
+    box-shadow: 0 0 0 2px var(--vcp-ui-focus-ring, color-mix(in srgb, var(--vcp-settings-accent) 25%, transparent));
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) > input[type="file"] {
@@ -933,15 +933,15 @@ html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header::before {
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-ui-accent, var(--highlight-text, #3b82f6)) 14%, transparent);
+    background-color: color-mix(in srgb, var(--vcp-settings-text) 5%, transparent);
 }
 
 html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-ui-accent, var(--highlight-text, #3b82f6)) 14%, rgba(255, 255, 255, 0.7));
+    background-color: color-mix(in srgb, var(--vcp-settings-text) 5%, rgba(0, 0, 0, 0.03));
 }
 
 html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-ui-accent, var(--highlight-text, #3b82f6)) 18%, rgba(255, 255, 255, 0.04));
+    background-color: color-mix(in srgb, var(--vcp-settings-text) 7%, rgba(255, 255, 255, 0.04));
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-title {
@@ -951,10 +951,15 @@ html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-title {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--highlight-text);
-    font-size: 0.98em;
+    color: var(--vcp-settings-muted);
+    font-size: 11.5px;
     font-weight: 500;
-    line-height: 24px;
+    line-height: 20px;
+    transition: color 0.15s ease;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-title {
+    color: var(--vcp-settings-text);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon {
@@ -962,19 +967,19 @@ html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon {
     position: relative;
     margin-left: auto;
     margin-right: 0;
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
     border: none;
     border-radius: 999px;
-    color: var(--vcp-ui-text-2, var(--secondary-text, #9ca3af));
+    color: var(--vcp-settings-muted);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font-size: 0;
     line-height: 0;
     transform: none;
-    transition: color var(--vcp-motion-duration-normal, 0.2s) var(--vcp-motion-ease-standard, ease), background-color var(--vcp-motion-duration-normal, 0.2s) var(--vcp-motion-ease-standard, ease);
+    transition: color 0.15s ease;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon::after {
@@ -1003,7 +1008,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-contain
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-icon {
-    color: var(--vcp-ui-accent, var(--highlight-text, #3b82f6));
+    color: var(--vcp-settings-text);
     background-color: transparent;
     box-shadow: none;
 }
@@ -1302,20 +1307,25 @@ html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container {
     width: 100%;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > :is(select, input[type="text"]) {
+html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > :is(select, input) {
     min-width: 0;
     flex: 1 1 auto;
     width: 100%;
     height: 30px;
     min-height: 30px;
     line-height: 30px;
-    padding: 0 28px 0 8px;
+    padding: 0 32px 0 8px;
     border: 0.5px solid var(--vcp-settings-border);
     border-radius: var(--vcp-settings-radius, 8px);
     background: var(--vcp-settings-input);
     color: var(--vcp-settings-text);
     font-size: 12px;
     box-sizing: border-box;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container > select {
+    padding-right: 32px;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .model-input-container:has(#refreshTtsModelsBtn) {
