@@ -25,19 +25,19 @@ const agentFields = Object.freeze([
     field('agentTtsRegexPrimary', 'text', '主语言正则 (留空则匹配全部)', { name: 'ttsRegexPrimary', placeholder: '例如 [^\\[\\]]+', tooltip: '用于匹配需要使用主语言音色的文本。' }),
     field('agentTtsVoiceSecondary', 'select', '副语言音色 / MiMo 模式', { name: 'ttsVoiceSecondary', options: [['', '不使用']], tooltip: '可选的副语言音色。' }),
     field('agentTtsRegexSecondary', 'text', '副语言正则', { name: 'ttsRegexSecondary', placeholder: '例如 \\[(.*?)\\]', tooltip: '用于匹配需要使用副语言音色的文本。' }),
-    field('agentTtsSpeed', 'range', '语速', { name: 'ttsSpeed', min: 0.5, max: 2, step: 0.1, value: 1, validation: { min: 0.5, max: 2 } }),
-    field('agentCustomCss', 'textarea', '列表项自定义CSS', { name: 'customCss', rows: 3, tooltip: '应用于助手列表项容器。' }),
-    field('agentCardCss', 'textarea', '名片样式CSS', { name: 'cardCss', rows: 3, tooltip: '应用于设置页中的头像和名称区域。' }),
-    field('agentChatCss', 'textarea', '会话样式CSS', { name: 'chatCss', rows: 4, tooltip: '应用于聊天中的助手头像和名称。' }),
+    field('agentTtsSpeed', 'range', '语速', { name: 'ttsSpeed', min: 0.5, max: 2, step: 0.1, value: 1, tooltip: '本地 SoVITS 使用该语速；网络模式按模型原生节奏合成，可用下方自然语言提示词描述语速。', validation: { min: 0.5, max: 2 } }),
+    field('agentCustomCss', 'textarea', '列表项自定义CSS', { name: 'customCss', rows: 3, tooltip: '此CSS将应用于【助手】页面的Agent列表项容器。' }),
+    field('agentCardCss', 'textarea', '名片样式CSS', { name: 'cardCss', rows: 3, tooltip: '此CSS将应用于【设置】页面中Agent的名片区域（头像和名称）。' }),
+    field('agentChatCss', 'textarea', '会话样式CSS', { name: 'chatCss', rows: 4, tooltip: '此CSS将应用于【聊天会话】中Agent的头像和名称。可使用 .message-avatar 控制头像，.sender-name 控制名称。' }),
 ]);
 
 const groupFields = Object.freeze([
     field('groupNameInput', 'text', '群组名称', { required: true, tooltip: '列表和聊天中显示的群组名称。', validation: { required: true } }),
-    field('groupChatMode', 'select', '群聊模式', { options: [['sequential', '顺序发言'], ['naturerandom', '自然随机'], ['invite_only', '邀请发言']], tooltip: '决定群组如何选择下一位发言者。' }),
-    field('tagMatchMode', 'select', 'Tag 触发模式', { options: [['strict', '严格模式'], ['natural', '自然模式']], tooltip: '自然随机模式下的 Tag 匹配方式。', dependsOn: { field: 'groupChatMode', equals: 'naturerandom' } }),
+    field('groupChatMode', 'select', '群聊模式', { options: [['sequential', '顺序发言'], ['naturerandom', '自然随机'], ['invite_only', '邀请发言']], tooltip: '决定群组如何选择下一位发言者：顺序发言、自然随机或仅受邀请。' }),
+    field('tagMatchMode', 'select', 'Tag 触发模式', { options: [['strict', '严格模式'], ['natural', '自然模式']], tooltip: '自然模式会区分 Tag 来源，尽量避免 Agent 因引用自身历史发言而重复触发。', dependsOn: { field: 'groupChatMode', equals: 'naturerandom' } }),
     field('groupUnifiedModelInput', 'text', '群组统一模型', { placeholder: '选择群组统一模型', tooltip: '启用统一模型后，群组成员共享此模型。', dependsOn: { field: 'groupUseUnifiedModel', equals: true } }),
-    field('groupPrompt', 'textarea', 'GroupPrompt', { rows: 4, tooltip: '注入群聊上下文的系统提示词。' }),
-    field('invitePrompt', 'textarea', 'InvitePrompt', { rows: 4, tooltip: '邀请某个成员发言时使用的提示词。' }),
+    field('groupPrompt', 'textarea', 'GroupPrompt', { rows: 4, tooltip: '注入群聊上下文的系统提示词，作为群组整体对话指导。' }),
+    field('invitePrompt', 'textarea', 'InvitePrompt', { rows: 4, tooltip: '邀请某个成员发言时使用的提示词。可使用 {{VCPChatAgentName}} 作为被邀请发言的 Agent 名称占位符。' }),
 ]);
 
 export const settingsSidebarSchema = Object.freeze({
@@ -69,25 +69,68 @@ function el(doc, tag, attributes = {}, ...children) {
     return node;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(doc, tag, attributes = {}, ...children) {
+    const node = setAttributes(doc.createElementNS(SVG_NS, tag), attributes);
+    children.flat(Infinity).forEach(child => {
+        if (child === null || child === undefined || child === false) return;
+        node.append(child.nodeType ? child : doc.createTextNode(String(child)));
+    });
+    return node;
+}
+
 function buildCameraIcon(doc) {
-    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    setAttributes(svg, {
+    return svgEl(doc, 'svg', {
         class: 'avatar-upload-icon',
         viewBox: '0 0 24 24',
         fill: 'none',
         stroke: 'currentColor',
         'stroke-width': '2',
         'aria-hidden': 'true',
-    });
-    svg.append(
-        el(doc, 'path', { d: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z' }),
-        el(doc, 'circle', { cx: '12', cy: '13', r: '4' }),
+    },
+        svgEl(doc, 'path', { d: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z' }),
+        svgEl(doc, 'circle', { cx: '12', cy: '13', r: '4' }),
     );
-    return svg;
+}
+
+function buildPlusIcon(doc) {
+    return svgEl(doc, 'svg', {
+        class: 'vcp-ui-icon-svg',
+        viewBox: '0 0 16 16',
+        width: '10',
+        height: '10',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '1.8',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'aria-hidden': 'true',
+    },
+        svgEl(doc, 'path', { d: 'M8 3v10M3 8h10' }),
+    );
+}
+
+function makeHelpBadge(doc, tooltipText) {
+    const badge = el(doc, 'button', {
+        type: 'button',
+        class: 'vcp-settings-info-badge',
+        'aria-label': tooltipText || '提示说明',
+        'data-tooltip': tooltipText,
+    }, '?');
+    badge.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+    });
+    return badge;
 }
 
 function labelFor(doc, spec) {
-    return el(doc, 'label', { for: spec.id }, spec.label);
+    const label = el(doc, 'label', { for: spec.id }, spec.label);
+    if (spec.tooltip) {
+        label.append(makeHelpBadge(doc, spec.tooltip));
+    }
+    return label;
 }
 
 function renderControl(doc, spec) {
@@ -106,7 +149,6 @@ function renderField(doc, spec, className = 'settings-schema-field') {
     const row = el(doc, 'div', { class: className, 'data-schema-field': spec.id });
     const control = renderControl(doc, spec);
     if (spec.tooltip) {
-        control.title = spec.tooltip;
         row.dataset.schemaTooltip = spec.tooltip;
     }
     if (spec.validation) row.dataset.schemaValidation = JSON.stringify(spec.validation);
@@ -124,41 +166,6 @@ const SECTION_ICONS = {
     regex: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 2.5H14.5L9.5 8.5V13.5L6.5 15V8.5L1.5 2.5Z"/></svg>',
     mode: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM11.5 6a2 2 0 100-4 2 2 0 000 4zM6 7c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM11.5 8c-.37 0-.77.03-1.19.09 1.02.73 1.69 1.7 1.69 2.91v2H16v-2c0-1.63-2.9-2.9-4.5-3z" fill="currentColor"/></svg>',
 };
-
-function makeHelpBadge(doc, tooltipText) {
-    const badge = el(doc, 'button', {
-        type: 'button',
-        class: 'vcp-settings-info-badge',
-        'aria-label': '提示说明',
-        'data-tooltip': tooltipText,
-        title: tooltipText,
-    }, '?');
-    badge.addEventListener('click', event => {
-        event.preventDefault();
-        event.stopPropagation();
-    });
-    // Mount DeepSeek Harness HoverCard if available in runtime
-    if (typeof globalThis.window !== 'undefined') {
-        const mount = () => {
-            if (badge.dataset.hoverCardMounted === 'true' || !badge.isConnected) return;
-            if (globalThis.window?.VCPUIUX?.mountHoverCard) {
-                try {
-                    const cardContent = document.createElement('div');
-                    cardContent.className = 'vcp-settings-hover-card-content';
-                    cardContent.textContent = tooltipText;
-                    globalThis.window.VCPUIUX.mountHoverCard(badge, {
-                        content: cardContent,
-                        openDelayMs: 150,
-                        copyable: true
-                    }, { own: () => {}, child: () => ({ own: () => {}, listen: () => {}, dispose: () => {} }) });
-                    badge.dataset.hoverCardMounted = 'true';
-                } catch (_) {}
-            }
-        };
-        badge.addEventListener('mouseenter', mount, { once: true });
-    }
-    return badge;
-}
 
 function renderSection(doc, { kind, key, title, summaryId, content, contentId, sectionClass }) {
     const prefix = kind === 'agent' ? 'agent' : 'group';
@@ -275,14 +282,8 @@ function renderAgentIdentity(doc) {
     controls.append(colorPair('agentAvatarBorderColor', '头像外框颜色:', '#3d5a80', 'avatarBorderColor'), colorPair('agentNameTextColor', '名称文字颜色:', '#ffffff', 'nameTextColor'));
     controls.append(el(doc, 'div', { class: 'style-control-item full-width' }, el(doc, 'button', { type: 'button', id: 'resetAvatarColorsBtn', class: 'reset-colors-btn' }, '重置为头像默认颜色')));
     const customCss = renderField(doc, agentFields[12]);
-    customCss.querySelector('label')?.append(makeHelpBadge(doc, '此CSS将应用于【助手】页面的Agent列表项容器。'));
-    customCss.append(el(doc, 'small', { class: 'settings-schema-hint' }, '提示：此 CSS 将应用于助手列表项容器。'));
     const cardCss = renderField(doc, agentFields[13]);
-    cardCss.querySelector('label')?.append(makeHelpBadge(doc, '此CSS将应用于【设置】页面中Agent的名片区域（头像和名称）。'));
-    cardCss.append(el(doc, 'small', { class: 'settings-schema-hint' }, '提示：此 CSS 将应用于设置页面中的 Agent 名片区域。'));
     const chatCss = renderField(doc, agentFields[14]);
-    chatCss.querySelector('label')?.append(makeHelpBadge(doc, '此CSS将应用于【聊天会话】中Agent的头像和名称。可使用 .message-avatar 控制头像，.sender-name 控制名称。'));
-    chatCss.append(el(doc, 'small', { class: 'settings-schema-hint' }, '提示：此 CSS 将应用于聊天中的 Agent 头像和名称。'));
     controls.append(customCss, cardCss, chatCss);
     style.append(styleHeader, controls);
     return el(doc, 'div', { class: 'agent-identity-container' }, identityMain, style);
@@ -307,7 +308,6 @@ function renderAgentTts(doc) {
         el(doc, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'refresh'));
     content.append(selectRow(agentFields[7], refresh), renderField(doc, agentFields[8]), selectRow(agentFields[9]), renderField(doc, agentFields[10]));
     const speed = renderField(doc, agentFields[11]);
-    speed.querySelector('label')?.append(makeHelpBadge(doc, '本地 SoVITS 使用该语速；网络模式按模型原生节奏合成，可用下方自然语言提示词描述语速。'));
     const speedInput = speed.querySelector('input');
     speedInput?.setAttribute('value', '1.0');
     const speedValue = el(doc, 'span', { id: 'ttsSpeedValue' }, '1.0');
@@ -319,18 +319,17 @@ function renderAgentTts(doc) {
     speedInput?.addEventListener('change', syncSpeedDisplay);
     const speedControl = el(doc, 'div', { class: 'slider-container' });
     speedControl.append(speedInput, speedValue);
-    speed.append(speedControl, el(doc, 'small', { class: 'settings-schema-hint', 'data-vcp-style': '4' }, '本地 SoVITS 使用该语速；网络模式按模型原生节奏合成，可用下方自然语言提示词描述语速。'));
+    speed.append(speedControl);
     content.append(speed);
     const composer = el(doc, 'div', { class: 'settings-form-group tts-director-settings' },
         el(doc, 'div', { class: 'tts-director-heading' },
-            el(doc, 'label', { for: 'agentTtsDirectorPromptInput' }, 'MiMo 导演提示词:', makeHelpBadge(doc, '适用于网络模式：预置音色模式使用“提示词 + voice”控制演绎；自然语言控制模式使用专用模型且不发送 voice；克隆模式使用参考音频作为 voice。Ctrl+Enter 添加，右侧 − 删除。'))),
+            el(doc, 'label', { for: 'agentTtsDirectorPromptInput' }, 'MiMo 导演提示词:', makeHelpBadge(doc, '适用于网络模式：预置音色模式使用“提示词 + voice”控制演绎；自然语言控制模式使用专用模型且不发送 voice；克隆模式使用参考音频作为 voice。Ctrl+Enter 添加，卡片右上角 × 删除。'))),
         el(doc, 'div', { class: 'tts-director-composer' },
             el(doc, 'textarea', { id: 'agentTtsDirectorPromptInput', class: 'tts-director-editor tts-director-editor-new', rows: 3, placeholder: '描述角色、场景与演绎指导 (Ctrl+Enter 添加)' }),
             el(doc, 'div', { class: 'tts-director-floating-actions' },
                 el(doc, 'button', { type: 'button', id: 'fillAgentTtsDirectorTemplateBtn', class: 'tts-director-template-button', title: '填入角色、场景和指导模板' }, '模板'),
-                el(doc, 'button', { type: 'button', id: 'addAgentTtsDirectorPromptBtn', class: 'small-button tts-director-action-button', title: '添加导演提示词', 'aria-label': '添加导演提示词' }, '+'))),
-        el(doc, 'div', { id: 'agentTtsDirectorPromptsContainer', class: 'tts-director-prompts-container' }),
-        el(doc, 'small', { class: 'tts-director-help' }, '适用于网络模式；本地 SoVITS 会忽略这些提示词。Ctrl+Enter 添加，右侧 − 删除。'));
+                el(doc, 'button', { type: 'button', id: 'addAgentTtsDirectorPromptBtn', class: 'small-button tts-director-action-button', title: '添加导演提示词', 'aria-label': '添加导演提示词' }, buildPlusIcon(doc)))),
+        el(doc, 'div', { id: 'agentTtsDirectorPromptsContainer', class: 'tts-director-prompts-container' }));
     content.append(composer);
     return el(doc, 'div', { class: 'agent-settings-card-shell' }, content);
 }
@@ -384,22 +383,22 @@ function renderGroupSectionContent(doc, key) {
             el(doc, 'div', { class: 'agent-identity-main group-identity-main' },
                 el(doc, 'div', { class: 'agent-avatar-wrapper group-avatar-wrapper' }, el(doc, 'img', { id: 'groupAvatarPreview', src: 'assets/default_group_avatar.png', alt: '群组头像预览', class: 'agent-avatar-display group-avatar-display', width: 60, height: 60 }), el(doc, 'label', { for: 'groupAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换群组头像' }, buildCameraIcon(doc)), el(doc, 'input', { id: 'groupAvatarInput', type: 'file', accept: 'image/*', hidden: true })),
                 renderField(doc, groupFields[0], 'agent-name-wrapper group-name-wrapper')),
-            el(doc, 'div', { class: 'group-settings-field-shell' }, el(doc, 'label', { for: 'groupMembersList' }, '群组成员'), el(doc, 'div', { id: 'groupMembersList', class: 'group-members-list-container' })));
+            el(doc, 'div', { class: 'group-settings-field-shell' }, el(doc, 'label', { for: 'groupMembersList' }, '群组成员', makeHelpBadge(doc, '勾选要加入此群聊的助手成员。')), el(doc, 'div', { id: 'groupMembersList', class: 'group-members-list-container' })));
     }
     if (key === 'mode') {
         const mode = renderField(doc, groupFields[1], 'group-settings-field-shell');
         const tags = renderField(doc, groupFields[2], 'group-settings-field-shell');
-        tags.append(el(doc, 'div', { class: 'group-settings-helper-text' }, '自然模式会区分 Tag 来源，尽量避免 Agent 因引用自身历史发言而重复触发。'), el(doc, 'div', { class: 'group-settings-field-shell group-member-tags-shell' }, el(doc, 'label', { class: 'group-settings-field-label', for: 'memberTagsInputs' }, '成员 Tags'), el(doc, 'div', { id: 'memberTagsInputs' })));
-        return el(doc, 'div', { class: 'group-settings-card-shell' }, mode, el(doc, 'div', { id: 'sequentialOrderContainer', class: 'group-settings-field-shell', hidden: true }, el(doc, 'label', { class: 'group-settings-field-label', for: 'sequentialSpeakerOrderList' }, '顺序发言次序'), el(doc, 'div', { class: 'group-settings-helper-text' }, '拖拽成员调整发言顺序。新加入且尚未排序的成员会自动追加到末尾。'), el(doc, 'div', { id: 'sequentialSpeakerOrderList', class: 'sequential-speaker-order-list', role: 'list', 'aria-label': '顺序发言次序' })), el(doc, 'div', { id: 'memberTagsContainer', class: 'group-settings-field-shell', hidden: true }, tags));
+        tags.append(el(doc, 'div', { class: 'group-settings-field-shell group-member-tags-shell' }, el(doc, 'label', { class: 'group-settings-field-label', for: 'memberTagsInputs' }, '成员 Tags', makeHelpBadge(doc, '为成员配置触发标签（逗号分隔），在自然随机模式下匹配。')), el(doc, 'div', { id: 'memberTagsInputs' })));
+        const seqLabel = el(doc, 'label', { class: 'group-settings-field-label', for: 'sequentialSpeakerOrderList' }, '顺序发言次序', makeHelpBadge(doc, '拖拽成员或点击上下箭头调整发言顺序。新加入且尚未排序的成员会自动追加到末尾。'));
+        return el(doc, 'div', { class: 'group-settings-card-shell' }, mode, el(doc, 'div', { id: 'sequentialOrderContainer', class: 'group-settings-field-shell', hidden: true }, seqLabel, el(doc, 'div', { id: 'sequentialSpeakerOrderList', class: 'sequential-speaker-order-list', role: 'list', 'aria-label': '顺序发言次序' })), el(doc, 'div', { id: 'memberTagsContainer', class: 'group-settings-field-shell', hidden: true }, tags));
     }
     if (key === 'model') {
-        return el(doc, 'div', { class: 'group-settings-card-shell group-settings-model-shell' }, el(doc, 'div', { class: 'group-settings-switch-row' }, el(doc, 'label', { for: 'groupUseUnifiedModel' }, '启用群组统一模型'), el(doc, 'label', { class: 'switch', for: 'groupUseUnifiedModel', 'aria-label': '启用群组统一模型' }, el(doc, 'input', { id: 'groupUseUnifiedModel', type: 'checkbox' }), el(doc, 'span', { class: 'slider round' }))), el(doc, 'div', { id: 'groupUnifiedModelContainer', class: 'group-settings-field-shell', hidden: true, 'data-schema-field': groupFields[3].id }, el(doc, 'div', { class: 'model-input-container' }, renderControl(doc, groupFields[3]), el(doc, 'button', { type: 'button', id: 'openGroupModelSelectBtn', title: '选择模型', 'aria-label': '打开模型选择器' }, '选择'))));
+        return el(doc, 'div', { class: 'group-settings-card-shell group-settings-model-shell' }, el(doc, 'div', { class: 'group-settings-switch-row' }, el(doc, 'label', { for: 'groupUseUnifiedModel' }, '启用群组统一模型'), el(doc, 'label', { class: 'switch', for: 'groupUseUnifiedModel', 'aria-label': '启用群组统一模型' }, el(doc, 'input', { id: 'groupUseUnifiedModel', type: 'checkbox' }), el(doc, 'span', { class: 'slider round' }))), el(doc, 'div', { id: 'groupUnifiedModelContainer', class: 'group-settings-field-shell', hidden: true, 'data-schema-field': groupFields[3].id }, el(doc, 'div', { class: 'model-input-container' }, renderControl(doc, groupFields[3]), el(doc, 'button', { type: 'button', id: 'openGroupModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '打开模型选择器' }, el(doc, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more')))));
     }
     const groupPrompt = renderField(doc, groupFields[4]);
     groupPrompt.querySelector('textarea')?.setAttribute('placeholder', '例如：这里是用户家的聊天空间，成员应保持协作与角色分工。');
     const invitePrompt = renderField(doc, groupFields[5]);
     invitePrompt.querySelector('textarea')?.setAttribute('placeholder', '例如：现在轮到 {{VCPChatAgentName}} 发言了。');
-    invitePrompt.append(el(doc, 'small', { class: 'group-settings-helper-text' }, '可使用 {{VCPChatAgentName}} 作为被邀请发言的 Agent 名称占位符。'));
     return el(doc, 'div', { class: 'group-settings-card-shell group-settings-prompt-shell' }, groupPrompt, invitePrompt);
 }
 

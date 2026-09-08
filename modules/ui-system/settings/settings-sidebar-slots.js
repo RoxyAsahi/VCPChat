@@ -56,6 +56,7 @@ class MimoDirectorSlot {
             this.add();
         }, undefined, 'mimo-director-submit');
         this.bindEditor(this.input, () => this.renderDraftState());
+        this.resize(this.input, false);
         this.release = this.scope.own(() => {
             if (this.host?.dataset.vcpSettingsSlot === 'mimo-director') delete this.host.dataset.vcpSettingsSlot;
             this.host = null;
@@ -166,14 +167,15 @@ class MimoDirectorSlot {
             row.className = 'tts-director-item';
             const editor = doc.createElement('textarea');
             editor.className = 'tts-director-editor';
-            editor.rows = 1;
+            editor.rows = 3;
             editor.value = prompt;
             editor.setAttribute('aria-label', `导演提示词 ${index + 1}`);
             this.bindRowEditor(editor, index, rowScope);
+            this.resize(editor, false);
             const remove = doc.createElement('button');
             remove.type = 'button';
             remove.className = 'small-button tts-director-action-button';
-            remove.textContent = '−';
+            remove.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4L12 12M12 4L4 12"/></svg>';
             remove.title = '删除该导演提示词';
             remove.setAttribute('aria-label', `删除导演提示词 ${index + 1}`);
             rowScope.listen(remove, 'mousedown', event => event.preventDefault(), undefined, `mimo-director-row-${index}-guard`);
@@ -190,14 +192,27 @@ class MimoDirectorSlot {
 
     resize(editor, expanded) {
         if (!editor) return;
+        const baseHeight = 96;
+        const maxHeight = 148;
+
         if (!expanded) {
-            editor.style.height = '';
-            editor.rows = 1;
+            editor.style.height = `${baseHeight}px`;
+            editor.rows = 3;
+            editor.scrollTop = 0;
             return;
         }
-        editor.rows = 3;
-        editor.style.height = 'auto';
-        editor.style.height = `${Math.min(Math.max(editor.scrollHeight, 84), 240)}px`;
+
+        const lines = (editor.value || '').split('\n').length;
+        if (lines <= 3 && (editor.value || '').length < 60) {
+            editor.style.height = `${baseHeight}px`;
+            editor.rows = 3;
+            return;
+        }
+
+        editor.rows = 4;
+        const scrollH = editor.scrollHeight;
+        const targetHeight = Math.min(Math.max(scrollH || baseHeight, baseHeight), maxHeight);
+        editor.style.height = `${targetHeight}px`;
     }
 }
 

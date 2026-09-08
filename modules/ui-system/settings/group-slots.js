@@ -110,6 +110,23 @@
         onChanged?.();
     }
 
+    function buildChevronIcon(doc, direction = 'up') {
+        const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 16 16');
+        svg.setAttribute('width', '10');
+        svg.setAttribute('height', '10');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '1.6');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', direction === 'up' ? 'M3.5 10L8 5.5L12.5 10' : 'M3.5 6L8 10.5L12.5 6');
+        svg.append(path);
+        return svg;
+    }
+
     function createSequentialItem({ list, agent, onChanged }) {
         const doc = list.ownerDocument;
         const item = doc.createElement('div');
@@ -137,16 +154,16 @@
         const up = doc.createElement('button');
         up.type = 'button';
         up.className = 'sequential-order-move-btn';
-        up.textContent = '↑';
         up.title = '上移';
         up.setAttribute('aria-label', `上移 ${agent.name || agent.id}`);
+        up.append(buildChevronIcon(doc, 'up'));
         up.addEventListener('click', () => moveItem(list, item, -1, onChanged));
         const down = doc.createElement('button');
         down.type = 'button';
         down.className = 'sequential-order-move-btn';
-        down.textContent = '↓';
         down.title = '下移';
         down.setAttribute('aria-label', `下移 ${agent.name || agent.id}`);
+        down.append(buildChevronIcon(doc, 'down'));
         down.addEventListener('click', () => moveItem(list, item, 1, onChanged));
         controls.append(up, down);
         item.append(handle, avatar, name, controls);
@@ -166,7 +183,11 @@
             if (!item.classList.contains('dragging')) item.classList.add('drag-over');
             event.dataTransfer.dropEffect = 'move';
         });
-        item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+        item.addEventListener('dragleave', event => {
+            if (!item.contains(event.relatedTarget)) {
+                item.classList.remove('drag-over');
+            }
+        });
         item.addEventListener('drop', event => {
             event.preventDefault();
             item.classList.remove('drag-over');
