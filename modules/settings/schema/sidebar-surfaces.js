@@ -371,9 +371,6 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     form.append(renderSection(doc, { kind: 'agent', key: 'tts', title: '语音设置', summaryId: 'ttsSummary', content: renderAgentTts }));
     form.append(renderRegexSection(doc));
     form.append(el(doc, 'div', { class: 'form-actions' },
-        el(doc, 'div', { class: 'form-save-state-indicator', id: 'formSaveStateIndicator', title: '保存状态' },
-            el(doc, 'span', { id: 'formStateDotHost', class: 'form-state-dot-host' }),
-            el(doc, 'span', { id: 'formStateDotLabel', class: 'form-state-label' }, '已保存')),
         el(doc, 'button', { type: 'submit' }, '保存Agent设置'),
         el(doc, 'div', { class: 'delete-button-container' },
             el(doc, 'button', { type: 'button', id: 'deleteAgentBtn', class: 'danger-button' }, '删除此Agent'))));
