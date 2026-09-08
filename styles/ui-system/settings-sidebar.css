@@ -516,8 +516,15 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIden
     display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface #identitySummary.summary-with-avatar,
-html .vcp-ui-scope .vcp-settings-schema-surface #groupIdentitySummary.summary-with-avatar {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section):not(.collapsed) :is(#identitySummary, #groupIdentitySummary),
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section):not(.collapsed) :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
+    display: none;
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section).collapsed :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -527,22 +534,21 @@ html .vcp-ui-scope .vcp-settings-schema-surface #groupIdentitySummary.summary-wi
     box-sizing: border-box;
     padding: 6px 12px;
     border-radius: 12px;
-    border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+    border: 0.5px solid var(--vcp-settings-border);
     background: color-mix(in srgb, var(--input-bg) 75%, transparent);
     background-clip: padding-box;
     overflow: hidden;
     pointer-events: auto;
     visibility: visible;
-    transition: max-height 140ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 120ms ease,
-                margin 140ms cubic-bezier(0.2, 0, 0, 1),
-                padding 140ms cubic-bezier(0.2, 0, 0, 1),
-                border-width 140ms cubic-bezier(0.2, 0, 0, 1),
+    transition: max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 180ms ease,
+                margin 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 visibility 0s 0s;
 }
 
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface #identitySummary.summary-with-avatar,
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface #groupIdentitySummary.summary-with-avatar {
+html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
     background: var(--vcp-settings-surface, #ffffff);
     border-color: var(--vcp-settings-border);
     backdrop-filter: none;
@@ -550,8 +556,7 @@ html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-sche
     box-shadow: none;
 }
 
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface #identitySummary.summary-with-avatar,
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface #groupIdentitySummary.summary-with-avatar {
+html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
     background: var(--vcp-settings-surface, #1e1e1e);
     border-color: var(--vcp-settings-border);
     backdrop-filter: none;
@@ -711,16 +716,6 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content 
     overflow: hidden;
 }
 
-/* Identity section: permanent in-place card container */
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed .agent-settings-section-content,
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed .group-settings-section-content {
-    grid-template-rows: 1fr;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    padding: 2px 10px 8px 10px;
-    overflow: visible;
-}
 
 /* Agent and Group identity custom slots: seamless in-place transition. */
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell) {
@@ -760,36 +755,11 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .
     border-color: var(--highlight-text);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section[data-section-key="identity"] .group-settings-field-shell,
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section[data-section-key="identity"] .agent-style-collapsible-container {
-    display: grid;
-    grid-template-rows: 1fr;
-    opacity: 1;
-    visibility: visible;
-    overflow: hidden;
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell .group-settings-field-shell,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container .agent-style-collapsible-container {
     margin-top: 6px;
     padding-top: 8px;
     border-top: 0.5px solid var(--vcp-settings-border);
-    transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                margin-top 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                padding-top 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                border-color 180ms ease;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(.group-settings-field-shell, .agent-style-collapsible-container) {
-    grid-template-rows: 0fr;
-    opacity: 0;
-    visibility: hidden;
-    margin-top: 0;
-    padding-top: 0;
-    border-top-color: transparent;
-    pointer-events: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"] :is(.group-settings-field-shell, .agent-style-collapsible-container) > * {
-    min-height: 0;
-    overflow: hidden;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) {
