@@ -6,7 +6,7 @@
 html .vcp-ui-scope #tabContentSettings {
     --vcp-settings-control-height: 30px;
     --vcp-settings-control-height-compact: 26px;
-    --vcp-settings-radius: var(--vcp-ui-radius-sm, 8px);
+    --vcp-settings-radius: 8px;
     --vcp-settings-gap: 6px;
     --vcp-settings-field-gap: 3px;
     --vcp-settings-pad: var(--vcp-ui-space-2, 8px);
@@ -2412,7 +2412,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .strip-regex-input {
     height: 28px;
     line-height: 28px;
     padding: 0 8px;
-    border-radius: 6px;
+    border-radius: var(--vcp-settings-radius, 8px);
     border: 0.5px solid var(--vcp-settings-border);
     background-color: var(--vcp-settings-input);
     color: var(--vcp-settings-text);
@@ -2446,7 +2446,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .custom-select-button {
     background-color: var(--vcp-ui-fill-1, var(--button-bg));
     border: 0.5px solid var(--vcp-settings-border);
     color: var(--vcp-ui-text-0, var(--text-on-accent));
-    border-radius: 6px;
+    border-radius: var(--vcp-settings-radius, 8px);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2639,3 +2639,15 @@ html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema
     color: var(--vcp-ui-text-0);
     box-shadow: none;
 }
+
+/* Continuous superellipse corner curvature */
+@supports (corner-shape: superellipse(1.5)) {
+    html .vcp-ui-scope #tabContentSettings :is(input, select, textarea, button, .vcp-uiux-select-trigger, .custom-select-button, .card, .group-settings-card-shell, .agent-settings-card-shell) {
+        corner-shape: superellipse(1.5);
+    }
+
+    html .vcp-ui-scope #tabContentSettings :is(.round, .slider.round, .avatar-upload-overlay, img.avatar, .agent-avatar-display, .group-avatar-display, .vcp-settings-info-badge, .badge, [style*="border-radius: 50%"], [style*="border-radius: 999px"]) {
+        corner-shape: round;
+    }
+}
+

@@ -12,6 +12,7 @@ const sidebarListCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/setti
 const sidebarTabsCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-sidebar-tabs.css'), 'utf8');
 const searchCss = fs.readFileSync(path.join(repoRoot, 'styles/setting/settings-search.css'), 'utf8');
 const sidebarCss = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/settings-sidebar.css'), 'utf8');
+const groupSettingsCss = fs.readFileSync(path.join(repoRoot, 'styles/ui-system/group-settings.css'), 'utf8');
 const schema = await import(pathToFileURL(path.join(repoRoot, 'modules/settings/schema/sidebar-surfaces.js')).href);
 const surfaceModule = await import(pathToFileURL(path.join(repoRoot, 'modules/ui-system/settings/settings-sidebar-surface.js')).href);
 
@@ -362,3 +363,26 @@ test('样式入口引用完备性核验：settings.css 完整导入 5 个核心�
     assert.match(settingsCss, /@import url\('\.\/setting\/settings-model-select\.css'\);/);
     assert.match(settingsCss, /@import url\('\.\/setting\/settings-regex\.css'\);/);
 });
+
+test('侧边栏助手与群聊表单控件圆角与 8px 规范及连续曲率对齐测试', () => {
+    // 1. settings-sidebar.css 明确声明 8px 基础圆角
+    assert.match(sidebarCss, /--vcp-settings-radius:\s*8px;/, '侧边栏设置必须以 8px 为标准基础圆角');
+
+    // 2. input / select / textarea 统一应用 --vcp-settings-radius
+    assert.match(sidebarCss, /\.vcp-settings-schema-surface input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):not\(\[type="color"\]\),[\s\S]*?border-radius:\s*var\(--vcp-settings-radius\);/, '基础表单控件必须采用统一的 8px 设置圆角');
+
+    // 3. 群聊设置输入框与下拉框不再使用 16px 大圆角，与 8px 标准对齐
+    assert.doesNotMatch(groupSettingsCss, /border-radius:\s*16px;/, '群聊设置控件不得使用 16px 孤立大圆角');
+    assert.match(groupSettingsCss, /#groupSettingsContainer\s+:is\(input\[type="text"\],\s*select\)[\s\S]*?border-radius:\s*var\(--vcp-settings-radius,\s*8px\);/, '群聊文本输入与选择框必须使用 8px 规范圆角');
+    assert.match(groupSettingsCss, /#groupSettingsContainer\s+textarea[\s\S]*?border-radius:\s*var\(--vcp-settings-radius,\s*8px\);/, '群聊多行文本框必须使用 8px 规范圆角');
+
+    // 4. 正则输入与选择按钮对齐 8px 圆角
+    assert.match(sidebarCss, /\.strip-regex-input[\s\S]*?border-radius:\s*var\(--vcp-settings-radius,\s*8px\);/, '正则输入框必须对齐 8px 规范圆角');
+    assert.match(sidebarCss, /\.custom-select-button[\s\S]*?border-radius:\s*var\(--vcp-settings-radius,\s*8px\);/, '自定义选择按钮必须对齐 8px 规范圆角');
+
+    // 5. 连续平滑超椭圆曲率支持
+    assert.match(sidebarCss, /@supports\s*\(corner-shape:\s*superellipse\(1\.5\)\)/, '必须包含连续超椭圆 corner-shape 优雅降级支持');
+    assert.match(sidebarCss, /corner-shape:\s*superellipse\(1\.5\);/, '控件必须配置 superellipse(1.5) 曲率');
+    assert.match(sidebarCss, /corner-shape:\s*round;/, '正圆指示器与头像必须豁免超椭圆形变');
+});
+
