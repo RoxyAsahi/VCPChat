@@ -14,7 +14,7 @@ const field = (id, type, label, options = {}) => Object.freeze({
 });
 
 const agentFields = Object.freeze([
-    field('agentNameInput', 'text', 'Agent 名称', { name: 'name', required: true, tooltip: '列表和聊天中显示的助手名称。', validation: { required: true } }),
+    field('agentNameInput', 'text', 'Agent 名称', { name: 'name', placeholder: 'Agent 名称', required: true, tooltip: '列表和聊天中显示的助手名称。', validation: { required: true } }),
     field('agentModel', 'text', 'Agent 模型', { name: 'model', placeholder: '例如 gemini-2.5-flash-preview-05-20', tooltip: '留空时使用服务端默认模型。' }),
     field('agentTemperature', 'number', 'Temperature (0-2)', { name: 'temperature', min: 0, max: 2, step: 0.1, validation: { min: 0, max: 2 } }),
     field('agentContextTokenLimit', 'number', '上下文Token上限', { name: 'contextTokenLimit', min: 0, step: 100, validation: { min: 0 } }),
@@ -32,7 +32,7 @@ const agentFields = Object.freeze([
 ]);
 
 const groupFields = Object.freeze([
-    field('groupNameInput', 'text', '群组名称', { required: true, tooltip: '列表和聊天中显示的群组名称。', validation: { required: true } }),
+    field('groupNameInput', 'text', '群组名称', { placeholder: '群组名称', required: true, tooltip: '列表和聊天中显示的群组名称。', validation: { required: true } }),
     field('groupChatMode', 'select', '群聊模式', { options: [['sequential', '顺序发言'], ['naturerandom', '自然随机'], ['invite_only', '邀请发言']], tooltip: '决定群组如何选择下一位发言者：顺序发言、自然随机或仅受邀请。' }),
     field('tagMatchMode', 'select', 'Tag 触发模式', { options: [['strict', '严格模式'], ['natural', '自然模式']], tooltip: '自然模式会区分 Tag 来源，尽量避免 Agent 因引用自身历史发言而重复触发。', dependsOn: { field: 'groupChatMode', equals: 'naturerandom' } }),
     field('groupUnifiedModelInput', 'text', '群组统一模型', { placeholder: '选择群组统一模型', tooltip: '启用统一模型后，群组成员共享此模型。', dependsOn: { field: 'groupUseUnifiedModel', equals: true } }),

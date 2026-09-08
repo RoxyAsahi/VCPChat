@@ -514,23 +514,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option:has(in
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section:not(.collapsed) #identitySummary,
 html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section:not(.collapsed) #groupIdentitySummary {
-    max-height: 0;
-    opacity: 0;
-    margin-top: 0;
-    margin-bottom: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-top-width: 0;
-    border-bottom-width: 0;
-    overflow: hidden;
-    pointer-events: none;
-    visibility: hidden;
-    transition: max-height 140ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 100ms ease,
-                margin 140ms cubic-bezier(0.2, 0, 0, 1),
-                padding 140ms cubic-bezier(0.2, 0, 0, 1),
-                border-width 140ms cubic-bezier(0.2, 0, 0, 1),
-                visibility 0s 140ms;
+    display: none;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface #identitySummary.summary-with-avatar,
@@ -728,16 +712,16 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content 
     overflow: hidden;
 }
 
-/* Agent identity, parameter and TTS custom slots. */
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container {
+/* Agent and Group identity custom slots: seamless in-place transition. */
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell) {
     position: relative;
     isolation: isolate;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px;
+    gap: 8px;
+    padding: 6px 12px 10px 12px;
     margin: 2px 0 4px;
-    border-radius: 10px;
+    border-radius: 12px;
     overflow: hidden;
     background: var(--vcp-settings-surface);
     backdrop-filter: none;
@@ -746,78 +730,88 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container {
     transition: border-color var(--vcp-motion-duration-normal, 0.2s) ease,
                 background-color var(--vcp-motion-duration-normal, 0.2s) ease;
     box-sizing: border-box;
+    min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container::before {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell)::before {
     display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container:hover {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell):hover {
     border-color: color-mix(in srgb, var(--highlight-text) 50%, var(--vcp-settings-border));
 }
 
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container {
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell) {
     background: var(--vcp-settings-surface);
     border-color: var(--vcp-settings-border);
 }
 
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container:hover {
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell):hover {
     border-color: var(--highlight-text);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container .agent-style-collapsible-container {
     margin: 4px 0 0;
-    padding: 0;
-    border-top: none;
+    padding: 4px 0 0;
+    border-top: 0.5px solid var(--vcp-settings-border);
     background: transparent;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-main,
-html .vcp-ui-scope .vcp-settings-schema-surface .group-identity-main {
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr);
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell .group-settings-field-shell {
+    border-top: 0.5px solid var(--vcp-settings-border);
+    margin-top: 4px;
+    padding-top: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) {
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
     min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) {
     position: relative;
-    width: 38px;
-    height: 38px;
-    flex: 0 0 38px;
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    flex: 0 0 30px;
+    border-radius: 50%;
     overflow: hidden;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-display {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-display, .group-avatar-display) {
     display: block;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    max-width: 38px;
-    min-height: 38px;
-    max-height: 38px;
-    border: 0.5px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    border: 2px solid color-mix(in srgb, var(--highlight-text) 24%, transparent);
+    border-radius: 50%;
     object-fit: cover;
     margin: 0;
     transition: transform var(--vcp-motion-duration-normal, 0.2s) ease,
                 border-color var(--vcp-motion-duration-normal, 0.2s) ease;
     cursor: pointer;
+    box-sizing: border-box;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper:hover .agent-avatar-display {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper):hover :is(.agent-avatar-display, .group-avatar-display) {
     transform: scale(1.04);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .avatar-upload-overlay {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) .avatar-upload-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    border-radius: 10px;
+    border-radius: 50%;
     background-color: rgba(0, 0, 0, 0.45);
     display: flex;
     align-items: center;
@@ -827,33 +821,30 @@ html .vcp-ui-scope .vcp-settings-schema-surface .avatar-upload-overlay {
     cursor: pointer;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper:hover .avatar-upload-overlay {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper):hover .avatar-upload-overlay {
     opacity: 1;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .avatar-upload-overlay svg {
-    width: 16px;
-    height: 16px;
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) .avatar-upload-overlay svg {
+    width: 14px;
+    height: 14px;
     color: #ffffff;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--vcp-settings-muted);
-    margin: 0;
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) label:not(.switch):not(.agent-stream-mode-option):not(.avatar-upload-overlay) {
+    display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper input[type="text"] {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"] {
     width: 100%;
     margin: 0;
     height: 30px;
@@ -861,27 +852,29 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper input[type="
     padding: 0 8px;
     border-radius: 8px;
     border: 0.5px solid var(--vcp-settings-border);
-    background: var(--vcp-settings-surface);
-    color: var(--vcp-settings-text);
-    font-size: 12px;
-    font-weight: 500;
+    background: color-mix(in srgb, var(--vcp-settings-surface) 85%, var(--vcp-settings-input));
+    color: var(--vcp-settings-text, var(--primary-text));
+    font-size: 1.18em;
+    font-weight: 600;
+    line-height: 1.2;
     box-sizing: border-box;
     outline: none;
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper input[type="text"]:hover {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:hover {
     border-color: color-mix(in srgb, var(--highlight-text) 45%, var(--vcp-settings-border));
-    background-color: color-mix(in srgb, var(--vcp-settings-surface) 80%, var(--vcp-settings-input));
+    background-color: var(--vcp-settings-surface);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-name-wrapper input[type="text"]:focus {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:focus {
     border-color: var(--vcp-settings-accent, var(--highlight-text, #3b82f6));
+    background-color: var(--vcp-settings-surface);
     outline: none;
     box-shadow: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-avatar-wrapper > input[type="file"] {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) > input[type="file"] {
     display: none;
 }
 
@@ -1878,69 +1871,6 @@ html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-prompts-container:
 }
 
 /* Group custom slots. */
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell {
-    position: relative;
-    isolation: isolate;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px;
-    margin: 2px 0 4px;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--vcp-settings-surface);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 0.5px solid var(--vcp-settings-border);
-    transition: border-color var(--vcp-motion-duration-normal, 0.2s) ease,
-                background-color var(--vcp-motion-duration-normal, 0.2s) ease;
-    box-sizing: border-box;
-    min-width: 0;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell::before {
-    display: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell:hover {
-    border-color: color-mix(in srgb, var(--highlight-text) 50%, var(--vcp-settings-border));
-}
-
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell {
-    background: var(--vcp-settings-surface);
-    border-color: var(--vcp-settings-border);
-}
-
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell:hover {
-    border-color: var(--highlight-text);
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .group-avatar-wrapper {
-    position: relative;
-    width: 38px;
-    height: 38px;
-    flex: 0 0 38px;
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .group-avatar-display {
-    display: block;
-    width: 38px;
-    height: 38px;
-    min-width: 38px;
-    max-width: 38px;
-    min-height: 38px;
-    max-height: 38px;
-    border: 0.5px solid rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
-    object-fit: cover;
-    margin: 0;
-    transition: transform var(--vcp-motion-duration-normal, 0.2s) ease,
-                border-color var(--vcp-motion-duration-normal, 0.2s) ease;
-    cursor: pointer;
-}
-
 html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-card-shell {
     display: grid;
     gap: var(--vcp-settings-gap);
