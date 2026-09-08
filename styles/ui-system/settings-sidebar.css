@@ -2195,38 +2195,6 @@ html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button {
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
-    color: var(--highlight-text);
-}
-
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--user-bubble-bg) 82%, rgba(255, 255, 255, 0.4)),
-        color-mix(in srgb, var(--user-bubble-bg) 70%, rgba(255, 255, 255, 0.22))
-    );
-    border-color: rgba(51, 51, 51, 0.08);
-    backdrop-filter: blur(10px) saturate(130%);
-    -webkit-backdrop-filter: blur(10px) saturate(130%);
-    box-shadow:
-        inset 2px -2px 1px -1px rgba(255, 255, 255, 0.72),
-        inset -2px 2px 1px -1px rgba(255, 255, 255, 0.62),
-        inset 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
-    background: var(--highlight-text);
-    border-color: var(--highlight-text);
-    color: #ffffff;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-}
-
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
-    transform: translateY(0) scale(0.985);
-}
-
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
     border: 1px solid color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 82%, #ffffff 18%);
     background: var(--vcp-settings-accent, var(--highlight-text));
     color: var(--vcp-ui-on-accent, #ffffff);
@@ -2238,7 +2206,7 @@ html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema
         0 2px 8px color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 28%, transparent);
 }
 
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
     background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, #ffffff 12%);
     background-image: none;
     color: var(--vcp-ui-on-accent, #ffffff);
@@ -2252,7 +2220,70 @@ html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema
     filter: none;
 }
 
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
+    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, #000000 12%);
+    border-color: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 80%, #000000 20%);
+    color: var(--vcp-ui-on-accent, #ffffff);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transform: translateY(0) scale(0.985);
+}
+
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--user-bubble-bg) 82%, rgba(255, 255, 255, 0.4)),
+        color-mix(in srgb, var(--user-bubble-bg) 70%, rgba(255, 255, 255, 0.22))
+    );
+    border-color: rgba(51, 51, 51, 0.08);
+    color: var(--highlight-text);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+    box-shadow:
+        inset 2px -2px 1px -1px rgba(255, 255, 255, 0.72),
+        inset -2px 2px 1px -1px rgba(255, 255, 255, 0.62),
+        inset 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
+    background: var(--highlight-text);
+    border-color: var(--highlight-text);
+    color: #ffffff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+}
+
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
+    transform: translateY(0) scale(0.985);
+}
+
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
+    border: 1px solid color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 82%, #ffffff 18%);
+    background: var(--vcp-settings-accent, var(--highlight-text));
+    color: var(--vcp-ui-on-accent, #ffffff);
+    font-weight: 600;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.25),
+        0 2px 8px color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 28%, transparent);
+}
+
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
+    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, #ffffff 12%);
+    background-image: none;
+    color: var(--vcp-ui-on-accent, #ffffff);
+    border-color: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 76%, #ffffff 24%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.3),
+        0 4px 14px color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 40%, transparent);
+    transform: translateY(-0.5px);
+    filter: none;
+}
+
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
     background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, #000000 12%);
     border-color: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 80%, #000000 20%);
     color: var(--vcp-ui-on-accent, #ffffff);
@@ -2263,12 +2294,14 @@ html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema
 html .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button,
 html .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn,
 html .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
+    border: 1px solid color-mix(in srgb, var(--danger-color) 38%, transparent);
+    background: color-mix(in srgb, var(--danger-color) 16%, transparent);
     color: color-mix(in srgb, var(--danger-color) 88%, #ffffff 12%);
 }
 
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button,
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn,
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--danger-color) 16%, rgba(255, 255, 255, 0.78)),
@@ -2284,9 +2317,9 @@ html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-sche
         inset 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button:hover,
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn:hover,
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn:hover {
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button:hover,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn:hover,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn:hover {
     background: var(--danger-color);
     border-color: var(--danger-color);
     color: #ffffff;
@@ -2295,9 +2328,9 @@ html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-sche
     box-shadow: none;
 }
 
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button,
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn,
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button,
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn,
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn {
     border-color: rgba(255, 255, 255, 0.08);
     background: linear-gradient(
         180deg,
@@ -2313,9 +2346,9 @@ html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema
         inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button:hover,
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn:hover,
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn:hover {
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions .danger-button:hover,
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteAgentBtn:hover,
+:is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions #deleteGroupBtn:hover {
     background: var(--danger-color);
     border-color: var(--danger-color);
     color: #ffffff;
