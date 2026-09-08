@@ -257,6 +257,9 @@ class ModularPromptModule {
             // 内容编辑区
             const contentEl = document.createElement('div');
             contentEl.className = 'block-content';
+            contentEl.spellcheck = false;
+            contentEl.setAttribute('autocorrect', 'off');
+            contentEl.setAttribute('autocapitalize', 'off');
             contentEl.contentEditable = false; // 默认不可编辑
             // 如果有自定义名称，显示名称；否则显示内容
             const displayText = block.name && block.name.trim() ? block.name : currentContent;
@@ -479,7 +482,7 @@ class ModularPromptModule {
         block.variants.forEach((variant, idx) => {
             dialogHTML += `
                         <div class="variant-item-edit" data-index="${idx}">
-                            <textarea class="variant-content-input" rows="3" placeholder="内容条目 ${idx + 1}">${variant}</textarea>
+                            <textarea class="variant-content-input" rows="3" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="内容条目 ${idx + 1}">${variant}</textarea>
                             ${block.variants.length > 1 ? `<button class="remove-variant-btn" data-index="${idx}">×</button>` : ''}
                         </div>`;
         });
@@ -511,7 +514,7 @@ class ModularPromptModule {
             variantItem.className = 'variant-item-edit';
             variantItem.dataset.index = newIndex;
             variantItem.innerHTML = `
-                <textarea class="variant-content-input" rows="3" placeholder="内容条目 ${newIndex + 1}"></textarea>
+                <textarea class="variant-content-input" rows="3" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="内容条目 ${newIndex + 1}"></textarea>
                 <button class="remove-variant-btn" data-index="${newIndex}">×</button>
             `;
             variantsList.appendChild(variantItem);
@@ -939,7 +942,7 @@ class ModularPromptModule {
         block.variants.forEach((variant, idx) => {
             dialogHTML += `
                         <div class="variant-item-edit" data-index="${idx}">
-                            <textarea class="variant-content-input" rows="3" placeholder="内容条目 ${idx + 1}">${variant}</textarea>
+                            <textarea class="variant-content-input" rows="3" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="内容条目 ${idx + 1}">${variant}</textarea>
                             ${block.variants.length > 1 ? `<button class="remove-variant-btn" data-index="${idx}">×</button>` : ''}
                         </div>`;
         });
@@ -971,7 +974,7 @@ class ModularPromptModule {
             variantItem.className = 'variant-item-edit';
             variantItem.dataset.index = newIndex;
             variantItem.innerHTML = `
-                <textarea class="variant-content-input" rows="3" placeholder="内容条目 ${newIndex + 1}"></textarea>
+                <textarea class="variant-content-input" rows="3" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="内容条目 ${newIndex + 1}"></textarea>
                 <button class="remove-variant-btn" data-index="${newIndex}">×</button>
             `;
             variantsList.appendChild(variantItem);

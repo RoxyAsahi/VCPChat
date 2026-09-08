@@ -141,7 +141,7 @@ function renderControl(doc, spec) {
         (spec.options || []).forEach(([value, text]) => select.append(el(doc, 'option', { value }, text)));
         return select;
     }
-    if (spec.type === 'textarea') return el(doc, 'textarea', attributes);
+    if (spec.type === 'textarea') return el(doc, 'textarea', { ...attributes, spellcheck: false, autocorrect: 'off', autocapitalize: 'off' });
     return el(doc, 'input', attributes);
 }
 
@@ -325,7 +325,7 @@ function renderAgentTts(doc) {
         el(doc, 'div', { class: 'tts-director-heading' },
             el(doc, 'label', { for: 'agentTtsDirectorPromptInput' }, 'MiMo 导演提示词:', makeHelpBadge(doc, '适用于网络模式：预置音色模式使用“提示词 + voice”控制演绎；自然语言控制模式使用专用模型且不发送 voice；克隆模式使用参考音频作为 voice。Ctrl+Enter 添加，卡片右上角 × 删除。'))),
         el(doc, 'div', { class: 'tts-director-composer' },
-            el(doc, 'textarea', { id: 'agentTtsDirectorPromptInput', class: 'tts-director-editor tts-director-editor-new', rows: 3, placeholder: '描述角色、场景与演绎指导 (Ctrl+Enter 添加)' }),
+            el(doc, 'textarea', { id: 'agentTtsDirectorPromptInput', class: 'tts-director-editor tts-director-editor-new', rows: 3, spellcheck: false, autocorrect: 'off', autocapitalize: 'off', placeholder: '描述角色、场景与演绎指导 (Ctrl+Enter 添加)' }),
             el(doc, 'div', { class: 'tts-director-floating-actions' },
                 el(doc, 'button', { type: 'button', id: 'fillAgentTtsDirectorTemplateBtn', class: 'tts-director-template-button', title: '填入角色、场景和指导模板' }, '模板'),
                 el(doc, 'button', { type: 'button', id: 'addAgentTtsDirectorPromptBtn', class: 'small-button tts-director-action-button', title: '添加导演提示词', 'aria-label': '添加导演提示词' }, buildPlusIcon(doc)))),
