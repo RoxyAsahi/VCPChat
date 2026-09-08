@@ -250,7 +250,6 @@ class PresetPromptModule {
         badge.setAttribute('data-tooltip', '可使用 {{AgentName}} 占位符，将在对话中自动替换为当前助手名称');
         badge.setAttribute('aria-label', '占位符说明');
         badge.textContent = '?';
-        badge.style.marginLeft = '4px';
         badge.onclick = (e) => { e.preventDefault(); e.stopPropagation(); };
         label.appendChild(badge);
         section.appendChild(label);
