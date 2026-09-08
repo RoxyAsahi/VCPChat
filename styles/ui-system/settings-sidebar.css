@@ -516,36 +516,47 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIden
     display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section):not(.collapsed) :is(#identitySummary, #groupIdentitySummary),
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section):not(.collapsed) :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
-    display: none;
-    opacity: 0;
-    pointer-events: none;
-    visibility: hidden;
+/* Fixed-height header for identity section so it never collapses/spikes by 50px */
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"] .agent-settings-section-header,
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"] .group-settings-section-header {
+    grid-template-rows: 32px 0px;
+    min-height: 36px;
+    padding: 3px 0 3px 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section).collapsed :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-height: 48px;
-    opacity: 1;
-    margin: 4px 10px 8px 10px;
+html .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
+    position: absolute;
+    top: -0.5px;
+    left: 10px;
+    right: 10px;
+    margin: 0;
+    height: 44px;
     box-sizing: border-box;
     padding: 6px 12px;
     border-radius: 12px;
     border: 0.5px solid var(--vcp-settings-border);
-    background: color-mix(in srgb, var(--input-bg) 75%, transparent);
-    background-clip: padding-box;
+    background: var(--vcp-settings-surface);
+    display: flex;
+    align-items: center;
+    gap: 12px;
     overflow: hidden;
+    z-index: 3;
     pointer-events: auto;
+    transition: opacity 180ms ease, visibility 0s 0s;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
+    opacity: 1;
     visibility: visible;
-    transition: max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                opacity 180ms ease,
-                margin 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                border-width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                visibility 0s 0s;
+    pointer-events: auto;
+    transition: opacity 180ms ease, visibility 0s 0s;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 180ms ease, visibility 0s 180ms;
 }
 
 html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIdentitySummary).summary-with-avatar {
@@ -722,6 +733,17 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content 
     overflow: hidden;
 }
 
+/* Identity Section Content & Container: continuous seamless flow without 50px drop */
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(.agent-settings-section-content, .group-settings-section-content),
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(.agent-settings-section-content, .group-settings-section-content) {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    padding: 0 10px 4px 10px;
+    overflow: visible;
+    transition: none;
+}
 
 /* Agent and Group identity custom slots: seamless in-place transition. */
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell) {
@@ -731,17 +753,61 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .
     flex-direction: column;
     gap: 8px;
     padding: 6px 12px 10px 12px;
-    margin: 2px 0 4px;
+    margin: 0;
     border-radius: 12px;
     overflow: hidden;
     background: var(--vcp-settings-surface);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     border: 0.5px solid var(--vcp-settings-border);
-    transition: border-color var(--vcp-motion-duration-normal, 0.2s) ease,
+    transition: opacity 180ms ease,
+                border-color var(--vcp-motion-duration-normal, 0.2s) ease,
                 background-color var(--vcp-motion-duration-normal, 0.2s) ease;
     box-sizing: border-box;
     min-width: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(.agent-identity-container, .group-settings-identity-shell) {
+    opacity: 0;
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(.agent-identity-container, .group-settings-identity-shell) {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Collapsible sub-drawer inside identity card (style settings for agent, members list for group) */
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(.agent-identity-container .agent-style-collapsible-container, .group-settings-identity-shell .group-settings-field-shell) {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    border-top: none;
+    overflow: hidden;
+    pointer-events: none;
+    visibility: hidden;
+    transition: max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 160ms ease,
+                margin 220ms ease,
+                padding 220ms ease,
+                visibility 0s 220ms;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(.agent-identity-container .agent-style-collapsible-container, .group-settings-identity-shell .group-settings-field-shell) {
+    max-height: 600px;
+    opacity: 1;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--vcp-settings-border);
+    overflow: visible;
+    pointer-events: auto;
+    visibility: visible;
+    transition: max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 200ms ease,
+                margin-top 220ms ease,
+                padding-top 220ms ease,
+                visibility 0s 0s;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell)::before {
