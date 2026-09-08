@@ -972,149 +972,147 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-controls {
     min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container {
-    margin-top: 0;
-    border-top: none;
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 0.5px solid var(--vcp-settings-border);
     background: transparent;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header {
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header {
     position: relative;
-    isolation: isolate;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 4px 0 5px;
+    gap: 6px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
     background: transparent;
+    border: none;
     cursor: pointer;
     user-select: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header::before {
-    content: "";
-    position: absolute;
-    left: -8px;
-    right: -2px;
-    top: 3px;
-    height: 26px;
-    border-radius: 999px;
-    background-color: transparent;
-    transition: background-color var(--vcp-motion-duration-fast, 0.15s) var(--vcp-motion-ease-standard, ease), box-shadow var(--vcp-motion-duration-fast, 0.15s) var(--vcp-motion-ease-standard, ease);
-    z-index: -1;
-    pointer-events: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-settings-text) 5%, transparent);
-}
-
-html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-settings-text) 5%, rgba(0, 0, 0, 0.03));
-}
-
-html:is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover::before {
-    background-color: color-mix(in srgb, var(--vcp-settings-text) 7%, rgba(255, 255, 255, 0.04));
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-title {
-    order: 1;
-    flex: 1 1 auto;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--vcp-settings-muted);
-    font-size: 11.5px;
-    font-weight: 500;
-    line-height: 20px;
-    transition: color 0.15s ease;
+    font-size: 13px;
+    line-height: 24px;
+    transition: color 100ms ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-title {
-    color: var(--vcp-settings-text);
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header::before,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header::before {
+    display: none;
+    content: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon {
-    order: 2;
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-icon {
     position: relative;
-    margin-left: auto;
-    margin-right: 0;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    border: none;
-    border-radius: 999px;
-    color: var(--vcp-settings-muted);
+    flex: none;
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0;
-    line-height: 0;
-    transform: none;
-    transition: color 0.15s ease;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--vcp-settings-muted);
+    transition: color 100ms ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon::after {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    border-radius: 999px;
-    background-color: transparent;
-    transition: background-color var(--vcp-motion-duration-normal, 0.2s) var(--vcp-motion-ease-standard, ease);
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon::after,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-icon::after {
+    display: none;
+    content: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon::before {
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-icon::before,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-icon::before {
     content: "";
-    position: relative;
-    z-index: 1;
     width: 5px;
     height: 5px;
-    border-right: 1.6px solid currentColor;
-    border-bottom: 1.6px solid currentColor;
-    transform: rotate(-45deg);
-    transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg) translate(-1px, -1px);
+    transition: transform 120ms ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .style-collapse-icon::before {
-    transform: rotate(45deg);
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .style-collapse-icon::before,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container:not(.collapsed) .style-collapse-icon::before {
+    transform: rotate(45deg) translate(-1px, -1px);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-icon {
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-title,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-title {
+    flex: none;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 24px;
+    color: var(--vcp-settings-muted);
+    transition: color 100ms ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header:hover {
     color: var(--vcp-settings-text);
-    background-color: transparent;
-    box-shadow: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container.collapsed .agent-style-controls {
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-title,
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:hover .style-collapse-icon,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header:hover .style-collapse-title,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header:hover .style-collapse-icon {
+    color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .style-collapse-header:focus-visible,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header:focus-visible {
+    outline: 2px solid var(--highlight-text);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container.collapsed .agent-style-controls,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container.collapsed .agent-style-controls {
     max-height: 0;
     opacity: 0;
     visibility: hidden;
-    padding-top: 0;
-    padding-bottom: 0;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding: 0;
     margin: 0;
     overflow: hidden;
     pointer-events: none;
-    transition: max-height 140ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 100ms ease,
-                padding 140ms cubic-bezier(0.2, 0, 0, 1),
-                visibility 0s 140ms;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .agent-style-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 520px;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    padding: 4px 4px 8px;
-    overflow: hidden;
     transition: max-height 160ms cubic-bezier(0.2, 0, 0, 1),
                 opacity 120ms ease,
                 padding 160ms cubic-bezier(0.2, 0, 0, 1),
+                visibility 0s 160ms;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-container:not(.collapsed) .agent-style-controls,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container:not(.collapsed) .agent-style-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 600px;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    padding-top: 8px;
+    padding-bottom: 4px;
+    overflow: hidden;
+    transition: max-height 180ms cubic-bezier(0.2, 0, 0, 1),
+                opacity 140ms ease,
+                padding 180ms cubic-bezier(0.2, 0, 0, 1),
                 visibility 0s 0s;
 }
 

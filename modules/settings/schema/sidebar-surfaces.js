@@ -249,9 +249,9 @@ function renderAgentIdentity(doc) {
         el(doc, 'label', { for: 'agentAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换头像' }, buildCameraIcon(doc)),
         el(doc, 'input', { id: 'agentAvatarInput', name: 'avatar', type: 'file', accept: 'image/png, image/jpeg, image/gif', hidden: true }));
     const identityMain = el(doc, 'div', { class: 'agent-identity-main' }, avatar, renderField(doc, agentFields[0], 'agent-name-wrapper'));
-    const style = el(doc, 'div', { class: 'agent-style-collapsible-container collapsed', 'data-schema-section': 'style' });
+    const style = el(doc, 'div', { class: 'agent-style-collapsible-container collapsed', 'data-schema-section': 'style', 'data-setting-primitive': 'disclosure' });
     const styleIcon = el(doc, 'span', { class: 'style-collapse-icon', 'aria-hidden': 'true' });
-    const styleHeader = el(doc, 'div', { class: 'style-collapse-header', id: 'styleCollapseHeader', role: 'button', tabindex: '0', 'aria-expanded': 'false' },
+    const styleHeader = el(doc, 'div', { class: 'style-collapse-header vcp-uiux-disclosure-row', id: 'styleCollapseHeader', role: 'button', tabindex: '0', 'aria-expanded': 'false', 'aria-controls': 'agentStyleControls' },
         styleIcon, el(doc, 'span', { class: 'style-collapse-title' }, '自定义样式设置'));
 
     const toggleStyle = () => {
@@ -271,7 +271,7 @@ function renderAgentIdentity(doc) {
             toggleStyle();
         }
     });
-    const controls = el(doc, 'div', { class: 'agent-style-controls' });
+    const controls = el(doc, 'div', { class: 'agent-style-controls', id: 'agentStyleControls' });
     [['disableCustomColors', '助手页面中使用主题默认颜色'], ['useThemeColorsInChat', '会话界面中使用主题默认颜色']].forEach(([id, text]) => {
         const checkbox = el(doc, 'input', { id, type: 'checkbox', name: id });
         controls.append(el(doc, 'div', { class: 'style-control-item full-width' },

@@ -210,13 +210,50 @@ try {
     assert.ok(nameFocusBorder && nameFocusBorder !== 'rgba(0, 0, 0, 0)', 'Focus border must appear on agentNameInput focus');
     console.log('[PASS] Agent name input focus state active');
 
-    console.log('[INFO] Testing style collapse accordion interaction');
+    console.log('[INFO] Testing style collapse accordion interaction and DisclosureRow geometry');
     const collapseContainer = '#agentSettingsForm .agent-style-collapsible-container';
     const isInitiallyCollapsed = await page.evaluate(sel => document.querySelector(sel)?.classList.contains('collapsed'), collapseContainer);
     assert.equal(isInitiallyCollapsed, true, 'Style collapse container is initially collapsed');
+
+    const headerMetrics = await page.evaluate(() => {
+        const header = document.querySelector('#agentSettingsForm #styleCollapseHeader');
+        const icon = header?.querySelector('.style-collapse-icon');
+        const title = header?.querySelector('.style-collapse-title');
+        const hRect = header?.getBoundingClientRect();
+        const iRect = icon?.getBoundingClientRect();
+        const tRect = title?.getBoundingClientRect();
+        const bg = header ? getComputedStyle(header).backgroundColor : null;
+        return {
+            height: hRect ? Math.round(hRect.height) : 0,
+            iconLeft: iRect ? Math.round(iRect.left) : 0,
+            titleLeft: tRect ? Math.round(tRect.left) : 0,
+            bg,
+            isDisclosurePrimitive: header?.classList.contains('vcp-uiux-disclosure-row'),
+            ariaExpanded: header?.getAttribute('aria-expanded'),
+        };
+    });
+    assert.equal(headerMetrics.height, 24, 'Style collapse header height must be strictly 24px');
+    assert.ok(headerMetrics.iconLeft < headerMetrics.titleLeft, 'Leading chevron must be positioned to the left of the title');
+    assert.equal(headerMetrics.isDisclosurePrimitive, true, 'Style collapse header must carry vcp-uiux-disclosure-row primitive class');
+    assert.equal(headerMetrics.ariaExpanded, 'false', 'Style collapse header must have aria-expanded="false" when collapsed');
+
+    const cardHandle = await page.$('#agentSettingsForm .agent-identity-container');
+    if (cardHandle) {
+        await cardHandle.screenshot({ path: '/Users/asahi/.gemini/antigravity/brain/007afa13-0e99-4fcb-aab1-e20c01db4828/scratch/style_disclosure_collapsed.png' });
+    }
+
     await page.click('#agentSettingsForm #styleCollapseHeader');
     await page.waitForFunction(sel => !document.querySelector(sel)?.classList.contains('collapsed'), { timeout: 5000 }, collapseContainer);
     console.log('[PASS] Accordion successfully expanded upon user click');
+
+    const expandedAria = await page.evaluate(() => document.querySelector('#agentSettingsForm #styleCollapseHeader')?.getAttribute('aria-expanded'));
+    assert.equal(expandedAria, 'true', 'Style collapse header must have aria-expanded="true" when expanded');
+
+    await sleep(300);
+    if (cardHandle) {
+        await cardHandle.screenshot({ path: '/Users/asahi/.gemini/antigravity/brain/007afa13-0e99-4fcb-aab1-e20c01db4828/scratch/style_disclosure_expanded.png' });
+    }
+
     await page.click('#agentSettingsForm #styleCollapseHeader');
     await page.waitForFunction(sel => document.querySelector(sel)?.classList.contains('collapsed'), { timeout: 5000 }, collapseContainer);
     console.log('[PASS] Accordion successfully re-collapsed upon second user click');
