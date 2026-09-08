@@ -89,13 +89,16 @@
             checkbox.checked = Boolean(groupConfig?.members?.includes(agent.id));
             checkbox.addEventListener('change', () => onChange?.());
             const label = doc.createElement('label');
+            label.className = 'group-member-label';
             label.htmlFor = checkbox.id;
-            label.textContent = agent.name || agent.id;
             const avatar = doc.createElement('img');
             avatar.src = agent.avatarUrl || defaultAvatar;
             avatar.alt = agent.name || agent.id;
             avatar.className = 'avatar-small';
-            label.prepend(avatar);
+            const name = doc.createElement('span');
+            name.className = 'group-member-name';
+            name.textContent = agent.name || agent.id;
+            label.append(avatar, name);
             row.append(checkbox, label);
             container.appendChild(row);
         });

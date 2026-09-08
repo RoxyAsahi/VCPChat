@@ -188,7 +188,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .settings-form-group {
     min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface label:not(.switch):not(.agent-stream-mode-option):not(.avatar-upload-overlay),
+html .vcp-ui-scope .vcp-settings-schema-surface label:not(.switch):not(.agent-stream-mode-option):not(.avatar-upload-overlay):not(.group-member-label),
 html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-field-label,
 html .vcp-ui-scope .preset-section-label {
     display: inline-flex;
@@ -512,8 +512,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-stream-mode-option:has(in
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section:not(.collapsed) #identitySummary,
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section:not(.collapsed) #groupIdentitySummary {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(#identitySummary, #groupIdentitySummary) {
     display: none;
 }
 
@@ -662,7 +661,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .toggle-icon {
     width: 16px;
     height: 16px;
     display: inline-block;
-    transition: transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section.collapsed .toggle-icon,
@@ -685,10 +684,10 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content 
     padding: 0 10px;
     overflow: hidden;
     pointer-events: none;
-    transition: grid-template-rows 140ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 100ms ease,
-                padding 140ms cubic-bezier(0.2, 0, 0, 1),
-                visibility 0s 140ms;
+    transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                visibility 0s 220ms;
     will-change: grid-template-rows, opacity;
 }
 
@@ -699,9 +698,9 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section:not(.col
     visibility: visible;
     pointer-events: auto;
     padding: 2px 10px 8px 10px;
-    transition: grid-template-rows 140ms cubic-bezier(0.2, 0, 0, 1),
-                opacity 120ms ease,
-                padding 140ms cubic-bezier(0.2, 0, 0, 1),
+    transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 visibility 0s 0s;
 }
 
@@ -710,6 +709,17 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-content 
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+}
+
+/* Identity section: permanent in-place card container */
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed .agent-settings-section-content,
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed .group-settings-section-content {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    padding: 2px 10px 8px 10px;
+    overflow: visible;
 }
 
 /* Agent and Group identity custom slots: seamless in-place transition. */
@@ -750,17 +760,36 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .
     border-color: var(--highlight-text);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container .agent-style-collapsible-container {
-    margin: 4px 0 0;
-    padding: 4px 0 0;
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section[data-section-key="identity"] .group-settings-field-shell,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section[data-section-key="identity"] .agent-style-collapsible-container {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+    overflow: hidden;
+    margin-top: 6px;
+    padding-top: 8px;
     border-top: 0.5px solid var(--vcp-settings-border);
-    background: transparent;
+    transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                margin-top 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                padding-top 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 180ms ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell .group-settings-field-shell {
-    border-top: 0.5px solid var(--vcp-settings-border);
-    margin-top: 4px;
-    padding-top: 8px;
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"].collapsed :is(.group-settings-field-shell, .agent-style-collapsible-container) {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    margin-top: 0;
+    padding-top: 0;
+    border-top-color: transparent;
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"] :is(.group-settings-field-shell, .agent-style-collapsible-container) > * {
+    min-height: 0;
+    overflow: hidden;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) {
@@ -832,11 +861,14 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .grou
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) :is(.agent-name-wrapper, .group-name-wrapper) {
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
     gap: 0;
 }
 
@@ -844,30 +876,31 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-
     display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"] {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"] {
     width: 100%;
     margin: 0;
     height: 30px;
     min-height: 30px;
-    padding: 0 8px;
+    max-height: 30px;
+    padding: 0 10px;
     border-radius: 8px;
     border: 0.5px solid var(--vcp-settings-border);
     background: color-mix(in srgb, var(--vcp-settings-surface) 85%, var(--vcp-settings-input));
     color: var(--vcp-settings-text, var(--primary-text));
     font-size: 1.18em;
     font-weight: 600;
-    line-height: 1.2;
+    line-height: 28px;
     box-sizing: border-box;
     outline: none;
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:hover {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:hover {
     border-color: color-mix(in srgb, var(--highlight-text) 45%, var(--vcp-settings-border));
     background-color: var(--vcp-settings-surface);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:focus {
+html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:focus {
     border-color: var(--vcp-settings-accent, var(--highlight-text, #3b82f6));
     background-color: var(--vcp-settings-surface);
     outline: none;
@@ -1886,24 +1919,99 @@ html .vcp-ui-scope .vcp-settings-schema-surface #memberTagsInputs {
     min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item,
-html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item {
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item {
     display: flex;
     align-items: center;
     min-width: 0;
-    gap: 6px;
-    padding: 4px 8px;
-    min-height: 28px;
+    gap: 8px;
+    padding: 6px 10px;
+    min-height: 32px;
     border: 0.5px solid var(--vcp-settings-border);
     border-radius: var(--vcp-settings-radius, 8px);
     color: var(--vcp-settings-text);
     background: color-mix(in srgb, var(--vcp-settings-surface) 82%, transparent);
-    font-size: 11.5px;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item:hover {
+    border-color: color-mix(in srgb, var(--highlight-text) 35%, var(--vcp-settings-border));
+    background: color-mix(in srgb, var(--vcp-settings-surface) 92%, transparent);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item input[type="checkbox"] {
+    margin: 0;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    flex: 0 0 14px;
+    cursor: pointer;
+    accent-color: var(--highlight-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item label,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+    margin: 0;
+    padding: 0;
+    color: var(--vcp-settings-text);
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item .avatar-small {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    flex: 0 0 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    margin: 0;
+    border: 1px solid color-mix(in srgb, var(--highlight-text) 18%, transparent);
+    box-sizing: border-box;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--vcp-settings-text);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+    padding: 5px 8px;
+    min-height: 32px;
+    border: 0.5px solid var(--vcp-settings-border);
+    border-radius: var(--vcp-settings-radius, 8px);
+    color: var(--vcp-settings-text);
+    background: color-mix(in srgb, var(--vcp-settings-surface) 82%, transparent);
+    box-sizing: border-box;
+    font-size: 12px;
     cursor: grab;
     user-select: none;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item:hover {
+    border-color: color-mix(in srgb, var(--highlight-text) 35%, var(--vcp-settings-border));
+    background: color-mix(in srgb, var(--vcp-settings-surface) 92%, transparent);
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item:active {
@@ -1922,12 +2030,16 @@ html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item.d
     transition: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item label,
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-name {
     min-width: 0;
     flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
     color: var(--vcp-settings-text);
-    font-size: 11.5px;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .group-member-tags-shell {
@@ -2008,9 +2120,14 @@ html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input:not
 html .vcp-ui-scope .vcp-settings-schema-surface .avatar-small {
     width: 20px;
     height: 20px;
+    min-width: 20px;
+    min-height: 20px;
     flex: 0 0 20px;
     border-radius: 50%;
     object-fit: cover;
+    display: block;
+    margin: 0;
+    box-sizing: border-box;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-drag-handle {
