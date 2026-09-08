@@ -611,6 +611,27 @@ class VCPLoomManager {
         };
     }
 
+    async createPersistentWebAgentTarget(appId, target, context = {}) {
+        const instance = await this.ensureWebAgentRuntime(this.getRunningInstance(appId));
+        const serializedTarget = JSON.stringify(target);
+        const serializedContext = JSON.stringify(context);
+        return instance.view.webContents.executeJavaScriptInIsolatedWorld(
+            WEB_AGENT_WORLD_ID,
+            [{
+                code: `(() => {
+                    const runtime = globalThis.__vcpLoomWebAgentRuntime;
+                    if (!runtime) throw new Error('Loom Web Agent Runtime 尚未初始化');
+                    return runtime.createPersistentTarget(
+                        ${serializedTarget},
+                        ${serializedContext}
+                    );
+                })()`,
+                url: 'vcp-loom-webcore://skill/persist-target.js',
+            }],
+            true
+        );
+    }
+
     normalizeLoomActionId(actionId) {
         const input = String(actionId || '').trim();
         const resolved = webAgentCore.protocol.resolveCommand(input);
@@ -652,6 +673,18 @@ class VCPLoomManager {
         if (!isPlainObject(params)) throw new Error('Loom Web Agent 动作 params 必须是对象。');
         if (!isPlainObject(options)) throw new Error('Loom Web Agent 动作 options 必须是对象。');
 
+        // 兼容自然语言工具常用的单数 key，以及历史上误生成的
+        // page_press/press 动作别名；页面运行时统一消费 keys。
+        const normalizedParams = { ...params };
+        if (
+            action === 'page_send_keys'
+            && normalizedParams.keys === undefined
+            && normalizedParams.key !== undefined
+        ) {
+            normalizedParams.keys = normalizedParams.key;
+            delete normalizedParams.key;
+        }
+
         if (!instance.webAgentRuntime) {
             throw new Error('Loom Web Agent 后端运行时尚未初始化。');
         }
@@ -661,9 +694,9 @@ class VCPLoomManager {
                 adapter: 'electron-loom',
                 targetId: instance.view.webContents.id,
                 appId: instance.appId,
-                ...(isPlainObject(params.targetContext) ? params.targetContext : {}),
+                ...(isPlainObject(normalizedParams.targetContext) ? normalizedParams.targetContext : {}),
             },
-            params,
+            params: normalizedParams,
             options,
             metadata: {
                 source: 'LoomController',
@@ -1704,6 +1737,26 @@ class VCPLoomManager {
         return null;
     }
 
+    async openSkillManagerInCanvas(instance = null) {
+        const skillsRoot = path.join(this.appDataRoot, 'LoomSkills');
+        await fs.ensureDir(skillsRoot);
+        const canvasHandlers = require('../ipc/canvasHandlers');
+        await canvasHandlers.createCanvasWindow({
+            rootDir: skillsRoot,
+            context: 'loom-skill',
+            metadata: {
+                appId: instance?.appId || null,
+                title: 'Loom Skill',
+            },
+        });
+        return {
+            success: true,
+            appId: instance?.appId || null,
+            rootDir: skillsRoot,
+            context: 'loom-skill',
+        };
+    }
+
     async navigate(instance, action) {
         const contents = instance.view.webContents;
         if (contents.isDestroyed()) return;
@@ -2001,6 +2054,8 @@ class VCPLoomManager {
         handle('loom:get-runtime-source', (_event, appId) => this.readRuntimeSource(appId));
         handle('loom:get-rendered-text', (_event, appId, options) => this.readRenderedText(appId, options));
         handle('loom:get-web-agent-page-info', (_event, appId) => this.getWebAgentPageInfo(appId));
+        handle('loom:create-persistent-web-agent-target', (_event, appId, target, context) =>
+            this.createPersistentWebAgentTarget(appId, target, context));
         handle('loom:execute-web-agent-action', (_event, appId, actionId, params, options) =>
             this.executeWebAgentAction(appId, actionId, params, options));
         handle('loom:create-app', (_event, payload) => this.createApp(payload));
@@ -2015,6 +2070,7 @@ class VCPLoomManager {
         handle('loom:open-manager', () => this.openManager());
         handle('loom:export-app', (_event, appId) => this.exportApp(appId));
         handle('loom:import-app', () => this.importApp());
+        handle('loom:open-skill-manager', () => this.openSkillManagerInCanvas());
         handle('loom:open-app-folder', async (_event, appId) => {
             const error = await shell.openPath(this.appDir(appId));
             if (error) throw new Error(error);
@@ -2048,6 +2104,8 @@ class VCPLoomManager {
                 return this.selectDeviceFromShell(instance, payload);
             } else if (action === 'open-external') {
                 await shell.openExternal(instance.view.webContents.getURL());
+            } else if (action === 'open-skill-manager') {
+                return this.openSkillManagerInCanvas(instance);
             } else {
                 throw new Error(`不支持的壳操作：${action}`);
             }

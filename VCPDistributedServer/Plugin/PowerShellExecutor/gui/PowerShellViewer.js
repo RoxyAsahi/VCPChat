@@ -88,7 +88,8 @@ async function pasteFromClipboard() {
     try {
         const text = await window.electronAPI.invoke('read-from-clipboard');
         if (text) {
-            window.electronAPI.send('powershell-input', text);
+            // 统一经过 xterm 的 paste 状态机，以支持 TUI 开启的 bracketed-paste 模式。
+            term.paste(text);
             term.focus();
         }
     } catch (error) {
@@ -194,9 +195,24 @@ function handleContextMenuAction(action) {
 
 if (window.electronAPI) {
     // --- 查询可见文本 ---
-    window.electronAPI.on('query-visible-text', ({ maxLines }) => {
+    window.electronAPI.on('query-visible-text', (payload = {}) => {
+        const { requestId = null, maxLines = null } = payload;
         const text = extractVisibleText(maxLines);
-        window.electronAPI.send('visible-text-response', text);
+        window.electronAPI.send('visible-text-response', { requestId, text });
+    });
+
+    // --- AI 串行交互请求的 xterm 原生粘贴 ---
+    window.electronAPI.on('terminal-paste-request', (payload = {}) => {
+        const { requestId, text } = payload;
+        if (!requestId || typeof text !== 'string') {
+            return;
+        }
+
+        // Terminal.paste 会依据当前 DECSET 2004 状态自动包裹 bracketed-paste
+        // 控制序列，并从 term.onData 走与真人粘贴完全相同的 PTY 输入链路。
+        term.paste(text);
+        term.focus();
+        window.electronAPI.send('terminal-paste-complete', { requestId });
     });
 
     // --- 数据、清屏与主题 ---
@@ -289,10 +305,9 @@ if (window.electronAPI) {
             return false;
         }
 
-        if (arg.ctrlKey && arg.shiftKey && arg.code === 'KeyV') {
-            pasteFromClipboard();
-            return false;
-        }
+        // Ctrl+V / Ctrl+Shift+V 不在这里手动读取剪贴板。
+        // xterm 会通过隐藏 textarea 的原生 paste 事件接收内容，并由 term.onData
+        // 转发给 PTY；若这里再调用 pasteFromClipboard，会把同一内容发送两遍。
 
         if (arg.ctrlKey && arg.code === 'KeyC') {
             if (term.hasSelection()) {
@@ -301,11 +316,6 @@ if (window.electronAPI) {
             }
 
             return true; // 无选区时保留终端原生 Ctrl+C 中断行为
-        }
-
-        if (arg.ctrlKey && arg.code === 'KeyV') {
-            pasteFromClipboard();
-            return false;
         }
 
         if (arg.ctrlKey && arg.code === 'KeyL') {

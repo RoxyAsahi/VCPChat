@@ -1,15 +1,55 @@
 'use strict';
 
+const path = require('path');
+const {
+    LoomSkillService,
+    normalizePlaceholders,
+} = require('./LoomSkillService');
+let skillService = null;
+
+const DIRECT_ACTION_COMMANDS = Object.freeze(new Set([
+    'click',
+    'type',
+    'set_value',
+    'send_keys',
+    'press',
+    'page_press',
+    'select_option',
+    'check',
+    'hover',
+    'scroll',
+    'wait_for',
+    'query_html',
+    'query_js',
+    'page_code_search',
+    'execute_script',
+    'capture_screenshot',
+]));
+
+const ACTION_ID_ALIASES = Object.freeze({
+    press: 'send_keys',
+    page_press: 'send_keys',
+});
+
 let runtime = {
     loomManager: null,
     logger: console,
 };
 
 function initialize(options = {}) {
+    skillService?.dispose();
     runtime = {
         loomManager: options.services?.loomManager || options.loomManager || null,
         logger: options.logger || console,
     };
+    skillService = new LoomSkillService({
+        root: options.skillsRoot || path.join(
+            runtime.loomManager?.appDataRoot || path.resolve(__dirname, '../../../AppData'),
+            'LoomSkills'
+        ),
+        execute: processToolCall,
+        compile: compileSkill,
+    });
 }
 
 function requireManager() {
@@ -81,7 +121,10 @@ function parseWaitMs(args = {}) {
     if (!Number.isFinite(parsed) || parsed < 0) {
         throw new Error('[LoomController] wait 时长必须是非负数。');
     }
-    return Math.min(Math.round(parsed), 30000);
+    if (parsed > 2147483647) {
+        throw new Error('[LoomController] wait 时长超过 JavaScript 定时器安全范围。');
+    }
+    return Math.round(parsed);
 }
 
 function delay(waitMs) {
@@ -122,12 +165,15 @@ function extractSerialStepArgs(rawArgs, index) {
 
 function buildSerialActionArgs(command, stepArgs) {
     const explicit = command.toLowerCase() === 'executeaction';
-    const actionId = explicit
+    const requestedActionId = explicit
         ? requireActionId(stepArgs)
         : command;
-    const params = parseObject(stepArgs.params ?? stepArgs.actionParams, 'params');
-    const options = parseObject(stepArgs.options ?? stepArgs.actionOptions, 'options');
+    const normalizedRequestedActionId = requestedActionId.toLowerCase();
+    const actionId = ACTION_ID_ALIASES[normalizedRequestedActionId] || requestedActionId;
+    const params = { ...parseObject(stepArgs.params ?? stepArgs.actionParams, 'params') };
+    const options = { ...parseObject(stepArgs.options ?? stepArgs.actionOptions, 'options') };
     const reserved = new Set([
+        'command', 'action', 'commandIdentifier', 'tool_name', 'maid',
         'appId', 'app_id', 'id',
         'actionId', 'action_id', 'webAction',
         'params', 'actionParams', 'options', 'actionOptions',
@@ -149,11 +195,203 @@ function buildSerialActionArgs(command, stepArgs) {
         }
     }
 
+    if (
+        actionId.toLowerCase() === 'send_keys'
+        && params.keys === undefined
+        && params.key !== undefined
+    ) {
+        params.keys = params.key;
+        delete params.key;
+    }
+
     return {
         appId: requireAppId(stepArgs),
         actionId,
         params,
         options,
+    };
+}
+
+function hasTemplate(value) {
+    return typeof value === 'string' && /\{\{[A-Za-z_][A-Za-z0-9_]{0,63}\}\}/.test(value);
+}
+
+function normalizeSkillStep(entry, rawArgs) {
+    const stepArgs = extractSerialStepArgs(rawArgs, entry.index);
+    const normalized = entry.command.toLowerCase();
+    if (['wait', 'sleep', 'delay'].includes(normalized)) {
+        return { index: entry.index, command: 'wait', waitMs: parseWaitMs(stepArgs) };
+    }
+    const business = {
+        openapp: 'OpenApp',
+        closeapp: 'CloseApp',
+        getpageinfo: 'GetPageInfo',
+        get_page_info: 'GetPageInfo',
+        page_get_info: 'GetPageInfo',
+        getrenderedtext: 'GetRenderedText',
+        getpageimage: 'GetPageImage',
+        get_page_image: 'GetPageImage',
+        page_get_image: 'GetPageImage',
+    };
+    if (business[normalized]) {
+        const params = { ...stepArgs };
+        delete params.appId;
+        delete params.app_id;
+        if (business[normalized] === 'OpenApp' || business[normalized] === 'CloseApp') {
+            return {
+                index: entry.index,
+                command: business[normalized],
+                appId: requireAppId(stepArgs),
+            };
+        }
+        return { index: entry.index, command: business[normalized], params };
+    }
+    const built = buildSerialActionArgs(entry.command, stepArgs);
+    return {
+        index: entry.index,
+        command: built.actionId,
+        params: built.params,
+        options: built.options,
+    };
+}
+
+function trialInputs(placeholders) {
+    const definitions = parseObject(placeholders, 'placeholders');
+    const inputs = {};
+    for (const [name, raw] of Object.entries(definitions)) {
+        const definition = typeof raw === 'string' ? {} : raw;
+        if (definition?.example !== undefined) inputs[name] = definition.example;
+        else if (definition?.default !== undefined) inputs[name] = definition.default;
+    }
+    return inputs;
+}
+
+function substituteTrialValue(value, inputs) {
+    if (typeof value === 'string') {
+        const exact = value.match(/^\{\{([A-Za-z_][A-Za-z0-9_]{0,63})\}\}$/);
+        if (exact) {
+            if (!Object.prototype.hasOwnProperty.call(inputs, exact[1])) {
+                throw new Error(`试跑缺少占位符 ${exact[1]} 的 example 或 default。`);
+            }
+            return inputs[exact[1]];
+        }
+        return value.replace(/\{\{([A-Za-z_][A-Za-z0-9_]{0,63})\}\}/g, (_token, name) => {
+            if (!Object.prototype.hasOwnProperty.call(inputs, name)) {
+                throw new Error(`试跑缺少占位符 ${name} 的 example 或 default。`);
+            }
+            return String(inputs[name]);
+        });
+    }
+    if (Array.isArray(value)) return value.map(item => substituteTrialValue(item, inputs));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+            key, substituteTrialValue(item, inputs),
+        ]));
+    }
+    return value;
+}
+
+async function executeCompiledSkillStep(step, appId, inputs) {
+    if (step.command === 'wait') {
+        await delay(step.waitMs);
+        return { waited: step.waitMs };
+    }
+    const resolved = substituteTrialValue(step, inputs);
+    return processToolCall({
+        command: resolved.command,
+        appId: resolved.appId || appId,
+        ...(resolved.params || {}),
+        ...(resolved.options || {}),
+    });
+}
+
+async function compileSkill(rawArgs) {
+    const entries = getSerialCommandEntries(rawArgs);
+    if (!entries.length) throw new Error('CreateSkill/EditSkill 需要 command1、command2 等串语法步骤。');
+    const appId = firstNonEmptyString(rawArgs.appId, rawArgs.app_id, rawArgs.id);
+    if (!appId) throw new Error('CreateSkill 缺少公共 appId。');
+    const steps = entries.map(entry => normalizeSkillStep(entry, rawArgs));
+    // 显式试跑可能产生真实副作用，因此必须先校验整条链的全部占位符，
+    // 不能运行到后续步骤才发现变量未声明。
+    const placeholderValidation = normalizePlaceholders(rawArgs.placeholders, steps);
+    const validationMode = String(rawArgs.validationMode || 'current').toLowerCase();
+    if (!['current', 'trial', 'none'].includes(validationMode)) {
+        throw new Error('validationMode 必须为 current、trial 或 none。');
+    }
+    const inputs = trialInputs(rawArgs.placeholders);
+    const targetResults = [];
+    let currentAppId = appId;
+    const trialResults = [];
+    for (const step of steps) {
+        if (step.appId) currentAppId = step.appId;
+        const target = step.params?.target;
+        if (target !== undefined) {
+            if (hasTemplate(target)) throw new Error(`步骤 ${step.index} 的 target 不允许使用输入占位符。`);
+            if (validationMode !== 'none') {
+                try {
+                    const persistent = await requireManager().createPersistentWebAgentTarget(
+                        currentAppId,
+                        target,
+                        {
+                            runtimeInstanceId: step.params.runtimeInstanceId,
+                            documentGeneration: step.params.documentGeneration,
+                            snapshotId: step.params.snapshotId,
+                            strict: true,
+                        }
+                    );
+                    step.params.target = persistent;
+                    delete step.params.runtimeInstanceId;
+                    delete step.params.documentGeneration;
+                    delete step.params.snapshotId;
+                    targetResults.push({
+                        index: step.index,
+                        originalTarget: target,
+                        validated: true,
+                        fallback: null,
+                        persistentTarget: persistent,
+                    });
+                } catch (error) {
+                    // 非试跑创建允许保留 Agent 已验证过的原始 VCP 句柄作为低可靠性兜底。
+                    // 它不会被宣称为持久定位，跨文档代次失效时执行会在该步骤明确停止。
+                    if (validationMode === 'trial') throw error;
+                    targetResults.push({
+                        index: step.index,
+                        originalTarget: target,
+                        validated: false,
+                        fallback: /^vcp-/i.test(String(target)) ? 'raw-vcp-id' : 'raw-target',
+                        warning: error.message,
+                    });
+                }
+            } else {
+                targetResults.push({
+                    index: step.index,
+                    originalTarget: target,
+                    validated: false,
+                    fallback: /^vcp-/i.test(String(target)) ? 'raw-vcp-id' : 'raw-target',
+                    warning: '已按 validationMode=none 跳过 DOM 验证。',
+                });
+            }
+        }
+        if (validationMode === 'trial') {
+            const output = await executeCompiledSkillStep(step, currentAppId, inputs);
+            trialResults.push({ index: step.index, command: step.command, success: true, output });
+        }
+    }
+    return {
+        appId,
+        steps,
+        validation: {
+            placeholders: {
+                configured: Object.keys(placeholderValidation.definitions),
+                used: placeholderValidation.used,
+                valid: placeholderValidation.valid,
+            },
+            targets: targetResults,
+            executed: validationMode === 'trial',
+            trialResults,
+            mode: validationMode,
+            valid: targetResults.every(item => item.validated) || validationMode === 'none',
+        },
     };
 }
 
@@ -198,12 +436,13 @@ async function processSerialToolCall(rawArgs) {
                 continue;
             }
 
-            let output;
-            if (['getpageinfo', 'get_page_info', 'page_get_info'].includes(normalized)) {
-                output = await getPageInfo(stepArgs);
-            } else {
-                output = await executeAction(buildSerialActionArgs(entry.command, stepArgs));
-            }
+            const businessCommands = new Set([
+                'openapp', 'closeapp', 'getpageinfo', 'get_page_info', 'page_get_info',
+                'getrenderedtext', 'getpageimage', 'get_page_image', 'page_get_image',
+            ]);
+            const output = businessCommands.has(normalized)
+                ? await processToolCall({ ...stepArgs, command: entry.command })
+                : await executeAction(buildSerialActionArgs(entry.command, stepArgs));
             steps.push({
                 index: entry.index,
                 command: entry.command,
@@ -519,9 +758,18 @@ async function getPageImage(args) {
 
 async function executeAction(args) {
     const appId = requireAppId(args);
-    const actionId = requireActionId(args);
-    const params = parseObject(args.params ?? args.actionParams, 'params');
-    const options = parseObject(args.options ?? args.actionOptions, 'options');
+    const requestedActionId = requireActionId(args);
+    const actionId = ACTION_ID_ALIASES[requestedActionId.toLowerCase()] || requestedActionId;
+    const params = { ...parseObject(args.params ?? args.actionParams, 'params') };
+    const options = { ...parseObject(args.options ?? args.actionOptions, 'options') };
+    if (
+        actionId.toLowerCase() === 'send_keys'
+        && params.keys === undefined
+        && params.key !== undefined
+    ) {
+        params.keys = params.key;
+        delete params.key;
+    }
     const execution = await requireManager().executeWebAgentAction(
         appId,
         actionId,
@@ -593,11 +841,11 @@ async function processToolCall(rawArgs = {}) {
         throw new Error('[LoomController] 无效的工具参数。');
     }
 
-    if (getSerialCommandEntries(rawArgs).length) {
+    const command = normalizeCommand(rawArgs);
+    // Skill 创建/编辑携带的 command1... 是待编译内容，不能进入普通串行执行。
+    if (getSerialCommandEntries(rawArgs).length && !['createskill', 'editskill'].includes(command)) {
         return processSerialToolCall(rawArgs);
     }
-
-    const command = normalizeCommand(rawArgs);
     switch (command) {
         case 'listapps':
             return listApps();
@@ -616,7 +864,33 @@ async function processToolCall(rawArgs = {}) {
         case 'getrenderedtext':
             return getRenderedText(rawArgs);
         case 'getpageinfo':
+        case 'get_page_info':
+        case 'page_get_info':
             return getPageInfo(rawArgs);
+        case 'createskill':
+        case 'editskill':
+        case 'manageskill':
+        case 'executeskill':
+        case 'getskilltask': {
+            if (!skillService) throw new Error('Skill 服务尚未初始化。');
+            let result;
+            if (command === 'createskill') result = await skillService.save(rawArgs);
+            if (command === 'editskill') result = await skillService.save(rawArgs, true);
+            if (command === 'manageskill') result = await skillService.manage(rawArgs);
+            if (command === 'executeskill') result = await skillService.run(rawArgs);
+            if (command === 'getskilltask') result = skillService.query(rawArgs.taskId);
+            if (command === 'executeskill' && rawArgs.mode === 'async') {
+                return textResult(result.taskId, { taskId: result.taskId });
+            }
+            const response = textResult(jsonText(result), result);
+            if (Array.isArray(result.content) && result.content.length) {
+                response.content = [
+                    { type: 'text', text: `Skill ${result.status}；完成 ${result.completedCount} 步${result.error ? `；${result.error}` : ''}` },
+                    ...result.content,
+                ];
+            }
+            return response;
+        }
         case 'getpageimage':
         case 'get_page_image':
         case 'page_get_image':
@@ -626,13 +900,18 @@ async function processToolCall(rawArgs = {}) {
         case 'editappsources':
             return editAppSources(rawArgs);
         default:
+            if (DIRECT_ACTION_COMMANDS.has(command)) {
+                return executeAction(buildSerialActionArgs(command, rawArgs));
+            }
             throw new Error(
-                '[LoomController] 不支持的 command。可用值：ListApps、ListOpenApps、CreateApp、OpenApp、CloseApp、GetAppSources、GetRuntimeSource、GetRenderedText、GetPageInfo、GetPageImage、ExecuteAction、EditAppSources。'
+                '[LoomController] 不支持的 command。可用值：ListApps、ListOpenApps、CreateApp、OpenApp、CloseApp、GetAppSources、GetRuntimeSource、GetRenderedText、GetPageInfo、GetPageImage、click、type、send_keys、press、scroll、wait_for 等页面命令、ExecuteAction、EditAppSources。'
             );
     }
 }
 
 function resetForTests() {
+    skillService?.dispose();
+    skillService = null;
     runtime = {
         loomManager: null,
         logger: console,
@@ -643,6 +922,8 @@ module.exports = {
     initialize,
     processToolCall,
     _test: {
+        DIRECT_ACTION_COMMANDS,
+        ACTION_ID_ALIASES,
         normalizeCommand,
         requireActionId,
         requireImageId,
@@ -651,6 +932,7 @@ module.exports = {
         getSerialCommandEntries,
         extractSerialStepArgs,
         buildSerialActionArgs,
+        compileSkill,
         resetForTests,
     },
 };
