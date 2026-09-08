@@ -188,8 +188,12 @@ html .vcp-ui-scope .vcp-settings-schema-surface .settings-form-group {
     min-width: 0;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface label,
-html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-field-label {
+html .vcp-ui-scope .vcp-settings-schema-surface label:not(.switch):not(.agent-stream-mode-option):not(.avatar-upload-overlay),
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-field-label,
+html .vcp-ui-scope .preset-section-label {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
     min-width: 0;
     color: var(--vcp-settings-muted);
     font-size: 11px;
@@ -2079,8 +2083,6 @@ html .vcp-ui-scope .vcp-settings-schema-surface .vcp-settings-info-badge {
     max-height: 13px;
     margin-left: 5px;
     vertical-align: middle;
-    position: relative;
-    top: -1.5px;
     padding: 0;
     border: 0.5px solid var(--vcp-settings-border);
     border-radius: 50%;
