@@ -115,6 +115,7 @@ function makeHelpBadge(doc, tooltipText) {
     const badge = el(doc, 'button', {
         type: 'button',
         class: 'vcp-settings-info-badge',
+        title: tooltipText || '提示说明',
         'aria-label': tooltipText || '提示说明',
         'data-tooltip': tooltipText,
     }, '?');
@@ -167,7 +168,7 @@ const SECTION_ICONS = {
     mode: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM11.5 6a2 2 0 100-4 2 2 0 000 4zM6 7c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM11.5 8c-.37 0-.77.03-1.19.09 1.02.73 1.69 1.7 1.69 2.91v2H16v-2c0-1.63-2.9-2.9-4.5-3z" fill="currentColor"/></svg>',
 };
 
-function renderSection(doc, { kind, key, title, summaryId, content, contentId, sectionClass }) {
+function renderSection(doc, { kind, key, title, tooltip, summaryId, content, contentId, sectionClass }) {
     const prefix = kind === 'agent' ? 'agent' : 'group';
     const section = el(doc, 'section', {
         class: `${prefix}-settings-collapsible-container ${prefix}-settings-section collapsed${sectionClass ? ' ' + sectionClass : ''}`,
@@ -201,6 +202,9 @@ function renderSection(doc, { kind, key, title, summaryId, content, contentId, s
         titleChildren.push(iconWrapper);
     }
     titleChildren.push(el(doc, 'span', { class: `${prefix}-settings-section-title` }, title));
+    if (tooltip) {
+        titleChildren.push(makeHelpBadge(doc, tooltip));
+    }
     const titleRow = el(doc, 'div', { class: `${prefix}-settings-section-title-row` }, titleChildren);
     header.append(titleRow, summary, toggle);
     const contentNode = el(doc, 'div', { class: `${prefix}-settings-section-content`, id: contentId || `${kind === 'agent' ? '' : 'group'}${key[0].toUpperCase()}${key.slice(1)}Content` });
@@ -361,7 +365,7 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     const form = el(doc, 'form', { id: 'agentSettingsForm', novalidate: true });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingAgentId', name: 'agentId' }));
     form.append(renderSection(doc, { kind: 'agent', key: 'identity', title: '基础信息', summaryId: 'identitySummary', content: renderAgentIdentity }));
-    form.append(renderSection(doc, { kind: 'agent', key: 'prompt', title: '系统提示词', summaryId: 'promptSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell agent-settings-prompt-shell' }, el(d, 'div', { class: 'prompt-section-note' }, '三个模块独立编辑后，注意保存以生效'), el(d, 'div', { id: 'systemPromptContainer', class: 'system-prompt-container' })) }));
+    form.append(renderSection(doc, { kind: 'agent', key: 'prompt', title: '系统提示词', tooltip: '三个模块独立编辑后，注意保存以生效', summaryId: 'promptSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell agent-settings-prompt-shell' }, el(d, 'div', { id: 'systemPromptContainer', class: 'system-prompt-container' })) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'model', title: '模型设置', summaryId: 'modelSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell agent-settings-model-shell' }, el(d, 'div', { class: 'model-input-container' }, renderControl(d, agentFields[1]), el(d, 'button', { type: 'button', id: 'openModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '选择模型' }, el(d, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more')))) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'params', title: '模型参数配置', summaryId: 'paramsSummary', content: renderAgentParams }));
     form.append(renderSection(doc, { kind: 'agent', key: 'tts', title: '语音设置', summaryId: 'ttsSummary', content: renderAgentTts }));

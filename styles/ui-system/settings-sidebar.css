@@ -354,7 +354,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title-ro
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title,
 html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title {
     min-width: 0;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     color: var(--highlight-text);
     font-size: 13px;
     font-weight: 500;
@@ -366,6 +366,11 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-settings-section-title-row .vcp-settings-info-badge,
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section-title-row .vcp-settings-info-badge {
+    margin-left: 0;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .section-title-icon-wrapper {
