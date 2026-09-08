@@ -246,7 +246,9 @@
             row.className = 'member-tag-input-item';
             const label = doc.createElement('label');
             label.htmlFor = `tags_for_${agentId}`;
-            label.textContent = `${agent.name || agent.id} Tags:`;
+            const agentName = agent.name || agent.id;
+            label.textContent = agentName;
+            label.title = agentName;
             const input = doc.createElement('input');
             input.type = 'text';
             input.id = `tags_for_${agentId}`;

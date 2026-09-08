@@ -1966,12 +1966,29 @@ html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item.d
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item label,
-html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item label,
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-name {
     min-width: 0;
     flex: 1 1 auto;
     color: var(--vcp-settings-text);
     font-size: 11.5px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item label {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 88px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--vcp-settings-text);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .avatar-small {
