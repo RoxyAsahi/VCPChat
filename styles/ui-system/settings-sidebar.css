@@ -751,8 +751,8 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .
     isolation: isolate;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 6px 12px 10px 12px;
+    gap: 0;
+    padding: 6px 12px 8px 12px;
     margin: 0;
     border-radius: 12px;
     overflow: hidden;
@@ -798,7 +798,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .gr
     max-height: 600px;
     opacity: 1;
     margin-top: 6px;
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 0.5px solid var(--vcp-settings-border);
     overflow: visible;
     pointer-events: auto;
@@ -830,7 +830,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .
 html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-identity-shell .group-settings-field-shell,
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-identity-container .agent-style-collapsible-container {
     margin-top: 6px;
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 0.5px solid var(--vcp-settings-border);
 }
 
@@ -943,10 +943,10 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-main, .group-identity-main) :is(.agent-name-wrapper, .group-name-wrapper) input[type="text"]:focus {
-    border-color: var(--vcp-settings-accent, var(--highlight-text, #3b82f6));
+    border-color: var(--highlight-text);
     background-color: var(--vcp-settings-surface);
     outline: none;
-    box-shadow: 0 0 0 2px var(--vcp-ui-focus-ring, color-mix(in srgb, var(--vcp-settings-accent) 25%, transparent));
+    box-shadow: none;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-avatar-wrapper, .group-avatar-wrapper) > input[type="file"] {

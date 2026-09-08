@@ -203,13 +203,12 @@ try {
 
     console.log('[INFO] Testing focus state on Agent name input');
     await page.focus('#agentNameInput');
-    const nameFocusRing = await page.evaluate(() => {
+    const nameFocusBorder = await page.evaluate(() => {
         const input = document.querySelector('#agentNameInput');
-        const wrap = input?.closest('.vcp-uiux-input-wrap');
-        return wrap ? getComputedStyle(wrap).boxShadow : (input ? getComputedStyle(input).boxShadow : null);
+        return input ? getComputedStyle(input).borderColor : null;
     });
-    assert.ok(nameFocusRing && nameFocusRing !== 'none', 'Focus ring must appear on agentNameInput focus');
-    console.log('[PASS] Agent name input focus ring active');
+    assert.ok(nameFocusBorder && nameFocusBorder !== 'rgba(0, 0, 0, 0)', 'Focus border must appear on agentNameInput focus');
+    console.log('[PASS] Agent name input focus state active');
 
     console.log('[INFO] Testing style collapse accordion interaction');
     const collapseContainer = '#agentSettingsForm .agent-style-collapsible-container';
