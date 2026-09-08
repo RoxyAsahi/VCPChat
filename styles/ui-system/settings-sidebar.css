@@ -1929,7 +1929,6 @@ html .vcp-ui-scope .vcp-settings-schema-surface #memberTagsInputs {
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .group-member-item,
-html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item,
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-order-item {
     display: flex;
     align-items: center;
@@ -1973,22 +1972,79 @@ html .vcp-ui-scope .vcp-settings-schema-surface .sequential-speaker-name {
     font-size: 11.5px;
 }
 
+html .vcp-ui-scope .vcp-settings-schema-surface .group-member-tags-shell {
+    margin-top: 10px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 8px;
+    padding: 0 8px;
+    height: var(--vcp-settings-control-height);
+    min-height: var(--vcp-settings-control-height);
+    border: 0.5px solid var(--vcp-settings-border);
+    border-radius: var(--vcp-settings-radius, 8px);
+    color: var(--vcp-settings-text);
+    background: var(--vcp-settings-input);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item:hover {
+    background-color: color-mix(in srgb, var(--vcp-settings-input) 80%, var(--vcp-settings-surface));
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item:focus-within {
+    border-color: var(--vcp-settings-accent, var(--highlight-text));
+}
+
 html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item label {
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 88px;
+    max-width: 84px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--vcp-settings-text);
     font-size: 11.5px;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 1;
+    user-select: none;
+    cursor: default;
+    padding-right: 8px;
+    border-right: 0.5px solid var(--vcp-settings-border);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input {
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input:not([type="checkbox"]):not([type="radio"]):not([type="color"]) {
     flex: 1 1 0;
     min-width: 0;
+    height: 100%;
+    min-height: 0;
+    line-height: var(--vcp-settings-control-height);
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--vcp-settings-text);
+    padding: 0;
+    font-size: 11.5px;
+    box-sizing: border-box;
+    box-shadow: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):hover {
+    background: transparent;
+    background-color: transparent;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible {
+    border: none;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    background-color: transparent;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .avatar-small {
