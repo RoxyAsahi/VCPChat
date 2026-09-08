@@ -2078,7 +2078,9 @@ html .vcp-ui-scope .vcp-settings-schema-surface .vcp-settings-info-badge {
     min-height: 13px;
     max-height: 13px;
     margin-left: 5px;
-    vertical-align: -1px;
+    vertical-align: middle;
+    position: relative;
+    top: -1.5px;
     padding: 0;
     border: 0.5px solid var(--vcp-settings-border);
     border-radius: 50%;
