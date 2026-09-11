@@ -30,6 +30,37 @@ window.GroupRenderer = (() => {
     // State for group settings
     let availableAgentsForGroup = []; // To populate member selection
     const groupSectionControllers = new Map();
+    let groupSettingsGeneration = 0;
+    let groupSettingsReady = false;
+    let groupSlotsLoadPromise = null;
+
+    function ensureGroupSlotsBridge() {
+        if (window.VCPGroupSettingsSlots) return Promise.resolve(true);
+        if (groupSlotsLoadPromise) return groupSlotsLoadPromise;
+
+        // main.html 同步加载插槽脚本。这里仅容忍正在完成的脚本执行，
+        // 不由业务 Renderer 动态创建 DOM 或注入第二份脚本。
+        groupSlotsLoadPromise = new Promise(resolve => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                window.removeEventListener('vcp-group-settings-slots-ready', onReady);
+                clearTimeout(timeoutId);
+                resolve(Boolean(window.VCPGroupSettingsSlots));
+            };
+            const onReady = () => finish();
+            const timeoutId = setTimeout(finish, 1000);
+            window.addEventListener('vcp-group-settings-slots-ready', onReady, { once: true });
+            queueMicrotask(() => {
+                if (window.VCPGroupSettingsSlots) finish();
+            });
+        }).finally(() => {
+            if (!window.VCPGroupSettingsSlots) groupSlotsLoadPromise = null;
+        });
+
+        return groupSlotsLoadPromise;
+    }
 
     function setCurrentItemActionButtonText(button, text) {
         if (!button) return;
@@ -86,8 +117,12 @@ window.GroupRenderer = (() => {
 
     function ensureGroupSettingsDOM() {
         const settingsTab = document.getElementById('tabContentSettings');
-        if (!settingsTab || !window.VCPGroupSettingsSlots) {
-            console.error("[GroupRenderer] Could not find tabContentSettings to append group settings DOM.");
+        if (!settingsTab) {
+            console.error("[GroupRenderer] tabContentSettings is not currently attached.");
+            return false;
+        }
+        if (!window.VCPGroupSettingsSlots) {
+            console.warn("[GroupRenderer] Group settings slots are not ready.");
             return false;
         }
         groupSettingsContainer = window.VCPGroupSettingsSlots.ensureSettingsSurface({ document, settingsTab });
@@ -151,6 +186,24 @@ window.GroupRenderer = (() => {
         groupPromptTextarea = getGroupControl('groupPrompt');
         invitePromptTextarea = getGroupControl('invitePrompt');
         deleteGroupBtn = getGroupControl('deleteGroupBtn'); // This is the button inside the group settings form
+
+        const requiredControls = [
+            groupSettingsForm,
+            groupNameInput,
+            groupAvatarInput,
+            groupAvatarPreview,
+            groupMembersListDiv,
+            groupChatModeSelect,
+            groupUseUnifiedModel,
+            groupUnifiedModelContainer,
+            groupUnifiedModelInput,
+            groupPromptTextarea,
+            invitePromptTextarea
+        ];
+        if (requiredControls.some(control => !control)) {
+            console.error('[GroupRenderer] Group settings surface is incomplete.');
+            return false;
+        }
         return true;
     }
 
@@ -404,9 +457,26 @@ window.GroupRenderer = (() => {
 
     async function displayGroupSettingsPage(groupId) {
         console.log('[GroupRenderer] displayGroupSettingsPage called for groupId:', groupId);
+        const generation = ++groupSettingsGeneration;
+        groupSettingsReady = false;
 
         const settingsSurface = window.VCPSettingsSidebar;
-        const viewToken = settingsSurface?.show?.('group', { id: groupId });
+        let viewToken = settingsSurface?.show?.('group', { id: groupId });
+
+        if (!window.VCPGroupSettingsSlots && !await ensureGroupSlotsBridge()) {
+            console.error('[GroupRenderer] Failed to load the group settings slots bridge.');
+            uiHelper?.showToastNotification?.('群组设置组件加载失败，请重新打开设置页面。', 'error');
+            return;
+        }
+        if (generation !== groupSettingsGeneration) return;
+
+        // Surface 可能在初始化阶段处于物理卸载状态；打开页面时必须重新挂载并解析。
+        viewToken = settingsSurface?.show?.('group', { id: groupId }) || viewToken;
+        if (!ensureGroupSettingsDOM()) {
+            console.error('[GroupRenderer] Group settings DOM is unavailable after surface activation.');
+            uiHelper?.showToastNotification?.('群组设置页面尚未准备完成，请重试。', 'error');
+            return;
+        }
 
         // Use the module-level specific references that were set during init
         // const localSelectPrompt = selectAgentPromptForSettingsElementFromRenderer; // No longer needed if mainRendererElements is used directly
@@ -416,13 +486,14 @@ window.GroupRenderer = (() => {
         console.log('[GroupRenderer] agentSettingsContainerFromRenderer at start of displayGroupSettingsPage:', agentSettingsContainerFromRenderer);
 
 
-        if (!getGroupSettingsElements()) { // This function primarily gets elements specific to group settings form
+        if (!getGroupSettingsElements()) {
             console.error('[GroupRenderer] getGroupSettingsElements() failed in displayGroupSettingsPage.');
+            uiHelper?.showToastNotification?.('群组设置表单不完整，请重新打开设置页面。', 'error');
             return;
         }
 
         const groupConfig = await electronAPI.getAgentGroupConfig(groupId);
-        if (settingsSurface && !settingsSurface.isCurrent(viewToken)) return;
+        if (generation !== groupSettingsGeneration || (settingsSurface && !settingsSurface.isCurrent(viewToken))) return;
         if (!groupConfig || groupConfig.error) {
             uiHelper?.showToastNotification ? uiHelper.showToastNotification(`加载群组配置失败: ${groupConfig?.error || '未知错误'}`, 'error') : console.error(`加载群组配置失败: ${groupConfig?.error || '未知错误'}`);
             settingsSurface?.show?.('prompt', { message: `加载群组 ${groupId} 配置失败。` });
@@ -436,7 +507,7 @@ window.GroupRenderer = (() => {
 
         // The surface owns view attachment/detachment. Keep the historical
         // references only for text compatibility with upstream callers.
-        settingsSurface?.show?.('group', { id: groupId });
+        // 保留本次加载的 viewToken，不重复 show 使令牌失效。
 
         const titleSpan = selectedItemNameForSettingsElementFromRenderer || document.getElementById('selectedItemNameForSettings') || document.getElementById('selectedAgentNameForSettings');
         if (titleSpan) {
@@ -451,6 +522,8 @@ window.GroupRenderer = (() => {
             ? `${groupConfig.avatarUrl}?t=${Date.now()}`
             : 'assets/default_group_avatar.png';
         groupAvatarInput.value = ''; // Clear file input
+        mainRendererFunctions.setCroppedFile?.('group', null);
+        sequentialSpeakerOrderList?.replaceChildren();
 
         groupChatModeSelect.value = groupConfig.mode || 'sequential';
         const persistedNaturalSettings = groupConfig.modeSettings?.naturerandom || {};
@@ -458,9 +531,12 @@ window.GroupRenderer = (() => {
             tagMatchModeSelect.value = persistedNaturalSettings.tagMatchMode || groupConfig.tagMatchMode || 'strict';
         }
         groupPromptTextarea.value = groupConfig.groupPrompt || '';
-        invitePromptTextarea.value = groupConfig.invitePrompt || '现在轮到你{{VCPChatAgentName}}发言了。';
+        invitePromptTextarea.value = groupConfig.invitePrompt ?? '现在轮到你{{VCPChatAgentName}}发言了。';
 
-        await populateGroupMembersSettings(groupConfig);
+        const isCurrentLoad = () => generation === groupSettingsGeneration &&
+            (!settingsSurface || settingsSurface.isCurrent(viewToken));
+        const membersLoaded = await populateGroupMembersSettings(groupConfig, isCurrentLoad);
+        if (!isCurrentLoad() || !membersLoaded) return;
         toggleModeSettingsVisibility(groupConfig.mode);
 
         // 新增：处理统一模型UI
@@ -514,14 +590,17 @@ window.GroupRenderer = (() => {
         groupAvatarInput.addEventListener('change', handleGroupAvatarChange);
         groupAvatarInput._eventListenerAttached = true;
 
+        groupSettingsReady = true;
         updateAllGroupSectionSummaries();
     }
 
 
     function handleGroupAvatarChange(event) {
+        const generation = groupSettingsGeneration;
         const file = event.target.files[0];
         if (file) {
             uiHelper.openAvatarCropper(file, (croppedFile) => {
+                if (generation !== groupSettingsGeneration || !groupSettingsReady) return;
                 mainRendererFunctions.setCroppedFile('group', croppedFile); // Use renderer's central cropped file store
                 if (groupAvatarPreview) {
                     groupAvatarPreview.src = URL.createObjectURL(croppedFile);
@@ -533,7 +612,7 @@ window.GroupRenderer = (() => {
     }
 
 
-    async function populateGroupMembersSettings(groupConfig) {
+    async function populateGroupMembersSettings(groupConfig, isCurrentLoad = () => true) {
         if (!groupMembersListDiv) {
             console.error("groupMembersListDiv not found for populating members.");
             return;
@@ -543,6 +622,7 @@ window.GroupRenderer = (() => {
 
         try {
             const agents = await electronAPI.getAgents();
+            if (!isCurrentLoad()) return false;
             if (agents.error) {
                 window.VCPGroupSettingsSlots.message(groupMembersListDiv, `加载Agent列表失败: ${agents.error}`);
                 return;
@@ -564,7 +644,9 @@ window.GroupRenderer = (() => {
             updateSequentialSpeakerOrder(groupConfig);
             updateGroupSectionSummary('identity');
             updateGroupSectionSummary('mode');
+            return true;
         } catch (error) {
+            if (!isCurrentLoad()) return false;
             window.VCPGroupSettingsSlots.message(groupMembersListDiv, `加载Agent列表时出错: ${error.message}`);
             console.error("Error populating group members settings:", error);
         }
@@ -629,7 +711,36 @@ window.GroupRenderer = (() => {
             reportSettingsSaveResult(false, 'missing-group-id');
             return;
         }
-        const selectedMemberIds = getSelectedMemberIds();
+        if (!groupSettingsReady) {
+            reportSettingsSaveResult(false, 'group-loading');
+            return;
+        }
+        const selectedMemberIds = [...getSelectedMemberIds()];
+        const targetGroupId = groupId;
+        const saveGeneration = groupSettingsGeneration;
+        const saveSurface = window.VCPSettingsSidebar;
+        const saveSnapshot = saveSurface?.getSnapshot?.();
+        const isCurrentSave = () => {
+            const snapshot = saveSurface?.getSnapshot?.();
+            return saveGeneration === groupSettingsGeneration &&
+                getGroupControl('editingGroupId')?.value === targetGroupId &&
+                (!saveSnapshot || (snapshot?.generation === saveSnapshot.generation &&
+                    snapshot?.activeKind === 'group' && snapshot?.activeId === targetGroupId));
+        };
+        const croppedGroupAvatar = mainRendererFunctions.getCroppedFile('group');
+        const readFormDraft = () => ({
+            name: groupNameInput?.value?.trim?.() || '',
+            members: [...selectedMemberIds],
+            mode: groupChatModeSelect?.value || 'sequential',
+            useUnifiedModel: groupUseUnifiedModel?.checked === true,
+            unifiedModel: groupUnifiedModelInput?.value?.trim?.() || '',
+            groupPrompt: groupPromptTextarea?.value?.trim?.() || '',
+            invitePrompt: invitePromptTextarea?.value?.trim?.() || '',
+            tagMatchMode: tagMatchModeSelect?.value || 'strict',
+            memberTags: window.VCPGroupSettingsSlots.readMemberTags(memberTagsInputsDiv),
+            sequentialSpeakerOrder: getSequentialSpeakerOrder()
+        });
+        const formDraft = readFormDraft();
 
         // 保留每种模式已有的独立设置，切换模式并保存时不会覆盖其他模式。
         // 先获取服务端已有的完整 memberTags 作为基础
@@ -637,20 +748,23 @@ window.GroupRenderer = (() => {
         let existingModeSettings = {};
         try {
             const existingConfig = await electronAPI.getAgentGroupConfig(groupId);
+            if (!existingConfig || existingConfig.error) throw new Error(existingConfig?.error || '群组配置读取失败');
             existingModeSettings = { ...(existingConfig?.modeSettings || {}) };
             existingMemberTags = {
                 ...(existingConfig?.memberTags || {}),
                 ...(existingModeSettings.naturerandom?.memberTags || {})
             };
         } catch (e) {
-            console.warn('[GroupRenderer] 获取现有模式设置失败，将仅使用当前表单数据:', e);
+            console.error('[GroupRenderer] 获取现有模式设置失败，取消保存:', e);
+            if (isCurrentSave()) reportSettingsSaveResult(false, e.message);
+            return;
         }
 
-        // 用当前 DOM 中的值覆盖（当前勾选成员的最新编辑）
+        // 用保存开始时冻结的 DOM 草稿覆盖（等待期间不再重新读取共享表单）。
         const memberTags = { ...existingMemberTags };
-        Object.assign(memberTags, window.VCPGroupSettingsSlots.readMemberTags(memberTagsInputsDiv));
+        Object.assign(memberTags, formDraft.memberTags);
 
-        const sequentialSpeakerOrder = getSequentialSpeakerOrder()
+        const sequentialSpeakerOrder = formDraft.sequentialSpeakerOrder
             .filter(agentId => selectedMemberIds.includes(agentId));
         const normalizedSequentialOrder = [
             ...sequentialSpeakerOrder,
@@ -658,7 +772,7 @@ window.GroupRenderer = (() => {
         ];
         const naturalSettings = {
             ...(existingModeSettings.naturerandom || {}),
-            tagMatchMode: tagMatchModeSelect ? tagMatchModeSelect.value : 'strict',
+            tagMatchMode: formDraft.tagMatchMode,
             memberTags
         };
         const sequentialSettings = {
@@ -667,9 +781,9 @@ window.GroupRenderer = (() => {
         };
 
         const newConfig = {
-            name: groupNameInput.value.trim(),
+            name: formDraft.name,
             members: selectedMemberIds,
-            mode: groupChatModeSelect.value,
+            mode: formDraft.mode,
             modeSettings: {
                 ...existingModeSettings,
                 sequential: sequentialSettings,
@@ -679,12 +793,12 @@ window.GroupRenderer = (() => {
             // 保留旧字段供旧版本读取；权威数据位于 modeSettings。
             sequentialSpeakerOrder: normalizedSequentialOrder,
             tagMatchMode: naturalSettings.tagMatchMode,
-            // 新增：读取统一模型设置
-            useUnifiedModel: groupUseUnifiedModel.checked,
-            unifiedModel: groupUnifiedModelInput.value.trim(),
+            // 新增：读取保存开始时冻结的统一模型与提示词设置
+            useUnifiedModel: formDraft.useUnifiedModel,
+            unifiedModel: formDraft.unifiedModel,
             memberTags: memberTags,
-            groupPrompt: groupPromptTextarea.value.trim(),
-            invitePrompt: invitePromptTextarea.value.trim()
+            groupPrompt: formDraft.groupPrompt,
+            invitePrompt: formDraft.invitePrompt
         };
 
         if (!newConfig.name) {
@@ -707,7 +821,6 @@ window.GroupRenderer = (() => {
             return;
         }
 
-        const croppedGroupAvatar = mainRendererFunctions.getCroppedFile('group');
         if (croppedGroupAvatar) {
             try {
                 const arrayBuffer = await croppedGroupAvatar.arrayBuffer();
@@ -718,9 +831,11 @@ window.GroupRenderer = (() => {
                 });
                 if (avatarResult.success) {
                     newConfig.avatar = avatarResult.avatarFileName; // Save filename to config
-                    groupAvatarPreview.src = avatarResult.avatarUrl; // Update preview
-                    mainRendererFunctions.setCroppedFile('group', null); // Clear after save
-                    groupAvatarInput.value = '';
+                    if (isCurrentSave() && mainRendererFunctions.getCroppedFile('group') === croppedGroupAvatar) {
+                        groupAvatarPreview.src = avatarResult.avatarUrl;
+                        mainRendererFunctions.setCroppedFile('group', null);
+                        groupAvatarInput.value = '';
+                    }
                     // Potentially update avatar color if groups also have calculated colors
                 } else {
                     uiHelper?.showToastNotification ? uiHelper.showToastNotification(`保存群组头像失败: ${avatarResult.error}`, 'error') : console.error(`保存群组头像失败: ${avatarResult.error}`);
@@ -731,16 +846,18 @@ window.GroupRenderer = (() => {
         }
 
         try {
-            const result = await electronAPI.saveAgentGroupConfig(groupId, newConfig);
+            const result = await electronAPI.saveAgentGroupConfig(targetGroupId, newConfig);
+            if (!isCurrentSave()) return;
             const saveButton = groupSettingsForm.querySelector('button[type="submit"]');
 
             if (result.success && result.agentGroup) {
                 reportSettingsSaveResult(true);
                 if (saveButton) uiHelper.showSaveFeedback(saveButton, true, "已保存!", "保存群组设置");
                 await mainRendererFunctions.loadItems(); // Reload list to reflect name/avatar changes
+                if (!isCurrentSave()) return;
                 // If current selected group is this one, update its details
                 const currentSelected = currentSelectedItemRef.get();
-                if (currentSelected.id === groupId && currentSelected.type === 'group') {
+                if (currentSelected.id === targetGroupId && currentSelected.type === 'group') {
                     currentSelectedItemRef.set({ ...currentSelected, ...result.agentGroup });
                     const chatHeaderEl = mainRendererElements?.currentChatNameH3 || mainRendererElements?.currentChatAgentNameH3;
                     if (chatHeaderEl) {
@@ -760,12 +877,17 @@ window.GroupRenderer = (() => {
                 uiHelper?.showToastNotification ? uiHelper.showToastNotification(`保存群组设置失败: ${result.error}`, 'error') : console.error(`保存群组设置失败: ${result.error}`);
             }
 
+            if (!result.success || !isCurrentSave() ||
+                currentSelectedItemRef.get()?.id !== targetGroupId ||
+                currentSelectedItemRef.get()?.type !== 'group') return;
             // Update invite buttons based on new mode after saving
             const updatedGroupConfig = result.agentGroup || newConfig; // Use result if available, else optimistic newConfig
             if (updatedGroupConfig.mode === 'invite_only') {
                 const membersDetails = await Promise.all(
                     (updatedGroupConfig.members || []).map(id => electronAPI.getAgentConfig(id))
                 );
+                if (!isCurrentSave() || currentSelectedItemRef.get()?.id !== targetGroupId ||
+                    currentSelectedItemRef.get()?.type !== 'group') return;
                 const validMembers = membersDetails.filter(m => m && !m.error);
                 displayInviteAgentButtons(groupId, currentTopicIdRef.get(), validMembers, updatedGroupConfig);
             } else {
@@ -774,6 +896,7 @@ window.GroupRenderer = (() => {
 
         } catch (error) {
             console.error("Error saving group settings:", error);
+            if (!isCurrentSave()) return;
             reportSettingsSaveResult(false, error.message);
             // 使用 uiHelper.showToastNotification 替换 alert
             if (uiHelper && typeof uiHelper.showToastNotification === 'function') {
@@ -784,7 +907,8 @@ window.GroupRenderer = (() => {
             }
         }
     }
-    async function handleDeleteCurrentGroup() {
+
+    async function handleDeleteCurrentGroup() {
         if (!getGroupSettingsElements()) {
             reportSettingsDeleteResult(false, { error: 'missing-form-elements' });
             return;
@@ -1215,17 +1339,33 @@ window.GroupRenderer = (() => {
     }
 
     function clearInviteAgentButtons() {
-        const container = inviteAgentButtonsContainerRef ? inviteAgentButtonsContainerRef.get() : null;
-        window.VCPGroupSettingsSlots.clearInviteButtons(container);
+        const container = inviteAgentButtonsContainerRef?.get?.() || null;
+        const clearInviteButtons = window.VCPGroupSettingsSlots?.clearInviteButtons;
+        if (typeof clearInviteButtons === 'function') {
+            clearInviteButtons(container);
+            return;
+        }
+        // 邀请按钮属于聊天通知栏，不应因设置表面插槽尚未安装而阻断开局。
+        container?.replaceChildren?.();
+        if (container) container.hidden = true;
     }
 
     async function displayInviteAgentButtons(groupId, topicId, membersConfigs, groupConfig) {
-        const container = inviteAgentButtonsContainerRef ? inviteAgentButtonsContainerRef.get() : null;
+        const container = inviteAgentButtonsContainerRef?.get?.() || null;
         if (!container) {
-            console.error("[GroupRenderer] Invite agent buttons container not found.");
+            console.warn("[GroupRenderer] Invite agent buttons container is not attached yet.");
             return;
         }
-        window.VCPGroupSettingsSlots.renderInviteButtons({
+        if (!window.VCPGroupSettingsSlots && !await ensureGroupSlotsBridge()) {
+            clearInviteAgentButtons();
+            return;
+        }
+        const renderInviteButtons = window.VCPGroupSettingsSlots?.renderInviteButtons;
+        if (typeof renderInviteButtons !== 'function') {
+            clearInviteAgentButtons();
+            return;
+        }
+        renderInviteButtons({
             container,
             membersConfigs,
             groupConfig,
