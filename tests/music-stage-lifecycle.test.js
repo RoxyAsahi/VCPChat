@@ -232,10 +232,10 @@ test('music stage keeps one mode instance and releases canvases across switches'
         const snapshot = app.stageHost.getDebugSnapshot();
         assert.equal(snapshot.modeId, mode);
         assert.equal(snapshot.modeRootChildren, 1);
-        const expectedCanvases = ['tempera', 'fume'].includes(mode) ? 1 : 0;
+        const expectedCanvases = mode === 'fume' ? 1 : 0;
         assert.equal(snapshot.canvasCount, expectedCanvases);
         if (mode === 'diorama') {
-            assert.ok(document.querySelector('.diorama-fallback'));
+            assert.ok(dom.window.document.querySelector('.diorama-fallback'));
         }
     }
 
