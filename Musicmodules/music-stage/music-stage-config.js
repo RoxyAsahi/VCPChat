@@ -2,7 +2,7 @@
     'use strict';
 
     const STORAGE_KEY = 'musicStageConfig';
-    const VERSION = 1;
+    const VERSION = 2;
     const clamp = (value, min, max, fallback) => {
         const number = Number(value);
         if (!Number.isFinite(number)) return fallback;
@@ -22,6 +22,14 @@
         { id: 'starborn', label: '星诞', description: '按歌词段落自动导演' }
     ]);
 
+    const PIXI_DEFAULTS = Object.freeze({
+        cameraBreath: 0.5, cameraTracking: 0.35, shotFlow: 'auto', sceneTransitions: true,
+        cameraSoftness: 0.75, cameraRoll: 0.25,
+        lyricLayout: 'phrases', phraseLength: 12, phraseEmphasis: 0.4,
+        fontScale: 1, glyphStyle: 'rise', waitingOpacity: 0.25, releaseDuration: 0.45,
+        postProcess: true, lensDistortion: 0.35, lensDispersion: 0.18,
+        rgbShift: 0, grain: 0, contrast: 0, halftone: 0, vignette: 0.18
+    });
     const DEFAULTS = Object.freeze({
         enabledModes: ['tempera', 'sonnet', 'diorama', 'fume', 'luminous', 'partita', 'cadenza', 'starborn'],
         quality: 'standard',
@@ -29,6 +37,7 @@
         edgeSpectrum: true,
         modes: {
             tempera: {
+                ...PIXI_DEFAULTS,
                 cameraIntensity: 1,
                 glyphMotion: 1,
                 colorMode: 'duo',
@@ -37,6 +46,7 @@
                 textInversion: true
             },
             sonnet: {
+                ...PIXI_DEFAULTS,
                 cameraIntensity: 1,
                 typographyMotion: 1,
                 guideLines: true,
@@ -53,12 +63,18 @@
                 glow: 1
             },
             luminous: {
+                vectorDecor: true, decorOpacity: 0.55, decorMotion: 1,
+                fontScale: 1, semanticLayout: true, layoutStyle: 'normal',
+                chorusRipple: true, sceneTransitions: true, showTranslation: true, showUpcoming: true,
                 wordRotation: true,
                 breathing: 1,
                 wordSpacing: 0.7,
                 glow: 1
             },
             partita: {
+                vectorDecor: true, decorOpacity: 0.5, decorMotion: 1, guidePulse: true,
+                fontScale: 1, glow: 1, breathing: 1, layoutStyle: 'normal',
+                chorusRipple: true, sceneTransitions: true, showTranslation: true, showUpcoming: true,
                 guideLines: true,
                 semanticLayout: true,
                 staggerMin: 20,
@@ -66,18 +82,25 @@
                 power: 1
             },
             cadenza: {
+                vectorDecor: true, decorOpacity: 0.5, decorMotion: 1,
+                heroEmphasis: true, breathing: 0.5,
+                chorusRipple: true, sceneTransitions: true, showTranslation: true, showUpcoming: true,
                 motion: 1,
                 fontScale: 1,
                 widthRatio: 0.78,
                 glow: 1
             },
             fume: {
+                backgroundDetail: 0.6, backgroundMotion: 1,
                 geometricBackground: true,
                 backgroundOpacity: 0.5,
                 cameraSpeed: 1,
                 cameraMode: 'smooth',
                 glow: 1,
-                heroScale: 1
+                heroScale: 1,
+                articleSpacing: 1,
+                textHoldRatio: 0.35,
+                hidePrintSymbols: false
             },
             starborn: {
                 transitionLock: 4,
@@ -91,6 +114,49 @@
         return {
             ...fallback,
             ...source,
+            guidePulse: bool(source.guidePulse, fallback.guidePulse),
+            backgroundDetail: clamp(source.backgroundDetail, 0, 1, fallback.backgroundDetail),
+            backgroundMotion: clamp(source.backgroundMotion, 0, 2, fallback.backgroundMotion),
+            vectorDecor: bool(source.vectorDecor, fallback.vectorDecor),
+            decorOpacity: clamp(source.decorOpacity, 0, 1, fallback.decorOpacity),
+            decorMotion: clamp(source.decorMotion, 0, 2, fallback.decorMotion),
+            layoutStyle: enumValue(source.layoutStyle, ['calm', 'normal', 'chaotic'], fallback.layoutStyle),
+            chorusRipple: bool(source.chorusRipple, fallback.chorusRipple),
+            heroEmphasis: bool(source.heroEmphasis, fallback.heroEmphasis),
+            showTranslation: bool(source.showTranslation, fallback.showTranslation),
+            showUpcoming: bool(source.showUpcoming, fallback.showUpcoming),
+            cameraIntensity: clamp(source.cameraIntensity, 0, 2, fallback.cameraIntensity),
+            typographyMotion: clamp(source.typographyMotion, 0, 2, fallback.typographyMotion),
+            glyphMotion: clamp(source.glyphMotion, 0, 2, fallback.glyphMotion),
+            cameraBreath: clamp(source.cameraBreath, 0, 2, fallback.cameraBreath),
+            cameraTracking: clamp(source.cameraTracking, 0, 1, fallback.cameraTracking),
+            cameraSoftness: clamp(source.cameraSoftness, 0, 1, fallback.cameraSoftness),
+            cameraRoll: clamp(source.cameraRoll, 0, 1, fallback.cameraRoll),
+            lyricLayout: enumValue(source.lyricLayout, ['lines', 'phrases', 'staircase'], fallback.lyricLayout),
+            phraseLength: Math.round(clamp(source.phraseLength, 6, 24, fallback.phraseLength) || 12),
+            phraseEmphasis: clamp(source.phraseEmphasis, 0, 1, fallback.phraseEmphasis),
+            sceneTransitions: bool(source.sceneTransitions, fallback.sceneTransitions),
+            shotFlow: enumValue(source.shotFlow, ['auto', 'editorial-column', 'type-impact', 'fragment-collage', 'tracking-ribbon', 'mask-reveal', 'poster-blocks', 'quiet-tableau'], fallback.shotFlow),
+            glyphStyle: enumValue(source.glyphStyle, ['rise', 'scatter', 'impact'], fallback.glyphStyle),
+            waitingOpacity: clamp(source.waitingOpacity, 0, 1, fallback.waitingOpacity),
+            releaseDuration: clamp(source.releaseDuration, 0, 1.5, fallback.releaseDuration),
+            postProcess: bool(source.postProcess, fallback.postProcess),
+            lensDistortion: clamp(source.lensDistortion, 0, 2, fallback.lensDistortion),
+            lensDispersion: clamp(source.lensDispersion, 0, 1, fallback.lensDispersion),
+            rgbShift: clamp(source.rgbShift, 0, 1, fallback.rgbShift),
+            grain: clamp(source.grain, 0, 1, fallback.grain),
+            contrast: clamp(source.contrast, 0, 1, fallback.contrast),
+            halftone: clamp(source.halftone, 0, 1, fallback.halftone),
+            vignette: clamp(source.vignette, 0, 1, fallback.vignette),
+            colorMode: enumValue(source.colorMode, ['duo', 'mono', 'gradient'], fallback.colorMode),
+            showBlocks: bool(source.showBlocks, fallback.showBlocks),
+            showDecor: bool(source.showDecor, fallback.showDecor),
+            showBackground: bool(source.showBackground, fallback.showBackground),
+            textInversion: bool(source.textInversion, fallback.textInversion),
+            motionAmount: clamp(source.motionAmount, 0, 2, fallback.motionAmount),
+            audioReactivity: clamp(source.audioReactivity, 0, 2, fallback.audioReactivity),
+            showParticles: bool(source.showParticles, fallback.showParticles),
+            geometryMode: enumValue(source.geometryMode, ['clouds', 'corridor'], fallback.geometryMode),
             wordRotation: bool(source.wordRotation, fallback.wordRotation),
             breathing: clamp(source.breathing, 0, 2, fallback.breathing),
             wordSpacing: clamp(source.wordSpacing, 0, 2, fallback.wordSpacing),
@@ -108,6 +174,9 @@
             cameraSpeed: clamp(source.cameraSpeed, 0.55, 1.85, fallback.cameraSpeed),
             cameraMode: enumValue(source.cameraMode, ['stepped', 'smooth'], fallback.cameraMode),
             heroScale: clamp(source.heroScale, 0.82, 1.32, fallback.heroScale),
+            articleSpacing: clamp(source.articleSpacing, 0.65, 1.6, fallback.articleSpacing),
+            textHoldRatio: clamp(source.textHoldRatio, 0, 1, fallback.textHoldRatio),
+            hidePrintSymbols: bool(source.hidePrintSymbols, fallback.hidePrintSymbols),
             transitionLock: clamp(source.transitionLock, 0.5, 12, fallback.transitionLock),
             avoidRepeat: bool(source.avoidRepeat, fallback.avoidRepeat)
         };

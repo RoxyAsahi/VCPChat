@@ -24,13 +24,13 @@
         };
     };
 
+    const graphemeSegmenter = typeof Intl !== 'undefined' && Intl.Segmenter
+        ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
     const splitGraphemes = (text) => {
         const value = String(text ?? '');
-        if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-            const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-            return Array.from(segmenter.segment(value), (entry) => entry.segment);
-        }
-        return Array.from(value);
+        return graphemeSegmenter
+            ? Array.from(graphemeSegmenter.segment(value), (entry) => entry.segment)
+            : Array.from(value);
     };
 
     const EMPTY_LINES = Object.freeze([]);
@@ -67,6 +67,7 @@
         const endTime = Math.max(startTime + 0.08, declaredEnd || nextStart || startTime + 5);
         const words = Array.isArray(line?.words) && line.words.length
             ? line.words.map((word, wordIndex) => ({
+                ...word,
                 text: String(word?.text ?? ''),
                 startTime: Number.isFinite(word?.startTime) ? word.startTime : startTime,
                 endTime: Math.max(
@@ -123,10 +124,7 @@
             }
         }
 
-        if (result < previousIndex && previousIndex >= 0) {
-            const previous = lines[previousIndex];
-            if (previous && playbackTime >= previous.startTime - 1.25) return previousIndex;
-        }
+        // Absolute-time lookup: hysteresis here retains future lyrics after a backward seek.
         return result;
     };
 
@@ -193,7 +191,8 @@
         const lineDuration = activeLine ? Math.max(0.001, activeLine.endTime - activeLine.startTime) : 1;
         const lineProgress = activeLine ? clamp((playbackTime - activeLine.startTime) / lineDuration) : 0;
         const wordState = resolveWordState(activeLine, playbackTime);
-        const spectrum = Array.isArray(app?.currentVisualizerData) ? app.currentVisualizerData : [];
+        const spectrum = Array.isArray(app?.currentVisualizerData) || ArrayBuffer.isView(app?.currentVisualizerData)
+            ? app.currentVisualizerData : [];
         const track = app?.playlist?.[app?.currentTrackIndex] || null;
 
         return {
@@ -265,7 +264,14 @@
         }
     }
 
+    // Call after intentional in-place lyric edits; normal source replacement is
+    // already tracked by array identity without hashing the whole song per frame.
+    const invalidateLines = (lines) => {
+        if (Array.isArray(lines)) normalizedLinesCache.delete(lines);
+    };
+
     global.MusicStageRuntime = Object.freeze({
+        invalidateLines,
         clamp,
         hashString,
         seededRandom,
