@@ -73,12 +73,14 @@ const installCanvasStub = (window) => {
         quadraticCurveTo() {},
         closePath() {},
         stroke() {},
+        fill() {},
         measureText(text) { return { width: String(text).length * 20 }; },
         set fillStyle(value) {},
         set strokeStyle(value) {},
         set lineWidth(value) {},
         set shadowColor(value) {},
-        set shadowBlur(value) {}
+        set shadowBlur(value) {},
+        set globalAlpha(value) {}
     };
     window.HTMLCanvasElement.prototype.getContext = () => context;
 };
@@ -208,6 +210,15 @@ test('music stage keeps one mode instance and releases canvases across switches'
     runScript(dom, 'Musicmodules/music-stage/music-stage-runtime.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-config.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-mode-utils.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-layout.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-decor.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-performance.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/luminous-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/partita-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/cadenza-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-pixi-effects.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/tempera-pixi-core.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/sonnet-pixi-core.js');
     runScript(dom, 'Musicmodules/music-stage/modes/tempera-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/sonnet-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/diorama-manager.js');
@@ -264,6 +275,15 @@ test('stage transport synchronizes play mode, mute and volume with the existing 
     runScript(dom, 'Musicmodules/music-stage/music-stage-runtime.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-config.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-mode-utils.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-layout.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-decor.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-performance.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/luminous-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/partita-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/cadenza-manager.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/stage-pixi-effects.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/tempera-pixi-core.js');
+    runScript(dom, 'Musicmodules/music-stage/modes/sonnet-pixi-core.js');
     runScript(dom, 'Musicmodules/music-stage/modes/tempera-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/sonnet-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/diorama-manager.js');
