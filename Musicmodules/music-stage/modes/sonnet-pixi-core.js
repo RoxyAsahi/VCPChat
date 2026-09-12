@@ -14,6 +14,8 @@
             this.hudContainer = null;
             this.geoContainer = null;
             this.textContainer = null;
+            this.trackContainer = null;
+            this.editorialTrack = null;
             this.giantText = null;
             this.words = [];
             this.width = 1;
@@ -34,8 +36,9 @@
             const PIXI = global.PIXI;
             if (!PIXI) throw new Error('PIXI is not loaded');
 
-            this.app = new PIXI.Application();
-            await this.app.init({
+            const application = new PIXI.Application();
+            this.app = application;
+            await application.init({
                 backgroundAlpha: 0,
                 preference: 'webgl',
                 autoStart: false,
@@ -44,9 +47,14 @@
                 autoDensity: true
             });
 
-            if (this.destroyed) {
-                this.app.destroy(true, { children: true });
-                this.app = null;
+            if (this.destroyed || this.app !== application) {
+                // The mode may be destroyed while initialization is awaiting
+                // GPU setup. Avoid dereferencing or destroying an application
+                // which the synchronous teardown path has already released.
+                if (this.app === application) {
+                    application.destroy(true, { children: true });
+                    this.app = null;
+                }
                 return;
             }
             this.app.stop();
@@ -61,11 +69,14 @@
             this.hudContainer = new PIXI.Container();
             this.frameDecorContainer = new PIXI.Container();
             this.textContainer = new PIXI.Container();
+            this.trackContainer = new PIXI.Container();
 
             this.sceneContainer.addChild(this.geoContainer);
             this.sceneContainer.addChild(this.hudContainer);
             this.sceneContainer.addChild(this.frameDecorContainer);
             this.sceneContainer.addChild(this.textContainer);
+            this.sceneContainer.addChild(this.trackContainer);
+            this.editorialTrack = Effects.createEditorialTrack(PIXI, this.trackContainer, 'sonnet');
             this.app.stage.addChild(this.sceneContainer);
 
             this.postProcess = Effects.createPostProcess(PIXI, this.app.stage);
@@ -205,7 +216,9 @@
             this.scan = hud;
             this.scan.pivot.set(cx, cy);
             this.scan.position.set(cx, cy);
-            this.sceneContainer.pivot.set(cx, cy);
+            if (tuning.lyricLayout !== 'editorial-track') {
+                this.sceneContainer.pivot.set(cx, cy);
+            }
             this.hudContainer.pivot.set(cx, cy);
             this.hudContainer.position.set(cx, cy);
         }
@@ -219,11 +232,29 @@
             const progress = clamp(frame.lineProgress || 0);
             const motion = Effects.motionScale(tuning);
             const bass = Number(frame.audio?.bass) || 0;
-            const camera = Effects.camera(frame, tuning, this.activeKind, this.width, this.height, this.words);
-            this.sceneContainer.position.set(camera.x, camera.y);
+            const trackMode = tuning.lyricLayout === 'editorial-track';
+            const trackSeed = frame.track?.path || frame.track?.title || 'sonnet-track';
+            const trackCamera = trackMode
+                ? this.editorialTrack.update(frame, tuning, this.numPrimary || 0xffffff, trackSeed, this.width, this.height)
+                : null;
+            const camera = trackCamera || Effects.camera(frame, tuning, this.activeKind, this.width, this.height, this.words);
+            this.textContainer.visible = !trackMode;
+            this.trackContainer.visible = trackMode;
+            if (trackMode) {
+                this.sceneContainer.pivot.set(camera.x, camera.y);
+                this.sceneContainer.position.set(this.width / 2, this.height / 2);
+            } else {
+                this.sceneContainer.pivot.set(this.width / 2, this.height / 2);
+                this.sceneContainer.position.set(camera.x, camera.y);
+            }
             this.sceneContainer.scale.set(camera.scale);
             this.sceneContainer.rotation = camera.rotation;
-            this.sceneContainer.alpha = Effects.transition(frame, tuning);
+            this.sceneContainer.alpha = trackMode ? 1 : Effects.transition(frame, tuning);
+            const fixedOffsetX = trackMode ? camera.x - this.width / 2 : 0;
+            const fixedOffsetY = trackMode ? camera.y - this.height / 2 : 0;
+            this.geoContainer.position.set(fixedOffsetX, fixedOffsetY);
+            this.frameDecorContainer.position.set(fixedOffsetX, fixedOffsetY);
+            this.hudContainer.position.set(this.width / 2 + fixedOffsetX, this.height / 2 + fixedOffsetY);
 
             const time = frame.playbackTime;
             const intensity = motion * Effects.amount(tuning.performanceIntensity, 1.25);
@@ -246,9 +277,11 @@
                 this.giantText.rotation = Math.sin(time * 0.12) * 0.035 * intensity;
             }
 
-            Effects.animateLyrics(this.words, frame, tuning, this.numPrimary);
-            Effects.animatePhraseStage(this.phrases, frame, tuning, this.activeKind);
-            this.accents?.update(frame, tuning);
+            if (!trackMode) {
+                Effects.animateLyrics(this.words, frame, tuning, this.numPrimary);
+                Effects.animatePhraseStage(this.phrases, frame, tuning, this.activeKind);
+                this.accents?.update(frame, tuning);
+            }
 
             // 4. 图层开关
             this.hudContainer.visible = tuning.showBackground !== false && tuning.guideLines !== false;
@@ -263,10 +296,12 @@
             return { initialized: this.initialized, camera: this.activeKind,
                 glyphs: this.words.length, phrases: this.phrases.length, orbits: this.orbits.length,
                 performance: this.performance.snapshot(), accents: this.accents?.snapshot(),
+                ...this.editorialTrack?.snapshot(),
                 resolution: this.app?.renderer?.resolution, ...this.retirement?.snapshot() };
         }
 
         destroy() {
+            if (this.destroyed && !this.app) return;
             this.destroyed = true;
             this.pendingShot = null;
             this.performance.reset();
@@ -274,14 +309,31 @@
             this.phrases = [];
             this.orbits = [];
             this.accents = null;
+            this.editorialTrack?.destroy();
+            this.editorialTrack = null;
             this.motif = this.scan = this.giantText = null;
             this.retirement?.destroy();
+            this.retirement = null;
             this.postProcess?.destroy();
             this.postProcess = null;
-            if (this.app && this.initialized) {
-                this.app.destroy(true, { children: true });
+            // A rejected or interrupted init can allocate the renderer before
+            // `initialized` is set. Destroy any existing application regardless
+            // of that flag to release its WebGL context and canvas references.
+            if (this.app) {
+                try {
+                    this.app.destroy(true, { children: true });
+                } catch (error) {
+                    console.warn('[MusicStage:Sonnet] PIXI cleanup failed:', error);
+                }
                 this.app = null;
             }
+            this.sceneContainer = null;
+            this.frameDecorContainer = null;
+            this.hudContainer = null;
+            this.geoContainer = null;
+            this.textContainer = null;
+            this.trackContainer = null;
+            this.container = null;
             this.initialized = false;
         }
     }
