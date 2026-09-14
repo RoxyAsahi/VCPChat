@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
+const { parseLRC } = require('../modules/lyrics/parserCore');
 
 const workspace = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(workspace, relativePath), 'utf8');
@@ -72,15 +73,14 @@ const installCanvasStub = (window) => {
         lineTo() {},
         quadraticCurveTo() {},
         closePath() {},
-        stroke() {},
         fill() {},
+        stroke() {},
         measureText(text) { return { width: String(text).length * 20 }; },
         set fillStyle(value) {},
         set strokeStyle(value) {},
         set lineWidth(value) {},
         set shadowColor(value) {},
-        set shadowBlur(value) {},
-        set globalAlpha(value) {}
+        set shadowBlur(value) {}
     };
     window.HTMLCanvasElement.prototype.getContext = () => context;
 };
@@ -99,6 +99,7 @@ const createApp = () => {
         pause: 0,
         previous: 0,
         next: 0,
+        sidebarScrolls: 0,
         volumes: []
     };
 
@@ -140,6 +141,7 @@ const createApp = () => {
         updateVolumeSliderBackground() {},
         updateModeButton() {},
         saveSettings() {},
+        scrollCurrentTrackToSidebarTop() { calls.sidebarScrolls += 1; },
         playTrack() { calls.play += 1; },
         pauseTrack() { calls.pause += 1; },
         prevTrack() { calls.previous += 1; },
@@ -204,6 +206,127 @@ test('music stage caches normalized lyrics and fallback word timelines by source
     dom.window.close();
 });
 
+test('music stage normalizes advanced JSON syllables, numeric strings and dual subtitles', () => {
+    const dom = createStageDom();
+    installCanvasStub(dom.window);
+    runScript(dom, 'Musicmodules/music-stage/music-stage-runtime.js');
+
+    const app = createApp().app;
+    app.isPlaying = false;
+    app.lastKnownCurrentTime = 1.25;
+    app.currentLyrics = [{
+        startTime: '1',
+        endTime: '3',
+        fullText: 'Hello',
+        translation: '你好',
+        romanization: 'Nǐ hǎo',
+        chorus: true,
+        words: [{
+            text: 'Hello',
+            startTime: '1',
+            endTime: '3',
+            syllables: [
+                { text: 'Hel', startTime: '1', endTime: '1.6' },
+                { text: 'lo', startTime: '1.6', endTime: '3.2' }
+            ]
+        }]
+    }];
+
+    const frame = dom.window.MusicStageRuntime.createFrame(app, 100);
+    const glyphs = dom.window.MusicStageRuntime.buildGlyphTimeline(frame.activeLine);
+
+    assert.equal(frame.activeLine.startTime, 1);
+    assert.equal(frame.activeLine.isChorus, true);
+    assert.equal(frame.activeLine.vocalEndTime, 3.2);
+    assert.equal(glyphs.map(glyph => glyph.text).join(''), 'Hello');
+    assert.equal(glyphs[0].syllableIndex, 0);
+    assert.equal(glyphs.at(-1).syllableIndex, 1);
+    assert.equal(
+        dom.window.MusicStageRuntime.resolveSupplementalText(frame.activeLine),
+        'Nǐ hǎo\n你好'
+    );
+    dom.window.close();
+});
+
+test('plain LRC keeps fallback timing and untouched display spaces', () => {
+    const dom = createStageDom();
+    installCanvasStub(dom.window);
+    runScript(dom, 'Musicmodules/music-stage/music-stage-runtime.js');
+
+    const parsed = parseLRC('[00:01.00]Hello world\n[00:05.00]下一句');
+    const app = createApp().app;
+    app.isPlaying = false;
+    app.lastKnownCurrentTime = 2;
+    app.currentLyrics = parsed.lines.map(line => ({
+        ...line,
+        time: line.startTime,
+        original: line.fullText,
+        isWordByWord: parsed.isWordByWord
+    }));
+
+    const frame = dom.window.MusicStageRuntime.createFrame(app, 100);
+    const glyphs = dom.window.MusicStageRuntime.buildGlyphTimeline(frame.activeLine);
+
+    assert.equal(parsed.isWordByWord, false);
+    assert.equal(frame.activeLine.fullText, 'Hello world');
+    assert.equal(glyphs.map(glyph => glyph.text).join(''), 'Hello world');
+    assert.equal(glyphs.some(glyph => glyph.text === ' '), true);
+    assert.equal(frame.wordStates.length, 2);
+    dom.window.close();
+});
+
+test('music UI positions the current visible track at one quarter of the sidebar without changing filtered context', () => {
+    const dom = new JSDOM('<!doctype html><body><ul id="playlist"></ul></body>', {
+        url: 'http://localhost/',
+        pretendToBeVisual: true,
+        runScripts: 'outside-only'
+    });
+    runScript(dom, 'Musicmodules/music-ui.js');
+
+    const playlistEl = dom.window.document.getElementById('playlist');
+    const playlist = [
+        { title: '第一首.flac' },
+        { title: '当前歌曲.flac' },
+        { title: '第三首.flac' }
+    ];
+    const app = {
+        playlist,
+        playlistEl,
+        currentTrackIndex: 1,
+        stripAudioExtension: (value) => String(value).replace(/\.[^.]+$/, ''),
+        updateAllCount() {}
+    };
+    dom.window.setupUI(app);
+    app.renderPlaylist([playlist[2], playlist[1]]);
+
+    Object.defineProperty(playlistEl, 'clientHeight', { configurable: true, value: 200 });
+    Object.defineProperty(playlistEl, 'scrollHeight', { configurable: true, value: 500 });
+    playlistEl.scrollTop = 35;
+    playlistEl.getBoundingClientRect = () => ({ top: 100, height: 200 });
+    const activeItem = playlistEl.querySelector('[data-index="1"]');
+    activeItem.getBoundingClientRect = () => ({ top: 220 });
+
+    assert.equal(app.scrollCurrentTrackToSidebarTop(), true);
+    assert.equal(playlistEl.scrollTop, 105);
+    assert.equal(playlistEl.firstElementChild.dataset.index, '2');
+
+    app.renderPlaylist([playlist[2]]);
+    playlistEl.scrollTop = 48;
+    assert.equal(app.scrollCurrentTrackToSidebarTop(), false);
+    assert.equal(playlistEl.scrollTop, 48);
+    dom.window.close();
+});
+
+test('music player repositions the sidebar after normal and gapless track changes', () => {
+    const source = read('Musicmodules/music-player.js');
+    const renderThenPosition = /app\.renderPlaylist\(app\.currentFilteredTracks\);\s*app\.scrollCurrentTrackToSidebarTop\?\.\(\);/g;
+    assert.equal(
+        Array.from(source.matchAll(renderThenPosition)).length,
+        3,
+        'normal load plus exact and fuzzy gapless synchronization must reposition the current track'
+    );
+});
+
 test('music stage keeps one mode instance and releases canvases across switches', async () => {
     const dom = createStageDom();
     installCanvasStub(dom.window);
@@ -211,14 +334,10 @@ test('music stage keeps one mode instance and releases canvases across switches'
     runScript(dom, 'Musicmodules/music-stage/music-stage-config.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-mode-utils.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-layout.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-decor.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-performance.js');
     runScript(dom, 'Musicmodules/music-stage/modes/luminous-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/partita-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/cadenza-manager.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/stage-pixi-effects.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/tempera-pixi-core.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/sonnet-pixi-core.js');
     runScript(dom, 'Musicmodules/music-stage/modes/tempera-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/sonnet-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/diorama-manager.js');
@@ -227,7 +346,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     runScript(dom, 'Musicmodules/music-stage/music-stage-modes.js');
     runScript(dom, 'Musicmodules/music-stage/music-stage-host.js');
 
-    const { app } = createApp();
+    const { app, calls } = createApp();
     dom.window.setupMusicStage(app);
     app.stageHost.enter();
     await wait(dom.window, 20);
@@ -243,12 +362,24 @@ test('music stage keeps one mode instance and releases canvases across switches'
         const snapshot = app.stageHost.getDebugSnapshot();
         assert.equal(snapshot.modeId, mode);
         assert.equal(snapshot.modeRootChildren, 1);
+        // The jsdom lifecycle harness does not load Pixi directors or WebGL;
+        // Fume is the only manager that synchronously owns a canvas here.
         const expectedCanvases = mode === 'fume' ? 1 : 0;
         assert.equal(snapshot.canvasCount, expectedCanvases);
         if (mode === 'diorama') {
             assert.ok(dom.window.document.querySelector('.diorama-fallback'));
         }
     }
+
+    app.stageHost.setMode('starborn');
+    await wait(dom.window, 210);
+    app.stageHost.updateFrame(1200);
+    const starborn = app.stageHost.getDebugSnapshot();
+    assert.equal(starborn.modeId, 'starborn');
+    assert.equal(starborn.mode.excludesWebGLModes, true);
+    assert.equal(starborn.mode.candidateModes.includes('diorama'), false);
+    assert.equal(starborn.mode.candidateModes.includes('tempera'), true);
+    assert.equal(starborn.mode.candidateModes.includes('sonnet'), true);
 
     app.stageHost.setMode('luminous');
     await wait(dom.window, 210);
@@ -261,6 +392,7 @@ test('music stage keeps one mode instance and releases canvases across switches'
     await wait(dom.window, 410);
     const exited = app.stageHost.getDebugSnapshot();
     assert.equal(exited.active, false);
+    assert.equal(calls.sidebarScrolls, 1);
     assert.equal(exited.hasModeInstance, false);
     assert.equal(exited.modeRootChildren, 0);
     assert.equal(app.isStageActive, false);
@@ -276,14 +408,10 @@ test('stage transport synchronizes play mode, mute and volume with the existing 
     runScript(dom, 'Musicmodules/music-stage/music-stage-config.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-mode-utils.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-layout.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-decor.js');
     runScript(dom, 'Musicmodules/music-stage/modes/stage-lyric-performance.js');
     runScript(dom, 'Musicmodules/music-stage/modes/luminous-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/partita-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/cadenza-manager.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/stage-pixi-effects.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/tempera-pixi-core.js');
-    runScript(dom, 'Musicmodules/music-stage/modes/sonnet-pixi-core.js');
     runScript(dom, 'Musicmodules/music-stage/modes/tempera-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/sonnet-manager.js');
     runScript(dom, 'Musicmodules/music-stage/modes/diorama-manager.js');

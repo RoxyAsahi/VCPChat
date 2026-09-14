@@ -1,7 +1,12 @@
 (function (global) {
     'use strict';
 
-    const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+    const finiteNumber = (value, fallback = 0) => {
+        const number = typeof value === 'number' ? value
+            : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+        return Number.isFinite(number) ? number : fallback;
+    };
+    const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, finiteNumber(value, min)));
 
     const hashString = (input) => {
         let hash = 2166136261;
@@ -60,22 +65,36 @@
     };
 
     const normalizeLine = (line, index, lines) => {
-        const startTime = Number.isFinite(line?.time) ? line.time : Number(line?.startTime) || 0;
+        const startTime = finiteNumber(line?.time, finiteNumber(line?.startTime, 0));
         const next = lines[index + 1];
-        const nextStart = Number.isFinite(next?.time) ? next.time : Number(next?.startTime);
-        const declaredEnd = Number.isFinite(line?.endTime) ? line.endTime : 0;
+        const nextStart = finiteNumber(next?.time, finiteNumber(next?.startTime, NaN));
+        const declaredEnd = finiteNumber(line?.endTime, 0);
         const endTime = Math.max(startTime + 0.08, declaredEnd || nextStart || startTime + 5);
         const words = Array.isArray(line?.words) && line.words.length
-            ? line.words.map((word, wordIndex) => ({
-                ...word,
-                text: String(word?.text ?? ''),
-                startTime: Number.isFinite(word?.startTime) ? word.startTime : startTime,
-                endTime: Math.max(
-                    Number.isFinite(word?.startTime) ? word.startTime : startTime,
-                    Number.isFinite(word?.endTime) ? word.endTime : endTime
-                ),
-                index: wordIndex
-            }))
+            ? line.words.map((word, wordIndex) => {
+                const wordStart = finiteNumber(word?.startTime, startTime);
+                const wordEnd = Math.max(wordStart, finiteNumber(word?.endTime, endTime));
+                const syllables = Array.isArray(word?.syllables)
+                    ? word.syllables.map((syllable, syllableIndex) => {
+                        const syllableStart = finiteNumber(syllable?.startTime, wordStart);
+                        return {
+                            ...syllable,
+                            text: String(syllable?.text ?? ''),
+                            startTime: syllableStart,
+                            endTime: Math.max(syllableStart, finiteNumber(syllable?.endTime, wordEnd)),
+                            index: syllableIndex
+                        };
+                    })
+                    : EMPTY_WORDS;
+                return {
+                    ...word,
+                    text: String(word?.text ?? ''),
+                    startTime: wordStart,
+                    endTime: wordEnd,
+                    syllables,
+                    index: wordIndex
+                };
+            })
             : EMPTY_WORDS;
         const normalized = {
             ...line,
@@ -86,9 +105,19 @@
             fullText: String(line?.fullText ?? line?.original ?? ''),
             translation: String(line?.translation ?? ''),
             romanization: String(line?.romanization ?? ''),
+            isChorus: Boolean(line?.isChorus ?? line?.chorus),
+            wordSegments: Array.isArray(line?.wordSegments) ? line.wordSegments.map(String) : undefined,
+            renderHints: line?.renderHints && typeof line.renderHints === 'object' ? { ...line.renderHints } : undefined,
             words
         };
         normalized.resolvedWords = words.length ? words : buildFallbackWords(normalized);
+        normalized.vocalEndTime = normalized.resolvedWords.reduce((latest, word) => {
+            const syllableEnd = (word.syllables || []).reduce(
+                (end, syllable) => Math.max(end, finiteNumber(syllable.endTime, end)),
+                finiteNumber(word.endTime, latest)
+            );
+            return Math.max(latest, finiteNumber(word.endTime, latest), syllableEnd);
+        }, startTime);
         return normalized;
     };
 
@@ -99,6 +128,76 @@
         const normalized = lines.map((line, index) => normalizeLine(line, index, lines));
         normalizedLinesCache.set(lines, normalized);
         return normalized;
+    };
+
+    const resolveSupplementalText = (line) => {
+        const translation = String(line?.translation ?? '').trim();
+        const romanization = String(line?.romanization ?? '').trim();
+        if (translation && romanization && translation !== romanization) {
+            return `${romanization}\n${translation}`;
+        }
+        return translation || romanization;
+    };
+
+    const buildGlyphTimeline = (line) => {
+        if (!line) return EMPTY_WORDS;
+        const words = line.resolvedWords || line.words || EMPTY_WORDS;
+        const source = words.flatMap((word, wordIndex) => {
+            const validSyllables = Array.isArray(word.syllables) && word.syllables.length
+                && word.syllables.map(part => part.text).join('') === word.text;
+            const parts = validSyllables ? word.syllables : [word];
+            return parts.flatMap((part, partIndex) => {
+                const graphemes = splitGraphemes(part.text);
+                const startTime = finiteNumber(part.startTime, finiteNumber(word.startTime, line.startTime));
+                const endTime = Math.max(startTime, finiteNumber(part.endTime, finiteNumber(word.endTime, line.endTime)));
+                return graphemes.map((text, glyphIndex) => ({
+                    text,
+                    char: text,
+                    startTime: startTime + (endTime - startTime) * glyphIndex / Math.max(1, graphemes.length),
+                    endTime: startTime + (endTime - startTime) * (glyphIndex + 1) / Math.max(1, graphemes.length),
+                    wordIndex,
+                    syllableIndex: validSyllables ? partIndex : -1
+                }));
+            });
+        });
+        const fullText = splitGraphemes(line.fullText);
+        if (!fullText.length || source.map(glyph => glyph.text).join('') === line.fullText) return source;
+
+        // Reconcile tokenized words with the untouched display string. This keeps
+        // spaces omitted by legacy LRC tokenization and punctuation not carrying a
+        // timing tag, while every timed source glyph preserves its original clock.
+        const aligned = fullText.map(text => ({
+            text,
+            char: text,
+            startTime: line.startTime,
+            endTime: line.startTime,
+            wordIndex: -1,
+            syllableIndex: -1
+        }));
+        let cursor = 0;
+        let lastTime = line.startTime;
+        source.forEach(glyph => {
+            let target = -1;
+            for (let index = cursor; index < fullText.length; index += 1) {
+                if (fullText[index] === glyph.text) {
+                    target = index;
+                    break;
+                }
+            }
+            if (target < 0) return;
+            for (let index = cursor; index < target; index += 1) {
+                aligned[index].startTime = glyph.startTime;
+                aligned[index].endTime = glyph.startTime;
+            }
+            aligned[target] = glyph;
+            cursor = target + 1;
+            lastTime = Math.max(lastTime, glyph.endTime);
+        });
+        for (let index = cursor; index < aligned.length; index += 1) {
+            aligned[index].startTime = lastTime;
+            aligned[index].endTime = lastTime;
+        }
+        return aligned;
     };
 
     const resolvePlaybackTime = (app, now) => {
@@ -242,6 +341,96 @@
         };
     };
 
+    const createInterludeVisualizer = (options = {}) => {
+        const barCount = Math.max(20, Math.min(64, Math.round(finiteNumber(options.barCount, 36))));
+        const root = document.createElement('div');
+        root.className = `stage-interlude-visualizer${options.className ? ` ${options.className}` : ''}`;
+        root.setAttribute('role', 'status');
+        root.setAttribute('aria-live', 'polite');
+
+        const orbit = document.createElement('span');
+        orbit.className = 'stage-interlude-orbit';
+        orbit.setAttribute('aria-hidden', 'true');
+        const bars = document.createElement('span');
+        bars.className = 'stage-interlude-bars';
+        bars.setAttribute('aria-hidden', 'true');
+        const barsList = Array.from({ length: barCount }, (_, index) => {
+            const bar = document.createElement('i');
+            bar.style.setProperty('--interlude-index', String(index));
+            bar.style.setProperty('--interlude-angle', `${index * 360 / barCount}deg`);
+            bars.appendChild(bar);
+            return bar;
+        });
+        orbit.append(bars);
+        root.append(orbit);
+
+        let visible = false;
+        let destroyed = false;
+        let lastLabel = '';
+        const update = (frame, state = {}) => {
+            if (destroyed) return;
+            const nextVisible = state.visible !== false;
+            if (nextVisible !== visible) {
+                visible = nextVisible;
+                root.hidden = !visible;
+            }
+            const label = String(state.label || '音乐间奏');
+            if (label !== lastLabel) {
+                lastLabel = label;
+                root.setAttribute('aria-label', label);
+            }
+            if (!visible) return;
+
+            const spectrum = frame?.audio?.spectrum || EMPTY_WORDS;
+            const hasSpectrum = spectrum.length > 0;
+            const motion = global.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+                ? 0 : clamp(finiteNumber(state.intensity, 1), 0, 2);
+            const time = finiteNumber(frame?.playbackTime, 0) * motion;
+            const playing = Boolean(frame?.isPlaying);
+            const power = playing ? clamp(frame?.audio?.power) * Math.min(1, motion) : 0;
+            root.classList.toggle('is-playing', playing);
+            root.style.setProperty('--interlude-power', power.toFixed(4));
+            // Same absolute phase on pause: no change of angular speed that jumps the ring.
+            root.style.setProperty('--interlude-phase', `${(time * 3) % 360}deg`);
+
+            barsList.forEach((bar, index) => {
+                const ratio = index / barCount;
+                let energy;
+                if (hasSpectrum) {
+                    const mirrored = ratio <= 0.5 ? ratio * 2 : (1 - ratio) * 2;
+                    const spectrumRatio = 0.025 + Math.pow(mirrored, 1.65) * 0.92;
+                    const center = Math.min(spectrum.length - 1, Math.floor(spectrumRatio * spectrum.length));
+                    const radius = Math.max(1, Math.floor(spectrum.length / 128));
+                    let total = 0;
+                    let samples = 0;
+                    for (let sample = Math.max(0, center - radius); sample <= Math.min(spectrum.length - 1, center + radius); sample += 1) {
+                        total += clamp(spectrum[sample]);
+                        samples += 1;
+                    }
+                    energy = clamp(Math.pow(total / Math.max(1, samples), 0.72));
+                } else {
+                    const wave = Math.sin(time * 0.85 + index * 0.52) * 0.5
+                        + Math.sin(time * 0.43 - index * 0.26) * 0.28;
+                    energy = 0.16 + Math.max(0, wave) * 0.22;
+                }
+                const settled = playing ? energy * Math.min(1, motion) : 0;
+                const length = 0.28 + settled * 0.72;
+                // Translate from the centre first; scaling only changes the stroke length.
+                bar.style.transform = `rotate(var(--interlude-angle)) translateY(calc(-1 * var(--interlude-radius))) scaleY(${length.toFixed(4)})`;
+                bar.style.opacity = (0.3 + settled * 0.5).toFixed(4);
+            });
+        };
+        const destroy = () => {
+            if (destroyed) return;
+            destroyed = true;
+            barsList.length = 0;
+            root.remove();
+        };
+
+        root.hidden = true;
+        return Object.freeze({ root, update, destroy });
+    };
+
     class DisposableScope {
         constructor() {
             this.disposers = [];
@@ -296,17 +485,21 @@
 
     global.MusicStageRuntime = Object.freeze({
         invalidateLines,
+        finiteNumber,
         clamp,
         hashString,
         seededRandom,
         splitGraphemes,
         normalizeLines,
         buildFallbackWords,
+        buildGlyphTimeline,
+        resolveSupplementalText,
         resolvePlaybackTime,
         findActiveLineIndex,
         resolveWordState,
         resolveAudioBands,
         createFrame,
+        createInterludeVisualizer,
         DisposableScope
     });
 })(window);

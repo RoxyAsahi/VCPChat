@@ -116,6 +116,102 @@
     color: color-mix(in srgb, var(--stage-ink) 42%, transparent);
     font-size: clamp(22px,3vw,38px);
 }
+
+/* A quiet vector rest, sharing the lyric composition rather than a HUD overlay. */
+.stage-interlude-visualizer {
+    --interlude-power: 0;
+    --interlude-phase: 0deg;
+    --interlude-radius: clamp(32px, 4vw, 48px);
+    --interlude-stroke: 1.5px;
+    --interlude-color: color-mix(in srgb, var(--stage-ink) 72%, var(--performance-accent, var(--stage-accent)));
+    position: absolute;
+    inset: 11% 5% 27%;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+}
+.stage-interlude-visualizer[hidden] {
+    display: none;
+}
+.stage-interlude-orbit {
+    position: relative;
+    width: calc(var(--interlude-radius) * 2);
+    aspect-ratio: 1;
+    color: var(--interlude-color);
+    transform: rotate(var(--interlude-phase));
+}
+.stage-interlude-orbit::before {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border: 1px solid currentColor;
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    opacity: 0.12;
+}
+.stage-interlude-bars {
+    position: absolute;
+    inset: 0;
+}
+.stage-interlude-bars > i {
+    position: absolute;
+    left: calc(50% - var(--interlude-stroke) / 2);
+    top: calc(50% - 14px);
+    width: var(--interlude-stroke);
+    height: 14px;
+    border-radius: 0;
+    background: currentColor;
+    transform-origin: 50% 100%;
+}
+.stage-interlude-bars > i:nth-child(6n + 1) {
+    color: var(--performance-accent, var(--stage-accent));
+}
+.stage-interlude-visualizer:not(.is-playing) {
+    opacity: 0.65;
+}
+/* Luminous: soft strokes, only a trace of its existing vector glow. */
+.stage-interlude-luminous {
+    --interlude-color: color-mix(in srgb, var(--stage-ink) 48%, var(--performance-accent));
+}
+.stage-interlude-luminous .stage-interlude-bars {
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--performance-accent) 25%, transparent));
+}
+.stage-interlude-luminous .stage-interlude-bars > i {
+    border-radius: 1px;
+}
+/* Partita: grouped, square-ended score ticks echo the stepped guides. */
+.stage-interlude-partita {
+    --interlude-stroke: 2px;
+}
+.stage-interlude-partita .stage-interlude-bars > i:nth-child(6n) {
+    visibility: hidden;
+}
+.stage-interlude-partita .stage-interlude-orbit::before {
+    border-radius: 0;
+    inset: 32%;
+    transform: rotate(45deg);
+}
+/* Cadenza: a restrained geometric accent, not another concentric dial. */
+.stage-interlude-cadenza .stage-interlude-orbit::before {
+    inset: 37%;
+    border-radius: 0;
+    transform: rotate(-45deg);
+    opacity: 0.22;
+}
+/* Fume: neutral ink and an open centre, matching the printed article world. */
+.stage-interlude-fume {
+    --interlude-color: var(--stage-ink);
+    --interlude-stroke: 1px;
+    inset: 12% 5% 24%;
+}
+.stage-interlude-fume .stage-interlude-orbit::before {
+    display: none;
+}
+.stage-interlude-fume .stage-interlude-bars > i {
+    color: inherit;
+}
 .music-stage-mode-partita.lyric-performance-mode::before,
 .music-stage-mode-partita.lyric-performance-mode::after {
     display: none;
@@ -141,7 +237,8 @@
 }
 .lyric-performance-mode > .lyric-performance-viewport,
 .lyric-performance-mode > .lyric-performance-subtitle,
-.lyric-performance-mode > .lyric-performance-empty {
+.lyric-performance-mode > .lyric-performance-empty,
+.lyric-performance-mode > .stage-interlude-visualizer {
     z-index: 1;
 }
 
@@ -158,4 +255,20 @@
 }
 .lyric-performance-guide-head[hidden] {
     display: none;
+}
+
+@media (max-width: 560px) {
+    .lyric-performance-mode > .stage-interlude-visualizer {
+        inset: 12% 4% 33%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stage-interlude-orbit {
+        transform: none !important;
+    }
+    .stage-interlude-bars > i {
+        transform: rotate(var(--interlude-angle)) translateY(calc(-1 * var(--interlude-radius))) scaleY(0.28) !important;
+        opacity: 0.3 !important;
+    }
 }
