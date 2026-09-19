@@ -298,7 +298,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return result;
     };
 
-    function transformSpecialBlocksForViewer(text) {
+    function transformSpecialBlocksForViewer(text, restoreCodeDomains = (value) => value) {
         const noteRegex = /<<<DailyNoteStart>>>(.*?)<<<DailyNoteEnd>>>/gs;
         const toolResultRegex = /\[\[VCP调用结果信息汇总:(.*?)VCP调用结果结束\]\]/gs;
         const toolCallSummaryRegex = /\[本轮工具调用摘要:\]([\s\S]*?)\[本轮工具调用摘要结束\]/g;
@@ -341,7 +341,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const renderMarkdownField = (rawText) => {
-            const source = rawText || '';
+            /*
+             * 围栏代码在外层预处理阶段会被占位符保护。特殊块（尤其日记）
+             * 会在外层 Markdown 解析前先独立调用 marked.parse，因此必须在
+             * 此处恢复其字段内的代码域，否则占位符会被固化为普通段落文本。
+             */
+            const source = restoreCodeDomains(rawText || '');
             if (window.marked) {
                 try {
                     return window.marked.parse(source);
@@ -579,7 +584,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             flushCurrentField();
 
-            let html = `<div class="vcp-tool-result-bubble collapsible" data-vcp-block-type="tool-result">`;
+            // 阅读模式默认展开工具结果，同时保留点击标题折叠/展开的能力。
+            let html = `<div class="vcp-tool-result-bubble collapsible expanded" data-vcp-block-type="tool-result">`;
             html += `<div class="vcp-tool-result-header">`;
             html += `<span class="vcp-tool-result-label">VCP-ToolResult</span>`;
             html += `<span class="vcp-tool-result-name">${escapeHtml(toolName)}</span>`;
@@ -677,7 +683,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             toolName = toolName.replace(/[「{](?:始|末)(?:[Ee][Ss][Cc][Aa][Pp][Ee])?[」}]/gi, '').replace(/,$/, '').trim();
 
             const escapedFullContent = escapeHtml(content.trim());
-            return `\n\n<div class="vcp-tool-use-bubble" data-vcp-block-type="tool-use">` +
+            // 阅读模式以完整阅读为主，工具调用默认展开。
+            return `\n\n<div class="vcp-tool-use-bubble expanded" data-vcp-block-type="tool-use">` +
                 `<div class="vcp-tool-summary">` +
                 `<span class="vcp-tool-label">VCP-ToolUse:</span> ` +
                 `<span class="vcp-tool-name-highlight">${escapeHtml(toolName)}</span>` +
@@ -859,7 +866,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Step 5: Run other pre-processing on the text (which still has placeholders).
         processed = deIndentHtml(processed);
-        processed = transformSpecialBlocksForViewer(processed);
+
+        /*
+         * 仅为特殊块的内嵌 Markdown 字段按需恢复代码域。普通正文仍保留
+         * 占位符直到 Step 7，避免下面的通用文本修正规则改写代码内容。
+         */
+        const restoreCodeDomains = (value) => {
+            let restored = value;
+            for (const [placeholder, block] of codeBlockMap.entries()) {
+                restored = restored.split(placeholder).join(block);
+            }
+            return restored;
+        };
+        processed = transformSpecialBlocksForViewer(processed, restoreCodeDomains);
         
         // Basic content processors from contentProcessor.js
         processed = processed.replace(/^(\s*```)(?![\r\n])/gm, '$1\n'); // ensureNewlineAfterCodeBlock
@@ -1071,8 +1090,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Theme Management ---
     function applyTheme(theme) {
-        const currentTheme = theme || 'dark';
+        const currentTheme = theme === 'light' ? 'light' : 'dark';
+
+        /*
+         * 保留阅读器原有的 light-theme 类，同时同步主消息渲染器使用的
+         * data-vcp-theme 契约。工具块、工具结果和日记组件由此直接复用
+         * messageRenderer.css 的同一套深浅主题样式，不再维护分叉皮肤。
+         */
         document.body.classList.toggle('light-theme', currentTheme === 'light');
+        document.body.dataset.vcpTheme = currentTheme;
+
         const highlightThemeStyle = document.getElementById('highlight-theme-style');
         if (highlightThemeStyle) {
             highlightThemeStyle.href = currentTheme === 'light'
