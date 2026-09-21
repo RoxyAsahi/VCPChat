@@ -1,0 +1,389 @@
+/* ==========================================================================
+   VCPChat Workspace Side Pane & Side Chat Design System
+   ========================================================================== */
+
+/* --- Modern 4px Resizer with 2px Subtle Indicator --- */
+#resizerRight.resizer,
+.vcp-side-pane-resizer {
+    width: 4px;
+    margin: 0 -2px;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 50;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transition: background-color 0.15s ease;
+    user-select: none;
+}
+
+#resizerRight.resizer::after,
+.vcp-side-pane-resizer::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 9999px;
+    background-color: var(--vcp-resizer-line, rgba(255, 255, 255, 0.22));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+body[data-vcp-theme="light"] #resizerRight.resizer::after,
+body[data-vcp-theme="light"] .vcp-side-pane-resizer::after {
+    background-color: var(--vcp-resizer-line-light, rgba(0, 0, 0, 0.18));
+}
+
+#resizerRight.resizer:hover::after,
+#resizerRight.resizer.active::after,
+body.vcp-sidebar-resizing #resizerRight.resizer::after {
+    opacity: 1;
+}
+
+#resizerRight.resizer.active::after {
+    background-color: var(--accent-bg, #3b82f6) !important;
+}
+
+/* Hide resizer completely when side pane is collapsed */
+.vcp-side-pane-hidden + #resizerRight,
+#vcpSidePane:not(.active) + #resizerRight,
+#vcpSidePane[aria-hidden="true"] + #resizerRight,
+#resizerRight.hidden {
+    display: none !important;
+}
+
+/* --- Workspace Side Pane Host --- */
+.vcp-side-pane,
+#vcpSidePane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--panel-bg-dark, rgba(24, 24, 28, 0.96));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-left: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    box-sizing: border-box;
+    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, border-color 0.2s ease;
+    z-index: 40;
+}
+
+body[data-vcp-theme="light"] .vcp-side-pane,
+body[data-vcp-theme="light"] #vcpSidePane {
+    background-color: var(--panel-bg-light, rgba(255, 255, 255, 0.95));
+    border-left-color: var(--border-color-light, rgba(0, 0, 0, 0.08));
+}
+
+/* Collapsed / Hidden State */
+.vcp-side-pane.collapsed,
+.vcp-side-pane[aria-hidden="true"],
+#vcpSidePane:not(.active) {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    border-left-color: transparent !important;
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+/* --- Side Pane Tab Bar --- */
+.side-pane-tab-bar {
+    height: 38px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px 0 10px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    background: transparent;
+    user-select: none;
+}
+
+body[data-vcp-theme="light"] .side-pane-tab-bar {
+    border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+.side-pane-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1;
+    min-width: 0;
+}
+
+.side-pane-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.side-pane-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 8px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.65));
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    max-width: 140px;
+}
+
+body[data-vcp-theme="light"] .side-pane-tab {
+    color: rgba(0, 0, 0, 0.65);
+}
+
+.side-pane-tab:hover {
+    color: var(--text-color-primary, #ffffff);
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+body[data-vcp-theme="light"] .side-pane-tab:hover {
+    color: #111827;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.side-pane-tab.active {
+    color: var(--text-color-primary, #ffffff);
+    background-color: var(--card-bg-selected, rgba(255, 255, 255, 0.12));
+    font-weight: 500;
+}
+
+body[data-vcp-theme="light"] .side-pane-tab.active {
+    color: #111827;
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.side-pane-tab .tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.side-pane-tab .tab-icon {
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.side-pane-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin-left: 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    opacity: 0.6;
+    cursor: pointer;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.side-pane-tab-close:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.side-pane-tab-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.side-pane-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.65));
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.side-pane-action-btn:hover {
+    color: var(--text-color-primary, #ffffff);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+body[data-vcp-theme="light"] .side-pane-action-btn:hover {
+    color: #111827;
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* --- Content Views Container --- */
+.side-pane-content-container {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.side-pane-view {
+    display: none;
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.side-pane-view.active {
+    display: flex;
+}
+
+/* --- Side Chat Specific Presentation --- */
+.side-chat-surface {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.side-chat-header {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.04));
+    font-size: 12px;
+}
+
+.side-chat-topic-title {
+    font-weight: 500;
+    color: var(--text-color-primary, #ffffff);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.side-chat-messages-container {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.side-chat-messages-container .message-item {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.side-chat-composer {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.side-chat-reference-box {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 2px solid var(--accent-bg, #3b82f6);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.7));
+}
+
+.side-chat-textarea-shell {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 8px;
+    padding: 6px 8px;
+    transition: border-color 0.15s ease;
+}
+
+.side-chat-textarea-shell:focus-within {
+    border-color: var(--accent-bg, #3b82f6);
+}
+
+.side-chat-textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-color-primary, #ffffff);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    resize: none;
+    max-height: 120px;
+    min-height: 24px;
+}
+
+.side-chat-send-btn,
+.side-chat-stop-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent-bg, #3b82f6);
+    color: #ffffff;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+}
+
+.side-chat-send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.side-chat-stop-btn {
+    background: #ef4444;
+}
+
+.side-chat-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.side-chat-status-error {
+    color: #ef4444;
+}
+
+.side-chat-status-unsaved {
+    color: #f59e0b;
+}
