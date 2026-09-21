@@ -13,6 +13,8 @@ export function createSidePaneController({
     toggleChatBtn = null,
     closeSidePaneBtn = null,
     addChatTabBtn = null,
+    overviewBtn = null,
+    overviewPopover = null,
     settingsRef = null,
     electronAPI = null,
     scope = null,
@@ -26,6 +28,10 @@ export function createSidePaneController({
     }
 
     const doc = root.ownerDocument || globalThis.document;
+    const resolvedAddChatTabBtn = addChatTabBtn || doc.getElementById?.('addSidePaneChatBtn');
+    const resolvedOverviewBtn = overviewBtn || doc.getElementById?.('sidePaneTabOverviewBtn');
+    const resolvedOverviewPopover = overviewPopover || doc.getElementById?.('sidePaneTabOverviewPopover');
+
     const initialWidth = Number(settingsRef?.get?.()?.notificationsSidebarWidth)
         || SidePaneState.DEFAULT_WIDTH;
 
@@ -124,6 +130,7 @@ export function createSidePaneController({
 
             tabListElement.appendChild(tabItem);
         });
+        renderTabOverviewPopover?.(searchInput?.value || '');
     }
 
     if (tabListElement) {
@@ -421,18 +428,109 @@ export function createSidePaneController({
         cleanupListeners.push(() => closeSidePaneBtn.removeEventListener('click', onCloseClick));
     }
 
-    if (addChatTabBtn) {
+    function renderTabOverviewPopover(filterQuery = '') {
+        if (!resolvedOverviewPopover) return;
+        const listEl = resolvedOverviewPopover.querySelector('#sidePaneOpenTabsList');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        const visibleTabs = SidePaneState.getVisibleTabs(state, state.parent);
+        const query = filterQuery.trim().toLowerCase();
+        const filtered = query
+            ? visibleTabs.filter(t => t.title.toLowerCase().includes(query))
+            : visibleTabs;
+
+        if (filtered.length === 0) {
+            const emptyEl = doc.createElement('div');
+            emptyEl.className = 'side-pane-overview-empty';
+            emptyEl.textContent = '未找到匹配的标签页';
+            listEl.appendChild(emptyEl);
+            return;
+        }
+
+        filtered.forEach(tab => {
+            const item = doc.createElement('div');
+            item.className = `side-pane-overview-item${tab.id === state.activeTabId ? ' active' : ''}`;
+            const titleDiv = doc.createElement('div');
+            titleDiv.className = 'side-pane-overview-item-title';
+            const icon = doc.createElement('span');
+            icon.className = 'vcp-ui-icon';
+            icon.style.fontSize = '14px';
+            icon.textContent = tab.kind === 'notifications' ? 'notifications' : 'chat_bubble';
+            const label = doc.createElement('span');
+            label.textContent = tab.title;
+            titleDiv.append(icon, label);
+
+            item.appendChild(titleDiv);
+
+            if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID) {
+                const closeBtn = doc.createElement('button');
+                closeBtn.type = 'button';
+                closeBtn.className = 'side-pane-tab-close';
+                closeBtn.title = '关闭';
+                closeBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">close</span>';
+                closeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    controller.closeTab(tab.id);
+                    renderTabOverviewPopover(searchInput?.value || '');
+                });
+                item.appendChild(closeBtn);
+            }
+
+            item.addEventListener('click', () => {
+                controller.activateTab(tab.id);
+                controller.setVisible(true);
+                resolvedOverviewPopover.style.display = 'none';
+            });
+
+            listEl.appendChild(item);
+        });
+    }
+
+    const searchInput = resolvedOverviewPopover?.querySelector?.('.side-pane-overview-input');
+    if (searchInput) {
+        const onSearchInput = () => {
+            renderTabOverviewPopover(searchInput.value);
+        };
+        searchInput.addEventListener('input', onSearchInput);
+        cleanupListeners.push(() => searchInput.removeEventListener('input', onSearchInput));
+    }
+
+    if (resolvedOverviewBtn && resolvedOverviewPopover) {
+        const onOverviewClick = (e) => {
+            e.stopPropagation();
+            const isOpen = resolvedOverviewPopover.style.display !== 'none';
+            resolvedOverviewPopover.style.display = isOpen ? 'none' : 'flex';
+            if (!isOpen) {
+                if (searchInput) searchInput.value = '';
+                renderTabOverviewPopover();
+                searchInput?.focus?.();
+            }
+        };
+        resolvedOverviewBtn.addEventListener('click', onOverviewClick);
+        cleanupListeners.push(() => resolvedOverviewBtn.removeEventListener('click', onOverviewClick));
+
+        const onDocClick = (e) => {
+            if (!resolvedOverviewPopover.contains?.(e.target) && e.target !== resolvedOverviewBtn) {
+                resolvedOverviewPopover.style.display = 'none';
+            }
+        };
+        doc.addEventListener('click', onDocClick);
+        cleanupListeners.push(() => doc.removeEventListener('click', onDocClick));
+    }
+
+    if (resolvedAddChatTabBtn) {
         const onAddClick = () => {
             if (typeof onOpenSideChat === 'function') {
                 onOpenSideChat();
             }
         };
-        addChatTabBtn.addEventListener('click', onAddClick);
-        cleanupListeners.push(() => addChatTabBtn.removeEventListener('click', onAddClick));
+        resolvedAddChatTabBtn.addEventListener('click', onAddClick);
+        cleanupListeners.push(() => resolvedAddChatTabBtn.removeEventListener('click', onAddClick));
     }
 
     // Initial render
     renderTabList();
+    renderTabOverviewPopover();
     syncViewPanels();
     syncDomVisibility();
 

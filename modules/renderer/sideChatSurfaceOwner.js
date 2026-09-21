@@ -111,15 +111,28 @@ export async function mountSideChatSurface(container, {
           </div>
         </div>
         <form class="side-chat-composer">
-          <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
-          <div class="side-chat-textarea-shell">
-            <textarea class="side-chat-textarea" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
-            <button type="submit" class="side-chat-send-btn" title="发送 (Enter)" aria-label="发送" disabled>
-              <span class="vcp-ui-icon" style="font-size:16px;">arrow_upward</span>
-            </button>
-            <button type="button" class="side-chat-stop-btn" style="display:none;" title="停止生成" aria-label="停止生成">
-              <span class="vcp-ui-icon" style="font-size:16px;">stop</span>
-            </button>
+          <div class="chat-input-card side-chat-input-card">
+            <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
+            <textarea class="chat-message-input side-chat-textarea" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
+            <div class="chat-input-actions side-chat-input-actions">
+              <div class="side-chat-toolbar-left">
+                <span class="side-chat-toolbar-badge side-chat-model-badge" title="当前模型: ${escapeHtml(modelName)}">
+                  <span class="vcp-ui-icon" style="font-size:12px;">smart_toy</span>
+                  ${escapeHtml(modelName)}
+                </span>
+                <span class="side-chat-toolbar-badge side-chat-mode-badge" title="${contextModeTitle}">
+                  ${contextModeLabel}
+                </span>
+              </div>
+              <div class="side-chat-toolbar-right">
+                <button type="submit" class="chat-send-button side-chat-send-btn" title="发送 (Enter)" aria-label="发送" disabled>
+                  <span class="vcp-ui-icon" style="font-size:16px;">arrow_upward</span>
+                </button>
+                <button type="button" class="chat-send-button side-chat-stop-btn interrupt-mode" style="display:none;" title="停止生成" aria-label="停止生成">
+                  <span class="vcp-ui-icon" style="font-size:16px;">stop</span>
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       </div>
