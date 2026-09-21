@@ -1590,7 +1590,13 @@ export const chatManager = (() => {
 
         try {
             const agentConfig = currentSelectedItem.config || currentSelectedItem;
-            const historySnapshotForVCP = sendHistory.filter(msg => !msg.isThinking);
+            const extraContextHistory = typeof request?.conversation?.getContextHistory === 'function'
+                ? (request.conversation.getContextHistory() || [])
+                : (Array.isArray(request?.contextHistory) ? request.contextHistory : []);
+            const historySnapshotForVCP = [
+                ...extraContextHistory,
+                ...sendHistory.filter(msg => !msg.isThinking)
+            ];
             const contextRegexRules = Array.isArray(agentConfig?.stripRegexes)
                 ? agentConfig.stripRegexes
                 : [];

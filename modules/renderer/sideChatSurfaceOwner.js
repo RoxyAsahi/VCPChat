@@ -157,13 +157,23 @@ export async function mountSideChatSurface(container, {
 
     const renderer = rendererOwner.renderer;
 
+    // Supply frozen parent snapshot context if present (P1 context inheritance)
+    const frozenContext = Array.isArray(descriptor.parentSnapshot)
+        ? [...descriptor.parentSnapshot]
+        : [];
+
+    const enhancedConversation = Object.freeze({
+        ...rendererOwner.conversation,
+        getContextHistory: () => frozenContext
+    });
+
     const operations = createChatOperations({
         send: async (request) => {
             operationReady = new Promise((resolve) => { publishOperation = resolve; });
             try {
                 return await chatManager.sendMessage({
                     ...request,
-                    conversation: rendererOwner.conversation,
+                    conversation: enhancedConversation,
                     awaitTerminal: true,
                     onOperation(operation) {
                         activeOperation = operation;
@@ -191,7 +201,7 @@ export async function mountSideChatSurface(container, {
         mode: 'interactive',
         operations,
         disposeRenderer: () => rendererOwner.dispose(),
-        conversation: rendererOwner.conversation
+        conversation: enhancedConversation
     });
 
     // Composer event handling

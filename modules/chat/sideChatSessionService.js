@@ -17,7 +17,8 @@ export function createSideChatDescriptor({
     childTopicId,
     title = null,
     contextMode = 'references-only',
-    snapshotId = null
+    snapshotId = null,
+    parentSnapshot = []
 }) {
     if (!parent || !parent.itemId || !parent.topicId) {
         throw new TypeError('SideChatDescriptor requires a valid parent reference with itemId and topicId');
@@ -58,6 +59,7 @@ export function createSideChatDescriptor({
         createdAt: now,
         contextMode: contextMode === 'parent-snapshot' ? 'parent-snapshot' : 'references-only',
         snapshotId: snapshotId || null,
+        parentSnapshot: Array.isArray(parentSnapshot) ? Object.freeze([...parentSnapshot]) : Object.freeze([]),
     });
 }
 

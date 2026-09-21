@@ -241,3 +241,77 @@ test('Dual stream concurrency: cancelling side chat does not abort main chat str
     await handle.dispose();
     dom.window.close();
 });
+
+test('Parent context snapshot inheritance (P1): child sends frozen parent context without persisting it to child topic', async () => {
+    const dom = new JSDOM('<div id="sideContainer"></div>');
+    const container = dom.window.document.getElementById('sideContainer');
+
+    let sentRequest = null;
+    let savedTopicHistory = null;
+
+    const mockCapabilities = {
+        repository: {
+            async getHistory() { return []; },
+            async saveHistory(itemId, itemType, topicId, history) {
+                savedTopicHistory = history;
+                return { success: true };
+            }
+        },
+        createRenderer: ({ conversation }) => ({
+            renderer: { async renderHistory() {}, async dispose() {} },
+            conversation: {
+                selectedItemRef: { get: () => conversation.selectedItem },
+                topicIdRef: { get: () => conversation.topicId },
+                historyRef: { get: () => [], set: () => {} },
+                replaceHistory: () => [],
+                dispose: () => {}
+            },
+            dispose: async () => {}
+        }),
+        manager: {
+            async sendMessage(req) {
+                sentRequest = req;
+                return { terminal: { event: { type: 'completed' } } };
+            }
+        }
+    };
+
+    const parentHistory = [
+        { role: 'user', content: 'Parent question 1' },
+        { role: 'assistant', content: 'Parent answer 1' }
+    ];
+
+    const descriptor = {
+        id: 'chat-side-inheritance-1',
+        title: '上下文继承测试',
+        parent: { itemId: 'agent-1', topicId: 'topic-main' },
+        child: { itemId: 'agent-1', topicId: 'topic-side' },
+        contextMode: 'parent-snapshot',
+        parentSnapshot: parentHistory
+    };
+
+    const sideChatOwner = createSideChatSurfaceOwner({
+        chatCapabilities: mockCapabilities
+    });
+
+    const handle = await sideChatOwner.mountTab(descriptor, container);
+    await new Promise(r => setTimeout(r, 10));
+
+    // Submit side chat message
+    const textarea = container.querySelector('.side-chat-textarea');
+    textarea.value = 'Child question 1';
+    const form = container.querySelector('form');
+    form.requestSubmit();
+
+    await new Promise(r => setTimeout(r, 20));
+
+    assert.ok(sentRequest);
+    assert.equal(typeof sentRequest.conversation.getContextHistory, 'function');
+    const inherited = sentRequest.conversation.getContextHistory();
+    assert.equal(inherited.length, 2);
+    assert.equal(inherited[0].content, 'Parent question 1');
+    assert.equal(inherited[1].content, 'Parent answer 1');
+
+    await handle.dispose();
+    dom.window.close();
+});

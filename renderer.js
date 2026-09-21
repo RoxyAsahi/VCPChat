@@ -20,7 +20,7 @@ import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttach
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
-import { createSideChatDescriptor, createChildTopicForAgent } from './modules/chat/sideChatSessionService.js';
+import { createSideChatDescriptor, createChildTopicForAgent, freezeParentHistory } from './modules/chat/sideChatSessionService.js';
 import { captureSelectionReference } from './modules/ui-system/side-pane/selection-reference.js';
 
 const streamManager = createStreamProjection();
@@ -961,6 +961,10 @@ mainChatSettingsPresentationOwner.configureStartup({
                         return null;
                     }
 
+                    const parentSnapshot = (options?.contextMode === 'parent-snapshot' || options?.inheritParentContext !== false)
+                        ? freezeParentHistory(mainHistoryRef?.get?.() || [])
+                        : [];
+
                     const descriptor = createSideChatDescriptor({
                         parent: {
                             itemId: currentItem.id,
@@ -970,7 +974,8 @@ mainChatSettingsPresentationOwner.configureStartup({
                         },
                         childTopicId: createResult.topicId,
                         title: topicTitle,
-                        contextMode: options?.contextMode || 'references-only'
+                        contextMode: options?.contextMode || (parentSnapshot.length > 0 ? 'parent-snapshot' : 'references-only'),
+                        parentSnapshot
                     });
 
                     const handle = await sidePaneController.openChat(descriptor);
