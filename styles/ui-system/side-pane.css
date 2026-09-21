@@ -111,21 +111,34 @@ html #vcpSidePane .notifications-sidebar.active {
     transition: none;
 }
 
-/* --- Side Pane Tab Bar --- */
-html .side-pane-tab-bar {
+html #vcpSidePane .notifications-header {
     height: 38px;
     min-height: 38px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.04));
+    background: transparent;
+}
+
+html body[data-vcp-theme="light"] #vcpSidePane .notifications-header {
+    border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+/* --- Side Pane Tab Bar --- */
+html .side-pane-tab-bar {
+    height: var(--vcp-ui-shell-header-height, 46px);
+    min-height: var(--vcp-ui-shell-header-height, 46px);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 6px 0 10px;
-    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
+    border-bottom: 1px solid var(--next-border, var(--border-color, rgba(255, 255, 255, 0.06)));
     background: transparent;
     user-select: none;
+    box-sizing: border-box;
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab-bar {
-    border-bottom-color: rgba(0, 0, 0, 0.06);
+    border-bottom-color: var(--next-border, rgba(0, 0, 0, 0.06));
 }
 
 html .side-pane-tabs {
@@ -484,14 +497,14 @@ html .side-chat-empty-desc {
 html .side-chat-composer {
     display: flex;
     flex-direction: column;
-    padding: 8px 10px;
-    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.06));
-    background: rgba(0, 0, 0, 0.1);
+    padding: 0 12px 12px 12px;
+    border-top: none;
+    background: transparent;
 }
 
 html body[data-vcp-theme="light"] .side-chat-composer {
-    background: rgba(0, 0, 0, 0.02);
-    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+    background: transparent;
+    border-top: none;
 }
 
 html .side-chat-reference-box {
@@ -517,10 +530,10 @@ html .side-chat-input-card {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 10px 12px 8px;
+    padding: 14px 14px 8px;
     box-sizing: border-box;
     border: 1px solid color-mix(in srgb, var(--border-color, rgba(255, 255, 255, 0.1)) 48%, transparent);
-    border-radius: 18px;
+    border-radius: var(--vcp-ui-composer-radius, 24px);
     background: linear-gradient(
         180deg,
         color-mix(in srgb, var(--input-bg, rgba(255, 255, 255, 0.05)) 85%, rgba(255, 255, 255, 0.08)),
@@ -578,11 +591,11 @@ html .side-chat-textarea {
     color: var(--primary-text, #f1f5f9);
     font-family: inherit;
     font-size: 13px;
-    line-height: 1.45;
+    line-height: 1.4;
     resize: none;
     max-height: 120px;
-    min-height: 26px;
-    padding: 2px 2px;
+    min-height: 24px;
+    padding: 0 0 0 4px;
     box-sizing: border-box;
 }
 
@@ -596,7 +609,7 @@ html .side-chat-input-actions {
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    padding-top: 4px;
+    padding-top: 0;
 }
 
 html .side-chat-toolbar-left {
@@ -661,40 +674,41 @@ html .side-chat-stop-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: var(--vcp-ui-send-button-size, 36px);
+    height: var(--vcp-ui-send-button-size, 36px);
+    margin-left: auto;
     border: none;
-    border-radius: 50%;
-    background: var(--accent-bg, #3b82f6);
-    color: #ffffff;
+    border-radius: var(--vcp-ui-radius-full, 9999px);
+    background: var(--vcp-ui-accent, #2563eb);
+    color: var(--vcp-ui-on-accent, #ffffff);
     cursor: pointer;
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--vcp-ui-send-button-shadow, 0 2px 6px rgba(37, 99, 235, 0.25));
     transition: opacity 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
 html .side-chat-send-btn svg {
-    width: 16px;
-    height: 16px;
+    width: var(--vcp-ui-send-icon-size, 20px);
+    height: var(--vcp-ui-send-icon-size, 20px);
     stroke: currentColor;
-    stroke-width: 2.2;
+    stroke-width: 2;
     fill: none;
     flex: 0 0 auto;
 }
 
 html body[data-vcp-theme="light"] .side-chat-send-btn {
-    background: var(--accent-color, #2563eb);
-    color: #ffffff;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    background: var(--vcp-ui-accent, #2563eb);
+    color: var(--vcp-ui-on-accent, #ffffff);
+    box-shadow: var(--vcp-ui-send-button-shadow, 0 2px 6px rgba(37, 99, 235, 0.25));
 }
 
 html .side-chat-send-btn:hover:not(:disabled) {
-    background: #2563eb;
+    background: var(--vcp-ui-accent-hover, #1d4ed8);
     transform: translateY(-1px);
 }
 
 html body[data-vcp-theme="light"] .side-chat-send-btn:hover:not(:disabled) {
-    background: #1d4ed8;
+    background: var(--vcp-ui-accent-hover, #1d4ed8);
 }
 
 html .side-chat-send-btn:disabled {

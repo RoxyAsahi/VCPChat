@@ -384,7 +384,7 @@ export async function mountSideChatSurface(container, {
         if (isDisposed) return;
         const hasText = Boolean(textarea.value.trim());
         const hasRefs = references.length > 0;
-        sendBtn.disabled = !isHistoryLoaded || (!hasText && !hasRefs);
+        sendBtn.disabled = !isHistoryLoaded;
         if (!hasText && hasRefs && descriptor.contextMode !== 'parent-snapshot') {
             textarea.placeholder = '输入针对引用的问题... (直接回车可发送引用)';
         } else {
