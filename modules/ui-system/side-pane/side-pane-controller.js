@@ -42,6 +42,7 @@ export function createSidePaneController({
 
     const mountedTabMap = new Map(); // tabId -> { provider, viewElement, tabElement, handle }
     const cleanupListeners = [];
+    const recentlyClosedTabs = [];
     let isDisposed = false;
 
     // Resizer Owner
@@ -331,6 +332,19 @@ export function createSidePaneController({
                 try { await onTabClosed(tabDesc); } catch {}
             }
 
+            const tabObj = state.tabs.find(t => t.id === tabId);
+            if (tabObj && tabObj.kind === 'chat' && tabDesc) {
+                recentlyClosedTabs.unshift({
+                    id: tabId,
+                    title: tabObj.title || tabDesc.title || '辅助聊天',
+                    descriptor: tabDesc,
+                    closedAt: Date.now()
+                });
+                if (recentlyClosedTabs.length > 10) {
+                    recentlyClosedTabs.pop();
+                }
+            }
+
             state = SidePaneState.closeTab(state, tabId);
             renderTabList();
             syncViewPanels();
@@ -428,6 +442,16 @@ export function createSidePaneController({
         cleanupListeners.push(() => closeSidePaneBtn.removeEventListener('click', onCloseClick));
     }
 
+    function formatRelativeTime(timestamp) {
+        const diff = Math.max(0, Date.now() - timestamp);
+        if (diff < 60_000) return '刚刚';
+        const mins = Math.floor(diff / 60_000);
+        if (mins < 60) return `${mins}分钟前`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}小时前`;
+        return `${Math.floor(hours / 24)}天前`;
+    }
+
     function renderTabOverviewPopover(filterQuery = '') {
         if (!resolvedOverviewPopover) return;
         const listEl = resolvedOverviewPopover.querySelector('#sidePaneOpenTabsList');
@@ -435,11 +459,14 @@ export function createSidePaneController({
         listEl.innerHTML = '';
         const visibleTabs = SidePaneState.getVisibleTabs(state, state.parent);
         const query = filterQuery.trim().toLowerCase();
-        const filtered = query
+        const filteredOpen = query
             ? visibleTabs.filter(t => t.title.toLowerCase().includes(query))
             : visibleTabs;
+        const filteredClosed = query
+            ? recentlyClosedTabs.filter(t => t.title.toLowerCase().includes(query))
+            : recentlyClosedTabs;
 
-        if (filtered.length === 0) {
+        if (filteredOpen.length === 0 && filteredClosed.length === 0) {
             const emptyEl = doc.createElement('div');
             emptyEl.className = 'side-pane-overview-empty';
             emptyEl.textContent = '未找到匹配的标签页';
@@ -447,43 +474,92 @@ export function createSidePaneController({
             return;
         }
 
-        filtered.forEach(tab => {
-            const item = doc.createElement('div');
-            item.className = `side-pane-overview-item${tab.id === state.activeTabId ? ' active' : ''}`;
-            const titleDiv = doc.createElement('div');
-            titleDiv.className = 'side-pane-overview-item-title';
-            const icon = doc.createElement('span');
-            icon.className = 'vcp-ui-icon';
-            icon.style.fontSize = '14px';
-            icon.textContent = tab.kind === 'notifications' ? 'notifications' : 'chat_bubble';
-            const label = doc.createElement('span');
-            label.textContent = tab.title;
-            titleDiv.append(icon, label);
+        if (filteredOpen.length > 0) {
+            const openTitle = doc.createElement('div');
+            openTitle.className = 'side-pane-overview-section-title';
+            openTitle.textContent = '打开的标签页';
+            listEl.appendChild(openTitle);
 
-            item.appendChild(titleDiv);
+            filteredOpen.forEach(tab => {
+                const item = doc.createElement('div');
+                item.className = `side-pane-overview-item${tab.id === state.activeTabId ? ' active' : ''}`;
+                const titleDiv = doc.createElement('div');
+                titleDiv.className = 'side-pane-overview-item-title';
+                const icon = doc.createElement('span');
+                icon.className = 'vcp-ui-icon';
+                icon.style.fontSize = '14px';
+                icon.textContent = tab.kind === 'notifications' ? 'notifications' : 'chat_bubble';
+                const label = doc.createElement('span');
+                label.textContent = tab.title;
+                titleDiv.append(icon, label);
 
-            if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID) {
-                const closeBtn = doc.createElement('button');
-                closeBtn.type = 'button';
-                closeBtn.className = 'side-pane-tab-close';
-                closeBtn.title = '关闭';
-                closeBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">close</span>';
-                closeBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    controller.closeTab(tab.id);
-                    renderTabOverviewPopover(searchInput?.value || '');
+                item.appendChild(titleDiv);
+
+                if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID) {
+                    const closeBtn = doc.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'side-pane-tab-close';
+                    closeBtn.title = '关闭';
+                    closeBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">close</span>';
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        controller.closeTab(tab.id);
+                        renderTabOverviewPopover(searchInput?.value || '');
+                    });
+                    item.appendChild(closeBtn);
+                }
+
+                item.addEventListener('click', () => {
+                    controller.activateTab(tab.id);
+                    controller.setVisible(true);
+                    resolvedOverviewPopover.style.display = 'none';
                 });
-                item.appendChild(closeBtn);
-            }
 
-            item.addEventListener('click', () => {
-                controller.activateTab(tab.id);
-                controller.setVisible(true);
-                resolvedOverviewPopover.style.display = 'none';
+                listEl.appendChild(item);
             });
+        }
 
-            listEl.appendChild(item);
-        });
+        if (filteredClosed.length > 0) {
+            const closedTitle = doc.createElement('div');
+            closedTitle.className = 'side-pane-overview-section-title';
+            closedTitle.textContent = '最近关闭的标签页';
+            listEl.appendChild(closedTitle);
+
+            filteredClosed.forEach((closedTab) => {
+                const item = doc.createElement('div');
+                item.className = 'side-pane-overview-item recently-closed';
+
+                const titleDiv = doc.createElement('div');
+                titleDiv.className = 'side-pane-overview-item-title';
+                const icon = doc.createElement('span');
+                icon.className = 'vcp-ui-icon';
+                icon.style.fontSize = '14px';
+                icon.textContent = 'history';
+                const label = doc.createElement('span');
+                label.textContent = closedTab.title;
+                titleDiv.append(icon, label);
+
+                const timeSpan = doc.createElement('span');
+                timeSpan.className = 'side-pane-overview-time';
+                timeSpan.textContent = formatRelativeTime(closedTab.closedAt);
+
+                item.append(titleDiv, timeSpan);
+
+                item.addEventListener('click', async () => {
+                    const idx = recentlyClosedTabs.indexOf(closedTab);
+                    if (idx !== -1) recentlyClosedTabs.splice(idx, 1);
+                    resolvedOverviewPopover.style.display = 'none';
+                    if (typeof onOpenSideChat === 'function') {
+                        await onOpenSideChat(closedTab.descriptor);
+                    } else {
+                        await controller.openChat(closedTab.descriptor);
+                    }
+                    controller.setVisible(true);
+                });
+
+                listEl.appendChild(item);
+            });
+        }
     }
 
     const searchInput = resolvedOverviewPopover?.querySelector?.('.side-pane-overview-input');

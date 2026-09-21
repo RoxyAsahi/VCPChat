@@ -6222,36 +6222,47 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 360,
+          "line": 374,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 417,
+          "line": 431,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 524,
+          "line": 553,
+          "kind": "preload-subscription"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 600,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 360,
+          "line": 374,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 417,
+          "line": 431,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 524,
+          "line": 553,
+          "kind": "preload-subscription",
+          "match": "onOpenSideChat("
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 600,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         }

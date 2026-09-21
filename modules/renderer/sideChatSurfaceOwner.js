@@ -67,31 +67,15 @@ export async function mountSideChatSurface(container, {
 
     const hasSnapshot = Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0;
 
-    // Shell template
+    // Shell template (aligned with ZCode: single unified tab header, clean message area, rich composer toolbar)
     container.innerHTML = `
       <div class="side-chat-surface" aria-label="侧边聊天">
-        <div class="side-chat-header">
-          <div class="side-chat-header-main">
-            <div class="side-chat-title-row">
-              <span class="side-chat-topic-title" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
-              <div class="side-chat-badges">
-                <span class="side-chat-badge side-chat-model-badge" title="当前模型: ${escapeHtml(modelName)}">${escapeHtml(modelName)}</span>
-                <span class="side-chat-badge side-chat-mode-badge" title="${contextModeTitle}">${contextModeLabel}</span>
-              </div>
-            </div>
-            <div class="side-chat-parent-bar">
-              <span class="side-chat-meta-label">来源:</span>
-              <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicTitle || descriptor.parent?.topicId || '父会话')}</button>
-              ${hasSnapshot ? `<button type="button" class="side-chat-context-toggle-btn" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:12px;">history</span> 上下文(${descriptor.parentSnapshot.length})</button>` : ''}
-            </div>
-          </div>
-          <div class="side-chat-status-bar" role="status" aria-live="polite">
-            <span class="side-chat-persistence-badge side-chat-status-unsaved" style="display:none;">未保存</span>
-            <span class="side-chat-status-text">加载中...</span>
-          </div>
-        </div>
+        <span class="side-chat-topic-title sr-only" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
         ${hasSnapshot ? `
         <div class="side-chat-snapshot-drawer" aria-label="继承上下文列表">
+          <div class="side-chat-snapshot-drawer-header">
+            <span>继承父会话上下文历史 (${descriptor.parentSnapshot.length})</span>
+          </div>
           ${descriptor.parentSnapshot.map(m => `
             <div class="side-chat-snapshot-item">
               <span class="side-chat-snapshot-role">${escapeHtml(m.role === 'user' ? '用户' : '助手')}:</span>
@@ -101,11 +85,10 @@ export async function mountSideChatSurface(container, {
         </div>` : ''}
         <div class="side-chat-messages-container" tabindex="-1" aria-label="侧聊消息">
           <div class="side-chat-empty-state" aria-hidden="true">
-            <div class="side-chat-empty-icon"><span class="vcp-ui-icon">forum</span></div>
             <div class="side-chat-empty-title">侧边辅助聊天</div>
             <div class="side-chat-empty-desc">
               ${isSnapshot
-                ? '已继承来源话题的历史快照。在下方输入提问，或在主聊中划选文字右键提问。'
+                ? '已继承来源话题的历史快照。在下方输入提问，或在主聊中划选文字追问。'
                 : '当前为仅引用模式。选区引用会作为上下文随问题一同发送。'}
             </div>
           </div>
@@ -113,7 +96,7 @@ export async function mountSideChatSurface(container, {
         <form class="side-chat-composer">
           <div class="chat-input-card side-chat-input-card">
             <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
-            <textarea class="chat-message-input side-chat-textarea" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
+            <textarea class="chat-message-input side-chat-textarea" placeholder="提出修改要求或疑问... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
             <div class="chat-input-actions side-chat-input-actions">
               <div class="side-chat-toolbar-left">
                 <span class="side-chat-toolbar-badge side-chat-model-badge" title="当前模型: ${escapeHtml(modelName)}">
@@ -123,10 +106,22 @@ export async function mountSideChatSurface(container, {
                 <span class="side-chat-toolbar-badge side-chat-mode-badge" title="${contextModeTitle}">
                   ${contextModeLabel}
                 </span>
+                <span class="side-chat-toolbar-badge side-chat-parent-wrapper" title="定位父话题">
+                  <span class="side-chat-meta-label">来源:</span>
+                  <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicTitle || descriptor.parent?.topicId || '父会话')}</button>
+                </span>
+                ${hasSnapshot ? `<button type="button" class="side-chat-toolbar-btn side-chat-context-toggle-btn" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:11px;">history</span> 上下文(${descriptor.parentSnapshot.length})</button>` : ''}
               </div>
               <div class="side-chat-toolbar-right">
+                <div class="side-chat-status-bar" role="status" aria-live="polite">
+                  <span class="side-chat-persistence-badge side-chat-status-unsaved" style="display:none;">未保存</span>
+                  <span class="side-chat-status-text">就绪</span>
+                </div>
                 <button type="submit" class="chat-send-button side-chat-send-btn" title="发送 (Enter)" aria-label="发送" disabled>
-                  <span class="vcp-ui-icon" style="font-size:16px;">arrow_upward</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="m5 12 7-7 7 7"></path>
+                    <path d="M12 19V5"></path>
+                  </svg>
                 </button>
                 <button type="button" class="chat-send-button side-chat-stop-btn interrupt-mode" style="display:none;" title="停止生成" aria-label="停止生成">
                   <span class="vcp-ui-icon" style="font-size:16px;">stop</span>
