@@ -36,16 +36,34 @@ export async function mountSideChatSurface(container, {
     const chatManager = chatCapabilities?.manager;
     const childScope = scope?.child?.(`side-chat-${descriptor.id}`) || null;
 
+    const hasSnapshot = Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0;
+
     // Shell template
     container.innerHTML = `
       <div class="side-chat-surface" aria-label="侧边聊天">
         <div class="side-chat-header">
-          <span class="side-chat-topic-title" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+            <span class="side-chat-topic-title" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
+            <div class="side-chat-parent-bar">
+              <span>来源:</span>
+              <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicId || '父会话')}</button>
+              ${hasSnapshot ? `<button type="button" class="side-chat-context-toggle-btn" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:12px;">history</span> 上下文(${descriptor.parentSnapshot.length})</button>` : ''}
+            </div>
+          </div>
           <div class="side-chat-status-bar" role="status" aria-live="polite">
             <span class="side-chat-persistence-badge side-chat-status-unsaved" style="display:none;">未保存</span>
             <span class="side-chat-status-text">加载中...</span>
           </div>
         </div>
+        ${hasSnapshot ? `
+        <div class="side-chat-snapshot-drawer" aria-label="继承上下文列表">
+          ${descriptor.parentSnapshot.map(m => `
+            <div class="side-chat-snapshot-item">
+              <span class="side-chat-snapshot-role">${escapeHtml(m.role === 'user' ? '用户' : '助手')}:</span>
+              <span class="side-chat-snapshot-text">${escapeHtml(typeof m.content === 'string' ? (m.content.length > 80 ? m.content.slice(0, 80) + '...' : m.content) : '[复杂内容]')}</span>
+            </div>
+          `).join('')}
+        </div>` : ''}
         <div class="side-chat-messages-container" tabindex="-1" aria-label="侧聊消息"></div>
         <form class="side-chat-composer">
           <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
@@ -70,6 +88,25 @@ export async function mountSideChatSurface(container, {
     const statusText = container.querySelector('.side-chat-status-text');
     const persistenceBadge = container.querySelector('.side-chat-persistence-badge');
     const referenceList = container.querySelector('.side-chat-reference-list');
+    const contextToggleBtn = container.querySelector('.side-chat-context-toggle-btn');
+    const snapshotDrawer = container.querySelector('.side-chat-snapshot-drawer');
+    const parentLink = container.querySelector('.side-chat-parent-link');
+
+    if (contextToggleBtn && snapshotDrawer) {
+        contextToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            snapshotDrawer.classList.toggle('open');
+        });
+    }
+
+    if (parentLink) {
+        parentLink.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const mainInput = doc.querySelector('#chatInput') || doc.querySelector('textarea#chatInput');
+            mainInput?.focus?.();
+            chatCapabilities?.uiHelper?.showToastNotification?.(`当前侧聊关联父话题: ${descriptor.parent?.name || descriptor.parent?.topicId}`, 'info');
+        });
+    }
 
     let isDisposed = false;
     let isHistoryLoaded = false;
@@ -79,6 +116,74 @@ export async function mountSideChatSurface(container, {
     let publishOperation = null;
     let submitInteractiveContent = null;
     const references = []; // { id, text, sourceMessageId }
+
+    function extractTextFromContentDiv(contentDiv) {
+        if (!contentDiv) return '';
+        const clone = contentDiv.cloneNode(true);
+        clone.querySelectorAll?.(
+            '.vcp-tool-use-bubble, .vcp-tool-result-bubble, .vcp-tool-call-summary-bubble, .vcp-flowlock-bubble, .vcp-role-divider, .vcp-thought-chain-bubble, .message-attachments, .message-attachment-remove-btn, .side-chat-message-actions, style, script'
+        )?.forEach?.(el => el.remove());
+        return (clone.innerText || clone.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function attachMessageActions(messageItem) {
+        if (!messageItem || messageItem.hasAttribute?.('data-has-side-action')) return;
+        if (messageItem.classList?.contains('user')) return;
+        messageItem.setAttribute('data-has-side-action', 'true');
+
+        const actionsDiv = doc.createElement('div');
+        actionsDiv.className = 'side-chat-message-actions';
+
+        const sendToMainBtn = doc.createElement('button');
+        sendToMainBtn.type = 'button';
+        sendToMainBtn.className = 'side-chat-send-to-main-btn';
+        sendToMainBtn.title = '将此回答填入主聊天输入框';
+        sendToMainBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">reply</span> 填入主聊';
+
+        sendToMainBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const contentDiv = messageItem.querySelector('.md-content');
+            const cleanText = extractTextFromContentDiv(contentDiv);
+            if (!cleanText) {
+                chatCapabilities?.uiHelper?.showToastNotification?.('无可填入的文本内容', 'warning');
+                return;
+            }
+
+            const mainInput = doc.querySelector('#chatInput') || doc.querySelector('textarea#chatInput');
+            if (mainInput) {
+                const currentVal = mainInput.value ? mainInput.value.trim() : '';
+                mainInput.value = currentVal ? `${currentVal}\n\n${cleanText}` : cleanText;
+                const EventClass = doc.defaultView?.Event || globalThis.Event;
+                mainInput.dispatchEvent(new EventClass('input', { bubbles: true }));
+                mainInput.focus();
+                chatCapabilities?.uiHelper?.showToastNotification?.('已填入主聊天输入框', 'success');
+            } else {
+                chatCapabilities?.uiHelper?.showToastNotification?.('未找到主聊天输入框', 'error');
+            }
+        });
+
+        actionsDiv.appendChild(sendToMainBtn);
+        messageItem.appendChild(actionsDiv);
+    }
+
+    const MutationObserverClass = doc.defaultView?.MutationObserver || globalThis.MutationObserver;
+    let messageObserver = null;
+    function syncMessageActions() {
+        if (isDisposed || !root) return;
+        const items = root.querySelectorAll('.message-item:not([data-has-side-action])');
+        items.forEach(item => {
+            if (!item.classList?.contains('streaming')) {
+                attachMessageActions(item);
+            }
+        });
+    }
+
+    if (MutationObserverClass && root) {
+        messageObserver = new MutationObserverClass(() => {
+            syncMessageActions();
+        });
+        messageObserver.observe(root, { childList: true, subtree: true });
+    }
 
     function updateStatus(text, type = 'normal') {
         if (isDisposed) return;
@@ -358,6 +463,7 @@ export async function mountSideChatSurface(container, {
         async dispose() {
             if (isDisposed) return;
             isDisposed = true;
+            messageObserver?.disconnect?.();
             submitInteractiveContent = null;
             form.removeEventListener('submit', onSubmit);
             stopBtn.removeEventListener('click', onStop);

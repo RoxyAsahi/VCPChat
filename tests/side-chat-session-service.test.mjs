@@ -86,3 +86,88 @@ test('freezeParentHistory filters out transient or streaming messages and clones
     raw[1].content = 'Mutated';
     assert.equal(frozen[1].content, 'Hello');
 });
+
+test('saveSideChatMetadata, getSideChatMetadata, listSideChatsForParent, deleteSideChatMetadata handle contracts', async () => {
+    const {
+        saveSideChatMetadata,
+        getSideChatMetadata,
+        listSideChatsForParent,
+        deleteSideChatMetadata,
+        createParentSnapshot
+    } = await import('../modules/chat/sideChatSessionService.js');
+
+    // Invalid metadata structure
+    const resInvalid = await saveSideChatMetadata({ electronAPI: null, metadata: null });
+    assert.equal(resInvalid.ok, false);
+    assert.equal(resInvalid.code, 'INVALID_METADATA');
+
+    // Mock API
+    let stored = null;
+    const mockElectron = {
+        async saveSideChatMetadata(meta) {
+            stored = meta;
+            return { success: true, metadata: meta };
+        },
+        async getSideChatMetadata(agentId, childTopicId) {
+            if (stored && stored.child?.topicId === childTopicId) {
+                return { success: true, metadata: stored };
+            }
+            return { success: false, error: 'NOT_FOUND' };
+        },
+        async listSideChatMetadata(agentId, parentTopicId) {
+            if (stored && (!parentTopicId || stored.parent?.topicId === parentTopicId)) {
+                return { success: true, items: [stored] };
+            }
+            return { success: true, items: [] };
+        },
+        async deleteSideChatMetadata(agentId, childTopicId) {
+            if (stored?.child?.topicId === childTopicId) stored = null;
+            return { success: true };
+        },
+        async createSideChatSnapshot(agentId, parentTopicId, childTopicId) {
+            return {
+                success: true,
+                snapshotId: 'snap-123',
+                snapshotBoundary: { lastMessageId: 'm1', capturedAt: 500, messageCount: 1 },
+                messages: [{ id: 'm1', role: 'user', content: 'hello' }]
+            };
+        }
+    };
+
+    const meta = {
+        schemaVersion: 1,
+        id: 'sc-1',
+        parent: { itemType: 'agent', itemId: 'a1', topicId: 'top-parent' },
+        child: { itemType: 'agent', itemId: 'a1', topicId: 'top-child' },
+        title: '测试侧聊'
+    };
+
+    // Save
+    const saveRes = await saveSideChatMetadata({ electronAPI: mockElectron, metadata: meta });
+    assert.equal(saveRes.ok, true);
+    assert.equal(saveRes.metadata.id, 'sc-1');
+
+    // Get
+    const getRes = await getSideChatMetadata({ electronAPI: mockElectron, agentId: 'a1', childTopicId: 'top-child' });
+    assert.equal(getRes.ok, true);
+    assert.equal(getRes.metadata.title, '测试侧聊');
+
+    // List
+    const listRes = await listSideChatsForParent({ electronAPI: mockElectron, agentId: 'a1', parentTopicId: 'top-parent' });
+    assert.equal(listRes.ok, true);
+    assert.equal(listRes.items.length, 1);
+
+    // Create snapshot
+    const snapRes = await createParentSnapshot({ electronAPI: mockElectron, agentId: 'a1', parentTopicId: 'top-parent' });
+    assert.equal(snapRes.ok, true);
+    assert.equal(snapRes.snapshotId, 'snap-123');
+    assert.equal(snapRes.messages.length, 1);
+
+    // Delete
+    const delRes = await deleteSideChatMetadata({ electronAPI: mockElectron, agentId: 'a1', childTopicId: 'top-child' });
+    assert.equal(delRes.ok, true);
+
+    const getAfter = await getSideChatMetadata({ electronAPI: mockElectron, agentId: 'a1', childTopicId: 'top-child' });
+    assert.equal(getAfter.ok, false);
+});
+

@@ -20,7 +20,15 @@ import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttach
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
-import { createSideChatDescriptor, createChildTopicForAgent, freezeParentHistory } from './modules/chat/sideChatSessionService.js';
+import {
+    createSideChatDescriptor,
+    createChildTopicForAgent,
+    freezeParentHistory,
+    createParentSnapshot,
+    saveSideChatMetadata,
+    listSideChatsForParent,
+    deleteSideChatMetadata
+} from './modules/chat/sideChatSessionService.js';
 import { captureSelectionReference } from './modules/ui-system/side-pane/selection-reference.js';
 
 const streamManager = createStreamProjection();
@@ -949,6 +957,22 @@ mainChatSettingsPresentationOwner.configureStartup({
                         return null;
                     }
 
+                    // ZCode selectionSideChatRuntime reuse logic:
+                    // If a reference is provided and forceNew is not set, reuse the active side chat for this parent if one exists
+                    if (options?.reference && !options?.forceNew) {
+                        const state = sidePaneController.getSnapshot();
+                        const activeTab = state.tabs.find(t => t.id === state.activeTabId && t.kind === 'chat');
+                        if (activeTab && activeTab.descriptor?.parent?.itemId === currentItem.id && activeTab.descriptor?.parent?.topicId === currentTopicId) {
+                            const handle = sidePaneController.getTabHandle(activeTab.id);
+                            if (handle?.addReference) {
+                                handle.addReference(options.reference);
+                                sidePaneController.setVisible(true);
+                                handle.focus?.();
+                                return handle;
+                            }
+                        }
+                    }
+
                     const topicTitle = options?.title || `侧聊 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
                     const createResult = await createChildTopicForAgent({
                         electronAPI: chatAPI,
@@ -961,9 +985,13 @@ mainChatSettingsPresentationOwner.configureStartup({
                         return null;
                     }
 
-                    const parentSnapshot = (options?.contextMode === 'parent-snapshot' || options?.inheritParentContext !== false)
-                        ? freezeParentHistory(mainHistoryRef?.get?.() || [])
-                        : [];
+                    const snapshotRes = await createParentSnapshot({
+                        electronAPI: chatAPI,
+                        agentId: currentItem.id,
+                        parentTopicId: currentTopicId,
+                        childTopicId: createResult.topicId,
+                        fallbackHistory: mainHistoryRef?.get?.() || []
+                    });
 
                     const descriptor = createSideChatDescriptor({
                         parent: {
@@ -974,25 +1002,82 @@ mainChatSettingsPresentationOwner.configureStartup({
                         },
                         childTopicId: createResult.topicId,
                         title: topicTitle,
-                        contextMode: options?.contextMode || (parentSnapshot.length > 0 ? 'parent-snapshot' : 'references-only'),
-                        parentSnapshot
+                        contextMode: options?.contextMode || (snapshotRes.messages.length > 0 ? 'parent-snapshot' : 'references-only'),
+                        snapshotId: snapshotRes.snapshotId,
+                        parentSnapshot: snapshotRes.messages
                     });
+
+                    // Persist metadata to disk asynchronously
+                    saveSideChatMetadata({
+                        electronAPI: chatAPI,
+                        metadata: descriptor
+                    }).catch(err => console.warn('[SideChat] Failed to persist metadata:', err));
 
                     const handle = await sidePaneController.openChat(descriptor);
                     if (options?.reference && handle?.addReference) {
                         handle.addReference(options.reference);
                     }
                     return handle;
+                },
+                onTabClosed: async (descriptor) => {
+                    if (descriptor?.child?.itemId && descriptor?.child?.topicId) {
+                        deleteSideChatMetadata({
+                            electronAPI: chatAPI,
+                            agentId: descriptor.child.itemId,
+                            childTopicId: descriptor.child.topicId
+                        }).catch(err => console.warn('[SideChat] Failed to delete metadata:', err));
+                    }
+                },
+                onRestoreSessions: async (agentId, parentTopicId) => {
+                    const listRes = await listSideChatsForParent({
+                        electronAPI: chatAPI,
+                        agentId,
+                        parentTopicId
+                    });
+                    if (listRes.ok && Array.isArray(listRes.items)) {
+                        for (const item of listRes.items) {
+                            try {
+                                const desc = createSideChatDescriptor({
+                                    parent: item.parent,
+                                    childTopicId: item.child.topicId,
+                                    title: item.title,
+                                    contextMode: item.contextMode,
+                                    snapshotId: item.snapshotId,
+                                    parentSnapshot: item.parentSnapshot || []
+                                });
+                                await sidePaneController.openChat(desc);
+                            } catch (e) {
+                                console.warn('[SideChat] Failed to restore side chat tab:', e);
+                            }
+                        }
+                        return listRes.items;
+                    }
+                    return [];
                 }
             });
             globalThis.vcpSidePaneController = sidePaneController;
             window.vcpSidePaneController = sidePaneController;
             ownedRendererSubscriptions.add(sidePaneController);
 
-            window.openSideChatWithSelection = async () => {
-                const selRes = captureSelectionReference(window);
-                if (selRes.ok) {
-                    await sidePaneController.openSideChat({ reference: selRes.reference });
+            window.openSideChatWithSelection = async (contextParams = null) => {
+                let reference = null;
+                if (contextParams?.selectedText) {
+                    reference = {
+                        id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                        text: contextParams.selectedText,
+                        sourceMessageId: contextParams.message?.id || null,
+                        capturedAt: Date.now()
+                    };
+                } else if (contextParams?.messageItem) {
+                    const selRes = captureSelectionReference(window, contextParams.messageItem, contextParams.message);
+                    if (selRes.ok) reference = selRes.reference;
+                } else {
+                    const selRes = captureSelectionReference(window);
+                    if (selRes.ok) reference = selRes.reference;
+                }
+
+                if (reference) {
+                    await sidePaneController.openSideChat({ reference });
                 } else {
                     await sidePaneController.openSideChat();
                 }

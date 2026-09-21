@@ -17,7 +17,9 @@ export function createSidePaneController({
     electronAPI = null,
     scope = null,
     providers = {},
-    onOpenSideChat = null
+    onOpenSideChat = null,
+    onTabClosed = null,
+    onRestoreSessions = null
 }) {
     if (!root) {
         throw new TypeError('SidePaneController requires a root element');
@@ -251,6 +253,9 @@ export function createSidePaneController({
                 if (closeResult && closeResult.closed === false) {
                     return; // User or operation prevented close
                 }
+                if (entry.descriptor && typeof onTabClosed === 'function') {
+                    try { await onTabClosed(entry.descriptor); } catch {}
+                }
                 await entry.handle?.dispose?.();
                 entry.viewElement?.remove?.();
                 mountedTabMap.delete(tabId);
@@ -283,6 +288,14 @@ export function createSidePaneController({
                 return await onOpenSideChat(opts);
             }
             return null;
+        },
+
+        async restoreSessions(agentId, parentTopicId) {
+            if (isDisposed || !agentId) return [];
+            if (typeof onRestoreSessions === 'function') {
+                return await onRestoreSessions(agentId, parentTopicId);
+            }
+            return [];
         },
 
         dispose() {

@@ -190,3 +190,90 @@ test('createSideChatSurfaceOwner wraps mountTab provider contract', async () => 
     assert.equal(container.children.length, 0);
     dom.window.close();
 });
+
+test('mountSideChatSurface renders parent navigation, context drawer, and send-to-main action', async () => {
+    const dom = new JSDOM(`
+        <div>
+            <textarea id="chatInput"></textarea>
+            <div id="sideContainer"></div>
+        </div>
+    `);
+    const doc = dom.window.document;
+    const container = doc.getElementById('sideContainer');
+    const mainInput = doc.getElementById('chatInput');
+
+    let toastMessage = null;
+    const caps = {
+        ...createMockChatCapabilities(),
+        uiHelper: {
+            showToastNotification: (msg) => { toastMessage = msg; }
+        }
+    };
+
+    const parentSnapshot = [
+        { id: 'p1', role: 'user', content: 'What is Python?' },
+        { id: 'p2', role: 'assistant', content: 'Python is a high-level programming language.' }
+    ];
+
+    const descriptor = {
+        id: 'chat-test-p1',
+        title: 'P1 Context Side Chat',
+        parent: { itemId: 'agent-1', topicId: 'topic-parent', name: 'Master Agent' },
+        child: { itemId: 'agent-1', topicId: 'topic-child-p1' },
+        contextMode: 'parent-snapshot',
+        parentSnapshot
+    };
+
+    const handle = await mountSideChatSurface(container, {
+        descriptor,
+        chatCapabilities: caps
+    });
+
+    // 1. Check parent link
+    const parentLink = container.querySelector('.side-chat-parent-link');
+    assert.ok(parentLink);
+    assert.equal(parentLink.textContent, 'Master Agent');
+
+    parentLink.click();
+    assert.ok(toastMessage && toastMessage.includes('Master Agent'));
+
+    // 2. Check context toggle and drawer
+    const contextBtn = container.querySelector('.side-chat-context-toggle-btn');
+    assert.ok(contextBtn);
+    assert.ok(contextBtn.textContent.includes('2'));
+
+    const drawer = container.querySelector('.side-chat-snapshot-drawer');
+    assert.ok(drawer);
+    assert.equal(drawer.classList.contains('open'), false);
+
+    contextBtn.click();
+    assert.equal(drawer.classList.contains('open'), true);
+
+    const snapshotItems = drawer.querySelectorAll('.side-chat-snapshot-item');
+    assert.equal(snapshotItems.length, 2);
+    assert.ok(snapshotItems[0].textContent.includes('What is Python?'));
+
+    // 3. Check send-to-main action on assistant message
+    const msgContainer = container.querySelector('.side-chat-messages-container');
+    const assistantMsg = doc.createElement('div');
+    assistantMsg.className = 'message-item assistant';
+    const contentDiv = doc.createElement('div');
+    contentDiv.className = 'md-content';
+    contentDiv.textContent = 'Here is the recommended algorithm solution.';
+    assistantMsg.appendChild(contentDiv);
+    msgContainer.appendChild(assistantMsg);
+
+    // Give MutationObserver a tick to run or trigger observer
+    await new Promise(r => setTimeout(r, 20));
+
+    const sendBtn = assistantMsg.querySelector('.side-chat-send-to-main-btn');
+    assert.ok(sendBtn, 'Assistant message should have send-to-main button');
+
+    sendBtn.click();
+    assert.equal(mainInput.value, 'Here is the recommended algorithm solution.');
+    assert.ok(toastMessage && toastMessage.includes('已填入主聊天输入框'));
+
+    await handle.dispose();
+    dom.window.close();
+});
+

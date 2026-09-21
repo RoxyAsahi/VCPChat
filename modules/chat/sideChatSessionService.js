@@ -143,10 +143,156 @@ export function freezeParentHistory(parentHistory = []) {
         }));
 }
 
+/**
+ * Saves side chat metadata via IPC with fallback.
+ */
+export async function saveSideChatMetadata({ electronAPI, metadata }) {
+    if (!metadata || !metadata.child?.itemId || !metadata.child?.topicId) {
+        return { ok: false, code: 'INVALID_METADATA', message: 'Invalid metadata structure' };
+    }
+    try {
+        if (typeof electronAPI?.saveSideChatMetadata === 'function') {
+            const res = await electronAPI.saveSideChatMetadata(metadata);
+            return res?.success ? { ok: true, metadata: res.metadata } : { ok: false, code: 'SAVE_FAILED', message: res?.error || 'Save failed' };
+        }
+        if (typeof electronAPI?.invoke === 'function') {
+            const res = await electronAPI.invoke('side-chat:save-metadata', metadata);
+            return res?.success ? { ok: true, metadata: res.metadata } : { ok: false, code: 'SAVE_FAILED', message: res?.error || 'Save failed' };
+        }
+        // Memory fallback for tests
+        return { ok: true, metadata };
+    } catch (err) {
+        return { ok: false, code: 'SAVE_ERROR', message: err.message || String(err) };
+    }
+}
+
+/**
+ * Gets side chat metadata for child topic.
+ */
+export async function getSideChatMetadata({ electronAPI, agentId, childTopicId }) {
+    if (!agentId || !childTopicId) {
+        return { ok: false, code: 'INVALID_PARAMS', message: 'agentId and childTopicId are required' };
+    }
+    try {
+        if (typeof electronAPI?.getSideChatMetadata === 'function') {
+            const res = await electronAPI.getSideChatMetadata(agentId, childTopicId);
+            return res?.success ? { ok: true, metadata: res.metadata } : { ok: false, code: res?.error || 'NOT_FOUND', message: 'Metadata not found' };
+        }
+        if (typeof electronAPI?.invoke === 'function') {
+            const res = await electronAPI.invoke('side-chat:get-metadata', agentId, childTopicId);
+            return res?.success ? { ok: true, metadata: res.metadata } : { ok: false, code: res?.error || 'NOT_FOUND', message: 'Metadata not found' };
+        }
+        return { ok: false, code: 'UNSUPPORTED', message: 'IPC unavailable' };
+    } catch (err) {
+        return { ok: false, code: 'GET_ERROR', message: err.message || String(err) };
+    }
+}
+
+/**
+ * Lists side chats belonging to parent.
+ */
+export async function listSideChatsForParent({ electronAPI, agentId, parentTopicId = null }) {
+    if (!agentId) {
+        return { ok: false, code: 'INVALID_AGENT', message: 'agentId is required' };
+    }
+    try {
+        if (typeof electronAPI?.listSideChatMetadata === 'function') {
+            const res = await electronAPI.listSideChatMetadata(agentId, parentTopicId);
+            return res?.success ? { ok: true, items: res.items || [] } : { ok: false, code: 'LIST_FAILED', message: res?.error || 'Failed to list' };
+        }
+        if (typeof electronAPI?.invoke === 'function') {
+            const res = await electronAPI.invoke('side-chat:list-metadata', agentId, parentTopicId);
+            return res?.success ? { ok: true, items: res.items || [] } : { ok: false, code: 'LIST_FAILED', message: res?.error || 'Failed to list' };
+        }
+        return { ok: true, items: [] };
+    } catch (err) {
+        return { ok: false, code: 'LIST_ERROR', message: err.message || String(err) };
+    }
+}
+
+/**
+ * Deletes side chat metadata for child topic.
+ */
+export async function deleteSideChatMetadata({ electronAPI, agentId, childTopicId }) {
+    if (!agentId || !childTopicId) {
+        return { ok: false, code: 'INVALID_PARAMS', message: 'agentId and childTopicId are required' };
+    }
+    try {
+        if (typeof electronAPI?.deleteSideChatMetadata === 'function') {
+            const res = await electronAPI.deleteSideChatMetadata(agentId, childTopicId);
+            return res?.success ? { ok: true } : { ok: false, code: 'DELETE_FAILED', message: res?.error || 'Failed to delete' };
+        }
+        if (typeof electronAPI?.invoke === 'function') {
+            const res = await electronAPI.invoke('side-chat:delete-metadata', agentId, childTopicId);
+            return res?.success ? { ok: true } : { ok: false, code: 'DELETE_FAILED', message: res?.error || 'Failed to delete' };
+        }
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, code: 'DELETE_ERROR', message: err.message || String(err) };
+    }
+}
+
+/**
+ * Creates parent snapshot on backend or falls back to local freeze.
+ */
+export async function createParentSnapshot({
+    electronAPI,
+    agentId,
+    parentTopicId,
+    childTopicId = null,
+    fallbackHistory = []
+}) {
+    try {
+        if (typeof electronAPI?.createSideChatSnapshot === 'function') {
+            const res = await electronAPI.createSideChatSnapshot(agentId, parentTopicId, childTopicId);
+            if (res?.success) {
+                return {
+                    ok: true,
+                    snapshotId: res.snapshotId,
+                    snapshotBoundary: res.snapshotBoundary,
+                    messages: res.messages || []
+                };
+            }
+        }
+        if (typeof electronAPI?.invoke === 'function') {
+            const res = await electronAPI.invoke('side-chat:create-snapshot', agentId, parentTopicId, childTopicId);
+            if (res?.success) {
+                return {
+                    ok: true,
+                    snapshotId: res.snapshotId,
+                    snapshotBoundary: res.snapshotBoundary,
+                    messages: res.messages || []
+                };
+            }
+        }
+    } catch {
+        // Fall back to local freeze
+    }
+
+    const messages = freezeParentHistory(fallbackHistory);
+    const now = Date.now();
+    const lastMsg = messages[messages.length - 1];
+    return {
+        ok: true,
+        snapshotId: `local-snapshot-${now}`,
+        snapshotBoundary: {
+            lastMessageId: lastMsg?.id || null,
+            capturedAt: now,
+            messageCount: messages.length
+        },
+        messages
+    };
+}
+
 const api = Object.freeze({
     createSideChatDescriptor,
     createChildTopicForAgent,
-    freezeParentHistory
+    freezeParentHistory,
+    saveSideChatMetadata,
+    getSideChatMetadata,
+    listSideChatsForParent,
+    deleteSideChatMetadata,
+    createParentSnapshot
 });
 
 if (typeof globalThis !== 'undefined') {

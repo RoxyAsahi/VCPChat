@@ -403,3 +403,96 @@ body[data-vcp-theme="light"] .side-pane-action-btn:hover {
 .side-chat-status-unsaved {
     color: #f59e0b;
 }
+
+/* --- Parent info and inherited context (P1) --- */
+.side-chat-parent-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.6));
+    padding: 2px 0;
+}
+
+.side-chat-parent-link {
+    background: transparent;
+    border: none;
+    color: var(--accent-bg, #3b82f6);
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.side-chat-context-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 4px;
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.7));
+    font-size: 11px;
+    padding: 2px 6px;
+    cursor: pointer;
+}
+
+.side-chat-context-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: var(--text-color-primary, #ffffff);
+}
+
+.side-chat-snapshot-drawer {
+    display: none;
+    max-height: 180px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+.side-chat-snapshot-drawer.open {
+    display: block;
+}
+
+.side-chat-snapshot-item {
+    margin-bottom: 6px;
+    padding: 4px 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+}
+
+.side-chat-snapshot-role {
+    font-weight: 600;
+    margin-right: 4px;
+    color: var(--accent-bg, #3b82f6);
+}
+
+/* Send to main chat button (P1) */
+.side-chat-message-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.side-chat-send-to-main-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-color-secondary, rgba(255, 255, 255, 0.75));
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.side-chat-send-to-main-btn:hover {
+    background: var(--accent-bg, #3b82f6);
+    color: #ffffff;
+    border-color: var(--accent-bg, #3b82f6);
+}
