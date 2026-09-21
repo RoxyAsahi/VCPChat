@@ -69,16 +69,24 @@ export function createSidePaneController({
     function renderTabList() {
         if (!tabListElement) return;
         tabListElement.innerHTML = '';
+        tabListElement.setAttribute('role', 'tablist');
+        tabListElement.setAttribute('aria-label', '工作区侧栏标签页');
 
         const visibleTabs = SidePaneState.getVisibleTabs(state, state.parent);
 
         visibleTabs.forEach(tab => {
             const isActive = tab.id === state.activeTabId;
+
+            const tabItem = doc.createElement('div');
+            tabItem.className = `side-pane-tab-item${isActive ? ' active' : ''}`;
+            tabItem.setAttribute('data-tab-id', tab.id);
+
             const btn = doc.createElement('button');
             btn.type = 'button';
             btn.className = `side-pane-tab${isActive ? ' active' : ''}`;
             btn.setAttribute('role', 'tab');
             btn.setAttribute('aria-selected', String(isActive));
+            btn.setAttribute('tabindex', isActive ? '0' : '-1');
             btn.setAttribute('data-tab-id', tab.id);
 
             const iconSpan = doc.createElement('span');
@@ -92,26 +100,58 @@ export function createSidePaneController({
 
             btn.append(iconSpan, titleSpan);
 
-            // Close button for closable tabs (chat tabs)
+            btn.addEventListener('click', () => {
+                controller.activateTab(tab.id);
+            });
+
+            tabItem.appendChild(btn);
+
+            // Close button for closable tabs (chat tabs) - sibling to tab button
             if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID) {
                 const closeBtn = doc.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.className = 'side-pane-tab-close';
                 closeBtn.title = '关闭此侧聊';
                 closeBtn.setAttribute('aria-label', `关闭 ${tab.title}`);
+                closeBtn.setAttribute('tabindex', '-1');
                 closeBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">close</span>';
                 closeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     controller.closeTab(tab.id);
                 });
-                btn.appendChild(closeBtn);
+                tabItem.appendChild(closeBtn);
             }
 
-            btn.addEventListener('click', () => {
-                controller.activateTab(tab.id);
-            });
+            tabListElement.appendChild(tabItem);
+        });
+    }
 
-            tabListElement.appendChild(btn);
+    if (tabListElement) {
+        tabListElement.addEventListener('keydown', (e) => {
+            const tabButtons = Array.from(tabListElement.querySelectorAll('[role="tab"]'));
+            if (tabButtons.length === 0) return;
+            const currentIndex = tabButtons.findIndex(b => b.getAttribute('data-tab-id') === state.activeTabId);
+            let targetIndex = currentIndex;
+
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault();
+                targetIndex = (currentIndex + 1) % tabButtons.length;
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                targetIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                targetIndex = 0;
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                targetIndex = tabButtons.length - 1;
+            }
+
+            if (targetIndex !== currentIndex && targetIndex >= 0 && targetIndex < tabButtons.length) {
+                const targetId = tabButtons[targetIndex].getAttribute('data-tab-id');
+                controller.activateTab(targetId);
+                tabButtons[targetIndex].focus();
+            }
         });
     }
 
@@ -184,6 +224,10 @@ export function createSidePaneController({
             if (isDisposed) return;
             state = SidePaneState.setVisible(state, visible);
             syncDomVisibility();
+            if (!visible) {
+                const trigger = toggleChatBtn || toggleNotificationsBtn || doc.getElementById('toggleSidePaneChatBtn') || doc.getElementById('closeSidePaneBtn');
+                trigger?.focus?.();
+            }
         },
 
         toggleVisible() {
@@ -284,6 +328,8 @@ export function createSidePaneController({
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
+            const activeTabBtn = tabListElement?.querySelector?.(`[role="tab"][data-tab-id="${state.activeTabId}"]`);
+            activeTabBtn?.focus?.();
         },
 
         setParent(parentRef) {

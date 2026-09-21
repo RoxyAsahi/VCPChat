@@ -37,17 +37,51 @@ export async function mountSideChatSurface(container, {
     const chatManager = chatCapabilities?.manager;
     const childScope = scope?.child?.(`side-chat-${descriptor.id}`) || null;
 
+    // Resolve agent config from descriptor or capability or fallback
+    const agentConfig = descriptor.child?.config
+        || descriptor.parent?.config
+        || (typeof chatCapabilities?.resolveAgentConfig === 'function'
+            ? await chatCapabilities.resolveAgentConfig(descriptor.child?.itemId)
+            : null)
+        || {
+            model: descriptor.model || descriptor.parent?.model || 'gpt-4o',
+            systemPrompt: descriptor.systemPrompt || descriptor.parent?.systemPrompt || '你是辅助聊天助手。',
+            streamOutput: true
+        };
+
+    const selectedItem = {
+        id: descriptor.child.itemId,
+        type: 'agent',
+        name: descriptor.parent.name,
+        avatarUrl: descriptor.parent.avatar,
+        config: agentConfig,
+        model: agentConfig?.model,
+        systemPrompt: agentConfig?.systemPrompt,
+        streamOutput: agentConfig?.streamOutput
+    };
+
+    const modelName = agentConfig?.model || descriptor.model || 'gpt-4o';
+    const isSnapshot = descriptor.contextMode === 'parent-snapshot' || (Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0);
+    const contextModeLabel = isSnapshot ? '父快照' : '仅引用';
+    const contextModeTitle = isSnapshot ? '已继承来源话题的历史快照' : '不继承父历史，仅附带选区引用';
+
     const hasSnapshot = Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0;
 
     // Shell template
     container.innerHTML = `
       <div class="side-chat-surface" aria-label="侧边聊天">
         <div class="side-chat-header">
-          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
-            <span class="side-chat-topic-title" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
+          <div class="side-chat-header-main">
+            <div class="side-chat-title-row">
+              <span class="side-chat-topic-title" title="${escapeHtml(descriptor.title)}">${escapeHtml(descriptor.title)}</span>
+              <div class="side-chat-badges">
+                <span class="side-chat-badge side-chat-model-badge" title="当前模型: ${escapeHtml(modelName)}">${escapeHtml(modelName)}</span>
+                <span class="side-chat-badge side-chat-mode-badge" title="${contextModeTitle}">${contextModeLabel}</span>
+              </div>
+            </div>
             <div class="side-chat-parent-bar">
-              <span>来源:</span>
-              <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicId || '父会话')}</button>
+              <span class="side-chat-meta-label">来源:</span>
+              <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicTitle || descriptor.parent?.topicId || '父会话')}</button>
               ${hasSnapshot ? `<button type="button" class="side-chat-context-toggle-btn" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:12px;">history</span> 上下文(${descriptor.parentSnapshot.length})</button>` : ''}
             </div>
           </div>
@@ -65,7 +99,17 @@ export async function mountSideChatSurface(container, {
             </div>
           `).join('')}
         </div>` : ''}
-        <div class="side-chat-messages-container" tabindex="-1" aria-label="侧聊消息"></div>
+        <div class="side-chat-messages-container" tabindex="-1" aria-label="侧聊消息">
+          <div class="side-chat-empty-state" aria-hidden="true">
+            <div class="side-chat-empty-icon"><span class="vcp-ui-icon">forum</span></div>
+            <div class="side-chat-empty-title">侧边辅助聊天</div>
+            <div class="side-chat-empty-desc">
+              ${isSnapshot
+                ? '已继承来源话题的历史快照。在下方输入提问，或在主聊中划选文字右键提问。'
+                : '当前为仅引用模式。选区引用会作为上下文随问题一同发送。'}
+            </div>
+          </div>
+        </div>
         <form class="side-chat-composer">
           <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
           <div class="side-chat-textarea-shell">
@@ -186,6 +230,7 @@ export async function mountSideChatSurface(container, {
                 attachMessageActions(item);
             }
         });
+        updateEmptyState();
     }
 
     if (MutationObserverClass && root) {
@@ -254,28 +299,25 @@ export async function mountSideChatSurface(container, {
         };
     }
 
-    // Resolve agent config from descriptor or capability or fallback
-    const agentConfig = descriptor.child?.config
-        || descriptor.parent?.config
-        || (typeof chatCapabilities?.resolveAgentConfig === 'function'
-            ? await chatCapabilities.resolveAgentConfig(descriptor.child?.itemId)
-            : null)
-        || {
-            model: descriptor.model || descriptor.parent?.model || 'gpt-4o',
-            systemPrompt: descriptor.systemPrompt || descriptor.parent?.systemPrompt || '你是辅助聊天助手。',
-            streamOutput: true
-        };
+    function updateEmptyState() {
+        if (!root) return;
+        const emptyState = root.querySelector('.side-chat-empty-state');
+        if (!emptyState) return;
+        const messageItems = root.querySelectorAll('.message-item');
+        emptyState.style.display = messageItems.length > 0 ? 'none' : 'flex';
+    }
 
-    const selectedItem = {
-        id: descriptor.child.itemId,
-        type: 'agent',
-        name: descriptor.parent.name,
-        avatarUrl: descriptor.parent.avatar,
-        config: agentConfig,
-        model: agentConfig?.model,
-        systemPrompt: agentConfig?.systemPrompt,
-        streamOutput: agentConfig?.streamOutput
-    };
+    function updateComposerState() {
+        if (isDisposed) return;
+        const hasText = Boolean(textarea.value.trim());
+        const hasRefs = references.length > 0;
+        sendBtn.disabled = !isHistoryLoaded || (!hasText && !hasRefs);
+        if (!hasText && hasRefs && descriptor.contextMode !== 'parent-snapshot') {
+            textarea.placeholder = '输入针对引用的问题... (直接回车可发送引用)';
+        } else {
+            textarea.placeholder = '输入消息... (Enter 发送, Shift+Enter 换行)';
+        }
+    }
 
     // Mount owned isolated internal renderer
     const rendererOwner = createRenderer({
@@ -347,6 +389,7 @@ export async function mountSideChatSurface(container, {
     textarea.addEventListener('input', () => {
         textarea.style.height = 'auto';
         textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+        updateComposerState();
     });
 
     textarea.addEventListener('keydown', (e) => {
@@ -451,6 +494,8 @@ export async function mountSideChatSurface(container, {
                 textarea.disabled = false;
                 sendBtn.style.display = 'inline-flex';
                 stopBtn.style.display = 'none';
+                updateComposerState();
+                updateEmptyState();
             }
         }
     };
@@ -479,7 +524,8 @@ export async function mountSideChatSurface(container, {
         if (isDisposed) return;
         isHistoryLoaded = true;
         textarea.disabled = false;
-        sendBtn.disabled = false;
+        updateComposerState();
+        updateEmptyState();
         updateStatus('就绪');
         return res;
     }).catch((err) => {
@@ -509,12 +555,14 @@ export async function mountSideChatSurface(container, {
             }
             references.push(ref);
             renderReferences();
+            updateComposerState();
         },
         removeReference(refId) {
             const index = references.findIndex(r => r.id === refId);
             if (index !== -1) {
                 references.splice(index, 1);
                 renderReferences();
+                updateComposerState();
             }
         },
         getReferences() {

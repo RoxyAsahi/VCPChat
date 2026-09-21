@@ -792,7 +792,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 307,
+          "line": 349,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "sendMessage",
@@ -16376,7 +16376,7 @@
       "documentReferences": 1,
       "electronReferences": 4,
       "timers": 0,
-      "listeners": 6,
+      "listeners": 7,
       "mutableMaps": 1
     },
     "modules/ui-system/side-pane/side-pane-resizer-owner.js": {
