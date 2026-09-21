@@ -18,19 +18,33 @@ function filterStableHistory(history = []) {
     const stable = [];
     for (const msg of history) {
         if (!msg || typeof msg !== 'object') continue;
-        if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking) continue;
-        if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') continue;
-        const text = msg.content || msg.text;
-        if (!text) continue;
+        if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking || msg.isPendingStream) continue;
+        if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system' && (msg.role !== 'tool' || !msg.tool_call_id)) continue;
+        const text = msg.content !== undefined ? msg.content : msg.text;
+        if (text === undefined || text === null || text === '') continue;
 
-        stable.push({
+        const clonedContent = typeof text === 'object' ? JSON.parse(JSON.stringify(text)) : text;
+
+        const entry = {
             id: msg.id || null,
             sourceMessageId: msg.id || null,
             role: msg.role,
-            content: text,
+            content: clonedContent,
             timestamp: msg.timestamp || null,
             isInherited: true
-        });
+        };
+
+        if (msg.tool_calls) {
+            entry.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls));
+        }
+        if (msg.tool_call_id) {
+            entry.tool_call_id = msg.tool_call_id;
+        }
+        if (msg.attachments) {
+            entry.attachments = JSON.parse(JSON.stringify(msg.attachments));
+        }
+
+        stable.push(entry);
     }
 
     return stable;
@@ -88,6 +102,15 @@ function initialize(paths) {
             await fs.ensureDir(topicDir);
             const metadataPath = path.join(topicDir, 'sidechat-metadata.json');
 
+            const snapshotPath = path.join(topicDir, 'parent-snapshot.json');
+            let snapshotBoundary = metadata.snapshotBoundary || null;
+            if (!snapshotBoundary && await fs.pathExists(snapshotPath)) {
+                try {
+                    const snap = await fs.readJson(snapshotPath);
+                    snapshotBoundary = snap.snapshotBoundary || null;
+                } catch {}
+            }
+
             const payload = {
                 schemaVersion: 1,
                 id: metadata.id || `sidechat-${Date.now()}`,
@@ -106,7 +129,7 @@ function initialize(paths) {
                 title: metadata.title || '侧聊',
                 contextMode: metadata.contextMode === 'parent-snapshot' ? 'parent-snapshot' : 'references-only',
                 snapshotId: metadata.snapshotId || null,
-                snapshotBoundary: metadata.snapshotBoundary || null,
+                snapshotBoundary,
                 status: metadata.status || 'ready',
                 createdAt: metadata.createdAt || Date.now(),
                 updatedAt: Date.now()
@@ -131,6 +154,16 @@ function initialize(paths) {
             }
 
             const metadata = await fs.readJson(metadataPath);
+            const snapshotPath = path.join(topicDir, 'parent-snapshot.json');
+            if (await fs.pathExists(snapshotPath)) {
+                try {
+                    const snap = await fs.readJson(snapshotPath);
+                    metadata.parentSnapshot = snap.messages || [];
+                    if (snap.snapshotBoundary) {
+                        metadata.snapshotBoundary = snap.snapshotBoundary;
+                    }
+                } catch {}
+            }
             return { success: true, metadata };
         } catch (error) {
             console.error('[SideChatHandlers] get-metadata error:', error);
@@ -154,12 +187,24 @@ function initialize(paths) {
 
             for (const entry of entries) {
                 if (!entry.isDirectory()) continue;
-                const metadataPath = path.join(topicsDir, entry.name, 'sidechat-metadata.json');
+                const entryDir = path.join(topicsDir, entry.name);
+                const metadataPath = path.join(entryDir, 'sidechat-metadata.json');
                 try {
                     if (await fs.pathExists(metadataPath)) {
                         const meta = await fs.readJson(metadataPath);
                         if (meta && meta.schemaVersion === 1) {
                             if (!parentTopicId || meta.parent?.topicId === parentTopicId) {
+                                const snapshotPath = path.join(entryDir, 'parent-snapshot.json');
+                                if (await fs.pathExists(snapshotPath)) {
+                                    try {
+                                        const snap = await fs.readJson(snapshotPath);
+                                        meta.parentSnapshot = snap.messages || [];
+                                        const boundary = snap.snapshotBoundary || snap.boundary;
+                                        if (boundary) {
+                                            meta.snapshotBoundary = boundary;
+                                        }
+                                    } catch {}
+                                }
                                 items.push(meta);
                             }
                         }
@@ -184,13 +229,9 @@ function initialize(paths) {
             if (!topicDir) return { success: false, error: 'INVALID_PATH' };
 
             const metadataPath = path.join(topicDir, 'sidechat-metadata.json');
-            const snapshotPath = path.join(topicDir, 'parent-snapshot.json');
 
             if (await fs.pathExists(metadataPath)) {
                 await fs.remove(metadataPath);
-            }
-            if (await fs.pathExists(snapshotPath)) {
-                await fs.remove(snapshotPath);
             }
 
             return { success: true };
@@ -238,6 +279,7 @@ function initialize(paths) {
                         snapshotId,
                         parentTopicId,
                         boundary: snapshotBoundary,
+                        snapshotBoundary,
                         messages: stableHistory
                     }, { spaces: 2 });
                 }

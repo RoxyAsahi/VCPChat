@@ -125,23 +125,39 @@ export async function createChildTopicForAgent({
 export function freezeParentHistory(parentHistory = []) {
     if (!Array.isArray(parentHistory)) return [];
     
-    // Filter out uncompleted/transient/generating messages
-    return parentHistory
-        .filter(msg => {
-            if (!msg || typeof msg !== 'object') return false;
-            // Exclude transient/thinking/streaming in progress
-            if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking) return false;
-            if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') return false;
-            return Boolean(msg.content || msg.text);
-        })
-        .map(msg => ({
+    const stable = [];
+    for (const msg of parentHistory) {
+        if (!msg || typeof msg !== 'object') continue;
+        if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking || msg.isPendingStream) continue;
+        if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system' && (msg.role !== 'tool' || !msg.tool_call_id)) continue;
+        const text = msg.content !== undefined ? msg.content : msg.text;
+        if (text === undefined || text === null || text === '') continue;
+
+        const clonedContent = typeof text === 'object' ? JSON.parse(JSON.stringify(text)) : text;
+
+        const entry = {
             id: msg.id || null,
             sourceMessageId: msg.id || null,
             role: msg.role,
-            content: msg.content || msg.text || '',
+            content: clonedContent,
             timestamp: msg.timestamp || null,
             isInherited: true
-        }));
+        };
+
+        if (msg.tool_calls) {
+            entry.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls));
+        }
+        if (msg.tool_call_id) {
+            entry.tool_call_id = msg.tool_call_id;
+        }
+        if (msg.attachments) {
+            entry.attachments = JSON.parse(JSON.stringify(msg.attachments));
+        }
+
+        stable.push(entry);
+    }
+
+    return stable;
 }
 
 /**
@@ -160,8 +176,7 @@ export async function saveSideChatMetadata({ electronAPI, metadata }) {
             const res = await electronAPI.invoke('side-chat:save-metadata', metadata);
             return res?.success ? { ok: true, metadata: res.metadata } : { ok: false, code: 'SAVE_FAILED', message: res?.error || 'Save failed' };
         }
-        // Memory fallback for tests
-        return { ok: true, metadata };
+        return { ok: false, code: 'UNSUPPORTED', message: 'IPC unavailable' };
     } catch (err) {
         return { ok: false, code: 'SAVE_ERROR', message: err.message || String(err) };
     }
@@ -254,6 +269,9 @@ export async function createParentSnapshot({
                     messages: res.messages || []
                 };
             }
+            if (res && res.success === false) {
+                return { ok: false, code: 'SNAPSHOT_FAILED', error: res.error || 'Snapshot failed' };
+            }
         }
         if (typeof electronAPI?.invoke === 'function') {
             const res = await electronAPI.invoke('side-chat:create-snapshot', agentId, parentTopicId, childTopicId);
@@ -265,9 +283,12 @@ export async function createParentSnapshot({
                     messages: res.messages || []
                 };
             }
+            if (res && res.success === false) {
+                return { ok: false, code: 'SNAPSHOT_FAILED', error: res.error || 'Snapshot failed' };
+            }
         }
-    } catch {
-        // Fall back to local freeze
+    } catch (err) {
+        return { ok: false, code: 'SNAPSHOT_ERROR', error: err.message || String(err) };
     }
 
     const messages = freezeParentHistory(fallbackHistory);

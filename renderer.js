@@ -931,6 +931,18 @@ mainChatSettingsPresentationOwner.configureStartup({
                     createRenderer: createOwnedInternalChatRenderer,
                     manager: chatManager,
                     uiHelper: uiHelperFunctions,
+                    resolveAgentConfig: async (agentId) => {
+                        const current = currentSelectedItemRef?.get?.();
+                        if (current?.id === agentId && current?.config) {
+                            return current.config;
+                        }
+                        if (typeof chatAPI?.getAgentConfig === 'function') {
+                            const res = await chatAPI.getAgentConfig(agentId);
+                            if (res?.success && res.config) return res.config;
+                        }
+                        return current?.config || null;
+                    },
+                    getCurrentTopic: () => currentTopicIdRef?.get?.() || null,
                 }
             });
 
@@ -998,7 +1010,8 @@ mainChatSettingsPresentationOwner.configureStartup({
                             itemId: currentItem.id,
                             topicId: currentTopicId,
                             name: currentItem.name,
-                            avatar: currentItem.avatarUrl || currentItem.avatar
+                            avatar: currentItem.avatarUrl || currentItem.avatar,
+                            config: currentItem.config || null
                         },
                         childTopicId: createResult.topicId,
                         title: topicTitle,
@@ -1020,13 +1033,9 @@ mainChatSettingsPresentationOwner.configureStartup({
                     return handle;
                 },
                 onTabClosed: async (descriptor) => {
-                    if (descriptor?.child?.itemId && descriptor?.child?.topicId) {
-                        deleteSideChatMetadata({
-                            electronAPI: chatAPI,
-                            agentId: descriptor.child.itemId,
-                            childTopicId: descriptor.child.topicId
-                        }).catch(err => console.warn('[SideChat] Failed to delete metadata:', err));
-                    }
+                    // Tab close only disposes the in-memory view surface.
+                    // Persistent session metadata and snapshots are retained on disk
+                    // for subsequent restoration, and only deleted upon explicit topic deletion.
                 },
                 onRestoreSessions: async (agentId, parentTopicId) => {
                     const listRes = await listSideChatsForParent({
