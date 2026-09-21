@@ -555,6 +555,10 @@
                     </div>
                 </section>
                 <div class="chat-messages" id="chatMessages">
+                    <button id="floatingSelectionSideChatBtn" class="floating-selection-side-chat-btn" type="button" style="display:none;" title="在侧边栏提问" aria-label="在侧边栏提问">
+                        <span class="vcp-ui-icon" style="font-size:14px;">chat_bubble</span>
+                        <span>在侧栏提问</span>
+                    </button>
                 </div>
             </div>
             <footer class="chat-input-area vcp-ui-scope" aria-label="消息输入区">
@@ -629,6 +633,43 @@
                     </div>
                     <div class="side-pane-overview-section-title">打开的标签页</div>
                     <div class="side-pane-overview-list" id="sidePaneOpenTabsList"></div>
+                </div>
+                <div id="sidePaneAddMenuPopover" class="side-pane-add-menu-popover" style="display:none;" aria-label="添加标签页菜单">
+                    <button type="button" class="side-pane-menu-item" data-action="new-chat">
+                        <span class="vcp-ui-icon">chat_bubble</span>
+                        <span>新建辅助对话</span>
+                    </button>
+                    <button type="button" class="side-pane-menu-item" data-action="notifications">
+                        <span class="vcp-ui-icon">notifications</span>
+                        <span>系统通知</span>
+                    </button>
+                    <button type="button" class="side-pane-menu-item" data-action="review">
+                        <span class="vcp-ui-icon">difference</span>
+                        <span>代码审阅</span>
+                    </button>
+                    <button type="button" class="side-pane-menu-item" data-action="terminal">
+                        <span class="vcp-ui-icon">terminal</span>
+                        <span>终端</span>
+                    </button>
+                    <div class="side-pane-menu-divider"></div>
+                    <button type="button" class="side-pane-menu-item" data-action="launcher">
+                        <span class="vcp-ui-icon">apps</span>
+                        <span>打开标签页引导...</span>
+                    </button>
+                </div>
+                <div id="sidePaneTabContextMenu" class="side-pane-context-menu" style="display:none;" aria-label="标签页上下文菜单">
+                    <button type="button" class="side-pane-menu-item" data-action="close-tab">
+                        <span class="vcp-ui-icon">close</span>
+                        <span>关闭当前标签页</span>
+                    </button>
+                    <button type="button" class="side-pane-menu-item" data-action="close-others">
+                        <span class="vcp-ui-icon">tab_unselected</span>
+                        <span>关闭其他标签页</span>
+                    </button>
+                    <button type="button" class="side-pane-menu-item" data-action="close-all">
+                        <span class="vcp-ui-icon">tab_close</span>
+                        <span>关闭所有标签页</span>
+                    </button>
                 </div>
             </header>
             <div class="side-pane-content-container">
@@ -739,6 +780,34 @@
                 </section>
                 <section class="side-pane-view" id="sidePaneViewChat" role="tabpanel" aria-label="侧边聊天视图">
                     <div id="sideChatContainer" class="side-chat-container"></div>
+                </section>
+                <section class="side-pane-view" id="sidePaneViewLauncher" data-tab-id="launcher" role="tabpanel" aria-label="打开标签页引导" style="display:none;">
+                    <div class="side-pane-open-tab-shell">
+                        <div class="side-pane-open-tab-content">
+                            <div class="side-pane-open-tab-header">
+                                <h2 class="side-pane-open-tab-title">打开标签页</h2>
+                                <p class="side-pane-open-tab-desc">选择要在侧边栏中打开的内容</p>
+                            </div>
+                            <div class="side-pane-open-tab-list">
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="selection-side-conversation">
+                                    <span class="vcp-ui-icon">chat_bubble</span>
+                                    <span class="side-pane-open-tab-button-label">辅助对话</span>
+                                </button>
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="notifications">
+                                    <span class="vcp-ui-icon">notifications</span>
+                                    <span class="side-pane-open-tab-button-label">系统通知</span>
+                                </button>
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="review">
+                                    <span class="vcp-ui-icon">difference</span>
+                                    <span class="side-pane-open-tab-button-label">代码审阅</span>
+                                </button>
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="terminal">
+                                    <span class="vcp-ui-icon">terminal</span>
+                                    <span class="side-pane-open-tab-button-label">终端</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
           </aside>

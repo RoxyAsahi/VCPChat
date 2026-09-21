@@ -1103,6 +1103,59 @@ mainChatSettingsPresentationOwner.configureStartup({
                     await sidePaneController.openSideChat();
                 }
             };
+
+            const floatingBtn = document.getElementById('floatingSelectionSideChatBtn');
+            if (floatingBtn) {
+                const handleSelectionChange = () => {
+                    const sel = window.getSelection();
+                    if (!sel || sel.isCollapsed || !sel.rangeCount) {
+                        floatingBtn.style.display = 'none';
+                        return;
+                    }
+                    const selectedText = sel.toString().trim();
+                    if (!selectedText || selectedText.length < 2) {
+                        floatingBtn.style.display = 'none';
+                        return;
+                    }
+
+                    const range = sel.getRangeAt(0);
+                    const commonAncestor = range.commonAncestorContainer;
+                    const messageItem = (commonAncestor.nodeType === 1 ? commonAncestor : commonAncestor.parentElement)?.closest?.('.message-item');
+                    if (!messageItem) {
+                        floatingBtn.style.display = 'none';
+                        return;
+                    }
+
+                    const rect = range.getBoundingClientRect();
+                    floatingBtn.style.display = 'inline-flex';
+                    floatingBtn.style.position = 'fixed';
+                    const btnWidth = 110;
+                    const left = Math.max(10, Math.min(window.innerWidth - btnWidth - 10, rect.left + (rect.width / 2) - (btnWidth / 2)));
+                    const top = Math.max(10, rect.top - 36);
+                    floatingBtn.style.left = `${left}px`;
+                    floatingBtn.style.top = `${top}px`;
+                    floatingBtn.style.zIndex = '999';
+                };
+
+                document.addEventListener('selectionchange', handleSelectionChange);
+                ownedRendererSubscriptions.add({
+                    dispose: () => document.removeEventListener('selectionchange', handleSelectionChange)
+                });
+
+                floatingBtn.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                });
+
+                floatingBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const sel = window.getSelection();
+                    const selectedText = sel ? sel.toString().trim() : '';
+                    floatingBtn.style.display = 'none';
+                    if (selectedText) {
+                        await window.openSideChatWithSelection({ selectedText });
+                    }
+                });
+            }
         }
 
         // Initialize Filter Manager

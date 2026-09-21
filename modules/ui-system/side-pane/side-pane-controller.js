@@ -31,6 +31,8 @@ export function createSidePaneController({
     const resolvedAddChatTabBtn = addChatTabBtn || doc.getElementById?.('addSidePaneChatBtn');
     const resolvedOverviewBtn = overviewBtn || doc.getElementById?.('sidePaneTabOverviewBtn');
     const resolvedOverviewPopover = overviewPopover || doc.getElementById?.('sidePaneTabOverviewPopover');
+    const resolvedAddMenuPopover = doc.getElementById?.('sidePaneAddMenuPopover');
+    const resolvedTabContextMenu = doc.getElementById?.('sidePaneTabContextMenu');
 
     const initialWidth = Number(settingsRef?.get?.()?.notificationsSidebarWidth)
         || SidePaneState.DEFAULT_WIDTH;
@@ -44,6 +46,7 @@ export function createSidePaneController({
     const cleanupListeners = [];
     const recentlyClosedTabs = [];
     let isDisposed = false;
+    let contextTargetTabId = null;
 
     // Resizer Owner
     let resizerOwner = null;
@@ -129,6 +132,13 @@ export function createSidePaneController({
                 tabItem.appendChild(closeBtn);
             }
 
+            tabItem.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                hideAddMenu();
+                showTabContextMenu(tab.id, e.clientX, e.clientY);
+            });
+
             tabListElement.appendChild(tabItem);
         });
         renderTabOverviewPopover?.(searchInput?.value || '');
@@ -167,16 +177,21 @@ export function createSidePaneController({
         if (!contentContainer) return;
         const visibleTabs = SidePaneState.getVisibleTabs(state, state.parent);
         const visibleTabIds = new Set(visibleTabs.map(t => t.id));
+        if (state.activeTabId === SidePaneState.LAUNCHER_TAB_ID) {
+            visibleTabIds.add(SidePaneState.LAUNCHER_TAB_ID);
+        }
         const views = contentContainer.querySelectorAll('.side-pane-view');
         views.forEach(view => {
             const viewTabId = view.getAttribute('data-tab-id') || (
-                view.id === 'sidePaneViewNotifications' ? SidePaneState.NOTIFICATIONS_TAB_ID : null
+                view.id === 'sidePaneViewNotifications' ? SidePaneState.NOTIFICATIONS_TAB_ID : (
+                    view.id === 'sidePaneViewLauncher' ? SidePaneState.LAUNCHER_TAB_ID : null
+                )
             );
-            const isVisible = visibleTabIds.has(viewTabId);
+            const isVisible = visibleTabIds.has(viewTabId) || (viewTabId === SidePaneState.LAUNCHER_TAB_ID && state.activeTabId === SidePaneState.LAUNCHER_TAB_ID);
             const isActive = isVisible && viewTabId === state.activeTabId;
             view.classList.toggle('active', isActive);
             view.setAttribute('aria-hidden', String(!isActive));
-            if (!isVisible) {
+            if (!isVisible || !isActive) {
                 view.style.display = 'none';
             } else {
                 view.style.display = '';
@@ -217,7 +232,7 @@ export function createSidePaneController({
         }
 
         if (toggleChatBtn) {
-            const isChatActive = isVisible && state.activeTabId !== SidePaneState.NOTIFICATIONS_TAB_ID;
+            const isChatActive = isVisible && state.activeTabId !== SidePaneState.NOTIFICATIONS_TAB_ID && state.activeTabId !== SidePaneState.LAUNCHER_TAB_ID;
             toggleChatBtn.classList.toggle('side-chat-active', isChatActive);
             toggleChatBtn.setAttribute('aria-expanded', String(isChatActive));
         }
@@ -251,6 +266,14 @@ export function createSidePaneController({
             syncDomVisibility();
         },
 
+        showLauncher() {
+            if (isDisposed) return;
+            state = SidePaneState.showLauncher(state);
+            renderTabList();
+            syncViewPanels();
+            syncDomVisibility();
+        },
+
         activateTab(tabId) {
             if (isDisposed || !tabId) return;
             state = SidePaneState.activateTab(state, tabId);
@@ -260,6 +283,24 @@ export function createSidePaneController({
 
             const entry = mountedTabMap.get(tabId);
             entry?.handle?.focus?.();
+        },
+
+        async closeOtherTabs(tabId) {
+            if (isDisposed || !tabId) return;
+            const chatTabs = state.tabs.filter(t => t.kind === 'chat' && t.id !== tabId);
+            for (const tab of chatTabs) {
+                await this.closeTab(tab.id);
+            }
+            this.activateTab(tabId);
+        },
+
+        async closeAllTabs() {
+            if (isDisposed) return;
+            const chatTabs = state.tabs.filter(t => t.kind === 'chat');
+            for (const tab of chatTabs) {
+                await this.closeTab(tab.id);
+            }
+            this.showLauncher();
         },
 
         async openChat(descriptor) {
@@ -589,19 +630,146 @@ export function createSidePaneController({
             if (!resolvedOverviewPopover.contains?.(e.target) && e.target !== resolvedOverviewBtn) {
                 resolvedOverviewPopover.style.display = 'none';
             }
+            if (!resolvedAddMenuPopover?.contains?.(e.target) && !resolvedAddChatTabBtn?.contains?.(e.target)) {
+                hideAddMenu();
+            }
+            if (!resolvedTabContextMenu?.contains?.(e.target)) {
+                hideTabContextMenu();
+            }
         };
         doc.addEventListener('click', onDocClick);
         cleanupListeners.push(() => doc.removeEventListener('click', onDocClick));
     }
 
+    function showTabContextMenu(tabId, x, y) {
+        if (!resolvedTabContextMenu) return;
+        contextTargetTabId = tabId;
+        resolvedTabContextMenu.style.display = 'flex';
+        resolvedTabContextMenu.style.position = 'fixed';
+        const winWidth = doc.defaultView?.innerWidth || 1000;
+        const winHeight = doc.defaultView?.innerHeight || 800;
+        resolvedTabContextMenu.style.left = `${Math.min(x, winWidth - 180)}px`;
+        resolvedTabContextMenu.style.top = `${Math.min(y, winHeight - 150)}px`;
+        resolvedTabContextMenu.style.zIndex = '1000';
+
+        const closeCurrentBtn = resolvedTabContextMenu.querySelector('[data-action="close-tab"]');
+        if (closeCurrentBtn) {
+            const canClose = tabId !== SidePaneState.NOTIFICATIONS_TAB_ID;
+            closeCurrentBtn.disabled = !canClose;
+            closeCurrentBtn.style.opacity = canClose ? '1' : '0.4';
+        }
+
+        const closeOthersBtn = resolvedTabContextMenu.querySelector('[data-action="close-others"]');
+        if (closeOthersBtn) {
+            const hasOthers = state.tabs.some(t => t.kind === 'chat' && t.id !== tabId);
+            closeOthersBtn.disabled = !hasOthers;
+            closeOthersBtn.style.opacity = hasOthers ? '1' : '0.4';
+        }
+
+        const closeAllBtn = resolvedTabContextMenu.querySelector('[data-action="close-all"]');
+        if (closeAllBtn) {
+            const hasChats = state.tabs.some(t => t.kind === 'chat');
+            closeAllBtn.disabled = !hasChats;
+            closeAllBtn.style.opacity = hasChats ? '1' : '0.4';
+        }
+    }
+
+    function hideTabContextMenu() {
+        if (resolvedTabContextMenu) {
+            resolvedTabContextMenu.style.display = 'none';
+            contextTargetTabId = null;
+        }
+    }
+
+    function hideAddMenu() {
+        if (resolvedAddMenuPopover) {
+            resolvedAddMenuPopover.style.display = 'none';
+        }
+    }
+
+    if (resolvedTabContextMenu) {
+        const onContextMenuClick = async (e) => {
+            const actionBtn = e.target.closest('[data-action]');
+            if (!actionBtn || actionBtn.disabled) return;
+            const action = actionBtn.getAttribute('data-action');
+            const targetId = contextTargetTabId;
+            hideTabContextMenu();
+
+            if (action === 'close-tab' && targetId) {
+                await controller.closeTab(targetId);
+            } else if (action === 'close-others' && targetId) {
+                await controller.closeOtherTabs(targetId);
+            } else if (action === 'close-all') {
+                await controller.closeAllTabs();
+            }
+        };
+        resolvedTabContextMenu.addEventListener('click', onContextMenuClick);
+        cleanupListeners.push(() => resolvedTabContextMenu.removeEventListener('click', onContextMenuClick));
+    }
+
     if (resolvedAddChatTabBtn) {
-        const onAddClick = () => {
-            if (typeof onOpenSideChat === 'function') {
+        const onAddClick = (e) => {
+            e?.stopPropagation?.();
+            hideTabContextMenu();
+            if (resolvedAddMenuPopover) {
+                const isOpen = resolvedAddMenuPopover.style.display !== 'none';
+                resolvedAddMenuPopover.style.display = isOpen ? 'none' : 'flex';
+            } else if (typeof onOpenSideChat === 'function') {
                 onOpenSideChat();
             }
         };
         resolvedAddChatTabBtn.addEventListener('click', onAddClick);
         cleanupListeners.push(() => resolvedAddChatTabBtn.removeEventListener('click', onAddClick));
+    }
+
+    if (resolvedAddMenuPopover) {
+        const onAddMenuClick = async (e) => {
+            const actionBtn = e.target.closest('[data-action]');
+            if (!actionBtn) return;
+            const action = actionBtn.getAttribute('data-action');
+            hideAddMenu();
+
+            if (action === 'new-chat') {
+                if (typeof onOpenSideChat === 'function') {
+                    await onOpenSideChat();
+                }
+            } else if (action === 'notifications') {
+                controller.showNotifications();
+            } else if (action === 'launcher') {
+                controller.showLauncher();
+            } else if (action === 'review' || action === 'terminal') {
+                const label = action === 'review' ? '代码审阅' : '终端';
+                const toast = (typeof globalThis !== 'undefined' && globalThis.uiHelperFunctions?.showToastNotification)
+                    || doc.defaultView?.uiHelperFunctions?.showToastNotification;
+                toast?.(`${label}功能正在深度建设中，敬请期待！`, 'info');
+            }
+        };
+        resolvedAddMenuPopover.addEventListener('click', onAddMenuClick);
+        cleanupListeners.push(() => resolvedAddMenuPopover.removeEventListener('click', onAddMenuClick));
+    }
+
+    const launcherView = contentContainer?.querySelector?.('#sidePaneViewLauncher')
+        || contentContainer?.querySelector?.('[data-tab-id="launcher"]');
+    if (launcherView) {
+        const onLauncherClick = async (e) => {
+            const btn = e.target.closest('[data-side-pane-open-tab-item]');
+            if (!btn) return;
+            const item = btn.getAttribute('data-side-pane-open-tab-item');
+            if (item === 'selection-side-conversation') {
+                if (typeof onOpenSideChat === 'function') {
+                    await onOpenSideChat();
+                }
+            } else if (item === 'notifications') {
+                controller.showNotifications();
+            } else if (item === 'review' || item === 'terminal') {
+                const label = item === 'review' ? '代码审阅' : '工作区终端';
+                const toast = (typeof globalThis !== 'undefined' && globalThis.uiHelperFunctions?.showToastNotification)
+                    || doc.defaultView?.uiHelperFunctions?.showToastNotification;
+                toast?.(`${label}功能即将上线，敬请期待！`, 'info');
+            }
+        };
+        launcherView.addEventListener('click', onLauncherClick);
+        cleanupListeners.push(() => launcherView.removeEventListener('click', onLauncherClick));
     }
 
     // Initial render

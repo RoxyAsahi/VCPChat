@@ -99,10 +99,24 @@ export async function mountSideChatSurface(container, {
             <textarea class="chat-message-input side-chat-textarea" placeholder="提出修改要求或疑问... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
             <div class="chat-input-actions side-chat-input-actions">
               <div class="side-chat-toolbar-left">
-                <span class="side-chat-toolbar-badge side-chat-model-badge" title="当前模型: ${escapeHtml(modelName)}">
-                  <span class="vcp-ui-icon" style="font-size:12px;">smart_toy</span>
-                  ${escapeHtml(modelName)}
-                </span>
+                <div class="side-chat-model-picker-wrapper" style="position:relative; display:inline-flex;">
+                  <button type="button" class="side-chat-toolbar-badge side-chat-model-badge side-chat-model-picker-btn" title="点击切换模型 (当前: ${escapeHtml(modelName)})" aria-haspopup="listbox">
+                    <span class="vcp-ui-icon" style="font-size:12px;">smart_toy</span>
+                    <span class="side-chat-model-name">${escapeHtml(modelName)}</span>
+                    <span class="vcp-ui-icon" style="font-size:11px; margin-left:1px; opacity:0.7;">arrow_drop_down</span>
+                  </button>
+                  <div class="side-chat-model-popover" style="display:none;" role="listbox">
+                    <div class="side-chat-model-item${modelName === 'gpt-4o' ? ' active' : ''}" data-model="gpt-4o">gpt-4o</div>
+                    <div class="side-chat-model-item${modelName === 'gpt-4o-mini' ? ' active' : ''}" data-model="gpt-4o-mini">gpt-4o-mini</div>
+                    <div class="side-chat-model-item${modelName === 'claude-3-5-sonnet' ? ' active' : ''}" data-model="claude-3-5-sonnet">claude-3-5-sonnet</div>
+                    <div class="side-chat-model-item${modelName === 'gemini-1.5-pro' ? ' active' : ''}" data-model="gemini-1.5-pro">gemini-1.5-pro</div>
+                    <div class="side-chat-model-item${modelName === 'deepseek-chat' ? ' active' : ''}" data-model="deepseek-chat">deepseek-chat</div>
+                  </div>
+                </div>
+                <button type="button" class="side-chat-toolbar-btn side-chat-attach-btn" title="手动添加文本或代码引用">
+                  <span class="vcp-ui-icon" style="font-size:12px;">attach_file</span>
+                  <span>引用</span>
+                </button>
                 <span class="side-chat-toolbar-badge side-chat-mode-badge" title="${contextModeTitle}">
                   ${contextModeLabel}
                 </span>
@@ -144,6 +158,57 @@ export async function mountSideChatSurface(container, {
     const contextToggleBtn = container.querySelector('.side-chat-context-toggle-btn');
     const snapshotDrawer = container.querySelector('.side-chat-snapshot-drawer');
     const parentLink = container.querySelector('.side-chat-parent-link');
+    const modelPickerBtn = container.querySelector('.side-chat-model-picker-btn');
+    const modelPopover = container.querySelector('.side-chat-model-popover');
+    const modelNameSpan = container.querySelector('.side-chat-model-name');
+    const attachBtn = container.querySelector('.side-chat-attach-btn');
+
+    if (modelPickerBtn && modelPopover) {
+        modelPickerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = modelPopover.style.display !== 'none';
+            modelPopover.style.display = isOpen ? 'none' : 'flex';
+        });
+
+        modelPopover.addEventListener('click', (e) => {
+            const item = e.target.closest('.side-chat-model-item');
+            if (!item) return;
+            const newModel = item.getAttribute('data-model');
+            if (newModel) {
+                selectedItem.model = newModel;
+                if (selectedItem.config) selectedItem.config.model = newModel;
+                descriptor.model = newModel;
+                if (modelNameSpan) modelNameSpan.textContent = newModel;
+                modelPickerBtn.title = `点击切换模型 (当前: ${newModel})`;
+                modelPopover.querySelectorAll('.side-chat-model-item').forEach(el => {
+                    el.classList.toggle('active', el.getAttribute('data-model') === newModel);
+                });
+                chatCapabilities?.uiHelper?.showToastNotification?.(`已切换模型至: ${newModel}`, 'success');
+            }
+            modelPopover.style.display = 'none';
+        });
+
+        doc.addEventListener('click', (e) => {
+            if (!modelPickerBtn.contains?.(e.target) && !modelPopover.contains?.(e.target)) {
+                modelPopover.style.display = 'none';
+            }
+        });
+    }
+
+    if (attachBtn) {
+        attachBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const snippet = doc.defaultView?.prompt?.('请输入要引用的文本片段或上下文：');
+            if (snippet && snippet.trim()) {
+                handle.addReference({
+                    id: `ref-manual-${Date.now()}`,
+                    text: snippet.trim(),
+                    sourceMessageId: null,
+                    capturedAt: Date.now()
+                });
+            }
+        });
+    }
 
     if (contextToggleBtn && snapshotDrawer) {
         contextToggleBtn.addEventListener('click', (e) => {
@@ -575,6 +640,17 @@ export async function mountSideChatSurface(container, {
         },
         getReferences() {
             return [...references];
+        },
+        setModel(model) {
+            if (!model || isDisposed) return;
+            selectedItem.model = model;
+            if (selectedItem.config) selectedItem.config.model = model;
+            descriptor.model = model;
+            if (modelNameSpan) modelNameSpan.textContent = model;
+            if (modelPickerBtn) modelPickerBtn.title = `点击切换模型 (当前: ${model})`;
+        },
+        getModel() {
+            return selectedItem.model || descriptor.model || 'gpt-4o';
         },
         async requestClose() {
             if (hasUnsavedChanges) {

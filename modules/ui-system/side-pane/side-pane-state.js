@@ -134,9 +134,11 @@ export function setParent(state, parentRef) {
     });
 }
 
+export const LAUNCHER_TAB_ID = 'launcher';
+
 export function activateTab(state, tabId) {
     if (!tabId || state.activeTabId === tabId) return state;
-    if (!state.tabs.some(tab => tab.id === tabId)) return state;
+    if (tabId !== LAUNCHER_TAB_ID && !state.tabs.some(tab => tab.id === tabId)) return state;
     return Object.freeze({
         ...state,
         activeTabId: tabId
@@ -149,6 +151,15 @@ export function showNotifications(state) {
         ...state,
         visible: true,
         activeTabId: NOTIFICATIONS_TAB_ID
+    });
+}
+
+export function showLauncher(state) {
+    if (state.activeTabId === LAUNCHER_TAB_ID && state.visible) return state;
+    return Object.freeze({
+        ...state,
+        visible: true,
+        activeTabId: LAUNCHER_TAB_ID
     });
 }
 
@@ -202,6 +213,28 @@ export function closeTab(state, tabId) {
     });
 }
 
+export function closeOtherTabs(state, tabId) {
+    if (!tabId) return state;
+    const targetTab = state.tabs.find(t => t.id === tabId);
+    if (!targetTab) return state;
+
+    const nextTabs = state.tabs.filter(t => t.id === tabId || t.id === NOTIFICATIONS_TAB_ID);
+    return Object.freeze({
+        ...state,
+        activeTabId: tabId,
+        tabs: Object.freeze(nextTabs)
+    });
+}
+
+export function closeAllTabs(state) {
+    const nextTabs = state.tabs.filter(t => t.id === NOTIFICATIONS_TAB_ID);
+    return Object.freeze({
+        ...state,
+        activeTabId: LAUNCHER_TAB_ID,
+        tabs: Object.freeze(nextTabs)
+    });
+}
+
 export function getVisibleTabs(state, parentRef = null) {
     if (!parentRef) return state.tabs;
     return state.tabs.filter(tab => {
@@ -220,6 +253,7 @@ const api = Object.freeze({
     MAX_WIDTH,
     NOTIFICATIONS_TAB_ID,
     NOTIFICATIONS_TAB,
+    LAUNCHER_TAB_ID,
     matchesConversation,
     freezeDescriptor,
     createInitialSidePaneState,
@@ -228,8 +262,11 @@ const api = Object.freeze({
     setParent,
     activateTab,
     showNotifications,
+    showLauncher,
     openChatTab,
     closeTab,
+    closeOtherTabs,
+    closeAllTabs,
     getVisibleTabs
 });
 

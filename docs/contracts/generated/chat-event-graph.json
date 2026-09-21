@@ -6222,47 +6222,69 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 374,
+          "line": 415,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 431,
+          "line": 472,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 553,
+          "line": 594,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 600,
+          "line": 718,
+          "kind": "preload-subscription"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 734,
+          "kind": "preload-subscription"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 760,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 374,
+          "line": 415,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 431,
+          "line": 472,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 553,
+          "line": 594,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 600,
+          "line": 718,
+          "kind": "preload-subscription",
+          "match": "onOpenSideChat("
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 734,
+          "kind": "preload-subscription",
+          "match": "onOpenSideChat("
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 760,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         }
@@ -8459,6 +8481,25 @@
       ]
     },
     {
+      "name": "selectionchange",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "renderer.js",
+          "line": 1140,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "renderer.js",
+          "line": 1140,
+          "kind": "custom-event-listener",
+          "match": "addEventListener('selectionchange'"
+        }
+      ]
+    },
+    {
       "name": "send-group-chat-message",
       "producers": [
         {
@@ -10557,7 +10598,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1169,
+          "line": 1222,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -10565,7 +10606,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1169,
+          "line": 1222,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

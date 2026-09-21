@@ -1037,3 +1037,267 @@ html .vcp-side-pane-resizer:focus-visible {
         transition: none;
     }
 }
+
+/* --- Open Tab Launcher (ZCode Parity) --- */
+html .side-pane-open-tab-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+html .side-pane-open-tab-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 320px;
+    gap: 20px;
+}
+
+html .side-pane-open-tab-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+}
+
+html .side-pane-open-tab-title {
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--primary-text, #f1f5f9);
+    margin: 0;
+}
+
+html body[data-vcp-theme="light"] .side-pane-open-tab-title {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-pane-open-tab-desc {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--sub-text, rgba(255, 255, 255, 0.6));
+    margin: 0;
+}
+
+html body[data-vcp-theme="light"] .side-pane-open-tab-desc {
+    color: var(--sub-text, rgba(0, 0, 0, 0.55));
+}
+
+html .side-pane-open-tab-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+}
+
+html .side-pane-open-tab-button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    width: 100%;
+    padding: 0 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--primary-text, #f1f5f9);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+html body[data-vcp-theme="light"] .side-pane-open-tab-button {
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-pane-open-tab-button:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
+}
+
+html body[data-vcp-theme="light"] .side-pane-open-tab-button:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.16);
+}
+
+html .side-pane-open-tab-button-label {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- Side Pane Add Menu Popover & Tab Context Menu --- */
+html .side-pane-add-menu-popover,
+html .side-pane-context-menu {
+    position: absolute;
+    min-width: 170px;
+    padding: 6px;
+    border-radius: 10px;
+    background: var(--panel-bg-dark, #1e1e24);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 100;
+    flex-direction: column;
+    gap: 2px;
+}
+
+html body[data-vcp-theme="light"] .side-pane-add-menu-popover,
+html body[data-vcp-theme="light"] .side-pane-context-menu {
+    background: var(--panel-bg-light, #ffffff);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+}
+
+html .side-pane-add-menu-popover {
+    top: 38px;
+    right: 28px;
+}
+
+html .side-pane-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--primary-text, #f1f5f9);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background 0.12s ease;
+}
+
+html body[data-vcp-theme="light"] .side-pane-menu-item {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-pane-menu-item:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html body[data-vcp-theme="light"] .side-pane-menu-item:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+html .side-pane-menu-item:disabled {
+    cursor: not-allowed;
+}
+
+html .side-pane-menu-divider {
+    height: 1px;
+    background: var(--border-color, rgba(255, 255, 255, 0.08));
+    margin: 4px 0;
+}
+
+html body[data-vcp-theme="light"] .side-pane-menu-divider {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* --- Side Chat Interactive Model Popover --- */
+html .side-chat-model-popover {
+    position: absolute;
+    bottom: 28px;
+    left: 0;
+    min-width: 150px;
+    padding: 4px;
+    border-radius: 8px;
+    background: var(--panel-bg-dark, #1e1e24);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    z-index: 80;
+    flex-direction: column;
+    gap: 2px;
+}
+
+html body[data-vcp-theme="light"] .side-chat-model-popover {
+    background: var(--panel-bg-light, #ffffff);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+html .side-chat-model-item {
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    color: var(--primary-text, #f1f5f9);
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+html body[data-vcp-theme="light"] .side-chat-model-item {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-chat-model-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html body[data-vcp-theme="light"] .side-chat-model-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+html .side-chat-model-item.active {
+    background: var(--accent-bg, #3b82f6);
+    color: #ffffff;
+    font-weight: 500;
+}
+
+html .side-chat-model-picker-btn {
+    cursor: pointer;
+}
+
+html .side-chat-model-picker-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+html body[data-vcp-theme="light"] .side-chat-model-picker-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* --- Floating Quick Ask Pill --- */
+html #floatingSelectionSideChatBtn,
+html .floating-selection-side-chat-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--accent-bg, #3b82f6);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+html #floatingSelectionSideChatBtn:hover,
+html .floating-selection-side-chat-btn:hover {
+    transform: translateY(-1px);
+    background: #2563eb;
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
