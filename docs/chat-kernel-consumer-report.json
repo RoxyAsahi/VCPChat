@@ -693,6 +693,7 @@
     "tests/music-stage-lifecycle.test.js",
     "tests/non-streaming-event-consumer.test.mjs",
     "tests/notification-renderer-lifecycle.test.mjs",
+    "tests/side-chat-audit-probes.test.mjs",
     "tests/side-chat-integration.test.mjs",
     "tests/side-chat-ipc-metadata.test.mjs",
     "tests/side-chat-session-service.test.mjs",
@@ -791,7 +792,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 280,
+          "line": 307,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "sendMessage",
@@ -935,7 +936,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1232,
+          "line": 1241,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -943,7 +944,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1268,
+          "line": 1277,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -951,7 +952,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1318,
+          "line": 1327,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -959,7 +960,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1319,
+          "line": 1328,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -3579,13 +3580,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1163,
+          "line": 1172,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1171,
+          "line": 1180,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3647,13 +3648,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1100,
+          "line": 1109,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1101,
+          "line": 1110,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -3847,7 +3848,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1343,
+          "line": 1352,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4048,13 +4049,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1326,
+          "line": 1335,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1327,
+          "line": 1336,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4270,7 +4271,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1137,
+          "line": 1146,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4598,7 +4599,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1062,
+          "line": 1071,
           "syntax": "dot-assignment",
           "snippet": "window.openSideChatWithSelection = async (contextParams = null) => {"
         }
@@ -6382,25 +6383,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 1138,
+          "line": 1147,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1291,
+          "line": 1300,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1291,
+          "line": 1300,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1292,
+          "line": 1301,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -6831,13 +6832,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1140,
+          "line": 1149,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1186,
+          "line": 1195,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7469,7 +7470,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1346,
+          "line": 1355,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -7688,7 +7689,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1139,
+          "line": 1148,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -7803,7 +7804,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1151,
+          "line": 1160,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -10274,7 +10275,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1059,
+          "line": 1068,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
@@ -17005,7 +17006,7 @@
     "renderer.js": {
       "windowReferences": 123,
       "documentReferences": 51,
-      "electronReferences": 18,
+      "electronReferences": 17,
       "timers": 1,
       "listeners": 0,
       "mutableMaps": 0

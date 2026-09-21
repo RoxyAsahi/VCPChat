@@ -6222,36 +6222,36 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 289,
+          "line": 307,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 346,
+          "line": 364,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 363,
+          "line": 381,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 289,
+          "line": 307,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 346,
+          "line": 364,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 363,
+          "line": 381,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         }
@@ -9088,7 +9088,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 259,
+          "line": 277,
           "kind": "ipc-send"
         }
       ],
@@ -9120,7 +9120,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 259,
+          "line": 277,
           "kind": "ipc-send",
           "match": "invoke('side-chat:create-snapshot'"
         }
@@ -9151,7 +9151,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 227,
+          "line": 242,
           "kind": "ipc-send"
         }
       ],
@@ -9183,7 +9183,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 227,
+          "line": 242,
           "kind": "ipc-send",
           "match": "invoke('side-chat:delete-metadata'"
         }
@@ -9214,7 +9214,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 183,
+          "line": 198,
           "kind": "ipc-send"
         }
       ],
@@ -9246,7 +9246,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 183,
+          "line": 198,
           "kind": "ipc-send",
           "match": "invoke('side-chat:get-metadata'"
         }
@@ -9277,7 +9277,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 205,
+          "line": 220,
           "kind": "ipc-send"
         }
       ],
@@ -9309,7 +9309,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 205,
+          "line": 220,
           "kind": "ipc-send",
           "match": "invoke('side-chat:list-metadata'"
         }
@@ -9340,7 +9340,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 160,
+          "line": 176,
           "kind": "ipc-send"
         }
       ],
@@ -9372,7 +9372,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 160,
+          "line": 176,
           "kind": "ipc-send",
           "match": "invoke('side-chat:save-metadata'"
         }
@@ -10546,7 +10546,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1160,
+          "line": 1169,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -10554,7 +10554,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1160,
+          "line": 1169,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }
