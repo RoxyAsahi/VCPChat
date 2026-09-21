@@ -447,7 +447,11 @@ const allowedSourceDifferencePatterns = [
     /^rust_assistant_engine\/ui\/assistant\.(?:js|html)$/,
     /^Flowlockmodules\/flowlock-integration\.js$/,
     /^modules\/event-listeners\.js$/,
-    /^tests\/(?:chat-|content-|stream-|memory-chat-repository|window-stream-runtime|render-dependencies|main-chat-surface-adapter|vcp-stream-bridge)/,
+    /^tests\/(?:chat-|content-|stream-|memory-chat-repository|window-stream-runtime|render-dependencies|main-chat-surface-adapter|vcp-stream-bridge|side-pane|side-chat|selection-reference)/,
+    /^modules\/ui-system\/side-pane\//,
+    /^modules\/renderer\/sideChatSurfaceOwner\.js$/,
+    /^modules\/ipc\/sideChatHandlers\.js$/,
+    /^modules\/loom\/webcore\/comfyui-main-world-bridge\.js$/,
     /^(?:Agenttaskmodules|Forummodules|Logmodules|Memomodules|PluginManagerModules|VCPHumanToolBox|VchatManager)\//,
     /^Notemodules\/notemini\.(?:html|js|css)$/,
 ];

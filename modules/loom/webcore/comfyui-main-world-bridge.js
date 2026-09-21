@@ -268,12 +268,12 @@
             .then(() => applyWidgetValue(detail))
             .then(result => {
                 publishState('widget-action');
-                document.dispatchEvent(new CustomEvent(RESPONSE_EVENT, {
+                document.dispatchEvent(new CustomEvent('vcp-comfyui-agent-response', {
                     detail: { requestId, status: 'success', result }
                 }));
             })
             .catch(error => {
-                document.dispatchEvent(new CustomEvent(RESPONSE_EVENT, {
+                document.dispatchEvent(new CustomEvent('vcp-comfyui-agent-response', {
                     detail: {
                         requestId,
                         status: 'error',
