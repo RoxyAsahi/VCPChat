@@ -130,14 +130,15 @@ export function freezeParentHistory(parentHistory = []) {
         .filter(msg => {
             if (!msg || typeof msg !== 'object') return false;
             // Exclude transient/thinking/streaming in progress
-            if (msg.transient || msg.isStreaming || msg.pending) return false;
+            if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking) return false;
             if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') return false;
-            return Boolean(msg.content);
+            return Boolean(msg.content || msg.text);
         })
         .map(msg => ({
             id: msg.id || null,
+            sourceMessageId: msg.id || null,
             role: msg.role,
-            content: msg.content,
+            content: msg.content || msg.text || '',
             timestamp: msg.timestamp || null,
             isInherited: true
         }));

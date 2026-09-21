@@ -192,21 +192,23 @@ test('createSideChatSurfaceOwner wraps mountTab provider contract', async () => 
 });
 
 test('mountSideChatSurface renders parent navigation, context drawer, and send-to-main action', async () => {
+    let autoResized = false;
     const dom = new JSDOM(`
         <div>
-            <textarea id="chatInput"></textarea>
+            <textarea id="messageInput"></textarea>
             <div id="sideContainer"></div>
         </div>
     `);
     const doc = dom.window.document;
     const container = doc.getElementById('sideContainer');
-    const mainInput = doc.getElementById('chatInput');
+    const mainInput = doc.getElementById('messageInput');
 
     let toastMessage = null;
     const caps = {
         ...createMockChatCapabilities(),
         uiHelper: {
-            showToastNotification: (msg) => { toastMessage = msg; }
+            showToastNotification: (msg) => { toastMessage = msg; },
+            autoResizeTextarea: (el) => { if (el === mainInput) autoResized = true; }
         }
     };
 
@@ -271,6 +273,7 @@ test('mountSideChatSurface renders parent navigation, context drawer, and send-t
 
     sendBtn.click();
     assert.equal(mainInput.value, 'Here is the recommended algorithm solution.');
+    assert.equal(autoResized, true, 'autoResizeTextarea should be called on mainInput');
     assert.ok(toastMessage && toastMessage.includes('已填入主聊天输入框'));
 
     await handle.dispose();

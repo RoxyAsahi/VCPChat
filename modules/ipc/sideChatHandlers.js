@@ -4,7 +4,10 @@
  */
 'use strict';
 
-const { ipcMain } = require('electron');
+let electronModule = null;
+try {
+    electronModule = require('electron');
+} catch {}
 const fs = require('fs-extra');
 const path = require('path');
 const crypto = require('crypto');
@@ -15,14 +18,16 @@ function filterStableHistory(history = []) {
     const stable = [];
     for (const msg of history) {
         if (!msg || typeof msg !== 'object') continue;
-        if (msg.transient || msg.isStreaming || msg.pending) continue;
+        if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking) continue;
         if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system') continue;
-        if (!msg.content) continue;
+        const text = msg.content || msg.text;
+        if (!text) continue;
 
         stable.push({
             id: msg.id || null,
+            sourceMessageId: msg.id || null,
             role: msg.role,
-            content: msg.content,
+            content: text,
             timestamp: msg.timestamp || null,
             isInherited: true
         });
@@ -31,28 +36,40 @@ function filterStableHistory(history = []) {
     return stable;
 }
 
+function validateSegment(value) {
+    if (typeof value !== 'string' || !value ||
+        /[<>:"/\\|?*\x00-\x1f]/.test(value) ||
+        value === '.' || value === '..' || /[. ]$/.test(value) ||
+        /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(value)) {
+        return null;
+    }
+    return value;
+}
+
 /**
  * Initializes Side Chat IPC handlers.
  * @param {Object} paths
  * @param {string} paths.USER_DATA_DIR
  * @param {string} [paths.AGENT_DIR]
+ * @param {Object} [paths.historyMutationQueue]
+ * @param {Object} [paths.ipcMain]
  */
 function initialize(paths) {
-    const { USER_DATA_DIR } = paths || {};
-    if (!USER_DATA_DIR) {
-        console.error('[SideChatHandlers] USER_DATA_DIR is missing; handlers cannot be registered.');
+    const { USER_DATA_DIR, historyMutationQueue, ipcMain: injectedIpcMain } = paths || {};
+    const ipc = injectedIpcMain || (electronModule && typeof electronModule === 'object' ? electronModule.ipcMain : null);
+    if (!ipc || typeof ipc.handle !== 'function') {
+        console.error('[SideChatHandlers] ipcMain is missing or invalid; handlers cannot be registered.');
         return;
     }
 
     function getTopicDir(agentId, topicId) {
-        if (!agentId || !topicId) return null;
-        // Sanitize path components to prevent directory traversal
-        const safeAgentId = String(agentId).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const safeTopicId = String(topicId).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const safeAgentId = validateSegment(String(agentId || ''));
+        const safeTopicId = validateSegment(String(topicId || ''));
+        if (!safeAgentId || !safeTopicId) return null;
         return path.join(USER_DATA_DIR, safeAgentId, 'topics', safeTopicId);
     }
 
-    ipcMain.handle('side-chat:save-metadata', async (event, metadata) => {
+    ipc.handle('side-chat:save-metadata', async (event, metadata) => {
         try {
             if (!metadata || typeof metadata !== 'object') {
                 return { success: false, error: 'INVALID_METADATA' };
@@ -103,7 +120,7 @@ function initialize(paths) {
         }
     });
 
-    ipcMain.handle('side-chat:get-metadata', async (event, agentId, childTopicId) => {
+    ipc.handle('side-chat:get-metadata', async (event, agentId, childTopicId) => {
         try {
             const topicDir = getTopicDir(agentId, childTopicId);
             if (!topicDir) return { success: false, error: 'INVALID_PATH' };
@@ -121,10 +138,11 @@ function initialize(paths) {
         }
     });
 
-    ipcMain.handle('side-chat:list-metadata', async (event, agentId, parentTopicId = null) => {
+    ipc.handle('side-chat:list-metadata', async (event, agentId, parentTopicId = null) => {
         try {
             if (!agentId) return { success: false, error: 'MISSING_AGENT_ID' };
-            const safeAgentId = String(agentId).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const safeAgentId = validateSegment(String(agentId || ''));
+            if (!safeAgentId) return { success: false, error: 'INVALID_AGENT_ID' };
             const topicsDir = path.join(USER_DATA_DIR, safeAgentId, 'topics');
 
             if (!await fs.pathExists(topicsDir)) {
@@ -160,7 +178,7 @@ function initialize(paths) {
         }
     });
 
-    ipcMain.handle('side-chat:delete-metadata', async (event, agentId, childTopicId) => {
+    ipc.handle('side-chat:delete-metadata', async (event, agentId, childTopicId) => {
         try {
             const topicDir = getTopicDir(agentId, childTopicId);
             if (!topicDir) return { success: false, error: 'INVALID_PATH' };
@@ -182,15 +200,23 @@ function initialize(paths) {
         }
     });
 
-    ipcMain.handle('side-chat:create-snapshot', async (event, agentId, parentTopicId, childTopicId = null) => {
+    ipc.handle('side-chat:create-snapshot', async (event, agentId, parentTopicId, childTopicId = null) => {
         try {
             const parentDir = getTopicDir(agentId, parentTopicId);
             if (!parentDir) return { success: false, error: 'INVALID_PARENT_PATH' };
 
-            const parentHistoryPath = path.join(parentDir, 'history.json');
             let rawHistory = [];
-            if (await fs.pathExists(parentHistoryPath)) {
-                rawHistory = await fs.readJson(parentHistoryPath);
+            if (historyMutationQueue && typeof historyMutationQueue.read === 'function') {
+                try {
+                    rawHistory = await historyMutationQueue.read({ itemId: agentId, itemType: 'agent', topicId: parentTopicId });
+                } catch {
+                    rawHistory = [];
+                }
+            } else {
+                const parentHistoryPath = path.join(parentDir, 'history.json');
+                if (await fs.pathExists(parentHistoryPath)) {
+                    rawHistory = await fs.readJson(parentHistoryPath);
+                }
             }
 
             const stableHistory = filterStableHistory(rawHistory);

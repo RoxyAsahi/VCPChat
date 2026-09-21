@@ -1070,7 +1070,19 @@ mainChatSettingsPresentationOwner.configureStartup({
                     };
                 } else if (contextParams?.messageItem) {
                     const selRes = captureSelectionReference(window, contextParams.messageItem, contextParams.message);
-                    if (selRes.ok) reference = selRes.reference;
+                    if (selRes.ok) {
+                        reference = selRes.reference;
+                    } else if (contextParams.message?.content || contextParams.message?.text) {
+                        const rawContent = String(contextParams.message.content || contextParams.message.text || '').trim();
+                        if (rawContent) {
+                            reference = {
+                                id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                text: rawContent.length > 300 ? `${rawContent.slice(0, 300)}...` : rawContent,
+                                sourceMessageId: contextParams.message?.id || null,
+                                capturedAt: Date.now()
+                            };
+                        }
+                    }
                 } else {
                     const selRes = captureSelectionReference(window);
                     if (selRes.ok) reference = selRes.reference;

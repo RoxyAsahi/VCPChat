@@ -248,17 +248,18 @@ export function createSidePaneController({
         async closeTab(tabId) {
             if (isDisposed || !tabId || tabId === SidePaneState.NOTIFICATIONS_TAB_ID) return;
             const entry = mountedTabMap.get(tabId);
+            const tabDesc = entry?.descriptor || state.tabs.find(t => t.id === tabId)?.descriptor || null;
             if (entry) {
                 const closeResult = await entry.handle?.requestClose?.();
                 if (closeResult && closeResult.closed === false) {
                     return; // User or operation prevented close
                 }
-                if (entry.descriptor && typeof onTabClosed === 'function') {
-                    try { await onTabClosed(entry.descriptor); } catch {}
-                }
                 await entry.handle?.dispose?.();
                 entry.viewElement?.remove?.();
                 mountedTabMap.delete(tabId);
+            }
+            if (tabDesc && typeof onTabClosed === 'function') {
+                try { await onTabClosed(tabDesc); } catch {}
             }
 
             state = SidePaneState.closeTab(state, tabId);
@@ -298,7 +299,7 @@ export function createSidePaneController({
             return [];
         },
 
-        dispose() {
+        async dispose() {
             if (isDisposed) return;
             isDisposed = true;
             cleanupListeners.forEach(cleanup => cleanup());
@@ -306,11 +307,15 @@ export function createSidePaneController({
 
             resizerOwner?.dispose?.();
 
+            const disposePromises = [];
             mountedTabMap.forEach((entry) => {
-                entry.handle?.dispose?.();
+                if (entry.handle?.dispose) {
+                    disposePromises.push(entry.handle.dispose());
+                }
                 entry.viewElement?.remove?.();
             });
             mountedTabMap.clear();
+            await Promise.allSettled(disposePromises);
         }
     });
 

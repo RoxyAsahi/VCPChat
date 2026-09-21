@@ -64,67 +64,14 @@ test('sideChatHandlers handles metadata lifecycle and snapshot creation with iso
         ])
     );
 
-    // Call handlers through mock wrapper
-    const saveMetadataHandler = async (metadata) => {
-        const safeAgentId = String(metadata.child?.itemId).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const safeTopicId = String(metadata.child?.topicId).replace(/[^a-zA-Z0-9_-]/g, '_');
-        const topicDir = path.join(tmpDir, safeAgentId, 'topics', safeTopicId);
-        await fs.mkdir(topicDir, { recursive: true });
-        const metadataPath = path.join(topicDir, 'sidechat-metadata.json');
-        await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
-        return { success: true, metadata };
-    };
+    // Wire fake ipcMain in place of electron's ipcMain by running real initialize
+    initialize({ USER_DATA_DIR: tmpDir, ipcMain: fakeIpcMain });
 
-    const getMetadataHandler = async (aId, cTopicId) => {
-        const metadataPath = path.join(tmpDir, aId, 'topics', cTopicId, 'sidechat-metadata.json');
-        try {
-            const data = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-            return { success: true, metadata: data };
-        } catch {
-            return { success: false, error: 'NOT_FOUND' };
-        }
-    };
-
-    const listMetadataHandler = async (aId, pTopicId) => {
-        const topicsDir = path.join(tmpDir, aId, 'topics');
-        const entries = await fs.readdir(topicsDir);
-        const items = [];
-        for (const entry of entries) {
-            try {
-                const meta = JSON.parse(await fs.readFile(path.join(topicsDir, entry, 'sidechat-metadata.json'), 'utf8'));
-                if (!pTopicId || meta.parent?.topicId === pTopicId) {
-                    items.push(meta);
-                }
-            } catch {}
-        }
-        return { success: true, items };
-    };
-
-    const createSnapshotHandler = async (aId, pTopicId, cTopicId) => {
-        const pDir = path.join(tmpDir, aId, 'topics', pTopicId);
-        const rawHistory = JSON.parse(await fs.readFile(path.join(pDir, 'history.json'), 'utf8'));
-        const stableHistory = filterStableHistory(rawHistory);
-        const snapshotId = `snapshot_test_1`;
-        const snapshotBoundary = {
-            lastMessageId: stableHistory[stableHistory.length - 1]?.id || null,
-            capturedAt: Date.now(),
-            messageCount: stableHistory.length
-        };
-        const cDir = path.join(tmpDir, aId, 'topics', cTopicId);
-        await fs.mkdir(cDir, { recursive: true });
-        await fs.writeFile(
-            path.join(cDir, 'parent-snapshot.json'),
-            JSON.stringify({ snapshotId, parentTopicId: pTopicId, boundary: snapshotBoundary, messages: stableHistory })
-        );
-        return { success: true, snapshotId, snapshotBoundary, messages: stableHistory };
-    };
-
-    const deleteMetadataHandler = async (aId, cTopicId) => {
-        const tDir = path.join(tmpDir, aId, 'topics', cTopicId);
-        await fs.rm(path.join(tDir, 'sidechat-metadata.json'), { force: true });
-        await fs.rm(path.join(tDir, 'parent-snapshot.json'), { force: true });
-        return { success: true };
-    };
+    const saveMetadataHandler = (metadata) => handlers.get('side-chat:save-metadata')({}, metadata);
+    const getMetadataHandler = (aId, cTopicId) => handlers.get('side-chat:get-metadata')({}, aId, cTopicId);
+    const listMetadataHandler = (aId, pTopicId) => handlers.get('side-chat:list-metadata')({}, aId, pTopicId);
+    const createSnapshotHandler = (aId, pTopicId, cTopicId) => handlers.get('side-chat:create-snapshot')({}, aId, pTopicId, cTopicId);
+    const deleteMetadataHandler = (aId, cTopicId) => handlers.get('side-chat:delete-metadata')({}, aId, cTopicId);
 
     // 1. Create snapshot
     const snapRes = await createSnapshotHandler(agentId, parentTopicId, childTopicId);
@@ -134,7 +81,7 @@ test('sideChatHandlers handles metadata lifecycle and snapshot creation with iso
 
     // Verify snapshot file exists
     const snapFile = JSON.parse(await fs.readFile(path.join(tmpDir, agentId, 'topics', childTopicId, 'parent-snapshot.json'), 'utf8'));
-    assert.equal(snapFile.snapshotId, 'snapshot_test_1');
+    assert.equal(snapFile.snapshotId, snapRes.snapshotId);
 
     // 2. Save metadata
     const metaPayload = {
@@ -169,4 +116,31 @@ test('sideChatHandlers handles metadata lifecycle and snapshot creation with iso
 
     const getAfterDel = await getMetadataHandler(agentId, childTopicId);
     assert.equal(getAfterDel.success, false);
+
+    // 6. Adversarial: Path traversal attempts must be rejected
+    const maliciousRes = await getMetadataHandler('../../etc', 'passwd');
+    assert.equal(maliciousRes.success, false);
+    assert.equal(maliciousRes.error, 'INVALID_PATH');
+
+    // 7. Adversarial: Unicode/Chinese agent and topic IDs must be preserved cleanly
+    const unicodeAgentId = '智能助手小艾';
+    const unicodeParentTopicId = '主对话_2026';
+    const unicodeChildTopicId = '侧聊_分支1';
+    const unicodeParentDir = path.join(tmpDir, unicodeAgentId, 'topics', unicodeParentTopicId);
+    await fs.mkdir(unicodeParentDir, { recursive: true });
+    await fs.writeFile(path.join(unicodeParentDir, 'history.json'), JSON.stringify([
+        { id: 'u1', role: 'user', content: '请问你能做什么？', timestamp: 5000 },
+        { id: 'u2', role: 'assistant', content: '我可以帮你分析代码。', timestamp: 6000 }
+    ]), 'utf8');
+
+    const unicodeSnap = await createSnapshotHandler(unicodeAgentId, unicodeParentTopicId, unicodeChildTopicId);
+    assert.equal(unicodeSnap.success, true);
+    assert.equal(unicodeSnap.messages.length, 2);
+    assert.equal(unicodeSnap.messages[0].content, '请问你能做什么？');
+
+    // Verify snapshot written inside unicode path
+    const childSnapshotFile = path.join(tmpDir, unicodeAgentId, 'topics', unicodeChildTopicId, 'parent-snapshot.json');
+    const childSnapshotData = JSON.parse(await fs.readFile(childSnapshotFile, 'utf8'));
+    assert.equal(childSnapshotData.messages.length, 2);
 });
+

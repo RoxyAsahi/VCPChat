@@ -102,7 +102,7 @@ export async function mountSideChatSurface(container, {
     if (parentLink) {
         parentLink.addEventListener('click', (e) => {
             e.stopPropagation();
-            const mainInput = doc.querySelector('#chatInput') || doc.querySelector('textarea#chatInput');
+            const mainInput = doc.querySelector('#messageInput') || doc.querySelector('#chatInput') || doc.querySelector('textarea#messageInput');
             mainInput?.focus?.();
             chatCapabilities?.uiHelper?.showToastNotification?.(`当前侧聊关联父话题: ${descriptor.parent?.name || descriptor.parent?.topicId}`, 'info');
         });
@@ -149,10 +149,11 @@ export async function mountSideChatSurface(container, {
                 return;
             }
 
-            const mainInput = doc.querySelector('#chatInput') || doc.querySelector('textarea#chatInput');
+            const mainInput = doc.querySelector('#messageInput') || doc.querySelector('#chatInput') || doc.querySelector('textarea#messageInput');
             if (mainInput) {
                 const currentVal = mainInput.value ? mainInput.value.trim() : '';
                 mainInput.value = currentVal ? `${currentVal}\n\n${cleanText}` : cleanText;
+                chatCapabilities?.uiHelper?.autoResizeTextarea?.(mainInput);
                 const EventClass = doc.defaultView?.Event || globalThis.Event;
                 mainInput.dispatchEvent(new EventClass('input', { bubbles: true }));
                 mainInput.focus();
@@ -363,11 +364,15 @@ export async function mountSideChatSurface(container, {
 
             const terminalType = result?.terminal?.event?.type;
             if (terminalType === 'cancelled' || terminalType === 'discarded') {
+                if (!textarea.value && rawText) textarea.value = rawText;
                 updateStatus('已取消');
             } else if (terminalType === 'failed') {
                 const transportErr = result.terminal.event.outcome?.transport?.error;
                 const persistenceErr = result.terminal.event.outcome?.persistence?.error;
                 const err = transportErr || persistenceErr || '连接中断';
+                if (!persistenceErr && !textarea.value && rawText) {
+                    textarea.value = rawText;
+                }
                 if (persistenceErr) {
                     persistenceBadge.style.display = 'inline-block';
                     updateStatus('已生成但保存失败', 'error');
@@ -379,6 +384,7 @@ export async function mountSideChatSurface(container, {
                 updateStatus('就绪');
             }
         } catch (error) {
+            if (!textarea.value && rawText) textarea.value = rawText;
             updateStatus(`发送失败：${error.message}`, 'error');
         } finally {
             if (!isDisposed) {
