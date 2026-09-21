@@ -472,6 +472,7 @@ mainChatSettingsPresentationOwner.configureStartup({
             globalSettingsRef: mainChatSettingsOwner.ref,
             currentSelectedItemRef,
             currentTopicIdRef,
+            currentChatHistoryRef: mainHistoryRef,
             messageRenderer, // Explicit provider; initialized below
             uiHelper: uiHelperFunctions,
             mainRendererElements: mainRendererElementsForGroupRenderer, // 使用构造好的对象
@@ -694,7 +695,11 @@ mainChatSettingsPresentationOwner.configureStartup({
 
     mainChatEventBridge = createMainChatEventBridge({
         chatAPI,
-        acceptStreamEvent: eventData => mainChatAdapter?.acceptStreamEvent(eventData) === true,
+        acceptStreamEvent: eventData => {
+            // 侧栏说话状态必须先于当前会话路由更新，后台 Agent/群聊也能保持可见。
+            window.itemListManager?.consumeStreamActivityEvent?.(eventData);
+            return mainChatAdapter?.acceptStreamEvent(eventData) === true;
+        },
         consumeNonStreamingEvent: eventData => nonStreamingEventConsumer?.consume(eventData),
     });
 
