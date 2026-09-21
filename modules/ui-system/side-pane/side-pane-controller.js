@@ -117,14 +117,22 @@ export function createSidePaneController({
 
     function syncViewPanels() {
         if (!contentContainer) return;
+        const visibleTabs = SidePaneState.getVisibleTabs(state, state.parent);
+        const visibleTabIds = new Set(visibleTabs.map(t => t.id));
         const views = contentContainer.querySelectorAll('.side-pane-view');
         views.forEach(view => {
             const viewTabId = view.getAttribute('data-tab-id') || (
                 view.id === 'sidePaneViewNotifications' ? SidePaneState.NOTIFICATIONS_TAB_ID : null
             );
-            const isActive = viewTabId === state.activeTabId;
+            const isVisible = visibleTabIds.has(viewTabId);
+            const isActive = isVisible && viewTabId === state.activeTabId;
             view.classList.toggle('active', isActive);
             view.setAttribute('aria-hidden', String(!isActive));
+            if (!isVisible) {
+                view.style.display = 'none';
+            } else {
+                view.style.display = '';
+            }
         });
     }
 
@@ -203,29 +211,39 @@ export function createSidePaneController({
         },
 
         async openChat(descriptor) {
-            if (isDisposed || !descriptor) return;
+            if (isDisposed || !descriptor) return null;
             state = SidePaneState.openChatTab(state, descriptor);
+            const targetTabId = state.activeTabId;
             renderTabList();
 
             // Check if view container already mounted for this tab
-            let entry = mountedTabMap.get(descriptor.id);
+            let entry = mountedTabMap.get(targetTabId);
             if (!entry) {
-                let view = contentContainer?.querySelector(`[data-tab-id="${descriptor.id}"]`);
+                let view = contentContainer?.querySelector(`[data-tab-id="${targetTabId}"]`);
                 if (!view && contentContainer) {
                     view = doc.createElement('section');
                     view.className = 'side-pane-view';
-                    view.setAttribute('data-tab-id', descriptor.id);
+                    view.setAttribute('data-tab-id', targetTabId);
                     view.setAttribute('role', 'tabpanel');
                     contentContainer.appendChild(view);
                 }
 
                 if (providers.chat?.mountTab && view) {
                     const handle = await providers.chat.mountTab(descriptor, view);
+                    if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
+                        await handle?.dispose?.();
+                        view?.remove?.();
+                        return null;
+                    }
                     entry = { descriptor, viewElement: view, handle };
-                    mountedTabMap.set(descriptor.id, entry);
+                    mountedTabMap.set(targetTabId, entry);
                 } else if (view) {
+                    if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
+                        view?.remove?.();
+                        return null;
+                    }
                     entry = { descriptor, viewElement: view, handle: null };
-                    mountedTabMap.set(descriptor.id, entry);
+                    mountedTabMap.set(targetTabId, entry);
                 }
             }
 

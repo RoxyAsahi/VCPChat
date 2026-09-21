@@ -120,9 +120,17 @@ export function setParent(state, parentRef) {
         : null;
 
     if (matchesConversation(state.parent, nextParent)) return state;
+
+    const visibleTabs = getVisibleTabs({ ...state, parent: nextParent }, nextParent);
+    let nextActiveTabId = state.activeTabId;
+    if (!visibleTabs.some(t => t.id === nextActiveTabId)) {
+        nextActiveTabId = visibleTabs[0]?.id || NOTIFICATIONS_TAB_ID;
+    }
+
     return Object.freeze({
         ...state,
-        parent: nextParent
+        parent: nextParent,
+        activeTabId: nextActiveTabId
     });
 }
 

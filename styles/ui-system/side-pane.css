@@ -291,10 +291,14 @@ html .side-chat-header {
 
 html .side-chat-topic-title {
     font-weight: 500;
-    color: var(--text-color-primary, #ffffff);
+    color: var(--primary-text, #f1f5f9);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+html body[data-vcp-theme="light"] .side-chat-topic-title {
+    color: var(--primary-text, #0f172a);
 }
 
 html .side-chat-messages-container {
@@ -320,6 +324,11 @@ html .side-chat-composer {
     background: rgba(0, 0, 0, 0.1);
 }
 
+html body[data-vcp-theme="light"] .side-chat-composer {
+    background: rgba(0, 0, 0, 0.02);
+    border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
 html .side-chat-reference-box {
     display: flex;
     align-items: flex-start;
@@ -330,7 +339,12 @@ html .side-chat-reference-box {
     border-left: 2px solid var(--accent-bg, #3b82f6);
     border-radius: 4px;
     font-size: 11px;
-    color: var(--text-color-secondary, rgba(255, 255, 255, 0.7));
+    color: var(--secondary-text, rgba(241, 245, 249, 0.7));
+}
+
+html body[data-vcp-theme="light"] .side-chat-reference-box {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--secondary-text, #475569);
 }
 
 html .side-chat-textarea-shell {
@@ -344,6 +358,11 @@ html .side-chat-textarea-shell {
     transition: border-color 0.15s ease;
 }
 
+html body[data-vcp-theme="light"] .side-chat-textarea-shell {
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+}
+
 html .side-chat-textarea-shell:focus-within {
     border-color: var(--accent-bg, #3b82f6);
 }
@@ -353,13 +372,17 @@ html .side-chat-textarea {
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-color-primary, #ffffff);
+    color: var(--primary-text, #f1f5f9);
     font-family: inherit;
     font-size: 13px;
     line-height: 1.4;
     resize: none;
     max-height: 120px;
     min-height: 24px;
+}
+
+html body[data-vcp-theme="light"] .side-chat-textarea {
+    color: var(--primary-text, #0f172a);
 }
 
 html .side-chat-send-btn,
@@ -393,7 +416,11 @@ html .side-chat-status-bar {
     justify-content: space-between;
     margin-top: 4px;
     font-size: 11px;
-    color: var(--text-color-secondary, rgba(255, 255, 255, 0.5));
+    color: var(--secondary-text, rgba(241, 245, 249, 0.5));
+}
+
+html body[data-vcp-theme="light"] .side-chat-status-bar {
+    color: var(--secondary-text, #64748b);
 }
 
 html .side-chat-status-error {
@@ -410,8 +437,12 @@ html .side-chat-parent-bar {
     align-items: center;
     gap: 6px;
     font-size: 11px;
-    color: var(--text-color-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--secondary-text, rgba(241, 245, 249, 0.6));
     padding: 2px 0;
+}
+
+html body[data-vcp-theme="light"] .side-chat-parent-bar {
+    color: var(--secondary-text, #64748b);
 }
 
 html .side-chat-parent-link {
@@ -432,15 +463,26 @@ html .side-chat-context-toggle-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
-    color: var(--text-color-secondary, rgba(255, 255, 255, 0.7));
+    color: var(--secondary-text, rgba(241, 245, 249, 0.7));
     font-size: 11px;
     padding: 2px 6px;
     cursor: pointer;
 }
 
+html body[data-vcp-theme="light"] .side-chat-context-toggle-btn {
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+    color: var(--secondary-text, #475569);
+}
+
 html .side-chat-context-toggle-btn:hover {
     background: rgba(255, 255, 255, 0.14);
-    color: var(--text-color-primary, #ffffff);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-chat-context-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--primary-text, #0f172a);
 }
 
 html .side-chat-snapshot-drawer {
@@ -451,6 +493,11 @@ html .side-chat-snapshot-drawer {
     border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
     padding: 8px 12px;
     font-size: 11px;
+}
+
+html body[data-vcp-theme="light"] .side-chat-snapshot-drawer {
+    background: rgba(0, 0, 0, 0.04);
+    border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
 }
 
 html .side-chat-snapshot-drawer.open {
@@ -485,10 +532,16 @@ html .side-chat-send-to-main-btn {
     border-radius: 4px;
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
     background: rgba(255, 255, 255, 0.06);
-    color: var(--text-color-secondary, rgba(255, 255, 255, 0.75));
+    color: var(--secondary-text, rgba(241, 245, 249, 0.75));
     font-size: 11px;
     cursor: pointer;
     transition: all 0.15s ease;
+}
+
+html body[data-vcp-theme="light"] .side-chat-send-to-main-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+    color: var(--secondary-text, #475569);
 }
 
 html .side-chat-send-to-main-btn:hover {

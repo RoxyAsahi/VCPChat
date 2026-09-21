@@ -6,6 +6,7 @@
 
 import { createChatSurface } from '../chat/chatSurface.js';
 import { createChatOperations } from '../chat/chatOperation.js';
+import { validateReferenceList } from '../ui-system/side-pane/selection-reference.js';
 
 /**
  * Mounts a full interactive side-chat surface into container.
@@ -115,6 +116,7 @@ export async function mountSideChatSurface(container, {
     let operationReady = Promise.resolve(null);
     let publishOperation = null;
     let submitInteractiveContent = null;
+    let hasUnsavedChanges = false;
     const references = []; // { id, text, sourceMessageId }
 
     function extractTextFromContentDiv(contentDiv) {
@@ -151,6 +153,13 @@ export async function mountSideChatSurface(container, {
 
             const mainInput = doc.querySelector('#messageInput') || doc.querySelector('#chatInput') || doc.querySelector('textarea#messageInput');
             if (mainInput) {
+                const inputTopic = mainInput.getAttribute('data-current-topic')
+                    || (typeof chatCapabilities?.getCurrentTopic === 'function' ? chatCapabilities.getCurrentTopic() : null);
+                const parentTopic = descriptor.parent?.topicId;
+                if (inputTopic && parentTopic && inputTopic !== parentTopic) {
+                    chatCapabilities?.uiHelper?.showToastNotification?.(`主聊天当前不在来源话题（${parentTopic}），已阻止填入`, 'warning');
+                    return;
+                }
                 const currentVal = mainInput.value ? mainInput.value.trim() : '';
                 mainInput.value = currentVal ? `${currentVal}\n\n${cleanText}` : cleanText;
                 chatCapabilities?.uiHelper?.autoResizeTextarea?.(mainInput);
@@ -245,17 +254,35 @@ export async function mountSideChatSurface(container, {
         };
     }
 
+    // Resolve agent config from descriptor or capability or fallback
+    const agentConfig = descriptor.child?.config
+        || descriptor.parent?.config
+        || (typeof chatCapabilities?.resolveAgentConfig === 'function'
+            ? await chatCapabilities.resolveAgentConfig(descriptor.child?.itemId)
+            : null)
+        || {
+            model: descriptor.model || descriptor.parent?.model || 'gpt-4o',
+            systemPrompt: descriptor.systemPrompt || descriptor.parent?.systemPrompt || '你是辅助聊天助手。',
+            streamOutput: true
+        };
+
+    const selectedItem = {
+        id: descriptor.child.itemId,
+        type: 'agent',
+        name: descriptor.parent.name,
+        avatarUrl: descriptor.parent.avatar,
+        config: agentConfig,
+        model: agentConfig?.model,
+        systemPrompt: agentConfig?.systemPrompt,
+        streamOutput: agentConfig?.streamOutput
+    };
+
     // Mount owned isolated internal renderer
     const rendererOwner = createRenderer({
         root,
         mode: 'interactive',
         conversation: {
-            selectedItem: {
-                id: descriptor.child.itemId,
-                type: 'agent',
-                name: descriptor.parent.name,
-                avatarUrl: descriptor.parent.avatar
-            },
+            selectedItem,
             topicId: descriptor.child.topicId,
         },
         handleSendMessage: (text) => submitInteractiveContent?.(text),
@@ -294,8 +321,11 @@ export async function mountSideChatSurface(container, {
             }
         },
         cancel: async () => {
-            const operation = activeOperation || await operationReady;
-            return operation?.cancel?.('side-chat-user-cancel') || false;
+            const operation = activeOperation;
+            if (operation && typeof operation.cancel === 'function') {
+                return await operation.cancel('side-chat-user-cancel');
+            }
+            return false;
         }
     });
 
@@ -333,6 +363,10 @@ export async function mountSideChatSurface(container, {
         const rawText = textarea.value.trim();
         if (!rawText && references.length === 0) return;
 
+        const submittedText = rawText;
+        const submittedReferenceIds = new Set(references.map(r => r.id));
+        const submittedReferences = [...references];
+
         // Compose payload with references if present
         let payload = rawText;
         if (references.length > 0) {
@@ -341,6 +375,16 @@ export async function mountSideChatSurface(container, {
                 .join('\n\n');
             payload = rawText ? `${refContent}\n\n${rawText}` : refContent;
         }
+
+        // Clear composer draft and remove submitted references from composer view
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        for (let i = references.length - 1; i >= 0; i--) {
+            if (submittedReferenceIds.has(references[i].id)) {
+                references.splice(i, 1);
+            }
+        }
+        renderReferences();
 
         form.setAttribute('aria-busy', 'true');
         textarea.disabled = true;
@@ -357,34 +401,49 @@ export async function mountSideChatSurface(container, {
                 propagateError: true
             });
 
-            textarea.value = '';
-            textarea.style.height = 'auto';
-            references.length = 0;
-            renderReferences();
-
             const terminalType = result?.terminal?.event?.type;
             if (terminalType === 'cancelled' || terminalType === 'discarded') {
-                if (!textarea.value && rawText) textarea.value = rawText;
+                if (!textarea.value && submittedText) textarea.value = submittedText;
+                for (const ref of submittedReferences) {
+                    if (!references.some(r => r.id === ref.id)) {
+                        references.unshift(ref);
+                    }
+                }
+                renderReferences();
                 updateStatus('已取消');
             } else if (terminalType === 'failed') {
                 const transportErr = result.terminal.event.outcome?.transport?.error;
                 const persistenceErr = result.terminal.event.outcome?.persistence?.error;
                 const err = transportErr || persistenceErr || '连接中断';
-                if (!persistenceErr && !textarea.value && rawText) {
-                    textarea.value = rawText;
-                }
-                if (persistenceErr) {
+                if (!persistenceErr) {
+                    if (!textarea.value && submittedText) {
+                        textarea.value = submittedText;
+                    }
+                    for (const ref of submittedReferences) {
+                        if (!references.some(r => r.id === ref.id)) {
+                            references.unshift(ref);
+                        }
+                    }
+                    renderReferences();
+                    updateStatus(`发送失败：${err?.message || err}`, 'error');
+                } else {
+                    hasUnsavedChanges = true;
                     persistenceBadge.style.display = 'inline-block';
                     updateStatus('已生成但保存失败', 'error');
-                } else {
-                    updateStatus(`发送失败：${err?.message || err}`, 'error');
                 }
             } else {
+                hasUnsavedChanges = false;
                 persistenceBadge.style.display = 'none';
                 updateStatus('就绪');
             }
         } catch (error) {
-            if (!textarea.value && rawText) textarea.value = rawText;
+            if (!textarea.value && submittedText) textarea.value = submittedText;
+            for (const ref of submittedReferences) {
+                if (!references.some(r => r.id === ref.id)) {
+                    references.unshift(ref);
+                }
+            }
+            renderReferences();
             updateStatus(`发送失败：${error.message}`, 'error');
         } finally {
             if (!isDisposed) {
@@ -392,7 +451,6 @@ export async function mountSideChatSurface(container, {
                 textarea.disabled = false;
                 sendBtn.style.display = 'inline-flex';
                 stopBtn.style.display = 'none';
-                textarea.focus();
             }
         }
     };
@@ -404,8 +462,8 @@ export async function mountSideChatSurface(container, {
     };
 
     const onStop = async () => {
-        const cancelled = await surface.cancelMessage();
-        if (cancelled) updateStatus('已取消');
+        updateStatus('正在停止...');
+        await surface.cancelMessage();
     };
 
     form.addEventListener('submit', onSubmit);
@@ -444,8 +502,11 @@ export async function mountSideChatSurface(container, {
         },
         addReference(ref) {
             if (!ref || !ref.text || isDisposed) return;
-            // Prevent duplicate text references
-            if (references.some(r => r.text === ref.text)) return;
+            const validation = validateReferenceList(references, ref);
+            if (!validation.ok) {
+                chatCapabilities?.uiHelper?.showToastNotification?.(validation.message, 'warning');
+                return;
+            }
             references.push(ref);
             renderReferences();
         },
@@ -460,6 +521,9 @@ export async function mountSideChatSurface(container, {
             return [...references];
         },
         async requestClose() {
+            if (hasUnsavedChanges) {
+                return { closed: false, reason: 'UNSAVED_CHANGES' };
+            }
             // Cancel active operation and wait for settlement
             if (activeOperation) {
                 await surface.cancelMessage();

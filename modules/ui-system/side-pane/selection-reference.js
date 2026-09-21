@@ -57,8 +57,16 @@ export function captureSelectionReference(windowRef = globalThis.window) {
     const startMessageItem = startElement?.closest?.('.message-item');
     const endMessageItem = endElement?.closest?.('.message-item');
 
+    if (!startMessageItem || !endMessageItem) {
+        return {
+            ok: false,
+            reason: 'OUTSIDE_MESSAGE',
+            message: '选区必须位于聊天消息正文内'
+        };
+    }
+
     // Both start and end must reside in the same message item if in message area
-    if (startMessageItem && endMessageItem && startMessageItem !== endMessageItem) {
+    if (startMessageItem !== endMessageItem) {
         return {
             ok: false,
             reason: 'CROSS_MESSAGE_SELECTION',
@@ -66,7 +74,7 @@ export function captureSelectionReference(windowRef = globalThis.window) {
         };
     }
 
-    const sourceMessageItem = startMessageItem || endMessageItem || null;
+    const sourceMessageItem = startMessageItem;
     const sourceMessageId = sourceMessageItem?.getAttribute?.('data-message-id')
         || sourceMessageItem?.id
         || null;
