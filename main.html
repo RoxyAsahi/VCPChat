@@ -484,6 +484,14 @@
                             </path>
                         </svg>
                     </button>
+                    <button id="toggleSidePaneChatBtn" class="header-button" type="button" title="侧边聊天"
+                        aria-label="打开侧边聊天" aria-controls="vcpSidePane" aria-expanded="false">
+                        <svg class="lucide lucide-panel-right" viewBox="0 0 24 24" width="20" height="20" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                            <path d="M15 3v18"></path>
+                        </svg>
+                    </button>
 
                     <button id="currentAgentSettingsBtn" class="header-button" type="button" title="当前Agent设置" style="display: none;">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 44" width="110" height="44"
@@ -600,7 +608,18 @@
             </footer>
           </main>
           <div class="resizer" id="resizerRight"></div>
-          <aside class="notifications-sidebar vcp-ui-scope" id="notificationsSidebar">
+          <aside class="vcp-side-pane vcp-ui-scope" id="vcpSidePane" aria-label="工作区侧栏" aria-hidden="true">
+            <header class="side-pane-tab-bar">
+                <div class="side-pane-tabs" role="tablist" aria-label="侧边栏标签页"></div>
+                <div class="side-pane-tab-actions">
+                    <button id="closeSidePaneBtn" class="side-pane-action-btn" type="button" title="收起侧边栏" aria-label="收起侧边栏">
+                        <span class="vcp-ui-icon" aria-hidden="true">first_page</span>
+                    </button>
+                </div>
+            </header>
+            <div class="side-pane-content-container">
+                <section class="side-pane-view active" id="sidePaneViewNotifications" role="tabpanel" aria-label="通知视图">
+                  <aside class="notifications-sidebar vcp-ui-scope" id="notificationsSidebar">
             <header class="notifications-header">
                 <h4 id="notificationTitle" style="display: none;">VCP 通知</h4>
                 <div class="datetime-container">
@@ -701,6 +720,12 @@
                     </div>
                     <div id="appTrayDrawerGrid" class="app-tray-drawer-grid"></div>
                 </div>
+            </div>
+          </aside>
+                </section>
+                <section class="side-pane-view" id="sidePaneViewChat" role="tabpanel" aria-label="侧边聊天视图">
+                    <div id="sideChatContainer" class="side-chat-container"></div>
+                </section>
             </div>
           </aside>
         </section>

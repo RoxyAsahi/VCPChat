@@ -18,6 +18,7 @@ import { createMainChatThemeOwner } from './modules/renderer/mainChatThemeOwner.
 import { createMainChatSettingsPresentationOwner } from './modules/renderer/mainChatSettingsPresentationOwner.js';
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
+import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -126,6 +127,8 @@ const {
     leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight,
     agentSearchInput, notificationTitleElement, digitalClockElement,
     dateDisplayElement, toggleAssistantBtn, toggleSidebarModeBtn, openModelSelectBtn,
+    vcpSidePane, sidePaneTabs, sidePaneContentContainer,
+    toggleSidePaneChatBtn, closeSidePaneBtn, addSidePaneChatBtn,
 } = createMainChatDomBindings(document);
 // 模态框及其内部元素现在延迟加载，不再在顶层缓存引用
 let globalSettingsForm = null;
@@ -228,6 +231,7 @@ const mainChatSettingsPresentationOwner = createMainChatSettingsPresentationOwne
     elements: {
         leftSidebar,
         rightNotificationsSidebar,
+        vcpSidePane,
         vcpLogConnectionStatus: vcpLogConnectionStatusDiv,
         toggleAssistant: toggleAssistantBtn,
         toggleSidebarMode: toggleSidebarModeBtn,
@@ -894,6 +898,7 @@ mainChatSettingsPresentationOwner.configureStartup({
                 elements: {
                     leftSidebar: document.querySelector('.sidebar'),
                     rightNotificationsSidebar: document.getElementById('notificationsSidebar'),
+                    vcpSidePane,
                     resizerLeft: document.getElementById('resizerLeft'),
                     resizerRight: document.getElementById('resizerRight'),
                     digitalClockElement: document.getElementById('digitalClock'),
@@ -905,6 +910,27 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
         } else {
             console.error('[RENDERER_INIT] uiManager module not found!');
+        }
+
+        // Initialize Workspace Side Pane Controller (ZCode style)
+        if (vcpSidePane) {
+            const sidePaneController = createSidePaneController({
+                root: vcpSidePane,
+                resizerHandle: resizerRight,
+                tabListElement: sidePaneTabs,
+                contentContainer: sidePaneContentContainer,
+                toggleNotificationsBtn,
+                toggleChatBtn: toggleSidePaneChatBtn,
+                closeSidePaneBtn,
+                addChatTabBtn: addSidePaneChatBtn,
+                settingsRef: mainChatSettingsOwner.ref,
+                electronAPI: chatAPI,
+                scope: null,
+                providers: {},
+            });
+            globalThis.vcpSidePaneController = sidePaneController;
+            window.vcpSidePaneController = sidePaneController;
+            ownedRendererSubscriptions.add(sidePaneController);
         }
 
         // Initialize Filter Manager

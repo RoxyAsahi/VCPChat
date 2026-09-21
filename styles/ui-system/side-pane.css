@@ -95,6 +95,22 @@ body[data-vcp-theme="light"] #vcpSidePane {
     visibility: hidden;
 }
 
+/* Hosted Notifications Sidebar Adaptations */
+#vcpSidePane .notifications-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 100%;
+    flex: 1;
+    border-left: none !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important;
+    transition: none !important;
+}
+
+
 /* --- Side Pane Tab Bar --- */
 .side-pane-tab-bar {
     height: 38px;

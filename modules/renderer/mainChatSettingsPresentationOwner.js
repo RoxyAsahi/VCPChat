@@ -86,8 +86,13 @@ export function createMainChatSettingsPresentationOwner({
             elements.leftSidebar.classList.toggle('avatar-only', avatarOnly);
             document.querySelector('.main-content')?.classList.toggle('sidebar-active', sidebarIsActive);
         }
-        if (globalSettings.notificationsSidebarWidth && elements.rightNotificationsSidebar?.classList.contains('active')) {
-            elements.rightNotificationsSidebar.style.width = `${globalSettings.notificationsSidebarWidth}px`;
+        if (globalSettings.notificationsSidebarWidth) {
+            if (elements.rightNotificationsSidebar?.classList.contains('active')) {
+                elements.rightNotificationsSidebar.style.width = `${globalSettings.notificationsSidebarWidth}px`;
+            }
+            if (elements.vcpSidePane?.classList.contains('active')) {
+                elements.vcpSidePane.style.width = `${globalSettings.notificationsSidebarWidth}px`;
+            }
         }
 
         if (globalSettings.vcpLogUrl && globalSettings.vcpLogKey) {
