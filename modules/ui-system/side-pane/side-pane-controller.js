@@ -230,6 +230,12 @@ export function createSidePaneController({
             syncViewPanels();
             syncDomVisibility();
             entry?.handle?.focus?.();
+            return entry?.handle || null;
+        },
+
+        getTabHandle(tabId) {
+            if (isDisposed || !tabId) return null;
+            return mountedTabMap.get(tabId)?.handle || null;
         },
 
         registerProvider(name, provider) {
@@ -269,6 +275,14 @@ export function createSidePaneController({
             if (state.visible) {
                 root.style.width = `${state.preferredWidth}px`;
             }
+        },
+
+        async openSideChat(opts = {}) {
+            if (isDisposed) return null;
+            if (typeof onOpenSideChat === 'function') {
+                return await onOpenSideChat(opts);
+            }
+            return null;
         },
 
         dispose() {

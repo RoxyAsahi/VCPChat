@@ -19,6 +19,9 @@ import { createMainChatSettingsPresentationOwner } from './modules/renderer/main
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
+import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
+import { createSideChatDescriptor, createChildTopicForAgent } from './modules/chat/sideChatSessionService.js';
+import { captureSelectionReference } from './modules/ui-system/side-pane/selection-reference.js';
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -914,6 +917,15 @@ mainChatSettingsPresentationOwner.configureStartup({
 
         // Initialize Workspace Side Pane Controller (ZCode style)
         if (vcpSidePane) {
+            const sideChatOwner = createSideChatSurfaceOwner({
+                chatCapabilities: {
+                    repository: chatRepository,
+                    createRenderer: createOwnedInternalChatRenderer,
+                    manager: chatManager,
+                    uiHelper: uiHelperFunctions,
+                }
+            });
+
             const sidePaneController = createSidePaneController({
                 root: vcpSidePane,
                 resizerHandle: resizerRight,
@@ -926,11 +938,60 @@ mainChatSettingsPresentationOwner.configureStartup({
                 settingsRef: mainChatSettingsOwner.ref,
                 electronAPI: chatAPI,
                 scope: null,
-                providers: {},
+                providers: {
+                    chat: sideChatOwner,
+                },
+                onOpenSideChat: async (options = {}) => {
+                    const currentItem = currentSelectedItemRef.get();
+                    const currentTopicId = currentTopicIdRef.get();
+                    if (!currentItem || currentItem.type !== 'agent') {
+                        uiHelperFunctions?.showToastNotification?.('请先在主聊天中选择一个助手，再开启侧边聊天', 'warning');
+                        return null;
+                    }
+
+                    const topicTitle = options?.title || `侧聊 ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                    const createResult = await createChildTopicForAgent({
+                        electronAPI: chatAPI,
+                        agentId: currentItem.id,
+                        topicTitle
+                    });
+
+                    if (!createResult.ok) {
+                        uiHelperFunctions?.showToastNotification?.(`创建侧聊失败：${createResult.message}`, 'error');
+                        return null;
+                    }
+
+                    const descriptor = createSideChatDescriptor({
+                        parent: {
+                            itemId: currentItem.id,
+                            topicId: currentTopicId,
+                            name: currentItem.name,
+                            avatar: currentItem.avatarUrl || currentItem.avatar
+                        },
+                        childTopicId: createResult.topicId,
+                        title: topicTitle,
+                        contextMode: options?.contextMode || 'references-only'
+                    });
+
+                    const handle = await sidePaneController.openChat(descriptor);
+                    if (options?.reference && handle?.addReference) {
+                        handle.addReference(options.reference);
+                    }
+                    return handle;
+                }
             });
             globalThis.vcpSidePaneController = sidePaneController;
             window.vcpSidePaneController = sidePaneController;
             ownedRendererSubscriptions.add(sidePaneController);
+
+            window.openSideChatWithSelection = async () => {
+                const selRes = captureSelectionReference(window);
+                if (selRes.ok) {
+                    await sidePaneController.openSideChat({ reference: selRes.reference });
+                } else {
+                    await sidePaneController.openSideChat();
+                }
+            };
         }
 
         // Initialize Filter Manager
