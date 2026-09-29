@@ -61,6 +61,14 @@ function validateSegment(value) {
     return value;
 }
 
+const CHANNELS = [
+    'side-chat:save-metadata',
+    'side-chat:get-metadata',
+    'side-chat:list-metadata',
+    'side-chat:delete-metadata',
+    'side-chat:create-snapshot',
+];
+
 /**
  * Initializes Side Chat IPC handlers.
  * @param {Object} paths
@@ -75,6 +83,12 @@ function initialize(paths) {
     if (!ipc || typeof ipc.handle !== 'function') {
         console.error('[SideChatHandlers] ipcMain is missing or invalid; handlers cannot be registered.');
         return;
+    }
+
+    for (const channel of CHANNELS) {
+        try {
+            ipc.removeHandler(channel);
+        } catch {}
     }
 
     function getTopicDir(agentId, topicId) {

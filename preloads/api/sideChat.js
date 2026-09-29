@@ -6,7 +6,7 @@ const { invoke } = require('../core/define');
 
 module.exports = {
     handlers: ['modules/ipc/sideChatHandlers.js'],
-    roles: ['chat', 'utility', 'desktop'],
+    roles: ['chat', 'utility'],
     api: {
         createSideChatSnapshot: invoke('side-chat:create-snapshot', 'agentId', 'parentTopicId', 'childTopicId'),
         saveSideChatMetadata: invoke('side-chat:save-metadata', 'metadata'),
