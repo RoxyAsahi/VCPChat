@@ -532,3 +532,57 @@ test('ChatVoiceComposer: 处于 STT_RECORDING 状态时左键点击具有最高�
 
 
 
+
+test('isNativeSttSupported 优先采用 getPlatform IPC 的结果（渲染进程无 process）', async () => {
+    const composer = new ChatVoiceComposer();
+    composer.electronAPI = { getPlatform: async () => 'darwin' };
+    await composer.resolvePlatform();
+    assert.equal(composer.isNativeSttSupported(), false);
+
+    composer.electronAPI = { getPlatform: async () => 'win32' };
+    await composer.resolvePlatform();
+    assert.equal(composer.isNativeSttSupported(), true);
+});
+
+test('joinSpeechTexts: 中文自然衔接，仅英文数字交界处保留分词空格', () => {
+    const { joinSpeechTexts } = require('../modules/voice/chatVoiceComposer');
+    assert.equal(joinSpeechTexts('今天天气真好', '我们去散步'), '今天天气真好我们去散步');
+    assert.equal(joinSpeechTexts('今天天气真好，', '我们去散步'), '今天天气真好，我们去散步');
+    assert.equal(joinSpeechTexts('Hello', 'World'), 'Hello World');
+    assert.equal(joinSpeechTexts('Model', 'V2'), 'Model V2');
+    assert.equal(joinSpeechTexts('这是', 'GPT4'), '这是GPT4');
+    assert.equal(joinSpeechTexts('GPT4', '很强'), 'GPT4很强');
+});
+
+test('ChatVoiceComposer: local_sensevoice 模式录音后走本地转写并插入文字', async () => {
+    const composer = new ChatVoiceComposer();
+    composer.messageInput = { value: '', selectionStart: 0, selectionEnd: 0, dispatchEvent: () => {} };
+    composer.activeSpan = composer.captureInsertion();
+    const calls = [];
+    composer.electronAPI = {
+        getLocalSttStatus: async () => ({ phase: 'ready' }),
+        transcribeLocalStt: async (payload) => {
+            calls.push(payload);
+            return { success: true, text: '你好世界' };
+        },
+    };
+    composer.state = 'TRANSCRIBING';
+    const blob = { arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
+    await composer.transcribeLocally(blob);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].wav.length, 3);
+    assert.equal(composer.messageInput.value, '你好世界');
+});
+
+test('ChatVoiceComposer: 本地资源包未安装时给出安装提示且不转写', async () => {
+    const composer = new ChatVoiceComposer();
+    composer.messageInput = { value: '', dispatchEvent: () => {} };
+    let transcribed = false;
+    composer.electronAPI = {
+        getLocalSttStatus: async () => ({ phase: 'unprepared' }),
+        transcribeLocalStt: async () => { transcribed = true; return { success: true, text: 'x' }; },
+    };
+    await composer.transcribeLocally({ arrayBuffer: async () => new ArrayBuffer(4) });
+    assert.equal(transcribed, false);
+    assert.equal(composer.messageInput.value, '');
+});
