@@ -430,10 +430,19 @@ html .next-ui-embedded-app-status.is-error .vcp-ui-icon {
     }
 }
 
-.next-ui-add-tab,
-.next-ui-icon-button {
+.next-ui-add-tab {
     width: 30px;
     height: 30px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    flex: 0 0 auto;
+}
+
+.next-ui-icon-button {
+    width: 28px;
+    height: 28px;
     padding: 0;
     display: grid;
     place-items: center;
@@ -457,14 +466,14 @@ html .next-ui-window-button {
 
 html .next-ui-topbar-actions {
     margin-left: auto;
-    gap: 0;
+    gap: 2px;
     flex: 0 0 auto;
     align-self: stretch;
 }
 
 html .next-ui-topbar-actions > .next-ui-presentation-switcher,
 html .next-ui-topbar-actions > #nextUiThemeStoreBtn {
-    margin-right: 6px;
+    margin-right: 0;
 }
 
 html .next-ui-window-button:hover {
@@ -1019,12 +1028,16 @@ html .chat-actions #themeToggleBtn {
 }
 
 html .chat-actions .header-button {
-    min-width: 30px;
-    height: 30px;
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
     margin-left: 0;
-    padding: 0 6px;
+    padding: 0;
     border: 0;
-    border-radius: 6px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--next-muted);
     background: transparent;
     box-shadow: none;

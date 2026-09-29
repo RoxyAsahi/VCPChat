@@ -10,16 +10,20 @@
         display: none;
     }
 
-    /* Material 图标对齐迁移前 SVG 图标尺寸 */
-    html .vcp-ui-scope .next-ui-add-tab .vcp-ui-icon,
-    html .vcp-ui-scope .next-ui-icon-button .vcp-ui-icon {
-        --vcp-ui-icon-size: 19px;
-    }
-
     /* The compact launchpad trigger uses a smaller glyph than the full tab
        height; the button shell matches the adjacent 30px tabs. */
     html .vcp-ui-scope .next-ui-add-tab .vcp-ui-icon {
         --vcp-ui-icon-size: 15px;
+    }
+
+    /* Topbar & header action icons match ZCode size-4 (16px) */
+    html .vcp-ui-scope .next-ui-icon-button .vcp-ui-icon,
+    html .vcp-ui-scope .next-ui-icon-button svg {
+        --vcp-ui-icon-size: 16px;
+        width: 16px;
+        height: 16px;
+        font-size: 16px;
+        line-height: 1;
     }
 
     /* Topbar tab & launchpad "+" button colors live here (vcp-ui.components)
@@ -64,8 +68,36 @@
         background: color-mix(in srgb, var(--next-text) 10%, transparent);
     }
 
+    /* Topbar action group layout (ZCode items-center gap-0.5 parity) */
+    html .vcp-ui-scope .next-ui-topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    html .vcp-ui-scope .next-ui-topbar-actions > .next-ui-presentation-switcher,
+    html .vcp-ui-scope .next-ui-topbar-actions > #nextUiThemeStoreBtn {
+        margin-right: 0;
+    }
+
+    /* Topbar Icon Button: ZCode variant="ghost" size="icon-md" (28px × 28px, 8px radius, 16px glyph) */
     html .vcp-ui-scope .next-ui-icon-button {
-        color: var(--next-muted);
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #d4d4d4;
+        background: transparent;
+        box-shadow: none;
+        outline: none;
+        transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
     }
 
     html .vcp-ui-scope .vcp-settings-icon {
@@ -77,11 +109,91 @@
         overflow: visible;
     }
 
-    html .vcp-ui-scope .next-ui-icon-button:hover,
-    html .vcp-ui-scope .next-ui-icon-button.active,
-    html .vcp-ui-scope .next-ui-icon-button.is-active {
-        color: var(--next-text);
-        background: color-mix(in srgb, var(--next-text) 8%, transparent);
+    html .vcp-ui-scope .next-ui-icon-button:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    html .vcp-ui-scope .next-ui-icon-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.10);
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .next-ui-icon-button,
+    html body.light-theme .vcp-ui-scope .next-ui-icon-button {
+        color: #262626;
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .next-ui-icon-button:hover,
+    html body.light-theme .vcp-ui-scope .next-ui-icon-button:hover {
+        color: #000000;
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .next-ui-icon-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]),
+    html body.light-theme .vcp-ui-scope .next-ui-icon-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+        color: #000000;
+        background: rgba(0, 0, 0, 0.08);
+    }
+
+    /* Chat header action buttons (ZCode icon-md parity) */
+    html .vcp-ui-scope .chat-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn) {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 0;
+        margin: 0;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #d4d4d4;
+        background: transparent;
+        box-shadow: none;
+        outline: none;
+        transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+    }
+
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn) svg {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+    }
+
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.10);
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn),
+    html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn) {
+        color: #262626;
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):hover,
+    html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):hover {
+        color: #000000;
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]),
+    html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+        color: #000000;
+        background: rgba(0, 0, 0, 0.08);
     }
 
     /* Avatar-only mode is a persistent layout state, not a selected control
