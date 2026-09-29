@@ -451,9 +451,13 @@ const allowedSourceDifferencePatterns = [
     /^modules\/ui-system\/side-pane\//,
     /^modules\/renderer\/sideChatSurfaceOwner\.js$/,
     /^modules\/ipc\/sideChatHandlers\.js$/,
+    /^preloads\/api\/sideChat\.js$/,
+    /^artifacts\/diorama\//,
     /^modules\/loom\/webcore\/comfyui-main-world-bridge\.js$/,
     /^(?:Agenttaskmodules|Forummodules|Logmodules|Memomodules|PluginManagerModules|VCPHumanToolBox|VchatManager)\//,
     /^Notemodules\/notemini\.(?:html|js|css)$/,
+    /^(?:scratch|work|outputs)\//,
+    /^uv\.lock$/,
 ];
 
 const upstreamClassicPatterns = [

@@ -7936,36 +7936,6 @@
       ]
     },
     {
-      "name": "vcp-comfyui-agent-response",
-      "producers": [
-        {
-          "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
-          "line": 271,
-          "kind": "custom-event-dispatch"
-        },
-        {
-          "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
-          "line": 276,
-          "kind": "custom-event-dispatch"
-        }
-      ],
-      "consumers": [],
-      "evidence": [
-        {
-          "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
-          "line": 271,
-          "kind": "custom-event-dispatch",
-          "match": "dispatchEvent(new CustomEvent('vcp-comfyui-agent-response'"
-        },
-        {
-          "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
-          "line": 276,
-          "kind": "custom-event-dispatch",
-          "match": "dispatchEvent(new CustomEvent('vcp-comfyui-agent-response'"
-        }
-      ]
-    },
-    {
       "name": "vcp-comfyui-agent-state-updated",
       "producers": [
         {
@@ -9526,6 +9496,18 @@
     }
   ],
   "registeredDynamic": [
+    {
+      "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
+      "line": 271,
+      "reason": "dynamic CustomEvent name: RESPONSE_EVENT",
+      "contractId": "loom.comfyui.agent-response-bridge"
+    },
+    {
+      "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
+      "line": 276,
+      "reason": "dynamic CustomEvent name: RESPONSE_EVENT",
+      "contractId": "loom.comfyui.agent-response-bridge"
+    },
     {
       "file": "modules/ui-system/webawesome-adapter.js",
       "line": 150,
