@@ -155,7 +155,11 @@ class MainChatVoiceCoordinator {
         this.deps.ensureEngineEvents?.();
 
         const shortcut = this.deps.getConfiguredShortcut?.() || 'F7';
-        await engine.configureHotkey({ shortcut, mode });
+        try {
+            await engine.configureHotkey({ shortcut, mode });
+        } catch (err) {
+            console.warn('[MainChatVoiceCoordinator] Hotkey configuration warning:', err.message || err);
+        }
 
         const initialIdle = Number(options.idleTimeoutMs)
             || (Number(settings?.mainChatVoiceInitialIdleTimeout) ? Number(settings.mainChatVoiceInitialIdleTimeout) * 1000 : MAIN_CHAT_INITIAL_IDLE_MS);
