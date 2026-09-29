@@ -49,23 +49,28 @@ export async function mountSideChatSurface(container, {
             streamOutput: true
         };
 
+    const clonedConfig = agentConfig ? structuredClone(agentConfig) : {};
+    let currentModel = descriptor.model || clonedConfig?.model || 'gpt-4o';
+    clonedConfig.model = currentModel;
+
     const selectedItem = {
         id: descriptor.child.itemId,
         type: 'agent',
         name: descriptor.parent.name,
         avatarUrl: descriptor.parent.avatar,
-        config: agentConfig,
-        model: agentConfig?.model,
-        systemPrompt: agentConfig?.systemPrompt,
-        streamOutput: agentConfig?.streamOutput
+        config: clonedConfig,
+        model: currentModel,
+        systemPrompt: clonedConfig?.systemPrompt,
+        streamOutput: clonedConfig?.streamOutput
     };
 
-    const modelName = agentConfig?.model || descriptor.model || 'gpt-4o';
+    const modelName = currentModel;
     const isSnapshot = descriptor.contextMode === 'parent-snapshot' || (Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0);
     const contextModeLabel = isSnapshot ? '父快照' : '仅引用';
     const contextModeTitle = isSnapshot ? '已继承来源话题的历史快照' : '不继承父历史，仅附带选区引用';
 
     const hasSnapshot = Array.isArray(descriptor.parentSnapshot) && descriptor.parentSnapshot.length > 0;
+    const disposeCleanups = [];
 
     // Shell template (aligned with ZCode: single unified tab header, clean message area, rich composer toolbar)
     container.innerHTML = `
@@ -96,27 +101,16 @@ export async function mountSideChatSurface(container, {
         <form class="side-chat-composer">
           <div class="chat-input-card side-chat-input-card">
             <div class="side-chat-reference-list" style="display:none;" aria-label="选区引用"></div>
+            <div class="side-chat-model-popover" style="display:none;" role="listbox" aria-label="选择模型">
+              <div class="side-chat-model-item${modelName === 'gpt-4o' ? ' active' : ''}" data-model="gpt-4o" role="option" aria-selected="${modelName === 'gpt-4o'}" tabindex="-1">gpt-4o</div>
+              <div class="side-chat-model-item${modelName === 'gpt-4o-mini' ? ' active' : ''}" data-model="gpt-4o-mini" role="option" aria-selected="${modelName === 'gpt-4o-mini'}" tabindex="-1">gpt-4o-mini</div>
+              <div class="side-chat-model-item${modelName === 'claude-3-5-sonnet' ? ' active' : ''}" data-model="claude-3-5-sonnet" role="option" aria-selected="${modelName === 'claude-3-5-sonnet'}" tabindex="-1">claude-3-5-sonnet</div>
+              <div class="side-chat-model-item${modelName === 'gemini-1.5-pro' ? ' active' : ''}" data-model="gemini-1.5-pro" role="option" aria-selected="${modelName === 'gemini-1.5-pro'}" tabindex="-1">gemini-1.5-pro</div>
+              <div class="side-chat-model-item${modelName === 'deepseek-chat' ? ' active' : ''}" data-model="deepseek-chat" role="option" aria-selected="${modelName === 'deepseek-chat'}" tabindex="-1">deepseek-chat</div>
+            </div>
             <textarea class="chat-message-input side-chat-textarea" placeholder="提出修改要求或疑问... (Enter 发送, Shift+Enter 换行)" rows="1" aria-label="侧聊输入框" disabled></textarea>
             <div class="chat-input-actions side-chat-input-actions">
-              <div class="side-chat-toolbar-left">
-                <div class="side-chat-model-picker-wrapper" style="position:relative; display:inline-flex;">
-                  <button type="button" class="side-chat-toolbar-badge side-chat-model-badge side-chat-model-picker-btn" title="点击切换模型 (当前: ${escapeHtml(modelName)})" aria-haspopup="listbox">
-                    <span class="vcp-ui-icon" style="font-size:12px;">smart_toy</span>
-                    <span class="side-chat-model-name">${escapeHtml(modelName)}</span>
-                    <span class="vcp-ui-icon" style="font-size:11px; margin-left:1px; opacity:0.7;">arrow_drop_down</span>
-                  </button>
-                  <div class="side-chat-model-popover" style="display:none;" role="listbox">
-                    <div class="side-chat-model-item${modelName === 'gpt-4o' ? ' active' : ''}" data-model="gpt-4o">gpt-4o</div>
-                    <div class="side-chat-model-item${modelName === 'gpt-4o-mini' ? ' active' : ''}" data-model="gpt-4o-mini">gpt-4o-mini</div>
-                    <div class="side-chat-model-item${modelName === 'claude-3-5-sonnet' ? ' active' : ''}" data-model="claude-3-5-sonnet">claude-3-5-sonnet</div>
-                    <div class="side-chat-model-item${modelName === 'gemini-1.5-pro' ? ' active' : ''}" data-model="gemini-1.5-pro">gemini-1.5-pro</div>
-                    <div class="side-chat-model-item${modelName === 'deepseek-chat' ? ' active' : ''}" data-model="deepseek-chat">deepseek-chat</div>
-                  </div>
-                </div>
-                <button type="button" class="side-chat-toolbar-btn side-chat-attach-btn" title="手动添加文本或代码引用">
-                  <span class="vcp-ui-icon" style="font-size:12px;">attach_file</span>
-                  <span>引用</span>
-                </button>
+              <div class="side-chat-toolbar-meta">
                 <span class="side-chat-toolbar-badge side-chat-mode-badge" title="${contextModeTitle}">
                   ${contextModeLabel}
                 </span>
@@ -124,26 +118,59 @@ export async function mountSideChatSurface(container, {
                   <span class="side-chat-meta-label">来源:</span>
                   <button type="button" class="side-chat-parent-link" title="定位父话题">${escapeHtml(descriptor.parent?.name || descriptor.parent?.topicTitle || descriptor.parent?.topicId || '父会话')}</button>
                 </span>
-                ${hasSnapshot ? `<button type="button" class="side-chat-toolbar-btn side-chat-context-toggle-btn" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:11px;">history</span> 上下文(${descriptor.parentSnapshot.length})</button>` : ''}
+                <button type="button" class="side-chat-toolbar-btn side-chat-context-toggle-btn" style="${hasSnapshot ? '' : 'display:none;'}" title="查看模型继承的上下文历史"><span class="vcp-ui-icon" style="font-size:11px;">history</span> 上下文(${descriptor.parentSnapshot?.length || 0})</button>
               </div>
-              <div class="side-chat-toolbar-right">
-                <div class="side-chat-status-bar" role="status" aria-live="polite">
-                  <span class="side-chat-persistence-badge side-chat-status-unsaved" style="display:none;">未保存</span>
-                  <span class="side-chat-status-text">就绪</span>
+              <div class="side-chat-toolbar-row">
+                <div class="side-chat-toolbar-left">
+                  <div class="side-chat-model-picker-wrapper" style="position:relative; display:inline-flex;">
+                    <button type="button" class="side-chat-toolbar-badge side-chat-model-badge side-chat-model-picker-btn" title="点击切换模型 (当前: ${escapeHtml(modelName)})" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="vcp-ui-icon" style="font-size:12px;">smart_toy</span>
+                      <span class="side-chat-model-name">${escapeHtml(modelName)}</span>
+                      <span class="vcp-ui-icon" style="font-size:11px; margin-left:1px; opacity:0.7;">arrow_drop_down</span>
+                    </button>
+                  </div>
+                  <button type="button" class="side-chat-toolbar-btn side-chat-attach-btn" title="手动添加文本或代码引用">
+                    <span class="vcp-ui-icon" style="font-size:12px;">attach_file</span>
+                    <span>引用</span>
+                  </button>
                 </div>
-                <button type="submit" class="chat-send-button side-chat-send-btn" title="发送 (Enter)" aria-label="发送" disabled>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="m5 12 7-7 7 7"></path>
-                    <path d="M12 19V5"></path>
-                  </svg>
-                </button>
-                <button type="button" class="chat-send-button side-chat-stop-btn interrupt-mode" style="display:none;" title="停止生成" aria-label="停止生成">
-                  <span class="vcp-ui-icon" style="font-size:16px;">stop</span>
-                </button>
+                <div class="side-chat-toolbar-right">
+                  <div class="side-chat-status-bar" role="status" aria-live="polite">
+                    <button type="button" class="side-chat-persistence-badge side-chat-status-unsaved" style="display:none;" title="历史保存失败。左键重试保存，右键放弃未保存状态">未保存 ↻</button>
+                    <span class="side-chat-status-text">就绪</span>
+                  </div>
+                  <button type="submit" class="chat-send-button side-chat-send-btn" title="发送 (Enter)" aria-label="发送" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m5 12 7-7 7 7"></path>
+                      <path d="M12 19V5"></path>
+                    </svg>
+                  </button>
+                  <button type="button" class="chat-send-button side-chat-stop-btn interrupt-mode" style="display:none;" title="停止生成" aria-label="停止生成">
+                    <span class="vcp-ui-icon" style="font-size:16px;">stop</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </form>
+        <div class="side-chat-ref-modal-backdrop" style="display:none;" aria-hidden="true">
+          <div class="side-chat-ref-modal" role="dialog" aria-modal="true" aria-labelledby="sideChatRefModalTitle">
+            <div class="side-chat-ref-modal-header">
+              <span id="sideChatRefModalTitle" class="side-chat-ref-modal-title">添加引用</span>
+              <button type="button" class="side-chat-ref-modal-close-btn" aria-label="关闭">&times;</button>
+            </div>
+            <div class="side-chat-ref-modal-body">
+              <textarea class="side-chat-ref-modal-textarea" placeholder="粘贴或输入要引用的文本片段..." rows="5" maxlength="8000"></textarea>
+              <div class="side-chat-ref-modal-footer">
+                <span class="side-chat-ref-modal-counter">0 / 8000</span>
+                <div class="side-chat-ref-modal-actions">
+                  <button type="button" class="side-chat-ref-modal-btn side-chat-ref-modal-cancel">取消</button>
+                  <button type="button" class="side-chat-ref-modal-btn side-chat-ref-modal-confirm primary">确认添加</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -163,11 +190,68 @@ export async function mountSideChatSurface(container, {
     const modelNameSpan = container.querySelector('.side-chat-model-name');
     const attachBtn = container.querySelector('.side-chat-attach-btn');
 
+    // Reference Modal Elements
+    const refModalBackdrop = container.querySelector('.side-chat-ref-modal-backdrop');
+    const refModalTextarea = container.querySelector('.side-chat-ref-modal-textarea');
+    const refModalCounter = container.querySelector('.side-chat-ref-modal-counter');
+    const refModalCloseBtn = container.querySelector('.side-chat-ref-modal-close-btn');
+    const refModalCancelBtn = container.querySelector('.side-chat-ref-modal-cancel');
+    const refModalConfirmBtn = container.querySelector('.side-chat-ref-modal-confirm');
+
+    let currentDescriptor = {
+        ...descriptor,
+        model: currentModel
+    };
+
+    function updateModel(newModel) {
+        if (!newModel || isDisposed) return;
+        currentModel = newModel;
+        currentDescriptor = {
+            ...currentDescriptor,
+            model: newModel
+        };
+        selectedItem.model = newModel;
+        if (selectedItem.config) selectedItem.config.model = newModel;
+        if (modelNameSpan) modelNameSpan.textContent = newModel;
+        if (modelPickerBtn) {
+            modelPickerBtn.title = `点击切换模型 (当前: ${newModel})`;
+            modelPickerBtn.setAttribute('aria-expanded', 'false');
+        }
+        if (modelPopover) {
+            modelPopover.querySelectorAll('.side-chat-model-item').forEach(el => {
+                const isActive = el.getAttribute('data-model') === newModel;
+                el.classList.toggle('active', isActive);
+                el.setAttribute('aria-selected', String(isActive));
+            });
+            modelPopover.style.display = 'none';
+        }
+        const metaToPersist = {
+            ...currentDescriptor,
+            model: newModel
+        };
+        if (typeof chatCapabilities?.saveSideChatMetadata === 'function') {
+            chatCapabilities.saveSideChatMetadata(metaToPersist).catch(e => console.warn('[SideChat] Failed to persist model update:', e));
+        } else if (typeof chatCapabilities?.repository?.saveSideChatMetadata === 'function') {
+            chatCapabilities.repository.saveSideChatMetadata(metaToPersist).catch(e => console.warn('[SideChat] Failed to persist model update:', e));
+        } else if (typeof globalThis.chatAPI?.saveSideChatMetadata === 'function') {
+            globalThis.chatAPI.saveSideChatMetadata(metaToPersist).catch(e => console.warn('[SideChat] Failed to persist model update:', e));
+        }
+    }
+
     if (modelPickerBtn && modelPopover) {
-        modelPickerBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
+        const togglePopover = () => {
             const isOpen = modelPopover.style.display !== 'none';
             modelPopover.style.display = isOpen ? 'none' : 'flex';
+            modelPickerBtn.setAttribute('aria-expanded', String(!isOpen));
+            if (!isOpen) {
+                const activeItem = modelPopover.querySelector('.side-chat-model-item.active') || modelPopover.querySelector('.side-chat-model-item');
+                activeItem?.focus?.();
+            }
+        };
+
+        modelPickerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopover();
         });
 
         modelPopover.addEventListener('click', (e) => {
@@ -175,51 +259,135 @@ export async function mountSideChatSurface(container, {
             if (!item) return;
             const newModel = item.getAttribute('data-model');
             if (newModel) {
-                selectedItem.model = newModel;
-                if (selectedItem.config) selectedItem.config.model = newModel;
-                descriptor.model = newModel;
-                if (modelNameSpan) modelNameSpan.textContent = newModel;
-                modelPickerBtn.title = `点击切换模型 (当前: ${newModel})`;
-                modelPopover.querySelectorAll('.side-chat-model-item').forEach(el => {
-                    el.classList.toggle('active', el.getAttribute('data-model') === newModel);
-                });
+                updateModel(newModel);
                 chatCapabilities?.uiHelper?.showToastNotification?.(`已切换模型至: ${newModel}`, 'success');
             }
-            modelPopover.style.display = 'none';
+            modelPickerBtn.focus();
         });
 
-        doc.addEventListener('click', (e) => {
+        const onPopoverKeydown = (e) => {
+            const items = Array.from(modelPopover.querySelectorAll('.side-chat-model-item'));
+            const idx = items.indexOf(doc.activeElement);
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                modelPopover.style.display = 'none';
+                modelPickerBtn.setAttribute('aria-expanded', 'false');
+                modelPickerBtn.focus();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const nextIdx = (idx + 1) % items.length;
+                items[nextIdx]?.focus?.();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prevIdx = (idx - 1 + items.length) % items.length;
+                items[prevIdx]?.focus?.();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (doc.activeElement?.classList?.contains('side-chat-model-item')) {
+                    doc.activeElement.click();
+                }
+            }
+        };
+        modelPopover.addEventListener('keydown', onPopoverKeydown);
+
+        const onDocClick = (e) => {
             if (!modelPickerBtn.contains?.(e.target) && !modelPopover.contains?.(e.target)) {
                 modelPopover.style.display = 'none';
+                modelPickerBtn.setAttribute('aria-expanded', 'false');
             }
-        });
+        };
+        doc.addEventListener('click', onDocClick);
+        disposeCleanups.push(() => doc.removeEventListener('click', onDocClick));
     }
+
+    const closeRefModal = () => {
+        if (!refModalBackdrop) return;
+        refModalBackdrop.style.display = 'none';
+        refModalBackdrop.setAttribute('aria-hidden', 'true');
+        if (refModalTextarea) refModalTextarea.value = '';
+        if (refModalCounter) refModalCounter.textContent = '0 / 8000';
+        attachBtn?.focus?.();
+    };
+
+    const openRefModal = () => {
+        if (!refModalBackdrop) return;
+        refModalBackdrop.style.display = 'flex';
+        refModalBackdrop.setAttribute('aria-hidden', 'false');
+        if (refModalTextarea) {
+            refModalTextarea.value = '';
+            refModalTextarea.focus();
+        }
+        if (refModalCounter) refModalCounter.textContent = '0 / 8000';
+    };
 
     if (attachBtn) {
         attachBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const snippet = doc.defaultView?.prompt?.('请输入要引用的文本片段或上下文：');
-            if (snippet && snippet.trim()) {
-                handle.addReference({
-                    id: `ref-manual-${Date.now()}`,
-                    text: snippet.trim(),
-                    sourceMessageId: null,
-                    capturedAt: Date.now()
-                });
+            openRefModal();
+        });
+    }
+
+    if (refModalCloseBtn) refModalCloseBtn.addEventListener('click', closeRefModal);
+    if (refModalCancelBtn) refModalCancelBtn.addEventListener('click', closeRefModal);
+
+    if (refModalTextarea) {
+        refModalTextarea.addEventListener('input', () => {
+            const len = refModalTextarea.value.length;
+            if (refModalCounter) refModalCounter.textContent = `${len} / 8000`;
+        });
+        refModalTextarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeRefModal();
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                refModalConfirmBtn?.click?.();
             }
         });
     }
 
+    if (refModalConfirmBtn) {
+        refModalConfirmBtn.addEventListener('click', () => {
+            const snippet = refModalTextarea?.value?.trim?.();
+            if (snippet) {
+                if (snippet.length > 8000) {
+                    chatCapabilities?.uiHelper?.showToastNotification?.('引用文本超过 8000 字符上限', 'warning');
+                    return;
+                }
+                const addRes = handle.addReference({
+                    id: `ref-manual-${Date.now()}`,
+                    text: snippet,
+                    sourceMessageId: null,
+                    capturedAt: Date.now()
+                });
+                if (addRes && addRes.ok === false) {
+                    chatCapabilities?.uiHelper?.showToastNotification?.(addRes.message, 'warning');
+                    return;
+                }
+            }
+            closeRefModal();
+        });
+    }
+
     if (contextToggleBtn && snapshotDrawer) {
+        contextToggleBtn.setAttribute('aria-expanded', 'false');
         contextToggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            snapshotDrawer.classList.toggle('open');
+            const isOpen = snapshotDrawer.classList.toggle('open');
+            contextToggleBtn.setAttribute('aria-expanded', String(isOpen));
         });
     }
 
     if (parentLink) {
-        parentLink.addEventListener('click', (e) => {
+        parentLink.addEventListener('click', async (e) => {
             e.stopPropagation();
+            if (typeof chatCapabilities?.navigateToParent === 'function') {
+                try {
+                    await chatCapabilities.navigateToParent(descriptor.parent);
+                } catch (err) {
+                    console.warn('[SideChat] Failed to navigate to parent:', err);
+                }
+            }
             const mainInput = doc.querySelector('#messageInput') || doc.querySelector('#chatInput') || doc.querySelector('textarea#messageInput');
             mainInput?.focus?.();
             chatCapabilities?.uiHelper?.showToastNotification?.(`当前侧聊关联父话题: ${descriptor.parent?.name || descriptor.parent?.topicId}`, 'info');
@@ -234,6 +402,8 @@ export async function mountSideChatSurface(container, {
     let publishOperation = null;
     let submitInteractiveContent = null;
     let hasUnsavedChanges = false;
+    let lastPersistenceError = null;
+    let pendingSaveHistory = null;
     const references = []; // { id, text, sourceMessageId }
 
     function extractTextFromContentDiv(contentDiv) {
@@ -270,6 +440,12 @@ export async function mountSideChatSurface(container, {
 
             const mainInput = doc.querySelector('#messageInput') || doc.querySelector('#chatInput') || doc.querySelector('textarea#messageInput');
             if (mainInput) {
+                const curItem = typeof chatCapabilities?.getCurrentItem === 'function' ? chatCapabilities.getCurrentItem() : null;
+                const parentItemId = descriptor.parent?.itemId;
+                if (curItem && parentItemId && curItem.id !== parentItemId) {
+                    chatCapabilities?.uiHelper?.showToastNotification?.(`主聊天当前不在来源助手（${descriptor.parent?.name || parentItemId}），已阻止填入`, 'warning');
+                    return;
+                }
                 const inputTopic = mainInput.getAttribute('data-current-topic')
                     || (typeof chatCapabilities?.getCurrentTopic === 'function' ? chatCapabilities.getCurrentTopic() : null);
                 const parentTopic = descriptor.parent?.topicId;
@@ -406,13 +582,18 @@ export async function mountSideChatSurface(container, {
     const renderer = rendererOwner.renderer;
 
     // Supply frozen parent snapshot context if present (P1 context inheritance)
-    const frozenContext = Array.isArray(descriptor.parentSnapshot)
+    const frozenContext = (descriptor.contextMode === 'parent-snapshot' && Array.isArray(descriptor.parentSnapshot))
         ? [...descriptor.parentSnapshot]
         : [];
 
     const enhancedConversation = Object.freeze({
         ...rendererOwner.conversation,
-        getContextHistory: () => frozenContext
+        getContextHistory: () => {
+            if (descriptor.contextMode === 'references-only') {
+                return [];
+            }
+            return frozenContext;
+        }
     });
 
     const operations = createChatOperations({
@@ -544,11 +725,19 @@ export async function mountSideChatSurface(container, {
                     updateStatus(`发送失败：${err?.message || err}`, 'error');
                 } else {
                     hasUnsavedChanges = true;
+                    lastPersistenceError = persistenceErr;
+                    const inMem = enhancedConversation?.historyRef?.get?.();
+                    if (Array.isArray(inMem) && inMem.length > 0) {
+                        pendingSaveHistory = [...inMem];
+                    }
                     persistenceBadge.style.display = 'inline-block';
+                    persistenceBadge.textContent = '保存失败 (点击重试)';
                     updateStatus('已生成但保存失败', 'error');
                 }
             } else {
                 hasUnsavedChanges = false;
+                pendingSaveHistory = null;
+                lastPersistenceError = null;
                 persistenceBadge.style.display = 'none';
                 updateStatus('就绪');
             }
@@ -587,27 +776,101 @@ export async function mountSideChatSurface(container, {
     form.addEventListener('submit', onSubmit);
     stopBtn.addEventListener('click', onStop);
 
-    // Initial History Load
-    const loadPromise = surface.loadHistory(
-        descriptor.child.itemId,
-        'agent',
-        descriptor.child.topicId,
-        { initialBatch: 5, batchSize: 10, batchDelay: 80 }
-    ).then((res) => {
-        if (isDisposed) return;
-        isHistoryLoaded = true;
-        textarea.disabled = false;
-        updateComposerState();
-        updateEmptyState();
+    async function retryPersistence() {
+        if (!hasUnsavedChanges) return { ok: true, message: '无未保存的历史' };
+        updateStatus('正在重试保存...');
+        try {
+            const inMem = (pendingSaveHistory && pendingSaveHistory.length > 0)
+                ? pendingSaveHistory
+                : (enhancedConversation?.historyRef?.get?.() || []);
+            let targetHistory = inMem;
+            if (!Array.isArray(targetHistory) || targetHistory.length === 0) {
+                const histRes = await repository.getHistory(descriptor.child.itemId, 'agent', descriptor.child.topicId);
+                targetHistory = Array.isArray(histRes) ? histRes : (histRes?.history || []);
+            }
+            const saveRes = await repository.saveHistory(
+                descriptor.child.itemId,
+                'agent',
+                descriptor.child.topicId,
+                targetHistory
+            );
+            if (saveRes && saveRes.success !== false) {
+                hasUnsavedChanges = false;
+                pendingSaveHistory = null;
+                lastPersistenceError = null;
+                if (enhancedConversation?.historyRef?.set) {
+                    enhancedConversation.historyRef.set(targetHistory);
+                }
+                persistenceBadge.style.display = 'none';
+                updateStatus('保存成功');
+                return { ok: true };
+            } else {
+                updateStatus(`重试保存失败：${saveRes?.error || '未知错误'}`, 'error');
+                return { ok: false, error: saveRes?.error };
+            }
+        } catch (err) {
+            updateStatus(`重试保存失败：${err.message}`, 'error');
+            return { ok: false, error: err.message };
+        }
+    }
+
+    function discardUnsaved() {
+        hasUnsavedChanges = false;
+        pendingSaveHistory = null;
+        lastPersistenceError = null;
+        persistenceBadge.style.display = 'none';
         updateStatus('就绪');
-        return res;
-    }).catch((err) => {
-        if (isDisposed) return;
-        updateStatus(`加载历史失败：${err.message}`, 'error');
+    }
+
+    if (persistenceBadge) {
+        persistenceBadge.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await retryPersistence();
+        });
+        persistenceBadge.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            discardUnsaved();
+            chatCapabilities?.uiHelper?.showToastNotification?.('已放弃未保存的历史更改', 'info');
+        });
+    }
+
+    async function loadHistoryFn() {
+        updateStatus('正在加载历史...');
+        try {
+            const res = await surface.loadHistory(
+                descriptor.child.itemId,
+                'agent',
+                descriptor.child.topicId,
+                { initialBatch: 5, batchSize: 10, batchDelay: 80 }
+            );
+            if (isDisposed) return res;
+            isHistoryLoaded = true;
+            textarea.disabled = false;
+            updateComposerState();
+            updateEmptyState();
+            updateStatus('就绪');
+            return res;
+        } catch (err) {
+            if (isDisposed) return;
+            isHistoryLoaded = false;
+            updateStatus(`加载历史失败：${err.message} (点击重试)`, 'error');
+            throw err;
+        }
+    }
+
+    const loadPromise = loadHistoryFn().catch(() => {});
+
+    statusText.addEventListener('click', () => {
+        if (!isHistoryLoaded && !isDisposed) {
+            loadHistoryFn().catch(() => {});
+        }
     });
 
     const handle = Object.freeze({
-        descriptor,
+        get descriptor() {
+            return currentDescriptor;
+        },
         surface,
         setVisible(visible) {
             if (visible && !isDisposed && isHistoryLoaded) {
@@ -642,29 +905,54 @@ export async function mountSideChatSurface(container, {
             return [...references];
         },
         setModel(model) {
-            if (!model || isDisposed) return;
-            selectedItem.model = model;
-            if (selectedItem.config) selectedItem.config.model = model;
-            descriptor.model = model;
-            if (modelNameSpan) modelNameSpan.textContent = model;
-            if (modelPickerBtn) modelPickerBtn.title = `点击切换模型 (当前: ${model})`;
+            updateModel(model);
         },
         getModel() {
-            return selectedItem.model || descriptor.model || 'gpt-4o';
+            return currentModel;
+        },
+        getDraft() {
+            return textarea.value;
+        },
+        setDraft(text) {
+            if (isDisposed) return;
+            textarea.value = String(text || '');
+            updateComposerState();
+        },
+        getUnsavedStatus() {
+            return { hasUnsavedChanges, error: lastPersistenceError };
+        },
+        async retryPersistence() {
+            return await retryPersistence();
+        },
+        discardUnsaved() {
+            discardUnsaved();
+        },
+        async retryLoadHistory() {
+            return await loadHistoryFn();
         },
         async requestClose() {
             if (hasUnsavedChanges) {
+                chatCapabilities?.uiHelper?.showToastNotification?.('无法关闭标签页：存在未保存的历史记录。请点击保存徽标重试，或右键点击徽标放弃更改。', 'warning');
                 return { closed: false, reason: 'UNSAVED_CHANGES' };
             }
             // Cancel active operation and wait for settlement
             if (activeOperation) {
-                await surface.cancelMessage();
+                try {
+                    await surface.cancelMessage();
+                } catch {}
             }
             return { closed: true };
         },
         async dispose() {
             if (isDisposed) return;
             isDisposed = true;
+            if (activeOperation) {
+                try {
+                    await surface.cancelMessage();
+                } catch {}
+            }
+            disposeCleanups.forEach(fn => { try { fn(); } catch {} });
+            disposeCleanups.length = 0;
             messageObserver?.disconnect?.();
             submitInteractiveContent = null;
             form.removeEventListener('submit', onSubmit);

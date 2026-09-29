@@ -100,6 +100,14 @@ export function validateReferenceList(existingRefs = [], newRef) {
         return { ok: false, reason: 'INVALID_REFERENCE', message: '引用内容无效' };
     }
 
+    if (newRef.text.length > MAX_SINGLE_REFERENCE_LENGTH) {
+        return {
+            ok: false,
+            reason: 'EXCEEDS_SINGLE_LIMIT',
+            message: `选区长度 (${newRef.text.length}) 超过最大限制 (${MAX_SINGLE_REFERENCE_LENGTH})`
+        };
+    }
+
     if (existingRefs.length >= MAX_REFERENCE_COUNT) {
         return {
             ok: false,
@@ -108,7 +116,12 @@ export function validateReferenceList(existingRefs = [], newRef) {
         };
     }
 
-    if (existingRefs.some(r => r.text === newRef.text)) {
+    const isDuplicate = existingRefs.some(r => {
+        if (r.text !== newRef.text) return false;
+        if (!r.sourceMessageId && !newRef.sourceMessageId) return true;
+        return r.sourceMessageId === newRef.sourceMessageId;
+    });
+    if (isDuplicate) {
         return {
             ok: false,
             reason: 'DUPLICATE',

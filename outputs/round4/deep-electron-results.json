@@ -1,0 +1,279 @@
+{
+  "baseline": "55b6ebce",
+  "results": [
+    {
+      "id": "D01a-model-chosen",
+      "chosen": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082480190"
+        },
+        "model": "gpt-4o-mini",
+        "draft": "",
+        "refs": [],
+        "descriptorModel": "gpt-4o-mini"
+      }
+    },
+    {
+      "id": "D01-real-model-click-and-reopen",
+      "chosen": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082480190"
+        },
+        "model": "gpt-4o-mini",
+        "draft": "",
+        "refs": [],
+        "descriptorModel": "gpt-4o-mini"
+      },
+      "reopened": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082480190"
+        },
+        "model": "gpt-4o-mini",
+        "draft": "",
+        "refs": [],
+        "descriptorModel": "gpt-4o-mini"
+      },
+      "persistedModel": "gpt-4o-mini",
+      "requestModel": "gpt-4o-mini"
+    },
+    {
+      "id": "D02-modal-actual-entry-and-overquota",
+      "accepted": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082480190"
+        },
+        "model": "gpt-4o-mini",
+        "draft": "",
+        "refs": [
+          {
+            "id": "ref-manual-1790082481335",
+            "text": "manual quote verified",
+            "sourceMessageId": null,
+            "capturedAt": 1790082481335
+          }
+        ],
+        "descriptorModel": "gpt-4o-mini"
+      },
+      "after": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082480190"
+        },
+        "model": "gpt-4o-mini",
+        "draft": "",
+        "refs": [
+          {
+            "id": "ref-manual-1790082481335",
+            "text": "manual quote verified",
+            "sourceMessageId": null,
+            "capturedAt": 1790082481335
+          },
+          {
+            "id": "fill0",
+            "text": "fill quote 0"
+          },
+          {
+            "id": "fill1",
+            "text": "fill quote 1"
+          },
+          {
+            "id": "fill2",
+            "text": "fill quote 2"
+          },
+          {
+            "id": "fill3",
+            "text": "fill quote 3"
+          },
+          {
+            "id": "fill4",
+            "text": "fill quote 4"
+          },
+          {
+            "id": "fill5",
+            "text": "fill quote 5"
+          },
+          {
+            "id": "fill6",
+            "text": "fill quote 6"
+          }
+        ],
+        "descriptorModel": "gpt-4o-mini"
+      },
+      "modal": {
+        "display": "none",
+        "text": ""
+      }
+    },
+    {
+      "id": "D03-draft-same-process-reopen",
+      "child": {
+        "itemType": "agent",
+        "itemId": "AuditA",
+        "topicId": "topic_1790082480190"
+      },
+      "model": "gpt-4o-mini",
+      "draft": "IMPORTANT UNSENT DRAFT",
+      "refs": [
+        {
+          "id": "ref-manual-1790082481335",
+          "text": "manual quote verified",
+          "sourceMessageId": null,
+          "capturedAt": 1790082481335
+        },
+        {
+          "id": "fill0",
+          "text": "fill quote 0"
+        },
+        {
+          "id": "fill1",
+          "text": "fill quote 1"
+        },
+        {
+          "id": "fill2",
+          "text": "fill quote 2"
+        },
+        {
+          "id": "fill3",
+          "text": "fill quote 3"
+        },
+        {
+          "id": "fill4",
+          "text": "fill quote 4"
+        },
+        {
+          "id": "fill5",
+          "text": "fill quote 5"
+        },
+        {
+          "id": "fill6",
+          "text": "fill quote 6"
+        }
+      ],
+      "descriptorModel": "gpt-4o-mini"
+    },
+    {
+      "id": "D04-other-parent-toolbar",
+      "parent": {
+        "itemType": "agent",
+        "itemId": "AuditB",
+        "topicId": "b-one"
+      },
+      "activeId": "sidechat-mucow1mq-rgxf2",
+      "activeParent": {
+        "itemType": "agent",
+        "itemId": "AuditA",
+        "topicId": "a-one"
+      },
+      "visibleChatPanels": 0,
+      "visibleTabTitles": []
+    },
+    {
+      "id": "D05-closed-resurrection",
+      "closedCount": 0,
+      "reopened": {},
+      "afterReturnCount": 0
+    },
+    {
+      "id": "D06-process-restart-state",
+      "before": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082482507"
+        },
+        "model": "deepseek-chat",
+        "draft": "DRAFT BEFORE PROCESS RESTART",
+        "refs": [
+          {
+            "id": "restart-ref",
+            "text": "reference before restart"
+          }
+        ],
+        "descriptorModel": "deepseek-chat"
+      },
+      "after": {
+        "child": {
+          "itemType": "agent",
+          "itemId": "AuditA",
+          "topicId": "topic_1790082482507"
+        },
+        "model": "deepseek-chat",
+        "draft": "",
+        "refs": [],
+        "descriptorModel": "deepseek-chat"
+      },
+      "chatTabs": 1
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "_fixtureUrl": "/v1/models"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-pf2rhB/UserData/AuditA\\topics\\topic_1790082480190\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "deep-model-check",
+          "name": "用户"
+        }
+      ],
+      "model": "gpt-4o-mini",
+      "stream": true,
+      "requestId": "msg_1790082480770_assistant_6yjq5x3",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790082480759_user_em7dw7c",
+            "role": "user",
+            "timestamp": 1790082480759,
+            "timestampIso": "2026-09-22T13:08:00.759Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:d754690c2f177364a9343e8eb0896b9295748d832a3648f73a796651130e6962",
+            "sentMessageIndex": 2
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790082480770_assistant_6yjq5x3",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790082480190",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "_fixtureUrl": "/v1/models"
+    }
+  ]
+}

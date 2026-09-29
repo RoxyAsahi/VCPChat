@@ -6222,69 +6222,69 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 415,
+          "line": 526,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 472,
+          "line": 589,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 594,
+          "line": 710,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 718,
+          "line": 838,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 734,
+          "line": 854,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 760,
+          "line": 880,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 415,
+          "line": 526,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 472,
+          "line": 589,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 594,
+          "line": 710,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 718,
+          "line": 838,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 734,
+          "line": 854,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 760,
+          "line": 880,
           "kind": "preload-subscription",
           "match": "onOpenSideChat("
         }
@@ -6369,6 +6369,25 @@
           "line": 612,
           "kind": "preload-subscription",
           "match": "onSelection("
+        }
+      ]
+    },
+    {
+      "name": "onSelectionChange(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/chatManager.js",
+          "line": 2303,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/chatManager.js",
+          "line": 2303,
+          "kind": "preload-subscription",
+          "match": "onSelectionChange("
         }
       ]
     },
@@ -8486,14 +8505,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1140,
+          "line": 1268,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1140,
+          "line": 1268,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -9140,7 +9159,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 277,
+          "line": 290,
           "kind": "ipc-send"
         }
       ],
@@ -9172,7 +9191,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 277,
+          "line": 290,
           "kind": "ipc-send",
           "match": "invoke('side-chat:create-snapshot'"
         }
@@ -9203,7 +9222,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 242,
+          "line": 255,
           "kind": "ipc-send"
         }
       ],
@@ -9235,7 +9254,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 242,
+          "line": 255,
           "kind": "ipc-send",
           "match": "invoke('side-chat:delete-metadata'"
         }
@@ -9266,7 +9285,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 198,
+          "line": 211,
           "kind": "ipc-send"
         }
       ],
@@ -9298,7 +9317,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 198,
+          "line": 211,
           "kind": "ipc-send",
           "match": "invoke('side-chat:get-metadata'"
         }
@@ -9329,7 +9348,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 220,
+          "line": 233,
           "kind": "ipc-send"
         }
       ],
@@ -9361,7 +9380,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 220,
+          "line": 233,
           "kind": "ipc-send",
           "match": "invoke('side-chat:list-metadata'"
         }
@@ -9392,7 +9411,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 176,
+          "line": 189,
           "kind": "ipc-send"
         }
       ],
@@ -9424,7 +9443,7 @@
         },
         {
           "file": "modules/chat/sideChatSessionService.js",
-          "line": 176,
+          "line": 189,
           "kind": "ipc-send",
           "match": "invoke('side-chat:save-metadata'"
         }
@@ -10598,7 +10617,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1222,
+          "line": 1358,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -10606,7 +10625,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1222,
+          "line": 1358,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

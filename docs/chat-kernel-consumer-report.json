@@ -792,7 +792,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 422,
+          "line": 591,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "sendMessage",
@@ -936,7 +936,31 @@
         },
         {
           "file": "renderer.js",
-          "line": 1294,
+          "line": 954,
+          "surface": "main-window",
+          "access": "explicit-provider",
+          "member": "selectItem",
+          "snippet": "await chatManager.selectItem(parent.itemId, parent.itemType || 'agent', parent.name);"
+        },
+        {
+          "file": "renderer.js",
+          "line": 960,
+          "surface": "main-window",
+          "access": "explicit-provider",
+          "member": "selectTopic",
+          "snippet": "await chatManager.selectTopic(parent.topicId);"
+        },
+        {
+          "file": "renderer.js",
+          "line": 1131,
+          "surface": "main-window",
+          "access": "explicit-provider",
+          "member": "onSelectionChange",
+          "snippet": "const unbindSelection = chatManager.onSelectionChange?.(syncSidePaneParent);"
+        },
+        {
+          "file": "renderer.js",
+          "line": 1376,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -944,7 +968,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1330,
+          "line": 1412,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -952,7 +976,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1380,
+          "line": 1462,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -960,7 +984,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1381,
+          "line": 1463,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -1726,7 +1750,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 587,
+          "line": 598,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentSelectedItem",
@@ -1734,7 +1758,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 588,
+          "line": 599,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1742,7 +1766,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 589,
+          "line": 600,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentItemAvatar",
@@ -1750,7 +1774,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 590,
+          "line": 601,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentItemAvatarColor",
@@ -1758,7 +1782,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 646,
+          "line": 657,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1766,7 +1790,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 651,
+          "line": 662,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1774,7 +1798,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 660,
+          "line": 671,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1782,7 +1806,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 667,
+          "line": 678,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1790,7 +1814,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 670,
+          "line": 681,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1798,7 +1822,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 681,
+          "line": 692,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1806,7 +1830,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 684,
+          "line": 695,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1814,7 +1838,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 692,
+          "line": 703,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1822,7 +1846,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 781,
+          "line": 793,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1830,7 +1854,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 814,
+          "line": 827,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1838,7 +1862,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 860,
+          "line": 873,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1846,7 +1870,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 861,
+          "line": 874,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "clearChat",
@@ -1854,7 +1878,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 862,
+          "line": 875,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1862,7 +1886,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 885,
+          "line": 898,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "clearChat",
@@ -1870,7 +1894,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 896,
+          "line": 909,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -1878,7 +1902,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 902,
+          "line": 915,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1886,7 +1910,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 908,
+          "line": 921,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1894,7 +1918,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 921,
+          "line": 934,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1902,15 +1926,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 924,
-          "surface": "shared-renderer",
-          "access": "explicit-provider",
-          "member": "removeMessageById",
-          "snippet": "if (messageRenderer) messageRenderer.removeMessageById('loading_history');"
-        },
-        {
-          "file": "modules/chatManager.js",
-          "line": 931,
+          "line": 937,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "removeMessageById",
@@ -1926,7 +1942,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 948,
+          "line": 957,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "removeMessageById",
@@ -1934,7 +1950,15 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 989,
+          "line": 961,
+          "surface": "shared-renderer",
+          "access": "explicit-provider",
+          "member": "removeMessageById",
+          "snippet": "if (messageRenderer) messageRenderer.removeMessageById('loading_history');"
+        },
+        {
+          "file": "modules/chatManager.js",
+          "line": 1002,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1942,7 +1966,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1019,
+          "line": 1032,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -1950,7 +1974,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1076,
+          "line": 1089,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageUI",
@@ -1958,7 +1982,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1077,
+          "line": 1090,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageUI",
@@ -1966,7 +1990,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1177,
+          "line": 1190,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageUI",
@@ -1974,7 +1998,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1178,
+          "line": 1191,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageUI",
@@ -1982,7 +2006,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1281,
+          "line": 1294,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "summarizeTopicFromMessages",
@@ -1990,7 +2014,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1282,
+          "line": 1295,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "summarizeTopicFromMessages",
@@ -1998,7 +2022,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1683,
+          "line": 1696,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "startStreamingMessage",
@@ -2006,7 +2030,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1880,
+          "line": 1915,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -2014,7 +2038,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1881,
+          "line": 1916,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "clearChat",
@@ -2022,7 +2046,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1994,
+          "line": 2029,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "setCurrentTopicId",
@@ -2030,7 +2054,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2165,
+          "line": 2200,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "removeMessageById",
@@ -2038,7 +2062,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2176,
+          "line": 2211,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageContent",
@@ -2046,7 +2070,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2177,
+          "line": 2212,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageContent",
@@ -2054,7 +2078,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2192,
+          "line": 2227,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -3580,13 +3604,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1225,
+          "line": 1307,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1233,
+          "line": 1315,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3648,13 +3672,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1162,
+          "line": 1244,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1163,
+          "line": 1245,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -3782,31 +3806,31 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 606,
+          "line": 617,
           "surface": "shared-renderer",
           "snippet": "window.flowlockManager?.syncCurrentHeaderIndicator?.();"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 630,
+          "line": 641,
           "surface": "shared-renderer",
           "snippet": "? window.flowlockManager?.getLockedTopicId?.(itemId)"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 740,
+          "line": 752,
           "surface": "shared-renderer",
           "snippet": "? window.flowlockManager?.getLockedTopicId?.(selectedItemForLock.id)"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1840,
+          "line": 1875,
           "surface": "shared-renderer",
           "snippet": "if (itemType === 'agent' && window.flowlockManager?.isAgentLocked?.(itemId)) {"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1922,
+          "line": 1957,
           "surface": "shared-renderer",
           "snippet": "if (currentSelectedItem?.type === 'agent' && window.flowlockManager?.isAgentLocked?.(currentSelectedItem.id)) {"
         },
@@ -3848,7 +3872,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1405,
+          "line": 1487,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4049,13 +4073,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1388,
+          "line": 1470,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1389,
+          "line": 1471,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4271,7 +4295,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1199,
+          "line": 1281,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4599,7 +4623,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1071,
+          "line": 1141,
           "syntax": "dot-assignment",
           "snippet": "window.openSideChatWithSelection = async (contextParams = null) => {"
         }
@@ -4607,9 +4631,9 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1155,
+          "line": 1237,
           "surface": "main-window",
-          "snippet": "await window.openSideChatWithSelection({ selectedText });"
+          "snippet": "await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });"
         }
       ],
       "tests": []
@@ -6390,25 +6414,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 1200,
+          "line": 1282,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1353,
+          "line": 1435,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1353,
+          "line": 1435,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1354,
+          "line": 1436,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -6839,13 +6863,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1202,
+          "line": 1284,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1248,
+          "line": 1330,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7285,25 +7309,25 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 203,
+          "line": 213,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.getCompiledRegex) {"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 204,
+          "line": 214,
           "surface": "shared-renderer",
           "snippet": "const compiled = window.uiHelperFunctions.getCompiledRegex(rule.findPattern);"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 208,
+          "line": 218,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.regexFromString) {"
         },
         {
           "file": "modules/chatManager.js",
-          "line": 209,
+          "line": 219,
           "surface": "shared-renderer",
           "snippet": "return window.uiHelperFunctions.regexFromString(rule.findPattern);"
         },
@@ -7477,7 +7501,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1408,
+          "line": 1490,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -7696,7 +7720,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1201,
+          "line": 1283,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -7811,7 +7835,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1213,
+          "line": 1295,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -10282,7 +10306,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1068,
+          "line": 1110,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
@@ -15455,7 +15479,7 @@
       "documentReferences": 0,
       "electronReferences": 0,
       "timers": 0,
-      "listeners": 14,
+      "listeners": 22,
       "mutableMaps": 0
     },
     "modules/renderer/streamManager.js": {
@@ -16384,7 +16408,7 @@
       "electronReferences": 4,
       "timers": 0,
       "listeners": 17,
-      "mutableMaps": 1
+      "mutableMaps": 3
     },
     "modules/ui-system/side-pane/side-pane-resizer-owner.js": {
       "windowReferences": 5,

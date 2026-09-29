@@ -1,0 +1,35 @@
+
+DevTools listening on ws://127.0.0.1:61840/devtools/browser/f9353fe0-3a9a-444e-914e-739aa45a05f2
+
+[VCP-CDS] Shadow service failed to start; existing chat features remain active: ChatDataServiceError: VCP-CDS binary was not found at /Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/bin/darwin-arm64/vcp_chat_data_service.
+    at ChatDataServiceLifecycle.start (/Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/lifecycle.js:65:27)
+    at ChatDataServiceFacade.startShadowMode (/Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/index.js:21:41)
+    at /Users/asahi/Documents/Codex/vcpchat-exp-schema/main.js:1131:38 {
+  code: 'BINARY_NOT_FOUND',
+  status: null,
+  retryable: false,
+  cause: undefined
+}
+
+[Music] ========== INITIALIZE CALLED ==========
+
+[Music] About to call registerIpcHandlers...
+
+[Music] IPC handlers registered.
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[UIManager] currentThemeMode not found in settings, falling back to requesting from main process.
+请求本地 SoVITS 模型列表 API 时出错:  connect ECONNREFUSED 127.0.0.1:8000
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+请求本地 SoVITS 模型列表 API 时出错:  connect ECONNREFUSED 127.0.0.1:8000
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json

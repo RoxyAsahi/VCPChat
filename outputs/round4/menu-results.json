@@ -1,0 +1,176 @@
+{
+  "baseline": "55b6ebce",
+  "results": [
+    {
+      "id": "D08-fresh-empty-menu",
+      "immediate": {
+        "display": "flex",
+        "expanded": "true",
+        "focus": "<div class=\"side-chat-model-item\" data-model=\"gpt-4o\" role=\"option\" aria-selected=\"false\" tabindex=\"-1\">gpt-4o</div>",
+        "items": [
+          {
+            "model": "gpt-4o",
+            "x": 1227,
+            "y": 755.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "gpt-4o-mini",
+            "x": 1227,
+            "y": 784,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "claude-3-5-sonnet",
+            "x": 1227,
+            "y": 812.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "gemini-1.5-pro",
+            "x": 1227,
+            "y": 841,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "deepseek-chat",
+            "x": 1227,
+            "y": 869.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          }
+        ]
+      },
+      "later": {
+        "display": "flex",
+        "expanded": "true",
+        "focus": "<div class=\"side-chat-model-item\" data-model=\"gpt-4o\" role=\"option\" aria-selected=\"false\" tabindex=\"-1\">gpt-4o</div>",
+        "items": [
+          {
+            "model": "gpt-4o",
+            "x": 1227,
+            "y": 755.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "gpt-4o-mini",
+            "x": 1227,
+            "y": 784,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "claude-3-5-sonnet",
+            "x": 1227,
+            "y": 812.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "gemini-1.5-pro",
+            "x": 1227,
+            "y": 841,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          },
+          {
+            "model": "deepseek-chat",
+            "x": 1227,
+            "y": 869.5,
+            "w": 140,
+            "h": 26.5,
+            "reachable": true,
+            "hit": "side-chat-model-item"
+          }
+        ]
+      },
+      "clickError": null
+    },
+    {
+      "id": "D09-model-reopen-via-handle",
+      "probeError": "No element found for selector: .side-pane-overview-item.recently-closed"
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "_fixtureUrl": "/v1/models"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-p1eRtV/UserData/AuditA\\topics\\topic_1790085497538\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "confirm model persistence",
+          "name": "用户"
+        }
+      ],
+      "model": "gpt-4o-mini",
+      "stream": true,
+      "requestId": "msg_1790085498194_assistant_9why4tc",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790085498188_user_ogda8zw",
+            "role": "user",
+            "timestamp": 1790085498188,
+            "timestampIso": "2026-09-22T13:58:18.188Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:c1dbaacac03a44fb545ab7304d9cee22793b86d146093beeeb5f57d9b8132dcc",
+            "sentMessageIndex": 2
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790085498194_assistant_9why4tc",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790085497538",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    }
+  ]
+}

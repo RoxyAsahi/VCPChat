@@ -128,8 +128,13 @@ test('R04: Agent configuration is resolved and reference length/count quota is e
     });
     await tick();
 
+    // Single item exceeding 8000 limit must be rejected
+    handle.addReference({ id: 'too-long', text: 'x'.repeat(8001) });
+    assert.equal(handle.getReferences().length, 0, 'Single reference exceeding 8000 must be rejected');
+
+    // Add references within single limit and verify total 16000 quota enforcement
     for (let i = 0; i < 9; i++) {
-        handle.addReference({ id: 'r' + i, text: 'x'.repeat(9000) + i });
+        handle.addReference({ id: 'r' + i, text: 'x'.repeat(7999) + i });
     }
 
     const selectedKeys = Object.keys(caps.getSelected());
@@ -143,8 +148,8 @@ test('R04: Agent configuration is resolved and reference length/count quota is e
     assert.equal(effectiveConfig.stream, true);
 
     const refs = handle.getReferences();
-    assert.equal(refs.length, 1, 'Should accept only references within quota');
-    assert.equal(refs.reduce((sum, r) => sum + r.text.length, 0), 9001, 'Quota limit enforces character max');
+    assert.equal(refs.length, 2, 'Should accept only references within total 16000 quota');
+    assert.equal(refs.reduce((sum, r) => sum + r.text.length, 0), 16000, 'Quota limit enforces character max (2 * 8000)');
 
     await handle.dispose();
     dom.window.close();
@@ -382,3 +387,111 @@ test('R12: Send-to-main blocks cross-topic contamination', async () => {
     await handle.dispose();
     dom.window.close();
 });
+
+test('R13: Persistence retry and explicit discard restore ready state', async () => {
+    const dom = new JSDOM('<div id="mount"></div>');
+    const doc = dom.window.document;
+    let saveCount = 0;
+    const caps = createMockCapabilities(async () => ({
+        terminal: { event: { type: 'failed', outcome: { persistence: { error: 'write-failure' } } } }
+    }));
+    caps.repository.saveHistory = async () => {
+        saveCount++;
+        return { success: true };
+    };
+
+    const handle = await mountSideChatSurface(doc.getElementById('mount'), {
+        descriptor: createDescriptor(),
+        chatCapabilities: caps
+    });
+    await tick();
+
+    doc.querySelector('textarea').value = 'save-me';
+    doc.querySelector('form').requestSubmit();
+    await tick();
+    await tick();
+
+    assert.equal(handle.getUnsavedStatus().hasUnsavedChanges, true);
+    assert.equal(doc.querySelector('.side-chat-persistence-badge').style.display, 'inline-block');
+
+    // Retry persistence
+    const retryRes = await handle.retryPersistence();
+    assert.equal(retryRes.ok, true);
+    assert.equal(handle.getUnsavedStatus().hasUnsavedChanges, false);
+    assert.equal(doc.querySelector('.side-chat-persistence-badge').style.display, 'none');
+    assert.equal(saveCount, 1);
+
+    await handle.dispose();
+    dom.window.close();
+});
+
+test('R14: Draft and uncommitted references preserved across tab close and reopen', async () => {
+    const provider = {
+        mountTab: async (desc, view) => {
+            let draft = '';
+            const refs = [];
+            return {
+                descriptor: desc,
+                getDraft: () => draft,
+                setDraft: (d) => { draft = d; },
+                getReferences: () => [...refs],
+                addReference: (r) => { refs.push(r); },
+                requestClose: async () => ({ closed: true }),
+                dispose: async () => {}
+            };
+        }
+    };
+    const { dom, ctrl } = createMockController(provider);
+    const desc = createDescriptor('tab-draft', 'topic-draft');
+
+    const handle1 = await ctrl.openChat(desc);
+    handle1.setDraft('preserved draft message');
+    handle1.addReference({ id: 'r1', text: 'quoted draft ref' });
+
+    const activeTabId = ctrl.getSnapshot().activeTabId;
+    await ctrl.closeTab(activeTabId);
+
+    // Reopen same child
+    const handle2 = await ctrl.openChat(desc);
+    assert.equal(handle2.getDraft(), 'preserved draft message');
+    assert.equal(handle2.getReferences().length, 1);
+    assert.equal(handle2.getReferences()[0].text, 'quoted draft ref');
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('R15: Send-to-main validates both item ID and topic ID provenance', async () => {
+    const dom = new JSDOM('<textarea id="messageInput" data-current-topic="parent"></textarea><div id="mount"></div>');
+    const doc = dom.window.document;
+    doc.getElementById('messageInput').value = 'existing main draft';
+
+    let currentItemMock = { id: 'other-agent', type: 'agent' };
+    const caps = createMockCapabilities();
+    caps.getCurrentItem = () => currentItemMock;
+
+    const handle = await mountSideChatSurface(doc.getElementById('mount'), {
+        descriptor: createDescriptor('s1', 'c1', 'agent-correct'),
+        chatCapabilities: caps
+    });
+    await tick();
+
+    const item = doc.createElement('div');
+    item.className = 'message-item assistant';
+    item.innerHTML = '<div class="md-content">side answer</div>';
+    doc.querySelector('.side-chat-messages-container').append(item);
+    await tick();
+
+    // 1. Same topic name but wrong agent -> blocked
+    doc.querySelector('.side-chat-send-to-main-btn').click();
+    assert.equal(doc.getElementById('messageInput').value, 'existing main draft');
+
+    // 2. Correct agent and correct topic -> allowed
+    currentItemMock = { id: 'agent-correct', type: 'agent' };
+    doc.querySelector('.side-chat-send-to-main-btn').click();
+    assert.equal(doc.getElementById('messageInput').value, 'existing main draft\n\nside answer');
+
+    await handle.dispose();
+    dom.window.close();
+});
+

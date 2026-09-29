@@ -20,6 +20,11 @@ export function matchesConversation(refA, refB) {
         && refA.topicId === refB.topicId;
 }
 
+export function getParentKey(parentRef) {
+    if (!parentRef) return '';
+    return `${parentRef.itemType || 'agent'}:${parentRef.itemId || ''}:${parentRef.topicId || ''}`;
+}
+
 export function freezeDescriptor(descriptor) {
     if (!descriptor || typeof descriptor !== 'object') {
         throw new TypeError('SideChatDescriptor must be an object');
@@ -53,7 +58,9 @@ export function freezeDescriptor(descriptor) {
         title: String(descriptor.title || '侧聊'),
         createdAt: Number.isFinite(descriptor.createdAt) ? descriptor.createdAt : Date.now(),
         contextMode: descriptor.contextMode === 'parent-snapshot' ? 'parent-snapshot' : 'references-only',
-        snapshotId: descriptor.snapshotId ? String(descriptor.snapshotId) : undefined
+        snapshotId: descriptor.snapshotId ? String(descriptor.snapshotId) : undefined,
+        model: descriptor.model ? String(descriptor.model) : undefined,
+        parentSnapshot: Array.isArray(descriptor.parentSnapshot) ? descriptor.parentSnapshot : []
     });
 }
 
@@ -110,7 +117,37 @@ export function setPreferredWidth(state, width, bounds = {}) {
     });
 }
 
-export function setParent(state, parentRef) {
+export function resolveSidePaneScopeState(state, parentRef, options = {}) {
+    const parentChatTabs = parentRef
+        ? state.tabs.filter(t => t.kind === 'chat' && t.descriptor && matchesConversation(t.descriptor.parent, parentRef))
+        : [];
+
+    if (parentChatTabs.length === 0) {
+        // Auto-collapse per ZCode resolveSidePaneScopeState parity when owner has no tabs
+        return {
+            activeTabId: NOTIFICATIONS_TAB_ID,
+            visible: false
+        };
+    }
+
+    let resolvedActiveTabId = null;
+    if (options.preferredTabId && parentChatTabs.some(t => t.id === options.preferredTabId)) {
+        resolvedActiveTabId = options.preferredTabId;
+    } else if (parentChatTabs.some(t => t.id === state.activeTabId)) {
+        resolvedActiveTabId = state.activeTabId;
+    } else {
+        resolvedActiveTabId = parentChatTabs[parentChatTabs.length - 1].id;
+    }
+
+    const isCollapsed = options.collapsedPreference !== undefined ? Boolean(options.collapsedPreference) : false;
+
+    return {
+        activeTabId: resolvedActiveTabId,
+        visible: !isCollapsed
+    };
+}
+
+export function setParent(state, parentRef, options = {}) {
     const nextParent = parentRef
         ? Object.freeze({
             itemType: parentRef.itemType || 'agent',
@@ -119,18 +156,15 @@ export function setParent(state, parentRef) {
         })
         : null;
 
-    if (matchesConversation(state.parent, nextParent)) return state;
+    if (matchesConversation(state.parent, nextParent) && options.force !== true) return state;
 
-    const visibleTabs = getVisibleTabs({ ...state, parent: nextParent }, nextParent);
-    let nextActiveTabId = state.activeTabId;
-    if (!visibleTabs.some(t => t.id === nextActiveTabId)) {
-        nextActiveTabId = visibleTabs[0]?.id || NOTIFICATIONS_TAB_ID;
-    }
+    const resolved = resolveSidePaneScopeState({ ...state, parent: nextParent }, nextParent, options);
 
     return Object.freeze({
         ...state,
         parent: nextParent,
-        activeTabId: nextActiveTabId
+        activeTabId: resolved.activeTabId,
+        visible: resolved.visible
     });
 }
 
@@ -178,16 +212,20 @@ export function openChatTab(state, rawDescriptor) {
         const newTab = Object.freeze({
             id: descriptor.id,
             kind: 'chat',
+            type: 'selection-side-chat',
+            ephemeral: true,
             title: descriptor.title,
             descriptor
         });
         nextTabs = Object.freeze([...state.tabs, newTab]);
     }
 
+    const isVisibleForCurrentParent = !state.parent || matchesConversation(descriptor.parent, state.parent);
+
     return Object.freeze({
         ...state,
-        visible: true,
-        activeTabId: targetTabId,
+        visible: isVisibleForCurrentParent ? true : state.visible,
+        activeTabId: isVisibleForCurrentParent ? targetTabId : state.activeTabId,
         tabs: nextTabs
     });
 }
@@ -255,10 +293,12 @@ const api = Object.freeze({
     NOTIFICATIONS_TAB,
     LAUNCHER_TAB_ID,
     matchesConversation,
+    getParentKey,
     freezeDescriptor,
     createInitialSidePaneState,
     setVisible,
     setPreferredWidth,
+    resolveSidePaneScopeState,
     setParent,
     activateTab,
     showNotifications,

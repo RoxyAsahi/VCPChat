@@ -43,8 +43,12 @@ export function createSidePaneController({
     });
 
     const mountedTabMap = new Map(); // tabId -> { provider, viewElement, tabElement, handle }
+    const pendingMountMap = new Map(); // childKey -> Promise<handle>
+    const childDraftsMap = new Map(); // childKey -> { draft: string, references: Array }
     const cleanupListeners = [];
     const recentlyClosedTabs = [];
+    const collapsedByParent = new Map(); // parentKey -> boolean
+    const activeTabByParent = new Map(); // parentKey -> tabId
     let isDisposed = false;
     let contextTargetTabId = null;
 
@@ -246,6 +250,10 @@ export function createSidePaneController({
         setVisible(visible) {
             if (isDisposed) return;
             state = SidePaneState.setVisible(state, visible);
+            if (state.parent) {
+                const parentKey = SidePaneState.getParentKey(state.parent);
+                collapsedByParent.set(parentKey, !state.visible);
+            }
             syncDomVisibility();
             if (!visible) {
                 const trigger = toggleChatBtn || toggleNotificationsBtn || doc.getElementById('toggleSidePaneChatBtn') || doc.getElementById('closeSidePaneBtn');
@@ -277,6 +285,13 @@ export function createSidePaneController({
         activateTab(tabId) {
             if (isDisposed || !tabId) return;
             state = SidePaneState.activateTab(state, tabId);
+            if (state.parent && tabId !== SidePaneState.NOTIFICATIONS_TAB_ID && tabId !== SidePaneState.LAUNCHER_TAB_ID) {
+                const parentKey = SidePaneState.getParentKey(state.parent);
+                activeTabByParent.set(parentKey, tabId);
+                if (state.visible) {
+                    collapsedByParent.set(parentKey, false);
+                }
+            }
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
@@ -305,45 +320,86 @@ export function createSidePaneController({
 
         async openChat(descriptor) {
             if (isDisposed || !descriptor) return null;
-            state = SidePaneState.openChatTab(state, descriptor);
-            const targetTabId = state.activeTabId;
-            renderTabList();
-
-            // Check if view container already mounted for this tab
-            let entry = mountedTabMap.get(targetTabId);
-            if (!entry) {
-                let view = contentContainer?.querySelector(`[data-tab-id="${targetTabId}"]`);
-                if (!view && contentContainer) {
-                    view = doc.createElement('section');
-                    view.className = 'side-pane-view';
-                    view.setAttribute('data-tab-id', targetTabId);
-                    view.setAttribute('role', 'tabpanel');
-                    contentContainer.appendChild(view);
-                }
-
-                if (providers.chat?.mountTab && view) {
-                    const handle = await providers.chat.mountTab(descriptor, view);
-                    if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
-                        await handle?.dispose?.();
-                        view?.remove?.();
-                        return null;
-                    }
-                    entry = { descriptor, viewElement: view, handle };
-                    mountedTabMap.set(targetTabId, entry);
-                } else if (view) {
-                    if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
-                        view?.remove?.();
-                        return null;
-                    }
-                    entry = { descriptor, viewElement: view, handle: null };
-                    mountedTabMap.set(targetTabId, entry);
-                }
+            const childKey = `${descriptor.child?.itemId || ''}:${descriptor.child?.topicId || descriptor.id}`;
+            if (pendingMountMap.has(childKey)) {
+                return await pendingMountMap.get(childKey);
             }
 
-            syncViewPanels();
-            syncDomVisibility();
-            entry?.handle?.focus?.();
-            return entry?.handle || null;
+            const mountPromise = (async () => {
+                state = SidePaneState.openChatTab(state, descriptor);
+                const targetTabId = state.activeTabId;
+                if (state.parent && SidePaneState.matchesConversation(descriptor.parent, state.parent)) {
+                    const parentKey = SidePaneState.getParentKey(state.parent);
+                    collapsedByParent.set(parentKey, false);
+                    activeTabByParent.set(parentKey, targetTabId);
+                }
+                renderTabList();
+
+                // Check if view container already mounted for this tab
+                let entry = mountedTabMap.get(targetTabId);
+                if (!entry) {
+                    let view = contentContainer?.querySelector(`[data-tab-id="${targetTabId}"]`);
+                    if (!view && contentContainer) {
+                        view = doc.createElement('section');
+                        view.className = 'side-pane-view';
+                        view.setAttribute('data-tab-id', targetTabId);
+                        view.setAttribute('role', 'tabpanel');
+                        contentContainer.appendChild(view);
+                    }
+
+                    if (providers.chat?.mountTab && view) {
+                        const handle = await providers.chat.mountTab(descriptor, view);
+                        if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
+                            await handle?.dispose?.();
+                            view?.remove?.();
+                            return null;
+                        }
+                        entry = { descriptor, viewElement: view, handle };
+                        mountedTabMap.set(targetTabId, entry);
+
+                        // Restore cached draft & uncommitted references if available
+                        if (childDraftsMap.has(childKey)) {
+                            const cached = childDraftsMap.get(childKey);
+                            childDraftsMap.delete(childKey);
+                            if (cached.draft && typeof handle?.setDraft === 'function') {
+                                handle.setDraft(cached.draft);
+                            }
+                            if (Array.isArray(cached.references) && typeof handle?.addReference === 'function') {
+                                cached.references.forEach(r => handle.addReference(r));
+                            }
+                        } else if (descriptor?.draft || (Array.isArray(descriptor?.references) && descriptor.references.length > 0)) {
+                            if (descriptor.draft && typeof handle?.setDraft === 'function') {
+                                handle.setDraft(descriptor.draft);
+                            }
+                            if (Array.isArray(descriptor.references) && typeof handle?.addReference === 'function') {
+                                descriptor.references.forEach(r => handle.addReference(r));
+                            }
+                        }
+                        if (descriptor?.model && typeof handle?.setModel === 'function' && handle.getModel?.() !== descriptor.model) {
+                            handle.setModel(descriptor.model);
+                        }
+                    } else if (view) {
+                        if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
+                            view?.remove?.();
+                            return null;
+                        }
+                        entry = { descriptor, viewElement: view, handle: null };
+                        mountedTabMap.set(targetTabId, entry);
+                    }
+                }
+
+                syncViewPanels();
+                syncDomVisibility();
+                entry?.handle?.focus?.();
+                return entry?.handle || null;
+            })();
+
+            pendingMountMap.set(childKey, mountPromise);
+            try {
+                return await mountPromise;
+            } finally {
+                pendingMountMap.delete(childKey);
+            }
         },
 
         getTabHandle(tabId) {
@@ -360,7 +416,24 @@ export function createSidePaneController({
             if (isDisposed || !tabId || tabId === SidePaneState.NOTIFICATIONS_TAB_ID) return;
             const entry = mountedTabMap.get(tabId);
             const tabDesc = entry?.descriptor || state.tabs.find(t => t.id === tabId)?.descriptor || null;
+            let updatedTabDesc = tabDesc ? { ...tabDesc } : null;
             if (entry) {
+                // Preserve model, draft & uncommitted references before closing
+                const childKey = `${tabDesc?.child?.itemId || ''}:${tabDesc?.child?.topicId || tabDesc?.id || tabId}`;
+                const draft = entry.handle?.getDraft?.() || '';
+                const refs = entry.handle?.getReferences?.() || [];
+                const latestModel = entry.handle?.getModel?.();
+                if (latestModel && updatedTabDesc) {
+                    updatedTabDesc.model = latestModel;
+                }
+                if (draft || refs.length > 0) {
+                    childDraftsMap.set(childKey, { draft, references: refs });
+                }
+                if (updatedTabDesc) {
+                    updatedTabDesc.draft = draft;
+                    updatedTabDesc.references = refs;
+                }
+
                 const closeResult = await entry.handle?.requestClose?.();
                 if (closeResult && closeResult.closed === false) {
                     return; // User or operation prevented close
@@ -369,16 +442,20 @@ export function createSidePaneController({
                 entry.viewElement?.remove?.();
                 mountedTabMap.delete(tabId);
             }
-            if (tabDesc && typeof onTabClosed === 'function') {
-                try { await onTabClosed(tabDesc); } catch {}
+            if (updatedTabDesc && typeof onTabClosed === 'function') {
+                try { await onTabClosed(updatedTabDesc); } catch {}
             }
 
             const tabObj = state.tabs.find(t => t.id === tabId);
-            if (tabObj && tabObj.kind === 'chat' && tabDesc) {
+            // ZCode parity (useAppPanels.ts:1334):
+            // Ephemeral secondary sessions (selection-side-chat / kind === 'chat') are explicitly
+            // excluded from recentlyClosedTabs.
+            const isEphemeralChat = tabObj?.kind === 'chat' || tabObj?.type === 'selection-side-chat' || updatedTabDesc?.ephemeral;
+            if (tabObj && !isEphemeralChat && updatedTabDesc) {
                 recentlyClosedTabs.unshift({
                     id: tabId,
-                    title: tabObj.title || tabDesc.title || '辅助聊天',
-                    descriptor: tabDesc,
+                    title: tabObj.title || updatedTabDesc.title || '标签页',
+                    descriptor: updatedTabDesc,
                     closedAt: Date.now()
                 });
                 if (recentlyClosedTabs.length > 10) {
@@ -387,6 +464,26 @@ export function createSidePaneController({
             }
 
             state = SidePaneState.closeTab(state, tabId);
+
+            // ZCode parity (useAppPanels.ts:309-318 syncSidePaneCollapsedWithTabs):
+            // When all visible chat tabs for current parent are closed, automatically collapse side pane.
+            const remainingCurrentTabs = state.parent
+                ? state.tabs.filter(t => t.kind === 'chat' && t.descriptor && SidePaneState.matchesConversation(t.descriptor.parent, state.parent))
+                : [];
+            if (remainingCurrentTabs.length === 0) {
+                state = SidePaneState.setVisible(state, false);
+                if (state.parent) {
+                    const parentKey = SidePaneState.getParentKey(state.parent);
+                    collapsedByParent.set(parentKey, true);
+                    activeTabByParent.delete(parentKey);
+                }
+            } else if (state.parent) {
+                const parentKey = SidePaneState.getParentKey(state.parent);
+                if (activeTabByParent.get(parentKey) === tabId) {
+                    activeTabByParent.set(parentKey, state.activeTabId);
+                }
+            }
+
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
@@ -396,9 +493,23 @@ export function createSidePaneController({
 
         setParent(parentRef) {
             if (isDisposed) return;
-            state = SidePaneState.setParent(state, parentRef);
+            // Persist current parent's active tab and collapsed state before switching
+            if (state.parent) {
+                const prevKey = SidePaneState.getParentKey(state.parent);
+                if (state.activeTabId && state.activeTabId !== SidePaneState.NOTIFICATIONS_TAB_ID && state.activeTabId !== SidePaneState.LAUNCHER_TAB_ID) {
+                    activeTabByParent.set(prevKey, state.activeTabId);
+                }
+                collapsedByParent.set(prevKey, !state.visible);
+            }
+
+            const nextKey = parentRef ? SidePaneState.getParentKey(parentRef) : '';
+            const preferredTabId = activeTabByParent.get(nextKey);
+            const collapsedPreference = collapsedByParent.get(nextKey);
+
+            state = SidePaneState.setParent(state, parentRef, { preferredTabId, collapsedPreference });
             renderTabList();
             syncViewPanels();
+            syncDomVisibility();
         },
 
         setPreferredWidth(width) {
@@ -463,10 +574,16 @@ export function createSidePaneController({
             if (state.visible && state.activeTabId !== SidePaneState.NOTIFICATIONS_TAB_ID) {
                 controller.setVisible(false);
             } else {
-                // If a chat tab exists, activate the last chat tab, else trigger onOpenSideChat
-                const chatTabs = state.tabs.filter(t => t.kind === 'chat');
-                if (chatTabs.length > 0) {
-                    controller.activateTab(chatTabs[chatTabs.length - 1].id);
+                const currentParentChatTabs = state.parent
+                    ? state.tabs.filter(t => t.kind === 'chat' && t.descriptor && SidePaneState.matchesConversation(t.descriptor.parent, state.parent))
+                    : state.tabs.filter(t => t.kind === 'chat');
+                if (currentParentChatTabs.length > 0) {
+                    const parentKey = state.parent ? SidePaneState.getParentKey(state.parent) : '';
+                    const prefTab = parentKey ? activeTabByParent.get(parentKey) : null;
+                    const targetId = prefTab && currentParentChatTabs.some(t => t.id === prefTab)
+                        ? prefTab
+                        : currentParentChatTabs[currentParentChatTabs.length - 1].id;
+                    controller.activateTab(targetId);
                     controller.setVisible(true);
                 } else if (typeof onOpenSideChat === 'function') {
                     onOpenSideChat();
@@ -587,13 +704,16 @@ export function createSidePaneController({
                 item.append(titleDiv, timeSpan);
 
                 item.addEventListener('click', async () => {
-                    const idx = recentlyClosedTabs.indexOf(closedTab);
-                    if (idx !== -1) recentlyClosedTabs.splice(idx, 1);
                     resolvedOverviewPopover.style.display = 'none';
+                    let opened = null;
                     if (typeof onOpenSideChat === 'function') {
-                        await onOpenSideChat(closedTab.descriptor);
+                        opened = await onOpenSideChat(closedTab.descriptor);
                     } else {
-                        await controller.openChat(closedTab.descriptor);
+                        opened = await controller.openChat(closedTab.descriptor);
+                    }
+                    if (opened) {
+                        const idx = recentlyClosedTabs.indexOf(closedTab);
+                        if (idx !== -1) recentlyClosedTabs.splice(idx, 1);
                     }
                     controller.setVisible(true);
                 });
@@ -715,7 +835,7 @@ export function createSidePaneController({
                 const isOpen = resolvedAddMenuPopover.style.display !== 'none';
                 resolvedAddMenuPopover.style.display = isOpen ? 'none' : 'flex';
             } else if (typeof onOpenSideChat === 'function') {
-                onOpenSideChat();
+                onOpenSideChat({ forceNew: true });
             }
         };
         resolvedAddChatTabBtn.addEventListener('click', onAddClick);
@@ -731,7 +851,7 @@ export function createSidePaneController({
 
             if (action === 'new-chat') {
                 if (typeof onOpenSideChat === 'function') {
-                    await onOpenSideChat();
+                    await onOpenSideChat({ forceNew: true });
                 }
             } else if (action === 'notifications') {
                 controller.showNotifications();
@@ -757,7 +877,7 @@ export function createSidePaneController({
             const item = btn.getAttribute('data-side-pane-open-tab-item');
             if (item === 'selection-side-conversation') {
                 if (typeof onOpenSideChat === 'function') {
-                    await onOpenSideChat();
+                    await onOpenSideChat({ forceNew: true });
                 }
             } else if (item === 'notifications') {
                 controller.showNotifications();

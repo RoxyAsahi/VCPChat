@@ -1,0 +1,30 @@
+
+DevTools listening on ws://127.0.0.1:65177/devtools/browser/4f0901d3-9abe-44c2-aa93-341e8bdba3bd
+
+[VCP-CDS] Shadow service failed to start; existing chat features remain active: ChatDataServiceError: VCP-CDS binary was not found at /Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/bin/darwin-arm64/vcp_chat_data_service.
+    at ChatDataServiceLifecycle.start (/Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/lifecycle.js:65:27)
+    at ChatDataServiceFacade.startShadowMode (/Users/asahi/Documents/Codex/vcpchat-exp-schema/modules/services/chatDataService/index.js:21:41)
+    at /Users/asahi/Documents/Codex/vcpchat-exp-schema/main.js:1131:38 {
+  code: 'BINARY_NOT_FOUND',
+  status: null,
+  retryable: false,
+  cause: undefined
+}
+
+[Music] ========== INITIALIZE CALLED ==========
+
+[Music] About to call registerIpcHandlers...
+
+[Music] IPC handlers registered.
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+Scripts "build/three.js" and "build/three.min.js" are deprecated with r150+, and will be removed with r160. Please use ES Modules or alternatives: https://threejs.org/docs/index.html#manual/en/introduction/Installation
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json
+
+[UIManager] currentThemeMode not found in settings, falling back to requesting from main process.
+请求本地 SoVITS 模型列表 API 时出错:  connect ECONNREFUSED 127.0.0.1:8000
+
+[EmoticonFixer] Emoji library degraded: missing fileKey in settings.json

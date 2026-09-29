@@ -1,0 +1,304 @@
+{
+  "baseline": "55b6ebce",
+  "results": [
+    {
+      "id": "E11-parallel-selection-create",
+      "tabs": [
+        {
+          "child": "topic_1790082499331",
+          "refs": [
+            {
+              "id": "ref-1790082499327-9k2t",
+              "text": "first parallel ref",
+              "sourceMessageId": null,
+              "capturedAt": 1790082499327
+            },
+            {
+              "id": "ref-1790082499330-w4zl",
+              "text": "second parallel ref",
+              "sourceMessageId": null,
+              "capturedAt": 1790082499330
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "E12-reference-only-context",
+      "request": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-QNjkg4/UserData/AuditA\\topics\\topic_1790082499394\\history.json\n\nSequence fixture"
+          },
+          {
+            "role": "user",
+            "content": "audit-reference-mode",
+            "name": "用户"
+          }
+        ],
+        "model": "sequence-model",
+        "stream": true,
+        "requestId": "msg_1790082499427_assistant_73zdgge",
+        "vcpchatExtensions": {
+          "schemaVersion": 1,
+          "messageMetadataMode": "hash_only",
+          "messageTimestampBindings": [
+            {
+              "messageId": "msg_1790082499413_user_hfl5o67",
+              "role": "user",
+              "timestamp": 1790082499413,
+              "timestampIso": "2026-09-22T13:08:19.413Z",
+              "source": "client_history",
+              "sentMessageHash": "sha256:11aec64251c586101d174041b753f78458ba3ca1461a23c8c94b54f9b945350b",
+              "sentMessageIndex": 1
+            }
+          ],
+          "requestContext": {
+            "requestId": "msg_1790082499427_assistant_73zdgge",
+            "agentId": "AuditA",
+            "agentName": "AuditA",
+            "topicId": "topic_1790082499394",
+            "ownerType": "agent",
+            "isGroupMessage": false
+          }
+        },
+        "_fixtureUrl": "/v1/chat/completions"
+      },
+      "declared": "references-only"
+    },
+    {
+      "id": "E13-pointer-and-layout",
+      "geometry": {
+        ".side-chat-model-picker-btn": {
+          "x": 1228,
+          "y": 899,
+          "w": 138.0859375,
+          "h": 24,
+          "display": "flex",
+          "reachable": true
+        },
+        ".side-chat-attach-btn": {
+          "x": 1370.0859375,
+          "y": 900,
+          "w": 53,
+          "h": 22,
+          "display": "flex",
+          "reachable": true
+        },
+        ".side-chat-mode-badge": {
+          "x": 1228,
+          "y": 869,
+          "w": 44,
+          "h": 18,
+          "display": "flex",
+          "reachable": true
+        },
+        ".side-chat-parent-wrapper": {
+          "x": 1278,
+          "y": 869.3984375,
+          "w": 75.171875,
+          "h": 17.1953125,
+          "display": "flex",
+          "reachable": true
+        },
+        ".side-chat-context-toggle-btn": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0,
+          "display": "none",
+          "reachable": false
+        },
+        ".side-chat-send-btn": {
+          "x": 1437,
+          "y": 893,
+          "w": 36,
+          "h": 36,
+          "display": "flex",
+          "reachable": true
+        }
+      },
+      "options": [
+        {
+          "model": "gpt-4o",
+          "x": 1227,
+          "y": 755.5,
+          "w": 140,
+          "h": 26.5,
+          "reachable": true
+        },
+        {
+          "model": "gpt-4o-mini",
+          "x": 1227,
+          "y": 784,
+          "w": 140,
+          "h": 26.5,
+          "reachable": true
+        },
+        {
+          "model": "claude-3-5-sonnet",
+          "x": 1227,
+          "y": 812.5,
+          "w": 140,
+          "h": 26.5,
+          "reachable": true
+        },
+        {
+          "model": "gemini-1.5-pro",
+          "x": 1227,
+          "y": 841,
+          "w": 140,
+          "h": 26.5,
+          "reachable": true
+        },
+        {
+          "model": "deepseek-chat",
+          "x": 1227,
+          "y": 869.5,
+          "w": 140,
+          "h": 26.5,
+          "reachable": true
+        }
+      ]
+    },
+    {
+      "id": "E14-manual-reference",
+      "errors": []
+    },
+    {
+      "id": "E15-nonstream-stop",
+      "before": {
+        "status": "正在停止...",
+        "busy": "true"
+      },
+      "after": {
+        "status": "已取消",
+        "text": "用户\n2026-09-22 15:08\n\nsequence-hold-nonstream-audit\n\nAuditB\n2026-09-22 15:08\n\nfixture response\n\n填入主聊"
+      },
+      "stream": false
+    },
+    {
+      "id": "E16-width-800",
+      ".main-content": {
+        "x": 261,
+        "w": 539,
+        "right": 800
+      },
+      "#vcpSidePane": {
+        "x": 500,
+        "w": 300,
+        "right": 800
+      },
+      ".side-chat-send-btn": {
+        "x": 737,
+        "w": 36,
+        "right": 773
+      },
+      ".side-chat-stop-btn": {
+        "x": 0,
+        "w": 0,
+        "right": 0
+      }
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "_fixtureUrl": "/v1/models"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-QNjkg4/UserData/AuditA\\topics\\topic_1790082499394\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "user",
+          "content": "audit-reference-mode",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790082499427_assistant_73zdgge",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "msg_1790082499413_user_hfl5o67",
+            "role": "user",
+            "timestamp": 1790082499413,
+            "timestampIso": "2026-09-22T13:08:19.413Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:11aec64251c586101d174041b753f78458ba3ca1461a23c8c94b54f9b945350b",
+            "sentMessageIndex": 1
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790082499427_assistant_73zdgge",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790082499394",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-QNjkg4/UserData/AuditB\\topics\\topic_1790082500595\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditB/b-one"
+        },
+        {
+          "role": "user",
+          "content": "sequence-hold-nonstream-audit",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": false,
+      "requestId": "msg_1790082500622_assistant_hkvzca6",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditB-b-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:1cfb7ab16715116353f3dc9146b48b6d830a1caa9b954aca1a0447d3d3dc7201",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790082500615_user_12gy84q",
+            "role": "user",
+            "timestamp": 1790082500615,
+            "timestampIso": "2026-09-22T13:08:20.615Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:89ddf5feed924dfce0dad520b8d9e90ac06f250f7caed8003adec550cc069881",
+            "sentMessageIndex": 2
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790082500622_assistant_hkvzca6",
+          "agentId": "AuditB",
+          "agentName": "AuditB",
+          "topicId": "topic_1790082500595",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    }
+  ]
+}

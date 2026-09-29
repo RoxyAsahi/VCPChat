@@ -1,0 +1,965 @@
+{
+  "baseline": "55b6ebce",
+  "results": [
+    {
+      "id": "E01-open-and-send",
+      "mainUnchanged": true,
+      "mainTopic": "a-one",
+      "childTopic": "topic_1790079569754",
+      "requestModel": "sequence-model",
+      "system": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture",
+      "parentContextSent": true,
+      "sideText": "用户\n2026-09-22 14:19\n\naudit-side-first\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊",
+      "status": "就绪"
+    },
+    {
+      "id": "E02-reference",
+      "lastRequest": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+          },
+          {
+            "role": "assistant",
+            "content": "AuditA/a-one"
+          },
+          {
+            "role": "user",
+            "content": "audit-side-first",
+            "name": "用户"
+          },
+          {
+            "role": "assistant",
+            "content": "fixture stream complete",
+            "name": "AuditA"
+          },
+          {
+            "role": "user",
+            "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+            "name": "用户"
+          }
+        ],
+        "model": "sequence-model",
+        "stream": true,
+        "requestId": "msg_1790079570512_assistant_u0gy9pb",
+        "vcpchatExtensions": {
+          "schemaVersion": 1,
+          "messageMetadataMode": "hash_only",
+          "messageTimestampBindings": [
+            {
+              "messageId": "history-AuditA-a-one",
+              "role": "assistant",
+              "timestamp": 1,
+              "timestampIso": "1970-01-01T00:00:00.001Z",
+              "source": "client_history",
+              "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+              "sentMessageIndex": 1
+            },
+            {
+              "messageId": "msg_1790079569869_user_axeov6t",
+              "role": "user",
+              "timestamp": 1790079569869,
+              "timestampIso": "2026-09-22T12:19:29.869Z",
+              "source": "client_history",
+              "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+              "sentMessageIndex": 2
+            },
+            {
+              "messageId": "msg_1790079569917_assistant_k5r8ysa",
+              "role": "assistant",
+              "timestamp": 1790079569969,
+              "timestampIso": "2026-09-22T12:19:29.969Z",
+              "source": "client_history",
+              "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+              "sentMessageIndex": 3
+            },
+            {
+              "messageId": "msg_1790079570493_user_lo9gt5h",
+              "role": "user",
+              "timestamp": 1790079570493,
+              "timestampIso": "2026-09-22T12:19:30.493Z",
+              "source": "client_history",
+              "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+              "sentMessageIndex": 4
+            }
+          ],
+          "requestContext": {
+            "requestId": "msg_1790079570512_assistant_u0gy9pb",
+            "agentId": "AuditA",
+            "agentName": "AuditA",
+            "topicId": "topic_1790079569754",
+            "ownerType": "agent",
+            "isGroupMessage": false
+          }
+        },
+        "_fixtureUrl": "/v1/chat/completions"
+      },
+      "referencesLeft": 0
+    },
+    {
+      "id": "E03-main-side-concurrent",
+      "during": {
+        "mainText": "话题创建于 1970-01-01 01:00\nAuditA\n1970-01-01 01:00\n\nAuditA/a-one\n\n用户\n2026-09-22 14:19\n\nsequence-hold-main-audit\n\nAuditA\n思考中...",
+        "sideText": "用户\n2026-09-22 14:19\n\naudit-side-first\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\n> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\naudit-side-concurrent\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊"
+      },
+      "requestCount": 5
+    },
+    {
+      "id": "E04a-stop-before-response",
+      "beforeRelease": "still pending after 12s"
+    },
+    {
+      "id": "E04-stop-stream",
+      "status": "已取消",
+      "draft": "sequence-hold-side-audit"
+    },
+    {
+      "id": "E05-model-picker",
+      "badge": "gpt-4o-mini",
+      "mainModel": "sequence-model",
+      "newErrors": [],
+      "requestModel": "gpt-4o-mini"
+    },
+    {
+      "id": "E06-real-failure-retry",
+      "status": "发送失败：VCP请求失败 (503)",
+      "draft": "sequence-fail",
+      "refs": 1
+    },
+    {
+      "id": "E07-close-reopen",
+      "oldChild": "topic_1790079569754",
+      "newChild": "topic_1790079569754",
+      "sameSession": true,
+      "restoredText": "用户\n2026-09-22 14:19\n\naudit-side-first\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\n> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\naudit-side-concurrent\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\nsequence-hold-side-audit\n\nAuditA\n2026-09-22 14:19\n\nside-audit stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\naudit-model-change\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\n> [引用 1]:\n> AUDIT-FAILURE-REFERENCE\n\nsequence-fail"
+    },
+    {
+      "id": "E08-switch-parent",
+      "mainAgent": "AuditB",
+      "parentBinding": {
+        "itemType": "agent",
+        "itemId": "AuditB",
+        "topicId": ""
+      },
+      "visiblePanels": [
+        null
+      ]
+    },
+    {
+      "id": "E09-reload-restoration",
+      "chatTabs": 1,
+      "topic": "a-one"
+    },
+    {
+      "id": "E10-explicit-restoration",
+      "count": 1,
+      "tabs": [
+        {
+          "child": "topic_1790079569754",
+          "snapshotMessages": 1
+        }
+      ],
+      "messageText": [
+        "用户\n2026-09-22 14:19\n\naudit-side-first\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\n> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\naudit-side-concurrent\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\nsequence-hold-side-audit\n\nAuditA\n2026-09-22 14:19\n\nside-audit stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\naudit-model-change\n\nAuditA\n2026-09-22 14:19\n\nfixture stream complete\n\n填入主聊\n用户\n2026-09-22 14:19\n\n> [引用 1]:\n> AUDIT-FAILURE-REFERENCE\n\nsequence-fail"
+      ]
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "_fixtureUrl": "/v1/models"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790079569917_assistant_k5r8ysa",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079569917_assistant_k5r8ysa",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790079570512_assistant_u0gy9pb",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          },
+          {
+            "messageId": "msg_1790079569917_assistant_k5r8ysa",
+            "role": "assistant",
+            "timestamp": 1790079569969,
+            "timestampIso": "2026-09-22T12:19:29.969Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 3
+          },
+          {
+            "messageId": "msg_1790079570493_user_lo9gt5h",
+            "role": "user",
+            "timestamp": 1790079570493,
+            "timestampIso": "2026-09-22T12:19:30.493Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+            "sentMessageIndex": 4
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079570512_assistant_u0gy9pb",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\a-one\\history.json\n当前话题创建于 1970-01-01 01:00\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "sequence-hold-main-audit",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790079570912_assistant_cxuxb7i",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079570906_user_q7gbwhx",
+            "role": "user",
+            "timestamp": 1790079570906,
+            "timestampIso": "2026-09-22T12:19:30.906Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:678a659667e181324c259c27ebcbd0ac50ab3e78b02f657ef5bee50e62b80e8c",
+            "sentMessageIndex": 2
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079570912_assistant_cxuxb7i",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "a-one",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-concurrent",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790079570928_assistant_cszounq",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          },
+          {
+            "messageId": "msg_1790079569917_assistant_k5r8ysa",
+            "role": "assistant",
+            "timestamp": 1790079569969,
+            "timestampIso": "2026-09-22T12:19:29.969Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 3
+          },
+          {
+            "messageId": "msg_1790079570493_user_lo9gt5h",
+            "role": "user",
+            "timestamp": 1790079570493,
+            "timestampIso": "2026-09-22T12:19:30.493Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+            "sentMessageIndex": 4
+          },
+          {
+            "messageId": "msg_1790079570512_assistant_u0gy9pb",
+            "role": "assistant",
+            "timestamp": 1790079570518,
+            "timestampIso": "2026-09-22T12:19:30.518Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 5
+          },
+          {
+            "messageId": "msg_1790079570921_user_337in00",
+            "role": "user",
+            "timestamp": 1790079570921,
+            "timestampIso": "2026-09-22T12:19:30.921Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:5a4b803885c6f899cc4d16e83388899c8091f0369ac70b65ef0d7e370ddf11cd",
+            "sentMessageIndex": 6
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079570928_assistant_cszounq",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-concurrent",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "sequence-hold-side-audit",
+          "name": "用户"
+        }
+      ],
+      "model": "sequence-model",
+      "stream": true,
+      "requestId": "msg_1790079572319_assistant_acal7t8",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          },
+          {
+            "messageId": "msg_1790079569917_assistant_k5r8ysa",
+            "role": "assistant",
+            "timestamp": 1790079569969,
+            "timestampIso": "2026-09-22T12:19:29.969Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 3
+          },
+          {
+            "messageId": "msg_1790079570493_user_lo9gt5h",
+            "role": "user",
+            "timestamp": 1790079570493,
+            "timestampIso": "2026-09-22T12:19:30.493Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+            "sentMessageIndex": 4
+          },
+          {
+            "messageId": "msg_1790079570512_assistant_u0gy9pb",
+            "role": "assistant",
+            "timestamp": 1790079570518,
+            "timestampIso": "2026-09-22T12:19:30.518Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 5
+          },
+          {
+            "messageId": "msg_1790079570921_user_337in00",
+            "role": "user",
+            "timestamp": 1790079570921,
+            "timestampIso": "2026-09-22T12:19:30.921Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:5a4b803885c6f899cc4d16e83388899c8091f0369ac70b65ef0d7e370ddf11cd",
+            "sentMessageIndex": 6
+          },
+          {
+            "messageId": "msg_1790079570928_assistant_cszounq",
+            "role": "assistant",
+            "timestamp": 1790079570936,
+            "timestampIso": "2026-09-22T12:19:30.936Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 7
+          },
+          {
+            "messageId": "msg_1790079572306_user_8orhanw",
+            "role": "user",
+            "timestamp": 1790079572306,
+            "timestampIso": "2026-09-22T12:19:32.306Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:ab28db157e5da750792020f16bea40547c89d818011c081375c384c913ff3bcf",
+            "sentMessageIndex": 8
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079572319_assistant_acal7t8",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-concurrent",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "sequence-hold-side-audit",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "side-audit stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-model-change",
+          "name": "用户"
+        }
+      ],
+      "model": "gpt-4o-mini",
+      "stream": true,
+      "requestId": "msg_1790079584953_assistant_d34ruvk",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          },
+          {
+            "messageId": "msg_1790079569917_assistant_k5r8ysa",
+            "role": "assistant",
+            "timestamp": 1790079569969,
+            "timestampIso": "2026-09-22T12:19:29.969Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 3
+          },
+          {
+            "messageId": "msg_1790079570493_user_lo9gt5h",
+            "role": "user",
+            "timestamp": 1790079570493,
+            "timestampIso": "2026-09-22T12:19:30.493Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+            "sentMessageIndex": 4
+          },
+          {
+            "messageId": "msg_1790079570512_assistant_u0gy9pb",
+            "role": "assistant",
+            "timestamp": 1790079570518,
+            "timestampIso": "2026-09-22T12:19:30.518Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 5
+          },
+          {
+            "messageId": "msg_1790079570921_user_337in00",
+            "role": "user",
+            "timestamp": 1790079570921,
+            "timestampIso": "2026-09-22T12:19:30.921Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:5a4b803885c6f899cc4d16e83388899c8091f0369ac70b65ef0d7e370ddf11cd",
+            "sentMessageIndex": 6
+          },
+          {
+            "messageId": "msg_1790079570928_assistant_cszounq",
+            "role": "assistant",
+            "timestamp": 1790079570936,
+            "timestampIso": "2026-09-22T12:19:30.936Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 7
+          },
+          {
+            "messageId": "msg_1790079572306_user_8orhanw",
+            "role": "user",
+            "timestamp": 1790079572306,
+            "timestampIso": "2026-09-22T12:19:32.306Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:ab28db157e5da750792020f16bea40547c89d818011c081375c384c913ff3bcf",
+            "sentMessageIndex": 8
+          },
+          {
+            "messageId": "msg_1790079572319_assistant_acal7t8",
+            "role": "assistant",
+            "timestamp": 1790079584334,
+            "timestampIso": "2026-09-22T12:19:44.334Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:82e9892977fae4933fb422102513cd6ad7e92c6538ecf456b10aeba888ae2cce",
+            "sentMessageIndex": 9
+          },
+          {
+            "messageId": "msg_1790079584948_user_q0jst52",
+            "role": "user",
+            "timestamp": 1790079584948,
+            "timestampIso": "2026-09-22T12:19:44.948Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:371fa0e5094129ae3b2eaab932d57298a646bda69119d64d0a7b9960f2516dd9",
+            "sentMessageIndex": 10
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079584953_assistant_d34ruvk",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    },
+    {
+      "messages": [
+        {
+          "role": "system",
+          "content": "当前聊天记录文件路径: /var/folders/02/hmwzr1ls7r3998rkkmk6w00m0000gn/T/vcp-side-audit-4zXcLj/UserData/AuditA\\topics\\topic_1790079569754\\history.json\n\nSequence fixture"
+        },
+        {
+          "role": "assistant",
+          "content": "AuditA/a-one"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-first",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-REFERENCE-EXACT\n\naudit-reference-question",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-side-concurrent",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "sequence-hold-side-audit",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "side-audit stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "audit-model-change",
+          "name": "用户"
+        },
+        {
+          "role": "assistant",
+          "content": "fixture stream complete",
+          "name": "AuditA"
+        },
+        {
+          "role": "user",
+          "content": "> [引用 1]:\n> AUDIT-FAILURE-REFERENCE\n\nsequence-fail",
+          "name": "用户"
+        }
+      ],
+      "model": "gpt-4o-mini",
+      "stream": true,
+      "requestId": "msg_1790079585342_assistant_44ajbw6",
+      "vcpchatExtensions": {
+        "schemaVersion": 1,
+        "messageMetadataMode": "hash_only",
+        "messageTimestampBindings": [
+          {
+            "messageId": "history-AuditA-a-one",
+            "role": "assistant",
+            "timestamp": 1,
+            "timestampIso": "1970-01-01T00:00:00.001Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:727de95694ed9ec954a5eff12f7ccefde80914d393e4c8a375d058827a7ab810",
+            "sentMessageIndex": 1
+          },
+          {
+            "messageId": "msg_1790079569869_user_axeov6t",
+            "role": "user",
+            "timestamp": 1790079569869,
+            "timestampIso": "2026-09-22T12:19:29.869Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:883e93d78f178df7c50639e78848f95b5da1462019a754489fbcbb0a6345f6e7",
+            "sentMessageIndex": 2
+          },
+          {
+            "messageId": "msg_1790079569917_assistant_k5r8ysa",
+            "role": "assistant",
+            "timestamp": 1790079569969,
+            "timestampIso": "2026-09-22T12:19:29.969Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 3
+          },
+          {
+            "messageId": "msg_1790079570493_user_lo9gt5h",
+            "role": "user",
+            "timestamp": 1790079570493,
+            "timestampIso": "2026-09-22T12:19:30.493Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:3d420b28ac55e4029c66dac615578220e65e7238413652b3427a32f076fed071",
+            "sentMessageIndex": 4
+          },
+          {
+            "messageId": "msg_1790079570512_assistant_u0gy9pb",
+            "role": "assistant",
+            "timestamp": 1790079570518,
+            "timestampIso": "2026-09-22T12:19:30.518Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 5
+          },
+          {
+            "messageId": "msg_1790079570921_user_337in00",
+            "role": "user",
+            "timestamp": 1790079570921,
+            "timestampIso": "2026-09-22T12:19:30.921Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:5a4b803885c6f899cc4d16e83388899c8091f0369ac70b65ef0d7e370ddf11cd",
+            "sentMessageIndex": 6
+          },
+          {
+            "messageId": "msg_1790079570928_assistant_cszounq",
+            "role": "assistant",
+            "timestamp": 1790079570936,
+            "timestampIso": "2026-09-22T12:19:30.936Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 7
+          },
+          {
+            "messageId": "msg_1790079572306_user_8orhanw",
+            "role": "user",
+            "timestamp": 1790079572306,
+            "timestampIso": "2026-09-22T12:19:32.306Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:ab28db157e5da750792020f16bea40547c89d818011c081375c384c913ff3bcf",
+            "sentMessageIndex": 8
+          },
+          {
+            "messageId": "msg_1790079572319_assistant_acal7t8",
+            "role": "assistant",
+            "timestamp": 1790079584334,
+            "timestampIso": "2026-09-22T12:19:44.334Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:82e9892977fae4933fb422102513cd6ad7e92c6538ecf456b10aeba888ae2cce",
+            "sentMessageIndex": 9
+          },
+          {
+            "messageId": "msg_1790079584948_user_q0jst52",
+            "role": "user",
+            "timestamp": 1790079584948,
+            "timestampIso": "2026-09-22T12:19:44.948Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:371fa0e5094129ae3b2eaab932d57298a646bda69119d64d0a7b9960f2516dd9",
+            "sentMessageIndex": 10
+          },
+          {
+            "messageId": "msg_1790079584953_assistant_d34ruvk",
+            "role": "assistant",
+            "timestamp": 1790079584957,
+            "timestampIso": "2026-09-22T12:19:44.957Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:a14e37b6e2dd299c1e7e433975e01768dee484ab8f034ba0e8f51b7f7d31ff25",
+            "sentMessageIndex": 11
+          },
+          {
+            "messageId": "msg_1790079585336_user_jz22uiw",
+            "role": "user",
+            "timestamp": 1790079585336,
+            "timestampIso": "2026-09-22T12:19:45.336Z",
+            "source": "client_history",
+            "sentMessageHash": "sha256:e506c8ee1237dc82e5e66e874d70f06e685ad77d019a7e7e4d33fa2efdad4755",
+            "sentMessageIndex": 12
+          }
+        ],
+        "requestContext": {
+          "requestId": "msg_1790079585342_assistant_44ajbw6",
+          "agentId": "AuditA",
+          "agentName": "AuditA",
+          "topicId": "topic_1790079569754",
+          "ownerType": "agent",
+          "isGroupMessage": false
+        }
+      },
+      "_fixtureUrl": "/v1/chat/completions"
+    }
+  ]
+}

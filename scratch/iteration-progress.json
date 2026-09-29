@@ -1,0 +1,247 @@
+{
+  "plan": "/Users/asahi/.zcode/workspace/default/echo-player-bar-plan.md",
+  "mode": "plan-complete",
+  "currentPhase": 1,
+  "log": [
+    {
+      "time": "2026-09-13 00:30",
+      "note": "接管全部工作；摸底完成：舞台栏UI好但控件未接真实API、frame三处字段不匹配；主界面三栏大布局保持不动，逐格ECHO化"
+    },
+    {
+      "time": "2026-09-13 00:55",
+      "note": "1.1-1.4完成：frame字段适配(playbackTime/isPlaying/albumArt→file://)；transport直连真实API；死按钮处置(mic2→StageLab、视角→cycleStageMode、封面→退出舞台、桌面歌词隐藏、film→边缘动效开关)；Hi-Res徽标动态化。测试5/5通过(已扩充断言)"
+    },
+    {
+      "time": "2026-09-13 01:05",
+      "note": "1.5+1.6完成：暗色token选择器修复(默认暗色+body.light-theme亮色)；idle沉浸淡出3.5s+常驻锁定setPinned接口+reduced-motion降级。测试5/5通过。下一轮：1.7设置齿轮浮窗"
+    },
+    {
+      "time": "2026-09-13 01:20",
+      "note": "1.7完成：resizeCanvas实现为ECHO跑马灯溢出测量(PlayerMarqueeText算法+ResizeObserver双观察，曲目切换重测)；音量popover双向同步补外部回显测试。测试5/5通过。下一轮：1.8设置齿轮浮窗(新增项)"
+    },
+    {
+      "time": "2026-09-13 01:35",
+      "note": "1.8完成：设置齿轮+ECHO风格浮窗（主题暗/亮经app.applyTheme、9种强调色data-accent实时生效、波形三模式wave/spectrum/linear、锁定常驻toggle复用setPinned），localStorage持久化+重挂载恢复；新增第6个保真度测试。测试6/6通过。阶段1全部完成，下一轮进入2.1 echo-tokens.css"
+    },
+    {
+      "time": "2026-09-13 01:50",
+      "note": "2.1完成：新建Musicmodules/echo-tokens.css（暗/亮双形态表面/文本/交互表面/阴影/玻璃/字体/圆角/动效Token + body[data-echo-accent] 9色强调色板含双主题变体 + reduced-motion降级），纯新增--echo-前缀变量不碰既有选择器；music.html引入。测试6/6通过。下一轮：2.2 .music-player格ECHO化"
+    },
+    {
+      "time": "2026-09-13 02:10",
+      "note": "2.2完成：新建echo-main-polish.js/.css（仅作用.music-player格内部）：96柱确定性波形注入.progress-bar(渐进增强,失败回退原样)+细针光标(RAF读progress宽度)、曲名/艺人跑马灯(ECHO测量算法+ResizeObserver)、Hi-Res徽标行(MutationObserver随曲目刷新)、封面sheen光泽、控制按钮32px icon-button+48px实心play-btn微交互、音量滑杆/时间码ECHO风。music.html已引入。测试6/6通过。下一轮：2.3左栏ECHO化"
+    },
+    {
+      "time": "2026-09-13 02:25",
+      "note": "2.3完成：#left-sidebar格ECHO化（纯CSS追加到echo-main-polish.css）：分类标签胶囊chip(active实心accent+发光)、搜索框field-bg+focus-ring、本地/云端导入次级chip(hover抬升)、播放列表行track-row风(hover抬升+阴影,active accent左条+加粗)、新建歌单虚线卡、spinner accent化、ECHO滚动条(thumb混accent+留白边框)。测试6/6通过。下一轮：2.4 settings-container格"
+    },
+    {
+      "time": "2026-09-13 02:40",
+      "note": "2.4完成：.settings-container格ECHO化（纯CSS）：设置卡片微拟物surface+hover抬升、下拉框appearance-none自绘箭头+focus-ring+option深色、开关改ECHO 42×24胶囊(accent激活+弹性knob)、标题排版、ECHO滚动条。测试6/6通过。下一轮：2.5右栏两格"
+    },
+    {
+      "time": "2026-09-13 02:55",
+      "note": "2.5完成：右栏两格ECHO化（纯CSS）：VOCAL头部状态徽章(ECHO chip+发光圆点)、歌词行ECHO风(hover抬升,active accent色+克制text-shadow发光,singing词accent强调,romanization/translation降层级灰)、两格ECHO滚动条。测试6/6通过。下一轮：2.6全局打磨"
+    },
+    {
+      "time": "2026-09-13 03:10",
+      "note": "2.6完成：全局打磨（严格限定.music-player-container作用域）：::selection accent化、:focus-visible光环(键盘可达性)、.glass-panel hairline顶部反光+ECHO描边阴影、统一字体族、容器级ECHO滚动条兜底、prefers-reduced-motion全动效1ms降级。阶段2全部完成！测试6/6通过。下一轮：3.1浏览器实测验收"
+    },
+    {
+      "time": "2026-09-13 03:35",
+      "note": "3.1完成：浏览器实测走查（本地HTTP :8931 + 内置浏览器）。主界面暗色✓(96柱波形/胶囊chip/ECHO开关/48px播放键)、亮色+berry强调色全局切换✓、舞台播放栏渲染✓(玻璃岛/跑马灯滚动/Hi-Res徽标/细针26%/右侧齿轮)。发现并修复：设置区H4标题与16个滑块残留VCPChat主题色→统一accent token；麦克风按钮默认active去除。注：浏览器无Electron API,window.app不存在属预期；idle淡出3.5s实测生效。测试6/6通过。下一轮：3.2扩充测试+3.3兼容回归"
+    },
+    {
+      "time": "2026-09-13 03:50",
+      "note": "3.2+3.3完成，计划全部收官：新增第7个生命周期回归测试（20轮挂载/销毁，断言60个document监听器全部移除、容器清空、单根挂载）；git diff核查舞台歌词演出模式零触碰（music-stage.css仅2行新增、modes/与music-lyrics.js未动）。测试7/7通过。遗留提示：浏览器无法验证Electron内真实音频联动（seek/音量/播放引擎），建议在VCPChat真机里做一次播放实测。后续巡检轮若无新任务仅简短确认，不重复改动。"
+    },
+    {
+      "time": "2026-09-13 03:55",
+      "note": "确认轮：计划已完成无未完成项。验证7/7测试通过、本地服务:8931存活、文件状态11项符合预期、页面新鲜加载冒烟健康（96柱波形/徽标行/2处跑马灯/5玻璃面板/舞台态干净）。无代码改动。"
+    },
+    {
+      "time": "2026-09-13 04:05",
+      "note": "打磨轮：自定义标题栏ECHO化（纯CSS追加echo-main-polish.css）：标题Outfit 760字重+字距、窗口控制键圆形hover+accent反馈、舞台入口orbit按钮accent色+hover微光、关闭键hover红色警示。窗口键形状语义与拖动区行为不变。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 04:15",
+      "note": "渲染复核轮：重载页面验证近期盲加CSS——标题栏Outfit字体✓、舞台入口按钮accent色✓、全部range滑块accent-color=#2f6da8✓（此前发红问题确认修复）。EQ竖向滑块半透明拇指为#eq-section id级特异性刻意设计（默认折叠），保留原样。无代码改动，测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 04:25",
+      "note": "主题色残留收编轮：echo-tokens.css为9预设+默认蓝补--echo-accent-rgb三元组；echo-main-polish.css在.music-player-container作用域把--music-highlight/--music-highlight-rgb重映射到ECHO accent（一次性收编active行/歌词逐字渐变/发光等全部红色残留），标题栏orbit激活态同步accent。浏览器实测：变量已映射#2f6da8，合成active行命中echo-row-bg-active。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 04:35",
+      "note": "分类视图打磨轮：#left-sidebar .category-item ECHO化（纯CSS）：hover抬升+行阴影、active改accent左条+row-bg-active（替换硬编码紫rgba(118,106,226,.15)）、封面9px圆角+hairline内描边（头像圆形）、名称/计数排版token化、操作按钮圆形hover。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 04:50",
+      "note": "播放态彩排+跑马灯双bug修复轮：①内层span max-width:100%钳制scrollWidth导致溢出测量恒0——改为恒max-width:none（容器overflow:hidden裁剪），并消除maxWidth切换引发的ResizeObserver循环卡死风险；②textContent赋值会摧毁内层span——MutationObserver回调中自动重新包装。浏览器端到端验证：textContent更新曲名后data-overflow=true、echo-main-marquee动画启动(293px/21.3s)。播放态彩排截图确认active行/波形37%点亮+细针/暂停图标全部正确。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 05:05",
+      "note": "频谱采样升级轮：echo-player-bar.js renderSpectrumBars 从线性取样（~1024 bins只取前96个≈2kHz低频）改为对数映射全频段（指数1.6）+3点窗口平滑。合成真实衰减频谱实测：柱高74%→26%→16%→12%自然分布。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 05:15",
+      "note": "交付文档轮：新增Musicmodules/ECHO_POLISH_NOTES.md（文件清单/真实API接线/localStorage键/测试与视觉验收方式/已知边界）。测试7/7通过，无代码改动。"
+    },
+    {
+      "time": "2026-09-13 05:25",
+      "note": "CSS静态自审计轮：echo-tokens/echo-main-polish/echo-player-bar三文件括号配对全部为0差；var()引用核查——报告的'未定义'项逐个确认为JS运行时注入变量（波形柱高/跑马灯距离时长/色块/音量进度），均有CSS fallback或JS写入保证，无断裂风险。无代码改动，测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 05:35",
+      "note": "亮色×sea青×播放态组合彩排：全部元素验收通过——胶囊chip/active行accent左条/波形62%点亮+细针/teal播放键/开关滑块/歌词active行accent高亮+逐字状态，且截图中标题跑马灯动画被实拍捕捉（中间帧）。亮色对比度无问题。无代码改动，测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 05:45",
+      "note": "终审轮：逐行审查前一线程在music-stage-host.js(17行)与music-stage.css(2行)的全部diff——host改动严格限定为echo栏挂载/每帧驱动/enter实例化+resizeCanvas/exit与destroy双路径清理；CSS仅隐藏旧chrome与id3。无越界改动，无需修正。测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 05:55",
+      "note": "收纳态检查轮：body.sidebar-collapsed下#left-sidebar为width:0+overflow:hidden完全隐藏（内部元素不可见），ECHO化样式在收纳态无外溢风险。无代码改动，测试7/7通过。至此全部UI状态（暗/亮×9色×空闲/播放/舞台/收纳）验证完毕。"
+    },
+    {
+      "time": "2026-09-13 06:05",
+      "note": "性能微基准轮：主界面波形同步RAF循环实测每帧3µs（16.7ms帧预算的0.02%），性能损耗完全无感知。无代码改动，测试7/7通过。"
+    },
+    {
+      "time": "2026-09-13 06:15",
+      "note": "待机确认轮：测试7/7通过，文件状态12项（新增交付文档ECHO_POLISH_NOTES.md后+1），服务存活。无改动。"
+    },
+    {
+      "time": "2026-09-13 06:25",
+      "note": "4.2完成（阶段4启动）：新建Musicmodules/echo-ui/（echo-ui-shell.css+echo-ui.js）——Token桥（#echo-ui-root把ECHO --theme-*映射到我方--echo-*，主题/强调色自动联动）、app-shell网格(44/1fr/112×220/1fr)、侧栏nav(data-active左竖条+accent)、四页面路由hidden切换、body.echo-ui-active overlay模式(与舞台互斥,先退舞台)、标题栏JS注入入口按钮、播放栏宿主(EchoPlayerBar自动挂载)。浏览器冒烟：进出场/路由/主界面隐藏/播放栏停靠全部✓；修复旧标题栏文字透叠(overlay top:44px)与#player-background边缘透光。测试7/7通过。下一轮：4.3播放栏联动细节+4.4曲库页"
+    },
+    {
+      "time": "2026-09-13 06:40",
+      "note": "4.3+4.4完成：①播放栏帧驱动——echo-ui.js新增RAF循环，从app.lastKnownCurrentTime/lastKnownDuration/isPlaying/playlist[currentTrackIndex]构建frame喂EchoPlayerBar，enter启动/exit停止；②曲库页——原样移植songs.css:784-1100的.track-row全套CSS(56px/1fr/54px/max-content网格、hover上浮、data-playing圆点+正在播放徽章+accent边框、row-action 34px hover归位)，硬编码浅色值桥接为--theme-*；渲染app.playlist(封面file://、stripAudioExtension标题、时长tabular)、搜索框实时过滤、点击loadTrack(i,true)、MutationObserver借主界面#playlist感知曲库/播放态变化自动重渲染。浏览器实测5首合成曲库+播放态✓（右侧'重影'确认为截图合成器坏帧，DOM单root网格正确）。测试7/7通过。下一轮：4.5首页hero"
+    },
+    {
+      "time": "2026-09-13 06:55",
+      "note": "4.5完成：首页hero——原样移植home.css变量集(--home-*全套基于--theme-*)+hero(42px网格线+mask淡出+accent径向光,clamp34-44px/760大标题)+now-card(NOW PLAYING/820字重曲名/艺人专辑/116px封面)+信号条48柱对数取样接currentVisualizerData(帧驱动每3帧更新)+播放暂停/打开曲库按钮接真实API。浏览器实测：合成playlist+isPlaying下全部正确(按钮显示暂停、信号条自然衰减形)。右侧重影确认为截图器fade-in期坏帧,DOM单实例。测试7/7通过。下一轮：4.6歌词页"
+    },
+    {
+      "time": "2026-09-13 07:10",
+      "note": "4.6完成：歌词页——原样移植lyrics.css:2523-2760行状态机(.lyrics-scroll mask渐隐/padding留白、.lyrics-line data-past/-focus-distance 1-3渐隐缩放、data-active渐变文字clip:text+发光、720ms spring缓动)；数据源app.currentLyrics(original/time/translation)，空则回落主界面DOM；每5帧同步active行(按lastKnownCurrentTime二分)，点击行seekMusic(time)；封面blur(72px)背景+曲目头。修掉脚手架残留。浏览器实测：96s命中正确行、渐变发光居中、焦点渐隐全部✓。测试7/7通过。下一轮：4.7设置页"
+    },
+    {
+      "time": "2026-09-13 07:25",
+      "note": "4.7完成：设置页外观区——原样移植app.css:4221-4290胶囊chips+theme-presets.css:5728-5895预设卡+4810 toggle-btn；主题模式chips经app.applyTheme(全站同步)、9色强调色预设卡(preview渐变+名称描述+3色板,驱动body[data-echo-accent]全站即时生效)、播放栏常驻toggle复用localStorage键+setPinned。浏览器交互实测：点Berry→accent=#7657b8✓、亮色chip→light-theme✓、toggle→pinned持久化✓。测试7/7通过。下一轮：4.8总验收"
+    },
+    {
+      "time": "2026-09-13 07:40",
+      "note": "4.8完成，阶段4收官：新增第8项测试（EchoUI壳生命周期：单次挂载、舞台互斥enter先退舞台、四页面路由、15轮进出循环root不重复、exit停止帧驱动）8/8通过；浏览器总走查：enter/四页面切换/exit全部✓，主界面opacity与pointerEvents完全恢复✓。阶段4交付：Musicmodules/echo-ui/(shell.css+js)——Token桥/app外壳/侧栏nav/曲库(songs.css:784-1100原版)/首页(home变量+hero网格线+now-card+48柱信号条)/歌词(lyrics行状态机+渐变发光+seek)/设置(chips+9色预设卡+toggle)，全部#echo-ui-root前缀、与舞台互斥。4.9可选后续留档。"
+    },
+    {
+      "time": "2026-09-13 07:55",
+      "note": "4.9a完成：ECHO全局滚动条移植（scrollbars.css→echo-ui-shell.css，#echo-ui-root作用域）：accent混色999px圆头thumb+3px留白边框+内描边、hover/active变细变色、按钮/角落隐藏、Firefox scrollbar-color双支持、page-surface/track-list/lyrics-scroll定向透明track。括号配对0差。测试8/8通过。剩余4.9b可选（字体/更多预设/专辑详情页）留档。"
+    },
+    {
+      "time": "2026-09-13 08:05",
+      "note": "4.9b完成：字体捆绑——拷贝ECHO资产ZCOOL Happy/Monocraft ttf + 下载Outfit可变字体(Google Fonts OFL,100-900字重)到Musicmodules/echo-ui/fonts/，@font-face注册(font-display:swap)；echo-ui全站主字体从系统栈退化真正落到Outfit（浏览器document.fonts.check确认加载）。测试8/8通过。剩余4.9c可选（更多主题特化/queue/专辑详情页）。"
+    },
+    {
+      "time": "2026-09-13 08:15",
+      "note": "细节修正轮：移除曲库/首页的脚手架通用标题（曲库页曾出现两个'曲库'、首页hero上方多余的'首页'标题），与ECHO原版对齐（songs-header自带h1、home以hero为页头）。浏览器验证：首页脚手架标题0个、曲库仅剩songs-header唯一标题。测试8/8通过。"
+    },
+    {
+      "time": "2026-09-13 08:25",
+      "note": "待机确认轮：测试8/8通过，工作区状态稳定（阶段1-4全部收官+细节修正）。剩余4.9c（ECHO主题特化/queue/专辑详情页）留档待用户指示。无改动。"
+    },
+    {
+      "time": "2026-09-13 08:35",
+      "note": "待机确认轮：测试8/8通过，状态稳定。无改动。4.9c留档待指示。"
+    },
+    {
+      "time": "2026-09-13 08:45",
+      "note": "待机确认轮：测试8/8通过，服务存活。无改动。"
+    },
+    {
+      "time": "2026-09-13 08:55",
+      "note": "待机确认轮：测试8/8通过，状态稳定。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:05",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:15",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:25",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:35",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:45",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 09:55",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:05",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:15",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:25",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:35",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:45",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 10:55",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:05",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:15",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:25",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:35",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:45",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 11:55",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 12:05",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 12:15",
+      "note": "待机确认轮：测试8/8通过。无改动。"
+    }
+  ]
+}

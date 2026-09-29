@@ -931,18 +931,43 @@ mainChatSettingsPresentationOwner.configureStartup({
                     createRenderer: createOwnedInternalChatRenderer,
                     manager: chatManager,
                     uiHelper: uiHelperFunctions,
+                    electronAPI: chatAPI,
+                    saveSideChatMetadata: async (metadata) => {
+                        return await saveSideChatMetadata({
+                            electronAPI: chatAPI,
+                            metadata
+                        });
+                    },
                     resolveAgentConfig: async (agentId) => {
                         const current = currentSelectedItemRef?.get?.();
+                        let rawConfig = null;
                         if (current?.id === agentId && current?.config) {
-                            return current.config;
-                        }
-                        if (typeof chatAPI?.getAgentConfig === 'function') {
+                            rawConfig = current.config;
+                        } else if (typeof chatAPI?.getAgentConfig === 'function') {
                             const res = await chatAPI.getAgentConfig(agentId);
-                            if (res?.success && res.config) return res.config;
+                            if (res?.success && res.config) rawConfig = res.config;
+                        } else {
+                            rawConfig = current?.config || null;
                         }
-                        return current?.config || null;
+                        return rawConfig ? structuredClone(rawConfig) : null;
                     },
                     getCurrentTopic: () => currentTopicIdRef?.get?.() || null,
+                    getCurrentItem: () => currentSelectedItemRef?.get?.() || null,
+                    navigateToParent: async (parent) => {
+                        if (!parent) return;
+                        const currentItem = currentSelectedItemRef?.get?.();
+                        if (parent.itemId && currentItem?.id !== parent.itemId) {
+                            if (typeof chatManager?.selectItem === 'function') {
+                                await chatManager.selectItem(parent.itemId, parent.itemType || 'agent', parent.name);
+                            }
+                        }
+                        const currentTopicId = currentTopicIdRef?.get?.();
+                        if (parent.topicId && currentTopicId !== parent.topicId) {
+                            if (typeof chatManager?.selectTopic === 'function') {
+                                await chatManager.selectTopic(parent.topicId);
+                            }
+                        }
+                    },
                 }
             });
 
@@ -962,6 +987,25 @@ mainChatSettingsPresentationOwner.configureStartup({
                     chat: sideChatOwner,
                 },
                 onOpenSideChat: async (options = {}) => {
+                    // Reopening an existing closed side chat or opening by explicit descriptor
+                    if (options?.child?.topicId || (options?.id && options?.parent)) {
+                        const reopenDesc = {
+                            ...options,
+                            open: true,
+                            status: 'ready'
+                        };
+                        saveSideChatMetadata({
+                            electronAPI: chatAPI,
+                            metadata: reopenDesc
+                        }).catch(err => console.warn('[SideChat] Failed to persist reopened metadata:', err));
+                        const existingHandle = await sidePaneController.openChat(reopenDesc);
+                        if (existingHandle) {
+                            sidePaneController.setVisible(true);
+                            existingHandle.focus?.();
+                            return existingHandle;
+                        }
+                    }
+
                     const currentItem = currentSelectedItemRef.get();
                     const currentTopicId = currentTopicIdRef.get();
                     if (!currentItem || currentItem.type !== 'agent') {
@@ -997,13 +1041,24 @@ mainChatSettingsPresentationOwner.configureStartup({
                         return null;
                     }
 
-                    const snapshotRes = await createParentSnapshot({
-                        electronAPI: chatAPI,
-                        agentId: currentItem.id,
-                        parentTopicId: currentTopicId,
-                        childTopicId: createResult.topicId,
-                        fallbackHistory: mainHistoryRef?.get?.() || []
-                    });
+                    let snapshotRes = { ok: true, snapshotId: null, messages: [] };
+                    const isReferencesOnly = options?.contextMode === 'references-only';
+                    if (!isReferencesOnly) {
+                        snapshotRes = await createParentSnapshot({
+                            electronAPI: chatAPI,
+                            agentId: currentItem.id,
+                            parentTopicId: currentTopicId,
+                            childTopicId: createResult.topicId,
+                            fallbackHistory: mainHistoryRef?.get?.() || []
+                        });
+                        if (!snapshotRes || !snapshotRes.ok) {
+                            if (typeof chatAPI?.deleteTopic === 'function') {
+                                try { await chatAPI.deleteTopic(currentItem.id, createResult.topicId); } catch {}
+                            }
+                            uiHelperFunctions?.showToastNotification?.(`获取父历史快照失败：${snapshotRes?.message || snapshotRes?.error || '快照创建异常'}`, 'error');
+                            return null;
+                        }
+                    }
 
                     const descriptor = createSideChatDescriptor({
                         parent: {
@@ -1015,16 +1070,26 @@ mainChatSettingsPresentationOwner.configureStartup({
                         },
                         childTopicId: createResult.topicId,
                         title: topicTitle,
-                        contextMode: options?.contextMode || (snapshotRes.messages.length > 0 ? 'parent-snapshot' : 'references-only'),
+                        contextMode: isReferencesOnly ? 'references-only' : ((snapshotRes.messages && snapshotRes.messages.length > 0) ? 'parent-snapshot' : 'references-only'),
                         snapshotId: snapshotRes.snapshotId,
-                        parentSnapshot: snapshotRes.messages
+                        parentSnapshot: snapshotRes.messages || [],
+                        model: currentItem.config?.model || 'gpt-4o',
+                        open: true,
+                        status: 'ready'
                     });
 
-                    // Persist metadata to disk asynchronously
-                    saveSideChatMetadata({
+                    // Persist metadata to disk and verify transaction result before mounting
+                    const saveMetaRes = await saveSideChatMetadata({
                         electronAPI: chatAPI,
                         metadata: descriptor
-                    }).catch(err => console.warn('[SideChat] Failed to persist metadata:', err));
+                    });
+                    if (!saveMetaRes || !saveMetaRes.ok) {
+                        if (typeof chatAPI?.deleteTopic === 'function') {
+                            try { await chatAPI.deleteTopic(currentItem.id, createResult.topicId); } catch {}
+                        }
+                        uiHelperFunctions?.showToastNotification?.(`保存侧聊元数据失败：${saveMetaRes?.message || saveMetaRes?.error || '元数据持久化异常'}`, 'error');
+                        return null;
+                    }
 
                     const handle = await sidePaneController.openChat(descriptor);
                     if (options?.reference && handle?.addReference) {
@@ -1033,9 +1098,20 @@ mainChatSettingsPresentationOwner.configureStartup({
                     return handle;
                 },
                 onTabClosed: async (descriptor) => {
-                    // Tab close only disposes the in-memory view surface.
-                    // Persistent session metadata and snapshots are retained on disk
-                    // for subsequent restoration, and only deleted upon explicit topic deletion.
+                    if (!descriptor) return;
+                    // ZCode parity (useAppPanels.ts:1357):
+                    // Desktop 必须由 main 先删除 logical tab/recovery snapshot；bridge 缺失时不能只删 UI 壳，
+                    // 否则重启后已关闭 tab 会复活。
+                    // Ephemeral secondary session: delete recovery snapshot from disk authority.
+                    const agentId = descriptor.child?.itemId || descriptor.parent?.itemId;
+                    const childTopicId = descriptor.child?.topicId;
+                    if (agentId && childTopicId) {
+                        deleteSideChatMetadata({
+                            electronAPI: chatAPI,
+                            agentId,
+                            childTopicId
+                        }).catch(err => console.warn('[SideChat] Failed to delete closed ephemeral tab metadata:', err));
+                    }
                 },
                 onRestoreSessions: async (agentId, parentTopicId) => {
                     const listRes = await listSideChatsForParent({
@@ -1043,16 +1119,36 @@ mainChatSettingsPresentationOwner.configureStartup({
                         agentId,
                         parentTopicId
                     });
+                    const currentParent = sidePaneController.getSnapshot().parent;
+                    if (currentParent && (currentParent.itemId !== agentId || (parentTopicId && currentParent.topicId !== parentTopicId))) {
+                        return []; // Abort stale restoration
+                    }
                     if (listRes.ok && Array.isArray(listRes.items)) {
                         for (const item of listRes.items) {
                             try {
+                                const parentNow = sidePaneController.getSnapshot().parent;
+                                if (parentNow && (parentNow.itemId !== agentId || (parentTopicId && parentNow.topicId !== parentTopicId))) {
+                                    break; // Parent switched mid-iteration
+                                }
+                                if (item.open === false || item.status === 'closed') {
+                                    continue;
+                                }
+                                const currentTabs = sidePaneController.getSnapshot().tabs;
+                                const isAlreadyOpen = currentTabs.some(t => t.descriptor?.child?.topicId === item.child?.topicId);
+                                if (isAlreadyOpen) continue;
+
                                 const desc = createSideChatDescriptor({
                                     parent: item.parent,
                                     childTopicId: item.child.topicId,
                                     title: item.title,
                                     contextMode: item.contextMode,
                                     snapshotId: item.snapshotId,
-                                    parentSnapshot: item.parentSnapshot || []
+                                    parentSnapshot: item.parentSnapshot || [],
+                                    model: item.model || item.descriptor?.model || null,
+                                    open: true,
+                                    status: 'ready',
+                                    draft: item.draft || '',
+                                    references: Array.isArray(item.references) ? item.references : []
                                 });
                                 await sidePaneController.openChat(desc);
                             } catch (e) {
@@ -1068,9 +1164,41 @@ mainChatSettingsPresentationOwner.configureStartup({
             window.vcpSidePaneController = sidePaneController;
             ownedRendererSubscriptions.add(sidePaneController);
 
+            let parentSyncGeneration = 0;
+            const syncSidePaneParent = async ({ item, topicId }) => {
+                const currentGen = ++parentSyncGeneration;
+                if (item && item.type === 'agent') {
+                    sidePaneController.setParent({
+                        itemType: 'agent',
+                        itemId: item.id,
+                        topicId: topicId || ''
+                    });
+                    if (topicId) {
+                        await sidePaneController.restoreSessions(item.id, topicId);
+                        if (currentGen !== parentSyncGeneration) return;
+                    }
+                } else {
+                    sidePaneController.setParent(null);
+                }
+            };
+
+            const unbindSelection = chatManager.onSelectionChange?.(syncSidePaneParent);
+            if (unbindSelection) ownedRendererSubscriptions.add({ dispose: unbindSelection });
+
+            // Initial sync if item already selected
+            const curItem = currentSelectedItemRef?.get?.();
+            const curTopic = currentTopicIdRef?.get?.();
+            if (curItem?.id) {
+                syncSidePaneParent({ item: curItem, topicId: curTopic });
+            }
+
             window.openSideChatWithSelection = async (contextParams = null) => {
                 let reference = null;
                 if (contextParams?.selectedText) {
+                    if (contextParams.selectedText.length > 8000) {
+                        uiHelperFunctions?.showToastNotification?.('选区文本超过 8000 字符上限，无法引用', 'warning');
+                        return;
+                    }
                     reference = {
                         id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                         text: contextParams.selectedText,
@@ -1152,7 +1280,15 @@ mainChatSettingsPresentationOwner.configureStartup({
                     const selectedText = sel ? sel.toString().trim() : '';
                     floatingBtn.style.display = 'none';
                     if (selectedText) {
-                        await window.openSideChatWithSelection({ selectedText });
+                        if (selectedText.length > 8000) {
+                            uiHelperFunctions?.showToastNotification?.('选区文本超过 8000 字符上限，无法引用', 'warning');
+                            return;
+                        }
+                        const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+                        const commonAncestor = range?.commonAncestorContainer;
+                        const messageItem = (commonAncestor?.nodeType === 1 ? commonAncestor : commonAncestor?.parentElement)?.closest?.('.message-item');
+                        const sourceMessageId = messageItem?.getAttribute?.('data-message-id') || messageItem?.id || null;
+                        await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });
                     }
                 });
             }

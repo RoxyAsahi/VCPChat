@@ -73,6 +73,16 @@ export const chatManager = (() => {
     let canvasClosedDisposer = null;
     const forwardTimers = new Set();
     const outgoingPersistenceQueues = new Map();
+    const selectionListeners = new Set();
+
+    function notifySelectionCommitted() {
+        const item = currentSelectedItemRef?.get?.();
+        const topicId = currentTopicIdRef?.get?.();
+        selectionListeners.forEach(listener => {
+            try { listener({ item, topicId }); }
+            catch (e) { console.error('[ChatManager] selection listener failed:', e); }
+        });
+    }
     const pendingSendContexts = new Set();
     let lastOpenSaveQueue = Promise.resolve();
     let initialized = false;
@@ -578,6 +588,7 @@ export const chatManager = (() => {
         currentChatHistoryRef.set([]);
         chatContext?.setHistory([]);
         notifySendStateChanged();
+        notifySelectionCommitted();
 
         document.querySelectorAll('.topic-list .topic-item.active-topic-glowing').forEach(item => {
             item.classList.remove('active-topic-glowing');
@@ -701,6 +712,7 @@ export const chatManager = (() => {
         if (!isSelectionCurrent()) return;
         await _saveLastOpenState(); // Commit before startup/reload can observe the selection.
         finishSelection();
+        notifySelectionCommitted();
     }
 
     /**
@@ -807,6 +819,7 @@ export const chatManager = (() => {
             );
             if (!isTopicSelectionCurrent()) return;
             await _saveLastOpenState();
+            notifySelectionCommitted();
         } catch (error) {
             if (!isTopicSelectionCurrent()) return;
             console.error('[ChatManager] Failed to select topic:', error);
@@ -1704,7 +1717,10 @@ export const chatManager = (() => {
                         async cancel(reason) {
                             try { await interruptCapability?.interrupt?.(thinkingMessage.id); }
                             catch (error) { console.warn('[ChatManager] Surface interrupt request failed; cancelling locally:', error); }
-                            return releaseStreamConsumerRoute?.cancel?.(reason || 'surface-operation-cancelled');
+                            const res = releaseStreamConsumerRoute?.cancel?.(reason || 'surface-operation-cancelled');
+                            settleOwnedStreamOperation?.({ event: { type: 'cancelled', reason: reason || 'surface-operation-cancelled' } });
+                            await removeThinkingFromSource();
+                            return res !== false;
                         },
                     }));
 
@@ -1722,6 +1738,18 @@ export const chatManager = (() => {
                     });
                     notifySendState();
                 }
+            } else {
+                request?.onOperation?.(Object.freeze({
+                    messageId: thinkingMessage.id,
+                    done: ownedStreamTerminal,
+                    async cancel(reason) {
+                        try { await interruptCapability?.interrupt?.(thinkingMessage.id); }
+                        catch (error) { console.warn('[ChatManager] Non-streaming interrupt failed; cancelling locally:', error); }
+                        await removeThinkingFromSource();
+                        settleOwnedStreamOperation?.({ event: { type: 'cancelled', reason: reason || 'surface-operation-cancelled' } });
+                        return true;
+                    },
+                }));
             }
 
             const context = orchestrated.context;
@@ -1752,6 +1780,7 @@ export const chatManager = (() => {
 
                 if (response.error) {
                     await removeThinkingFromSource();
+                    settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: response.error } } } });
                     if (isForActiveChat && renderTarget) {
                         renderTarget.renderMessage({ role: 'system', content: `VCP错误: ${response.error}`, timestamp: Date.now() });
                     }
@@ -1791,8 +1820,10 @@ export const chatManager = (() => {
                     } else {
                          console.error(`[ChatManager] Failed to get history for background save:`, historyForSave.error);
                     }
+                    settleOwnedStreamOperation?.({ event: { type: 'completed' } });
                 } else {
                     await removeThinkingFromSource();
+                    settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: 'Unknown response format' } } } });
                     if (isForActiveChat && renderTarget) {
                         renderTarget.renderMessage({ role: 'system', content: 'VCP 返回了未知格式的响应。', timestamp: Date.now() });
                     }
@@ -1801,6 +1832,7 @@ export const chatManager = (() => {
                 if (vcpResponse && vcpResponse.streamError) {
                     console.error("Streaming setup failed in main process:", vcpResponse.errorDetail || vcpResponse.error);
                     await removeThinkingFromSource();
+                    settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: vcpResponse.error } } } });
                     if (isSendContextCurrent() && renderTarget) {
                         renderTarget.renderMessage({ role: 'system', content: `请求流式回复失败: ${vcpResponse.error || '未知错误'}`, timestamp: Date.now() });
                     }
@@ -1808,18 +1840,21 @@ export const chatManager = (() => {
                 } else if (vcpResponse && !vcpResponse.streamingStarted && !vcpResponse.streamError) {
                     console.warn("Expected streaming to start, but main process returned non-streaming or error:", vcpResponse);
                     await removeThinkingFromSource();
+                    settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: 'Expected streaming to start' } } } });
                     if (isSendContextCurrent() && renderTarget) {
                         renderTarget.renderMessage({ role: 'system', content: '请求流式回复失败，收到非流式响应或错误。', timestamp: Date.now() });
                     }
                     if (request?.propagateError) throw new Error('请求流式回复失败，收到非流式响应或错误');
                 }
-                if (request?.awaitTerminal && ownedStreamTerminal) {
-                    const terminal = await ownedStreamTerminal;
-                    return Object.freeze({ messageId: thinkingMessage.id, terminal });
-                }
+            }
+
+            if (request?.awaitTerminal && ownedStreamTerminal) {
+                const terminal = await ownedStreamTerminal;
+                return Object.freeze({ messageId: thinkingMessage.id, terminal });
             }
         } catch (error) {
             console.error('发送消息或处理VCP响应时出错', error);
+            settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error } } } });
             await removeThinkingFromSource();
             if (isSendContextCurrent() && renderTarget) {
                 renderTarget.renderMessage({ role: 'system', content: `错误: ${error.message}`, timestamp: Date.now() });
@@ -2234,6 +2269,7 @@ export const chatManager = (() => {
         canvasClosedDisposer = null;
         for (const timer of forwardTimers) clearTimeout(timer);
         forwardTimers.clear();
+        selectionListeners.clear();
         await Promise.allSettled([
             lastOpenSaveQueue,
             ...outgoingPersistenceQueues.values(),
@@ -2264,5 +2300,12 @@ export const chatManager = (() => {
         addAttachmentsToMessage,
         processFilesData,
         syncHistoryFromFile, // Expose the new function
+        onSelectionChange(callback) {
+            if (typeof callback === 'function') {
+                selectionListeners.add(callback);
+                return () => selectionListeners.delete(callback);
+            }
+            return () => {};
+        },
     };
 })();

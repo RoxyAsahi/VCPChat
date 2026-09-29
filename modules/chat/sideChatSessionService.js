@@ -18,7 +18,12 @@ export function createSideChatDescriptor({
     title = null,
     contextMode = 'references-only',
     snapshotId = null,
-    parentSnapshot = []
+    parentSnapshot = [],
+    model = null,
+    open = true,
+    status = 'ready',
+    draft = '',
+    references = []
 }) {
     if (!parent || !parent.itemId || !parent.topicId) {
         throw new TypeError('SideChatDescriptor requires a valid parent reference with itemId and topicId');
@@ -43,6 +48,8 @@ export function createSideChatDescriptor({
     return Object.freeze({
         schemaVersion: 1,
         id,
+        type: 'selection-side-chat',
+        ephemeral: true,
         parent: Object.freeze({
             itemType: 'agent',
             itemId,
@@ -59,6 +66,11 @@ export function createSideChatDescriptor({
         createdAt: now,
         contextMode: contextMode === 'parent-snapshot' ? 'parent-snapshot' : 'references-only',
         snapshotId: snapshotId || null,
+        model: model ? String(model) : null,
+        open: Boolean(open),
+        status: String(status || (open ? 'ready' : 'closed')),
+        draft: String(draft || ''),
+        references: Array.isArray(references) ? Object.freeze([...references]) : Object.freeze([]),
         parentSnapshot: Array.isArray(parentSnapshot) ? Object.freeze([...parentSnapshot]) : Object.freeze([]),
     });
 }
@@ -131,9 +143,10 @@ export function freezeParentHistory(parentHistory = []) {
         if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking || msg.isPendingStream) continue;
         if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system' && (msg.role !== 'tool' || !msg.tool_call_id)) continue;
         const text = msg.content !== undefined ? msg.content : msg.text;
-        if (text === undefined || text === null || text === '') continue;
+        const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
+        if ((text === undefined || text === null || text === '') && !hasToolCalls) continue;
 
-        const clonedContent = typeof text === 'object' ? JSON.parse(JSON.stringify(text)) : text;
+        const clonedContent = typeof text === 'object' && text !== null ? JSON.parse(JSON.stringify(text)) : (text ?? null);
 
         const entry = {
             id: msg.id || null,

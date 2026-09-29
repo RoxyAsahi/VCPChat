@@ -606,10 +606,31 @@ html body[data-vcp-theme="light"] .side-chat-textarea {
 html .side-chat-input-actions {
     width: 100%;
     display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 0;
+}
+
+html .side-chat-toolbar-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+html .side-chat-toolbar-meta::-webkit-scrollbar {
+    display: none;
+}
+
+html .side-chat-toolbar-row {
+    display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    padding-top: 0;
+    width: 100%;
 }
 
 html .side-chat-toolbar-left {
@@ -1231,15 +1252,15 @@ html body[data-vcp-theme="light"] .side-pane-menu-divider {
 /* --- Side Chat Interactive Model Popover --- */
 html .side-chat-model-popover {
     position: absolute;
-    bottom: 28px;
-    left: 0;
+    bottom: 36px;
+    left: 8px;
     min-width: 150px;
     padding: 4px;
     border-radius: 8px;
     background: var(--panel-bg-dark, #1e1e24);
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
-    z-index: 80;
+    z-index: 100;
     flex-direction: column;
     gap: 2px;
 }
@@ -1248,6 +1269,118 @@ html body[data-vcp-theme="light"] .side-chat-model-popover {
     background: var(--panel-bg-light, #ffffff);
     border-color: rgba(0, 0, 0, 0.12);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Side Chat Reference Dialog Modal --- */
+html .side-chat-ref-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+html .side-chat-ref-modal {
+    width: 100%;
+    max-width: 380px;
+    background: var(--panel-bg-dark, #1e1e24);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+html body[data-vcp-theme="light"] .side-chat-ref-modal {
+    background: var(--panel-bg-light, #ffffff);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+}
+
+html .side-chat-ref-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    font-size: 12px;
+    font-weight: 600;
+}
+
+html .side-chat-ref-modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    color: var(--secondary-text, #94a3b8);
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+html .side-chat-ref-modal-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+html .side-chat-ref-modal-textarea {
+    width: 100%;
+    min-height: 90px;
+    max-height: 200px;
+    resize: vertical;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: rgba(0, 0, 0, 0.2);
+    color: var(--primary-text, #f1f5f9);
+    padding: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    outline: none;
+}
+
+html body[data-vcp-theme="light"] .side-chat-ref-modal-textarea {
+    background: rgba(0, 0, 0, 0.03);
+    color: var(--primary-text, #0f172a);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+html .side-chat-ref-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--secondary-text, #94a3b8);
+}
+
+html .side-chat-ref-modal-actions {
+    display: flex;
+    gap: 6px;
+}
+
+html .side-chat-ref-modal-btn {
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: transparent;
+    color: var(--primary-text, #f1f5f9);
+}
+
+html body[data-vcp-theme="light"] .side-chat-ref-modal-btn {
+    color: var(--primary-text, #0f172a);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+html .side-chat-ref-modal-btn.primary {
+    background: var(--accent-bg, #3b82f6);
+    border-color: var(--accent-bg, #3b82f6);
+    color: #ffffff;
 }
 
 html .side-chat-model-item {
@@ -1313,5 +1446,23 @@ html .floating-selection-side-chat-btn:hover {
     transform: translateY(-1px);
     background: #2563eb;
     box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* --- Responsive Narrow Viewport Adaptation --- */
+@media (max-width: 960px) {
+    html #vcpSidePane.active,
+    html .vcp-side-pane.active {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        max-width: 85vw;
+        box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
+        z-index: 100;
+    }
+
+    html #resizerRight.resizer {
+        display: none;
+    }
 }
 

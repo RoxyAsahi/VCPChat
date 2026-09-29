@@ -21,9 +21,10 @@ function filterStableHistory(history = []) {
         if (msg.transient || msg.isStreaming || msg.pending || msg.isThinking || msg.isPendingStream) continue;
         if (msg.role !== 'user' && msg.role !== 'assistant' && msg.role !== 'system' && (msg.role !== 'tool' || !msg.tool_call_id)) continue;
         const text = msg.content !== undefined ? msg.content : msg.text;
-        if (text === undefined || text === null || text === '') continue;
+        const hasToolCalls = Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0;
+        if ((text === undefined || text === null || text === '') && !hasToolCalls) continue;
 
-        const clonedContent = typeof text === 'object' ? JSON.parse(JSON.stringify(text)) : text;
+        const clonedContent = typeof text === 'object' && text !== null ? JSON.parse(JSON.stringify(text)) : (text ?? null);
 
         const entry = {
             id: msg.id || null,
@@ -130,7 +131,11 @@ function initialize(paths) {
                 contextMode: metadata.contextMode === 'parent-snapshot' ? 'parent-snapshot' : 'references-only',
                 snapshotId: metadata.snapshotId || null,
                 snapshotBoundary,
-                status: metadata.status || 'ready',
+                model: metadata.model || null,
+                open: metadata.open !== undefined ? Boolean(metadata.open) : (metadata.status !== 'closed'),
+                draft: typeof metadata.draft === 'string' ? metadata.draft : '',
+                references: Array.isArray(metadata.references) ? metadata.references : [],
+                status: metadata.status || (metadata.open === false ? 'closed' : 'ready'),
                 createdAt: metadata.createdAt || Date.now(),
                 updatedAt: Date.now()
             };
@@ -250,8 +255,9 @@ function initialize(paths) {
             if (historyMutationQueue && typeof historyMutationQueue.read === 'function') {
                 try {
                     rawHistory = await historyMutationQueue.read({ itemId: agentId, itemType: 'agent', topicId: parentTopicId });
-                } catch {
-                    rawHistory = [];
+                } catch (readErr) {
+                    console.error('[SideChatHandlers] create-snapshot history read error:', readErr);
+                    return { success: false, error: readErr.message || 'HISTORY_READ_FAILED' };
                 }
             } else {
                 const parentHistoryPath = path.join(parentDir, 'history.json');
