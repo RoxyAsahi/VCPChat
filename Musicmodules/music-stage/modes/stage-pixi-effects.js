@@ -523,44 +523,12 @@ void main() {
     // Live onsets are deliberately separate from deterministic lyric cues.
     // Fixed-size spectrum history; no event queue, ticker, timers or unbounded particles.
     const createPerformance = () => {
-        const bins = new Float32Array(48);
-        let lastTime = null, track = null, source = null, playing = false;
-        let baseline = 0.02, energy = 0, hitAt = -Infinity, hitStrength = 0, hits = 0;
+        const onset = R.createAudioOnset();
         const state = { impact: 0, phrasePulse: 0, energy: 0, phrase: -1, time: 0, reset: true };
         return {
             update(frame, tuning, nodes) {
                 const time = Number(frame.playbackTime) || 0;
-                const identity = frame.track?.path || frame.track?.title || '';
-                const dt = lastTime === null ? 0 : time - lastTime;
-                const reset = lastTime === null || identity !== track || source !== frame.lines || dt < -0.025 || dt > 0.5;
-                const resumed = frame.isPlaying && !playing;
-                const spectrum = frame.audio?.spectrum || [];
-                let flux = 0;
-                // Do not feed changing analyser samples into a paused scene.
-                if (reset || resumed || (frame.isPlaying && dt > 0)) {
-                    for (let i = 0; i < bins.length; i++) {
-                        const value = clamp(Number(spectrum[Math.floor(i / bins.length * spectrum.length)]) || 0);
-                        flux += Math.max(0, value - bins[i]);
-                        bins[i] = value;
-                    }
-                    flux /= bins.length;
-                    if (reset || resumed) {
-                        baseline = 0.02;
-                        hitAt = -Infinity;
-                        hitStrength = 0;
-                        energy = clamp(frame.audio?.power || 0);
-                    } else {
-                        const a = 1 - Math.exp(-dt * 3);
-                        energy += (clamp(frame.audio?.power || 0) - energy) * a;
-                        const threshold = Math.max(0.018, baseline * 1.8);
-                        if (flux > threshold && energy > 0.035 && time - hitAt > 0.38) {
-                            hitAt = time;
-                            hitStrength = clamp((flux - threshold) * 10 + 0.35);
-                            hits++;
-                        }
-                        baseline += (flux - baseline) * (1 - Math.exp(-dt * 1.8));
-                    }
-                }
+                const live = onset.update(frame);
                 let phrase = -1, phraseStart = -Infinity;
                 for (const node of nodes) {
                     const d = node.dataset;
@@ -573,20 +541,19 @@ void main() {
                     ? (1 - Math.exp(-age * 35)) * Math.exp(-age * 5) : 0;
                 const strength = motionScale(tuning) * amount(tuning.performanceIntensity, 1.25);
                 state.phrasePulse = pulse(time - phraseStart) * strength;
-                state.impact = clamp(pulse(time - hitAt) * hitStrength * amount(tuning.beatImpact, 1.15) * strength
+                state.impact = clamp(live.impact * amount(tuning.beatImpact, 1.15) * strength
                     + state.phrasePulse * 0.45);
-                state.energy = energy;
+                state.energy = live.energy;
                 state.phrase = phrase;
                 state.time = time;
-                state.reset = reset;
-                lastTime = time;
-                track = identity;
-                source = frame.lines;
-                playing = Boolean(frame.isPlaying);
+                state.reset = live.reset;
                 return state;
             },
-            snapshot() { return { ...state, onsets: hits, historyBins: bins.length }; },
-            reset() { lastTime = null; hitAt = -Infinity; bins.fill(0); }
+            snapshot() {
+                const live = onset.snapshot();
+                return { ...state, onsets: live.onsets, historyBins: live.historyBins };
+            },
+            reset() { onset.reset(); }
         };
     };
 
@@ -631,6 +598,24 @@ void main() {
             bracket.position.set(group.left, group.top);
             textContainer.addChild(bracket);
             group.bracket = bracket;
+            // Two offset print frames and four fine rays, retained behind the type.
+            // No duplicated text textures; a phrase owns only three extra graphics.
+            group.echoes = [0, 1].map(index => {
+                const echo = new PIXI.Graphics().rect(-width / 2, -height / 2, width, height)
+                    .stroke({ color, width: index ? 1 : 2, alpha: 0.5 });
+                echo.position.set((group.left + group.right) / 2, (group.top + group.bottom) / 2);
+                textContainer.addChildAt(echo, 0);
+                return echo;
+            });
+            const rays = new PIXI.Graphics();
+            for (const side of [-1, 1]) {
+                const x = side * (width / 2 + 10);
+                rays.moveTo(x, -height * 0.23).lineTo(x + side * 22, -height * 0.38);
+                rays.moveTo(x, height * 0.23).lineTo(x + side * 22, height * 0.38);
+            }
+            rays.stroke({ color, width: 1.3, alpha: 0.7 });
+            textContainer.addChildAt(rays, 0);
+            group.rays = rays;
         }
         return groups;
     };
@@ -652,7 +637,31 @@ void main() {
             group.rail.alpha = focus * (0.3 + (tuning.performance?.phrasePulse || 0) * 0.35);
             group.rail.visible = tuning.showDecor !== false;
             group.bracket.alpha = focus * 0.7;
-            group.bracket.visible = tuning.performanceMode === 'sonnet' && tuning.guideLines !== false;
+            group.bracket.visible = tuning.showDecor !== false
+                && tuning.performanceMode === 'sonnet' && tuning.guideLines !== false;
+            const flourish = tuning.accentEffects !== false && tuning.showDecor !== false
+                && tuning.quality !== 'energy-saving' && motion > 0;
+            const strength = motion * amount(tuning.accentMotion, 1) * amount(tuning.performanceIntensity, 1.25);
+            const duration = Math.max(0, group.end - group.start);
+            // Short/rapid phrases retain quiet typography; long phrases get a tail response.
+            const age = time - group.start;
+            const tailAge = time - group.end;
+            const pulse = age >= 0 && age < 0.8 ? Math.sin(age / 0.8 * Math.PI) * (1 - age / 0.8) : 0;
+            const tail = duration > 1.5 && tailAge >= 0 && tailAge < 0.65
+                ? Math.sin(tailAge / 0.65 * Math.PI) * 0.45 : 0;
+            const amplitude = Math.min(1, (pulse + tail) * strength);
+            const cx = (group.left + group.right) / 2, cy = (group.top + group.bottom) / 2;
+            group.echoes.forEach((echo, index) => {
+                echo.visible = flourish && duration >= 0.65 && amplitude > 0;
+                const spread = (index + 1) * amplitude;
+                echo.position.set(cx + (tuning.performanceMode === 'tempera' ? spread * 9 : 0), cy - spread * 4);
+                echo.scale.set(1 + spread * 0.07, 1 + spread * 0.15);
+                echo.alpha = amplitude * (index ? 0.2 : 0.35);
+            });
+            group.rays.visible = flourish && duration >= 0.65 && amplitude > 0;
+            group.rays.position.set(cx, cy);
+            group.rays.scale.set(1 + amplitude * 0.14);
+            group.rays.alpha = amplitude * (frame.activeLine?.isChorus ? 0.85 : 0.55);
         }
     };
 
@@ -1122,7 +1131,9 @@ void main() {
         };
     };
 
-    const createRetirement = (PIXI, stage) => {
+    const createRetirement = (PIXI, stage, options = {}) => {
+        const dissolve = options.dissolve === true;
+        let duration = 0.6;
         let layer = null, born = 0, lastFrame = null, lastTuning = null, outgoingLine = null;
         const release = () => {
             if (layer) { layer.removeFromParent(); layer.destroy({ children: true }); layer = null; }
@@ -1134,6 +1145,7 @@ void main() {
                 if (!frame?.isPlaying || !nextLine || !frame.activeLine
                     || nextLine === frame.activeLine || !motionScale(tuning)
                     || tuning.sceneTransitions === false || tuning.quality === 'energy-saving'
+                    || (dissolve && nextLine.renderHints?.lineTransitionMode === 'none')
                     || nextLine.startTime < frame.playbackTime
                     || nextLine.startTime - frame.playbackTime > 0.2) return;
                 layer = new PIXI.Container();
@@ -1153,28 +1165,39 @@ void main() {
                     layer.addChild(copy);
                 }
                 stage.addChildAt(layer, 0);
+                duration = dissolve
+                    ? nextLine.renderHints?.lineTransitionMode === 'fast' ? 0.12
+                        : clamp((nextLine.endTime - nextLine.startTime) * 0.3, 0.12, 0.8)
+                    : 0.6;
                 born = nextLine.startTime;
                 outgoingLine = nextLine;
             },
             update(frame, tuning) {
+                let incoming = 1;
                 if (layer) {
                     const elapsed = frame.playbackTime - born;
                     const changedTrack = lastFrame && (frame.track?.path || frame.track?.title || '')
                         !== (lastFrame.track?.path || lastFrame.track?.title || '');
                     const jumped = lastFrame && (frame.playbackTime - lastFrame.playbackTime > 0.5
                         || frame.playbackTime < lastFrame.playbackTime - 0.025);
-                    if (elapsed < 0 || elapsed >= 0.6 || frame.activeLine !== outgoingLine || changedTrack || jumped
+                    if (elapsed < 0 || elapsed >= duration || frame.activeLine !== outgoingLine || changedTrack || jumped
+                        || (dissolve && (frame.lines !== lastFrame?.lines
+                            || tuning.showBackground !== lastTuning?.showBackground
+                            || tuning.guideLines !== lastTuning?.guideLines
+                            || tuning.lyricLayout !== lastTuning?.lyricLayout))
                         || !motionScale(tuning) || tuning.sceneTransitions === false
                         || tuning.quality === 'energy-saving') release();
                     else {
-                        const p = ease(elapsed / 0.6);
-                        layer.alpha = (1 - p) * 0.7;
-                        // Pose remains absolute, not integrated.
-                        layer.skew.x = p * 0.045 * motionScale(tuning);
+                        const p = ease(elapsed / duration);
+                        layer.alpha = (1 - p) * (dissolve ? 1 : 0.7);
+                        if (dissolve) incoming = p;
+                        // Sonnet dissolves without the print-skew used by Tempera.
+                        layer.skew.x = dissolve ? 0 : p * 0.045 * motionScale(tuning);
                     }
                 }
                 lastFrame = frame;
                 lastTuning = tuning;
+                return incoming;
             },
             snapshot() { return { outgoingLayers: layer ? 1 : 0 }; },
             destroy() { release(); lastFrame = lastTuning = outgoingLine = null; }

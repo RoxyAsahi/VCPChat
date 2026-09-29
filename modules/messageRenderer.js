@@ -17,6 +17,7 @@ import {
     replaceToolRequestBlocks
 } from './renderer/toolRequestScanner.js';
 import { replaceMarkdownCodeDomains } from './renderer/markdownCodeDomainScanner.js';
+import { parseJevToolUse } from './renderer/jevToolUse.js';
 
 import { createContentProcessor } from './renderer/contentProcessor.js';
 import { createMessageContextMenu } from './renderer/messageContextMenu.js';
@@ -1101,6 +1102,7 @@ function transformSpecialBlocks(text, codeBlockMap, thoughtChainMap = null) {
     processed = replaceToolRequestBlocks(processed, (match, content) => {
         const detectedToolName = extractMarkedField(content, /tool_name:\s*/i);
         const detectedCommand = extractMarkedField(content, /command:\s*/i);
+        const detectedJev = parseJevToolUse(extractMarkedField(content, /JEV:\s*/i));
         const normalizedToolName = (detectedToolName || '').trim().toLowerCase();
         const normalizedCommand = (detectedCommand || '').trim().toLowerCase();
 
@@ -1140,6 +1142,23 @@ function transformSpecialBlocks(text, codeBlockMap, thoughtChainMap = null) {
                 target: dailyNoteTarget || '',
                 replace: dailyNoteReplace || ''
             });
+        } else if (detectedJev) {
+            // JEV 是自然语言工具入口的兼容展示分支，不替代既有 tool_name/XML 协议。
+            // 显式单引号工具名优先；未显式指定时才展示能力名称。
+            const escapedFullContent = escapeHtml(restoreBlocks(content))
+                .replace(/\r\n?|\n/g, '&#10;');
+            const jevLabel = detectedJev.displayName ? 'JEVToolUse:' : 'JEVToolUse';
+            const jevNameHtml = detectedJev.displayName
+                ? ` <span class="vcp-tool-name-highlight">${escapeHtml(detectedJev.displayName)}</span>`
+                : '';
+            return `\n\n<div class="vcp-tool-use-bubble vcp-jev-tool-use-bubble" data-vcp-block-type="jev-tool-use" data-vcp-preserve-children="true">` +
+                `<div class="vcp-tool-summary">` +
+                `<span class="vcp-tool-label">${jevLabel}</span>` +
+                jevNameHtml +
+                `</div>` +
+                `<div class="vcp-tool-details"></div>` +
+                `<template class="vcp-tool-details-template"><pre>${escapedFullContent}</pre></template>` +
+                `</div>\n\n`;
         } else {
             // --- It's a regular tool call, render it normally ---
             const xmlToolNameMatch = content.match(/<tool_name>([\s\S]*?)<\/tool_name>/i);
@@ -2115,7 +2134,7 @@ function prepareFinalTextForRender(messageId, rawText, role = 'assistant', histo
  * @param {string} fullMatch - 完整的工具结果文本（含 [[VCP调用结果信息汇总: ... VCP调用结果结束]] 标记）
  * @returns {string} 渲染后的 HTML
  */
-function renderToolResultBlock(fullMatch) {
+function renderToolResultBlock(fullMatch, ordinal = -1) {
     const startMarker = '[[VCP调用结果信息汇总:';
     const endMarker = 'VCP调用结果结束]]';
     const markdownFieldKeys = new Set(['返回内容', '内容', 'Result', '返回结果', 'output']);
@@ -2166,12 +2185,15 @@ function renderToolResultBlock(fullMatch) {
         else details.push({ key: currentKey, value: val });
     }
 
-    let html = `<div class="vcp-tool-result-bubble collapsible" data-vcp-block-type="tool-result" data-vcp-preserve-children="true">`;
+    // 序号 + 原文哈希用于在消息原始内容中精确定位该工具结果块（删除功能使用）。
+    const toolResultHash = hashStringFNV1a(fullMatch);
+    let html = `<div class="vcp-tool-result-bubble collapsible" data-vcp-block-type="tool-result" data-vcp-preserve-children="true" data-vcp-tool-result-index="${Number.isInteger(ordinal) ? ordinal : -1}" data-vcp-tool-result-hash="${toolResultHash}">`;
     html += `<div class="vcp-tool-result-header">`;
     html += `<span class="vcp-tool-result-label">VCP-ToolResult</span>`;
     html += `<span class="vcp-tool-result-name">${escapeHtml(toolName)}</span>`;
     html += `<span class="vcp-tool-result-status">${escapeHtml(status)}</span>`;
     html += `<span class="vcp-result-toggle-icon"></span>`;
+    html += `<button type="button" class="vcp-tool-result-delete-btn" title="从上下文中删除此工具结果" aria-label="从上下文中删除此工具结果">${TOOL_RESULT_DELETE_ICON}</button>`;
     html += `</div>`;
 
     html += `<div class="vcp-tool-result-collapsible-content">`;
@@ -2265,8 +2287,145 @@ function restoreRenderedToolResults(html, toolResultMap) {
         const placeholder = wrappedPlaceholder || `<!--VCP_TOOL_RESULT_${bareId}-->`;
         const rawMatch = toolResultMap.get(placeholder);
         if (!rawMatch) return match;
-        return `\n\n${renderToolResultBlock(rawMatch)}\n\n`;
+        // 占位符 ID 按源文本中出现顺序从 0 递增，可直接作为序号。
+        const ordinal = Number.parseInt(wrappedId ?? bareId, 10);
+        return `\n\n${renderToolResultBlock(rawMatch, ordinal)}\n\n`;
     });
+}
+
+const TOOL_RESULT_DELETE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>`;
+const TOOL_RESULT_DELETE_CONFIRM_MS = 3000;
+
+function resetToolResultDeleteButton(button) {
+    if (!button) return;
+    const ownerWindow = button.ownerDocument?.defaultView;
+    if (button._vcpConfirmTimer) ownerWindow?.clearTimeout?.(button._vcpConfirmTimer);
+    delete button._vcpConfirmTimer;
+    delete button.dataset.confirming;
+    button.classList.remove('confirming');
+    button.innerHTML = TOOL_RESULT_DELETE_ICON;
+    button.title = '从上下文中删除此工具结果';
+    button.setAttribute('aria-label', '从上下文中删除此工具结果');
+}
+
+/**
+ * 两段式确认：第一次点击进入确认态，3 秒内再次点击才真正删除，避免误触。
+ */
+function handleToolResultDeleteClick(button) {
+    const bubble = button.closest('.vcp-tool-result-bubble');
+    const messageItem = button.closest('.message-item');
+    if (!bubble || !messageItem) return;
+
+    if (button.dataset.confirming !== 'true') {
+        button.dataset.confirming = 'true';
+        button.classList.add('confirming');
+        button.textContent = '确认删除?';
+        button.title = '再次点击确认从上下文中删除';
+        button.setAttribute('aria-label', '再次点击确认从上下文中删除此工具结果');
+        const ownerWindow = button.ownerDocument?.defaultView;
+        button._vcpConfirmTimer = ownerWindow?.setTimeout?.(() => resetToolResultDeleteButton(button), TOOL_RESULT_DELETE_CONFIRM_MS);
+        return;
+    }
+
+    resetToolResultDeleteButton(button);
+    const ordinal = Number.parseInt(bubble.dataset.vcpToolResultIndex, 10);
+    removeToolResultFromMessage(
+        messageItem,
+        Number.isInteger(ordinal) ? ordinal : -1,
+        bubble.dataset.vcpToolResultHash || ''
+    );
+}
+
+/**
+ * 从消息原始内容（上下文历史）中删除一个工具结果块，持久化并重新渲染该消息。
+ * 定位策略：优先按原文哈希匹配（多个同哈希时取序号最接近者），否则回退到序号。
+ */
+function removeToolResultFromMessage(messageItem, ordinal, hash) {
+    const notify = (text, type = 'info') => mainRendererReferences.uiHelper?.showToastNotification?.(text, type);
+    const messageId = messageItem?.dataset?.messageId;
+    if (!messageId) return false;
+
+    if (
+        messageItem.classList.contains('streaming')
+        || messageItem.classList.contains('thinking')
+        || streamManager.isMessageActive?.(messageId)
+    ) {
+        notify('消息仍在生成中，暂时无法删除工具结果', 'warning');
+        return false;
+    }
+
+    const history = [...mainRendererReferences.currentChatHistoryRef.get()];
+    const messageIndex = history.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) {
+        notify('未在历史记录中找到该消息', 'error');
+        return false;
+    }
+
+    const message = history[messageIndex];
+    const isTextObject = !!message.content && typeof message.content === 'object' && typeof message.content.text === 'string';
+    const content = typeof message.content === 'string' ? message.content : (isTextObject ? message.content.text : null);
+    if (typeof content !== 'string') {
+        notify('消息内容格式异常，无法删除工具结果', 'error');
+        return false;
+    }
+
+    const matches = [];
+    TOOL_RESULT_REGEX.lastIndex = 0;
+    let match;
+    while ((match = TOOL_RESULT_REGEX.exec(content)) !== null) {
+        matches.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            ordinal: matches.length,
+            hash: hashStringFNV1a(match[0])
+        });
+    }
+    TOOL_RESULT_REGEX.lastIndex = 0;
+
+    let target = null;
+    const hashMatches = hash ? matches.filter(item => item.hash === hash) : [];
+    if (hashMatches.length > 0) {
+        target = hashMatches.reduce((best, cur) =>
+            Math.abs(cur.ordinal - ordinal) < Math.abs(best.ordinal - ordinal) ? cur : best);
+    } else if (ordinal >= 0 && ordinal < matches.length) {
+        target = matches[ordinal];
+    }
+
+    if (!target) {
+        notify('未能在原始内容中定位该工具结果', 'error');
+        return false;
+    }
+
+    // 删除块本身，并收拢两侧多余空白，避免留下大段空行。
+    const before = content.slice(0, target.start).replace(/\s+$/, '');
+    const after = content.slice(target.end).replace(/^\s+/, '');
+    const newText = before && after ? `${before}\n\n${after}` : before + after;
+
+    const updatedMessage = {
+        ...message,
+        content: isTextObject ? { ...message.content, text: newText } : newText
+    };
+    history[messageIndex] = updatedMessage;
+    mainRendererReferences.currentChatHistoryRef.set(history);
+    messageItem._vcpMessageModel = updatedMessage;
+
+    const selectedItem = mainRendererReferences.currentSelectedItemRef.get();
+    const topicId = mainRendererReferences.currentTopicIdRef.get();
+    if (selectedItem?.id && topicId && mainRendererReferences.historyMutationAuthority) {
+        void mainRendererReferences.historyMutationAuthority.replace({
+            itemId: selectedItem.id,
+            itemType: selectedItem.type,
+            topicId,
+            category: 'tool-result-remove',
+        }, history).catch(error => {
+            console.error('[MessageRenderer] Failed to persist tool result removal:', error);
+            notify('工具结果已从界面移除，但保存历史失败', 'error');
+        });
+    }
+
+    updateMessageContent(messageId, updatedMessage.content);
+    notify('已从上下文中删除该工具结果', 'success');
+    return true;
 }
 
 /**
@@ -2576,6 +2735,15 @@ function initializeMessageRenderer(refs) {
 
     // --- Event Delegation ---
     ownRendererListener(mainRendererReferences.chatMessagesDiv, 'click', (e) => {
+        // 0. 工具结果删除按钮（位于 header 内，必须先于折叠逻辑处理）
+        const toolResultDeleteBtn = e.target.closest('.vcp-tool-result-delete-btn');
+        if (toolResultDeleteBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleToolResultDeleteClick(toolResultDeleteBtn);
+            return;
+        }
+
         // 1. Handle collapsible tool calls, tool results and thought chains
         const toolSummary = e.target.closest('.vcp-tool-summary');
         if (toolSummary) {
@@ -3481,12 +3649,52 @@ async function renderMessage(message, isInitialLoad = false, appendToDom = true,
                 }
             }
         } else if (currentSelectedItem) {
-            avatarColorToUse = currentSelectedItem.config?.avatarCalculatedColor
-                || currentSelectedItem.avatarCalculatedColor
-                || currentSelectedItem.config?.avatarColor
-                || currentSelectedItem.avatarColor
-                || message.avatarColor;
-            avatarUrlToUse = message.avatarUrl || currentSelectedItem.avatarUrl;
+            const hostName = currentSelectedItem.name || currentSelectedItem.config?.name || '';
+            const senderName = message.name || message._metadata?.sender_name || '';
+            const isCrossAgentMessage = message._metadata?.isPluginReply === true
+                || (Boolean(message.agentId) && message.agentId !== currentSelectedItem.id)
+                || (Boolean(senderName) && Boolean(hostName) && senderName !== hostName);
+
+            if (isCrossAgentMessage) {
+                // 跨 Agent 发言：基础采用消息自带的属性
+                avatarColorToUse = message.avatarColor || null;
+                avatarUrlToUse = message.avatarUrl || null;
+
+                // 历史旧错/空头像动态自愈机制 (三级降级防线)
+                const isBadAvatar = !avatarUrlToUse || (typeof avatarUrlToUse === 'string' && avatarUrlToUse.includes(currentSelectedItem.id));
+                if (isBadAvatar && senderName && senderName !== hostName) {
+                    const senderLower = senderName.toLowerCase();
+                    // 防线 1: 从 window.itemListManager 的缓存快照自愈查表 (三级匹配: 精确 > 前缀 > 双向包含)
+                    const loadedItems = typeof window !== 'undefined' && window.itemListManager?.getLoadedItems
+                        ? window.itemListManager.getLoadedItems()
+                        : [];
+                    
+                    const matchedItem = loadedItems.find(it => {
+                        if (it.type !== 'agent' || !it.name) return false;
+                        const itLower = it.name.toLowerCase();
+                        return itLower === senderLower || itLower.startsWith(senderLower) || itLower.includes(senderLower) || senderLower.includes(itLower);
+                    });
+
+                    if (matchedItem && matchedItem.avatarUrl) {
+                        avatarUrlToUse = matchedItem.avatarUrl;
+                        avatarColorToUse = matchedItem.avatarColor || matchedItem.avatarCalculatedColor || avatarColorToUse;
+                    } else if (message.agentId && message.agentId !== currentSelectedItem.id) {
+                        // 防线 2: 若已知发送者 agentId，直接组装标准的 file:// 物理头像路径兜底
+                        avatarUrlToUse = `file:///D:/VCP/VCP_itself_2nd/VCPChat/AppData/Agents/${message.agentId}/avatar.png`;
+                    }
+                }
+
+                // 优雅兜底：若前两道防线全未命中（极端异常角色），回退当前宿主头像以防默认灰色占位符影响视觉
+                avatarUrlToUse ||= currentSelectedItem.avatarUrl;
+                avatarColorToUse ||= currentSelectedItem.avatarColor;
+            } else {
+                avatarColorToUse = currentSelectedItem.config?.avatarCalculatedColor
+                    || currentSelectedItem.avatarCalculatedColor
+                    || currentSelectedItem.config?.avatarColor
+                    || currentSelectedItem.avatarColor
+                    || message.avatarColor;
+                avatarUrlToUse = message.avatarUrl || currentSelectedItem.avatarUrl;
+            }
 
             // 非群组消息，获取当前Agent的设置
             const agentConfig = currentSelectedItem.config || currentSelectedItem;

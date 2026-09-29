@@ -65,6 +65,9 @@ const groupChatHandlers = require('./modules/ipc/groupChatHandlers'); // Import 
 const sovitsHandlers = require('./modules/ipc/sovitsHandlers'); // Import SovitsTTS IPC handlers
 const promptHandlers = require('./modules/ipc/promptHandlers'); // Import prompt handlers
 const notesHandlers = require('./modules/ipc/notesHandlers'); // Import notes handlers
+const workspaceHandlers = require('./modules/ipc/workspaceHandlers'); // 工作区索引与实时引用
+const projectForgeHandlers = require('./modules/ipc/projectForgeHandlers'); // ProjectForge 施工图 GUI（只读 + 署名回退）
+const gitHandlers = require('./modules/ipc/gitHandlers'); // ProjectForge Git 源代码管理侧栏
 const assistantHandlers = require('./modules/ipc/assistantHandlers'); // Import assistant handlers
 const musicHandlers = require('./modules/ipc/musicHandlers'); // Import music handlers
 const diceHandlers = require('./modules/ipc/diceHandlers'); // Import dice handlers
@@ -494,7 +497,9 @@ function startDistributedServerAfterRenderer() {
                 loomManager,
                 scriptoriumAgentControl,
                 pluginAgentOperationService,
-                chartService
+                chartService,
+                // 工作区只读门面：direct 插件据此动态获取写入白名单
+                workspaceService: workspaceHandlers.workspaceService
             });
             distributedServer = server;
             await server.initialize();
@@ -692,6 +697,7 @@ async function performQuitCleanup() {
             }
         }
 
+        workspaceHandlers.dispose();
         await historyMutationQueue?.dispose?.();
         historyMutationQueue = null;
         pluginAgentOperationService = null;
@@ -720,6 +726,7 @@ function createWindow({ deferLoad = false } = {}) {
         ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
         webPreferences: {
             preload: resolveProjectPreload(__dirname, PRELOAD_ROLES.CHAT),
+            sandbox: false, // preloads/* 需要 require 本地模块，沙箱内不可用，见 preloads/README.md
             contextIsolation: true,    // 恢复: 开启上下文隔离
             nodeIntegration: false,  // 恢复: 关闭Node.js集成在渲染进程
             spellcheck: true, // Enable spellcheck for input fields
@@ -1439,6 +1446,10 @@ if (!gotTheLock) {
             APP_DATA_ROOT_IN_PROJECT,
             SETTINGS_FILE
         });
+        // 工作区索引在后台预热，不阻塞首屏。
+        workspaceHandlers.initialize({ settingsManager: appSettingsManager, logger: console });
+        projectForgeHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
+        gitHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
 
         translatorHandlers.initialize({
             mainWindow,

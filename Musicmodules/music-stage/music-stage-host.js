@@ -116,8 +116,8 @@
             { key: 'performanceIntensity', label: '场景编舞强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
             { key: 'beatImpact', label: '音频起音冲击', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
             { key: 'opticalImpact', label: '瞬态套印色散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
-            { key: 'accentEffects', label: '偶发强调（商籁螺旋落字／凝彩外框循迹）', type: 'toggle' },
-            { key: 'accentMotion', label: '偶发强调动势', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+            { key: 'accentEffects', label: '歌词强调（短语回声／螺旋落字／外框循迹）', type: 'toggle' },
+            { key: 'accentMotion', label: '歌词强调动势', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
             { key: 'sceneTransitions', label: '切句过渡', type: 'toggle' },
             { key: 'shotFlow', label: '分镜镜头', type: 'select', options: [['auto', '自动导演'], ['editorial-column', '编辑纵列'], ['type-impact', '文字冲击'], ['fragment-collage', '碎片拼贴'], ['tracking-ribbon', '带状追焦'], ['mask-reveal', '上升揭幕'], ['poster-blocks', '海报定景'], ['quiet-tableau', '静谧长镜']] },
             { key: 'cameraSoftness', label: '镜头平缓度', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
@@ -176,15 +176,26 @@
                 ...pixiTuningDefinitions
             ],
             diorama: [
-                { key: 'narrativeStations', label: '轨道叙事站点', type: 'toggle' },
-                { key: 'stationIntensity', label: '站点可见度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'waterReflection', label: '沉水段涟漪反射', type: 'toggle' },
+                { key: 'aurora', label: '天际极光（左上方流动光幕，随韵律波动）', type: 'toggle' },
+                { key: 'journeyEvents', label: '旅途奇遇（留白中的流星与水面生灵）', type: 'toggle' },
+                { key: 'fireworks', label: '远方烟花（副歌句尾与段后，默认关闭）', type: 'toggle' },
+                { key: 'cameraCuts', label: '自动剪辑（避开演唱中的字）', type: 'toggle' },
+                { key: 'letterbox', label: '电影遮幅', type: 'toggle' },
+                { key: 'lyricCarrier', label: '歌词载体', type: 'select', options: [['auto', '章节自动编排'], ['sign', '沿线站牌'], ['constellation', '星空文字']] },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
+                { key: 'postProcess', label: '光学后期（节能档关闭）', type: 'toggle' },
+                { key: 'grain', label: '胶片颗粒', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'vignette', label: '镜头暗角', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'narrativeStations', label: '沿线站台与电线杆', type: 'toggle' },
+                { key: 'stationIntensity', label: '沿线设施密度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'waterReflection', label: '全局水面反射', type: 'toggle' },
                 { key: 'waterStrength', label: '水面反射强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'cameraSpeed', label: '镜头速度', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'motionAmount', label: '运动幅度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'audioReactivity', label: '空间音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'showParticles', label: '背景粒子', type: 'toggle' },
-                { key: 'geometryMode', label: '伴随装饰', type: 'select', options: [['clouds', '保留液体与符号'], ['corridor', '纯轨道站点']] },
+                { key: 'showParticles', label: '天球星空', type: 'toggle' },
+                { key: 'geometryMode', label: '取景方式', type: 'select', options: [['clouds', '电影取景'], ['corridor', '全幅取景']] },
+                { key: 'cabinFrame', label: '车窗前景（侧望窗外时淡入）', type: 'toggle' },
                 { key: 'glow', label: '辉光强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ],
             luminous: [
@@ -238,6 +249,24 @@
             starborn: [
                 { key: 'transitionLock', label: '转场锁定', type: 'range', min: 0.5, max: 12, step: 0.5, unit: 's' },
                 { key: 'avoidRepeat', label: '避免重复', type: 'toggle' }
+            ],
+            tunnel: [
+                { key: 'cameraSpeed', label: '穿行速度', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
+                { key: 'motionAmount', label: '空间运动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'pauseDuration', label: '镜头停驻', type: 'range', min: 0, max: 3, step: 0.05, unit: 's' },
+                { key: 'cameraBreath', label: '镜头呼吸', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'cameraShake', label: '镜头晃动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'objectDensity', label: '物体密度', type: 'range', min: 0.25, max: 2, step: 0.05, unit: 'x' },
+                { key: 'starfield', label: '星场', type: 'toggle' },
+                { key: 'showPlanets', label: '星球', type: 'toggle' },
+                { key: 'showRings', label: '星环', type: 'toggle' },
+                { key: 'showShips', label: '飞船', type: 'toggle' },
+                { key: 'showStations', label: '空间站', type: 'toggle' },
+                { key: 'dissolveAmount', label: '点阵消散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
+                { key: 'textHoldRatio', label: '歌词驻留', type: 'range', min: 0, max: 0.8, step: 0.05, unit: '%' },
+                { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'glow', label: '点阵辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
+                { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ]
         });
         const state = {

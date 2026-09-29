@@ -4,6 +4,7 @@ const nodeFs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
+const { normalizePromptSettings } = require('../services/workspacePromptPlaceholders');
 
 class SettingsValidator {
     static validate(settings, defaultSettings) {
@@ -55,6 +56,30 @@ class SettingsValidator {
             console.log('Fixed invalid voiceInputShortcut');
         } else {
             validated.voiceInputShortcut = validated.voiceInputShortcut.trim().toUpperCase();
+        }
+
+        const initialIdle = Number(validated.mainChatVoiceInitialIdleTimeout);
+        validated.mainChatVoiceInitialIdleTimeout = Number.isFinite(initialIdle)
+            ? Math.min(12, Math.max(1, initialIdle))
+            : 5.5;
+
+        const quietTimeout = Number(validated.mainChatVoiceQuietTimeout);
+        validated.mainChatVoiceQuietTimeout = Number.isFinite(quietTimeout)
+            ? Math.min(15, Math.max(0.5, quietTimeout))
+            : 2.5;
+
+        if (typeof validated.mainChatVoiceClearPhrase !== 'string') {
+            validated.mainChatVoiceClearPhrase = '';
+            hasIssues = true;
+        } else {
+            validated.mainChatVoiceClearPhrase = validated.mainChatVoiceClearPhrase.trim();
+        }
+
+        if (typeof validated.mainChatVoiceSendPhrase !== 'string') {
+            validated.mainChatVoiceSendPhrase = '';
+            hasIssues = true;
+        } else {
+            validated.mainChatVoiceSendPhrase = validated.mainChatVoiceSendPhrase.trim();
         }
 
         if (
@@ -159,6 +184,27 @@ class SettingsValidator {
             hasIssues = true;
         }
 
+        // 工作区列表：只保留带有效 path 的条目，其余字段由 WorkspaceIndex 规范化。
+        if (!Array.isArray(validated.workspaces)) {
+            validated.workspaces = [];
+            hasIssues = true;
+        } else {
+            const cleaned = validated.workspaces.filter(item => (
+                item && typeof item === 'object' && typeof item.path === 'string' && item.path.trim()
+            ));
+            if (cleaned.length !== validated.workspaces.length) {
+                validated.workspaces = cleaned;
+                hasIssues = true;
+            }
+        }
+
+        // {{VCPChatWorkSpace}} 占位符行为设置：非法字段回落默认值并钳制范围。
+        const normalizedPromptSettings = normalizePromptSettings(validated.workspacePromptSettings);
+        if (JSON.stringify(normalizedPromptSettings) !== JSON.stringify(validated.workspacePromptSettings)) {
+            validated.workspacePromptSettings = normalizedPromptSettings;
+            hasIssues = true;
+        }
+
         if (!Array.isArray(validated.combinedItemOrder)) {
             validated.combinedItemOrder = [];
             hasIssues = true;
@@ -210,6 +256,9 @@ class SettingsManager extends EventEmitter {
             // request paths and the model picker placeholder.
             topicSummaryModel: 'gemini-2.5-flash-preview-05-20',
             networkNotesPaths: [],
+            workspaces: [],
+            activeWorkspaceId: null,
+            workspacePromptSettings: { enabled: true, maxChars: 20000, maxDepth: 6 },
             filterEnabled: false,
             filterRules: [],
             toolAutoApprovalEnabled: false,
@@ -270,6 +319,10 @@ class SettingsManager extends EventEmitter {
             voiceMode: 'local',
             voiceInputMode: 'windows_voice_typing',
             voiceInputShortcut: 'F7',
+            mainChatVoiceInitialIdleTimeout: 5.5,
+            mainChatVoiceQuietTimeout: 2.5,
+            mainChatVoiceClearPhrase: '',
+            mainChatVoiceSendPhrase: '',
             voiceLocalSettings: {
                 sovitsUrl: '',
                 sovitsKey: ''

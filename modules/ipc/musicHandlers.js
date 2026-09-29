@@ -95,6 +95,7 @@ function createOrFocusMusicWindow() {
             modal: false,
             webPreferences: {
                 preload: resolveProjectPreload(path.join(__dirname, '..', '..'), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
                 devTools: true
@@ -749,8 +750,9 @@ function initialize(options) {
             const possibleJsonPaths = [];
             if (sanitizedArtist) {
                 possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.json`));
+            } else {
+                possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.json`));
             }
-            possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.json`));
 
             for (const jsonPath of possibleJsonPaths) {
                 try {
@@ -767,8 +769,9 @@ function initialize(options) {
             const possibleLrcPaths = [];
             if (sanitizedArtist) {
                 possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.lrc`));
+            } else {
+                possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.lrc`));
             }
-            possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.lrc`));
 
             for (const lrcPath of possibleLrcPaths) {
                 try {

@@ -76,12 +76,50 @@ function getAttachmentType(attachment, data) {
     return attachment?.type || data?.type || 'application/octet-stream';
 }
 
-function appendAttachmentContext(text, attachment, data) {
+function isLiveReferenceAttachment(attachment, data) {
+    return attachment?.isLiveReference === true || data?.isLiveReference === true;
+}
+
+// 实时引用标签：工作区文件附带工作区别名与相对路径，帮助 AI 理解项目结构。
+function describeLiveReference(data) {
+    const ref = data?.workspaceRef;
+    if (data?.liveSource === 'workspace' || ref) {
+        const location = ref?.alias && ref?.relPath ? ` ${ref.alias}: ${ref.relPath}` : '';
+        return `工作区${location}，实时文件，可直接修改`;
+    }
+    return '笔记区实时文件，可直接修改';
+}
+
+// @笔记实时引用：每次构建上下文都从笔记区真实文件重新读取，保证内容与用户最新编辑一致。
+async function refreshLiveReferenceText(electronAPI, attachment, data) {
+    if (!isLiveReferenceAttachment(attachment, data)) return null;
+    if (!electronAPI || typeof electronAPI.getTextContent !== 'function') return null;
+    const source = data?.sourcePath || data?.internalPath || attachment?.internalPath || attachment?.src;
+    if (!source) return null;
+    try {
+        const result = await electronAPI.getTextContent(source, getAttachmentType(attachment, data));
+        return result && typeof result.text === 'string' ? result.text : null;
+    } catch (error) {
+        console.warn(
+            `[SingleChatRequestOrchestrator] 刷新实时笔记 ${attachment?.name || source} 失败，使用快照内容:`,
+            error
+        );
+        return null;
+    }
+}
+
+function appendAttachmentContext(text, attachment, data, liveText = null) {
     const path = getAttachmentPath(attachment, data);
     const name = attachment?.name || data?.name || '未知文件';
     const type = getAttachmentType(attachment, data);
     const imageFrames = data?.imageFrames || attachment?.imageFrames;
-    const extractedText = data?.extractedText || attachment?.extractedText;
+    const extractedText = typeof liveText === 'string'
+        ? liveText
+        : (data?.extractedText || attachment?.extractedText);
+
+    if (isLiveReferenceAttachment(attachment, data)) {
+        return `${text}\n\n[附加文件: ${path} (${describeLiveReference(data)})]\n${extractedText || ''}\n[/附加文件结束: ${name}]`;
+    }
 
     if (Array.isArray(imageFrames) && imageFrames.length > 0) {
         return `${text}\n\n[附加文件: ${path} (扫描版PDF，已转换为图片)]`;
@@ -144,7 +182,8 @@ async function buildDefaultMessageContent({ message, electronAPI }) {
 
     for (const attachment of attachments) {
         const data = getAttachmentData(attachment);
-        text = appendAttachmentContext(text, attachment, data);
+        const liveText = await refreshLiveReferenceText(electronAPI, attachment, data);
+        text = appendAttachmentContext(text, attachment, data, liveText);
         const framePayload = await readAttachmentFrames(electronAPI, attachment, data);
         if (!framePayload) continue;
 
@@ -251,6 +290,23 @@ function applyContextRules(messages, rules, engine) {
     return [...systemMessages, ...injected];
 }
 
+// {{VCPChatWorkSpace}} / {{VCPChatWorkSpace:文件夹名}}：由主进程按工作区索引展开为目录树。
+// 无占位符时不发 IPC；展开失败保留原文，不阻断发送。
+const WORKSPACE_PLACEHOLDER_HINT = '{{VCPChatWorkSpace';
+
+async function expandWorkspacePlaceholdersInPrompt(electronAPI, text) {
+    if (typeof text !== 'string' || !text.includes(WORKSPACE_PLACEHOLDER_HINT)) return text;
+    if (typeof electronAPI?.expandWorkspacePlaceholders !== 'function') return text;
+    try {
+        const result = await electronAPI.expandWorkspacePlaceholders(text);
+        if (result?.success && typeof result.text === 'string') return result.text;
+        console.warn('[SingleChatRequestOrchestrator] 工作区占位符展开失败，保留原文:', result?.error);
+    } catch (error) {
+        console.warn('[SingleChatRequestOrchestrator] 工作区占位符展开异常，保留原文:', error);
+    }
+    return text;
+}
+
 function createSingleChatRequestOrchestrator({
     electronAPI,
     tavernEngine = null,
@@ -336,7 +392,11 @@ function createSingleChatRequestOrchestrator({
             baseSystemPrompt.trim(),
             normalizeText(systemPromptAppend).trim(),
         ].filter(Boolean);
-        const systemPrompt = applySystemRules(systemParts.join('\n\n'), rules, engine);
+        // 先追加 Tavern system_suffix，再展开工作区占位符，使预设规则中的占位符同样生效。
+        const systemPrompt = await expandWorkspacePlaceholdersInPrompt(
+            electronAPI,
+            applySystemRules(systemParts.join('\n\n'), rules, engine)
+        );
         if (systemPrompt.trim()) {
             messages.unshift({ role: 'system', content: systemPrompt });
         }
@@ -380,6 +440,8 @@ function createSingleChatRequestOrchestrator({
 
 export {
     attachTimestampMetadata,
+    expandWorkspacePlaceholdersInPrompt,
+    describeLiveReference,
     buildDefaultMessageContent,
     buildModelConfig,
     createSingleChatRequestOrchestrator,
