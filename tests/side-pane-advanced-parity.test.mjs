@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 import * as SidePaneState from '../modules/ui-system/side-pane/side-pane-state.js';
@@ -298,4 +299,23 @@ test('Parity: Side Chat Model Picker supports interactive switching', async () =
 
     await handle.dispose();
     dom.window.close();
+});
+
+test('Parity: ZCode Subtle Border & Header Divider Contract', () => {
+    const css = fs.readFileSync(new URL('../styles/ui-system/side-pane.css', import.meta.url), 'utf8');
+
+    // Tokens defined on html
+    assert.match(css, /--zcode-panel-border:\s*rgba\(255,\s*255,\s*255,\s*0\.08\)/);
+    assert.match(css, /--zcode-header-divider:\s*rgba\(255,\s*255,\s*255,\s*0\.05\)/);
+
+    // Panel borders use var(--zcode-panel-border)
+    assert.match(css, /html body #nextUiMainPanel[\s\S]*?border:\s*1px solid var\(--zcode-panel-border/);
+    assert.match(css, /html body \.main-content\.side-pane-active[\s\S]*?border:\s*1px solid var\(--zcode-panel-border/);
+    assert.match(css, /html #vcpSidePane[\s\S]*?border:\s*1px solid var\(--zcode-panel-border/);
+
+    // Title / Header bottom dividers use var(--zcode-header-divider)
+    assert.match(css, /html body \.chat-header[\s\S]*?border-bottom:\s*1px solid var\(--zcode-header-divider/);
+    assert.match(css, /html \.side-pane-tab-bar[\s\S]*?border-bottom:\s*1px solid var\(--zcode-header-divider/);
+    assert.match(css, /html #vcpSidePane \.notifications-header[\s\S]*?border-bottom:\s*1px solid var\(--zcode-header-divider/);
+    assert.match(css, /html \.side-chat-header[\s\S]*?border-bottom:\s*1px solid var\(--zcode-header-divider/);
 });

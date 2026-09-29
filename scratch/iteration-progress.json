@@ -242,6 +242,26 @@
     {
       "time": "2026-09-13 12:15",
       "note": "待机确认轮：测试8/8通过。无改动。"
+    },
+    {
+      "time": "2026-09-13 12:30",
+      "note": "重大事件+恢复：发现工作区被切回main（ECHO文件从工作目录消失），排查确认全部成果已被（用户/其他会话）提交到 feat/echo-player-bar 分支（aafd5a1f preserve echo design tokens，+3480行，分支含main全部内容无分叉）。已用 git checkout feat/echo-player-bar -- <paths> 把ECHO文件恢复到当前main工作区（未切分支、未碰ui-system的两处他人未提交改动），恢复后测试8/8通过。注：music-stage-host.js/music-stage.css/music.html 对 main 而言是改动文件，若在main上未恢复则舞台集成缺失，待下一轮核查 music.html 引入是否在。"
+    },
+    {
+      "time": "2026-09-13 12:40",
+      "note": "恢复完成（补充）：music.html/music-stage-host.js/music-stage.css 也从 feat/echo-player-bar 恢复到 main 工作区（host.js 在main上原本不存在，feat分支版本包含全部舞台+echo集成）。grep确认music.html含echo-ui-shell.css引入，node --check通过，测试8/8通过。至此ECHO化全部成果在main工作区可见且可用，feat分支同时保留。"
+    },
+    {
+      "time": "2026-09-13 12:50",
+      "note": "巡检：工作区分支又被切到 pr/settings-sidebar-modernization（他人活跃操作中），但我恢复的ECHO文件以staged形式仍在工作区（11个A状态）且测试8/8通过。按约定不动分支、不提交、不干扰他人操作；文件会被 git checkout/switch 保留（无冲突）。继续观望。"
+    },
+    {
+      "time": "2026-09-13 13:05",
+      "note": "巡检：工作区仍在 pr/settings-sidebar-modernization（他人会话），ECHO文件staged完好（12个A状态），测试8/8通过。无干预。"
+    },
+    {
+      "time": "2026-09-13 13:20",
+      "note": "巡检：文件完好，测试8/8通过。无干预。"
     }
   ]
 }

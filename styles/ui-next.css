@@ -683,6 +683,8 @@ html[data-vcp-wallpaper-scope="global"] .container::before {
 
 html .sidebar:not(.avatar-only) {
     padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
 }
 
 html .sidebar.avatar-only {
