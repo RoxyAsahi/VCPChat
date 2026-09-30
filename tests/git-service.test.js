@@ -187,10 +187,11 @@ test('non-repository directory reports isRepo=false', { skip: SKIP_GIT }, async 
     assert.equal(status.isRepo, false);
 });
 
-test('git IPC only accepts the ProjectForge page as sender', () => {
+test('git IPC only accepts the ProjectForge and main chat pages as sender', () => {
     assert.equal(isAllowedSenderUrl('file:///H:/VCP/VCPMain/VCPChat/ProjectForgemodules/projectforge.html'), true);
     assert.equal(isAllowedSenderUrl('file:///H:/VCP/VCPMain/VCPChat/ProjectForgemodules/projectforge.html?vcpEmbedded=1'), true);
     assert.equal(isAllowedSenderUrl('file:///C:/Program%20Files/VCP/resources/app.asar/ProjectForgemodules/projectforge.html'), true);
+    assert.equal(isAllowedSenderUrl('file:///H:/VCP/VCPMain/VCPChat/main.html'), true);
     assert.equal(isAllowedSenderUrl('file:///H:/VCP/VCPMain/VCPChat/Forummodules/forum.html'), false);
     assert.equal(isAllowedSenderUrl('https://evil.example/ProjectForgemodules/projectforge.html'), false);
     assert.equal(isAllowedSenderUrl(''), false);

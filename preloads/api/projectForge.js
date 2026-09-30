@@ -8,7 +8,7 @@ const { invoke } = require('../core/define');
 
 module.exports = {
     handlers: ['modules/ipc/projectForgeHandlers.js', 'modules/ipc/gitHandlers.js', 'modules/ipc/sourceHandlers.js'],
-    roles: ['utility'],
+    roles: ['utility', 'chat'],
     api: {
         projectForgeListProjects: invoke('project-forge:list-projects', 'options'),
         projectForgeGetProject: invoke('project-forge:get-project', 'projectId'),

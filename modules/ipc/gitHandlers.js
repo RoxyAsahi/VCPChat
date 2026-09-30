@@ -19,7 +19,10 @@ const CHANNELS = [
     'git:push',
 ];
 
-const ALLOWED_PAGE_SUFFIX = '/projectforgemodules/projectforge.html';
+const ALLOWED_PAGE_SUFFIXES = [
+    '/projectforgemodules/projectforge.html',
+    '/main.html',
+];
 const MAX_PATHS = 5000;
 
 let workspaceServiceRef = null;
@@ -28,7 +31,8 @@ function isAllowedSenderUrl(raw) {
     try {
         const url = new URL(String(raw || ''));
         if (url.protocol !== 'file:') return false;
-        return decodeURIComponent(url.pathname).replace(/\\/g, '/').toLowerCase().endsWith(ALLOWED_PAGE_SUFFIX);
+        const normalizedPath = decodeURIComponent(url.pathname).replace(/\\/g, '/').toLowerCase();
+        return ALLOWED_PAGE_SUFFIXES.some(suffix => normalizedPath.endsWith(suffix));
     } catch (_error) {
         return false;
     }
