@@ -7,10 +7,24 @@ export const MIN_WIDTH = 240;
 export const MAX_WIDTH = 800;
 export const NOTIFICATIONS_TAB_ID = 'notifications';
 
+export const TAB_KINDS = Object.freeze({
+    NOTIFICATIONS: 'notifications',
+    CHAT: 'chat',
+    NOTES: 'notes',
+    CODE_VIEWER: 'code-viewer',
+    GIT: 'git',
+    WORKSPACE: 'workspace',
+    TOOL_OUTPUT: 'tool-output',
+    PLUGIN_UI: 'plugin-ui'
+});
+
 export const NOTIFICATIONS_TAB = Object.freeze({
     id: NOTIFICATIONS_TAB_ID,
     kind: 'notifications',
-    title: '通知'
+    title: '通知',
+    icon: 'notifications',
+    closable: false,
+    scopeMode: 'global'
 });
 
 export function matchesConversation(refA, refB) {
@@ -197,30 +211,59 @@ export function showLauncher(state) {
     });
 }
 
-export function openChatTab(state, rawDescriptor) {
-    const descriptor = freezeDescriptor(rawDescriptor);
-    const existingIndex = state.tabs.findIndex(tab => tab.id === descriptor.id || (
-        tab.kind === 'chat' && tab.descriptor && tab.descriptor.child.topicId === descriptor.child.topicId
-    ));
+export function openTab(state, rawTab) {
+    if (!rawTab || typeof rawTab !== 'object' || !rawTab.id) {
+        throw new TypeError('SidePaneTab requires an object with a valid id');
+    }
+    const kind = rawTab.kind || 'chat';
+    const id = String(rawTab.id);
+    const title = String(rawTab.title || '标签页');
+    const icon = rawTab.icon ? String(rawTab.icon) : (
+        kind === 'notifications' ? 'notifications' :
+        kind === 'notes' ? 'edit_note' :
+        kind === 'code-viewer' ? 'code' :
+        kind === 'tool-output' ? 'terminal' :
+        kind === 'plugin-ui' ? 'extension' :
+        'chat_bubble'
+    );
+    const scopeMode = rawTab.scopeMode || (kind === 'chat' ? 'topic' : 'global');
+    const closable = rawTab.closable !== undefined ? Boolean(rawTab.closable) : (id !== NOTIFICATIONS_TAB_ID);
 
+    const existingIndex = state.tabs.findIndex(t => t.id === id);
     let nextTabs = state.tabs;
-    let targetTabId = descriptor.id;
+    let targetTabId = id;
 
     if (existingIndex >= 0) {
         targetTabId = state.tabs[existingIndex].id;
+        const existing = state.tabs[existingIndex];
+        const updated = Object.freeze({
+            ...existing,
+            ...rawTab,
+            title,
+            icon,
+            closable,
+            scopeMode
+        });
+        const copy = [...state.tabs];
+        copy[existingIndex] = updated;
+        nextTabs = Object.freeze(copy);
     } else {
         const newTab = Object.freeze({
-            id: descriptor.id,
-            kind: 'chat',
-            type: 'selection-side-chat',
-            ephemeral: true,
-            title: descriptor.title,
-            descriptor
+            ...rawTab,
+            id,
+            kind,
+            title,
+            icon,
+            closable,
+            scopeMode,
+            openedAt: Number.isFinite(rawTab.openedAt) ? rawTab.openedAt : Date.now()
         });
         nextTabs = Object.freeze([...state.tabs, newTab]);
     }
 
-    const isVisibleForCurrentParent = !state.parent || matchesConversation(descriptor.parent, state.parent);
+    const isVisibleForCurrentParent = scopeMode === 'global' || !state.parent || (
+        rawTab.descriptor?.parent && matchesConversation(rawTab.descriptor.parent, state.parent)
+    );
 
     return Object.freeze({
         ...state,
@@ -230,10 +273,32 @@ export function openChatTab(state, rawDescriptor) {
     });
 }
 
+export function openChatTab(state, rawDescriptor) {
+    const descriptor = freezeDescriptor(rawDescriptor);
+    const existingIndex = state.tabs.findIndex(tab => tab.id === descriptor.id || (
+        tab.kind === 'chat' && tab.descriptor && tab.descriptor.child.topicId === descriptor.child.topicId
+    ));
+
+    const targetTabId = existingIndex >= 0 ? state.tabs[existingIndex].id : descriptor.id;
+
+    return openTab(state, {
+        id: targetTabId,
+        kind: 'chat',
+        type: 'selection-side-chat',
+        ephemeral: true,
+        title: descriptor.title,
+        icon: 'chat_bubble',
+        closable: true,
+        scopeMode: 'topic',
+        descriptor
+    });
+}
+
 export function closeTab(state, tabId) {
     if (!tabId || tabId === NOTIFICATIONS_TAB_ID) return state;
     const tabIndex = state.tabs.findIndex(tab => tab.id === tabId);
     if (tabIndex === -1) return state;
+    if (state.tabs[tabIndex].closable === false) return state;
 
     const nextTabs = state.tabs.filter(tab => tab.id !== tabId);
     let nextActiveTabId = state.activeTabId;
@@ -256,7 +321,7 @@ export function closeOtherTabs(state, tabId) {
     const targetTab = state.tabs.find(t => t.id === tabId);
     if (!targetTab) return state;
 
-    const nextTabs = state.tabs.filter(t => t.id === tabId || t.id === NOTIFICATIONS_TAB_ID);
+    const nextTabs = state.tabs.filter(t => t.id === tabId || t.id === NOTIFICATIONS_TAB_ID || t.closable === false);
     return Object.freeze({
         ...state,
         activeTabId: tabId,
@@ -265,7 +330,7 @@ export function closeOtherTabs(state, tabId) {
 }
 
 export function closeAllTabs(state) {
-    const nextTabs = state.tabs.filter(t => t.id === NOTIFICATIONS_TAB_ID);
+    const nextTabs = state.tabs.filter(t => t.id === NOTIFICATIONS_TAB_ID || t.closable === false);
     return Object.freeze({
         ...state,
         activeTabId: LAUNCHER_TAB_ID,
@@ -277,6 +342,7 @@ export function getVisibleTabs(state, parentRef = null) {
     if (!parentRef) return state.tabs;
     return state.tabs.filter(tab => {
         if (tab.id === NOTIFICATIONS_TAB_ID) return true;
+        if (tab.scopeMode === 'global' || tab.kind === 'notes') return true;
         if (tab.kind === 'chat' && tab.descriptor) {
             return matchesConversation(tab.descriptor.parent, parentRef);
         }
@@ -291,6 +357,7 @@ const api = Object.freeze({
     MAX_WIDTH,
     NOTIFICATIONS_TAB_ID,
     NOTIFICATIONS_TAB,
+    TAB_KINDS,
     LAUNCHER_TAB_ID,
     matchesConversation,
     getParentKey,
@@ -303,6 +370,7 @@ const api = Object.freeze({
     activateTab,
     showNotifications,
     showLauncher,
+    openTab,
     openChatTab,
     closeTab,
     closeOtherTabs,

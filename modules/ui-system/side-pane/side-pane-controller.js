@@ -28,14 +28,29 @@ export function createSidePaneController({
     }
 
     const doc = root.ownerDocument || globalThis.document;
+    const win = doc?.defaultView || globalThis.window;
     const resolvedAddChatTabBtn = addChatTabBtn || doc.getElementById?.('addSidePaneChatBtn');
     const resolvedOverviewBtn = overviewBtn || doc.getElementById?.('sidePaneTabOverviewBtn');
     const resolvedOverviewPopover = overviewPopover || doc.getElementById?.('sidePaneTabOverviewPopover');
     const resolvedAddMenuPopover = doc.getElementById?.('sidePaneAddMenuPopover');
     const resolvedTabContextMenu = doc.getElementById?.('sidePaneTabContextMenu');
 
+    // ZCode parity: Proportional width ratio (sidePaneLayout.ts: SIDE_PANE_DEFAULT_EXPANDED_RATIO = 0.45)
+    const ZCODE_DEFAULT_EXPANDED_RATIO = 0.45;
+    const MIN_RATIO = 0.20;
+    const MAX_RATIO = 0.65;
+
+    const savedRatio = Number(settingsRef?.get?.()?.notificationsSidebarRatio);
+    let currentRatio = (Number.isFinite(savedRatio) && savedRatio >= MIN_RATIO && savedRatio <= MAX_RATIO)
+        ? savedRatio
+        : ZCODE_DEFAULT_EXPANDED_RATIO;
+
     const initialWidth = Number(settingsRef?.get?.()?.notificationsSidebarWidth)
         || SidePaneState.DEFAULT_WIDTH;
+
+    function getFormattedPercent() {
+        return `${(currentRatio * 100).toFixed(1)}%`;
+    }
 
     let state = SidePaneState.createInitialSidePaneState({
         preferredWidth: initialWidth,
@@ -63,13 +78,26 @@ export function createSidePaneController({
             },
             onWidthCommit: async (width) => {
                 state = SidePaneState.setPreferredWidth(state, width);
+                const parent = root.parentElement || doc.querySelector('#nextUiMainPanel, .container') || doc.body;
+                const parentWidth = parent?.getBoundingClientRect?.()?.width || win?.innerWidth || 1200;
+                if (parentWidth > 0) {
+                    currentRatio = Math.max(MIN_RATIO, Math.min(MAX_RATIO, width / parentWidth));
+                    root.style.width = getFormattedPercent();
+                }
                 if (settingsRef?.set) {
                     const current = settingsRef.get() || {};
-                    settingsRef.set({ ...current, notificationsSidebarWidth: width });
+                    settingsRef.set({
+                        ...current,
+                        notificationsSidebarWidth: width,
+                        notificationsSidebarRatio: currentRatio
+                    });
                 }
                 if (electronAPI?.saveSettings) {
                     try {
-                        const ops = [{ op: 'set', path: ['notificationsSidebarWidth'], value: width }];
+                        const ops = [
+                            { op: 'set', path: ['notificationsSidebarWidth'], value: width },
+                            { op: 'set', path: ['notificationsSidebarRatio'], value: currentRatio }
+                        ];
                         await electronAPI.saveSettings({ __vcpSettingsOps: ops });
                     } catch (err) {
                         console.error('[SidePaneController] Failed to persist width:', err);
@@ -106,7 +134,16 @@ export function createSidePaneController({
             const iconSpan = doc.createElement('span');
             iconSpan.className = 'tab-icon vcp-ui-icon';
             iconSpan.setAttribute('aria-hidden', 'true');
-            iconSpan.textContent = tab.kind === 'notifications' ? 'notifications' : 'chat_bubble';
+            iconSpan.textContent = tab.icon || (
+                tab.kind === 'notifications' ? 'notifications' :
+                tab.kind === 'notes' ? 'edit_note' :
+                tab.kind === 'code-viewer' ? 'code' :
+                tab.kind === 'git' ? 'branch' :
+                tab.kind === 'workspace' ? 'folder_open' :
+                tab.kind === 'tool-output' ? 'terminal' :
+                tab.kind === 'plugin-ui' ? 'extension' :
+                'chat_bubble'
+            );
 
             const titleSpan = doc.createElement('span');
             titleSpan.className = 'tab-title';
@@ -120,12 +157,12 @@ export function createSidePaneController({
 
             tabItem.appendChild(btn);
 
-            // Close button for closable tabs (chat tabs) - sibling to tab button
-            if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID) {
+            // Close button for closable tabs - sibling to tab button
+            if (tab.id !== SidePaneState.NOTIFICATIONS_TAB_ID && tab.closable !== false) {
                 const closeBtn = doc.createElement('button');
                 closeBtn.type = 'button';
                 closeBtn.className = 'side-pane-tab-close';
-                closeBtn.title = '关闭此侧聊';
+                closeBtn.title = `关闭 ${tab.title}`;
                 closeBtn.setAttribute('aria-label', `关闭 ${tab.title}`);
                 closeBtn.setAttribute('tabindex', '-1');
                 closeBtn.innerHTML = '<span class="vcp-ui-icon" style="font-size:12px;">close</span>';
@@ -203,30 +240,52 @@ export function createSidePaneController({
         });
     }
 
-    function syncDomVisibility() {
-        const isVisible = state.visible;
-        root.classList.toggle('active', isVisible);
-        root.classList.toggle('collapsed', !isVisible);
-        root.setAttribute('aria-hidden', String(!isVisible));
+    const isJSDOM = (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.includes('jsdom'))
+        || (typeof win !== 'undefined' && win.name === 'nodejs');
 
-        if (resizerHandle) {
-            resizerHandle.classList.toggle('hidden', !isVisible);
+    function getSafeClampedWidth(desiredWidth) {
+        const container = doc.querySelector('.container') || doc.body;
+        const containerWidth = container?.getBoundingClientRect?.()?.width || win?.innerWidth || 1200;
+        const leftSidebar = doc.querySelector('.sidebar');
+        const leftWidth = (leftSidebar && !leftSidebar.classList.contains('hidden') && leftSidebar.classList.contains('active'))
+            ? (leftSidebar.getBoundingClientRect?.()?.width || 260)
+            : 0;
+        const minCenterWidth = 360;
+        const resizersWidth = 8;
+        const availableForSidePane = Math.max(0, containerWidth - leftWidth - minCenterWidth - resizersWidth);
+        const minWidth = 240;
+        const maxWidth = Math.max(minWidth, Math.min(Math.round(containerWidth * 0.65), availableForSidePane));
+        const target = (typeof desiredWidth === 'number' && !Number.isNaN(desiredWidth) && desiredWidth > 0)
+            ? desiredWidth
+            : (state.preferredWidth || 380);
+        return Math.max(minWidth, Math.min(target, maxWidth));
+    }
+
+    let isAnimating = false;
+    let animationTimer = null;
+    let animationRafId = null;
+
+    function clearPendingAnimation() {
+        if (animationTimer) {
+            clearTimeout(animationTimer);
+            animationTimer = null;
         }
-
-        const mainContent = doc.querySelector('.main-content');
-        if (mainContent) {
-            mainContent.classList.toggle('notifications-sidebar-active', isVisible);
-            mainContent.classList.toggle('side-pane-active', isVisible);
+        if (animationRafId) {
+            win?.cancelAnimationFrame?.(animationRafId);
+            animationRafId = null;
         }
+    }
 
-        if (isVisible) {
-            root.style.width = `${state.preferredWidth}px`;
-        }
-
+    function syncHeaderButtons(isVisible) {
         if (toggleNotificationsBtn) {
             const isNotifActive = isVisible && state.activeTabId === SidePaneState.NOTIFICATIONS_TAB_ID;
             toggleNotificationsBtn.classList.toggle('notification-panel-active', isNotifActive);
             toggleNotificationsBtn.setAttribute('aria-expanded', String(isNotifActive));
+            // 通知按钮仅在通知页签展开时挪进面板标题，其余情况（含切到其他页签/关闭）必须回到聊天标题
+            const targetHost = doc.getElementById(isNotifActive ? 'nextUiPanelNotificationHost' : 'nextUiChatNotificationHost');
+            if (targetHost && toggleNotificationsBtn.parentElement !== targetHost) {
+                targetHost.append(toggleNotificationsBtn);
+            }
         }
 
         const notifSidebar = doc.getElementById('notificationsSidebar');
@@ -242,19 +301,193 @@ export function createSidePaneController({
         }
     }
 
+    function applySynchronousVisibility(isVisible) {
+        clearPendingAnimation();
+        isAnimating = false;
+        root.classList.remove('is-animating');
+        root.classList.toggle('active', isVisible);
+        root.classList.toggle('collapsed', !isVisible);
+        root.setAttribute('aria-hidden', String(!isVisible));
+
+        if (resizerHandle) {
+            resizerHandle.classList.remove('is-animating', 'is-animating-closing');
+            resizerHandle.classList.toggle('hidden', !isVisible);
+        }
+
+        const mainContent = doc.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.classList.remove('side-pane-animating');
+            mainContent.classList.toggle('notifications-sidebar-active', isVisible);
+            mainContent.classList.toggle('side-pane-active', isVisible);
+        }
+
+        if (isVisible) {
+            root.style.width = getFormattedPercent();
+            root.style.opacity = '';
+        } else {
+            root.style.width = '';
+            root.style.opacity = '';
+        }
+
+        syncHeaderButtons(isVisible);
+    }
+
+    function animateOpen() {
+        clearPendingAnimation();
+        isAnimating = true;
+
+        const targetPercent = getFormattedPercent();
+
+        // Prep starting frame: unhide and lock at 0 width (ZCode next-frame pattern)
+        root.classList.remove('collapsed');
+        root.removeAttribute('aria-hidden');
+        root.classList.add('is-animating', 'active');
+        root.style.width = '0%';
+        root.style.opacity = '0';
+
+        if (resizerHandle) {
+            resizerHandle.classList.remove('hidden');
+            resizerHandle.classList.add('is-animating', 'is-animating-closing');
+        }
+
+        const mainContent = doc.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.classList.add('side-pane-active', 'notifications-sidebar-active', 'side-pane-animating');
+        }
+
+        syncHeaderButtons(true);
+
+        const finish = () => {
+            clearPendingAnimation();
+            isAnimating = false;
+            root.classList.remove('is-animating');
+            root.style.width = targetPercent;
+            root.style.opacity = '';
+            if (resizerHandle) {
+                resizerHandle.classList.remove('is-animating', 'is-animating-closing');
+            }
+            if (mainContent) {
+                mainContent.classList.remove('side-pane-animating');
+            }
+            root.removeEventListener('transitionend', onTransitionEnd);
+        };
+
+        const onTransitionEnd = (e) => {
+            if (e.target === root && e.propertyName === 'width') {
+                finish();
+            }
+        };
+
+        root.addEventListener('transitionend', onTransitionEnd);
+        animationTimer = setTimeout(finish, 240);
+
+        animationRafId = win.requestAnimationFrame(() => {
+            animationRafId = null;
+            root.style.width = targetPercent;
+            root.style.opacity = '1';
+            if (resizerHandle) {
+                resizerHandle.classList.remove('is-animating-closing');
+            }
+        });
+    }
+
+    function animateClose() {
+        clearPendingAnimation();
+        isAnimating = true;
+
+        const startPercent = root.style.width || getFormattedPercent();
+        root.classList.add('is-animating');
+        root.style.width = startPercent;
+        root.style.opacity = '1';
+
+        if (resizerHandle) {
+            resizerHandle.classList.add('is-animating', 'is-animating-closing');
+        }
+
+        const mainContent = doc.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.classList.add('side-pane-animating');
+        }
+
+        syncHeaderButtons(false);
+
+        const finish = () => {
+            clearPendingAnimation();
+            isAnimating = false;
+            root.classList.remove('is-animating', 'active');
+            root.classList.add('collapsed');
+            root.setAttribute('aria-hidden', 'true');
+            root.style.width = '';
+            root.style.opacity = '';
+
+            if (resizerHandle) {
+                resizerHandle.classList.add('hidden');
+                resizerHandle.classList.remove('is-animating', 'is-animating-closing');
+            }
+
+            if (mainContent) {
+                mainContent.classList.remove('side-pane-active', 'notifications-sidebar-active', 'side-pane-animating');
+            }
+            root.removeEventListener('transitionend', onTransitionEnd);
+        };
+
+        const onTransitionEnd = (e) => {
+            if (e.target === root && e.propertyName === 'width') {
+                finish();
+            }
+        };
+
+        root.addEventListener('transitionend', onTransitionEnd);
+        animationTimer = setTimeout(finish, 240);
+
+        animationRafId = win.requestAnimationFrame(() => {
+            animationRafId = null;
+            root.style.width = '0%';
+            root.style.opacity = '0';
+        });
+    }
+
+    function syncDomVisibility(options = {}) {
+        const isVisible = state.visible;
+        const shouldAnimate = options.animate !== false
+            && !isJSDOM
+            && typeof win?.requestAnimationFrame === 'function'
+            && !win?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+
+        if (!shouldAnimate) {
+            applySynchronousVisibility(isVisible);
+            return;
+        }
+
+        const currentlyVisible = root.classList.contains('active') && !root.classList.contains('collapsed');
+        if (isVisible === currentlyVisible && !isAnimating) {
+            if (isVisible) {
+                root.style.width = getFormattedPercent();
+            }
+            syncHeaderButtons(isVisible);
+            return;
+        }
+
+        if (isVisible) {
+            animateOpen();
+        } else {
+            animateClose();
+        }
+    }
+
     const controller = Object.freeze({
         getSnapshot() {
             return state;
         },
 
-        setVisible(visible) {
+        setVisible(visible, options = {}) {
             if (isDisposed) return;
             state = SidePaneState.setVisible(state, visible);
             if (state.parent) {
                 const parentKey = SidePaneState.getParentKey(state.parent);
                 collapsedByParent.set(parentKey, !state.visible);
             }
-            syncDomVisibility();
+            syncDomVisibility(options);
             if (!visible) {
                 const trigger = toggleChatBtn || toggleNotificationsBtn || doc.getElementById('toggleSidePaneChatBtn') || doc.getElementById('closeSidePaneBtn');
                 trigger?.focus?.();
@@ -302,8 +535,8 @@ export function createSidePaneController({
 
         async closeOtherTabs(tabId) {
             if (isDisposed || !tabId) return;
-            const chatTabs = state.tabs.filter(t => t.kind === 'chat' && t.id !== tabId);
-            for (const tab of chatTabs) {
+            const closableTabs = state.tabs.filter(t => t.id !== tabId && t.id !== SidePaneState.NOTIFICATIONS_TAB_ID && t.closable !== false);
+            for (const tab of closableTabs) {
                 await this.closeTab(tab.id);
             }
             this.activateTab(tabId);
@@ -311,11 +544,60 @@ export function createSidePaneController({
 
         async closeAllTabs() {
             if (isDisposed) return;
-            const chatTabs = state.tabs.filter(t => t.kind === 'chat');
-            for (const tab of chatTabs) {
+            const closableTabs = state.tabs.filter(t => t.id !== SidePaneState.NOTIFICATIONS_TAB_ID && t.closable !== false);
+            for (const tab of closableTabs) {
                 await this.closeTab(tab.id);
             }
             this.showLauncher();
+        },
+
+        async openTab(rawTab) {
+            if (isDisposed || !rawTab) return null;
+            if (rawTab.kind === 'chat' && rawTab.descriptor) {
+                return await this.openChat(rawTab.descriptor);
+            }
+
+            state = SidePaneState.openTab(state, rawTab);
+            const targetTabId = state.activeTabId;
+            if (rawTab.scopeMode === 'topic' && state.parent && rawTab.descriptor?.parent && SidePaneState.matchesConversation(rawTab.descriptor.parent, state.parent)) {
+                const parentKey = SidePaneState.getParentKey(state.parent);
+                collapsedByParent.set(parentKey, false);
+                activeTabByParent.set(parentKey, targetTabId);
+            }
+            renderTabList();
+
+            let entry = mountedTabMap.get(targetTabId);
+            if (!entry) {
+                let view = contentContainer?.querySelector(`[data-tab-id="${targetTabId}"]`);
+                if (!view && contentContainer) {
+                    view = doc.createElement('section');
+                    view.className = 'side-pane-view';
+                    view.setAttribute('data-tab-id', targetTabId);
+                    view.setAttribute('role', 'tabpanel');
+                    view.setAttribute('aria-label', rawTab.title || '副屏视图');
+                    contentContainer.appendChild(view);
+                }
+
+                const provider = providers[rawTab.kind];
+                if (provider?.mountTab && view) {
+                    const handle = await provider.mountTab(rawTab, view);
+                    if (isDisposed || !state.tabs.some(t => t.id === targetTabId)) {
+                        await handle?.dispose?.();
+                        view?.remove?.();
+                        return null;
+                    }
+                    entry = { tab: rawTab, viewElement: view, handle };
+                    mountedTabMap.set(targetTabId, entry);
+                } else if (view) {
+                    entry = { tab: rawTab, viewElement: view, handle: null };
+                    mountedTabMap.set(targetTabId, entry);
+                }
+            }
+
+            syncViewPanels();
+            syncDomVisibility();
+            entry?.handle?.focus?.();
+            return entry?.handle || null;
         },
 
         async openChat(descriptor) {
@@ -514,9 +796,20 @@ export function createSidePaneController({
 
         setPreferredWidth(width) {
             if (isDisposed) return;
+            if (typeof width === 'number') {
+                if (width > 0 && width <= 1) {
+                    currentRatio = Math.max(MIN_RATIO, Math.min(MAX_RATIO, width));
+                } else if (width > 1) {
+                    const parent = root.parentElement || doc.querySelector('#nextUiMainPanel, .container') || doc.body;
+                    const parentWidth = parent?.getBoundingClientRect?.()?.width || win?.innerWidth || 1200;
+                    if (parentWidth > 0) {
+                        currentRatio = Math.max(MIN_RATIO, Math.min(MAX_RATIO, width / parentWidth));
+                    }
+                }
+            }
             state = SidePaneState.setPreferredWidth(state, width);
-            if (state.visible) {
-                root.style.width = `${state.preferredWidth}px`;
+            if (state.visible && !isAnimating) {
+                root.style.width = getFormattedPercent();
             }
         },
 
@@ -539,6 +832,11 @@ export function createSidePaneController({
         async dispose() {
             if (isDisposed) return;
             isDisposed = true;
+            clearPendingAnimation();
+            if (windowResizeTimer) {
+                clearTimeout(windowResizeTimer);
+                windowResizeTimer = null;
+            }
             cleanupListeners.forEach(cleanup => cleanup());
             cleanupListeners.length = 0;
 
@@ -587,6 +885,8 @@ export function createSidePaneController({
                     controller.setVisible(true);
                 } else if (typeof onOpenSideChat === 'function') {
                     onOpenSideChat();
+                } else {
+                    controller.showLauncher();
                 }
             }
         };
@@ -599,6 +899,41 @@ export function createSidePaneController({
         closeSidePaneBtn.addEventListener('click', onCloseClick);
         cleanupListeners.push(() => closeSidePaneBtn.removeEventListener('click', onCloseClick));
     }
+
+    // ZCode parity (WorkspaceShellLayout.tsx:481-525)
+    // Auto-collapse side pane when conversation area is narrower than 480px.
+    const CONVERSATION_AUTO_COLLAPSE_SIDE_PANE_WIDTH_PX = 480;
+    const CONVERSATION_AUTO_COLLAPSE_RESIZE_IDLE_MS = 300;
+    let windowResizeTimer = null;
+
+    const onWindowResize = () => {
+        if (isDisposed) return;
+        if (windowResizeTimer) {
+            clearTimeout(windowResizeTimer);
+        }
+        windowResizeTimer = setTimeout(() => {
+            windowResizeTimer = null;
+            if (isDisposed) return;
+
+            const mainContent = doc.querySelector('.main-content');
+            const mainWidthPx = mainContent?.getBoundingClientRect?.()?.width ?? null;
+
+            if (state.visible && mainWidthPx !== null && mainWidthPx < CONVERSATION_AUTO_COLLAPSE_SIDE_PANE_WIDTH_PX) {
+                // conversation 过窄，自动收起右侧副屏 (ZCode WorkspaceShellLayout.tsx:495)
+                controller.setVisible(false);
+            } else if (state.visible && !isAnimating) {
+                if (!root.style.width.endsWith('%')) {
+                    root.style.width = getFormattedPercent();
+                }
+            }
+        }, CONVERSATION_AUTO_COLLAPSE_RESIZE_IDLE_MS);
+    };
+
+    win?.addEventListener?.('resize', onWindowResize, { passive: true });
+    cleanupListeners.push(() => {
+        if (windowResizeTimer) clearTimeout(windowResizeTimer);
+        win?.removeEventListener?.('resize', onWindowResize);
+    });
 
     function formatRelativeTime(timestamp) {
         const diff = Math.max(0, Date.now() - timestamp);
@@ -646,7 +981,14 @@ export function createSidePaneController({
                 const icon = doc.createElement('span');
                 icon.className = 'vcp-ui-icon';
                 icon.style.fontSize = '14px';
-                icon.textContent = tab.kind === 'notifications' ? 'notifications' : 'chat_bubble';
+                icon.textContent = tab.icon || (
+                    tab.kind === 'notifications' ? 'notifications' :
+                    tab.kind === 'notes' ? 'edit_note' :
+                    tab.kind === 'code-viewer' ? 'code' :
+                    tab.kind === 'git' ? 'branch' :
+                    tab.kind === 'workspace' ? 'folder_open' :
+                    'chat_bubble'
+                );
                 const label = doc.createElement('span');
                 label.textContent = tab.title;
                 titleDiv.append(icon, label);
@@ -853,15 +1195,53 @@ export function createSidePaneController({
                 if (typeof onOpenSideChat === 'function') {
                     await onOpenSideChat({ forceNew: true });
                 }
+            } else if (action === 'notes') {
+                if (typeof providers.notes?.openNotesTab === 'function') {
+                    await providers.notes.openNotesTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-notes',
+                        kind: 'notes',
+                        title: '随手笔记',
+                        icon: 'edit_note',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
             } else if (action === 'notifications') {
                 controller.showNotifications();
             } else if (action === 'launcher') {
                 controller.showLauncher();
-            } else if (action === 'review' || action === 'terminal') {
-                const label = action === 'review' ? '代码审阅' : '终端';
+            } else if (action === 'git' || action === 'review') {
+                if (typeof providers.git?.openGitTab === 'function') {
+                    await providers.git.openGitTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-git',
+                        kind: 'git',
+                        title: 'Git 变更',
+                        icon: 'branch',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
+            } else if (action === 'code-viewer') {
+                if (typeof providers['code-viewer']?.openCodeViewerTab === 'function') {
+                    await providers['code-viewer'].openCodeViewerTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-code-viewer',
+                        kind: 'code-viewer',
+                        title: '代码审阅',
+                        icon: 'code',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
+            } else if (action === 'terminal') {
                 const toast = (typeof globalThis !== 'undefined' && globalThis.uiHelperFunctions?.showToastNotification)
                     || doc.defaultView?.uiHelperFunctions?.showToastNotification;
-                toast?.(`${label}功能正在深度建设中，敬请期待！`, 'info');
+                toast?.('终端功能正在深度建设中，敬请期待！', 'info');
             }
         };
         resolvedAddMenuPopover.addEventListener('click', onAddMenuClick);
@@ -879,13 +1259,51 @@ export function createSidePaneController({
                 if (typeof onOpenSideChat === 'function') {
                     await onOpenSideChat({ forceNew: true });
                 }
+            } else if (item === 'notes') {
+                if (typeof providers.notes?.openNotesTab === 'function') {
+                    await providers.notes.openNotesTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-notes',
+                        kind: 'notes',
+                        title: '随手笔记',
+                        icon: 'edit_note',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
             } else if (item === 'notifications') {
                 controller.showNotifications();
-            } else if (item === 'review' || item === 'terminal') {
-                const label = item === 'review' ? '代码审阅' : '工作区终端';
+            } else if (item === 'git' || item === 'review') {
+                if (typeof providers.git?.openGitTab === 'function') {
+                    await providers.git.openGitTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-git',
+                        kind: 'git',
+                        title: 'Git 变更',
+                        icon: 'branch',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
+            } else if (item === 'code-viewer') {
+                if (typeof providers['code-viewer']?.openCodeViewerTab === 'function') {
+                    await providers['code-viewer'].openCodeViewerTab();
+                } else {
+                    await controller.openTab({
+                        id: 'side-pane-code-viewer',
+                        kind: 'code-viewer',
+                        title: '代码审阅',
+                        icon: 'code',
+                        closable: true,
+                        scopeMode: 'global'
+                    });
+                }
+            } else if (item === 'terminal') {
                 const toast = (typeof globalThis !== 'undefined' && globalThis.uiHelperFunctions?.showToastNotification)
                     || doc.defaultView?.uiHelperFunctions?.showToastNotification;
-                toast?.(`${label}功能即将上线，敬请期待！`, 'info');
+                toast?.('工作区终端功能即将上线，敬请期待！', 'info');
             }
         };
         launcherView.addEventListener('click', onLauncherClick);
@@ -896,7 +1314,7 @@ export function createSidePaneController({
     renderTabList();
     renderTabOverviewPopover();
     syncViewPanels();
-    syncDomVisibility();
+    syncDomVisibility({ animate: false });
 
     if (scope && typeof scope.own === 'function') {
         scope.own(controller, 'side-pane-controller');

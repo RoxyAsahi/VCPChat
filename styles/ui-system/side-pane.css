@@ -16,7 +16,32 @@ html body.light-theme {
 
 /* --- Modern 4px Resizer with 2px Subtle Indicator (ZCode Parity) --- */
 html #resizerRight.resizer,
-html .vcp-side-pane-resizer,
+html .vcp-side-pane-resizer {
+    width: 4px;
+    margin: 0;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 50;
+    background-color: var(--next-shell-bg);
+    background-image: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transition: background-color 0.15s ease;
+    user-select: none;
+}
+
+html[data-vcp-wallpaper-scope="global"] #resizerRight.resizer,
+html[data-vcp-wallpaper-scope="global"] .vcp-side-pane-resizer {
+    background-color: var(
+        --panel-bg,
+        color-mix(in srgb, var(--next-shell-bg) var(--vcp-material-opacity, 68%), transparent)
+    );
+    background-image: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
 html #resizerLeft.resizer {
     width: 4px;
     margin: 0;
@@ -77,12 +102,22 @@ html #resizerLeft.resizer.active::after {
     background-color: var(--accent-bg, #3b82f6);
 }
 
-/* Hide resizer completely when side pane is collapsed */
-html .vcp-side-pane-hidden + #resizerRight,
-html #vcpSidePane:not(.active) + #resizerRight,
-html #vcpSidePane[aria-hidden="true"] + #resizerRight,
-html #resizerRight.hidden {
+/* Hide resizer completely when side pane is collapsed and not animating */
+html .vcp-side-pane-hidden + #resizerRight:not(.is-animating),
+html #vcpSidePane:not(.active):not(.is-animating) + #resizerRight:not(.is-animating),
+html #vcpSidePane[aria-hidden="true"]:not(.is-animating) + #resizerRight:not(.is-animating),
+html #resizerRight.hidden:not(.is-animating),
+html body:not(:has(#vcpSidePane.active)):not(:has(#vcpSidePane.is-animating)) #resizerRight:not(.is-animating) {
     display: none;
+}
+
+html #resizerRight.resizer.is-animating {
+    pointer-events: none;
+    transition: opacity 0.18s ease-out;
+}
+
+html #resizerRight.resizer.is-animating-closing {
+    opacity: 0;
 }
 
 /* --- Workspace Side Pane Host (ZCode Card Parity) --- */
@@ -95,28 +130,42 @@ html #vcpSidePane {
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
-    background-color: var(--panel-bg-dark, rgba(24, 24, 28, 0.96));
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background-color: transparent;
     border: 1px solid var(--zcode-panel-border, rgba(255, 255, 255, 0.08));
     border-radius: var(--vcp-ui-shell-radius, 12px);
     box-shadow: var(--vcp-ui-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
     box-sizing: border-box;
-    transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, border-color 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     z-index: 40;
+}
+
+/* ZCode parity: Only apply size/opacity transition during explicit toggle cycles */
+html .vcp-side-pane.is-animating,
+html #vcpSidePane.is-animating {
+    transition: width 0.22s cubic-bezier(0.2, 0, 0, 1), opacity 0.18s ease-out;
+    will-change: width, opacity;
+    pointer-events: none;
+    overflow: hidden;
 }
 
 html body[data-vcp-theme="light"] .vcp-side-pane,
 html body[data-vcp-theme="light"] #vcpSidePane {
-    background-color: var(--panel-bg-light, rgba(255, 255, 255, 0.95));
     border-color: var(--zcode-panel-border, rgba(0, 0, 0, 0.08));
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Collapsed / Hidden State */
-html .vcp-side-pane.collapsed,
-html .vcp-side-pane[aria-hidden="true"],
-html #vcpSidePane:not(.active) {
+/* Active state: ZCode default ratio (45%) with responsive min/max constraints */
+html .vcp-side-pane.active:not(.is-animating),
+html #vcpSidePane.active:not(.is-animating) {
+    width: var(--side-pane-width, 45%);
+    min-width: 240px;
+    max-width: 65%;
+}
+
+/* Collapsed / Hidden State (Active only when not in an animation cycle) */
+html .vcp-side-pane.collapsed:not(.is-animating),
+html .vcp-side-pane[aria-hidden="true"]:not(.is-animating),
+html #vcpSidePane:not(.active):not(.is-animating) {
     width: 0;
     min-width: 0;
     max-width: 0;
@@ -137,6 +186,7 @@ html body #nextUiMainPanel {
     box-sizing: border-box;
     overflow: hidden;
     box-shadow: var(--vcp-ui-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
+    background-attachment: fixed;
     transition: border-radius 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -145,50 +195,57 @@ html body[data-vcp-theme="light"] #nextUiMainPanel {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* When Side Pane is open, decouple into two distinct floating cards separated only by the 4px resizer */
+/* When Side Pane is open or animating, host frame adopts topbar shell color so gap & corner notches match topbar */
 html body:has(#vcpSidePane.active) #nextUiMainPanel,
-html body:has(.side-pane-active) #nextUiMainPanel {
-    background: transparent;
+html body:has(#vcpSidePane.is-animating) #nextUiMainPanel,
+html body:has(.side-pane-active) #nextUiMainPanel,
+html body:has(.side-pane-animating) #nextUiMainPanel {
+    background-color: var(--next-shell-bg);
+    background-image: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     border-color: transparent;
     box-shadow: none;
     overflow: visible;
     gap: 0;
 }
 
-html body .main-content.side-pane-active {
-    flex: 1 1 auto;
-    min-width: 0;
+html[data-vcp-wallpaper-scope="global"] body:has(#vcpSidePane.active) #nextUiMainPanel,
+html[data-vcp-wallpaper-scope="global"] body:has(#vcpSidePane.is-animating) #nextUiMainPanel,
+html[data-vcp-wallpaper-scope="global"] body:has(.side-pane-active) #nextUiMainPanel,
+html[data-vcp-wallpaper-scope="global"] body:has(.side-pane-animating) #nextUiMainPanel {
+    background-color: var(
+        --panel-bg,
+        color-mix(in srgb, var(--next-shell-bg) var(--vcp-material-opacity, 68%), transparent)
+    );
+    background-image: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html body .main-content.side-pane-active,
+html body .main-content.side-pane-animating {
+    flex: 1 1 0%;
+    min-width: 360px;
     height: 100%;
     border-radius: var(--vcp-ui-shell-radius, 12px);
     border: 1px solid var(--zcode-panel-border, rgba(255, 255, 255, 0.08));
     overflow: hidden;
     box-sizing: border-box;
     box-shadow: var(--vcp-ui-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.1));
-    background-color: var(--next-shell-bg, var(--primary-bg, #1a1a1d));
-    background-image:
-        linear-gradient(var(--next-chat-surface), var(--next-chat-surface)),
-        var(--next-wallpaper);
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: cover;
-    backdrop-filter: var(--next-surface-backdrop-filter);
-    -webkit-backdrop-filter: var(--next-surface-backdrop-filter);
-}
-
-html body[data-vcp-theme="light"] .main-content.side-pane-active {
-    border-color: var(--zcode-panel-border, rgba(0, 0, 0, 0.08));
-    background-color: var(--next-shell-bg, var(--primary-bg-light, #ffffff));
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-html[data-vcp-wallpaper-scope="global"] body .main-content.side-pane-active {
     background-color: transparent;
-    background-image: linear-gradient(
-        color-mix(in srgb, var(--primary-bg) 24%, transparent),
-        color-mix(in srgb, var(--primary-bg) 24%, transparent)
-    );
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+}
+
+html body .main-content.side-pane-active .chat-header,
+html body .main-content.side-pane-animating .chat-header {
+    border-top-left-radius: var(--vcp-ui-shell-radius, 12px);
+    border-top-right-radius: var(--vcp-ui-shell-radius, 12px);
+}
+
+html body[data-vcp-theme="light"] .main-content.side-pane-active,
+html body[data-vcp-theme="light"] .main-content.side-pane-animating {
+    border-color: var(--zcode-panel-border, rgba(0, 0, 0, 0.08));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 /* Hosted Notifications Sidebar Adaptations */
@@ -231,20 +288,22 @@ html body.light-theme .chat-header {
 
 /* --- Side Pane Tab Bar --- */
 html .side-pane-tab-bar {
-    height: var(--vcp-ui-shell-header-height, 46px);
-    min-height: var(--vcp-ui-shell-header-height, 46px);
+    height: 48px;
+    min-height: 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 6px 0 10px;
-    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.05));
+    padding: 0 8px;
+    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.08));
+    border-top-left-radius: var(--vcp-ui-shell-radius, 12px);
+    border-top-right-radius: var(--vcp-ui-shell-radius, 12px);
     background: transparent;
     user-select: none;
     box-sizing: border-box;
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab-bar {
-    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.05));
+    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.08));
 }
 
 html .side-pane-tabs {
@@ -255,6 +314,7 @@ html .side-pane-tabs {
     scrollbar-width: none;
     flex: 1;
     min-width: 0;
+    padding: 0 2px;
 }
 
 html .side-pane-tabs::-webkit-scrollbar {
@@ -265,13 +325,20 @@ html .side-pane-tab-item {
     display: inline-flex;
     align-items: center;
     position: relative;
-    border-radius: 6px;
+    height: 28px;
+    border-radius: 8px;
     background: transparent;
-    transition: background-color 0.15s ease;
+    border: 1px solid transparent;
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    flex: 1 1 9.75rem;
+    min-width: 60px;
+    max-width: 156px;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 html .side-pane-tab-item:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab-item:hover {
@@ -279,7 +346,8 @@ html body[data-vcp-theme="light"] .side-pane-tab-item:hover {
 }
 
 html .side-pane-tab-item.active {
-    background-color: var(--card-bg-selected, rgba(255, 255, 255, 0.12));
+    background-color: rgba(255, 255, 255, 0.10);
+    border-color: transparent;
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab-item.active {
@@ -290,29 +358,36 @@ html .side-pane-tab {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 28px;
-    padding: 0 8px;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--secondary-text, rgba(241, 245, 249, 0.7));
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    padding: 0 24px 0 8px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.65));
     background: transparent;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
     white-space: nowrap;
-    transition: color 0.15s ease, background-color 0.15s ease;
-    max-width: 140px;
+    text-align: left;
+    outline: none;
+    transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab {
     color: var(--secondary-text, #475569);
 }
 
-html .side-pane-tab:hover {
+html .side-pane-tab:hover,
+html .side-pane-tab-item:hover .side-pane-tab {
     color: var(--primary-text, #ffffff);
 }
 
-html body[data-vcp-theme="light"] .side-pane-tab:hover {
+html body[data-vcp-theme="light"] .side-pane-tab:hover,
+html body[data-vcp-theme="light"] .side-pane-tab-item:hover .side-pane-tab {
     color: var(--primary-text, #0f172a);
 }
 
@@ -328,40 +403,79 @@ html body[data-vcp-theme="light"] .side-pane-tab-item.active .side-pane-tab {
 }
 
 html .side-pane-tab .tab-title {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-html .side-pane-tab .tab-icon {
-    font-size: 14px;
-    opacity: 0.8;
-}
-
-html .side-pane-tab-close {
+html .side-pane-tab .tab-icon,
+html .side-pane-tab .tab-icon.vcp-ui-icon,
+html .side-pane-tab .tab-icon svg {
+    --vcp-ui-icon-size: 14px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    flex: 0 0 16px;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+html .side-pane-tab-close {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
     padding: 0;
-    margin-left: 2px;
+    margin: 0;
     border: none;
     border-radius: 4px;
     background: transparent;
     color: inherit;
-    opacity: 0.6;
+    opacity: 0;
+    pointer-events: none;
     cursor: pointer;
-    transition: opacity 0.15s ease, background-color 0.15s ease;
+    transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html .side-pane-tab-item:hover .side-pane-tab-close,
+html .side-pane-tab-item.active .side-pane-tab-close,
+html .side-pane-tab-item:focus-within .side-pane-tab-close {
+    opacity: 0.65;
+    pointer-events: auto;
 }
 
 html .side-pane-tab-close:hover {
     opacity: 1;
-    background-color: rgba(255, 255, 255, 0.15);
+    color: var(--primary-text, #ffffff);
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 html body[data-vcp-theme="light"] .side-pane-tab-close:hover {
+    color: var(--primary-text, #0f172a);
     background-color: rgba(0, 0, 0, 0.08);
+}
+
+html .side-pane-tab-close .vcp-ui-icon,
+html .side-pane-tab-close svg {
+    --vcp-ui-icon-size: 12px;
+    width: 12px;
+    height: 12px;
+    font-size: 12px;
+    line-height: 1;
 }
 
 html .side-pane-tab-actions {
@@ -375,14 +489,18 @@ html .side-pane-action-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
     background: transparent;
-    color: var(--secondary-text, rgba(241, 245, 249, 0.7));
+    color: var(--secondary-text, rgba(255, 255, 255, 0.65));
     cursor: pointer;
-    transition: color 0.15s ease, background-color 0.15s ease;
+    outline: none;
+    transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html body[data-vcp-theme="light"] .side-pane-action-btn {
@@ -391,12 +509,31 @@ html body[data-vcp-theme="light"] .side-pane-action-btn {
 
 html .side-pane-action-btn:hover {
     color: var(--primary-text, #ffffff);
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 html body[data-vcp-theme="light"] .side-pane-action-btn:hover {
     color: var(--primary-text, #0f172a);
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+html .side-pane-action-btn:is(.active, [aria-expanded="true"]) {
+    color: var(--primary-text, #ffffff);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+html body[data-vcp-theme="light"] .side-pane-action-btn:is(.active, [aria-expanded="true"]) {
+    color: var(--primary-text, #0f172a);
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+html .side-pane-action-btn .vcp-ui-icon,
+html .side-pane-action-btn svg {
+    --vcp-ui-icon-size: 16px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 1;
 }
 
 /* --- Content Views Container --- */
@@ -1049,9 +1186,9 @@ html .side-pane-tab-overview-popover {
     left: 8px;
     width: 260px;
     max-height: 320px;
-    background: var(--card-bg, #1e242c);
+    background: var(--panel-bg-dark, #18181b);
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
-    border-radius: 8px;
+    border-radius: 12px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     z-index: 100;
     display: flex;
@@ -1086,7 +1223,7 @@ html .side-pane-overview-input {
     border: none;
     outline: none;
     color: var(--primary-text, #f1f5f9);
-    font-size: 12px;
+    font-size: 13px;
 }
 
 html body[data-vcp-theme="light"] .side-pane-overview-input {
@@ -1116,10 +1253,10 @@ html .side-pane-overview-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 8px;
+    padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--primary-text, #f1f5f9);
     transition: background 0.12s ease;
 }
@@ -1191,6 +1328,7 @@ html .side-pane-open-tab-shell {
     padding: 24px 16px;
     box-sizing: border-box;
     background: transparent;
+    container: side-pane-open-tab / inline-size;
 }
 
 html .side-pane-open-tab-content {
@@ -1283,14 +1421,48 @@ html .side-pane-open-tab-button-label {
     white-space: nowrap;
 }
 
+html .side-pane-open-tab-button .vcp-ui-icon,
+html .side-pane-open-tab-button svg {
+    --vcp-ui-icon-size: 16px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0.85;
+}
+
+@container side-pane-open-tab (min-width: 480px) {
+    html .side-pane-open-tab-content {
+        max-width: 34rem;
+    }
+
+    html .side-pane-open-tab-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    }
+
+    html .side-pane-open-tab-button {
+        flex-direction: column;
+        gap: 0.375rem;
+        height: 5.5rem;
+        justify-content: center;
+    }
+
+    html .side-pane-open-tab-button-label {
+        flex: 0 1 auto;
+        text-align: center;
+    }
+}
+
 /* --- Side Pane Add Menu Popover & Tab Context Menu --- */
 html .side-pane-add-menu-popover,
 html .side-pane-context-menu {
     position: absolute;
     min-width: 170px;
-    padding: 6px;
-    border-radius: 10px;
-    background: var(--panel-bg-dark, #1e1e24);
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--panel-bg-dark, #18181b);
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(12px);
@@ -1317,12 +1489,14 @@ html .side-pane-menu-item {
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 6px 10px;
+    min-height: 32px;
+    padding: 0 10px;
     border-radius: 6px;
     border: none;
     background: transparent;
     color: var(--primary-text, #f1f5f9);
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 400;
     text-align: left;
     cursor: pointer;
     box-sizing: border-box;
@@ -1343,6 +1517,17 @@ html body[data-vcp-theme="light"] .side-pane-menu-item:hover:not(:disabled) {
 
 html .side-pane-menu-item:disabled {
     cursor: not-allowed;
+}
+
+html .side-pane-menu-item .vcp-ui-icon,
+html .side-pane-menu-item svg {
+    --vcp-ui-icon-size: 16px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
 html .side-pane-menu-divider {
@@ -1556,6 +1741,1355 @@ html .floating-selection-side-chat-btn:hover {
     transform: translateY(-1px);
     background: #2563eb;
     box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* --- Side Pane Git Source Control View (ZCode Feat/UI-Plugin Spec) --- */
+html .side-git-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: transparent;
+}
+
+html .side-git-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* 1. Header Toolbar (ZCode p-3 style) */
+html .side-git-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--bg-surface-header, rgba(255, 255, 255, 0.015));
+}
+
+html body[data-vcp-theme="light"] .side-git-header {
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.015);
+}
+
+html .side-git-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+html .side-git-source-select {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--primary-text, #f1f5f9);
+    font-size: 13px;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-git-source-select {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-source-select:hover,
+html .side-git-source-select:focus {
+    border-color: var(--accent-color, #3b82f6);
+}
+
+html .side-git-top-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+html .side-git-refresh-btn {
+    width: auto;
+    padding: 0 10px;
+    gap: 6px;
+    height: 32px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+html .side-git-btn-label {
+    display: inline;
+}
+
+html .side-git-refresh-btn.spinning .vcp-ui-icon,
+html .side-git-refresh-btn.spinning svg {
+    animation: side-pane-spin 0.8s linear infinite;
+}
+
+/* Sub-row: Workspace Picker + Branch & Sync Info */
+html .side-git-sub-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+}
+
+html .side-git-ws-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+html .side-git-ws-icon {
+    font-size: 14px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-git-ws-icon {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-git-ws-select {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--secondary-text, rgba(255, 255, 255, 0.8));
+    font-size: 11px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+html body[data-vcp-theme="light"] .side-git-ws-select {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: var(--secondary-text, #334155);
+}
+
+html .side-git-meta-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+html .side-git-branch-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--primary-text, #f1f5f9);
+    font-weight: 500;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html body[data-vcp-theme="light"] .side-git-branch-badge {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+html body[data-vcp-theme="light"] .side-git-sync-badge {
+    background: rgba(59, 130, 246, 0.12);
+    color: #2563eb;
+}
+
+/* Notice Banner */
+html .side-git-notice {
+    margin: 8px 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+html .side-git-notice.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+html .side-git-notice.success {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+/* 2. File Changes Body (Scrollable Viewport) */
+html .side-git-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* ZCode Empty State Pattern */
+html .side-git-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 220px;
+    padding: 24px;
+    text-align: center;
+}
+
+html .side-git-empty .empty-icon {
+    font-size: 32px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.35));
+    margin-bottom: 12px;
+}
+
+html body[data-vcp-theme="light"] .side-git-empty .empty-icon {
+    color: var(--secondary-text, rgba(0, 0, 0, 0.3));
+}
+
+html .side-git-empty-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary-text, #f1f5f9);
+    margin: 0 0 4px 0;
+}
+
+html body[data-vcp-theme="light"] .side-git-empty-title {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-empty-desc {
+    font-size: 12px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    margin: 0;
+}
+
+html body[data-vcp-theme="light"] .side-git-empty-desc {
+    color: var(--secondary-text, #64748b);
+}
+
+/* Change Groups */
+html .side-git-group {
+    margin-bottom: 8px;
+}
+
+html .side-git-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    user-select: none;
+}
+
+html body[data-vcp-theme="light"] .side-git-group-head {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-git-group-head .group-count {
+    font-weight: normal;
+    opacity: 0.8;
+}
+
+html .side-git-batch-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    transition: background-color 100ms ease, color 100ms ease;
+}
+
+html .side-git-batch-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-git-batch-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+html .side-git-file-item {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+html body[data-vcp-theme="light"] .side-git-file-item {
+    border-bottom-color: rgba(0, 0, 0, 0.03);
+}
+
+/* ZCode GitPaneChangeCard: exactly 32px height (h-8), sticky top, backdrop blur */
+html .side-git-file-row {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 12px;
+    background: var(--bg-surface, #1e1e2e);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    box-sizing: border-box;
+}
+
+html body[data-vcp-theme="light"] .side-git-file-row {
+    background: var(--bg-surface, #ffffff);
+}
+
+html .side-git-file-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+html body[data-vcp-theme="light"] .side-git-file-row:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+
+html .side-git-file-row.is-expanded {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+html body[data-vcp-theme="light"] .side-git-file-row.is-expanded {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+html .side-git-file-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+html .side-git-file-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+html .side-git-file-status.status-m {
+    color: #eab308;
+    background: rgba(234, 179, 8, 0.15);
+}
+
+html .side-git-file-status.status-a {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.15);
+}
+
+html .side-git-file-status.status-d {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+html .side-git-file-status.status-u,
+html .side-git-file-status.status-r {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+}
+
+html .side-git-file-status.status-conflict {
+    color: #f97316;
+    background: rgba(249, 115, 22, 0.15);
+}
+
+html .side-git-file-basename {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary-text, #f1f5f9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html body[data-vcp-theme="light"] .side-git-file-basename {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-file-dir {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.45));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html body[data-vcp-theme="light"] .side-git-file-dir {
+    color: var(--secondary-text, #94a3b8);
+}
+
+html .side-git-file-meta {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-left: 8px;
+}
+
+html .side-git-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+html .side-git-file-row:hover .side-git-row-actions,
+html .side-git-file-row:focus-within .side-git-row-actions {
+    opacity: 1;
+}
+
+html .side-git-row-action-btn {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    transition: background-color 100ms ease, color 100ms ease;
+}
+
+html .side-git-row-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-git-row-action-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-row-action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+html .side-git-row-action-btn .vcp-ui-icon,
+html .side-git-row-action-btn svg {
+    --vcp-ui-icon-size: 13px;
+    width: 13px;
+    height: 13px;
+    font-size: 13px;
+    line-height: 1;
+}
+
+/* ZCode Diff Counters: +N in green, -M in red */
+html .side-git-diff-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    white-space: nowrap;
+}
+
+html .text-diff-added {
+    color: #22c55e;
+    font-weight: 500;
+}
+
+html .text-diff-removed {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+/* Chevron Down with smooth 180deg rotation */
+html .side-git-chevron {
+    font-size: 16px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(0deg);
+}
+
+html body[data-vcp-theme="light"] .side-git-chevron {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-git-file-row.is-expanded .side-git-chevron {
+    transform: rotate(180deg);
+}
+
+/* Inline Diff Container */
+html .side-git-inline-diff {
+    background: rgba(0, 0, 0, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 6px 8px;
+    overflow-x: auto;
+}
+
+html body[data-vcp-theme="light"] .side-git-inline-diff {
+    background: rgba(0, 0, 0, 0.03);
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+html .side-git-diff-summary-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 6px;
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+html .diff-summary-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+html .side-git-diff-summary-bar .diff-stat-add {
+    color: #22c55e;
+}
+
+html .side-git-diff-summary-bar .diff-stat-del {
+    color: #ef4444;
+}
+
+html .side-git-diff-summary-bar .diff-stat-rows {
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-summary-bar .diff-stat-rows {
+    color: var(--secondary-text, #94a3b8);
+}
+
+html .side-git-diff-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+html .side-git-diff-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--secondary-text, rgba(255, 255, 255, 0.8));
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-btn {
+    border-color: rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--secondary-text, #334155);
+}
+
+html .side-git-diff-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-diff-btn .vcp-ui-icon {
+    font-size: 12px;
+}
+
+html .side-git-diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+html .side-git-diff-table tr.diff-line.add {
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-table tr.diff-line.add {
+    background: rgba(34, 197, 94, 0.15);
+    color: #15803d;
+}
+
+html .side-git-diff-table tr.diff-line.del {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-table tr.diff-line.del {
+    background: rgba(239, 68, 68, 0.15);
+    color: #b91c1c;
+}
+
+html .side-git-diff-table tr.diff-line.same {
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-table tr.diff-line.same {
+    color: var(--secondary-text, #475569);
+}
+
+html .side-git-diff-table td.diff-num {
+    width: 26px;
+    min-width: 26px;
+    padding: 0 4px;
+    text-align: right;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.4));
+    user-select: none;
+    font-size: 10px;
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-table td.diff-num {
+    color: var(--secondary-text, #94a3b8);
+}
+
+html .side-git-diff-table td.diff-content {
+    padding: 0 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+html .side-git-diff-loading,
+html .side-git-diff-binary,
+html .side-git-diff-error,
+html .side-git-diff-overflow {
+    padding: 8px;
+    font-size: 11px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.6));
+}
+
+html body[data-vcp-theme="light"] .side-git-diff-loading,
+html body[data-vcp-theme="light"] .side-git-diff-binary,
+html body[data-vcp-theme="light"] .side-git-diff-error,
+html body[data-vcp-theme="light"] .side-git-diff-overflow {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-git-diff-error {
+    color: #f87171;
+}
+
+/* 3. Commit & Push Dock (Docked at bottom) */
+html .side-git-commit-dock {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--bg-surface-footer, rgba(0, 0, 0, 0.15));
+}
+
+html body[data-vcp-theme="light"] .side-git-commit-dock {
+    border-top-color: rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+html .side-git-commit-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: none;
+    border-radius: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--primary-text, #f1f5f9);
+    font-size: 12px;
+    padding: 6px 10px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 150ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-git-commit-input {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: #ffffff;
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-commit-input:focus {
+    border-color: var(--accent-color, #3b82f6);
+}
+
+html .side-git-commit-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+html .side-git-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--primary-text, #f1f5f9);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 120ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-git-btn {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-git-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+html .side-git-btn.primary {
+    background: var(--accent-bg, #3b82f6);
+    border-color: transparent;
+    color: #ffffff;
+}
+
+html .side-git-btn.primary:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+/* ==========================================================================
+   Universal Sub-screen: Notes / Quick Memo Provider (.side-notes-*)
+   ========================================================================== */
+html .side-notes-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+html .side-notes-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Notes Toolbar */
+html .side-notes-toolbar {
+    height: 38px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.06));
+    background: rgba(255, 255, 255, 0.02);
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-notes-toolbar {
+    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.06));
+    background: rgba(0, 0, 0, 0.02);
+}
+
+html .side-notes-selector-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+html .side-notes-icon {
+    --vcp-ui-icon-size: 14px;
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-notes-icon {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-notes-select {
+    height: 26px;
+    max-width: 160px;
+    padding: 0 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--primary-text, #f1f5f9);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    outline: none;
+    cursor: pointer;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: border-color 150ms ease, background 150ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-notes-select {
+    color: var(--primary-text, #0f172a);
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+html .side-notes-select:hover,
+html .side-notes-select:focus {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+html body[data-vcp-theme="light"] .side-notes-select:hover,
+html body[data-vcp-theme="light"] .side-notes-select:focus {
+    border-color: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.06);
+}
+
+html .side-notes-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+html .side-notes-status {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.6));
+    background: rgba(255, 255, 255, 0.05);
+    white-space: nowrap;
+    transition: all 150ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-notes-status {
+    color: var(--secondary-text, #64748b);
+    background: rgba(0, 0, 0, 0.04);
+}
+
+html .side-notes-status.is-error {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+}
+
+html .side-notes-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    outline: none;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-notes-action-btn {
+    color: var(--secondary-text, #475569);
+}
+
+html .side-notes-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-notes-action-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-notes-action-btn:active {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+html body[data-vcp-theme="light"] .side-notes-action-btn:active {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+html .side-notes-action-btn .vcp-ui-icon,
+html .side-notes-action-btn svg {
+    --vcp-ui-icon-size: 14px;
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Notes Body */
+html .side-notes-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+html .side-notes-title-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--primary-text, #f1f5f9);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.06));
+    outline: none;
+    transition: border-color 150ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-notes-title-input {
+    color: var(--primary-text, #0f172a);
+    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.06));
+}
+
+html .side-notes-title-input:focus {
+    border-bottom-color: var(--accent-bg, #3b82f6);
+}
+
+html .side-notes-title-input::placeholder {
+    color: var(--secondary-text, rgba(255, 255, 255, 0.35));
+}
+
+html body[data-vcp-theme="light"] .side-notes-title-input::placeholder {
+    color: var(--secondary-text, rgba(0, 0, 0, 0.35));
+}
+
+html .side-notes-content-textarea {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    font-family: inherit;
+    color: var(--primary-text, #f1f5f9);
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+}
+
+html body[data-vcp-theme="light"] .side-notes-content-textarea {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-notes-content-textarea::placeholder {
+    color: var(--secondary-text, rgba(255, 255, 255, 0.35));
+}
+
+html body[data-vcp-theme="light"] .side-notes-content-textarea::placeholder {
+    color: var(--secondary-text, rgba(0, 0, 0, 0.35));
+}
+
+/* ==========================================================================
+   Universal Sub-screen: Code & Diff Viewer Provider (.side-code-*)
+   ========================================================================== */
+html .side-code-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+html .side-code-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Code Toolbar */
+html .side-code-toolbar {
+    height: 38px;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.06));
+    background: rgba(255, 255, 255, 0.02);
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-code-toolbar {
+    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.06));
+    background: rgba(0, 0, 0, 0.02);
+}
+
+html .side-code-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+html .side-code-icon {
+    --vcp-ui-icon-size: 14px;
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.5));
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-code-icon {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-code-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--primary-text, #f1f5f9);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html body[data-vcp-theme="light"] .side-code-title {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-code-lang-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-code-lang-tag {
+    background: rgba(37, 99, 235, 0.08);
+    color: #1d4ed8;
+    border-color: rgba(37, 99, 235, 0.2);
+}
+
+html .side-code-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+html .side-code-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+    cursor: pointer;
+    outline: none;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+html body[data-vcp-theme="light"] .side-code-action-btn {
+    color: var(--secondary-text, #475569);
+}
+
+html .side-code-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--primary-text, #ffffff);
+}
+
+html body[data-vcp-theme="light"] .side-code-action-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-code-action-btn:active {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+html body[data-vcp-theme="light"] .side-code-action-btn:active {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+html .side-code-action-btn .vcp-ui-icon,
+html .side-code-action-btn svg {
+    --vcp-ui-icon-size: 14px;
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Code Body & Editor */
+html .side-code-body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface, rgba(0, 0, 0, 0.2));
+}
+
+html body[data-vcp-theme="light"] .side-code-body {
+    background: var(--color-surface, rgba(0, 0, 0, 0.02));
+}
+
+html .side-code-editor-shell {
+    display: flex;
+    min-height: 100%;
+    min-width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+html .side-code-gutter {
+    width: 38px;
+    min-width: 38px;
+    padding: 8px 6px 8px 0;
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.06));
+    color: var(--secondary-text, rgba(255, 255, 255, 0.35));
+    font-size: 11px;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+html body[data-vcp-theme="light"] .side-code-gutter {
+    border-right-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.06));
+    color: var(--secondary-text, rgba(0, 0, 0, 0.35));
+}
+
+html .side-code-line-number {
+    height: 18px;
+    line-height: 18px;
+}
+
+html .side-code-pre {
+    margin: 0;
+    padding: 8px 12px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--primary-text, #f1f5f9);
+    line-height: 18px;
+}
+
+html body[data-vcp-theme="light"] .side-code-pre {
+    color: var(--primary-text, #0f172a);
+}
+
+html .side-code-editor-shell.is-wrapped .side-code-pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+html .side-code-highlighted {
+    font-family: inherit;
+    font-size: inherit;
+    background: transparent;
+    padding: 0;
+}
+
+/* Code Diff View within Code Viewer */
+html .side-code-diff-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    border-bottom: 1px solid var(--zcode-header-divider, rgba(255, 255, 255, 0.06));
+    background: rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+}
+
+html body[data-vcp-theme="light"] .side-code-diff-summary {
+    border-bottom-color: var(--zcode-header-divider, rgba(0, 0, 0, 0.06));
+    background: rgba(0, 0, 0, 0.03);
+}
+
+html .side-code-diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+html .side-code-diff-table tr.diff-line.add {
+    background: rgba(34, 197, 94, 0.12);
+    color: #86efac;
+}
+
+html body[data-vcp-theme="light"] .side-code-diff-table tr.diff-line.add {
+    background: rgba(34, 197, 94, 0.15);
+    color: #15803d;
+}
+
+html .side-code-diff-table tr.diff-line.del {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+}
+
+html body[data-vcp-theme="light"] .side-code-diff-table tr.diff-line.del {
+    background: rgba(239, 68, 68, 0.15);
+    color: #b91c1c;
+}
+
+html .side-code-diff-table tr.diff-line.same {
+    color: var(--secondary-text, rgba(255, 255, 255, 0.7));
+}
+
+html body[data-vcp-theme="light"] .side-code-diff-table tr.diff-line.same {
+    color: var(--secondary-text, #475569);
+}
+
+html .side-code-diff-table td.diff-num {
+    width: 28px;
+    min-width: 28px;
+    padding: 0 4px;
+    text-align: right;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.35));
+    user-select: none;
+    font-size: 10px;
+}
+
+html body[data-vcp-theme="light"] .side-code-diff-table td.diff-num {
+    color: var(--secondary-text, #94a3b8);
+}
+
+html .side-code-diff-table td.diff-content {
+    padding: 0 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Loading & Error States */
+html .side-code-loading,
+html .side-code-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    font-size: 12px;
+    color: var(--secondary-text, rgba(255, 255, 255, 0.6));
+}
+
+html body[data-vcp-theme="light"] .side-code-loading,
+html body[data-vcp-theme="light"] .side-code-error {
+    color: var(--secondary-text, #64748b);
+}
+
+html .side-code-error {
+    color: #f87171;
 }
 
 /* --- Responsive Narrow Viewport Adaptation --- */

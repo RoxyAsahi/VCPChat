@@ -31,10 +31,12 @@ export function createSidePaneResizerOwner({
     handle?.setAttribute?.('aria-valuemin', String(minWidth));
 
     function getBounds() {
-        const workspace = doc?.querySelector?.('.app-container, .main-layout, main, body');
+        const workspace = doc?.querySelector?.('.container, #nextUiMainPanel, .app-container, .main-layout, body');
         const workspaceWidth = workspace?.getBoundingClientRect?.()?.width || win?.innerWidth || 1200;
         const leftSidebar = doc?.querySelector?.('.sidebar, #sidebarLeft');
-        const leftWidth = leftSidebar?.getBoundingClientRect?.()?.width || 0;
+        const leftWidth = (leftSidebar && !leftSidebar.classList.contains('hidden') && leftSidebar.classList.contains('active'))
+            ? (leftSidebar.getBoundingClientRect?.()?.width || 0)
+            : 0;
         const maxFromRatio = Math.round(workspaceWidth * maxRatio);
         const maxFromRemainder = Math.max(minWidth, workspaceWidth - leftWidth - minMainContentWidth);
         const max = Math.max(minWidth, Math.min(maxFromRatio, maxFromRemainder));

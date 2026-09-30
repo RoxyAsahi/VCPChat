@@ -275,7 +275,7 @@ function showContextMenu(event, messageItem, message) {
             menu.appendChild(createBranchOption);
         }
 
-        if (currentSelectedItemVal.type === 'agent') {
+        if (currentSelectedItemVal.type === 'agent' && typeof ownerWindow?.openSideChatWithSelection === 'function') {
             const sideChatOption = ownerDocument.createElement('div');
             sideChatOption.classList.add('context-menu-item');
             sideChatOption.innerHTML = `<i class="fas fa-columns"></i> 在侧边提问`;

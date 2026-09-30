@@ -568,6 +568,36 @@ html[data-vcp-wallpaper-scope="global"] .next-ui-main-panel {
     -webkit-backdrop-filter: none !important;
 }
 
+/* When Side Pane is open, both main chat and side pane host the wallpaper with continuous fixed alignment */
+html .next-ui-main-panel .main-content.side-pane-active,
+html .next-ui-main-panel .main-content.side-pane-animating,
+html .next-ui-main-panel #vcpSidePane.active,
+html .next-ui-main-panel #vcpSidePane.is-animating {
+    background-color: transparent;
+    background-image:
+        linear-gradient(var(--next-chat-surface, rgba(0, 0, 0, 0.2)), var(--next-chat-surface, rgba(0, 0, 0, 0.2))),
+        var(--next-wallpaper);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    backdrop-filter: var(--next-surface-backdrop-filter, none);
+    -webkit-backdrop-filter: var(--next-surface-backdrop-filter, none);
+}
+
+html[data-vcp-wallpaper-scope="global"] .next-ui-main-panel .main-content.side-pane-active,
+html[data-vcp-wallpaper-scope="global"] .next-ui-main-panel .main-content.side-pane-animating,
+html[data-vcp-wallpaper-scope="global"] .next-ui-main-panel #vcpSidePane.active,
+html[data-vcp-wallpaper-scope="global"] .next-ui-main-panel #vcpSidePane.is-animating {
+    background-color: transparent !important;
+    background-image: linear-gradient(
+        color-mix(in srgb, var(--primary-bg) 24%, transparent),
+        color-mix(in srgb, var(--primary-bg) 24%, transparent)
+    ) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
 /* Frontend wallpaper plugins retain their upstream DOM and behavior. The
    resolved wallpaper scope supplies one shared geometry contract for video,
    image and isolated web wallpaper planes. */

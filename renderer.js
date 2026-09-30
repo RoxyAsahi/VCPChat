@@ -19,6 +19,9 @@ import { createMainChatSettingsPresentationOwner } from './modules/renderer/main
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
+import { createNotesSideProvider } from './modules/ui-system/side-pane/notesSideProvider.js';
+import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/codeViewerSideProvider.js';
+import { createGitSideProvider } from './modules/ui-system/side-pane/gitSideProvider.js';
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
 import {
     createSideChatDescriptor,
@@ -30,6 +33,9 @@ import {
     deleteSideChatMetadata
 } from './modules/chat/sideChatSessionService.js';
 import { captureSelectionReference } from './modules/ui-system/side-pane/selection-reference.js';
+
+// 侧边辅助聊天尚未完成：关闭后只保留侧栏的通知/笔记/Git/代码查看标签，聊天入口全部隐藏。
+const SIDE_CHAT_ENABLED = false;
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -996,10 +1002,8 @@ mainChatSettingsPresentationOwner.configureStartup({
                 settingsRef: mainChatSettingsOwner.ref,
                 electronAPI: chatAPI,
                 scope: null,
-                providers: {
-                    chat: sideChatOwner,
-                },
-                onOpenSideChat: async (options = {}) => {
+                providers: SIDE_CHAT_ENABLED ? { chat: sideChatOwner } : {},
+                onOpenSideChat: !SIDE_CHAT_ENABLED ? null : async (options = {}) => {
                     // Reopening an existing closed side chat or opening by explicit descriptor
                     if (options?.child?.topicId || (options?.id && options?.parent)) {
                         const reopenDesc = {
@@ -1126,7 +1130,7 @@ mainChatSettingsPresentationOwner.configureStartup({
                         }).catch(err => console.warn('[SideChat] Failed to delete closed ephemeral tab metadata:', err));
                     }
                 },
-                onRestoreSessions: async (agentId, parentTopicId) => {
+                onRestoreSessions: !SIDE_CHAT_ENABLED ? null : async (agentId, parentTopicId) => {
                     const listRes = await listSideChatsForParent({
                         electronAPI: chatAPI,
                         agentId,
@@ -1173,6 +1177,41 @@ mainChatSettingsPresentationOwner.configureStartup({
                     return [];
                 }
             });
+            const notesSideProvider = createNotesSideProvider({
+                electronAPI: chatAPI,
+                utilityAPI: window.utilityAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions,
+                onOpenFullNotes: () => {
+                    const notesBtn = document.querySelector('[data-action="open-notes-window"]');
+                    notesBtn?.click?.();
+                }
+            });
+            sidePaneController.registerProvider('notes', notesSideProvider);
+
+            const codeViewerSideProvider = createCodeViewerSideProvider({
+                document,
+                api: chatAPI || window.utilityAPI || window.electronAPI,
+                uiHelper: uiHelperFunctions,
+                sidePaneController
+            });
+            sidePaneController.registerProvider('code-viewer', codeViewerSideProvider);
+
+            const gitSideProvider = createGitSideProvider({
+                electronAPI: chatAPI || window.electronAPI || window.utilityAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions,
+                onOpenProjectForge: () => {
+                    const btn = document.querySelector('[data-action="open-project-forge-window"]');
+                    if (btn) {
+                        btn.click();
+                    } else if (chatAPI?.desktopCreateEmbeddedVchatApp) {
+                        chatAPI.desktopCreateEmbeddedVchatApp('open-project-forge-window');
+                    }
+                }
+            });
+            sidePaneController.registerProvider('git', gitSideProvider);
+
             globalThis.vcpSidePaneController = sidePaneController;
             window.vcpSidePaneController = sidePaneController;
             ownedRendererSubscriptions.add(sidePaneController);
@@ -1205,7 +1244,7 @@ mainChatSettingsPresentationOwner.configureStartup({
                 syncSidePaneParent({ item: curItem, topicId: curTopic });
             }
 
-            window.openSideChatWithSelection = async (contextParams = null) => {
+            if (SIDE_CHAT_ENABLED) window.openSideChatWithSelection = async (contextParams = null) => {
                 let reference = null;
                 if (contextParams?.selectedText) {
                     if (contextParams.selectedText.length > 8000) {
@@ -1246,7 +1285,19 @@ mainChatSettingsPresentationOwner.configureStartup({
             };
 
             const floatingBtn = document.getElementById('floatingSelectionSideChatBtn');
-            if (floatingBtn) {
+            if (!SIDE_CHAT_ENABLED) {
+                floatingBtn?.remove();
+                document.querySelectorAll('[data-action="new-chat"], [data-side-pane-open-tab-item="selection-side-conversation"]')
+                    .forEach(el => el.remove());
+                if (toggleSidePaneChatBtn) {
+                    toggleSidePaneChatBtn.title = '侧边栏';
+                    toggleSidePaneChatBtn.setAttribute('aria-label', '打开侧边栏');
+                }
+                if (addSidePaneChatBtn) {
+                    addSidePaneChatBtn.title = '添加标签页';
+                    addSidePaneChatBtn.setAttribute('aria-label', '添加标签页');
+                }
+            } else if (floatingBtn) {
                 const handleSelectionChange = () => {
                     const sel = window.getSelection();
                     if (!sel || sel.isCollapsed || !sel.rangeCount) {
