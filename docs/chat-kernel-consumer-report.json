@@ -132,6 +132,8 @@
     "PluginManagerModules/plugin-manager.html",
     "PluginManagerModules/plugin-manager.js",
     "ProjectForgemodules/projectforge-git.js",
+    "ProjectForgemodules/projectforge-sidetabs.js",
+    "ProjectForgemodules/projectforge-source.js",
     "ProjectForgemodules/projectforge.html",
     "ProjectForgemodules/projectforge.js",
     "Promptmodules/modular-prompt-module.js",
@@ -414,6 +416,7 @@
     "modules/ipc/groupChatHandlers.js",
     "modules/ipc/ipcContracts.js",
     "modules/ipc/libreHardwareMonitorBridge.js",
+    "modules/ipc/localSttHandlers.js",
     "modules/ipc/mainChatVoiceCoordinator.js",
     "modules/ipc/memoHandlers.js",
     "modules/ipc/musicHandlers.js",
@@ -424,6 +427,7 @@
     "modules/ipc/regexHandlers.js",
     "modules/ipc/settingsHandlers.js",
     "modules/ipc/sideChatHandlers.js",
+    "modules/ipc/sourceHandlers.js",
     "modules/ipc/sovitsHandlers.js",
     "modules/ipc/tavernHandlers.js",
     "modules/ipc/themeHandlers.js",
@@ -453,9 +457,11 @@
     "modules/messageRenderer.js",
     "modules/modelUsageTracker.js",
     "modules/musicScannerWorker.js",
+    "modules/notificationCenter.js",
     "modules/notificationRenderer.js",
     "modules/renderer/animation.js",
     "modules/renderer/colorUtils.js",
+    "modules/renderer/composerModelSelect.js",
     "modules/renderer/contentPipeline.js",
     "modules/renderer/contentProcessor.js",
     "modules/renderer/desktopPushConsumer.js",
@@ -519,6 +525,7 @@
     "modules/services/scriptoriumImportService.js",
     "modules/services/scriptoriumPptxImportService.js",
     "modules/services/senderTaskRegistry.js",
+    "modules/services/sourceService.js",
     "modules/services/windowAppIds.js",
     "modules/services/windowPinService.js",
     "modules/services/windowService.js",
@@ -534,6 +541,7 @@
     "modules/settings/schema/appearance-settings.js",
     "modules/settings/schema/jev-service.js",
     "modules/settings/schema/kernel.js",
+    "modules/settings/schema/local-stt-panel.js",
     "modules/settings/schema/quick-actions.js",
     "modules/settings/schema/render-settings.js",
     "modules/settings/schema/selection-assistant.js",
@@ -608,6 +616,9 @@
     "modules/ui-system/settings/settings-sidebar-slots.js",
     "modules/ui-system/settings/settings-sidebar-surface.js",
     "modules/ui-system/settlement.js",
+    "modules/ui-system/side-pane/codeViewerSideProvider.js",
+    "modules/ui-system/side-pane/gitSideProvider.js",
+    "modules/ui-system/side-pane/notesSideProvider.js",
     "modules/ui-system/side-pane/selection-reference.js",
     "modules/ui-system/side-pane/side-pane-controller.js",
     "modules/ui-system/side-pane/side-pane-resizer-owner.js",
@@ -675,10 +686,14 @@
     "modules/vcpClient.js",
     "modules/voice/audioRecorder.js",
     "modules/voice/chatVoiceComposer.js",
+    "modules/voice/localStt/localSttService.js",
+    "modules/voice/localStt/modelManager.js",
+    "modules/voice/localStt/sttWorker.js",
     "modules/voice/passiveVoiceSentinel.js",
     "modules/voice/speechDirectiveMatcher.js",
     "modules/voice/voice-input-engine-adapter.js",
     "modules/voice/voiceComposerView.js",
+    "modules/voice/voiceWaveform.js",
     "modules/voice/wavAudioEncoder.js",
     "modules/weatherService.js",
     "modules/webdavManager.js",
@@ -696,6 +711,7 @@
     "preloads/api/flowlock.js",
     "preloads/api/forum.js",
     "preloads/api/groupChat.js",
+    "preloads/api/localStt.js",
     "preloads/api/loom.js",
     "preloads/api/memo.js",
     "preloads/api/music.js",
@@ -822,7 +838,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 447,
+          "line": 442,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "handleSendMessage",
@@ -830,7 +846,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 881,
+          "line": 876,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "createNewTopicForItem",
@@ -838,7 +854,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 961,
+          "line": 956,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -846,7 +862,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 962,
+          "line": 957,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -854,7 +870,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1476,
+          "line": 1471,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "createNewTopicForItem",
@@ -862,7 +878,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1477,
+          "line": 1472,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "createNewTopicForItem",
@@ -910,7 +926,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 36,
+          "line": 42,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "js",
@@ -918,7 +934,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 454,
+          "line": 463,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectItem",
@@ -926,7 +942,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 498,
+          "line": 507,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectItem",
@@ -934,7 +950,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 514,
+          "line": 523,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayTopicTimestampBubble",
@@ -942,7 +958,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 557,
+          "line": 566,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "processFilesData",
@@ -950,7 +966,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 558,
+          "line": 567,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "addAttachmentsToMessage",
@@ -958,7 +974,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 559,
+          "line": 568,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "removeAttachmentFromMessage",
@@ -966,7 +982,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 560,
+          "line": 569,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncNextUiEmptyStateWithMessages",
@@ -974,7 +990,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 561,
+          "line": 570,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "handleSendMessage",
@@ -982,7 +998,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 747,
+          "line": 766,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "handleTopicDeletion",
@@ -990,7 +1006,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 754,
+          "line": 773,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -998,7 +1014,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 767,
+          "line": 786,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "init",
@@ -1006,7 +1022,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 871,
+          "line": 890,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -1014,7 +1030,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 895,
+          "line": 914,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "restoreLastOpenState",
@@ -1022,7 +1038,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 961,
+          "line": 980,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectItem",
@@ -1030,7 +1046,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 967,
+          "line": 986,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -1038,7 +1054,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1185,
+          "line": 1237,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "onSelectionChange",
@@ -1046,7 +1062,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1430,
+          "line": 1461,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -1054,7 +1070,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1466,
+          "line": 1497,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -1062,7 +1078,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1516,
+          "line": 1547,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -1070,7 +1086,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1517,
+          "line": 1548,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -2482,7 +2498,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 38,
+          "line": 44,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "getDiagnostics",
@@ -3394,7 +3410,7 @@
       "definitions": [
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 610,
+          "line": 1177,
           "syntax": "dot-assignment",
           "snippet": "window.chatVoiceComposer = chatVoiceComposer;"
         }
@@ -3574,6 +3590,32 @@
       ],
       "tests": []
     },
+    "ComposerModelSelect": {
+      "classification": "legacy-or-feature-local-ambient",
+      "definitions": [
+        {
+          "file": "modules/renderer/composerModelSelect.js",
+          "line": 265,
+          "syntax": "dot-assignment",
+          "snippet": "window.ComposerModelSelect = { init };"
+        }
+      ],
+      "production": [
+        {
+          "file": "renderer.js",
+          "line": 654,
+          "surface": "main-window",
+          "snippet": "if (window.ComposerModelSelect) {"
+        },
+        {
+          "file": "renderer.js",
+          "line": 655,
+          "surface": "main-window",
+          "snippet": "const composerModelSelect = window.ComposerModelSelect.init({"
+        }
+      ],
+      "tests": []
+    },
     "deleteAgentByIndex": {
       "classification": "legacy-or-feature-local-ambient",
       "definitions": [
@@ -3673,7 +3715,7 @@
       "definitions": [
         {
           "file": "ProjectForgemodules/projectforge.html",
-          "line": 194,
+          "line": 243,
           "syntax": "dot-assignment",
           "snippet": "window.DIFF_DELETE = -1; window.DIFF_INSERT = 1; window.DIFF_EQUAL = 0;"
         }
@@ -3686,7 +3728,7 @@
       "definitions": [
         {
           "file": "ProjectForgemodules/projectforge.html",
-          "line": 194,
+          "line": 243,
           "syntax": "dot-assignment",
           "snippet": "window.DIFF_DELETE = -1; window.DIFF_INSERT = 1; window.DIFF_EQUAL = 0;"
         }
@@ -3699,7 +3741,7 @@
       "definitions": [
         {
           "file": "ProjectForgemodules/projectforge.html",
-          "line": 194,
+          "line": 243,
           "syntax": "dot-assignment",
           "snippet": "window.DIFF_DELETE = -1; window.DIFF_INSERT = 1; window.DIFF_EQUAL = 0;"
         }
@@ -3718,7 +3760,7 @@
         },
         {
           "file": "ProjectForgemodules/projectforge.html",
-          "line": 193,
+          "line": 242,
           "syntax": "dot-assignment",
           "snippet": "window.diff_match_patch = diff_match_patch;"
         }
@@ -3763,25 +3805,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 414,
+          "line": 420,
           "surface": "main-window",
           "snippet": "if (window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 415,
+          "line": 421,
           "surface": "main-window",
           "snippet": "window.emoticonManager.initialize({"
         },
         {
           "file": "renderer.js",
-          "line": 1361,
+          "line": 1425,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1369,
+          "line": 1433,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3813,7 +3855,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 251,
+          "line": 255,
           "surface": "shared-renderer",
           "snippet": "const autoApprovalResult = (filterManagerCapability || window.filterManager)?.checkToolAutoApproval?.(logData.data);"
         },
@@ -3825,31 +3867,31 @@
         },
         {
           "file": "renderer.js",
-          "line": 271,
+          "line": 277,
           "surface": "main-window",
           "snippet": "filterManager: window.filterManager,"
         },
         {
           "file": "renderer.js",
-          "line": 410,
+          "line": 416,
           "surface": "main-window",
           "snippet": "filterManager: window.filterManager,"
         },
         {
           "file": "renderer.js",
-          "line": 813,
+          "line": 832,
           "surface": "main-window",
           "snippet": "filterManager: window.filterManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1298,
+          "line": 1362,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1299,
+          "line": 1363,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -4007,13 +4049,13 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 460,
+          "line": 455,
           "surface": "main-window",
           "snippet": "if (window.flowlockManager?.isAgentLocked?.(currentSelectedItem?.id)) {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1441,
+          "line": 1436,
           "surface": "main-window",
           "snippet": "if (window.flowlockManager?.isAgentLocked?.(refs.currentSelectedItem.get()?.id)) {"
         },
@@ -4037,13 +4079,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 581,
+          "line": 590,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1541,
+          "line": 1572,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4063,37 +4105,37 @@
       "production": [
         {
           "file": "modules/event-listeners.js",
-          "line": 612,
+          "line": 607,
           "surface": "main-window",
           "snippet": "if (window.getDominantAvatarColor) {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 613,
+          "line": 608,
           "surface": "main-window",
           "snippet": "window.getDominantAvatarColor(previewUrl).then((avgColor) => {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 656,
+          "line": 651,
           "surface": "main-window",
           "snippet": "if (window.getDominantAvatarColor) {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 657,
+          "line": 652,
           "surface": "main-window",
           "snippet": "window.getDominantAvatarColor(userAvatarPreview.src).then((avgColor) => {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 840,
+          "line": 835,
           "surface": "main-window",
           "snippet": "if (window.getDominantAvatarColor) {"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 841,
+          "line": 836,
           "surface": "main-window",
           "snippet": "window.getDominantAvatarColor(userAvatarPreview.src).then((avgColor) => {"
         },
@@ -4173,25 +4215,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 467,
+          "line": 476,
           "surface": "main-window",
           "snippet": "if (window.GroupRenderer) {"
         },
         {
           "file": "renderer.js",
-          "line": 485,
+          "line": 494,
           "surface": "main-window",
           "snippet": "window.GroupRenderer.init({"
         },
         {
           "file": "renderer.js",
-          "line": 524,
+          "line": 533,
           "surface": "main-window",
           "snippet": "console.log('[Renderer POST-INIT GroupRenderer] window.GroupRenderer.init has been called.');"
         },
         {
           "file": "renderer.js",
-          "line": 778,
+          "line": 797,
           "surface": "main-window",
           "snippet": "groupRenderer: window.GroupRenderer,"
         }
@@ -4244,13 +4286,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1524,
+          "line": 1555,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1525,
+          "line": 1556,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4270,19 +4312,19 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 628,
+          "line": 637,
           "surface": "main-window",
           "snippet": "if (window.inputEnhancer) {"
         },
         {
           "file": "renderer.js",
-          "line": 629,
+          "line": 638,
           "surface": "main-window",
           "snippet": "window.inputEnhancer.initializeInputEnhancer({"
         },
         {
           "file": "renderer.js",
-          "line": 640,
+          "line": 649,
           "surface": "main-window",
           "snippet": "ownedRendererSubscriptions.add({ dispose: () => window.inputEnhancer.dispose?.() });"
         }
@@ -4376,109 +4418,109 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 527,
+          "line": 526,
           "surface": "shared-renderer",
           "snippet": "if ((itemListManagerCapability || window.itemListManager)?.resetMouseEventStates) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 528,
+          "line": 527,
           "surface": "shared-renderer",
           "snippet": "(itemListManagerCapability || window.itemListManager).resetMouseEventStates();"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 550,
+          "line": 549,
           "surface": "shared-renderer",
           "snippet": "if ((itemListManagerCapability || window.itemListManager)?.updateUnreadBadges) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 551,
+          "line": 550,
           "surface": "shared-renderer",
           "snippet": "(itemListManagerCapability || window.itemListManager).updateUnreadBadges(result.counts);"
         },
         {
           "file": "renderer.js",
-          "line": 441,
+          "line": 450,
           "surface": "main-window",
           "snippet": "if (window.itemListManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 442,
+          "line": 451,
           "surface": "main-window",
           "snippet": "window.itemListManager.init({"
         },
         {
           "file": "renderer.js",
-          "line": 495,
+          "line": 504,
           "surface": "main-window",
           "snippet": "loadItems: () => window.itemListManager ? window.itemListManager.loadItems() : console.error('[GroupRenderer] itemListManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 495,
+          "line": 504,
           "surface": "main-window",
           "snippet": "loadItems: () => window.itemListManager ? window.itemListManager.loadItems() : console.error('[GroupRenderer] itemListManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 503,
+          "line": 512,
           "surface": "main-window",
           "snippet": "highlightActiveItem: (itemId, itemType) => window.itemListManager ? window.itemListManager.highlightActiveItem(itemId, itemType) : console.error('[GroupRenderer] itemListManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 503,
+          "line": 512,
           "surface": "main-window",
           "snippet": "highlightActiveItem: (itemId, itemType) => window.itemListManager ? window.itemListManager.highlightActiveItem(itemId, itemType) : console.error('[GroupRenderer] itemListManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 715,
+          "line": 734,
           "surface": "main-window",
           "snippet": "window.itemListManager?.consumeStreamActivityEvent?.(eventData);"
         },
         {
           "file": "renderer.js",
-          "line": 736,
+          "line": 755,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 776,
+          "line": 795,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 812,
+          "line": 831,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 872,
+          "line": 891,
           "surface": "main-window",
           "snippet": "await window.itemListManager.loadItems();"
         },
         {
           "file": "renderer.js",
-          "line": 894,
+          "line": 913,
           "surface": "main-window",
           "snippet": "await window.itemListManager.loadItems(); // Load both agents and groups"
         },
         {
           "file": "renderer.js",
-          "line": 907,
+          "line": 926,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1335,
+          "line": 1399,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4628,7 +4670,7 @@
       "definitions": [
         {
           "file": "modules/notificationRenderer.js",
-          "line": 784,
+          "line": 844,
           "syntax": "dot-assignment",
           "snippet": "window.notificationRenderer = {"
         }
@@ -4654,43 +4696,43 @@
         },
         {
           "file": "renderer.js",
-          "line": 250,
+          "line": 256,
           "surface": "main-window",
           "snippet": "notificationRenderer: window.notificationRenderer,"
         },
         {
           "file": "renderer.js",
-          "line": 270,
+          "line": 276,
           "surface": "main-window",
           "snippet": "window.notificationRenderer?.configureCapabilities?.({"
         },
         {
           "file": "renderer.js",
-          "line": 409,
+          "line": 415,
           "surface": "main-window",
           "snippet": "window.notificationRenderer?.configureCapabilities?.({"
         },
         {
           "file": "renderer.js",
-          "line": 667,
+          "line": 686,
           "surface": "main-window",
           "snippet": "consumeLogStatus: statusUpdate => window.notificationRenderer?.updateVCPLogStatus(statusUpdate, vcpLogConnectionStatusDiv),"
         },
         {
           "file": "renderer.js",
-          "line": 669,
+          "line": 688,
           "surface": "main-window",
           "snippet": "if (!window.notificationRenderer) return;"
         },
         {
           "file": "renderer.js",
-          "line": 680,
+          "line": 699,
           "surface": "main-window",
           "snippet": "window.notificationRenderer.renderVCPLogNotification(logData, null, notificationsListUl, themeColors);"
         },
         {
           "file": "renderer.js",
-          "line": 814,
+          "line": 833,
           "surface": "main-window",
           "snippet": "notificationRenderer: window.notificationRenderer,"
         }
@@ -4702,7 +4744,7 @@
       "definitions": [
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 860,
+          "line": 898,
           "syntax": "dot-assignment",
           "snippet": "window.onload = () => {"
         }
@@ -4806,15 +4848,15 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1195,
+          "line": 1247,
           "syntax": "dot-assignment",
-          "snippet": "window.openSideChatWithSelection = async (contextParams = null) => {"
+          "snippet": "if (SIDE_CHAT_ENABLED) window.openSideChatWithSelection = async (contextParams = null) => {"
         }
       ],
       "production": [
         {
           "file": "renderer.js",
-          "line": 1291,
+          "line": 1355,
           "surface": "main-window",
           "snippet": "await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });"
         }
@@ -5230,25 +5272,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 255,
+          "line": 261,
           "surface": "main-window",
           "snippet": "getPretextBridge: () => window.pretextBridge,"
         },
         {
           "file": "renderer.js",
-          "line": 289,
+          "line": 295,
           "surface": "main-window",
           "snippet": "pretextBridge: window.pretextBridge,"
         },
         {
           "file": "renderer.js",
-          "line": 335,
+          "line": 341,
           "surface": "main-window",
           "snippet": "const surfacePretextBridge = createSurfacePretextBridge(window.pretextBridge);"
         },
         {
           "file": "renderer.js",
-          "line": 550,
+          "line": 559,
           "surface": "main-window",
           "snippet": "pretextBridge: window.pretextBridge,"
         },
@@ -5257,6 +5299,44 @@
           "line": 259,
           "surface": "rust-assistant",
           "snippet": "pretextBridge: window.pretextBridge,"
+        }
+      ],
+      "tests": []
+    },
+    "ProjectForgeSideTabs": {
+      "classification": "legacy-or-feature-local-ambient",
+      "definitions": [
+        {
+          "file": "ProjectForgemodules/projectforge-sidetabs.js",
+          "line": 82,
+          "syntax": "dot-assignment",
+          "snippet": "window.ProjectForgeSideTabs = Object.freeze({"
+        }
+      ],
+      "production": [
+        {
+          "file": "ProjectForgemodules/projectforge-git.js",
+          "line": 682,
+          "surface": "shared-renderer",
+          "snippet": "window.ProjectForgeSideTabs?.register('git', { onEnter: onEnterGitTab, onLeave: onLeaveGitTab });"
+        },
+        {
+          "file": "ProjectForgemodules/projectforge-git.js",
+          "line": 685,
+          "surface": "shared-renderer",
+          "snippet": "if (window.ProjectForgeSideTabs?.savedTab !== 'git') loadWorkspaces({ quiet: true });"
+        },
+        {
+          "file": "ProjectForgemodules/projectforge-source.js",
+          "line": 53,
+          "surface": "shared-renderer",
+          "snippet": "const isSourceTab = () => window.ProjectForgeSideTabs?.current() === 'source';"
+        },
+        {
+          "file": "ProjectForgemodules/projectforge-source.js",
+          "line": 963,
+          "surface": "shared-renderer",
+          "snippet": "window.ProjectForgeSideTabs?.register('source', { onEnter: onEnterSourceTab });"
         }
       ],
       "tests": []
@@ -6501,121 +6581,121 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 477,
+          "line": 476,
           "surface": "shared-renderer",
           "snippet": "if (window.settingsManager?.flushPendingSave) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 478,
+          "line": 477,
           "surface": "shared-renderer",
           "snippet": "window.settingsManager.flushPendingSave().catch(e => {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 507,
+          "line": 506,
           "surface": "shared-renderer",
           "snippet": "if (settingsManagerCapability || window.settingsManager) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 516,
+          "line": 515,
           "surface": "shared-renderer",
           "snippet": "if ((settingsManagerCapability || window.settingsManager)?.reloadAgentSettings) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 517,
+          "line": 516,
           "surface": "shared-renderer",
           "snippet": "track((settingsManagerCapability || window.settingsManager).reloadAgentSettings(pendingAgentId));"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 522,
+          "line": 521,
           "surface": "shared-renderer",
           "snippet": "(settingsManagerCapability || window.settingsManager)?.displaySettingsForItem?.();"
         },
         {
           "file": "renderer.js",
-          "line": 253,
+          "line": 259,
           "surface": "main-window",
           "snippet": "getSettingsManager: () => window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 274,
+          "line": 280,
           "surface": "main-window",
           "snippet": "window.settingsManager?.configureCapabilities?.({ settings: mainChatSettingsOwner });"
         },
         {
           "file": "renderer.js",
-          "line": 504,
+          "line": 513,
           "surface": "main-window",
           "snippet": "displaySettingsForItem: () => window.settingsManager ? window.settingsManager.displaySettingsForItem() : console.error('[GroupRenderer] settingsManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 504,
+          "line": 513,
           "surface": "main-window",
           "snippet": "displaySettingsForItem: () => window.settingsManager ? window.settingsManager.displaySettingsForItem() : console.error('[GroupRenderer] settingsManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 799,
+          "line": 818,
           "surface": "main-window",
           "snippet": "displaySettingsForItem: () => window.settingsManager.displaySettingsForItem(),"
         },
         {
           "file": "renderer.js",
-          "line": 825,
+          "line": 844,
           "surface": "main-window",
           "snippet": "if (window.settingsManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 826,
+          "line": 845,
           "surface": "main-window",
           "snippet": "window.settingsManager.init({"
         },
         {
           "file": "renderer.js",
-          "line": 878,
+          "line": 897,
           "surface": "main-window",
           "snippet": "if (window.settingsManager.prewarmPromptManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 879,
+          "line": 898,
           "surface": "main-window",
           "snippet": "window.settingsManager.prewarmPromptManager();"
         },
         {
           "file": "renderer.js",
-          "line": 906,
+          "line": 925,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1336,
+          "line": 1400,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1489,
+          "line": 1520,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1489,
+          "line": 1520,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1490,
+          "line": 1521,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -6775,13 +6855,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 565,
+          "line": 574,
           "surface": "main-window",
           "snippet": "if (typeof window.summarizeTopicFromMessages === 'function') return window.summarizeTopicFromMessages(messages, agentName);"
         },
         {
           "file": "renderer.js",
-          "line": 565,
+          "line": 574,
           "surface": "main-window",
           "snippet": "if (typeof window.summarizeTopicFromMessages === 'function') return window.summarizeTopicFromMessages(messages, agentName);"
         },
@@ -6824,29 +6904,23 @@
       "definitions": [
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 628,
+          "line": 657,
           "syntax": "dot-assignment",
           "snippet": "window.TavernManager = TavernManager;"
         }
       ],
       "production": [
         {
-          "file": "modules/event-listeners.js",
-          "line": 437,
+          "file": "renderer.js",
+          "line": 1453,
           "surface": "main-window",
-          "snippet": "if (window.TavernManager && typeof window.TavernManager.togglePopover === 'function') {"
+          "snippet": "if (window.TavernManager?.togglePopover) {"
         },
         {
-          "file": "modules/event-listeners.js",
-          "line": 437,
+          "file": "renderer.js",
+          "line": 1454,
           "surface": "main-window",
-          "snippet": "if (window.TavernManager && typeof window.TavernManager.togglePopover === 'function') {"
-        },
-        {
-          "file": "modules/event-listeners.js",
-          "line": 438,
-          "surface": "main-window",
-          "snippet": "window.TavernManager.togglePopover(sendMessageBtn);"
+          "snippet": "window.TavernManager.togglePopover(quickNewTopicBtn);"
         }
       ],
       "tests": []
@@ -7000,85 +7074,85 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 378,
+          "line": 377,
           "surface": "shared-renderer",
           "snippet": "window.topicListManager?.loadTopicList?.();"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 379,
+          "line": 378,
           "surface": "shared-renderer",
           "snippet": "window.topicListManager?.setupTopicSearch?.();"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 500,
+          "line": 499,
           "surface": "shared-renderer",
           "snippet": "if (window.topicListManager) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 501,
+          "line": 500,
           "surface": "shared-renderer",
           "snippet": "window.topicListManager.loadTopicList(); // This might create/re-render the topic list and search input"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 502,
+          "line": 501,
           "surface": "shared-renderer",
           "snippet": "window.topicListManager.setupTopicSearch(); // Explicitly set up search listeners after the tab is active and list loaded"
         },
         {
           "file": "renderer.js",
-          "line": 505,
+          "line": 514,
           "surface": "main-window",
           "snippet": "loadTopicList: () => window.topicListManager ? window.topicListManager.loadTopicList() : console.error('[GroupRenderer] topicListManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 505,
+          "line": 514,
           "surface": "main-window",
           "snippet": "loadTopicList: () => window.topicListManager ? window.topicListManager.loadTopicList() : console.error('[GroupRenderer] topicListManager not available'),"
-        },
-        {
-          "file": "renderer.js",
-          "line": 703,
-          "surface": "main-window",
-          "snippet": "await window.topicListManager.loadTopicList();"
         },
         {
           "file": "renderer.js",
           "line": 722,
           "surface": "main-window",
+          "snippet": "await window.topicListManager.loadTopicList();"
+        },
+        {
+          "file": "renderer.js",
+          "line": 741,
+          "surface": "main-window",
           "snippet": "if (window.topicListManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 723,
+          "line": 742,
           "surface": "main-window",
           "snippet": "window.topicListManager.init({"
         },
         {
           "file": "renderer.js",
-          "line": 777,
+          "line": 796,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 806,
+          "line": 825,
           "surface": "main-window",
           "snippet": "ownedRendererSubscriptions.add({ dispose: () => window.topicListManager.dispose?.() });"
         },
         {
           "file": "renderer.js",
-          "line": 1338,
+          "line": 1402,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1384,
+          "line": 1448,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7213,19 +7287,19 @@
         },
         {
           "file": "renderer.js",
-          "line": 430,
+          "line": 439,
           "surface": "main-window",
           "snippet": "if (window.topTabManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 431,
+          "line": 440,
           "surface": "main-window",
           "snippet": "window.topTabManager.init();"
         },
         {
           "file": "renderer.js",
-          "line": 816,
+          "line": 835,
           "surface": "main-window",
           "snippet": "topTabManager: window.topTabManager,"
         }
@@ -7287,13 +7361,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 424,
+          "line": 430,
           "surface": "main-window",
           "snippet": "if (window.trayManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 425,
+          "line": 431,
           "surface": "main-window",
           "snippet": "window.trayManager.init();"
         }
@@ -7386,85 +7460,85 @@
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 239,
+          "line": 268,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.showToastNotification) {"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 240,
+          "line": 269,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions.showToastNotification("
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 401,
+          "line": 430,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.showToastNotification) {"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 402,
+          "line": 431,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions.showToastNotification('顺序已更新并保存', 'success');"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 406,
+          "line": 435,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.showToastNotification) {"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 407,
+          "line": 436,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions.showToastNotification(`保存顺序失败: ${result?.error || '未知错误'}`, 'error');"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 572,
+          "line": 601,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.showToastNotification) {"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 573,
+          "line": 602,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions.showToastNotification('规则已保存', 'success');"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 578,
+          "line": 607,
           "surface": "shared-renderer",
           "snippet": "if (window.uiHelperFunctions?.showToastNotification) {"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 579,
+          "line": 608,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions.showToastNotification(`保存失败: ${result?.error || '未知错误'}`, 'error');"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 588,
+          "line": 617,
           "surface": "shared-renderer",
           "snippet": "const confirmFn = (window.uiHelperFunctions && typeof window.uiHelperFunctions.showConfirmDialog === 'function')"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 588,
+          "line": 617,
           "surface": "shared-renderer",
           "snippet": "const confirmFn = (window.uiHelperFunctions && typeof window.uiHelperFunctions.showConfirmDialog === 'function')"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 589,
+          "line": 618,
           "surface": "shared-renderer",
           "snippet": "? window.uiHelperFunctions.showConfirmDialog.bind(window.uiHelperFunctions)"
         },
         {
           "file": "Tavernmodules/tavern-manager.js",
-          "line": 589,
+          "line": 618,
           "surface": "shared-renderer",
           "snippet": "? window.uiHelperFunctions.showConfirmDialog.bind(window.uiHelperFunctions)"
         },
@@ -7554,15 +7628,21 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 122,
+          "line": 126,
           "surface": "shared-renderer",
           "snippet": "const uiHelper = window.uiHelperFunctions;"
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 633,
+          "line": 693,
           "surface": "shared-renderer",
           "snippet": "window.uiHelperFunctions?.closeModal?.('toolChangeAuditModal');"
+        },
+        {
+          "file": "modules/renderer/composerModelSelect.js",
+          "line": 125,
+          "surface": "shared-renderer",
+          "snippet": "window.uiHelperFunctions?.showToastNotification?.(`切换模型失败: ${error.message || error}`, 'error');"
         },
         {
           "file": "modules/trayManager.js",
@@ -7679,38 +7759,44 @@
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path)"
         },
         {
+          "file": "modules/ui-system/side-pane/codeViewerSideProvider.js",
+          "line": 147,
+          "surface": "internal-app",
+          "snippet": "uiHelper = (typeof window !== 'undefined' ? window.uiHelperFunctions : null),"
+        },
+        {
           "file": "modules/ui-system/typed-field-owners.js",
-          "line": 787,
+          "line": 789,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path);"
         },
         {
           "file": "modules/ui-system/typed-field-owners.js",
-          "line": 943,
+          "line": 945,
           "surface": "internal-app",
           "snippet": "window.uiHelperFunctions?.showToastNotification?.("
         },
         {
           "file": "modules/uiManager.js",
-          "line": 315,
+          "line": 314,
           "surface": "shared-renderer",
           "snippet": "if ((uiHelperCapability || window.uiHelperFunctions)?.openModal) {"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 317,
+          "line": 316,
           "surface": "shared-renderer",
           "snippet": "(uiHelperCapability || window.uiHelperFunctions).openModal('globalSettingsModal');"
         },
         {
           "file": "renderer.js",
-          "line": 174,
+          "line": 180,
           "surface": "main-window",
           "snippet": "const uiHelperFunctions = window.uiHelperFunctions;"
         },
         {
           "file": "renderer.js",
-          "line": 1544,
+          "line": 1575,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -7741,7 +7827,7 @@
       "definitions": [
         {
           "file": "modules/uiManager.js",
-          "line": 627,
+          "line": 626,
           "syntax": "dot-assignment",
           "snippet": "window.uiManager = uiManager;"
         }
@@ -7875,61 +7961,61 @@
         },
         {
           "file": "renderer.js",
-          "line": 279,
+          "line": 285,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         },
         {
           "file": "renderer.js",
-          "line": 286,
+          "line": 292,
           "surface": "main-window",
           "snippet": "getUiManager: () => window.uiManager,"
         },
         {
           "file": "renderer.js",
-          "line": 519,
+          "line": 528,
           "surface": "main-window",
           "snippet": "switchToTab: (tab) => window.uiManager ? window.uiManager.switchToTab(tab) : console.error('[GroupRenderer] uiManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 519,
+          "line": 528,
           "surface": "main-window",
           "snippet": "switchToTab: (tab) => window.uiManager ? window.uiManager.switchToTab(tab) : console.error('[GroupRenderer] uiManager not available'),"
         },
         {
           "file": "renderer.js",
-          "line": 735,
+          "line": 754,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         },
         {
           "file": "renderer.js",
-          "line": 811,
+          "line": 830,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         },
         {
           "file": "renderer.js",
-          "line": 898,
+          "line": 917,
           "surface": "main-window",
           "snippet": "if (window.uiManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 899,
+          "line": 918,
           "surface": "main-window",
           "snippet": "ownedRendererSubscriptions.add({ dispose: () => window.uiManager.dispose?.() });"
         },
         {
           "file": "renderer.js",
-          "line": 900,
+          "line": 919,
           "surface": "main-window",
           "snippet": "await window.uiManager.init({"
         },
         {
           "file": "renderer.js",
-          "line": 1337,
+          "line": 1401,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -8026,25 +8112,25 @@
         },
         {
           "file": "modules/ui-system/typed-field-owners.js",
-          "line": 914,
+          "line": 916,
           "surface": "internal-app",
           "snippet": "const appearance = window.VCPAppearance;"
         },
         {
           "file": "renderer.js",
-          "line": 254,
+          "line": 260,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         },
         {
           "file": "renderer.js",
-          "line": 278,
+          "line": 284,
           "surface": "main-window",
           "snippet": "appearance: window.VCPAppearance,"
         },
         {
           "file": "renderer.js",
-          "line": 1349,
+          "line": 1413,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -8088,7 +8174,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 815,
+          "line": 834,
           "surface": "main-window",
           "snippet": "appearanceStudio: window.VCPAppearanceStudio,"
         }
@@ -10426,7 +10512,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 118,
+          "line": 124,
           "syntax": "define-property",
           "snippet": "Object.defineProperty(window, 'VCPMainChatState', {"
         }
@@ -10496,7 +10582,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 589,
+          "line": 598,
           "surface": "main-window",
           "snippet": "provideCapabilities: window.VCPNextShellController?.provideChatCapabilities,"
         }
@@ -10515,12 +10601,19 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1164,
+          "line": 1216,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
       ],
-      "production": [],
+      "production": [
+        {
+          "file": "modules/renderer/contentProcessor.js",
+          "line": 628,
+          "surface": "shared-renderer",
+          "snippet": "const sideCtrl = (typeof window !== 'undefined' ? window.vcpSidePaneController : null)"
+        }
+      ],
       "tests": []
     },
     "VCPUI": {
@@ -10652,19 +10745,19 @@
       "production": [
         {
           "file": "modules/event-listeners.js",
-          "line": 535,
+          "line": 530,
           "surface": "main-window",
           "snippet": "if (window.VCPUISettingsBridge?.addNetworkPathInput?.()) return;"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 708,
+          "line": 703,
           "surface": "main-window",
           "snippet": "if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;"
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 737,
+          "line": 732,
           "surface": "main-window",
           "snippet": "if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;"
         },
@@ -10706,19 +10799,19 @@
       "definitions": [
         {
           "file": "modules/voice/audioRecorder.js",
-          "line": 289,
+          "line": 431,
           "syntax": "dot-assignment",
           "snippet": "window.VcpVoice = Object.assign(window.VcpVoice || {}, {"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 605,
+          "line": 1172,
           "syntax": "dot-assignment",
           "snippet": "window.VcpVoice = Object.assign(window.VcpVoice || {}, {"
         },
         {
           "file": "modules/voice/passiveVoiceSentinel.js",
-          "line": 263,
+          "line": 255,
           "syntax": "dot-assignment",
           "snippet": "window.VcpVoice = Object.assign(window.VcpVoice || {}, {"
         },
@@ -10730,7 +10823,13 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 273,
+          "line": 996,
+          "syntax": "dot-assignment",
+          "snippet": "window.VcpVoice = Object.assign(window.VcpVoice || {}, {"
+        },
+        {
+          "file": "modules/voice/voiceWaveform.js",
+          "line": 139,
           "syntax": "dot-assignment",
           "snippet": "window.VcpVoice = Object.assign(window.VcpVoice || {}, {"
         },
@@ -10756,39 +10855,57 @@
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 114,
+          "line": 186,
           "surface": "shared-renderer",
           "snippet": "(window.VcpVoice?.VoiceComposerView || window.VoiceComposerView);"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 126,
+          "line": 205,
           "surface": "shared-renderer",
           "snippet": "(window.VcpVoice?.AudioRecorder || window.AudioRecorder);"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 354,
-          "surface": "shared-renderer",
-          "snippet": "? window.VcpVoice?.PassiveVoiceSentinel || window.PassiveVoiceSentinel"
-        },
-        {
-          "file": "modules/voice/chatVoiceComposer.js",
-          "line": 461,
+          "line": 662,
           "surface": "shared-renderer",
           "snippet": "? window.VcpVoice?.AudioRecorder || window.AudioRecorder"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 579,
+          "line": 769,
+          "surface": "shared-renderer",
+          "snippet": "? window.VcpVoice?.PassiveVoiceSentinel || window.PassiveVoiceSentinel"
+        },
+        {
+          "file": "modules/voice/chatVoiceComposer.js",
+          "line": 895,
+          "surface": "shared-renderer",
+          "snippet": "? window.VcpVoice?.AudioRecorder || window.AudioRecorder"
+        },
+        {
+          "file": "modules/voice/chatVoiceComposer.js",
+          "line": 1146,
           "surface": "shared-renderer",
           "snippet": "if (window.VcpVoice?.SpeechDirectiveMatcher)"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
-          "line": 580,
+          "line": 1147,
           "surface": "shared-renderer",
           "snippet": "return window.VcpVoice.SpeechDirectiveMatcher;"
+        },
+        {
+          "file": "modules/voice/voiceComposerView.js",
+          "line": 9,
+          "surface": "shared-renderer",
+          "snippet": "if (window.VcpVoice?.VoiceWaveform) return window.VcpVoice.VoiceWaveform;"
+        },
+        {
+          "file": "modules/voice/voiceComposerView.js",
+          "line": 9,
+          "surface": "shared-renderer",
+          "snippet": "if (window.VcpVoice?.VoiceWaveform) return window.VcpVoice.VoiceWaveform;"
         }
       ],
       "tests": []
@@ -10961,6 +11078,32 @@
       ],
       "tests": []
     },
+    "VoiceWaveform": {
+      "classification": "legacy-or-feature-local-ambient",
+      "definitions": [
+        {
+          "file": "modules/voice/voiceWaveform.js",
+          "line": 142,
+          "syntax": "dot-assignment",
+          "snippet": "window.VoiceWaveform = VoiceWaveform;"
+        }
+      ],
+      "production": [
+        {
+          "file": "modules/voice/voiceComposerView.js",
+          "line": 10,
+          "surface": "shared-renderer",
+          "snippet": "if (window.VoiceWaveform) return window.VoiceWaveform;"
+        },
+        {
+          "file": "modules/voice/voiceComposerView.js",
+          "line": 10,
+          "surface": "shared-renderer",
+          "snippet": "if (window.VoiceWaveform) return window.VoiceWaveform;"
+        }
+      ],
+      "tests": []
+    },
     "wallpaperPluginListener": {
       "classification": "legacy-or-feature-local-ambient",
       "definitions": [
@@ -11091,7 +11234,7 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 275,
+          "line": 281,
           "surface": "main-window",
           "snippet": "window.weatherService?.configureCapabilities?.({ settings: mainChatSettingsOwner });"
         }
@@ -13232,11 +13375,27 @@
       "mutableMaps": 1
     },
     "ProjectForgemodules/projectforge-git.js": {
-      "windowReferences": 2,
-      "documentReferences": 7,
+      "windowReferences": 4,
+      "documentReferences": 4,
       "electronReferences": 0,
       "timers": 3,
-      "listeners": 12,
+      "listeners": 10,
+      "mutableMaps": 1
+    },
+    "ProjectForgemodules/projectforge-sidetabs.js": {
+      "windowReferences": 1,
+      "documentReferences": 5,
+      "electronReferences": 0,
+      "timers": 1,
+      "listeners": 3,
+      "mutableMaps": 1
+    },
+    "ProjectForgemodules/projectforge-source.js": {
+      "windowReferences": 4,
+      "documentReferences": 5,
+      "electronReferences": 0,
+      "timers": 4,
+      "listeners": 19,
       "mutableMaps": 1
     },
     "ProjectForgemodules/projectforge.html": {
@@ -13249,10 +13408,10 @@
     },
     "ProjectForgemodules/projectforge.js": {
       "windowReferences": 6,
-      "documentReferences": 9,
+      "documentReferences": 10,
       "electronReferences": 1,
-      "timers": 3,
-      "listeners": 21,
+      "timers": 4,
+      "listeners": 22,
       "mutableMaps": 0
     },
     "Promptmodules/modular-prompt-module.js": {
@@ -13704,11 +13863,11 @@
       "mutableMaps": 3
     },
     "Tavernmodules/tavern-manager.js": {
-      "windowReferences": 23,
+      "windowReferences": 25,
       "documentReferences": 12,
       "electronReferences": 1,
       "timers": 1,
-      "listeners": 13,
+      "listeners": 15,
       "mutableMaps": 1
     },
     "Themesmodules/themes.html": {
@@ -15288,7 +15447,7 @@
       "mutableMaps": 0
     },
     "modules/event-listeners.js": {
-      "windowReferences": 30,
+      "windowReferences": 27,
       "documentReferences": 71,
       "electronReferences": 8,
       "timers": 1,
@@ -15495,6 +15654,14 @@
       "listeners": 0,
       "mutableMaps": 1
     },
+    "modules/ipc/localSttHandlers.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
     "modules/ipc/mainChatVoiceCoordinator.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -15568,6 +15735,14 @@
       "mutableMaps": 0
     },
     "modules/ipc/sideChatHandlers.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/ipc/sourceHandlers.js": {
       "windowReferences": 0,
       "documentReferences": 0,
       "electronReferences": 0,
@@ -15807,9 +15982,17 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/notificationCenter.js": {
+      "windowReferences": 2,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 3,
+      "listeners": 3,
+      "mutableMaps": 1
+    },
     "modules/notificationRenderer.js": {
       "windowReferences": 8,
-      "documentReferences": 42,
+      "documentReferences": 49,
       "electronReferences": 1,
       "timers": 2,
       "listeners": 3,
@@ -15831,6 +16014,14 @@
       "listeners": 0,
       "mutableMaps": 1
     },
+    "modules/renderer/composerModelSelect.js": {
+      "windowReferences": 4,
+      "documentReferences": 26,
+      "electronReferences": 8,
+      "timers": 2,
+      "listeners": 6,
+      "mutableMaps": 0
+    },
     "modules/renderer/contentPipeline.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -15840,11 +16031,11 @@
       "mutableMaps": 4
     },
     "modules/renderer/contentProcessor.js": {
-      "windowReferences": 2,
-      "documentReferences": 8,
+      "windowReferences": 4,
+      "documentReferences": 9,
       "electronReferences": 0,
       "timers": 4,
-      "listeners": 4,
+      "listeners": 5,
       "mutableMaps": 0
     },
     "modules/renderer/desktopPushConsumer.js": {
@@ -16335,6 +16526,14 @@
       "listeners": 0,
       "mutableMaps": 2
     },
+    "modules/services/sourceService.js": {
+      "windowReferences": 0,
+      "documentReferences": 1,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 1
+    },
     "modules/services/windowAppIds.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -16453,6 +16652,14 @@
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/settings/schema/local-stt-panel.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 2,
+      "timers": 0,
+      "listeners": 3,
       "mutableMaps": 0
     },
     "modules/settings/schema/quick-actions.js": {
@@ -17047,6 +17254,30 @@
       "listeners": 1,
       "mutableMaps": 0
     },
+    "modules/ui-system/side-pane/codeViewerSideProvider.js": {
+      "windowReferences": 9,
+      "documentReferences": 2,
+      "electronReferences": 1,
+      "timers": 1,
+      "listeners": 5,
+      "mutableMaps": 0
+    },
+    "modules/ui-system/side-pane/gitSideProvider.js": {
+      "windowReferences": 4,
+      "documentReferences": 1,
+      "electronReferences": 3,
+      "timers": 2,
+      "listeners": 17,
+      "mutableMaps": 1
+    },
+    "modules/ui-system/side-pane/notesSideProvider.js": {
+      "windowReferences": 4,
+      "documentReferences": 1,
+      "electronReferences": 3,
+      "timers": 1,
+      "listeners": 8,
+      "mutableMaps": 0
+    },
     "modules/ui-system/side-pane/selection-reference.js": {
       "windowReferences": 2,
       "documentReferences": 0,
@@ -17056,11 +17287,11 @@
       "mutableMaps": 0
     },
     "modules/ui-system/side-pane/side-pane-controller.js": {
-      "windowReferences": 2,
+      "windowReferences": 3,
       "documentReferences": 1,
       "electronReferences": 4,
-      "timers": 0,
-      "listeners": 17,
+      "timers": 6,
+      "listeners": 19,
       "mutableMaps": 5
     },
     "modules/ui-system/side-pane/side-pane-resizer-owner.js": {
@@ -17568,19 +17799,43 @@
       "mutableMaps": 1
     },
     "modules/voice/audioRecorder.js": {
-      "windowReferences": 8,
+      "windowReferences": 13,
       "documentReferences": 0,
       "electronReferences": 0,
-      "timers": 0,
+      "timers": 1,
       "listeners": 0,
       "mutableMaps": 0
     },
     "modules/voice/chatVoiceComposer.js": {
-      "windowReferences": 22,
-      "documentReferences": 5,
+      "windowReferences": 28,
+      "documentReferences": 14,
       "electronReferences": 15,
+      "timers": 6,
+      "listeners": 4,
+      "mutableMaps": 0
+    },
+    "modules/voice/localStt/localSttService.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 2,
+      "listeners": 0,
+      "mutableMaps": 1
+    },
+    "modules/voice/localStt/modelManager.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 2,
+      "listeners": 2,
+      "mutableMaps": 0
+    },
+    "modules/voice/localStt/sttWorker.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
       "timers": 0,
-      "listeners": 1,
+      "listeners": 0,
       "mutableMaps": 0
     },
     "modules/voice/passiveVoiceSentinel.js": {
@@ -17608,11 +17863,19 @@
       "mutableMaps": 1
     },
     "modules/voice/voiceComposerView.js": {
-      "windowReferences": 3,
-      "documentReferences": 19,
+      "windowReferences": 8,
+      "documentReferences": 49,
       "electronReferences": 0,
-      "timers": 2,
-      "listeners": 2,
+      "timers": 3,
+      "listeners": 18,
+      "mutableMaps": 0
+    },
+    "modules/voice/voiceWaveform.js": {
+      "windowReferences": 4,
+      "documentReferences": 4,
+      "electronReferences": 0,
+      "timers": 3,
+      "listeners": 0,
       "mutableMaps": 0
     },
     "modules/voice/wavAudioEncoder.js": {
@@ -17744,6 +18007,14 @@
       "mutableMaps": 0
     },
     "preloads/api/groupChat.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "preloads/api/localStt.js": {
       "windowReferences": 0,
       "documentReferences": 0,
       "electronReferences": 0,
@@ -17984,9 +18255,9 @@
       "mutableMaps": 0
     },
     "renderer.js": {
-      "windowReferences": 127,
-      "documentReferences": 54,
-      "electronReferences": 21,
+      "windowReferences": 139,
+      "documentReferences": 59,
+      "electronReferences": 27,
       "timers": 1,
       "listeners": 3,
       "mutableMaps": 0
