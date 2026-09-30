@@ -642,9 +642,6 @@ mainChatSettingsPresentationOwner.configureStartup({
         console.error('[RENDERER_INIT] inputEnhancer module not found!');
     }
 
-    const auxiliaryEventOwner = createMainChatAuxiliaryEventOwner({
-        subscriptions: {
-            loomShareText: chatAPI?.onLoomShareTextToInput,
     if (window.ComposerModelSelect) {
         const composerModelSelect = window.ComposerModelSelect.init({
             electronAPI: window.electronAPI || chatAPI,
@@ -655,6 +652,9 @@ mainChatSettingsPresentationOwner.configureStartup({
         ownedRendererSubscriptions.add({ dispose: () => composerModelSelect.dispose?.() });
     }
 
+    const auxiliaryEventOwner = createMainChatAuxiliaryEventOwner({
+        subscriptions: {
+            loomShareText: chatAPI?.onLoomShareTextToInput,
             logStatus: chatAPI?.onVCPLogStatus,
             logMessage: chatAPI?.onVCPLogMessage,
             groupTopicUpdated: chatAPI?.onVCPGroupTopicUpdated,
