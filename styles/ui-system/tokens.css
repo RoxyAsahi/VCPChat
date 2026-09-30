@@ -55,6 +55,38 @@
         --vcp-ui-text-2: var(--vcp-ui-text-secondary);
         --vcp-ui-text-3: color-mix(in srgb, var(--vcp-ui-text-secondary) 72%, transparent);
 
+        /* ZCode-inspired roles keep the existing theme palette as authority. */
+        --vcp-ui-color-background: var(--vcp-ui-bg-0);
+        --vcp-ui-color-sidebar: var(--vcp-ui-bg-1);
+        --vcp-ui-color-panel: var(--vcp-ui-bg-1);
+        --vcp-ui-color-surface: var(--vcp-ui-bg-2);
+        --vcp-ui-color-card: var(--vcp-ui-bg-2);
+        --vcp-ui-color-popover: var(--vcp-ui-bg-3);
+        --vcp-ui-color-menu: var(--vcp-ui-bg-3);
+        --vcp-ui-color-input: var(--vcp-ui-bg-input);
+        --vcp-ui-color-input-focused: color-mix(in srgb, var(--vcp-ui-bg-input) 92%, var(--vcp-ui-text-primary));
+        /* ZCode Zai Dark composer palette; geometry remains owned by chat-input.css. */
+        --vcp-ui-composer-input: #2b2b2b;
+        --vcp-ui-composer-border: rgba(255, 255, 255, 0.1);
+        --vcp-ui-composer-border-active: rgba(255, 255, 255, 0.15);
+        --vcp-ui-composer-foreground: #d4d4d4;
+        --vcp-ui-composer-placeholder: color-mix(in oklab, #d4d4d4 30%, transparent);
+        --vcp-ui-color-foreground: var(--vcp-ui-text-0);
+        --vcp-ui-color-foreground-subtle: var(--vcp-ui-text-2);
+        --vcp-ui-color-foreground-subtlest: var(--vcp-ui-text-3);
+        --vcp-ui-color-border: var(--vcp-ui-border);
+        --vcp-ui-color-brand: var(--vcp-ui-accent);
+        --vcp-ui-color-hover: var(--vcp-ui-fill-0);
+        --vcp-ui-color-selected: var(--vcp-ui-selection-bg);
+
+        --vcp-ui-font-size: 14px;
+        --vcp-ui-text-xl: calc(var(--vcp-ui-font-size) + 4px);
+        --vcp-ui-text-lg: calc(var(--vcp-ui-font-size) + 2px);
+        --vcp-ui-text-base: var(--vcp-ui-font-size);
+        --vcp-ui-text-caption: calc(var(--vcp-ui-font-size) - 1px);
+        --vcp-ui-text-sm: calc(var(--vcp-ui-font-size) - 2px);
+        --vcp-ui-text-xs: calc(var(--vcp-ui-font-size) - 4px);
+
         --vcp-ui-success: var(--success-color, var(--vcp-ui-palette-green));
         --vcp-ui-warning: var(--warning-color, var(--vcp-ui-palette-amber));
         --vcp-ui-danger: var(--danger-color, var(--vcp-ui-palette-red));
@@ -165,7 +197,7 @@
         --vcp-ui-control-hover: var(--vcp-ui-surface-strong);
         --vcp-ui-control-focus: var(--vcp-ui-border-strong);
         --vcp-ui-row-height: 44px;
-        --vcp-ui-shell-header-height: 46px;
+        --vcp-ui-shell-header-height: 48px;
         --vcp-ui-panel-padding: var(--vcp-ui-space-4);
         --vcp-ui-density-gap: var(--vcp-ui-space-3);
         --vcp-ui-scrollbar-size: 6px;
@@ -235,6 +267,30 @@
         --vcp-ui-text-1: color-mix(in srgb, var(--vcp-ui-text-primary) 82%, var(--vcp-ui-text-secondary));
         --vcp-ui-text-2: var(--vcp-ui-text-secondary);
         --vcp-ui-text-3: color-mix(in srgb, var(--vcp-ui-text-secondary) 72%, transparent);
+
+        /* Repeat theme-derived roles after the light palette overrides. */
+        --vcp-ui-color-background: var(--vcp-ui-bg-0);
+        --vcp-ui-color-sidebar: var(--vcp-ui-bg-1);
+        --vcp-ui-color-panel: var(--vcp-ui-bg-1);
+        --vcp-ui-color-surface: var(--vcp-ui-bg-2);
+        --vcp-ui-color-card: var(--vcp-ui-bg-2);
+        --vcp-ui-color-popover: var(--vcp-ui-bg-3);
+        --vcp-ui-color-menu: var(--vcp-ui-bg-3);
+        --vcp-ui-color-input: var(--vcp-ui-bg-input);
+        --vcp-ui-color-input-focused: color-mix(in srgb, var(--vcp-ui-bg-input) 92%, var(--vcp-ui-text-primary));
+        /* ZCode Zai Light composer palette. */
+        --vcp-ui-composer-input: #ffffff;
+        --vcp-ui-composer-border: rgba(13, 13, 13, 0.1);
+        --vcp-ui-composer-border-active: rgba(13, 13, 13, 0.15);
+        --vcp-ui-composer-foreground: #262626;
+        --vcp-ui-composer-placeholder: color-mix(in oklab, #262626 40%, transparent);
+        --vcp-ui-color-foreground: var(--vcp-ui-text-0);
+        --vcp-ui-color-foreground-subtle: var(--vcp-ui-text-2);
+        --vcp-ui-color-foreground-subtlest: var(--vcp-ui-text-3);
+        --vcp-ui-color-border: var(--vcp-ui-border);
+        --vcp-ui-color-brand: var(--vcp-ui-accent);
+        --vcp-ui-color-hover: var(--vcp-ui-fill-0);
+        --vcp-ui-color-selected: var(--vcp-ui-selection-bg);
 
         --vcp-ui-success: var(--success-color, var(--vcp-ui-palette-green));
         --vcp-ui-warning: var(--warning-color, var(--vcp-ui-palette-amber));
@@ -336,7 +392,7 @@
         --vcp-ui-control-hover: var(--vcp-ui-surface-strong);
         --vcp-ui-control-focus: var(--vcp-ui-border-strong);
         --vcp-ui-row-height: 44px;
-        --vcp-ui-shell-header-height: 46px;
+        --vcp-ui-shell-header-height: 48px;
         --vcp-ui-panel-padding: var(--vcp-ui-space-4);
         --vcp-ui-density-gap: var(--vcp-ui-space-3);
         --vcp-ui-scrollbar-size: 6px;

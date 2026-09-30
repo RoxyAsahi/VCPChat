@@ -205,26 +205,28 @@ html .next-ui-window-button {
 
 .next-ui-tab {
     position: relative;
-    height: 30px;
-    min-width: 96px;
+    height: 28px;
+    min-width: 80px;
     max-width: 160px;
-    padding: 0 10px;
+    padding: 0 8px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     border-radius: 8px;
     color: var(--next-muted);
-    font-size: 15px;
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     transition: color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard), background-color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard), font-weight var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard);
 }
 
 html #nextUiHomeTab {
-    min-width: 80px;
+    min-width: 76px;
     max-width: 96px;
-    padding: 0 10px 0 3px;
+    height: 28px;
+    padding: 0 10px 0 4px;
     justify-content: flex-start;
     border-radius: 0 8px 8px 0;
     background: transparent;
@@ -235,7 +237,7 @@ html #nextUiHomeTab > span:last-child {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     line-height: 1;
     letter-spacing: 0;
@@ -297,13 +299,23 @@ html #nextUiHomeTab > span:last-child {
     opacity: 0;
 }
 
-.next-ui-tab > svg,
+.next-ui-tab > svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: 0 0 auto;
+}
+
 .next-ui-add-tab > svg,
 .next-ui-icon-button > svg,
 .next-ui-window-button > svg,
 .next-ui-app-icon svg {
-    width: 19px;
-    height: 19px;
+    width: 16px;
+    height: 16px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
@@ -315,7 +327,7 @@ html #nextUiHomeTab > span:last-child {
 .next-ui-tab-label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -328,18 +340,21 @@ html #nextUiHomeTab > span:last-child {
     color: inherit;
     background: transparent;
     font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
     text-align: left;
     cursor: pointer;
 }
 
 .next-ui-tab-close {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: grid;
     place-items: center;
     padding: 0;
     border: 0;
-    border-radius: 5px;
+    border-radius: 4px;
     color: var(--next-muted);
     background: transparent;
     cursor: pointer;
@@ -357,8 +372,8 @@ html #nextUiHomeTab > span:last-child {
 }
 
 .next-ui-tab-close svg {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
@@ -366,10 +381,10 @@ html #nextUiHomeTab > span:last-child {
 
 html .next-ui-tab-svg,
 html .next-ui-tab-svg svg {
-    width: 19px;
-    height: 19px;
+    width: 14px;
+    height: 14px;
     display: block;
-    flex: 0 0 19px;
+    flex: 0 0 14px;
 }
 
 html .next-ui-tab.is-dragging {
@@ -758,7 +773,7 @@ html body #toggleSidebarModeBtn.next-ui-sidebar-mode-button.active:focus-visible
 }
 
 html .next-ui-brand-tab-group {
-    height: 30px;
+    height: 28px;
     display: flex;
     align-items: stretch;
     overflow: hidden;
@@ -777,8 +792,8 @@ html .next-ui-brand-tab-group #nextUiHomeTab:hover {
 
 html #toggleSidebarModeBtn.next-ui-sidebar-mode-button {
     position: relative;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     display: grid;
     overflow: hidden;
     border-color: transparent;
@@ -798,8 +813,8 @@ html .next-ui-sidebar-control-icon {
 }
 
 html .next-ui-sidebar-brand {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     padding: 0;
     overflow: hidden;
     box-sizing: border-box;
@@ -809,18 +824,18 @@ html .next-ui-sidebar-brand {
 }
 
 html .next-ui-sidebar-brand img {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     margin: 4px;
     display: block;
     object-fit: contain;
 }
 
 html .next-ui-sidebar-mode-button > .next-ui-sidebar-control-icon {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     display: block;
-    flex: 0 0 18px;
+    flex: 0 0 16px;
     stroke: currentColor;
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.76);

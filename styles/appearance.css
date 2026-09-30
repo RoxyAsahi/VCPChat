@@ -184,7 +184,7 @@
     }
 
     html[data-vcp-composer-radius="tuned"],
-    html[data-vcp-composer-radius="tuned"] .vcp-ui-scope { --vcp-ui-composer-radius: 24px; }
+    html[data-vcp-composer-radius="tuned"] .vcp-ui-scope { --vcp-ui-composer-radius: 16px; }
     html[data-vcp-composer-radius="follow"],
     html[data-vcp-composer-radius="follow"] .vcp-ui-scope { --vcp-ui-composer-radius: var(--vcp-ui-radius-xl); }
     html[data-vcp-composer-radius="square"],
@@ -330,18 +330,27 @@
 
     html .vcp-ui-scope {
         --vcp-ui-font-family: var(--vcp-appearance-font-family);
-        --vcp-ui-font-caption: calc(12px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-micro: calc(10px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-helper: calc(13px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-body: calc(14px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-emphasis: calc(15px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-title: calc(18px * var(--vcp-appearance-font-scale));
-        --vcp-ui-font-display: calc(22px * var(--vcp-appearance-font-scale));
+        --vcp-ui-font-size: calc(14px * var(--vcp-appearance-font-scale));
+        --vcp-ui-text-xl: calc(var(--vcp-ui-font-size) + 4px);
+        --vcp-ui-text-lg: calc(var(--vcp-ui-font-size) + 2px);
+        --vcp-ui-text-base: var(--vcp-ui-font-size);
+        --vcp-ui-text-caption: calc(var(--vcp-ui-font-size) - 1px);
+        --vcp-ui-text-sm: calc(var(--vcp-ui-font-size) - 2px);
+        --vcp-ui-text-xs: calc(var(--vcp-ui-font-size) - 4px);
+        /* Compatibility aliases for the existing VCPUI components. */
+        --vcp-ui-font-caption: var(--vcp-ui-text-sm);
+        --vcp-ui-font-micro: var(--vcp-ui-text-xs);
+        --vcp-ui-font-helper: var(--vcp-ui-text-caption);
+        --vcp-ui-font-body: var(--vcp-ui-text-base);
+        --vcp-ui-font-emphasis: var(--vcp-ui-text-base);
+        --vcp-ui-font-section: var(--vcp-ui-text-lg);
+        --vcp-ui-font-title: var(--vcp-ui-text-xl);
+        --vcp-ui-font-display: var(--vcp-ui-text-xl);
         font-family: var(--vcp-ui-font-family);
     }
 
     html .vcp-ui-scope .chat-input-card {
-        border-radius: var(--vcp-ui-composer-radius, 24px);
+        border-radius: var(--vcp-ui-composer-radius, 16px);
     }
 
     html[data-vcp-content-width="centered"] .chat-messages {
