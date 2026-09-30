@@ -245,9 +245,8 @@ const uiManager = (() => {
                 scheduleTimeout(scheduleClock, 60000);
             };
             scheduleTimeout(scheduleClock, 60000);
-        } else {
-            console.error('Digital clock, notification title, or date display element not found.');
         }
+        // 通知面板已不再展示时钟：缺少这些元素是预期状态，无需报错。
     }
 
     /**

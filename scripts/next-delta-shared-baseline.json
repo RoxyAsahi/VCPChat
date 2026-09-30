@@ -32,7 +32,7 @@
     "reason": "shared filter authority; canonical menu calls its public API; filter persistence now uses operation-aware path patches to avoid complete-snapshot overwrite"
   },
   "modules/notificationRenderer.js": {
-    "sha256": "0abeb968314af2042d13493751c4836e560b4f7d1ee06ffe2c0a068665ceb81e",
+    "sha256": "357b81ceb8469de7d2db68743592817ae22630bcbc18f4559b2317c1dc6c2aeb",
     "reason": "reviewed notification rendering after injected filtering and owner-scoped toast timers and transition listeners replaced ambient lifecycle effects"
   },
   "VCPDistributedServer/frontend-plugin-loader.js": {

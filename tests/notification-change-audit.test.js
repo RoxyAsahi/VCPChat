@@ -90,7 +90,8 @@ test('main-window tool approval exposes change audit and submits modal reason', 
     window.document.getElementById('toolChangeAuditReason').value = '已核对新增代码，可以执行。';
     window.document.getElementById('approveToolChangeAudit').click();
 
-    assert.deepEqual(sentMessages, [{
+    // 消息对象由 jsdom 窗口内的脚本创建，原型与 Node 不同，先序列化再比较
+    assert.deepEqual(JSON.parse(JSON.stringify(sentMessages)), [{
         type: 'tool_approval_response',
         data: {
             requestId: 'approve-change-audit-test',
