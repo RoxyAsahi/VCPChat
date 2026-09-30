@@ -183,7 +183,7 @@
     }
 
     html .vcp-ui-scope .chat-actions .header-button#currentAgentSettingsBtn svg {
-        width: 50px;
+        width: 40px;
         height: 18px;
         flex-shrink: 0;
         display: block;
