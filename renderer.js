@@ -26,7 +26,7 @@ import { createBrowserSideProvider } from './modules/ui-system/side-pane/browser
 import { createGitSideProvider } from './modules/ui-system/side-pane/gitSideProvider.js';
 import { createPlanDetailSideProvider } from './modules/ui-system/side-pane/planDetailSideProvider.js';
 import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
-
+import { createModelTrajectorySideProvider } from './modules/ui-system/side-pane/modelTrajectorySideProvider.js';
 import { createConversationStatusPanel } from './modules/ui-system/conversation-status-panel.js';
 
 
@@ -1299,8 +1299,15 @@ mainChatSettingsPresentationOwner.configureStartup({
                 uiHelper: uiHelperFunctions
             });
             sidePaneController.registerProvider('tool-output', toolOutputSideProvider);
-            
-            
+            const modelTrajectorySideProvider = createModelTrajectorySideProvider({
+                document,
+                api: chatAPI || window.electronAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions,
+                getConversation: () => ({ item: currentSelectedItemRef.get(), topicId: currentTopicIdRef.get() }),
+                onConversationChange: (callback) => chatManager.onSelectionChange?.(callback)
+            });
+            sidePaneController.registerProvider('model-trajectory', modelTrajectorySideProvider);
             const conversationStatusPanel = createConversationStatusPanel({
                 document,
                 api: chatAPI || window.electronAPI,

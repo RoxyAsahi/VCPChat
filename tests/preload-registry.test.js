@@ -95,3 +95,27 @@ test('使用角色 preload 的窗口都显式设置了 sandbox: false', () => {
     }
     assert.equal(checked, 22, '角色 preload 窗口数量变化，请同步更新本测试的文件清单');
 });
+test('侧栏面板调用的 API 对 chat 角色可见（否则调用会被“权限已隔离”拒绝）', () => {
+    const chat = visibleTo('chat');
+    const sidePaneApis = [
+        // 笔记标签页
+        'readNotesTree', 'saveMiniNote',
+        // Git 标签页
+        'gitListWorkspaces', 'gitStatus', 'gitDiff', 'gitStage', 'gitUnstage', 'gitDiscard', 'gitCommit', 'gitPush',
+        'selectWorkspaceDirectory', 'addWorkspace',
+        // 代码查看标签页
+        'sourceListFiles', 'sourceReadFile',
+        // 终端标签页
+        'terminalCreate', 'terminalWrite', 'terminalResize', 'terminalKill', 'terminalRestart', 'terminalChangeDirectory',
+        'onTerminalData', 'onTerminalClear', 'onTerminalExit',
+        'gitListBranches', 'gitSwitchBranch', 'gitCreateBranch', 'gitCommitGraph', 'gitChangeSummary',
+        // 调用轨迹标签页
+        'modelTrajectoryList', 'modelTrajectoryClear', 'modelTrajectoryOpenDirectory', 'modelTrajectoryWatch', 'onModelTrajectoryChanged',
+        // 浏览器标签页
+        'browserOpenExternal', 'browserClearData', 'onBrowserOpenTab',
+    ];
+    for (const name of sidePaneApis) {
+        assert.ok(byName.has(name), `注册表缺少 ${name}`);
+        assert.ok(chat.has(name), `chat 角色看不到 ${name}`);
+    }
+});

@@ -868,6 +868,10 @@
     {
       "path": "tests/terminal-native-helper.test.js",
       "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/model-trajectory-recovery.test.js",
+      "feature": "model-trajectory"
     }
   ]
 }

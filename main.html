@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="styles/ui-system/side-pane-tabs.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-plan.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-tool-output.css">
+    <link rel="stylesheet" href="styles/ui-system/side-pane-model-trajectory.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-git-extras.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-side-chat-extras.css">
     <link rel="stylesheet" href="styles/ui-system/status-panel.css">
@@ -673,7 +674,10 @@
                         <span class="vcp-ui-icon">terminal</span>
                         <span>命令输出</span>
                     </button>
-                    
+                    <button type="button" class="side-pane-menu-item" data-action="model-trajectory">
+                        <span class="vcp-ui-icon">monitoring</span>
+                        <span>调用轨迹</span>
+                    </button>
                     <button type="button" class="side-pane-menu-item" data-action="code-viewer">
                         <span class="vcp-ui-icon">code</span>
                         <span>代码审阅</span>
@@ -854,7 +858,10 @@
                                     <span class="vcp-ui-icon">terminal</span>
                                     <span class="side-pane-open-tab-button-label">命令输出</span>
                                 </button>
-                                
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="model-trajectory">
+                                    <span class="vcp-ui-icon">monitoring</span>
+                                    <span class="side-pane-open-tab-button-label">调用轨迹</span>
+                                </button>
                                 <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="code-viewer">
                                     <span class="vcp-ui-icon">code</span>
                                     <span class="side-pane-open-tab-button-label">代码审阅</span>
