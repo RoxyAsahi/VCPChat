@@ -368,6 +368,7 @@
     "modules/ui-system/next-ui-apps.js",
     "modules/ui-system/performance-recorder.js",
     "modules/ui-system/project-plan-model.js",
+    "modules/ui-system/selection-quote-action.js",
     "modules/ui-system/settings-bridge.js",
     "modules/ui-system/settings/agent-disclosures.js",
     "modules/ui-system/settings/agent-model-picker-directory.js",
@@ -4928,6 +4929,47 @@
       ]
     },
     {
+      "name": "onInMessages(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 146,
+          "kind": "preload-subscription"
+        },
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 166,
+          "kind": "preload-subscription"
+        },
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 191,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 146,
+          "kind": "preload-subscription",
+          "match": "onInMessages("
+        },
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 166,
+          "kind": "preload-subscription",
+          "match": "onInMessages("
+        },
+        {
+          "file": "modules/ui-system/selection-quote-action.js",
+          "line": 191,
+          "kind": "preload-subscription",
+          "match": "onInMessages("
+        }
+      ]
+    },
+    {
       "name": "onMainChatVoiceCapturedText(",
       "producers": [],
       "consumers": [
@@ -6651,14 +6693,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1488,
+          "line": 1492,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1488,
+          "line": 1492,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8719,7 +8761,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1578,
+          "line": 1582,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8727,7 +8769,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1578,
+          "line": 1582,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

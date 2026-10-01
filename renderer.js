@@ -31,7 +31,7 @@ import { createConversationStatusPanel } from './modules/ui-system/conversation-
 import { createConversationTurnNavigator } from './modules/ui-system/conversation-turn-navigator.js';
 import { createMessageMetaEnhancer } from './modules/ui-system/message-meta-enhancer.js';
 import { createConversationFind } from './modules/ui-system/conversation-find.js';
-
+import { createSelectionQuoteAction } from './modules/ui-system/selection-quote-action.js';
 
 
 
@@ -1342,9 +1342,13 @@ mainChatSettingsPresentationOwner.configureStartup({
             const conversationFind = createConversationFind({ document, messagesRoot: chatMessagesDiv });
             conversationFind.mount();
             ownedRendererSubscriptions.add({ dispose: () => conversationFind.dispose() });
-            
-            
-            
+            const selectionQuoteAction = createSelectionQuoteAction({
+                document,
+                messagesRoot: chatMessagesDiv,
+                notify: (text, type) => uiHelperFunctions?.showToastNotification?.(text, type)
+            });
+            selectionQuoteAction.mount();
+            ownedRendererSubscriptions.add({ dispose: () => selectionQuoteAction.dispose() });
             
             
             

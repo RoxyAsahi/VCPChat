@@ -1,0 +1,32 @@
+/*
+ * 选区「引用」按钮（modules/ui-system/selection-quote-action.js）。
+ * 外观与 side-pane-side-chat-extras.css 里的「在侧栏提问」浮动按钮一致：跟随主题的实色面板。
+ */
+html .vcp-selection-quote-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: fixed;
+    z-index: 999;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color, var(--vcp-ui-port-color-2b3441));
+    background: var(--secondary-bg, var(--vcp-ui-port-color-15191f));
+    color: var(--primary-text, var(--vcp-ui-port-color-f0f4f8));
+    font-size: calc(var(--vcp-ui-font-size) - 2px);
+    font-weight: 500;
+    box-shadow: 0 6px 18px var(--vcp-ui-port-color-rgba-0-0-0-0-22), 0 1px 3px var(--vcp-ui-port-color-rgba-0-0-0-0-16);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+html .vcp-selection-quote-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    transform: translateY(-1px);
+    background: var(--accent-bg, var(--vcp-ui-port-color-1f252e));
+    box-shadow: 0 8px 22px var(--vcp-ui-port-color-rgba-0-0-0-0-28), 0 1px 3px var(--vcp-ui-port-color-rgba-0-0-0-0-18);
+}
+html .vcp-selection-quote-btn svg:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: none; }
+@media (prefers-reduced-motion: reduce) {
+    html .vcp-selection-quote-btn:where(.vcp-ui-scope, .vcp-ui-scope *) { transition: none; }
+    html .vcp-selection-quote-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { transform: none; }
+}
