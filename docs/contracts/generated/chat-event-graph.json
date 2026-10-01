@@ -342,6 +342,7 @@
     "modules/ui-system/line-diff.js",
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
+    "modules/ui-system/message-file-changes.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
     "modules/ui-system/next-shell/app-tab-host.js",
     "modules/ui-system/next-shell/assistant-search-controller.js",
@@ -6637,14 +6638,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1463,
+          "line": 1470,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1463,
+          "line": 1470,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8705,7 +8706,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1553,
+          "line": 1560,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8713,7 +8714,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1553,
+          "line": 1560,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

@@ -35,7 +35,7 @@ import { createToolOutputSideProvider } from './modules/ui-system/side-pane/tool
 
 
 
-
+import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
 import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
 
 
@@ -1310,10 +1310,17 @@ mainChatSettingsPresentationOwner.configureStartup({
             
             
             
-            
-            
-            
-            
+            const gitFileDiffResolver = createGitFileDiffResolver({ api: chatAPI || window.electronAPI || window.utilityAPI });
+            const messageFileChanges = createMessageFileChanges({
+                document,
+                messagesRoot: chatMessagesDiv,
+                getHistory: () => mainHistoryRef.get(),
+                openFile: (filePath) => codeViewerSideProvider.openViewer({ filePath }),
+                getDiffStats: (filePath) => gitFileDiffResolver.resolve(filePath),
+                openDiff: (filePath) => gitSideProvider.openGitTab({ focusPath: filePath })
+            });
+            messageFileChanges.mount();
+            ownedRendererSubscriptions.add({ dispose: () => messageFileChanges.dispose() });
             
             
             

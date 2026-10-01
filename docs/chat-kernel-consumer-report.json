@@ -585,6 +585,7 @@
     "modules/ui-system/line-diff.js",
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
+    "modules/ui-system/message-file-changes.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
     "modules/ui-system/next-shell/app-tab-host.js",
     "modules/ui-system/next-shell/assistant-search-controller.js",
@@ -1078,7 +1079,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1368,
+          "line": 1375,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "onSelectionChange",
@@ -1086,7 +1087,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1592,
+          "line": 1599,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -1094,7 +1095,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1628,
+          "line": 1635,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -1102,7 +1103,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1678,
+          "line": 1685,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -1110,7 +1111,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1679,
+          "line": 1686,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -3865,13 +3866,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1556,
+          "line": 1563,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1564,
+          "line": 1571,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3933,13 +3934,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1493,
+          "line": 1500,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1494,
+          "line": 1501,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -4133,7 +4134,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1703,
+          "line": 1710,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4334,13 +4335,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1686,
+          "line": 1693,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1687,
+          "line": 1694,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4568,7 +4569,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1530,
+          "line": 1537,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4896,7 +4897,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1378,
+          "line": 1385,
           "syntax": "dot-assignment",
           "snippet": "if (SIDE_CHAT_ENABLED) window.openSideChatWithSelection = async (contextParams = null) => {"
         }
@@ -4904,7 +4905,7 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1486,
+          "line": 1493,
           "surface": "main-window",
           "snippet": "await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });"
         }
@@ -6725,25 +6726,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 1531,
+          "line": 1538,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1651,
+          "line": 1658,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1651,
+          "line": 1658,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1652,
+          "line": 1659,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -6978,13 +6979,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1584,
+          "line": 1591,
           "surface": "main-window",
           "snippet": "if (window.TavernManager?.togglePopover) {"
         },
         {
           "file": "renderer.js",
-          "line": 1585,
+          "line": 1592,
           "surface": "main-window",
           "snippet": "window.TavernManager.togglePopover(quickNewTopicBtn);"
         }
@@ -7212,13 +7213,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1533,
+          "line": 1540,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1579,
+          "line": 1586,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7862,7 +7863,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1706,
+          "line": 1713,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -8081,7 +8082,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1532,
+          "line": 1539,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -8196,7 +8197,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1544,
+          "line": 1551,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -10667,7 +10668,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1347,
+          "line": 1354,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
@@ -17062,6 +17063,14 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/ui-system/message-file-changes.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 3,
+      "mutableMaps": 3
+    },
     "modules/ui-system/next-shell/account-menu-controller.js": {
       "windowReferences": 7,
       "documentReferences": 13,
@@ -18471,9 +18480,9 @@
       "mutableMaps": 0
     },
     "renderer.js": {
-      "windowReferences": 144,
-      "documentReferences": 63,
-      "electronReferences": 36,
+      "windowReferences": 146,
+      "documentReferences": 64,
+      "electronReferences": 37,
       "timers": 2,
       "listeners": 3,
       "mutableMaps": 0
