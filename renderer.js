@@ -27,7 +27,7 @@ import { createGitSideProvider } from './modules/ui-system/side-pane/gitSideProv
 import { createPlanDetailSideProvider } from './modules/ui-system/side-pane/planDetailSideProvider.js';
 import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
 
-
+import { createConversationStatusPanel } from './modules/ui-system/conversation-status-panel.js';
 
 
 
@@ -1301,9 +1301,20 @@ mainChatSettingsPresentationOwner.configureStartup({
             sidePaneController.registerProvider('tool-output', toolOutputSideProvider);
             
             
-            
-            
-            
+            const conversationStatusPanel = createConversationStatusPanel({
+                document,
+                api: chatAPI || window.electronAPI,
+                uiHelper: uiHelperFunctions,
+                onOpenGitTab: () => gitSideProvider.openGitTab(),
+                onOpenPlanDetail: (project) => planDetailSideProvider.openPlanDetailTab({ projectId: project?.id, projectName: project?.name }),
+                onOpenToolOutput: (run) => toolOutputSideProvider.openToolOutputTab({ runId: run?.id }),
+                onOpenProjectForge: openProjectForgeWindow,
+                getHistory: () => mainHistoryRef.get(),
+                messagesRoot: chatMessagesDiv,
+                onConversationChange: (callback) => chatManager.onSelectionChange?.(callback)
+            });
+            conversationStatusPanel.mount();
+            ownedRendererSubscriptions.add({ dispose: () => conversationStatusPanel.dispose() });
             
             
             
