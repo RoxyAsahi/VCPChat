@@ -30,7 +30,7 @@ import { createModelTrajectorySideProvider } from './modules/ui-system/side-pane
 import { createConversationStatusPanel } from './modules/ui-system/conversation-status-panel.js';
 import { createConversationTurnNavigator } from './modules/ui-system/conversation-turn-navigator.js';
 import { createMessageMetaEnhancer } from './modules/ui-system/message-meta-enhancer.js';
-
+import { createConversationFind } from './modules/ui-system/conversation-find.js';
 
 
 
@@ -1339,9 +1339,9 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
             messageFileChanges.mount();
             ownedRendererSubscriptions.add({ dispose: () => messageFileChanges.dispose() });
-            
-            
-            
+            const conversationFind = createConversationFind({ document, messagesRoot: chatMessagesDiv });
+            conversationFind.mount();
+            ownedRendererSubscriptions.add({ dispose: () => conversationFind.dispose() });
             
             
             

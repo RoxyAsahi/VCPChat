@@ -582,6 +582,7 @@
     "modules/ui-system/component-manifest.js",
     "modules/ui-system/component-showcase.js",
     "modules/ui-system/contribution-registry.js",
+    "modules/ui-system/conversation-find.js",
     "modules/ui-system/conversation-scope.js",
     "modules/ui-system/conversation-status-panel.js",
     "modules/ui-system/conversation-turn-navigator.js",
@@ -17068,6 +17069,14 @@
       "listeners": 0,
       "mutableMaps": 1
     },
+    "modules/ui-system/conversation-find.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 2,
+      "listeners": 1,
+      "mutableMaps": 0
+    },
     "modules/ui-system/conversation-scope.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -18606,7 +18615,7 @@
     },
     "renderer.js": {
       "windowReferences": 148,
-      "documentReferences": 68,
+      "documentReferences": 69,
       "electronReferences": 39,
       "timers": 2,
       "listeners": 3,

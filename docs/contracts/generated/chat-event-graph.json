@@ -339,6 +339,7 @@
     "modules/ui-system/component-manifest.js",
     "modules/ui-system/component-showcase.js",
     "modules/ui-system/contribution-registry.js",
+    "modules/ui-system/conversation-find.js",
     "modules/ui-system/conversation-scope.js",
     "modules/ui-system/conversation-status-panel.js",
     "modules/ui-system/conversation-turn-navigator.js",

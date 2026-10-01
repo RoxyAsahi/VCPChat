@@ -1,0 +1,97 @@
+/*
+ * 主聊天「在当前对话中查找」浮动条（modules/ui-system/conversation-find.js）。
+ * 高亮颜色与做法对照 ZCode 的 conversationFindHighlightDom（https://github.com/zai-org/ZCode ，Apache-2.0）。
+ * 颜色变量沿用 status-panel.css 的 zc-*。
+ */
+
+html :where(.vcp-ui-scope, .vcp-ui-scope *)::highlight(vcp-conversation-find) {
+    background-color: var(--vcp-ui-port-color-fde68a);
+    color: var(--vcp-ui-port-color-262626);
+}
+html :where(.vcp-ui-scope, .vcp-ui-scope *)::highlight(vcp-conversation-find-active) {
+    background-color: var(--vcp-ui-port-color-f59e0b);
+    color: var(--vcp-ui-port-color-1a1a1a);
+}
+
+html .vcp-find-bar:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: absolute;
+    top: 10px;
+    right: 22px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: min(380px, calc(100% - 44px));
+    padding: 4px 4px 4px 10px;
+    border: 1px solid var(--zc-border-strong);
+    border-radius: 10px;
+    background: var(--zc-popover);
+    color: var(--zc-fg);
+    box-shadow: 0 6px 24px var(--vcp-ui-port-color-rgba-0-0-0-0-14);
+    animation: vcp-find-in 120ms ease-out;
+}
+html .vcp-find-bar[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+
+html .vcp-find-input:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
+}
+html .vcp-find-input:where(.vcp-ui-scope, .vcp-ui-scope *)::placeholder { color: var(--zc-fg-subtlest); }
+
+html .vcp-find-count:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 0 auto;
+    min-width: 44px;
+    margin: 0 4px;
+    text-align: right;
+    font-size: calc(var(--vcp-ui-font-size) - 2px);
+    font-variant-numeric: tabular-nums;
+    color: var(--zc-fg-subtle);
+    white-space: nowrap;
+}
+html .vcp-find-count.is-empty:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-danger); }
+
+html .vcp-find-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--zc-fg-subtle);
+    cursor: pointer;
+    font-size: calc(var(--vcp-ui-font-size) - 2px);
+}
+html .vcp-find-btn svg:where(.vcp-ui-scope, .vcp-ui-scope *) { display: block; }
+html .vcp-find-btn:hover:not(:disabled):where(.vcp-ui-scope, .vcp-ui-scope *) { background: var(--zc-menu-hover); color: var(--zc-fg); }
+html .vcp-find-btn:disabled:where(.vcp-ui-scope, .vcp-ui-scope *) { opacity: 0.4; cursor: default; }
+html .vcp-find-btn:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *) { outline: 2px solid color-mix(in srgb, var(--zc-fg) 45%, transparent); outline-offset: 1px; }
+html .vcp-find-btn-text:where(.vcp-ui-scope, .vcp-ui-scope *) { padding: 0 8px; }
+
+@keyframes vcp-find-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html .vcp-find-bar:where(.vcp-ui-scope, .vcp-ui-scope *) { animation: none; }
+}
+
+/* 应用全局的 input:focus 样式会给输入框加蓝色边框，查找条里的输入框整体已有外框 */
+html .vcp-find-bar .vcp-find-input:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .vcp-find-bar .vcp-find-input:focus:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    border: 0;
+    outline: 0;
+    box-shadow: none;
+    background: transparent;
+}
