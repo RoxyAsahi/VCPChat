@@ -23,7 +23,7 @@ import { createNotesSideProvider } from './modules/ui-system/side-pane/notesSide
 import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/codeViewerSideProvider.js';
 import { createTerminalSideProvider } from './modules/ui-system/side-pane/terminalSideProvider.js';
 import { createBrowserSideProvider } from './modules/ui-system/side-pane/browserSideProvider.js';
-
+import { createGitSideProvider } from './modules/ui-system/side-pane/gitSideProvider.js';
 import { createPlanDetailSideProvider } from './modules/ui-system/side-pane/planDetailSideProvider.js';
 import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
 
@@ -36,7 +36,7 @@ import { createToolOutputSideProvider } from './modules/ui-system/side-pane/tool
 
 
 
-
+import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
 
 
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
@@ -1278,8 +1278,12 @@ mainChatSettingsPresentationOwner.configureStartup({
                 }
             };
 
-            
-            
+            const gitSideProvider = createGitSideProvider({
+                electronAPI: chatAPI || window.electronAPI || window.utilityAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions
+            });
+            sidePaneController.registerProvider('git', gitSideProvider);
             const planDetailSideProvider = createPlanDetailSideProvider({
                 document,
                 api: chatAPI || window.electronAPI,

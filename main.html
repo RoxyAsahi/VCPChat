@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="styles/ui-system/side-pane-tabs.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-plan.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-tool-output.css">
+    <link rel="stylesheet" href="styles/ui-system/side-pane-git-extras.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-side-chat-extras.css">
     <link rel="stylesheet" href="styles/ui-system/notification-center.css">
     <script src="modules/ui-system/lifecycle-scope.js"></script>
@@ -659,7 +660,10 @@
                         <span class="vcp-ui-icon">notifications</span>
                         <span>系统通知</span>
                     </button>
-                    
+                    <button type="button" class="side-pane-menu-item" data-action="git">
+                        <span class="vcp-ui-icon">branch</span>
+                        <span>Git 变更与审阅</span>
+                    </button>
                     <button type="button" class="side-pane-menu-item" data-action="plan-detail">
                         <span class="vcp-ui-icon">checklist</span>
                         <span>V工程 计划详情</span>
@@ -837,7 +841,10 @@
                                     <span class="vcp-ui-icon">notifications</span>
                                     <span class="side-pane-open-tab-button-label">系统通知</span>
                                 </button>
-                                
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="git">
+                                    <span class="vcp-ui-icon">branch</span>
+                                    <span class="side-pane-open-tab-button-label">Git 变更与审阅</span>
+                                </button>
                                 <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="plan-detail">
                                     <span class="vcp-ui-icon">checklist</span>
                                     <span class="side-pane-open-tab-button-label">V工程 计划详情</span>
