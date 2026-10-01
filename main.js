@@ -77,6 +77,7 @@ const workspaceHandlers = require('./modules/ipc/workspaceHandlers'); // 工作�
 const projectForgeHandlers = require('./modules/ipc/projectForgeHandlers'); // ProjectForge 施工图 GUI（只读 + 署名回退）
 const gitHandlers = require('./modules/ipc/gitHandlers'); // ProjectForge Git 源代码管理侧栏
 const sourceHandlers = require('./modules/ipc/sourceHandlers'); // ProjectForge 源码浏览 / 轻量编辑侧栏
+const terminalHandlers = require('./modules/ipc/terminalHandlers'); // 侧栏终端（镜像自带终端会话）
 const browserHandlers = require('./modules/ipc/browserHandlers'); // 侧栏浏览器（<webview> 的安全围栏）
 const assistantHandlers = require('./modules/ipc/assistantHandlers'); // Import assistant handlers
 const musicHandlers = require('./modules/ipc/musicHandlers'); // Import music handlers
@@ -1474,6 +1475,7 @@ if (!gotTheLock) {
         projectForgeHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
         gitHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService, mainWindow });
         sourceHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
+        terminalHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService, mainWindow });
         browserHandlers.initialize({ mainWindow });
 
         translatorHandlers.initialize({
@@ -1881,6 +1883,7 @@ if (!gotTheLock) {
             fs.unlinkSync(readyFile);
         }
 
+        terminalHandlers.disposeAll();
         browserHandlers.dispose();
 
         // 1. 停止所有底层监听器
