@@ -1,0 +1,1532 @@
+
+> vcp-chat-desktop@1.0.0 test:chat-kernel
+> node --test tests/chat-*.test.mjs tests/content-*.test.mjs tests/stream-*.test.mjs tests/main-chat-*.test.mjs tests/topic-selection-readiness.test.mjs tests/owned-preload-subscription.test.mjs tests/non-streaming-event-consumer.test.mjs tests/stream-transient-history.test.mjs tests/lifecycle-scope.test.js tests/lifecycle-inspector.test.js tests/chat-manager-selection-race.test.js tests/history-watcher-lease-manager.test.js tests/message-edit-watcher-failure.test.js tests/stream-manager-terminal-cleanup.test.js tests/ui-helper-chat-scroll-follow.test.js
+
+TAP version 13
+# (node:87452) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatContext.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ChatContext exposes explicit state and ordered domain events
+ok 1 - ChatContext exposes explicit state and ordered domain events
+  ---
+  duration_ms: 2.9093
+  type: 'test'
+  ...
+# Subtest: ChatContext does not expose mutable history storage
+ok 2 - ChatContext does not expose mutable history storage
+  ---
+  duration_ms: 0.6118
+  type: 'test'
+  ...
+# (node:87472) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatDomRenderer.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ChatDomRenderer delegates operations and rejects work after dispose
+ok 3 - ChatDomRenderer delegates operations and rejects work after dispose
+  ---
+  duration_ms: 202.0235
+  type: 'test'
+  ...
+# Subtest: ChatDomRenderer dispose reaches quiescence for an in-flight render
+ok 4 - ChatDomRenderer dispose reaches quiescence for an in-flight render
+  ---
+  duration_ms: 21.2031
+  type: 'test'
+  ...
+# Subtest: ChatDomRenderer passes its root as render context
+ok 5 - ChatDomRenderer passes its root as render context
+  ---
+  duration_ms: 18.9674
+  type: 'test'
+  ...
+# Subtest: ChatDomRenderer forwards streaming messages without a hidden root side channel
+ok 6 - ChatDomRenderer forwards streaming messages without a hidden root side channel
+  ---
+  duration_ms: 15.0444
+  type: 'test'
+  ...
+# Subtest: ChatDomRenderer retracts owned routes before waiting for render work
+ok 7 - ChatDomRenderer retracts owned routes before waiting for render work
+  ---
+  duration_ms: 17.0844
+  type: 'test'
+  ...
+# Subtest: ChatDomRenderer awaits failing and asynchronous owner disposal without starving later owners
+ok 8 - ChatDomRenderer awaits failing and asynchronous owner disposal without starving later owners
+  ---
+  duration_ms: 14.2553
+  type: 'test'
+  ...
+# (node:10792) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatEventContract.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: chat event contracts distinguish durable terminal from transient events
+ok 9 - chat event contracts distinguish durable terminal from transient events
+  ---
+  duration_ms: 3.0234
+  type: 'test'
+  ...
+# Subtest: chat terminal normalization rejects unknown values at the contract seam
+ok 10 - chat terminal normalization rejects unknown values at the contract seam
+  ---
+  duration_ms: 2.2823
+  type: 'test'
+  ...
+# (node:89072) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatHistoryMutationAuthority.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: history mutations serialize per conversation and expose the durable commit result
+ok 11 - history mutations serialize per conversation and expose the durable commit result
+  ---
+  duration_ms: 9.2626
+  type: 'test'
+  ...
+# Subtest: mutation reads inside its queue and disposal revokes new write authority
+ok 12 - mutation reads inside its queue and disposal revokes new write authority
+  ---
+  duration_ms: 2.6045
+  type: 'test'
+  ...
+# (node:89412) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatHistoryPersistence.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: terminal persistence merges reverse-completing messages by identity and chronological order
+ok 13 - terminal persistence merges reverse-completing messages by identity and chronological order
+  ---
+  duration_ms: 3.9931
+  type: 'test'
+  ...
+# Subtest: terminal persistence propagates read and write failures without a fallback overwrite
+ok 14 - terminal persistence propagates read and write failures without a fallback overwrite
+  ---
+  duration_ms: 1.4235
+  type: 'test'
+  ...
+# Subtest: temporary assistant and group projections do not write renderer-owned history
+ok 15 - temporary assistant and group projections do not write renderer-owned history
+  ---
+  duration_ms: 0.5028
+  type: 'test'
+  ...
+# Subtest: auxiliary session persistence updates transient history without claiming durability
+ok 16 - auxiliary session persistence updates transient history without claiming durability
+  ---
+  duration_ms: 0.5725
+  type: 'test'
+  ...
+# Subtest: terminal persistence preserves concurrent durable fields outside the owned stream terminal
+ok 17 - terminal persistence preserves concurrent durable fields outside the owned stream terminal
+  ---
+  duration_ms: 0.8528
+  type: 'test'
+  ...
+# Subtest: terminal persistence rejects when saveHistory resolves with error object or success:false
+ok 18 - terminal persistence rejects when saveHistory resolves with error object or success:false
+  ---
+  duration_ms: 0.9242
+  type: 'test'
+  ...
+# Subtest: consumer inventory excludes local probes and nested worktrees while retaining product descendants
+ok 19 - consumer inventory excludes local probes and nested worktrees while retaining product descendants
+  ---
+  duration_ms: 42.9265
+  type: 'test'
+  ...
+# [ChatManager] Initialized successfully.
+# Subtest: ChatManager publishes readiness only after synchronous listener setup completes
+ok 20 - ChatManager publishes readiness only after synchronous listener setup completes
+  ---
+  duration_ms: 233.538
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a late assistant selection cannot overwrite the newer assistant topic and history
+ok 21 - a late assistant selection cannot overwrite the newer assistant topic and history
+  ---
+  duration_ms: 137.3333
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration selects the last durable assistant and topic
+ok 22 - startup restoration selects the last durable assistant and topic
+  ---
+  duration_ms: 48.7953
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration waits for the topic projection consumer
+ok 23 - startup restoration waits for the topic projection consumer
+  ---
+  duration_ms: 38.5397
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: an explicit selection supersedes an unfinished startup restoration
+ok 24 - an explicit selection supersedes an unfinished startup restoration
+  ---
+  duration_ms: 47.3868
+  type: 'test'
+  ...
+# Subtest: startup restoration ignores a deleted item
+ok 25 - startup restoration ignores a deleted item
+  ---
+  duration_ms: 30.2819
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: last-open persistence is ordered and awaited across rapid topic selections
+ok 26 - last-open persistence is ordered and awaited across rapid topic selections
+  ---
+  duration_ms: 62.2957
+  type: 'test'
+  ...
+# [ChatManager] Failed to start history watcher; continuing with loaded history: Error: controlled watcher failure
+#     at Object.failNextWatcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:295:37)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:474:13)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history watcher startup failure does not block assistant navigation
+ok 27 - history watcher startup failure does not block assistant navigation
+  ---
+  duration_ms: 36.5414
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a send delayed before VCP dispatch cannot mutate the newly selected topic
+ok 28 - a send delayed before VCP dispatch cannot mutate the newly selected topic
+  ---
+  duration_ms: 64.0901
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Failed to persist outgoing message: Error: controlled save failure
+#     at Object.failNextHistorySave (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:292:36)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:528:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: a failed durable save preserves the draft and retracts the optimistic message
+ok 29 - a failed durable save preserves the draft and retracts the optimistic message
+  ---
+  duration_ms: 40.6145
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a programmatic quick-action string sends its own content without consuming the composer draft
+ok 30 - a programmatic quick-action string sends its own content without consuming the composer draft
+  ---
+  duration_ms: 31.4907
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: an attachment added while the outgoing message is persisting remains in the draft
+ok 31 - an attachment added while the outgoing message is persisting remains in the draft
+  ---
+  duration_ms: 39.8858
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: stream ownership is published before upstream startup resolves
+ok 32 - stream ownership is published before upstream startup resolves
+  ---
+  duration_ms: 35.0596
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# 发送消息或处理VCP响应时出错 Error: controlled VCP failure
+#     at Object.failNextVcpRequest (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:298:28)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:636:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: failed VCP startup does not rewrite history to remove an unpersisted thinking message
+ok 33 - failed VCP startup does not rewrite history to remove an unpersisted thinking message
+  ---
+  duration_ms: 33.6292
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a second send cannot enter the same topic while the first is starting
+ok 34 - a second send cannot enter the same topic while the first is starting
+  ---
+  duration_ms: 38.8015
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale history load for agent:agent-b:topic-b-2
+# [ChatManager] Initialized successfully.
+# Subtest: a late topic watcher cannot replace a newer topic history
+ok 35 - a late topic watcher cannot replace a newer topic history
+  ---
+  duration_ms: 32.754
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a topic created for an old assistant cannot switch the new assistant view
+ok 36 - a topic created for an old assistant cannot switch the new assistant view
+  ---
+  duration_ms: 71.3259
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-newest
+# [displayTopicTimestampBubble] Topic topic-a-newest not found or has no createdAt for agent agent-a.
+# [ChatManager] Initialized successfully.
+# Subtest: only the newest concurrent topic creation may select its result
+ok 37 - only the newest concurrent topic creation may select its result
+  ---
+  duration_ms: 23.7668
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale topic deletion completion { id: 'agent-a', type: 'agent' }
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: a deletion completed for an old assistant cannot rewrite the new assistant
+ok 38 - a deletion completed for an old assistant cannot rewrite the new assistant
+  ---
+  duration_ms: 24.3482
+  type: 'test'
+  ...
+# Subtest: ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+ok 39 - ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+  ---
+  duration_ms: 16.174
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after selection changes cannot mutate the new conversation
+ok 40 - a history-file sync resolving after selection changes cannot mutate the new conversation
+  ---
+  duration_ms: 35.4942
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after dispose cannot mutate history or the DOM
+ok 41 - a history-file sync resolving after dispose cannot mutate history or the DOM
+  ---
+  duration_ms: 22.8305
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 25 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history projection keeps an active stream in the newest batch and final floor
+ok 42 - history projection keeps an active stream in the newest batch and final floor
+  ---
+  duration_ms: 33.5557
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history load reconciles an active stream after replacing the Surface projection
+ok 43 - history load reconciles an active stream after replacing the Surface projection
+  ---
+  duration_ms: 22.3093
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history sync does not delete a terminal message that commits while the file read is in flight
+ok 44 - history sync does not delete a terminal message that commits while the file read is in flight
+  ---
+  duration_ms: 25.417
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+ok 45 - JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+  ---
+  duration_ms: 26.6889
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-created
+# [displayTopicTimestampBubble] Topic topic-a-created not found or has no createdAt for agent agent-a.
+# Subtest: creating a topic commits a selection event after the empty history identity changes
+ok 46 - creating a topic commits a selection event after the empty history identity changes
+  ---
+  duration_ms: 26.8816
+  type: 'test'
+  ...
+# (node:91236) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatOperation.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ChatOperations uses real send promise and locks duplicate submissions
+ok 47 - ChatOperations uses real send promise and locks duplicate submissions
+  ---
+  duration_ms: 4.2904
+  type: 'test'
+  ...
+# Subtest: ChatOperations dispose cancels and waits for the operation
+ok 48 - ChatOperations dispose cancels and waits for the operation
+  ---
+  duration_ms: 0.5735
+  type: 'test'
+  ...
+# Subtest: ChatOperations cancellation is idempotent and late completion cannot regain authority
+ok 49 - ChatOperations cancellation is idempotent and late completion cannot regain authority
+  ---
+  duration_ms: 2.0204
+  type: 'test'
+  ...
+# (node:77316) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatPluginManifest.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: chat plugin manifest rejects undeclared powers and loader disposes provider
+ok 50 - chat plugin manifest rejects undeclared powers and loader disposes provider
+  ---
+  duration_ms: 4.8567
+  type: 'test'
+  ...
+# Subtest: chat plugin loader owns slot/theme/skin teardown and rejects undeclared capability
+ok 51 - chat plugin loader owns slot/theme/skin teardown and rejects undeclared capability
+  ---
+  duration_ms: 2.0023
+  type: 'test'
+  ...
+# Subtest: chat plugin state subscription is capability-gated, readonly, and disposed with owner
+ok 52 - chat plugin state subscription is capability-gated, readonly, and disposed with owner
+  ---
+  duration_ms: 1.2424
+  type: 'test'
+  ...
+# Subtest: loader owns presentation skin updates and removes the subscription on uninstall
+ok 53 - loader owns presentation skin updates and removes the subscription on uninstall
+  ---
+  duration_ms: 1.088
+  type: 'test'
+  ...
+# Subtest: plugin provider failure rolls back every earlier registration
+ok 54 - plugin provider failure rolls back every earlier registration
+  ---
+  duration_ms: 1.0695
+  type: 'test'
+  ...
+# Subtest: uninstalled plugin ignores late state updates and duplicate uninstall
+ok 55 - uninstalled plugin ignores late state updates and duplicate uninstall
+  ---
+  duration_ms: 1.0737
+  type: 'test'
+  ...
+# (node:9756) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatPresentationSkin.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: presentation skin receives only frozen state/tokens and disposes owned DOM
+ok 56 - presentation skin receives only frozen state/tokens and disposes owned DOM
+  ---
+  duration_ms: 184.5096
+  type: 'test'
+  ...
+# Subtest: presentation skin update is state-owned and unsubscribed with the mount
+ok 57 - presentation skin update is state-owned and unsubscribed with the mount
+  ---
+  duration_ms: 27.0916
+  type: 'test'
+  ...
+# [ChatPresentationState] subscriber failed during initial snapshot: Error: broken skin
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/chat-presentation-state.test.mjs:23:35
+#     at Object.subscribe (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatPresentationState.js:26:19)
+#     at TestContext.<anonymous> (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/chat-presentation-state.test.mjs:23:11)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+# [ChatPresentationState] subscriber failed: Error: broken skin
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/chat-presentation-state.test.mjs:23:35
+#     at Object.set (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatPresentationState.js:14:23)
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/chat-presentation-state.test.mjs:25:37
+#     at getActual (node:assert:530:5)
+#     at Function.doesNotThrow (node:assert:696:32)
+#     at TestContext.<anonymous> (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/chat-presentation-state.test.mjs:25:12)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+# (node:95040) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatPresentationState.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: presentation state publishes readonly snapshots and quiesces on dispose
+ok 58 - presentation state publishes readonly snapshots and quiesces on dispose
+  ---
+  duration_ms: 2.0533
+  type: 'test'
+  ...
+# Subtest: one presentation subscriber cannot abort the state transition for other consumers
+ok 59 - one presentation subscriber cannot abort the state transition for other consumers
+  ---
+  duration_ms: 4.5297
+  type: 'test'
+  ...
+# (node:7576) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatRepository.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ChatRepository maps agent and group history through the narrow contract
+ok 60 - ChatRepository maps agent and group history through the narrow contract
+  ---
+  duration_ms: 4.236
+  type: 'test'
+  ...
+# (node:36140) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/chat-scroll-release.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: releaseChatBottomFollow sends the same upward wheel the follow state machine listens for
+ok 61 - releaseChatBottomFollow sends the same upward wheel the follow state machine listens for
+  ---
+  duration_ms: 192.7938
+  type: 'test'
+  ...
+# Subtest: jumping away from the bottom first releases the bottom-follow, jumping to the bottom does not
+ok 62 - jumping away from the bottom first releases the bottom-follow, jumping to the bottom does not
+  ---
+  duration_ms: 448.4331
+  type: 'test'
+  ...
+# Subtest: a jump whose target moved during the scroll (layout shift) is corrected instead of left off-screen
+ok 63 - a jump whose target moved during the scroll (layout shift) is corrected instead of left off-screen
+  ---
+  duration_ms: 1621.0317
+  type: 'test'
+  ...
+# (node:90844) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatSurfaceSlots.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: chat surface slots are named, disposable and receive readonly snapshots
+ok 64 - chat surface slots are named, disposable and receive readonly snapshots
+  ---
+  duration_ms: 230.5157
+  type: 'test'
+  ...
+# Subtest: slot mount rolls back earlier contributions when a later consumer fails
+ok 65 - slot mount rolls back earlier contributions when a later consumer fails
+  ---
+  duration_ms: 47.251
+  type: 'test'
+  ...
+# (node:94940) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatSurface.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: read-only ChatSurface ignores a late history result after dispose
+ok 66 - read-only ChatSurface ignores a late history result after dispose
+  ---
+  duration_ms: 251.777
+  type: 'test'
+  ...
+# Subtest: interactive ChatSurface drains its real operation before renderer teardown
+ok 67 - interactive ChatSurface drains its real operation before renderer teardown
+  ---
+  duration_ms: 25.4905
+  type: 'test'
+  ...
+# (node:91892) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/chatThemePlugin.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: chat theme plugin applies only allowlisted tokens and disposes them
+ok 68 - chat theme plugin applies only allowlisted tokens and disposes them
+  ---
+  duration_ms: 216.5185
+  type: 'test'
+  ...
+# (node:64252) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentPipeline.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: content pipeline keeps thought, tool, request and code protocols ordered and isolated
+ok 69 - content pipeline keeps thought, tool, request and code protocols ordered and isolated
+  ---
+  duration_ms: 21.4193
+  type: 'test'
+  ...
+# Subtest: stream-fast protocol path is intentionally lightweight and does not create protection maps
+ok 70 - stream-fast protocol path is intentionally lightweight and does not create protection maps
+  ---
+  duration_ms: 0.8681
+  type: 'test'
+  ...
+# (node:59012) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentProcessor.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [ContentProcessor] Processed interactive button: A
+# [ContentProcessor] Processed interactive button: B
+# [ContentProcessor] Button message sent: [[点击按钮:B]]
+# [ContentProcessor] Processed interactive button: ★采用建议
+# Subtest: interactive message buttons retain their Surface command and teardown owner
+ok 71 - interactive message buttons retain their Surface command and teardown owner
+  ---
+  duration_ms: 277.3022
+  type: 'test'
+  ...
+# [ContentProcessor] Failed to send button message: Error: controlled async failure
+#     at handleSendMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/content-processor-owner.test.mjs:40:23)
+#     at sendMessageViaMainChat (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentProcessor.js:1197:12)
+#     at sendButtonMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentProcessor.js:1170:19)
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentProcessor.js:1121:14
+#     at Timeout._onTimeout (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentProcessor.js:14:9)
+#     at listOnTimeout (node:internal/timers:588:17)
+#     at process.processTimers (node:internal/timers:523:7)
+# [ContentProcessor] Processed interactive button: 采用建议
+# Subtest: interactive nested button targets the owning button and restores after async send failure
+ok 72 - interactive nested button targets the owning button and restores after async send failure
+  ---
+  duration_ms: 108.4958
+  type: 'test'
+  ...
+# [ContentProcessor] Processed interactive button: 采用建议
+# [ContentProcessor] Button message sent: [[点击按钮:建议]]
+# [ContentProcessor] Scoped CSS rejected: forbidden @import
+# Subtest: disabling AI buttons revokes existing bindings and re-enabling binds them again
+ok 73 - disabling AI buttons revokes existing bindings and re-enabling binds them again
+  ---
+  duration_ms: 89.5143
+  type: 'test'
+  ...
+# Subtest: CSS AST scoping recursively scopes nested rules and rejects external imports
+ok 74 - CSS AST scoping recursively scopes nested rules and rejects external imports
+  ---
+  duration_ms: 11.1353
+  type: 'test'
+  ...
+# Subtest: HTML code preview is sandboxed without same-origin authority
+ok 75 - HTML code preview is sandboxed without same-origin authority
+  ---
+  duration_ms: 77.9386
+  type: 'test'
+  ...
+# (node:35420) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/contentRuntime.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ContentRuntime delegates full/stream modes and extracts protocol chunks
+ok 76 - ContentRuntime delegates full/stream modes and extracts protocol chunks
+  ---
+  duration_ms: 3.8777
+  type: 'test'
+  ...
+# Subtest: ContentRuntime stream assembler has explicit append/reset state
+ok 77 - ContentRuntime stream assembler has explicit append/reset state
+  ---
+  duration_ms: 0.5473
+  type: 'test'
+  ...
+# Subtest: ContentRuntime creates a frozen render model without DOM or Electron access
+ok 78 - ContentRuntime creates a frozen render model without DOM or Electron access
+  ---
+  duration_ms: 0.6601
+  type: 'test'
+  ...
+# Subtest: ContentRuntime normalizes attachment protocol data before any DOM consumer sees it
+ok 79 - ContentRuntime normalizes attachment protocol data before any DOM consumer sees it
+  ---
+  duration_ms: 0.5792
+  type: 'test'
+  ...
+# Subtest: content transforms keep Mermaid conversion DOM-free and decode entities deterministically
+ok 80 - content transforms keep Mermaid conversion DOM-free and decode entities deterministically
+  ---
+  duration_ms: 2.123
+  type: 'test'
+  ...
+# Subtest: a newer lease rejects an older queued watcher start
+ok 81 - a newer lease rejects an older queued watcher start
+  ---
+  duration_ms: 4.7794
+  type: 'test'
+  ...
+# Subtest: a lease superseded during start cannot leave its watcher active
+ok 82 - a lease superseded during start cannot leave its watcher active
+  ---
+  duration_ms: 0.9513
+  type: 'test'
+  ...
+# Subtest: revoking a destroyed renderer stops its watcher and rejects its token
+ok 83 - revoking a destroyed renderer stops its watcher and rejects its token
+  ---
+  duration_ms: 12.1345
+  type: 'test'
+  ...
+# Subtest: lifecycle inspector reports ownership metadata without payload content
+ok 84 - lifecycle inspector reports ownership metadata without payload content
+  ---
+  duration_ms: 193.2891
+  type: 'test'
+  ...
+# Subtest: owned resources dispose once in reverse order and await async cleanup
+ok 85 - owned resources dispose once in reverse order and await async cleanup
+  ---
+  duration_ms: 5.8561
+  type: 'test'
+  ...
+# Subtest: dispose waits for a cleanup already started by manual release
+ok 86 - dispose waits for a cleanup already started by manual release
+  ---
+  duration_ms: 0.9004
+  type: 'test'
+  ...
+# Subtest: dispose reports a failure from cleanup already started by manual release
+ok 87 - dispose reports a failure from cleanup already started by manual release
+  ---
+  duration_ms: 2.6182
+  type: 'test'
+  ...
+# Subtest: one cleanup failure does not prevent remaining resources from releasing
+ok 88 - one cleanup failure does not prevent remaining resources from releasing
+  ---
+  duration_ms: 1.347
+  type: 'test'
+  ...
+# Subtest: listeners, timers, observers and abort controllers share one owner
+ok 89 - listeners, timers, observers and abort controllers share one owner
+  ---
+  duration_ms: 79.752
+  type: 'test'
+  ...
+# Subtest: generation guards suppress late work after replacement and disposal
+ok 90 - generation guards suppress late work after replacement and disposal
+  ---
+  duration_ms: 0.9021
+  type: 'test'
+  ...
+# Subtest: once listeners retract from diagnostics after firing
+ok 91 - once listeners retract from diagnostics after firing
+  ---
+  duration_ms: 0.9372
+  type: 'test'
+  ...
+# Subtest: child scopes collapse with their parent
+ok 92 - child scopes collapse with their parent
+  ---
+  duration_ms: 0.9597
+  type: 'test'
+  ...
+# Subtest: disposing a child retracts its ownership record from the parent
+ok 93 - disposing a child retracts its ownership record from the parent
+  ---
+  duration_ms: 1.3904
+  type: 'test'
+  ...
+# Subtest: concurrent child and parent disposal releases shared ownership exactly once
+ok 94 - concurrent child and parent disposal releases shared ownership exactly once
+  ---
+  duration_ms: 1.9624
+  type: 'test'
+  ...
+# Subtest: settled timeouts and tracked tasks leave diagnostics
+ok 95 - settled timeouts and tracked tasks leave diagnostics
+  ---
+  duration_ms: 26.7735
+  type: 'test'
+  ...
+# Subtest: owned resources can be forgotten after natural settlement without running cleanup
+ok 96 - owned resources can be forgotten after natural settlement without running cleanup
+  ---
+  duration_ms: 0.5604
+  type: 'test'
+  ...
+# Subtest: animation frames are owned and suppressed after disposal
+ok 97 - animation frames are owned and suppressed after disposal
+  ---
+  duration_ms: 41.8176
+  type: 'test'
+  ...
+# (node:86172) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatAttachmentOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: attachment owner provides one stable ref and projects its current files
+ok 98 - attachment owner provides one stable ref and projects its current files
+  ---
+  duration_ms: 5.1992
+  type: 'test'
+  ...
+# Subtest: attachment owner dispose is idempotent and rejects later mutation
+ok 99 - attachment owner dispose is idempotent and rejects later mutation
+  ---
+  duration_ms: 0.7587
+  type: 'test'
+  ...
+# (node:75516) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatAuxiliaryEventOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: auxiliary event owner connects each producer to its explicit consumer
+ok 100 - auxiliary event owner connects each producer to its explicit consumer
+  ---
+  duration_ms: 5.8184
+  type: 'test'
+  ...
+# Subtest: auxiliary event owner is idempotent and revokes late delivery
+ok 101 - auxiliary event owner is idempotent and revokes late delivery
+  ---
+  duration_ms: 1.2162
+  type: 'test'
+  ...
+# (node:91928) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatDomBindings.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: main chat DOM bindings resolve once from the owning document
+ok 102 - main chat DOM bindings resolve once from the owning document
+  ---
+  duration_ms: 211.9542
+  type: 'test'
+  ...
+# Subtest: main chat DOM bindings fail fast when the canonical contract is incomplete
+ok 103 - main chat DOM bindings fail fast when the canonical contract is incomplete
+  ---
+  duration_ms: 22.7106
+  type: 'test'
+  ...
+# Subtest: main chat DOM bindings resolve side pane elements when present
+ok 104 - main chat DOM bindings resolve side pane elements when present
+  ---
+  duration_ms: 26.2438
+  type: 'test'
+  ...
+# (node:88976) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatEventBridge.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: routes stream events to the owned consumer and disposes the preload subscription
+ok 105 - routes stream events to the owned consumer and disposes the preload subscription
+  ---
+  duration_ms: 2.3444
+  type: 'test'
+  ...
+# Subtest: rejects malformed events without touching the stream consumer
+ok 106 - rejects malformed events without touching the stream consumer
+  ---
+  duration_ms: 0.5561
+  type: 'test'
+  ...
+# (node:84652) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatFlowlockOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [MainChatFlowlockOwner] command failed Error: Unknown flowlock command: unknown
+#     at handle (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatFlowlockOwner.js:27:32)
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/ownedPreloadSubscription.js:15:24
+#     at TestContext.<anonymous> (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/main-chat-flowlock-owner.test.mjs:4:694)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+# Subtest: Flowlock owner handles commands and isolates response failures
+ok 107 - Flowlock owner handles commands and isolates response failures
+  ---
+  duration_ms: 4.269
+  type: 'test'
+  ...
+# Subtest: Flowlock owner ignores late callbacks after dispose
+ok 108 - Flowlock owner ignores late callbacks after dispose
+  ---
+  duration_ms: 0.7421
+  type: 'test'
+  ...
+# Subtest: Flowlock owner does not answer after an in-flight command loses its lifecycle
+ok 109 - Flowlock owner does not answer after an in-flight command loses its lifecycle
+  ---
+  duration_ms: 9.7817
+  type: 'test'
+  ...
+# (node:84524) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatSendOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: send owner preserves send projection and dispatch
+ok 110 - send owner preserves send projection and dispatch
+  ---
+  duration_ms: 4.8516
+  type: 'test'
+  ...
+# Subtest: send owner projects interrupt mode and dispatches the matching agent request
+ok 111 - send owner projects interrupt mode and dispatches the matching agent request
+  ---
+  duration_ms: 1.2826
+  type: 'test'
+  ...
+# Subtest: send owner preserves failed-interrupt local cleanup
+ok 112 - send owner preserves failed-interrupt local cleanup
+  ---
+  duration_ms: 1.818
+  type: 'test'
+  ...
+# Subtest: send owner suppresses late interrupt completion after dispose
+ok 113 - send owner suppresses late interrupt completion after dispose
+  ---
+  duration_ms: 0.5892
+  type: 'test'
+  ...
+# (node:58780) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatSettingsOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: settings owner publishes replacements and isolates snapshots
+ok 114 - settings owner publishes replacements and isolates snapshots
+  ---
+  duration_ms: 2.4015
+  type: 'test'
+  ...
+# Subtest: settings owner read copies cannot mutate nested authority state
+ok 115 - settings owner read copies cannot mutate nested authority state
+  ---
+  duration_ms: 1.8416
+  type: 'test'
+  ...
+# Subtest: disposed settings owner rejects further replacement
+ok 116 - disposed settings owner rejects further replacement
+  ---
+  duration_ms: 0.3083
+  type: 'test'
+  ...
+# Subtest: DOM listener owner removes registrations and ignores late adds
+ok 117 - DOM listener owner removes registrations and ignores late adds
+  ---
+  duration_ms: 0.9233
+  type: 'test'
+  ...
+# Subtest: DOM listener owner captures direct EventTarget registrations during assembly
+ok 118 - DOM listener owner captures direct EventTarget registrations during assembly
+  ---
+  duration_ms: 0.66
+  type: 'test'
+  ...
+# Subtest: DOM listener owner disposes observer-like resources
+ok 119 - DOM listener owner disposes observer-like resources
+  ---
+  duration_ms: 0.5823
+  type: 'test'
+  ...
+# Subtest: DOM listener owner cancels pending timeout on dispose
+ok 120 - DOM listener owner cancels pending timeout on dispose
+  ---
+  duration_ms: 15.8096
+  type: 'test'
+  ...
+# Subtest: theme owner rolls back failed presentation persistence
+ok 121 - theme owner rolls back failed presentation persistence
+  ---
+  duration_ms: 2.1132
+  type: 'test'
+  ...
+# Subtest: theme owner rejects work after dispose
+ok 122 - theme owner rejects work after dispose
+  ---
+  duration_ms: 0.8576
+  type: 'test'
+  ...
+# Subtest: settings presentation owner reads the live authority and releases quick-switcher listeners
+ok 123 - settings presentation owner reads the live authority and releases quick-switcher listeners
+  ---
+  duration_ms: 199.0887
+  type: 'test'
+  ...
+# Subtest: settings presentation owner waits for pending startup settings and suppresses projection after dispose
+ok 124 - settings presentation owner waits for pending startup settings and suppresses projection after dispose
+  ---
+  duration_ms: 17.2113
+  type: 'test'
+  ...
+# (node:78436) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/mainChatStateAuthority.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: main chat state exposes immutable snapshots through a read-only consumer
+ok 125 - main chat state exposes immutable snapshots through a read-only consumer
+  ---
+  duration_ms: 4.1109
+  type: 'test'
+  ...
+# Subtest: main chat state refs update immutable snapshots without exposing setters
+ok 126 - main chat state refs update immutable snapshots without exposing setters
+  ---
+  duration_ms: 0.9177
+  type: 'test'
+  ...
+# (node:86912) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatSurfaceAdapter.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: MainChatSurfaceAdapter owns renderer, stream routes and quiescent teardown
+ok 127 - MainChatSurfaceAdapter owns renderer, stream routes and quiescent teardown
+  ---
+  duration_ms: 154.798
+  type: 'test'
+  ...
+# Subtest: MainChatSurfaceAdapter owns the window unload receipt and releases it on dispose
+ok 128 - MainChatSurfaceAdapter owns the window unload receipt and releases it on dispose
+  ---
+  duration_ms: 31.0934
+  type: 'test'
+  ...
+# Subtest: main Surface send state follows the real stream terminal consumer
+ok 129 - main Surface send state follows the real stream terminal consumer
+  ---
+  duration_ms: 26.4208
+  type: 'test'
+  ...
+# (node:82324) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/mainChatThemeOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: theme owner applies and rolls back failed presentation persistence
+ok 130 - theme owner applies and rolls back failed presentation persistence
+  ---
+  duration_ms: 2.7574
+  type: 'test'
+  ...
+# Subtest: theme owner ignores work after dispose
+ok 131 - theme owner ignores work after dispose
+  ---
+  duration_ms: 0.7238
+  type: 'test'
+  ...
+# [EditMode] Claiming file watcher lease to prevent race condition
+# [EditMode] Failed to restart watcher after successful save: Error: controlled watcher restart failure
+#     at Object.watcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\message-edit-watcher-failure.test.js:30:23)
+#     at saveButton.onclick (eval at <anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\message-edit-watcher-failure.test.js:17:16), <anonymous>:742:61)
+# Subtest: a watcher restart failure cannot roll back a durably saved message edit
+ok 132 - a watcher restart failure cannot roll back a durably saved message edit
+  ---
+  duration_ms: 220.0341
+  type: 'test'
+  ...
+# Subtest: editing survives deletion of another message and replacement of the history array
+ok 133 - editing survives deletion of another message and replacement of the history array
+  ---
+  duration_ms: 40.9059
+  type: 'test'
+  ...
+# Subtest: a visible edited bubble is restored when a concurrent history snapshot temporarily omits it
+ok 134 - a visible edited bubble is restored when a concurrent history snapshot temporarily omits it
+  ---
+  duration_ms: 64.6322
+  type: 'test'
+  ...
+# (node:61160) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/nonStreamingEventConsumer.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: non-streaming consumer projects only already-persisted current-surface events
+ok 135 - non-streaming consumer projects only already-persisted current-surface events
+  ---
+  duration_ms: 5.7927
+  type: 'test'
+  ...
+# (node:67976) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/ownedPreloadSubscription.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: owned preload subscription forwards payloads and revokes late delivery
+ok 136 - owned preload subscription forwards payloads and revokes late delivery
+  ---
+  duration_ms: 3.0684
+  type: 'test'
+  ...
+# Subtest: consumer errors are reported without destroying the subscription owner
+ok 137 - consumer errors are reported without destroying the subscription owner
+  ---
+  duration_ms: 0.586
+  type: 'test'
+  ...
+# Subtest: dispose waits for an in-flight async consumer and reports its rejection
+ok 138 - dispose waits for an in-flight async consumer and reports its rejection
+  ---
+  duration_ms: 8.5289
+  type: 'test'
+  ...
+# Subtest: consumer receives an aborted lifecycle after disposal begins
+ok 139 - consumer receives an aborted lifecycle after disposal begins
+  ---
+  duration_ms: 0.7457
+  type: 'test'
+  ...
+# (node:81160) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamConsumerRegistry.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: stream consumer routes are exact-owner scoped and absent after release
+ok 140 - stream consumer routes are exact-owner scoped and absent after release
+  ---
+  duration_ms: 4.0476
+  type: 'test'
+  ...
+# Subtest: stream consumer registry rejects registration after owner dispose
+ok 141 - stream consumer registry rejects registration after owner dispose
+  ---
+  duration_ms: 0.6335
+  type: 'test'
+  ...
+# Subtest: owner retraction leaves a one-terminal tombstone for late stream events
+ok 142 - owner retraction leaves a one-terminal tombstone for late stream events
+  ---
+  duration_ms: 1.6231
+  type: 'test'
+  ...
+# Subtest: a retracted route loses DOM authority but can still settle its operation promise
+ok 143 - a retracted route loses DOM authority but can still settle its operation promise
+  ---
+  duration_ms: 0.6562
+  type: 'test'
+  ...
+# (node:66976) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamCoordinator.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: done waits for transport, persistence and owned cleanup before one terminal event
+ok 144 - done waits for transport, persistence and owned cleanup before one terminal event
+  ---
+  duration_ms: 18.1107
+  type: 'test'
+  ...
+# Subtest: reader failures and disconnects normalize to one failed terminal
+ok 145 - reader failures and disconnects normalize to one failed terminal
+  ---
+  duration_ms: 4.949
+  type: 'test'
+  ...
+# Subtest: cancel aborts transport and rejects duplicate terminal ownership
+ok 146 - cancel aborts transport and rejects duplicate terminal ownership
+  ---
+  duration_ms: 0.9863
+  type: 'test'
+  ...
+# Subtest: dispose detaches consumer before abort and waits for the blocked reader
+ok 147 - dispose detaches consumer before abort and waits for the blocked reader
+  ---
+  duration_ms: 2.7377
+  type: 'test'
+  ...
+# Subtest: external abort becomes cancelled and remains visible to the live surface
+ok 148 - external abort becomes cancelled and remains visible to the live surface
+  ---
+  duration_ms: 1.1734
+  type: 'test'
+  ...
+# Subtest: persistence failure produces a single failed outcome after completed transport
+ok 149 - persistence failure produces a single failed outcome after completed transport
+  ---
+  duration_ms: 1.3807
+  type: 'test'
+  ...
+# Subtest: same message retry revokes the old lease but distinct messages in one topic coexist
+ok 150 - same message retry revokes the old lease but distinct messages in one topic coexist
+  ---
+  duration_ms: 2.208
+  type: 'test'
+  ...
+# Subtest: persistence serializes per conversation but not across conversations
+ok 151 - persistence serializes per conversation but not across conversations
+  ---
+  duration_ms: 1.734
+  type: 'test'
+  ...
+# Subtest: consumer failure does not block persistence, terminal completion or later work
+ok 152 - consumer failure does not block persistence, terminal completion or later work
+  ---
+  duration_ms: 1.1084
+  type: 'test'
+  ...
+# Subtest: coordinator dispose aborts every active run and waits for quiescence
+ok 153 - coordinator dispose aborts every active run and waits for quiescence
+  ---
+  duration_ms: 9.0518
+  type: 'test'
+  ...
+# (node:66252) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Started pre-buffering for message same-message
+# [StreamManager] Started pre-buffering for message same-message
+# [StreamManager] Transient state cleared
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Started pre-buffering for message background-message
+# [StreamManager] Could not prepare transient history for background-message {
+#   agentId: 'background-agent',
+#   groupId: undefined,
+#   topicId: 'background-topic',
+#   isGroupMessage: false,
+#   agentName: undefined,
+#   avatarUrl: undefined,
+#   avatarColor: undefined,
+#   streamOperationId: null
+# } Error: controlled history failure
+#     at Object.getHistory (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:181:63)
+#     at readFor (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamTransientHistory.js:30:42)
+#     at Object.prepare (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamTransientHistory.js:42:35)
+#     at startStreamingMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2003:43)
+#     at Object.startStreamingMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2799:61)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:187:26)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: two StreamProjection owners isolate identical message identities and teardown listeners
+ok 154 - two StreamProjection owners isolate identical message identities and teardown listeners
+  ---
+  duration_ms: 81.2571
+  type: 'test'
+  ...
+# Subtest: disposed StreamProjection rejects initialization and ignores every late stream event
+ok 155 - disposed StreamProjection rejects initialization and ignores every late stream event
+  ---
+  duration_ms: 14.0881
+  type: 'test'
+  ...
+# Subtest: StreamProjection fails fast when transient history or view authority is missing
+ok 156 - StreamProjection fails fast when transient history or view authority is missing
+  ---
+  duration_ms: 11.5217
+  type: 'test'
+  ...
+# Subtest: owned StreamProjection completes terminal DOM projection without a cross-root side channel
+ok 157 - owned StreamProjection completes terminal DOM projection without a cross-root side channel
+  ---
+  duration_ms: 39.565
+  type: 'test'
+  ...
+# Subtest: background initialization failure releases every runtime owner
+ok 158 - background initialization failure releases every runtime owner
+  ---
+  duration_ms: 14.0641
+  type: 'test'
+  ...
+# Subtest: StreamProjection honors an owned view authority and history capability after navigation
+ok 159 - StreamProjection honors an owned view authority and history capability after navigation
+  ---
+  duration_ms: 15.4767
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: active stream waiting for tool result can reconcile after switching away and back
+ok 160 - active stream waiting for tool result can reconcile after switching away and back
+  ---
+  duration_ms: 135.6803
+  type: 'test'
+  ...
+# Subtest: StreamProjection rejects chunks and terminals from a different producer operation
+ok 161 - StreamProjection rejects chunks and terminals from a different producer operation
+  ---
+  duration_ms: 12.5235
+  type: 'test'
+  ...
+# Subtest: StreamProjection retires prior runtime state before same-message retry
+ok 162 - StreamProjection retires prior runtime state before same-message retry
+  ---
+  duration_ms: 13.0854
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# Subtest: stale async initialization cannot revive state after same-message operation replacement
+ok 163 - stale async initialization cannot revive state after same-message operation replacement
+  ---
+  duration_ms: 11.5486
+  type: 'test'
+  ...
+# Subtest: smooth stream terminal stops queued rendering and releases every runtime owner
+ok 164 - smooth stream terminal stops queued rendering and releases every runtime owner
+  ---
+  duration_ms: 11.8564
+  type: 'test'
+  ...
+# [StreamManager] morphdom rejected a stream frame; replaced the sealed tail directly. Error: controlled first-frame morph failure
+#     at Object.morphdom (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:430:19)
+#     at renderStreamFrame (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:1681:18)
+#     at processAndRenderSmoothChunk (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:1897:5)
+#     at renderLoop (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2148:13)
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2116:13
+#     at invoke (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:241:24)
+#     at invokeTheCallbackFunction (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\living\\generated\\Function.js:19:26)
+#     at runAnimationFrameCallbacks (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\browser\\Window.js:688:13)
+#     at Timeout.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\browser\\Window.js:666:11)
+#     at listOnTimeout (node:internal/timers:588:17)
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: tool-request-first stream falls back to direct DOM projection when morphdom rejects a frame
+ok 165 - tool-request-first stream falls back to direct DOM projection when morphdom rejects a frame
+  ---
+  duration_ms: 119.6653
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Message waiting-switch already initialized (ready) with same thinking state, skipping re-init
+# Subtest: active stream recreates a missing message DOM on the next render frame
+ok 166 - active stream recreates a missing message DOM on the next render frame
+  ---
+  duration_ms: 156.7755
+  type: 'test'
+  ...
+# Subtest: terminal projection recreates a missing message DOM from canonical final content
+ok 167 - terminal projection recreates a missing message DOM from canonical final content
+  ---
+  duration_ms: 13.5337
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: reconcile preserves the thinking placeholder until the first visible token arrives
+ok 168 - reconcile preserves the thinking placeholder until the first visible token arrives
+  ---
+  duration_ms: 121.9532
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: stream DOM recovery atomically removes a concurrent history duplicate
+ok 169 - stream DOM recovery atomically removes a concurrent history duplicate
+  ---
+  duration_ms: 222.2826
+  type: 'test'
+  ...
+# Subtest: thinking and streaming messages opt out of content-visibility clipping
+ok 170 - thinking and streaming messages opt out of content-visibility clipping
+  ---
+  duration_ms: 2.2775
+  type: 'test'
+  ...
+# Subtest: scrolling chat surfaces do not create per-message or scroll-owner backdrop captures
+ok 171 - scrolling chat surfaces do not create per-message or scroll-owner backdrop captures
+  ---
+  duration_ms: 3.5478
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# Subtest: a live stream frame reclaims the final message floor after a late history batch mounts
+ok 172 - a live stream frame reclaims the final message floor after a late history batch mounts
+  ---
+  duration_ms: 210.5701
+  type: 'test'
+  ...
+# (node:19388) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [StreamSession] consumer failed: Error: controlled consumer failure
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/stream-session.test.mjs:46:37
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:31:15
+#     at Array.forEach (<anonymous>)
+#     at emit (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:30:42)
+#     at update (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:37:9)
+#     at Object.pushChunk (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:53:20)
+#     at TestContext.<anonymous> (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/stream-session.test.mjs:48:13)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+# [StreamSession] consumer failed: Error: controlled terminal consumer failure
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/stream-session.test.mjs:57:47
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:31:15
+#     at Array.forEach (<anonymous>)
+#     at emit (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:30:42)
+#     at update (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:37:9)
+#     at Object.terminal (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamSession.js:59:30)
+#     at TestContext.<anonymous> (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/tests/stream-session.test.mjs:59:26)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+# Subtest: stream session emits ordered immutable chunks and one terminal outcome
+ok 173 - stream session emits ordered immutable chunks and one terminal outcome
+  ---
+  duration_ms: 5.0107
+  type: 'test'
+  ...
+# Subtest: stale generation and late chunks cannot regain authority
+ok 174 - stale generation and late chunks cannot regain authority
+  ---
+  duration_ms: 0.8015
+  type: 'test'
+  ...
+# Subtest: dispose publishes one discarded terminal, then silences consumers and is idempotent
+ok 175 - dispose publishes one discarded terminal, then silences consumers and is idempotent
+  ---
+  duration_ms: 0.6576
+  type: 'test'
+  ...
+# Subtest: subscriber failure does not block later stream consumers
+ok 176 - subscriber failure does not block later stream consumers
+  ---
+  duration_ms: 1.2543
+  type: 'test'
+  ...
+# Subtest: done resolves once from the accepted terminal even when a consumer throws
+ok 177 - done resolves once from the accepted terminal even when a consumer throws
+  ---
+  duration_ms: 1.0216
+  type: 'test'
+  ...
+# Subtest: normalizes transport terminal aliases into the four protocol outcomes
+ok 178 - normalizes transport terminal aliases into the four protocol outcomes
+  ---
+  duration_ms: 1.2914
+  type: 'test'
+  ...
+# Subtest: reducer mirrors events and ignores a late event after terminal
+ok 179 - reducer mirrors events and ignores a late event after terminal
+  ---
+  duration_ms: 5.6588
+  type: 'test'
+  ...
+# (node:3568) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamTransientHistory.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: transient stream history owns pending models without performing durable writes
+ok 180 - transient stream history owns pending models without performing durable writes
+  ---
+  duration_ms: 5.3683
+  type: 'test'
+  ...
+# Subtest: background transient models read latest history and preserve reply ordering
+ok 181 - background transient models read latest history and preserve reply ordering
+  ---
+  duration_ms: 0.9418
+  type: 'test'
+  ...
+# Subtest: dispose revokes transient history authority and clears pending models
+ok 182 - dispose revokes transient history authority and clears pending models
+  ---
+  duration_ms: 1.8028
+  type: 'test'
+  ...
+# (node:81328) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/topicSelectionReadiness.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: topic selection readiness defers and consumes the latest selection without ambient state
+ok 183 - topic selection readiness defers and consumes the latest selection without ambient state
+  ---
+  duration_ms: 3.3901
+  type: 'test'
+  ...
+# Subtest: topic selection readiness clearPending revokes a queued selection
+ok 184 - topic selection readiness clearPending revokes a queued selection
+  ---
+  duration_ms: 0.424
+  type: 'test'
+  ...
+# Subtest: async content growth keeps following the bottom without treating layout as user intent
+ok 185 - async content growth keeps following the bottom without treating layout as user intent
+  ---
+  duration_ms: 121.2653
+  type: 'test'
+  ...
+# Subtest: an upward wheel gesture revokes bottom follow and blocks later async growth compensation
+ok 186 - an upward wheel gesture revokes bottom follow and blocks later async growth compensation
+  ---
+  duration_ms: 19.5774
+  type: 'test'
+  ...
+# Subtest: a small upward wheel step inside the bottom threshold cannot be relocked by its scroll event
+ok 187 - a small upward wheel step inside the bottom threshold cannot be relocked by its scroll event
+  ---
+  duration_ms: 16.2811
+  type: 'test'
+  ...
+# Subtest: returning to the bottom re-enables continuous follow for subsequent async growth
+ok 188 - returning to the bottom re-enables continuous follow for subsequent async growth
+  ---
+  duration_ms: 16.4639
+  type: 'test'
+  ...
+# Subtest: a stale resize compensation cannot override a newer user scroll generation
+ok 189 - a stale resize compensation cannot override a newer user scroll generation
+  ---
+  duration_ms: 18.0573
+  type: 'test'
+  ...
+1..189
+# tests 189
+# suites 0
+# pass 189
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7333.3973

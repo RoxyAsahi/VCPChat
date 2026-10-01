@@ -1,0 +1,38 @@
+[
+  {
+    "label": "full-ui-gate",
+    "status": 0,
+    "tests": 46,
+    "pass": 46,
+    "fail": 0,
+    "skipped": 0
+  },
+  {
+    "label": "feature-regressions",
+    "status": 0,
+    "tests": 358,
+    "pass": 358,
+    "fail": 0,
+    "skipped": 0
+  },
+  {
+    "label": "chat-kernel",
+    "status": 0,
+    "tests": 189,
+    "pass": 189,
+    "fail": 0,
+    "skipped": 0
+  },
+  {
+    "label": "event-graph",
+    "status": 0
+  },
+  {
+    "label": "consumers",
+    "status": 0
+  },
+  {
+    "label": "chat-contracts",
+    "status": 0
+  }
+]

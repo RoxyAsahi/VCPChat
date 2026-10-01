@@ -1,0 +1,24 @@
+{
+  "pass": true,
+  "repairSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+  "functionalTip": "46819283d397dab31cf6de182b2a90240dd5b80b",
+  "differences": [
+    "docs/handoff/ADVERSARIAL-REVIEW.md",
+    "docs/handoff/HANDOFF.md",
+    "docs/handoff/PR-STACK.json",
+    "docs/handoff/PR-STACK.md",
+    "docs/handoff/REQUIREMENTS-vs-upstream.md",
+    "docs/handoff/review-probes/README.md",
+    "docs/handoff/review-probes/additional-probes.mjs",
+    "docs/handoff/review-probes/additional-results.json",
+    "docs/handoff/review-probes/adversarial-probes.mjs",
+    "docs/handoff/review-probes/adversarial-results.json",
+    "docs/handoff/review-probes/source-tests.json",
+    "scripts/next-delta-shared-baseline.json",
+    "vendor/zcode/ATTRIBUTION.md",
+    "vendor/zcode/LICENSE",
+    "vendor/zcode/NOTICE.md",
+    "vendor/zcode/THIRD-PARTY-NOTICES.md"
+  ],
+  "scope": "Functional code and tests identical. Documentation and protected-file baseline rationale differ by intended split ownership."
+}

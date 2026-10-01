@@ -1,0 +1,69 @@
+TAP version 13
+# (node:90764) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/renderer/widgetBridge.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: state key is stable per message and html, and absent without a message id
+ok 1 - state key is stable per message and html, and absent without a message id
+  ---
+  duration_ms: 1.8096
+  type: 'test'
+  ...
+# Subtest: bridge script exposes window.vcp and talks to the host through postMessage
+ok 2 - bridge script exposes window.vcp and talks to the host through postMessage
+  ---
+  duration_ms: 3.2905
+  type: 'test'
+  ...
+# Subtest: bridge script survives hostile state and frame ids
+ok 3 - bridge script survives hostile state and frame ids
+  ---
+  duration_ms: 0.7806
+  type: 'test'
+  ...
+# Subtest: channel persists state and only answers its own frame
+ok 4 - channel persists state and only answers its own frame
+  ---
+  duration_ms: 0.9873
+  type: 'test'
+  ...
+# [ContentProcessor] Widget request rejected: not-confirmed
+# Subtest: follow-up messages require a fresh host confirmation and are rate limited
+ok 5 - follow-up messages require a fresh host confirmation and are rate limited
+  ---
+  duration_ms: 7.3478
+  type: 'test'
+  ...
+# Subtest: readGlobals follows the app theme attribute
+ok 6 - readGlobals follows the app theme attribute
+  ---
+  duration_ms: 107.3718
+  type: 'test'
+  ...
+# Subtest: HTML preview embeds the bridge and restores saved state for the same message
+ok 7 - HTML preview embeds the bridge and restores saved state for the same message
+  ---
+  duration_ms: 176.2847
+  type: 'test'
+  ...
+# Subtest: iframe focus and repeated messages cannot replace a per-request host decision
+ok 8 - iframe focus and repeated messages cannot replace a per-request host decision
+  ---
+  duration_ms: 9.0912
+  type: 'test'
+  ...
+# Subtest: a confirmation completed after the originating conversation changes cannot send into the new conversation
+ok 9 - a confirmation completed after the originating conversation changes cannot send into the new conversation
+  ---
+  duration_ms: 1.9952
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2223.2011

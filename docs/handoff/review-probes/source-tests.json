@@ -1,0 +1,314 @@
+[
+  {
+    "file": "tests/browser-handlers.test.js",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/chat-history-persistence.test.mjs",
+    "exit": 0,
+    "tests": 6,
+    "failed": 0
+  },
+  {
+    "file": "tests/chat-scroll-release.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/command-center.test.mjs",
+    "exit": 0,
+    "tests": 11,
+    "failed": 0
+  },
+  {
+    "file": "tests/conversation-find.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/conversation-scope.test.mjs",
+    "exit": 0,
+    "tests": 4,
+    "failed": 0
+  },
+  {
+    "file": "tests/conversation-status-panel.test.mjs",
+    "exit": 0,
+    "tests": 19,
+    "failed": 0
+  },
+  {
+    "file": "tests/conversation-turn-navigator.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/draft-suggested-prompts.test.mjs",
+    "exit": 0,
+    "tests": 4,
+    "failed": 0
+  },
+  {
+    "file": "tests/dsh-voice-interaction.test.js",
+    "exit": 0,
+    "tests": 14,
+    "failed": 0
+  },
+  {
+    "file": "tests/git-file-diff.test.mjs",
+    "exit": 0,
+    "tests": 5,
+    "failed": 0
+  },
+  {
+    "file": "tests/git-service.test.js",
+    "exit": 0,
+    "tests": 10,
+    "failed": 0
+  },
+  {
+    "file": "tests/main-chat-dom-bindings.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/message-export.test.mjs",
+    "exit": 0,
+    "tests": 9,
+    "failed": 0
+  },
+  {
+    "file": "tests/message-file-changes-projectforge.test.mjs",
+    "exit": 0,
+    "tests": 9,
+    "failed": 0
+  },
+  {
+    "file": "tests/message-file-changes.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/message-meta-enhancer.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/model-trajectory-handlers.test.js",
+    "exit": 0,
+    "tests": 1,
+    "failed": 0
+  },
+  {
+    "file": "tests/model-trajectory-model.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/model-trajectory-recorder.test.js",
+    "exit": 0,
+    "tests": 10,
+    "failed": 0
+  },
+  {
+    "file": "tests/notification-center.test.js",
+    "exit": 0,
+    "tests": 16,
+    "failed": 0
+  },
+  {
+    "file": "tests/notification-change-audit.test.js",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/preload-registry.test.js",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/selection-quote-action.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/selection-reference.test.mjs",
+    "exit": 0,
+    "tests": 4,
+    "failed": 0
+  },
+  {
+    "file": "tests/send-queue.test.mjs",
+    "exit": 0,
+    "tests": 10,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-audit-probes.test.mjs",
+    "exit": 0,
+    "tests": 15,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-entry-points.test.mjs",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-ephemeral-zcode-parity.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-integration.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-ipc-metadata.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-model-and-context.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-session-service.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-surface-owner.test.mjs",
+    "exit": 0,
+    "tests": 4,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-chat-topic-binding-parity.test.mjs",
+    "exit": 0,
+    "tests": 6,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-advanced-parity.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-controller.test.mjs",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-git-ai-scope.test.mjs",
+    "exit": 0,
+    "tests": 5,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-git-real-backend.test.mjs",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-model-trajectory.test.mjs",
+    "exit": 0,
+    "tests": 11,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-plan-detail.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-resizer-owner.test.mjs",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-state.test.mjs",
+    "exit": 0,
+    "tests": 6,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-tab-strip.test.mjs",
+    "exit": 0,
+    "tests": 10,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-terminal-links.test.mjs",
+    "exit": 0,
+    "tests": 3,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-terminal-theme.test.mjs",
+    "exit": 0,
+    "tests": 4,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-tool-output.test.mjs",
+    "exit": 0,
+    "tests": 8,
+    "failed": 0
+  },
+  {
+    "file": "tests/side-pane-universal-provider.test.mjs",
+    "exit": 0,
+    "tests": 13,
+    "failed": 0
+  },
+  {
+    "file": "tests/slash-commands.test.mjs",
+    "exit": 0,
+    "tests": 10,
+    "failed": 0
+  },
+  {
+    "file": "tests/terminal-handlers.test.js",
+    "exit": 0,
+    "tests": 6,
+    "failed": 0
+  },
+  {
+    "file": "tests/visibility-optimizer-height-batch.test.mjs",
+    "exit": 0,
+    "tests": 2,
+    "failed": 0
+  },
+  {
+    "file": "tests/widget-bridge.test.mjs",
+    "exit": 0,
+    "tests": 7,
+    "failed": 0
+  }
+]

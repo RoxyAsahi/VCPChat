@@ -1,0 +1,13 @@
+{
+  "pass": true,
+  "before": [
+    {
+      "path": "C:/failed.js",
+      "op": "write"
+    }
+  ],
+  "after": [],
+  "sourceBefore": "59de8d87",
+  "fixedSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+  "scope": "Synthetic equal-count concurrent tool transcript; no real file write"
+}

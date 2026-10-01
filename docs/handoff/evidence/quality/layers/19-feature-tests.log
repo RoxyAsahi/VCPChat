@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: parseSlashDraft only reacts to a leading slash command
+ok 1 - parseSlashDraft only reacts to a leading slash command
+  ---
+  duration_ms: 3.8798
+  type: 'test'
+  ...
+# Subtest: filterCommands ranks exact > prefix > contains > description, and findCommand resolves aliases
+ok 2 - filterCommands ranks exact > prefix > contains > description, and findCommand resolves aliases
+  ---
+  duration_ms: 1.7199
+  type: 'test'
+  ...
+# Subtest: buildDefaultCommands only offers commands whose action exists
+ok 3 - buildDefaultCommands only offers commands whose action exists
+  ---
+  duration_ms: 0.6692
+  type: 'test'
+  ...
+# Subtest: /trace resolves by alias to the model trajectory action
+ok 4 - /trace resolves by alias to the model trajectory action
+  ---
+  duration_ms: 0.6487
+  type: 'test'
+  ...
+# Subtest: resolvePopupPosition sits above the input and stays inside the viewport
+ok 5 - resolvePopupPosition sits above the input and stays inside the viewport
+  ---
+  duration_ms: 0.5761
+  type: 'test'
+  ...
+# Subtest: typing "/" opens the list, arrows move, Enter runs the command and clears the draft without sending
+ok 6 - typing "/" opens the list, arrows move, Enter runs the command and clears the draft without sending
+  ---
+  duration_ms: 142.9234
+  type: 'test'
+  ...
+# Subtest: Escape closes, unknown slash text and paths are sent as ordinary messages
+ok 7 - Escape closes, unknown slash text and paths are sent as ordinary messages
+  ---
+  duration_ms: 15.4357
+  type: 'test'
+  ...
+# Subtest: commands with arguments complete to "/name " and run on Enter with the argument
+ok 8 - commands with arguments complete to "/name " and run on Enter with the argument
+  ---
+  duration_ms: 14.0043
+  type: 'test'
+  ...
+# Subtest: clicking an item runs it, IME composition is ignored, async failures are contained, dispose cleans up
+ok 9 - clicking an item runs it, IME composition is ignored, async failures are contained, dispose cleans up
+  ---
+  duration_ms: 37.6226
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without an input or without any command
+ok 10 - mount is a no-op without an input or without any command
+  ---
+  duration_ms: 18.6138
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2155.7901

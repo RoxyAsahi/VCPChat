@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: parsePorcelainV2 handles branch headers, spaces, renames, conflicts and untracked files
+ok 1 - parsePorcelainV2 handles branch headers, spaces, renames, conflicts and untracked files
+  ---
+  duration_ms: 5.2539
+  type: 'test'
+  ...
+# Subtest: chunkPaths keeps every path and splits long argument lists
+ok 2 - chunkPaths keeps every path and splits long argument lists
+  ---
+  duration_ms: 1.1749
+  type: 'test'
+  ...
+# Subtest: status → stage → unstage → commit round trip on a real repository
+ok 3 - status → stage → unstage → commit round trip on a real repository
+  ---
+  duration_ms: 4818.4129
+  type: 'test'
+  ...
+# Subtest: unstaged diff reads the working tree; discard restores tracked files and hands untracked ones to the remover
+ok 4 - unstaged diff reads the working tree; discard restores tracked files and hands untracked ones to the remover
+  ---
+  duration_ms: 3292.7412
+  type: 'test'
+  ...
+# Subtest: sub-directory workspace: status is scoped, outside paths are rejected, commit refuses foreign staged files
+ok 5 - sub-directory workspace: status is scoped, outside paths are rejected, commit refuses foreign staged files
+  ---
+  duration_ms: 3174.8234
+  type: 'test'
+  ...
+# Subtest: branches: list, create, switch and refuse unsafe cases
+ok 6 - branches: list, create, switch and refuse unsafe cases
+  ---
+  duration_ms: 12787.6493
+  type: 'test'
+  ...
+# Subtest: commit graph pages through visible history with refs
+ok 7 - commit graph pages through visible history with refs
+  ---
+  duration_ms: 4021.0525
+  type: 'test'
+  ...
+# Subtest: change summary counts tracked and untracked text lines
+ok 8 - change summary counts tracked and untracked text lines
+  ---
+  duration_ms: 2408.6837
+  type: 'test'
+  ...
+# Subtest: non-repository directory reports isRepo=false
+ok 9 - non-repository directory reports isRepo=false
+  ---
+  duration_ms: 135.7362
+  type: 'test'
+  ...
+# Subtest: git IPC accepts only exact application pages, including embedded query parameters
+ok 10 - git IPC accepts only exact application pages, including embedded query parameters
+  ---
+  duration_ms: 1.3641
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 31047.5076

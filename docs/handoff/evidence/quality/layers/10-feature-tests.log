@@ -1,0 +1,190 @@
+TAP version 13
+# (node:71088) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-1/modules/ui-system/conversation-scope.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-1\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a conversation that never touched ProjectForge or the terminal has an empty scope
+ok 1 - a conversation that never touched ProjectForge or the terminal has an empty scope
+  ---
+  duration_ms: 4.8436
+  type: 'test'
+  ...
+# Subtest: project ids come from CreateProject results and later requests, most recently mentioned first
+ok 2 - project ids come from CreateProject results and later requests, most recently mentioned first
+  ---
+  duration_ms: 3.0216
+  type: 'test'
+  ...
+# Subtest: PowerShellExecutor commands preserve shell whitespace, other tools are ignored
+ok 3 - PowerShellExecutor commands preserve shell whitespace, other tools are ignored
+  ---
+  duration_ms: 0.5773
+  type: 'test'
+  ...
+# Subtest: messages with array content are read too, and the signature changes only when the scope does
+ok 4 - messages with array content are read too, and the signature changes only when the scope does
+  ---
+  duration_ms: 0.6623
+  type: 'test'
+  ...
+# Subtest: quoted whitespace and equal-size command sets have different identities
+ok 5 - quoted whitespace and equal-size command sets have different identities
+  ---
+  duration_ms: 0.3561
+  type: 'test'
+  ...
+# (node:93936) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-1/modules/ui-system/git-graph-layout.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-1\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: helpers: branch filtering, project selection, todo mapping and commit message
+ok 6 - helpers: branch filtering, project selection, todo mapping and commit message
+  ---
+  duration_ms: 22.7603
+  type: 'test'
+  ...
+# Subtest: helpers: todo focus window, mini metric, variant and switch-blocked parsing
+ok 7 - helpers: todo focus window, mini metric, variant and switch-blocked parsing
+  ---
+  duration_ms: 2.322
+  type: 'test'
+  ...
+# Subtest: git graph layout: linear history stays on one lane, merges add a lane
+ok 8 - git graph layout: linear history stays on one lane, merges add a lane
+  ---
+  duration_ms: 3.4491
+  type: 'test'
+  ...
+# Subtest: panel renders Git 工具 rows and 进程 from V工程 todos, with mini capsule fallback
+ok 9 - panel renders Git 工具 rows and 进程 from V工程 todos, with mini capsule fallback
+  ---
+  duration_ms: 394.1287
+  type: 'test'
+  ...
+# Subtest: without git or todos the panel stays as an entry capsule that opens the Git tab
+ok 10 - without git or todos the panel stays as an entry capsule that opens the Git tab
+  ---
+  duration_ms: 72.166
+  type: 'test'
+  ...
+# Subtest: a workspace that is not a git repo shows a Git 工具 entry instead of disappearing
+ok 11 - a workspace that is not a git repo shows a Git 工具 entry instead of disappearing
+  ---
+  duration_ms: 60.992
+  type: 'test'
+  ...
+# Subtest: pickEntryMetric asks for a workspace first
+ok 12 - pickEntryMetric asks for a workspace first
+  ---
+  duration_ms: 0.3771
+  type: 'test'
+  ...
+# Subtest: branch popover filters, switches and offers create / graph in the footer
+ok 13 - branch popover filters, switches and offers create / graph in the footer
+  ---
+  duration_ms: 138.2623
+  type: 'test'
+  ...
+# Subtest: create-branch dialog creates and switches
+ok 14 - create-branch dialog creates and switches
+  ---
+  duration_ms: 126.9575
+  type: 'test'
+  ...
+# Subtest: a checkout blocked by local changes opens the commit-and-switch flow
+ok 15 - a checkout blocked by local changes opens the commit-and-switch flow
+  ---
+  duration_ms: 156.1511
+  type: 'test'
+  ...
+# Subtest: commit dialog stages unique paths, commits with a generated message and pushes
+ok 16 - commit dialog stages unique paths, commits with a generated message and pushes
+  ---
+  duration_ms: 153.8982
+  type: 'test'
+  ...
+# Subtest: push dialog sets the upstream automatically for a branch without one
+ok 17 - push dialog sets the upstream automatically for a branch without one
+  ---
+  duration_ms: 120.1197
+  type: 'test'
+  ...
+# Subtest: git graph dialog draws commits and lanes
+ok 18 - git graph dialog draws commits and lanes
+  ---
+  duration_ms: 93.6376
+  type: 'test'
+  ...
+# Subtest: panel lists recent AI commands from the built-in terminal and opens their output
+ok 19 - panel lists recent AI commands from the built-in terminal and opens their output
+  ---
+  duration_ms: 94.2134
+  type: 'test'
+  ...
+# Subtest: the panel shows up for running commands even without git or a plan
+ok 20 - the panel shows up for running commands even without git or a plan
+  ---
+  duration_ms: 45.0856
+  type: 'test'
+  ...
+# Subtest: scoped panel: a conversation that never used a V工程 shows no status at all
+ok 21 - scoped panel: a conversation that never used a V工程 shows no status at all
+  ---
+  duration_ms: 45.0497
+  type: 'test'
+  ...
+# Subtest: scoped panel: switching conversation swaps the plan, the Git workspace and the command list
+ok 22 - scoped panel: switching conversation swaps the plan, the Git workspace and the command list
+  ---
+  duration_ms: 111.1512
+  type: 'test'
+  ...
+# Subtest: scoped panel: a project from another workspace brings its own plan but no unrelated Git workspace
+ok 23 - scoped panel: a project from another workspace brings its own plan but no unrelated Git workspace
+  ---
+  duration_ms: 46.517
+  type: 'test'
+  ...
+# Subtest: scoped panel: a project mentioned after the history loaded appears without switching
+ok 24 - scoped panel: a project mentioned after the history loaded appears without switching
+  ---
+  duration_ms: 960.24
+  type: 'test'
+  ...
+# Subtest: switching workspace while staging cannot commit or push the new workspace
+ok 25 - switching workspace while staging cannot commit or push the new workspace
+  ---
+  duration_ms: 127.0068
+  type: 'test'
+  ...
+# (node:76460) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-1/modules/ui-system/conversation-status-panel.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-1\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: late A plan resolve cannot overwrite the refreshed B conversation
+ok 26 - late A plan resolve cannot overwrite the refreshed B conversation
+  ---
+  duration_ms: 364.851
+  type: 'test'
+  ...
+# Subtest: late A plan reject cannot overwrite the refreshed B conversation
+ok 27 - late A plan reject cannot overwrite the refreshed B conversation
+  ---
+  duration_ms: 57.3253
+  type: 'test'
+  ...
+# Subtest: disposal invalidates a delayed workspace result without mounting or committing a plan
+ok 28 - disposal invalidates a delayed workspace result without mounting or committing a plan
+  ---
+  duration_ms: 37.4509
+  type: 'test'
+  ...
+1..28
+# tests 28
+# suites 0
+# pass 28
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5079.2368

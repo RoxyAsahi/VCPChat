@@ -1,0 +1,4 @@
+Chat Kernel consumer baseline passed (775 production files, 66 test files, 17 kernel files).
+  chatManager: productionEvidence=39, productionFiles=6, compatibility=0, tests=63
+  messageRenderer: productionEvidence=94, productionFiles=13, compatibility=0, tests=3
+  streamManager: productionEvidence=21, productionFiles=6, compatibility=0, tests=1

@@ -1,0 +1,172 @@
+TAP version 13
+# (node:76544) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/ui-system/git-file-diff.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: path helpers: separators, case, longest workspace root and suffix matching
+ok 1 - path helpers: separators, case, longest workspace root and suffix matching
+  ---
+  duration_ms: 3.6328
+  type: 'test'
+  ...
+# Subtest: resolver reads +N -N from a real repository and distinguishes clean / outside / binary
+ok 2 - resolver reads +N -N from a real repository and distinguishes clean / outside / binary
+  ---
+  duration_ms: 2372.0542
+  type: 'test'
+  ...
+# Subtest: resolver degrades quietly without a git api, without workspaces and outside a repository
+ok 3 - resolver degrades quietly without a git api, without workspaces and outside a repository
+  ---
+  duration_ms: 132.8196
+  type: 'test'
+  ...
+# Subtest: file summary fetches stats only when expanded and opens the diff from the counts
+ok 4 - file summary fetches stats only when expanded and opens the diff from the counts
+  ---
+  duration_ms: 1743.7838
+  type: 'test'
+  ...
+# Subtest: opening the git tab with a focus path expands that file, both for a new and an already-mounted tab
+ok 5 - opening the git tab with a focus path expands that file, both for a new and an already-mounted tab
+  ---
+  duration_ms: 2080.284
+  type: 'test'
+  ...
+# (node:86792) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/ui-system/message-file-changes.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the real "✅ SUCCESS" status keeps FileOperator calls and "❌ ERROR" drops them
+ok 6 - the real "✅ SUCCESS" status keeps FileOperator calls and "❌ ERROR" drops them
+  ---
+  duration_ms: 9.3612
+  type: 'test'
+  ...
+# Subtest: ProjectForge: a file created and then edited is one new file whose stats are the final line count
+ok 7 - ProjectForge: a file created and then edited is one new file whose stats are the final line count
+  ---
+  duration_ms: 3.513
+  type: 'test'
+  ...
+# Subtest: ProjectForge: edits of an existing file add up their +/- and keep the edit label
+ok 8 - ProjectForge: edits of an existing file add up their +/- and keep the edit label
+  ---
+  duration_ms: 1.5345
+  type: 'test'
+  ...
+# Subtest: ProjectForge: "未写入" / "内容无变化" results are reported as SUCCESS by the plugin host but are not changes
+ok 9 - ProjectForge: "未写入" / "内容无变化" results are reported as SUCCESS by the plugin host but are not changes
+  ---
+  duration_ms: 1.6512
+  type: 'test'
+  ...
+# Subtest: ProjectForge: RemoveFile, MoveFile and MoveCode are read from their results
+ok 10 - ProjectForge: RemoveFile, MoveFile and MoveCode are read from their results
+  ---
+  duration_ms: 2.1173
+  type: 'test'
+  ...
+# Subtest: ProjectForge: read-only commands are ignored; unconfirmed requests are not claimed as changes
+ok 11 - ProjectForge: read-only commands are ignored; unconfirmed requests are not claimed as changes
+  ---
+  duration_ms: 0.5534
+  type: 'test'
+  ...
+# Subtest: findProjectRoots reads CreateProject and GetProject results; a later one replaces an earlier one
+ok 12 - findProjectRoots reads CreateProject and GetProject results; a later one replaces an earlier one
+  ---
+  duration_ms: 1.6204
+  type: 'test'
+  ...
+# Subtest: ProjectForge rows show exact counts at once and open the file through the project root created in an earlier message
+ok 13 - ProjectForge rows show exact counts at once and open the file through the project root created in an earlier message
+  ---
+  duration_ms: 217.1403
+  type: 'test'
+  ...
+# Subtest: ProjectForge rows whose project root is unknown still list the file but cannot be opened
+ok 14 - ProjectForge rows whose project root is unknown still list the file but cannot be opened
+  ---
+  duration_ms: 50.9051
+  type: 'test'
+  ...
+# (node:68888) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/ui-system/message-file-changes.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: parseToolFields reads plain and ESCAPE fields without being cut by fake end markers
+ok 15 - parseToolFields reads plain and ESCAPE fields without being cut by fake end markers
+  ---
+  duration_ms: 2.4664
+  type: 'test'
+  ...
+# Subtest: extractFileChanges lists write/edit/delete/move operations and ignores reads and other tools
+ok 16 - extractFileChanges lists write/edit/delete/move operations and ignores reads and other tools
+  ---
+  duration_ms: 8.0775
+  type: 'test'
+  ...
+# Subtest: batch requests (command1/filePath1…) are expanded
+ok 17 - batch requests (command1/filePath1…) are expanded
+  ---
+  duration_ms: 0.7245
+  type: 'test'
+  ...
+# Subtest: same path collapses to one entry: write beats edit, a later delete wins
+ok 18 - same path collapses to one entry: write beats edit, a later delete wins
+  ---
+  duration_ms: 0.8248
+  type: 'test'
+  ...
+# Subtest: failed and unconfirmed calls are never claimed as file changes
+ok 19 - failed and unconfirmed calls are never claimed as file changes
+  ---
+  duration_ms: 0.5676
+  type: 'test'
+  ...
+# Subtest: tool requests quoted inside code fences are not file changes
+ok 20 - tool requests quoted inside code fences are not file changes
+  ---
+  duration_ms: 0.9483
+  type: 'test'
+  ...
+# Subtest: renders a collapsible summary after streaming ends and opens files on click
+ok 21 - renders a collapsible summary after streaming ends and opens files on click
+  ---
+  duration_ms: 259.7682
+  type: 'test'
+  ...
+# Subtest: messages without file changes get nothing; dispose is idempotent
+ok 22 - messages without file changes get nothing; dispose is idempotent
+  ---
+  duration_ms: 46.7394
+  type: 'test'
+  ...
+# Subtest: attempt state distinguishes success, failure, pending and ambiguous pairing
+ok 23 - attempt state distinguishes success, failure, pending and ambiguous pairing
+  ---
+  duration_ms: 1.349
+  type: 'test'
+  ...
+# Subtest: equal-count concurrent calls without IDs cannot attribute success to a requested path
+ok 24 - equal-count concurrent calls without IDs cannot attribute success to a requested path
+  ---
+  duration_ms: 0.8915
+  type: 'test'
+  ...
+# Subtest: results preceding a request do not confirm it; later sequential requests remain attributable
+ok 25 - results preceding a request do not confirm it; later sequential requests remain attributable
+  ---
+  duration_ms: 0.5828
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8908.8433

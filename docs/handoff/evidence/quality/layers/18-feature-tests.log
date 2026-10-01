@@ -1,0 +1,68 @@
+TAP version 13
+# (node:35540) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/ui-system/message-export.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: stripThoughtChains removes VCP chains and <think> blocks but keeps the answer
+ok 1 - stripThoughtChains removes VCP chains and <think> blocks but keeps the answer
+  ---
+  duration_ms: 2.916
+  type: 'test'
+  ...
+# Subtest: contentToText handles strings, part arrays and {text}
+ok 2 - contentToText handles strings, part arrays and {text}
+  ---
+  duration_ms: 0.2607
+  type: 'test'
+  ...
+# Subtest: buildMarkdown writes a header and one section per message, without a trailing rule
+ok 3 - buildMarkdown writes a header and one section per message, without a trailing rule
+  ---
+  duration_ms: 1.8532
+  type: 'test'
+  ...
+# Subtest: rangeBetween is order-independent and ignores unknown ids
+ok 4 - rangeBetween is order-independent and ignores unknown ids
+  ---
+  duration_ms: 1.1524
+  type: 'test'
+  ...
+# Subtest: selection mode decorates selectable messages, toggles by click and Shift-range
+ok 5 - selection mode decorates selectable messages, toggles by click and Shift-range
+  ---
+  duration_ms: 165.3265
+  type: 'test'
+  ...
+# Subtest: copy builds Markdown from raw history (falls back to rendered text) and leaves selection mode
+ok 6 - copy builds Markdown from raw history (falls back to rendered text) and leaves selection mode
+  ---
+  duration_ms: 60.3373
+  type: 'test'
+  ...
+# Subtest: save passes topic name and markdown to the export API; cancelling the dialog keeps the selection
+ok 7 - save passes topic name and markdown to the export API; cancelling the dialog keeps the selection
+  ---
+  duration_ms: 76.1062
+  type: 'test'
+  ...
+# Subtest: Escape and 取消 leave the mode; new messages get a checkbox; dispose cleans up
+ok 8 - Escape and 取消 leave the mode; new messages get a checkbox; dispose cleans up
+  ---
+  duration_ms: 54.0196
+  type: 'test'
+  ...
+# Subtest: start refuses an empty conversation
+ok 9 - start refuses an empty conversation
+  ---
+  duration_ms: 15.8807
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2265.193

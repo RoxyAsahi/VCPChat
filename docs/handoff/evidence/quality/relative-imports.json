@@ -1,0 +1,112 @@
+[
+  {
+    "branch": "pr/zcode-01-shell-composer-notifications",
+    "scanned": 9,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-02-sidepane-sidechat",
+    "scanned": 21,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-03-git-backend",
+    "scanned": 4,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-04-notes-code-viewer",
+    "scanned": 7,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-05-browser",
+    "scanned": 5,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-06-terminal-command-runs",
+    "scanned": 12,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-07-plan-detail",
+    "scanned": 3,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-08-git-pane",
+    "scanned": 3,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-09-file-summary",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-10-conversation-status",
+    "scanned": 4,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-11-model-trajectory",
+    "scanned": 11,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-12-turn-navigation",
+    "scanned": 3,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-13-message-metadata",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-14-conversation-find",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-15-selection-quote",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-16-suggested-prompts",
+    "scanned": 3,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-17-send-queue",
+    "scanned": 5,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-18-message-export",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-19-slash-commands",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-20-command-center",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-21-widget-bridge",
+    "scanned": 2,
+    "missing": []
+  },
+  {
+    "branch": "pr/zcode-22-history-performance",
+    "scanned": 1,
+    "missing": []
+  }
+]

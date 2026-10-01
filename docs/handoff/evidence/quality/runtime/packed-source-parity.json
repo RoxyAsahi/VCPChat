@@ -1,0 +1,44 @@
+{
+  "pass": true,
+  "manifestFiles": 143,
+  "verifiedPackagedClosure": {
+    "ok": true,
+    "failures": []
+  },
+  "finalSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+  "terminalScopedSourceParity": [
+    {
+      "file": "modules/ipc/applicationSender.js",
+      "sha256": "b482142fad31b488716f69bcc6ec23f17417f506ffec8c0602a595f22a694e0c"
+    },
+    {
+      "file": "modules/ipc/terminalHandlers.js",
+      "sha256": "e6bbbec5eff76305e5e66ddd3364aac6ccbd81b05ea79747886a5f20a11c2381"
+    },
+    {
+      "file": "preloads/api/terminal.js",
+      "sha256": "bd1aa1e19711f4cc5766d8e3393b108541806fd3f33c96689456cd44c3026dc2"
+    },
+    {
+      "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+      "sha256": "87e134e8be0dc8b8923a36b53163bbb56eac2f192aeff41e0b64918ec424822a"
+    },
+    {
+      "file": "VCPDistributedServer/Plugin/PowerShellExecutor/nativeHelperPath.js",
+      "sha256": "05ec4e16117418eb1d3b2ce1612f48767364837e4f58e457f40e407ee40cbddc"
+    },
+    {
+      "file": "VCPDistributedServer/Plugin/PowerShellExecutor/plugin-manifest.json",
+      "sha256": "1b48dc04d8065c3bca3698b2b79413223024cbb4cb8f9b71aa07cfd729150415"
+    },
+    {
+      "file": "VCPDistributedServer/Plugin/PowerShellExecutor/AdminConfirm.py",
+      "sha256": "d447961cd4a69a6e69ce60d96033f41c18ceaa7bca5c0572a001a0266f76d862"
+    },
+    {
+      "file": "VCPDistributedServer/Plugin/PowerShellExecutor/gui/PowerShellViewer.js",
+      "sha256": "1b2fcce825844cacd943ac95d914ade48aa31ff1db506685ecd5983ec212a8d5"
+    }
+  ],
+  "scope": "Terminal-relevant modules match final source; package is not presented as the complete final release artifact."
+}

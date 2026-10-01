@@ -1,0 +1,32 @@
+{
+  "pass": true,
+  "checks": [
+    "focused iframe cannot auto-send",
+    "synthetic click cannot approve",
+    "trusted mouse click sends exactly once",
+    "topic switch invalidates confirmation"
+  ],
+  "verifiedSourceParity": {
+    "before": "19703d9",
+    "after": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+    "files": [
+      {
+        "file": "modules/renderer/contentProcessor.js",
+        "sha256": "f9d410bd54176c352bdb673164c137e2ae63e5ad7f73e2570e80e23e240f6281"
+      },
+      {
+        "file": "modules/renderer/widgetBridge.js",
+        "sha256": "cb1ca076277460bb0080321ca44a4ba339b96e81c0e55b9c196953e0ca376833"
+      },
+      {
+        "file": "styles/ui-system/tokens.css",
+        "sha256": "bc003f433fbb9cb1ed360bddd4c3c59b43a19e13d31e7fa2d3a1fa207462e560"
+      },
+      {
+        "file": "styles/ui-system/status-panel.css",
+        "sha256": "b88c0849fb69c1789bed6c29ad63adda754992c611643c3ef39fa66d0d41fae7"
+      }
+    ],
+    "dependencyConfigurationUnchanged": true
+  }
+}

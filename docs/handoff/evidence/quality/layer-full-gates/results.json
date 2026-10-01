@@ -1,0 +1,134 @@
+[
+  {
+    "number": 1,
+    "branch": "pr/zcode-01-shell-composer-notifications",
+    "head": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766",
+    "status": 0
+  },
+  {
+    "number": 2,
+    "branch": "pr/zcode-02-sidepane-sidechat",
+    "head": "a80f12559288c593ed87eee5a9b9274cc4c0ddff",
+    "status": 0
+  },
+  {
+    "number": 3,
+    "branch": "pr/zcode-03-git-backend",
+    "head": "efb3db3ce3172dd2cdc663c56972204eff8e1ead",
+    "status": 0
+  },
+  {
+    "number": 4,
+    "branch": "pr/zcode-04-notes-code-viewer",
+    "head": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3",
+    "status": 0
+  },
+  {
+    "number": 5,
+    "branch": "pr/zcode-05-browser",
+    "head": "b645544f5012ba28dcd90743970b66d7e0e42fd2",
+    "status": 0
+  },
+  {
+    "number": 6,
+    "branch": "pr/zcode-06-terminal-command-runs",
+    "head": "02ae8840c5708ac2b7880fefd4c29043a54fcf40",
+    "status": 0
+  },
+  {
+    "number": 7,
+    "branch": "pr/zcode-07-plan-detail",
+    "head": "6647fc85792003d533aecac6215c3b035ad60e43",
+    "status": 0
+  },
+  {
+    "number": 8,
+    "branch": "pr/zcode-08-git-pane",
+    "head": "c43760ea815157ce3af592d6319ad39bfb6cfb2d",
+    "status": 0
+  },
+  {
+    "number": 9,
+    "branch": "pr/zcode-09-file-summary",
+    "head": "2571aaf68d36ff8815bcc15b7b6d547dd5707572",
+    "status": 0
+  },
+  {
+    "number": 10,
+    "branch": "pr/zcode-10-conversation-status",
+    "head": "32340973c26784cd55f2e892b1f75a6daff8fac6",
+    "status": 0
+  },
+  {
+    "number": 11,
+    "branch": "pr/zcode-11-model-trajectory",
+    "head": "49f33574eb44d9bb6b57274199bf664e22a6e2e0",
+    "status": 0
+  },
+  {
+    "number": 12,
+    "branch": "pr/zcode-12-turn-navigation",
+    "head": "416759adf8d258fd526c888301b7d8006129809d",
+    "status": 0
+  },
+  {
+    "number": 13,
+    "branch": "pr/zcode-13-message-metadata",
+    "head": "b4658657310f3a07b4d0c596b603186b1661089c",
+    "status": 0
+  },
+  {
+    "number": 14,
+    "branch": "pr/zcode-14-conversation-find",
+    "head": "300fc735d6a7e4c8a3610c0b1ec3407f373a5d6b",
+    "status": 0
+  },
+  {
+    "number": 15,
+    "branch": "pr/zcode-15-selection-quote",
+    "head": "12ca725ced81407ed3465e3798e912b275c3be0c",
+    "status": 0
+  },
+  {
+    "number": 16,
+    "branch": "pr/zcode-16-suggested-prompts",
+    "head": "504b3c6df040d100d438de9232d7bde0c2fd0e98",
+    "status": 0
+  },
+  {
+    "number": 17,
+    "branch": "pr/zcode-17-send-queue",
+    "head": "83c40f5f44fcb740891a231afe426b1688ff9775",
+    "status": 0
+  },
+  {
+    "number": 18,
+    "branch": "pr/zcode-18-message-export",
+    "head": "5a3002b444515672425679b9348a101f3f8041d0",
+    "status": 0
+  },
+  {
+    "number": 19,
+    "branch": "pr/zcode-19-slash-commands",
+    "head": "509e71d26a44bc17cead917077d483321f848682",
+    "status": 0
+  },
+  {
+    "number": 20,
+    "branch": "pr/zcode-20-command-center",
+    "head": "635e306edf5abe2254aa9883d425d6b0c1066213",
+    "status": 0
+  },
+  {
+    "number": 21,
+    "branch": "pr/zcode-21-widget-bridge",
+    "head": "719bfdb83de447a132e749c05c8f947b6bfa5eb2",
+    "status": 0
+  },
+  {
+    "number": 22,
+    "branch": "pr/zcode-22-history-performance",
+    "head": "46819283d397dab31cf6de182b2a90240dd5b80b",
+    "status": 0
+  }
+]

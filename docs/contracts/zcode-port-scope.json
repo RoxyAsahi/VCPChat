@@ -872,6 +872,1070 @@
     {
       "path": "tests/model-trajectory-recovery.test.js",
       "feature": "model-trajectory"
+    },
+    {
+      "path": "docs/handoff/REPAIR-PROGRESS.md",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/REPAIR-REPORT.md",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/VERIFICATION.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/README.md",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/bundle-verify.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/chat-kernel.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/feature-regressions.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/integration/results.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/1.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/10.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/11.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/12.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/13.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/14.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/15.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/16.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/17.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/18.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/19.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/2.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/20.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/21.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/22.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/3.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/4.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/5.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/6.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/7.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/8.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/9.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layer-full-gates/results.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/1-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/10-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/11-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/12-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/13-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/14-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/15-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/16-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/17-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/18-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/19-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/2-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/20-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/21-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/22-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/3-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/4-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/5-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/6-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/7-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/8-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-chat-contracts.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-classic-retirement.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-consumers.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-css.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-event-graph.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-feature-tests.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-full-ui-gate.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-main.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-next-delta.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/layers/9-renderer.log",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/relative-imports.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/concurrent-file-attribution.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/electron-output.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/final-production-parity.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/packed-native-output.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/packed-native.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/packed-source-parity.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/packed-terminal-output.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/packed-terminal.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/result.json",
+      "feature": "review-docs-quality-evidence"
+    },
+    {
+      "path": "docs/handoff/evidence/quality/runtime/widget.png",
+      "feature": "review-docs-quality-evidence"
     }
   ]
 }

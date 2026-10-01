@@ -1,0 +1,37 @@
+{
+  "noteResult": {
+    "content": "",
+    "toasts": [
+      [
+        "主聊天中暂无助手回复可抓取",
+        "info"
+      ]
+    ]
+  },
+  "diffResult": {
+    "linesEach": 3000,
+    "arrayBytesAllocated": 35972368,
+    "elapsedMs": 152,
+    "matrixBytesFor20000Each": 1600160004
+  },
+  "packaging": {
+    "pluginPath": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+    "included": false,
+    "nodePtyUnpacked": true
+  },
+  "notesSaveRace": {
+    "saves": [
+      {
+        "title": "Old",
+        "content": "old content",
+        "filePath": null
+      },
+      {
+        "title": "New",
+        "content": "new content",
+        "filePath": "old-note.md"
+      }
+    ],
+    "newDraftWrittenToOldPath": true
+  }
+}

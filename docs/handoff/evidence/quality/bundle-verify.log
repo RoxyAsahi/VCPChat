@@ -1,0 +1,27 @@
+The bundle contains these 23 refs:
+ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766 refs/heads/pr/zcode-01-shell-composer-notifications
+a80f12559288c593ed87eee5a9b9274cc4c0ddff refs/heads/pr/zcode-02-sidepane-sidechat
+efb3db3ce3172dd2cdc663c56972204eff8e1ead refs/heads/pr/zcode-03-git-backend
+efe20c4a0fa284f8c0f751a4ca6e805304410ed3 refs/heads/pr/zcode-04-notes-code-viewer
+b645544f5012ba28dcd90743970b66d7e0e42fd2 refs/heads/pr/zcode-05-browser
+50e51485eecae8a6211a56295f22eb6decc442a1 refs/heads/pr/zcode-06-terminal-command-runs
+407b04072a2c91e5fa7e148ab545e7abf55a1f92 refs/heads/pr/zcode-07-plan-detail
+3c225a80b058bd01023374bac8db4efaa57c4ff4 refs/heads/pr/zcode-08-git-pane
+56eac23a636e8e7de48e58e7b2f3abc5bde671c7 refs/heads/pr/zcode-09-file-summary
+1adf3db6a417b43a08bb1452d9bb87bece0e6da1 refs/heads/pr/zcode-10-conversation-status
+8e91aae834c7da5d7ad76584412ab680233b2a00 refs/heads/pr/zcode-11-model-trajectory
+f0315d9ca285c85867150b36f097696e31407aa3 refs/heads/pr/zcode-12-turn-navigation
+868f2b6c1eb4620d7a71ccb62fb0c88199cfef8e refs/heads/pr/zcode-13-message-metadata
+72cd2218caf618aaf11cc610f1f4b0edcf3f5b85 refs/heads/pr/zcode-14-conversation-find
+02401e15fb337742df7625381de97ec001266ace refs/heads/pr/zcode-15-selection-quote
+fe32da466389aef7ade7ae6b57994e3ba868bba4 refs/heads/pr/zcode-16-suggested-prompts
+ce96ae828d37bc464baaffb352f7ef804b8cd6ef refs/heads/pr/zcode-17-send-queue
+78c3f4669152c773eb72ffb645243d5dd9ec221b refs/heads/pr/zcode-18-message-export
+90236ce59e44788647e8614465700efcd8ffaac5 refs/heads/pr/zcode-19-slash-commands
+6703063d1b08952c20e9c87775c3a1ae1b4742ff refs/heads/pr/zcode-20-command-center
+2e6807cb2a1ec2b7a16edc87754a8c16fa9ff405 refs/heads/pr/zcode-21-widget-bridge
+86541fb5aa776b49910507dad6ee04074744908e refs/heads/pr/zcode-22-history-performance
+e9038da36a88e5964aea0d8aa6ce3b50bf6eed3b refs/heads/pr/zcode-23-review-docs
+The bundle requires this ref:
+283255750376e645ec3e355dbfb84730371014cc 
+The bundle uses this hash algorithm: sha1

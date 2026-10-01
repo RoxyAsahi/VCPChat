@@ -1,0 +1,62 @@
+TAP version 13
+# (node:85356) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-1/modules/ui-system/message-meta-enhancer.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-1\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: formatWorkDuration keeps at most two units and rounds short runs up to one second
+ok 1 - formatWorkDuration keeps at most two units and rounds short runs up to one second
+  ---
+  duration_ms: 1.4284
+  type: 'test'
+  ...
+# Subtest: duration store persists by id and evicts the oldest entries
+ok 2 - duration store persists by id and evicts the oldest entries
+  ---
+  duration_ms: 1879.5059
+  type: 'test'
+  ...
+# Subtest: labels a streamed reply with its duration when streaming ends
+ok 3 - labels a streamed reply with its duration when streaming ends
+  ---
+  duration_ms: 291.3118
+  type: 'test'
+  ...
+# Subtest: a class that stays streaming keeps the original start time
+ok 4 - a class that stays streaming keeps the original start time
+  ---
+  duration_ms: 136.4459
+  type: 'test'
+  ...
+# Subtest: history messages get their stored duration back when rendered again
+ok 5 - history messages get their stored duration back when rendered again
+  ---
+  duration_ms: 186.533
+  type: 'test'
+  ...
+# Subtest: user messages and disposed observers are ignored
+ok 6 - user messages and disposed observers are ignored
+  ---
+  duration_ms: 154.8992
+  type: 'test'
+  ...
+# Subtest: formatMessageTimeLabel follows the today / yesterday / this year / older rules
+ok 7 - formatMessageTimeLabel follows the today / yesterday / this year / older rules
+  ---
+  duration_ms: 33.3129
+  type: 'test'
+  ...
+# Subtest: rewrites message timestamps to the short label, keeps the full time in the title and handles late-appended stamps
+ok 8 - rewrites message timestamps to the short label, keeps the full time in the title and handles late-appended stamps
+  ---
+  duration_ms: 199.2103
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4936.435

@@ -1,0 +1,142 @@
+TAP version 13
+# (node:53244) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/gitSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: filterAiTouched aligns absolute / relative / windows paths by suffix
+ok 1 - filterAiTouched aligns absolute / relative / windows paths by suffix
+  ---
+  duration_ms: 3.2535
+  type: 'test'
+  ...
+# Subtest: latestAiBatch picks the newest batch
+ok 2 - latestAiBatch picks the newest batch
+  ---
+  duration_ms: 0.936
+  type: 'test'
+  ...
+# Subtest: the 上一轮 source narrows changes to the newest V工程 batch and follows V工程 updates
+ok 3 - the 上一轮 source narrows changes to the newest V工程 batch and follows V工程 updates
+  ---
+  duration_ms: 1037.8995
+  type: 'test'
+  ...
+# Subtest: a change announced by the status panel refreshes the tab, and the tab ignores its own announcements
+ok 4 - a change announced by the status panel refreshes the tab, and the tab ignores its own announcements
+  ---
+  duration_ms: 165.1438
+  type: 'test'
+  ...
+# Subtest: a legacy stored "all" source falls back to unstaged
+ok 5 - a legacy stored "all" source falls back to unstaged
+  ---
+  duration_ms: 23.261
+  type: 'test'
+  ...
+# (node:94004) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/gitSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: GitSideProvider lists and diffs the changes of a real repository
+ok 6 - GitSideProvider lists and diffs the changes of a real repository
+  ---
+  duration_ms: 3071.2704
+  type: 'test'
+  ...
+# Subtest: GitSideProvider shows an add-workspace action when none are registered
+ok 7 - GitSideProvider shows an add-workspace action when none are registered
+  ---
+  duration_ms: 18.8717
+  type: 'test'
+  ...
+# (node:76044) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SidePaneState: exports TAB_KINDS and supports generic openTab
+ok 8 - SidePaneState: exports TAB_KINDS and supports generic openTab
+  ---
+  duration_ms: 4.1355
+  type: 'test'
+  ...
+# Subtest: SidePaneController: registers and dispatches universal tab providers
+ok 9 - SidePaneController: registers and dispatches universal tab providers
+  ---
+  duration_ms: 251.1371
+  type: 'test'
+  ...
+# Subtest: NotesSideProvider: mounts sub-screen notes UI and supports autosave, chat insert, and grab
+ok 10 - NotesSideProvider: mounts sub-screen notes UI and supports autosave, chat insert, and grab
+  ---
+  duration_ms: 888.698
+  type: 'test'
+  ...
+# Subtest: computeLineDiff: accurately computes LCS line diffs and statistics
+ok 11 - computeLineDiff: accurately computes LCS line diffs and statistics
+  ---
+  duration_ms: 1.1358
+  type: 'test'
+  ...
+# Subtest: detectLanguage: resolves extensions to correct identifiers and display tags
+ok 12 - detectLanguage: resolves extensions to correct identifiers and display tags
+  ---
+  duration_ms: 0.4292
+  type: 'test'
+  ...
+# Subtest: CodeViewerSideProvider: mounts code viewer, toggles wrap, diff mode, and inserts to chat
+ok 13 - CodeViewerSideProvider: mounts code viewer, toggles wrap, diff mode, and inserts to chat
+  ---
+  duration_ms: 34.6556
+  type: 'test'
+  ...
+# Subtest: GitSideProvider: mirrors the ZCode GitPane — source select, flat change cards, expandable diff, context menu
+ok 14 - GitSideProvider: mirrors the ZCode GitPane — source select, flat change cards, expandable diff, context menu
+  ---
+  duration_ms: 183.557
+  type: 'test'
+  ...
+# Subtest: SidePaneController: header toggle opens the launcher when side chat is disabled
+ok 15 - SidePaneController: header toggle opens the launcher when side chat is disabled
+  ---
+  duration_ms: 23.5432
+  type: 'test'
+  ...
+# Subtest: CodeViewerSideProvider: menu-opened viewer browses workspace files with the real source API shapes
+ok 16 - CodeViewerSideProvider: menu-opened viewer browses workspace files with the real source API shapes
+  ---
+  duration_ms: 83.8064
+  type: 'test'
+  ...
+# Subtest: TerminalSideProvider: mirrors the shared terminal session, wires input/output, and only closes its own view on dispose
+ok 17 - TerminalSideProvider: mirrors the shared terminal session, wires input/output, and only closes its own view on dispose
+  ---
+  duration_ms: 232.3032
+  type: 'test'
+  ...
+# Subtest: TerminalSideProvider: shows an error instead of a dead terminal when the shell cannot start
+ok 18 - TerminalSideProvider: shows an error instead of a dead terminal when the shell cannot start
+  ---
+  duration_ms: 49.6094
+  type: 'test'
+  ...
+# Subtest: normalizeBrowserInput: fills in schemes and refuses unsafe protocols
+ok 19 - normalizeBrowserInput: fills in schemes and refuses unsafe protocols
+  ---
+  duration_ms: 1.3057
+  type: 'test'
+  ...
+# Subtest: BrowserSideProvider: isolated webview, address bar navigation and popup routing
+ok 20 - BrowserSideProvider: isolated webview, address bar navigation and popup routing
+  ---
+  duration_ms: 31.5551
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5674.7269

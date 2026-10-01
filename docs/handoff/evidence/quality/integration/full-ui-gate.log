@@ -1,0 +1,1495 @@
+
+> vcp-chat-desktop@1.0.0 check:ui-system
+> npm run guard:design-subtraction && npm run guard:classic-parity && npm run guard:classic-retirement && npm run guard:next-delta && npm run guard:ui-interaction && npm run guard:ui-async-state && npm run guard:ui-task-journeys && npm run guard:theme-provenance && npm run test:ui-motion-contract && node --check modules/ui-system/lifecycle-scope.js && node --check VCPDistributedServer/frontend-plugin-loader.js && node --check modules/ui-system/component-manifest.js && node --check modules/ui-system/vcp-ui.js && node --check modules/ui-system/webawesome-runtime-manifest.js && node --check modules/ui-system/webawesome-adapter.js && node --check modules/ui-system/appearance-engine.js && node --check modules/ui-system/appearance-studio.js && node --check modules/ui-system/next-ui-apps.js && node --check modules/ui-system/component-showcase.js && node --check modules/ui-system/webawesome-comparison.js && node --check modules/topTabManager.js && npm run lint:ui-system && npm run guard:ui-system && npm run check:ui-applications && npm run test:ui-system && npm run test:appearance-engine && npm run test:appearance-studio && node scripts/test-next-ui-tab-lifecycle.mjs && node scripts/test-webawesome-adapter.mjs && node --test tests/lifecycle-scope.test.js tests/next-ui-registries.test.mjs tests/topic-list-mode-lifecycle.test.js && npm run test:bootstrap
+
+
+> vcp-chat-desktop@1.0.0 guard:design-subtraction
+> node scripts/check-design-system-boundary.mjs
+
+Design-system subtraction boundary passed (2345 tracked files, 45 CSS files).
+
+> vcp-chat-desktop@1.0.0 guard:classic-parity
+> node scripts/check-classic-parity.mjs
+
+Upstream shared-surface contract passed (controls, settings, icons and CSS isolation).
+
+> vcp-chat-desktop@1.0.0 guard:classic-retirement
+> node scripts/check-classic-retirement-boundary.mjs
+
+Classic retirement boundary gate passed.
+
+> vcp-chat-desktop@1.0.0 guard:next-delta
+> node scripts/check-next-delta-contract.mjs
+
+Next delta contract passed (canonical ownership, upstream reachability, modal and child policy).
+
+> vcp-chat-desktop@1.0.0 guard:ui-interaction
+> node scripts/check-ui-interaction-inventory.mjs
+
+UI interaction inventory passed: 10 surfaces, 231 ids
+
+> vcp-chat-desktop@1.0.0 guard:ui-async-state
+> node scripts/check-ui-async-state-matrix.mjs
+
+UI async state matrix passed: 5 surfaces × 6 states
+
+> vcp-chat-desktop@1.0.0 guard:ui-task-journeys
+> node scripts/check-ui-task-journeys.mjs
+
+UI task journey matrix passed: 7 journeys
+
+> vcp-chat-desktop@1.0.0 guard:theme-provenance
+> node scripts/check-theme-provenance.mjs
+
+Theme provenance passed: styles/themes.css <- styles/themes/themes赤与白昼.css
+
+> vcp-chat-desktop@1.0.0 test:ui-motion-contract
+> node scripts/test-ui-motion-contract.mjs
+
+UI motion contract passed: 8 stylesheets inspected
+
+> vcp-chat-desktop@1.0.0 lint:ui-system
+> stylelint "styles/ui-system/**/*.css" --config stylelint.ui-system.config.cjs
+
+
+> vcp-chat-desktop@1.0.0 guard:ui-system
+> node scripts/check-ui-system.mjs && node scripts/check-vcpui-consumers.mjs
+
+UI system guard passed (44 CSS files, 102 modules, 762 lucide aliases).
+VCPUI consumer gate passed (13 stable with production/Electron evidence, 19 candidate, 32 showcased).
+
+> vcp-chat-desktop@1.0.0 check:ui-applications
+> node scripts/check-ui-applications.mjs && node scripts/test-page-runtime.mjs
+
+UI applications gate passed (82 business files scanned, 20 shadow parts registered in the adapter).
+Page runtime gate passed (0 active rebuilt, 12 upstream classic).
+
+> vcp-chat-desktop@1.0.0 test:ui-system
+> node scripts/test-ui-system.mjs && node --test tests/performance-recorder.test.js tests/embedded-app-security.test.js tests/overlay-coordinator.test.js tests/embedded-app-controller.test.js tests/app-tab-host.test.js tests/assistant-search-controller.test.js tests/account-menu-controller.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js tests/launchpad-controller.test.js tests/creation-controller.test.js tests/global-settings-save.test.mjs tests/task-handle.test.js tests/sender-task-registry.test.js tests/contribution-registry.test.js tests/state-channel.test.js tests/state-authority.test.js tests/settlement.test.js tests/surface-controller.test.js tests/lifecycle-inspector.test.js tests/main-chat-sequence-model.test.js tests/chat-manager-selection-race.test.js tests/history-watcher-lease-manager.test.js tests/message-edit-watcher-failure.test.js tests/stream-manager-terminal-cleanup.test.js tests/theme-handlers.test.js
+
+Ask Nova DeepWiki service tests passed.
+[VCPUI SettingsPipeline] mount order: save-coordinator -> global-pill-steppers -> global-typed-primitives -> forum-field-owner -> uiux-disclosures -> agent-name-fields -> settings-shell -> autosave -> typed-field-owner
+lucide aliases validated (762 aliases, 4 names used by VCPUI).
+UI system contract tests passed (33 public component names).
+TAP version 13
+# Subtest: account menu synchronizes identity/theme and owns dismissal behavior
+ok 1 - account menu synchronizes identity/theme and owns dismissal behavior
+  ---
+  duration_ms: 278.3877
+  type: 'test'
+  ...
+# Subtest: tab host owns registration, activation, accessibility and persistence
+ok 2 - tab host owns registration, activation, accessibility and persistence
+  ---
+  duration_ms: 246.9264
+  type: 'test'
+  ...
+# Subtest: close control requests closure without mutating the registry
+ok 3 - close control requests closure without mutating the registry
+  ---
+  duration_ms: 47.4339
+  type: 'test'
+  ...
+# Subtest: tab host settlement observes a requested mutation revision without timers
+ok 4 - tab host settlement observes a requested mutation revision without timers
+  ---
+  duration_ms: 23.3132
+  type: 'test'
+  ...
+# Subtest: dynamic tabs support directional, Home and End keyboard focus
+ok 5 - dynamic tabs support directional, Home and End keyboard focus
+  ---
+  duration_ms: 55.5853
+  type: 'test'
+  ...
+# Subtest: launchpad is inert while closed so dynamic app buttons cannot receive focus
+ok 6 - launchpad is inert while closed so dynamic app buttons cannot receive focus
+  ---
+  duration_ms: 27.338
+  type: 'test'
+  ...
+# Subtest: closing the active tab restores focus to the adjacent tab or home
+ok 7 - closing the active tab restores focus to the adjacent tab or home
+  ---
+  duration_ms: 24.6038
+  type: 'test'
+  ...
+# Subtest: assistant search owns open, escape, tab-change and teardown state
+ok 8 - assistant search owns open, escape, tab-change and teardown state
+  ---
+  duration_ms: 207.0445
+  type: 'test'
+  ...
+# [ChatManager] Initialized successfully.
+# Subtest: ChatManager publishes readiness only after synchronous listener setup completes
+ok 9 - ChatManager publishes readiness only after synchronous listener setup completes
+  ---
+  duration_ms: 218.9852
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a late assistant selection cannot overwrite the newer assistant topic and history
+ok 10 - a late assistant selection cannot overwrite the newer assistant topic and history
+  ---
+  duration_ms: 151.0179
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration selects the last durable assistant and topic
+ok 11 - startup restoration selects the last durable assistant and topic
+  ---
+  duration_ms: 53.3244
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration waits for the topic projection consumer
+ok 12 - startup restoration waits for the topic projection consumer
+  ---
+  duration_ms: 44.7332
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: an explicit selection supersedes an unfinished startup restoration
+ok 13 - an explicit selection supersedes an unfinished startup restoration
+  ---
+  duration_ms: 33.9662
+  type: 'test'
+  ...
+# Subtest: startup restoration ignores a deleted item
+ok 14 - startup restoration ignores a deleted item
+  ---
+  duration_ms: 27.4448
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: last-open persistence is ordered and awaited across rapid topic selections
+ok 15 - last-open persistence is ordered and awaited across rapid topic selections
+  ---
+  duration_ms: 51.9328
+  type: 'test'
+  ...
+# [ChatManager] Failed to start history watcher; continuing with loaded history: Error: controlled watcher failure
+#     at Object.failNextWatcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:295:37)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:474:13)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history watcher startup failure does not block assistant navigation
+ok 16 - history watcher startup failure does not block assistant navigation
+  ---
+  duration_ms: 42.8094
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a send delayed before VCP dispatch cannot mutate the newly selected topic
+ok 17 - a send delayed before VCP dispatch cannot mutate the newly selected topic
+  ---
+  duration_ms: 58.7767
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Failed to persist outgoing message: Error: controlled save failure
+#     at Object.failNextHistorySave (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:292:36)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:528:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: a failed durable save preserves the draft and retracts the optimistic message
+ok 18 - a failed durable save preserves the draft and retracts the optimistic message
+  ---
+  duration_ms: 56.0963
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a programmatic quick-action string sends its own content without consuming the composer draft
+ok 19 - a programmatic quick-action string sends its own content without consuming the composer draft
+  ---
+  duration_ms: 34.561
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: an attachment added while the outgoing message is persisting remains in the draft
+ok 20 - an attachment added while the outgoing message is persisting remains in the draft
+  ---
+  duration_ms: 35.7188
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: stream ownership is published before upstream startup resolves
+ok 21 - stream ownership is published before upstream startup resolves
+  ---
+  duration_ms: 31.5933
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# 发送消息或处理VCP响应时出错 Error: controlled VCP failure
+#     at Object.failNextVcpRequest (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:298:28)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:636:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: failed VCP startup does not rewrite history to remove an unpersisted thinking message
+ok 22 - failed VCP startup does not rewrite history to remove an unpersisted thinking message
+  ---
+  duration_ms: 38.2652
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a second send cannot enter the same topic while the first is starting
+ok 23 - a second send cannot enter the same topic while the first is starting
+  ---
+  duration_ms: 42.1272
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale history load for agent:agent-b:topic-b-2
+# [ChatManager] Initialized successfully.
+# Subtest: a late topic watcher cannot replace a newer topic history
+ok 24 - a late topic watcher cannot replace a newer topic history
+  ---
+  duration_ms: 24.6128
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a topic created for an old assistant cannot switch the new assistant view
+ok 25 - a topic created for an old assistant cannot switch the new assistant view
+  ---
+  duration_ms: 55.4683
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-newest
+# [displayTopicTimestampBubble] Topic topic-a-newest not found or has no createdAt for agent agent-a.
+# [ChatManager] Initialized successfully.
+# Subtest: only the newest concurrent topic creation may select its result
+ok 26 - only the newest concurrent topic creation may select its result
+  ---
+  duration_ms: 24.4921
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale topic deletion completion { id: 'agent-a', type: 'agent' }
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: a deletion completed for an old assistant cannot rewrite the new assistant
+ok 27 - a deletion completed for an old assistant cannot rewrite the new assistant
+  ---
+  duration_ms: 22.718
+  type: 'test'
+  ...
+# Subtest: ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+ok 28 - ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+  ---
+  duration_ms: 17.485
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after selection changes cannot mutate the new conversation
+ok 29 - a history-file sync resolving after selection changes cannot mutate the new conversation
+  ---
+  duration_ms: 35.6881
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after dispose cannot mutate history or the DOM
+ok 30 - a history-file sync resolving after dispose cannot mutate history or the DOM
+  ---
+  duration_ms: 24.2949
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 25 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history projection keeps an active stream in the newest batch and final floor
+ok 31 - history projection keeps an active stream in the newest batch and final floor
+  ---
+  duration_ms: 24.9763
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history load reconciles an active stream after replacing the Surface projection
+ok 32 - history load reconciles an active stream after replacing the Surface projection
+  ---
+  duration_ms: 23.4259
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history sync does not delete a terminal message that commits while the file read is in flight
+ok 33 - history sync does not delete a terminal message that commits while the file read is in flight
+  ---
+  duration_ms: 24.2939
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+ok 34 - JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+  ---
+  duration_ms: 31.5325
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-created
+# [displayTopicTimestampBubble] Topic topic-a-created not found or has no createdAt for agent agent-a.
+# Subtest: creating a topic commits a selection event after the empty history identity changes
+ok 35 - creating a topic commits a selection event after the empty history identity changes
+  ---
+  duration_ms: 23.0572
+  type: 'test'
+  ...
+# Subtest: production contribution kinds retract with their lifecycle owner
+ok 36 - production contribution kinds retract with their lifecycle owner
+  ---
+  duration_ms: 8.7542
+  type: 'test'
+  ...
+# Subtest: contributions reject arbitrary presentation metadata
+ok 37 - contributions reject arbitrary presentation metadata
+  ---
+  duration_ms: 2.3745
+  type: 'test'
+  ...
+# Subtest: duplicate and late registrations fail without leaving entries
+ok 38 - duplicate and late registrations fail without leaving entries
+  ---
+  duration_ms: 1.5678
+  type: 'test'
+  ...
+# [NextUI] Creation surface render failed; fallback content is active.
+# Subtest: model options normalize supported payloads and remove duplicates
+ok 39 - model options normalize supported payloads and remove duplicates
+  ---
+  duration_ms: 3.5118
+  type: 'test'
+  ...
+# Subtest: creation controller refuses unavailable commands and disposes idempotently
+ok 40 - creation controller refuses unavailable commands and disposes idempotently
+  ---
+  duration_ms: 177.5323
+  type: 'test'
+  ...
+# Subtest: creation surface failure destroys partial controls and does not continue with a broken modal
+ok 41 - creation surface failure destroys partial controls and does not continue with a broken modal
+  ---
+  duration_ms: 52.328
+  type: 'test'
+  ...
+# [NextUI] Web Awesome creation kernel unavailable; using native kernel: Error: controlled kernel failure
+#     at Object.loadComponents (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\creation-controller.test.js:193:45)
+#     at CreationController.openInternal (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\modules\\ui-system\\next-shell\\creation-controller.js:93:34)
+#     at CreationController.open (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\modules\\ui-system\\next-shell\\creation-controller.js:61:35)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\creation-controller.test.js:203:22)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# Subtest: creation waits for its own Web Awesome kernel and coalesces repeated opens
+ok 42 - creation waits for its own Web Awesome kernel and coalesces repeated opens
+  ---
+  duration_ms: 76.7505
+  type: 'test'
+  ...
+# Subtest: disposing while the creation kernel loads prevents a late surface mount
+ok 43 - disposing while the creation kernel loads prevents a late surface mount
+  ---
+  duration_ms: 22.2934
+  type: 'test'
+  ...
+# Subtest: a terminal Web Awesome load failure mounts the same creation surface with native kernel
+ok 44 - a terminal Web Awesome load failure mounts the same creation surface with native kernel
+  ---
+  duration_ms: 42.1251
+  type: 'test'
+  ...
+# [NextUI] Failed to create item: Error: denied
+#     at submit (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\modules\\ui-system\\next-shell\\creation-controller.js:241:49)
+# Subtest: creation submission waits for the command promise and restores controls after failure
+ok 45 - creation submission waits for the command promise and restores controls after failure
+  ---
+  duration_ms: 47.7646
+  type: 'test'
+  ...
+# Subtest: late creation completion loses authority after the modal is disposed
+ok 46 - late creation completion loses authority after the modal is disposed
+  ---
+  duration_ms: 28.1987
+  type: 'test'
+  ...
+# Subtest: embedded controller is the single gateway for native session operations
+ok 47 - embedded controller is the single gateway for native session operations
+  ---
+  duration_ms: 11.9027
+  type: 'test'
+  ...
+# Subtest: closeAll uses the bulk API and falls back to individual close
+ok 48 - closeAll uses the bulk API and falls back to individual close
+  ---
+  duration_ms: 0.9815
+  type: 'test'
+  ...
+# Subtest: disposing a view owner cancels its pending native create request
+ok 49 - disposing a view owner cancels its pending native create request
+  ---
+  duration_ms: 13.9161
+  type: 'test'
+  ...
+# Subtest: embedded actions are restricted to the local application allowlist
+ok 50 - embedded actions are restricted to the local application allowlist
+  ---
+  duration_ms: 2.4959
+  type: 'test'
+  ...
+# Subtest: detach coordinates are finite, rounded and bounded
+ok 51 - detach coordinates are finite, rounded and bounded
+  ---
+  duration_ms: 2.5778
+  type: 'test'
+  ...
+# Subtest: embedded sessions keep child presentation policy independent from main settings
+ok 52 - embedded sessions keep child presentation policy independent from main settings
+  ---
+  duration_ms: 1.678
+  type: 'test'
+  ...
+# Subtest: embedded session manager enforces a bounded native view pool
+ok 53 - embedded session manager enforces a bounded native view pool
+  ---
+  duration_ms: 13.1664
+  type: 'test'
+  ...
+# Subtest: Escape closes only the highest-priority active owner
+ok 54 - Escape closes only the highest-priority active owner
+  ---
+  duration_ms: 162.7838
+  type: 'test'
+  ...
+# Subtest: Escape ignores handled events and disposal retracts owners
+ok 55 - Escape ignores handled events and disposal retracts owners
+  ---
+  duration_ms: 37.3921
+  type: 'test'
+  ...
+# (node:90576) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/settings/schema-surface.js?save-regression=1790879602944 is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: global settings saves the server URL once with canonical presentation
+ok 56 - global settings saves the server URL once with canonical presentation
+  ---
+  duration_ms: 1430.2757
+  type: 'test'
+  ...
+# Subtest: a newer lease rejects an older queued watcher start
+ok 57 - a newer lease rejects an older queued watcher start
+  ---
+  duration_ms: 4.7162
+  type: 'test'
+  ...
+# Subtest: a lease superseded during start cannot leave its watcher active
+ok 58 - a lease superseded during start cannot leave its watcher active
+  ---
+  duration_ms: 0.8699
+  type: 'test'
+  ...
+# Subtest: revoking a destroyed renderer stops its watcher and rejects its token
+ok 59 - revoking a destroyed renderer stops its watcher and rejects its token
+  ---
+  duration_ms: 16.0661
+  type: 'test'
+  ...
+# Subtest: launchpad renders shared catalogs and preserves embedded/window actions
+ok 60 - launchpad renders shared catalogs and preserves embedded/window actions
+  ---
+  duration_ms: 556.1544
+  type: 'test'
+  ...
+# Subtest: launchpad hides non-discoverable internal test apps while retaining other internal apps
+ok 61 - launchpad hides non-discoverable internal test apps while retaining other internal apps
+  ---
+  duration_ms: 22.0481
+  type: 'test'
+  ...
+# Subtest: lifecycle inspector reports ownership metadata without payload content
+ok 62 - lifecycle inspector reports ownership metadata without payload content
+  ---
+  duration_ms: 186.1416
+  type: 'test'
+  ...
+# Subtest: seeded random and generated traces are deterministic and serializable
+ok 63 - seeded random and generated traces are deterministic and serializable
+  ---
+  duration_ms: 13.0967
+  type: 'test'
+  ...
+# Subtest: coverage reports actions, pairs, transitions, faults and terminal outcomes deterministically
+ok 64 - coverage reports actions, pairs, transitions, faults and terminal outcomes deterministically
+  ---
+  duration_ms: 97.3755
+  type: 'test'
+  ...
+# Subtest: coverage merges runs and reports missing declared edges
+ok 65 - coverage merges runs and reports missing declared edges
+  ---
+  duration_ms: 1.7752
+  type: 'test'
+  ...
+# Subtest: trace runner enforces preconditions, updates the model and observes every step
+ok 66 - trace runner enforces preconditions, updates the model and observes every step
+  ---
+  duration_ms: 5.026
+  type: 'test'
+  ...
+# Subtest: trace minimizer removes unrelated action blocks while preserving a reproducible failure
+ok 67 - trace minimizer removes unrelated action blocks while preserving a reproducible failure
+  ---
+  duration_ms: 1.5637
+  type: 'test'
+  ...
+# Subtest: trace runner rejects an action whose model precondition is false
+ok 68 - trace runner rejects an action whose model precondition is false
+  ---
+  duration_ms: 1.6532
+  type: 'test'
+  ...
+# [EditMode] Claiming file watcher lease to prevent race condition
+# [EditMode] Failed to restart watcher after successful save: Error: controlled watcher restart failure
+#     at Object.watcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\message-edit-watcher-failure.test.js:30:23)
+#     at saveButton.onclick (eval at <anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\message-edit-watcher-failure.test.js:17:16), <anonymous>:742:61)
+# Subtest: a watcher restart failure cannot roll back a durably saved message edit
+ok 69 - a watcher restart failure cannot roll back a durably saved message edit
+  ---
+  duration_ms: 271.4196
+  type: 'test'
+  ...
+# Subtest: editing survives deletion of another message and replacement of the history array
+ok 70 - editing survives deletion of another message and replacement of the history array
+  ---
+  duration_ms: 62.8584
+  type: 'test'
+  ...
+# Subtest: a visible edited bubble is restored when a concurrent history snapshot temporarily omits it
+ok 71 - a visible edited bubble is restored when a concurrent history snapshot temporarily omits it
+  ---
+  duration_ms: 71.537
+  type: 'test'
+  ...
+# Subtest: notification menu owns keyboard focus, commands and Escape cleanup
+ok 72 - notification menu owns keyboard focus, commands and Escape cleanup
+  ---
+  duration_ms: 219.8061
+  type: 'test'
+  ...
+# Subtest: visible modals acquire one lease and close events release it
+ok 73 - visible modals acquire one lease and close events release it
+  ---
+  duration_ms: 203.2598
+  type: 'test'
+  ...
+# Subtest: a released lease reconciles after a delayed hide settles
+ok 74 - a released lease reconciles after a delayed hide settles
+  ---
+  duration_ms: 36.38
+  type: 'test'
+  ...
+# Subtest: dispose clears leases, retracts fallback listeners and is idempotent
+ok 75 - dispose clears leases, retracts fallback listeners and is idempotent
+  ---
+  duration_ms: 22.0391
+  type: 'test'
+  ...
+# Subtest: stale close from an older modal root cannot release a reopened modal lease
+ok 76 - stale close from an older modal root cannot release a reopened modal lease
+  ---
+  duration_ms: 23.1649
+  type: 'test'
+  ...
+# Subtest: performance recorder is bounded, payload-safe and marks budgets
+ok 77 - performance recorder is bounded, payload-safe and marks budgets
+  ---
+  duration_ms: 15.775
+  type: 'test'
+  ...
+# Subtest: performance recorder preserves sync return values and failure semantics
+ok 78 - performance recorder preserves sync return values and failure semantics
+  ---
+  duration_ms: 1.9285
+  type: 'test'
+  ...
+# Subtest: sender task registry rejects duplicate identities and settles once
+ok 79 - sender task registry rejects duplicate identities and settles once
+  ---
+  duration_ms: 5.7022
+  type: 'test'
+  ...
+# Subtest: cancel is idempotent and sender destruction aborts all owned work
+ok 80 - cancel is idempotent and sender destruction aborts all owned work
+  ---
+  duration_ms: 1.0726
+  type: 'test'
+  ...
+# Subtest: invalid task descriptors and reused numeric sender identities are rejected
+ok 81 - invalid task descriptors and reused numeric sender identities are rejected
+  ---
+  duration_ms: 0.7786
+  type: 'test'
+  ...
+# Subtest: navigation aborts only document-owned work and releases its listener
+ok 82 - navigation aborts only document-owned work and releases its listener
+  ---
+  duration_ms: 1.8921
+  type: 'test'
+  ...
+# Subtest: renderer crashes abort document-owned work before recovery navigation
+ok 83 - renderer crashes abort document-owned work before recovery navigation
+  ---
+  duration_ms: 0.8681
+  type: 'test'
+  ...
+# Subtest: settlement waits for both revision boundary and domain predicate
+ok 84 - settlement waits for both revision boundary and domain predicate
+  ---
+  duration_ms: 3.7009
+  type: 'test'
+  ...
+# Subtest: settlement abort and timeout clean their subscription
+ok 85 - settlement abort and timeout clean their subscription
+  ---
+  duration_ms: 11.9815
+  type: 'test'
+  ...
+# [UIManager] Theme applied: dark
+# [ItemListManager] Initialized successfully.
+# [ItemListManager] OpenHerPersona status unavailable: VCP Server URL not configured
+# [ItemListManager] SortableJS library not found. Item list drag-and-drop ordering will not be available.
+# [ItemListManager] OpenHerPersona status unavailable: VCP Server URL not configured
+# [ItemListManager] Ignoring stale loadItems result.
+# [ItemListManager] Initialized successfully.
+# [ItemListManager] OpenHerPersona status unavailable: VCP Server URL not configured
+# [ItemListManager] SortableJS library not found. Item list drag-and-drop ordering will not be available.
+# [ItemListManager] OpenHerPersona status unavailable: VCP Server URL not configured
+# [ItemListManager] SortableJS library not found. Item list drag-and-drop ordering will not be available.
+# [ItemListManager] OpenHerPersona status unavailable: VCP Server URL not configured
+# Subtest: appearance and theme expose explicit authoritative subscriptions
+ok 86 - appearance and theme expose explicit authoritative subscriptions
+  ---
+  duration_ms: 428.7264
+  type: 'test'
+  ...
+# Subtest: notification filter queries are safe before settings capability initialization
+ok 87 - notification filter queries are safe before settings capability initialization
+  ---
+  duration_ms: 18.8247
+  type: 'test'
+  ...
+# Subtest: notification filter publishes committed and rolled-back state exactly once
+ok 88 - notification filter publishes committed and rolled-back state exactly once
+  ---
+  duration_ms: 18.4795
+  type: 'test'
+  ...
+# Subtest: assistant catalog rejects stale load completion without a test-only state channel
+ok 89 - assistant catalog rejects stale load completion without a test-only state channel
+  ---
+  duration_ms: 35.4223
+  type: 'test'
+  ...
+# Subtest: assistant catalog preserves per-item speaking indicators across concurrent streams and rerenders
+ok 90 - assistant catalog preserves per-item speaking indicators across concurrent streams and rerenders
+  ---
+  duration_ms: 43.6668
+  type: 'test'
+  ...
+# Subtest: state channels publish one authoritative revision and unsubscribe explicitly
+ok 91 - state channels publish one authoritative revision and unsubscribe explicitly
+  ---
+  duration_ms: 14.0863
+  type: 'test'
+  ...
+# Subtest: duplicate channels and publishing after disposal are rejected
+ok 92 - duplicate channels and publishing after disposal are rejected
+  ---
+  duration_ms: 11.7322
+  type: 'test'
+  ...
+# Subtest: a failing immediate subscriber is rolled back transactionally
+ok 93 - a failing immediate subscriber is rolled back transactionally
+  ---
+  duration_ms: 2.2771
+  type: 'test'
+  ...
+# (node:56276) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Started pre-buffering for message same-message
+# [StreamManager] Started pre-buffering for message same-message
+# [StreamManager] Transient state cleared
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Started pre-buffering for message background-message
+# [StreamManager] Could not prepare transient history for background-message {
+#   agentId: 'background-agent',
+#   groupId: undefined,
+#   topicId: 'background-topic',
+#   isGroupMessage: false,
+#   agentName: undefined,
+#   avatarUrl: undefined,
+#   avatarColor: undefined,
+#   streamOperationId: null
+# } Error: controlled history failure
+#     at Object.getHistory (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:181:63)
+#     at readFor (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamTransientHistory.js:30:42)
+#     at Object.prepare (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/streamTransientHistory.js:42:35)
+#     at startStreamingMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2003:43)
+#     at Object.startStreamingMessage (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2799:61)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:187:26)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: two StreamProjection owners isolate identical message identities and teardown listeners
+ok 94 - two StreamProjection owners isolate identical message identities and teardown listeners
+  ---
+  duration_ms: 80.5684
+  type: 'test'
+  ...
+# Subtest: disposed StreamProjection rejects initialization and ignores every late stream event
+ok 95 - disposed StreamProjection rejects initialization and ignores every late stream event
+  ---
+  duration_ms: 14.0253
+  type: 'test'
+  ...
+# Subtest: StreamProjection fails fast when transient history or view authority is missing
+ok 96 - StreamProjection fails fast when transient history or view authority is missing
+  ---
+  duration_ms: 10.2556
+  type: 'test'
+  ...
+# Subtest: owned StreamProjection completes terminal DOM projection without a cross-root side channel
+ok 97 - owned StreamProjection completes terminal DOM projection without a cross-root side channel
+  ---
+  duration_ms: 38.2485
+  type: 'test'
+  ...
+# Subtest: background initialization failure releases every runtime owner
+ok 98 - background initialization failure releases every runtime owner
+  ---
+  duration_ms: 14.8031
+  type: 'test'
+  ...
+# Subtest: StreamProjection honors an owned view authority and history capability after navigation
+ok 99 - StreamProjection honors an owned view authority and history capability after navigation
+  ---
+  duration_ms: 16.3555
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: active stream waiting for tool result can reconcile after switching away and back
+ok 100 - active stream waiting for tool result can reconcile after switching away and back
+  ---
+  duration_ms: 135.5593
+  type: 'test'
+  ...
+# Subtest: StreamProjection rejects chunks and terminals from a different producer operation
+ok 101 - StreamProjection rejects chunks and terminals from a different producer operation
+  ---
+  duration_ms: 15.5062
+  type: 'test'
+  ...
+# Subtest: StreamProjection retires prior runtime state before same-message retry
+ok 102 - StreamProjection retires prior runtime state before same-message retry
+  ---
+  duration_ms: 14.419
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# Subtest: stale async initialization cannot revive state after same-message operation replacement
+ok 103 - stale async initialization cannot revive state after same-message operation replacement
+  ---
+  duration_ms: 11.8983
+  type: 'test'
+  ...
+# Subtest: smooth stream terminal stops queued rendering and releases every runtime owner
+ok 104 - smooth stream terminal stops queued rendering and releases every runtime owner
+  ---
+  duration_ms: 17.2468
+  type: 'test'
+  ...
+# [StreamManager] morphdom rejected a stream frame; replaced the sealed tail directly. Error: controlled first-frame morph failure
+#     at Object.morphdom (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\stream-manager-terminal-cleanup.test.js:430:19)
+#     at renderStreamFrame (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:1681:18)
+#     at processAndRenderSmoothChunk (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:1897:5)
+#     at renderLoop (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2148:13)
+#     at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:2116:13
+#     at invoke (file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/streamManager.js:241:24)
+#     at invokeTheCallbackFunction (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\living\\generated\\Function.js:19:26)
+#     at runAnimationFrameCallbacks (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\browser\\Window.js:688:13)
+#     at Timeout.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\jsdom\\lib\\jsdom\\browser\\Window.js:666:11)
+#     at listOnTimeout (node:internal/timers:588:17)
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: tool-request-first stream falls back to direct DOM projection when morphdom rejects a frame
+ok 105 - tool-request-first stream falls back to direct DOM projection when morphdom rejects a frame
+  ---
+  duration_ms: 123.4207
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# [StreamManager] Message waiting-switch already initialized (ready) with same thinking state, skipping re-init
+# Subtest: active stream recreates a missing message DOM on the next render frame
+ok 106 - active stream recreates a missing message DOM on the next render frame
+  ---
+  duration_ms: 157.1298
+  type: 'test'
+  ...
+# Subtest: terminal projection recreates a missing message DOM from canonical final content
+ok 107 - terminal projection recreates a missing message DOM from canonical final content
+  ---
+  duration_ms: 14.1519
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: reconcile preserves the thinking placeholder until the first visible token arrives
+ok 108 - reconcile preserves the thinking placeholder until the first visible token arrives
+  ---
+  duration_ms: 123.7833
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# [StreamManager] `morphdom` not provided. Streaming rendering will fall back to inefficient innerHTML updates.
+# Subtest: stream DOM recovery atomically removes a concurrent history duplicate
+ok 109 - stream DOM recovery atomically removes a concurrent history duplicate
+  ---
+  duration_ms: 201.8092
+  type: 'test'
+  ...
+# Subtest: thinking and streaming messages opt out of content-visibility clipping
+ok 110 - thinking and streaming messages opt out of content-visibility clipping
+  ---
+  duration_ms: 1.7972
+  type: 'test'
+  ...
+# Subtest: scrolling chat surfaces do not create per-message or scroll-owner backdrop captures
+ok 111 - scrolling chat surfaces do not create per-message or scroll-owner backdrop captures
+  ---
+  duration_ms: 3.1659
+  type: 'test'
+  ...
+# [StreamManager] Transient state cleared
+# Subtest: a live stream frame reclaims the final message floor after a late history batch mounts
+ok 112 - a live stream frame reclaims the final message floor after a late history batch mounts
+  ---
+  duration_ms: 213.9598
+  type: 'test'
+  ...
+# Subtest: surface chooses one kernel, owns controls and restores focus
+ok 113 - surface chooses one kernel, owns controls and restores focus
+  ---
+  duration_ms: 105.8831
+  type: 'test'
+  ...
+# Subtest: surface falls back atomically when render fails
+ok 114 - surface falls back atomically when render fails
+  ---
+  duration_ms: 13.6994
+  type: 'test'
+  ...
+# Subtest: task handle starts once and cancellation is idempotent
+ok 115 - task handle starts once and cancellation is idempotent
+  ---
+  duration_ms: 11.9101
+  type: 'test'
+  ...
+# Subtest: scope disposal owns cancellation before late completion
+ok 116 - scope disposal owns cancellation before late completion
+  ---
+  duration_ms: 3.5931
+  type: 'test'
+  ...
+# Subtest: settled tasks do not issue redundant cancellation
+ok 117 - settled tasks do not issue redundant cancellation
+  ---
+  duration_ms: 0.5269
+  type: 'test'
+  ...
+# Subtest: cancellation aborts the renderer token and settled tasks release teardown bookkeeping
+ok 118 - cancellation aborts the renderer token and settled tasks release teardown bookkeeping
+  ---
+  duration_ms: 2.6325
+  type: 'test'
+  ...
+# Subtest: task ids are operation-scoped and unique
+ok 119 - task ids are operation-scoped and unique
+  ---
+  duration_ms: 4.9388
+  type: 'test'
+  ...
+# [ThemeHandlers] Theme updated to: dark. Notifying windows.
+# [ThemeHandlers] Theme updated to: light. Notifying windows.
+# [ThemeHandlers] Failed to notify a theme target: main send failed
+# Subtest: theme broadcast reaches windows and embedded views exactly once
+ok 120 - theme broadcast reaches windows and embedded views exactly once
+  ---
+  duration_ms: 622.4313
+  type: 'test'
+  ...
+# Subtest: theme broadcast tolerates destroyed windows and send failures
+ok 121 - theme broadcast tolerates destroyed windows and send failures
+  ---
+  duration_ms: 2.1703
+  type: 'test'
+  ...
+1..121
+# tests 121
+# suites 0
+# pass 121
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6304.4259
+
+> vcp-chat-desktop@1.0.0 test:appearance-engine
+> node scripts/test-appearance-engine.mjs
+
+appearance engine checks passed.
+
+> vcp-chat-desktop@1.0.0 test:appearance-studio
+> node scripts/test-appearance-studio.mjs
+
+appearance studio checks passed.
+Next UI tab lifecycle checks passed.
+ok - exposes the VCP-shaped API
+ok - create builds a wa-* element and translates attributes
+ok - create appends children
+ok - on attaches and detaches a listener
+ok - awaitUpdate resolves without updateComplete
+ok - applyTokens marks an adapter scope in next mode and unmarks on release
+ok - registerTheme is ref-counted
+ok - isNextUi reflects the current ui mode
+ok - applyTokens is a no-op outside next mode
+ok - loadComponents refuses to run outside next mode
+ok - destroy clears theme ref-count nodes
+ok - exposes isLoaded alongside isDefined
+ok - translateEvent re-dispatches a wa event as a VCP event
+ok - mountScope applies tokens and theme together and releases both
+ok - awaitUpdate resolves through an updateComplete promise
+ok - mounted scope follows runtime light and dark theme changes
+ok - loadComponents failure is deterministic and observable
+ok - failed runtime ignores irreversible custom element registrations
+
+webawesome-adapter contract checks passed.
+TAP version 13
+# Subtest: owned resources dispose once in reverse order and await async cleanup
+ok 1 - owned resources dispose once in reverse order and await async cleanup
+  ---
+  duration_ms: 4.1617
+  type: 'test'
+  ...
+# Subtest: dispose waits for a cleanup already started by manual release
+ok 2 - dispose waits for a cleanup already started by manual release
+  ---
+  duration_ms: 0.5322
+  type: 'test'
+  ...
+# Subtest: dispose reports a failure from cleanup already started by manual release
+ok 3 - dispose reports a failure from cleanup already started by manual release
+  ---
+  duration_ms: 1.2581
+  type: 'test'
+  ...
+# Subtest: one cleanup failure does not prevent remaining resources from releasing
+ok 4 - one cleanup failure does not prevent remaining resources from releasing
+  ---
+  duration_ms: 0.3406
+  type: 'test'
+  ...
+# Subtest: listeners, timers, observers and abort controllers share one owner
+ok 5 - listeners, timers, observers and abort controllers share one owner
+  ---
+  duration_ms: 79.9375
+  type: 'test'
+  ...
+# Subtest: generation guards suppress late work after replacement and disposal
+ok 6 - generation guards suppress late work after replacement and disposal
+  ---
+  duration_ms: 0.9083
+  type: 'test'
+  ...
+# Subtest: once listeners retract from diagnostics after firing
+ok 7 - once listeners retract from diagnostics after firing
+  ---
+  duration_ms: 0.5973
+  type: 'test'
+  ...
+# Subtest: child scopes collapse with their parent
+ok 8 - child scopes collapse with their parent
+  ---
+  duration_ms: 0.5558
+  type: 'test'
+  ...
+# Subtest: disposing a child retracts its ownership record from the parent
+ok 9 - disposing a child retracts its ownership record from the parent
+  ---
+  duration_ms: 0.882
+  type: 'test'
+  ...
+# Subtest: concurrent child and parent disposal releases shared ownership exactly once
+ok 10 - concurrent child and parent disposal releases shared ownership exactly once
+  ---
+  duration_ms: 0.9431
+  type: 'test'
+  ...
+# Subtest: settled timeouts and tracked tasks leave diagnostics
+ok 11 - settled timeouts and tracked tasks leave diagnostics
+  ---
+  duration_ms: 10.594
+  type: 'test'
+  ...
+# Subtest: owned resources can be forgotten after natural settlement without running cleanup
+ok 12 - owned resources can be forgotten after natural settlement without running cleanup
+  ---
+  duration_ms: 0.5479
+  type: 'test'
+  ...
+# Subtest: animation frames are owned and suppressed after disposal
+ok 13 - animation frames are owned and suppressed after disposal
+  ---
+  duration_ms: 46.5591
+  type: 'test'
+  ...
+# (node:67976) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/next-ui-apps.js?registry-test=1790879624131 is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Next app registrations retract with their owner without changing the register return value
+ok 14 - Next app registrations retract with their owner without changing the register return value
+  ---
+  duration_ms: 124.5206
+  type: 'test'
+  ...
+# Subtest: frontend plugin loader keeps the upstream registration contract unchanged
+ok 15 - frontend plugin loader keeps the upstream registration contract unchanged
+  ---
+  duration_ms: 15.4142
+  type: 'test'
+  ...
+# [TopicListManager] 鼠标快捷键设置完成
+# [TopicListManager] Initialized successfully.
+# [TopicListManager] 鼠标快捷键设置完成
+# [TopicListManager] Initialized successfully.
+# Subtest: legacy mode events cannot tear down canonical topic management state
+ok 16 - legacy mode events cannot tear down canonical topic management state
+  ---
+  duration_ms: 167.8795
+  type: 'test'
+  ...
+# Subtest: topic manager accepts a lifecycle listener owner and disposes its render resources
+ok 17 - topic manager accepts a lifecycle listener owner and disposes its render resources
+  ---
+  duration_ms: 18.0089
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2142.5439
+
+> vcp-chat-desktop@1.0.0 test:bootstrap
+> node --test tests/vcpchat-bootstrap.test.mjs tests/vcpchat-managed-bootstrap-m3-m8.test.mjs tests/vcpchat-platform-boundary.test.mjs
+
+TAP version 13
+# Subtest: M0 protocol resolves platform state roots and publishes operation-scoped ready records
+ok 1 - M0 protocol resolves platform state roots and publishes operation-scoped ready records
+  ---
+  duration_ms: 24.6677
+  type: 'test'
+  ...
+# Subtest: graphical launcher entries are present without replacing upstream launchers
+ok 2 - graphical launcher entries are present without replacing upstream launchers
+  ---
+  duration_ms: 2.9492
+  type: 'test'
+  ...
+# Subtest: M0 stale operation locks are recoverable but live locks are not
+ok 3 - M0 stale operation locks are recoverable but live locks are not
+  ---
+  duration_ms: 12.4393
+  type: 'test'
+  ...
+# Subtest: M1 doctor is read-only and reports missing project/dependencies without attempting repair
+ok 4 - M1 doctor is read-only and reports missing project/dependencies without attempting repair
+  ---
+  duration_ms: 6.8127
+  type: 'test'
+  ...
+# Subtest: M1 doctor reports a valid project manifest and lockfile independently of dependency repair
+ok 5 - M1 doctor reports a valid project manifest and lockfile independently of dependency repair
+  ---
+  duration_ms: 42.3319
+  type: 'test'
+  ...
+# Subtest: H1 bootstrap completion marker skips deep work only for the same project inputs
+ok 6 - H1 bootstrap completion marker skips deep work only for the same project inputs
+  ---
+  duration_ms: 38.7464
+  type: 'test'
+  ...
+# Subtest: M2 argument parser separates launcher options from Electron arguments
+ok 7 - M2 argument parser separates launcher options from Electron arguments
+  ---
+  duration_ms: 1.4606
+  type: 'test'
+  ...
+# Subtest: managed launcher removes Electron-as-Node flag before spawning the real app
+ok 8 - managed launcher removes Electron-as-Node flag before spawning the real app
+  ---
+  duration_ms: 0.4492
+  type: 'test'
+  ...
+# Subtest: managed launcher preserves an explicit isolated app-data root
+ok 9 - managed launcher preserves an explicit isolated app-data root
+  ---
+  duration_ms: 0.8189
+  type: 'test'
+  ...
+# Subtest: managed launcher detaches Electron after authoritative handoff
+ok 10 - managed launcher detaches Electron after authoritative handoff
+  ---
+  duration_ms: 1.0129
+  type: 'test'
+  ...
+# Subtest: managed handoff launches Electron with independent stdio and platform-safe ownership
+ok 11 - managed handoff launches Electron with independent stdio and platform-safe ownership
+  ---
+  duration_ms: 0.5687
+  type: 'test'
+  ...
+# Subtest: managed readiness requires the main window to be visible before setup exits
+ok 12 - managed readiness requires the main window to be visible before setup exits
+  ---
+  duration_ms: 1.7562
+  type: 'test'
+  ...
+# Subtest: H1 managed entry shows a repair plan without mutating when consent is absent
+ok 13 - H1 managed entry shows a repair plan without mutating when consent is absent
+  ---
+  duration_ms: 6.0181
+  type: 'test'
+  ...
+# Subtest: H1 managed entry repairs with explicit consent, rechecks, then launches
+ok 14 - H1 managed entry repairs with explicit consent, rechecks, then launches
+  ---
+  duration_ms: 8.2927
+  type: 'test'
+  ...
+# Subtest: H1 parser keeps launcher flags separate from Electron arguments
+ok 15 - H1 parser keeps launcher flags separate from Electron arguments
+  ---
+  duration_ms: 0.3315
+  type: 'test'
+  ...
+# Subtest: H6 managed launcher sequence is diagnose → plan → repair → recheck → launch
+ok 16 - H6 managed launcher sequence is diagnose → plan → repair → recheck → launch
+  ---
+  duration_ms: 9.0061
+  type: 'test'
+  ...
+# Subtest: M2 ready waiter accepts only matching operation and child PID
+ok 17 - M2 ready waiter accepts only matching operation and child PID
+  ---
+  duration_ms: 6.6735
+  type: 'test'
+  ...
+# Subtest: M2 ready waiter accepts a visible main window as stronger readiness
+ok 18 - M2 ready waiter accepts a visible main window as stronger readiness
+  ---
+  duration_ms: 5.327
+  type: 'test'
+  ...
+# Subtest: M2 ready waiter reports child exit before readiness
+ok 19 - M2 ready waiter reports child exit before readiness
+  ---
+  duration_ms: 1.7178
+  type: 'test'
+  ...
+# Subtest: M2 ready waiter owns asynchronous spawn errors
+ok 20 - M2 ready waiter owns asynchronous spawn errors
+  ---
+  duration_ms: 1.285
+  type: 'test'
+  ...
+# Subtest: M2 diagnostics redact secrets before writing failure evidence
+ok 21 - M2 diagnostics redact secrets before writing failure evidence
+  ---
+  duration_ms: 4.2144
+  type: 'test'
+  ...
+# Subtest: M3 repair manifest is deterministic and uses npm ci plus targeted rebuild
+ok 22 - M3 repair manifest is deterministic and uses npm ci plus targeted rebuild
+  ---
+  duration_ms: 5.4818
+  type: 'test'
+  ...
+# Subtest: M3 Windows command shims run through cmd.exe instead of direct spawn
+ok 23 - M3 Windows command shims run through cmd.exe instead of direct spawn
+  ---
+  duration_ms: 0.6631
+  type: 'test'
+  ...
+# Subtest: M3 selection keeps optional Rust/vendor repairs opt-in
+ok 24 - M3 selection keeps optional Rust/vendor repairs opt-in
+  ---
+  duration_ms: 1.055
+  type: 'test'
+  ...
+# Subtest: M3 lock validation rejects package identity drift before npm ci
+ok 25 - M3 lock validation rejects package identity drift before npm ci
+  ---
+  duration_ms: 14.1066
+  type: 'test'
+  ...
+# Subtest: M3 repair episodes remain isolated across clones with the same lockfile
+ok 26 - M3 repair episodes remain isolated across clones with the same lockfile
+  ---
+  duration_ms: 3.1481
+  type: 'test'
+  ...
+# Subtest: M3 process runner cancels and settles exactly once
+ok 27 - M3 process runner cancels and settles exactly once
+  ---
+  duration_ms: 2.4941
+  type: 'test'
+  ...
+# Subtest: H4 process boundary emits explicit Windows and POSIX ownership plans
+ok 28 - H4 process boundary emits explicit Windows and POSIX ownership plans
+  ---
+  duration_ms: 0.9609
+  type: 'test'
+  ...
+# Subtest: H4 process boundary kills a Windows tree and falls back from POSIX group kill
+ok 29 - H4 process boundary kills a Windows tree and falls back from POSIX group kill
+  ---
+  duration_ms: 1.2914
+  type: 'test'
+  ...
+# Subtest: M4 progress protocol rejects malformed or unknown frames
+ok 30 - M4 progress protocol rejects malformed or unknown frames
+  ---
+  duration_ms: 5.6248
+  type: 'test'
+  ...
+# Subtest: M5 runtime closure detects tampering and policy gaps
+ok 31 - M5 runtime closure detects tampering and policy gaps
+  ---
+  duration_ms: 74.5858
+  type: 'test'
+  ...
+# Subtest: M5 runtime closure excludes node-gyp obj.target intermediates
+ok 32 - M5 runtime closure excludes node-gyp obj.target intermediates
+  ---
+  duration_ms: 26.8494
+  type: 'test'
+  ...
+# Subtest: M7 version switch is staged and rollback restores previous pointer
+ok 33 - M7 version switch is staged and rollback restores previous pointer
+  ---
+  duration_ms: 28.873
+  type: 'test'
+  ...
+# Subtest: M7 failed health check atomically returns current pointer to the prior version
+ok 34 - M7 failed health check atomically returns current pointer to the prior version
+  ---
+  duration_ms: 30.6182
+  type: 'test'
+  ...
+# Subtest: M7 update manifests reject path aliases, malformed entries, and uncovered launch executables
+ok 35 - M7 update manifests reject path aliases, malformed entries, and uncovered launch executables
+  ---
+  duration_ms: 5.3657
+  type: 'test'
+  ...
+# Subtest: M7 update staging rejects unlisted symlinks in the source tree
+ok 36 - M7 update staging rejects unlisted symlinks in the source tree
+  ---
+  duration_ms: 0.2779
+  type: 'test'
+  ...
+# Subtest: M7 update staging rejects insufficient disk capacity before copying
+ok 37 - M7 update staging rejects insufficient disk capacity before copying
+  ---
+  duration_ms: 1.2419
+  type: 'test'
+  ...
+# Subtest: H5 signed manifests require the matching public key and cover nested launch fields
+ok 38 - H5 signed manifests require the matching public key and cover nested launch fields
+  ---
+  duration_ms: 99.5346
+  type: 'test'
+  ...
+# Subtest: H5 network update requires HTTPS and resumes same-origin partial files
+ok 39 - H5 network update requires HTTPS and resumes same-origin partial files
+  ---
+  duration_ms: 72.4657
+  type: 'test'
+  ...
+# Subtest: H5 network update rejects mismatched ranges and oversized bodies
+ok 40 - H5 network update rejects mismatched ranges and oversized bodies
+  ---
+  duration_ms: 7.9888
+  type: 'test'
+  ...
+# Subtest: H5 signed network manifest downloads and verifies its file closure
+ok 41 - H5 signed network manifest downloads and verifies its file closure
+  ---
+  duration_ms: 237.1539
+  type: 'test'
+  ...
+# Subtest: M7 update gate detects a live VCPChat ready process before staging
+ok 42 - M7 update gate detects a live VCPChat ready process before staging
+  ---
+  duration_ms: 3.3649
+  type: 'test'
+  ...
+# Subtest: M8 evidence explicitly records external platform proof instead of claiming it
+ok 43 - M8 evidence explicitly records external platform proof instead of claiming it
+  ---
+  duration_ms: 14.2409
+  type: 'test'
+  ...
+# Subtest: H4 packaged executable discovery preserves spaces, unicode and nested helper exclusion
+ok 44 - H4 packaged executable discovery preserves spaces, unicode and nested helper exclusion
+  ---
+  duration_ms: 10.0524
+  type: 'test'
+  ...
+# Subtest: H4 packaged executable discovery handles Windows and Linux bundle layouts
+ok 45 - H4 packaged executable discovery handles Windows and Linux bundle layouts
+  ---
+  duration_ms: 5.6123
+  type: 'test'
+  ...
+# Subtest: H4 project profiles remain isolated for long unicode roots across platform policies
+ok 46 - H4 project profiles remain isolated for long unicode roots across platform policies
+  ---
+  duration_ms: 2.4098
+  type: 'test'
+  ...
+1..46
+# tests 46
+# suites 0
+# pass 46
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 885.2354
+warning: unable to access 'C:\Users\CHENXI/.config/git/ignore': Permission denied
+warning: unable to access 'C:\Users\CHENXI/.config/git/ignore': Permission denied
+warning: unable to access 'C:\Users\CHENXI/.config/git/ignore': Permission denied
+(node:15332) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/component-manifest.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33188) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/component-manifest.js?consumer-check=1 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32116) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/ui-surface-policy.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87060) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/vcp-ui.js?contract-test=1 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:93064) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/vcp-ui.js?appearance-studio-test=1 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[AppearanceStudio] Failed to hide embedded app: Error: simulated stale overlay acquisition failure
+    at file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/scripts/test-appearance-studio.mjs:530:20
+(node:3712) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/webawesome-adapter.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\CHENXI\Documents\Codex\2026-10-01\requirements-vs-upstream-md-ai-r1\work\split-checkout\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

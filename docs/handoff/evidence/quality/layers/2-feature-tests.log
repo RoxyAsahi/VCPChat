@@ -1,0 +1,911 @@
+TAP version 13
+# (node:51608) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/chat/chatHistoryPersistence.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: terminal persistence merges reverse-completing messages by identity and chronological order
+ok 1 - terminal persistence merges reverse-completing messages by identity and chronological order
+  ---
+  duration_ms: 4.6917
+  type: 'test'
+  ...
+# Subtest: terminal persistence propagates read and write failures without a fallback overwrite
+ok 2 - terminal persistence propagates read and write failures without a fallback overwrite
+  ---
+  duration_ms: 2.0652
+  type: 'test'
+  ...
+# Subtest: temporary assistant and group projections do not write renderer-owned history
+ok 3 - temporary assistant and group projections do not write renderer-owned history
+  ---
+  duration_ms: 0.4774
+  type: 'test'
+  ...
+# Subtest: auxiliary session persistence updates transient history without claiming durability
+ok 4 - auxiliary session persistence updates transient history without claiming durability
+  ---
+  duration_ms: 0.6963
+  type: 'test'
+  ...
+# Subtest: terminal persistence preserves concurrent durable fields outside the owned stream terminal
+ok 5 - terminal persistence preserves concurrent durable fields outside the owned stream terminal
+  ---
+  duration_ms: 1.2085
+  type: 'test'
+  ...
+# Subtest: terminal persistence rejects when saveHistory resolves with error object or success:false
+ok 6 - terminal persistence rejects when saveHistory resolves with error object or success:false
+  ---
+  duration_ms: 1.2283
+  type: 'test'
+  ...
+# [ChatManager] Initialized successfully.
+# Subtest: ChatManager publishes readiness only after synchronous listener setup completes
+ok 7 - ChatManager publishes readiness only after synchronous listener setup completes
+  ---
+  duration_ms: 220.6972
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a late assistant selection cannot overwrite the newer assistant topic and history
+ok 8 - a late assistant selection cannot overwrite the newer assistant topic and history
+  ---
+  duration_ms: 162.3371
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration selects the last durable assistant and topic
+ok 9 - startup restoration selects the last durable assistant and topic
+  ---
+  duration_ms: 39.3554
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration waits for the topic projection consumer
+ok 10 - startup restoration waits for the topic projection consumer
+  ---
+  duration_ms: 52.1842
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: an explicit selection supersedes an unfinished startup restoration
+ok 11 - an explicit selection supersedes an unfinished startup restoration
+  ---
+  duration_ms: 90.5
+  type: 'test'
+  ...
+# Subtest: startup restoration ignores a deleted item
+ok 12 - startup restoration ignores a deleted item
+  ---
+  duration_ms: 24.4166
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: last-open persistence is ordered and awaited across rapid topic selections
+ok 13 - last-open persistence is ordered and awaited across rapid topic selections
+  ---
+  duration_ms: 49.1174
+  type: 'test'
+  ...
+# [ChatManager] Failed to start history watcher; continuing with loaded history: Error: controlled watcher failure
+#     at Object.failNextWatcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:295:37)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:474:13)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history watcher startup failure does not block assistant navigation
+ok 14 - history watcher startup failure does not block assistant navigation
+  ---
+  duration_ms: 34.8798
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a send delayed before VCP dispatch cannot mutate the newly selected topic
+ok 15 - a send delayed before VCP dispatch cannot mutate the newly selected topic
+  ---
+  duration_ms: 90.3712
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Failed to persist outgoing message: Error: controlled save failure
+#     at Object.failNextHistorySave (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:292:36)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:528:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: a failed durable save preserves the draft and retracts the optimistic message
+ok 16 - a failed durable save preserves the draft and retracts the optimistic message
+  ---
+  duration_ms: 42.1779
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a programmatic quick-action string sends its own content without consuming the composer draft
+ok 17 - a programmatic quick-action string sends its own content without consuming the composer draft
+  ---
+  duration_ms: 52.3442
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: an attachment added while the outgoing message is persisting remains in the draft
+ok 18 - an attachment added while the outgoing message is persisting remains in the draft
+  ---
+  duration_ms: 40.7057
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: stream ownership is published before upstream startup resolves
+ok 19 - stream ownership is published before upstream startup resolves
+  ---
+  duration_ms: 38.1579
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# 发送消息或处理VCP响应时出错 Error: controlled VCP failure
+#     at Object.failNextVcpRequest (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:298:28)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\tests\\chat-manager-selection-race.test.js:636:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: failed VCP startup does not rewrite history to remove an unpersisted thinking message
+ok 20 - failed VCP startup does not rewrite history to remove an unpersisted thinking message
+  ---
+  duration_ms: 37.6938
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a second send cannot enter the same topic while the first is starting
+ok 21 - a second send cannot enter the same topic while the first is starting
+  ---
+  duration_ms: 47.1962
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale history load for agent:agent-b:topic-b-2
+# [ChatManager] Initialized successfully.
+# Subtest: a late topic watcher cannot replace a newer topic history
+ok 22 - a late topic watcher cannot replace a newer topic history
+  ---
+  duration_ms: 48.4158
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a topic created for an old assistant cannot switch the new assistant view
+ok 23 - a topic created for an old assistant cannot switch the new assistant view
+  ---
+  duration_ms: 91.1674
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-newest
+# [displayTopicTimestampBubble] Topic topic-a-newest not found or has no createdAt for agent agent-a.
+# [ChatManager] Initialized successfully.
+# Subtest: only the newest concurrent topic creation may select its result
+ok 24 - only the newest concurrent topic creation may select its result
+  ---
+  duration_ms: 33.9439
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale topic deletion completion { id: 'agent-a', type: 'agent' }
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: a deletion completed for an old assistant cannot rewrite the new assistant
+ok 25 - a deletion completed for an old assistant cannot rewrite the new assistant
+  ---
+  duration_ms: 43.8457
+  type: 'test'
+  ...
+# Subtest: ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+ok 26 - ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+  ---
+  duration_ms: 18.6981
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after selection changes cannot mutate the new conversation
+ok 27 - a history-file sync resolving after selection changes cannot mutate the new conversation
+  ---
+  duration_ms: 35.4463
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after dispose cannot mutate history or the DOM
+ok 28 - a history-file sync resolving after dispose cannot mutate history or the DOM
+  ---
+  duration_ms: 47.6781
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 25 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history projection keeps an active stream in the newest batch and final floor
+ok 29 - history projection keeps an active stream in the newest batch and final floor
+  ---
+  duration_ms: 37.7996
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history load reconciles an active stream after replacing the Surface projection
+ok 30 - history load reconciles an active stream after replacing the Surface projection
+  ---
+  duration_ms: 54.9564
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history sync does not delete a terminal message that commits while the file read is in flight
+ok 31 - history sync does not delete a terminal message that commits while the file read is in flight
+  ---
+  duration_ms: 29.1119
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+ok 32 - JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+  ---
+  duration_ms: 91.0271
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-created
+# [displayTopicTimestampBubble] Topic topic-a-created not found or has no createdAt for agent agent-a.
+# Subtest: creating a topic commits a selection event after the empty history identity changes
+ok 33 - creating a topic commits a selection event after the empty history identity changes
+  ---
+  duration_ms: 44.569
+  type: 'test'
+  ...
+# (node:80100) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/renderer/mainChatDomBindings.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: main chat DOM bindings resolve once from the owning document
+ok 34 - main chat DOM bindings resolve once from the owning document
+  ---
+  duration_ms: 208.6823
+  type: 'test'
+  ...
+# Subtest: main chat DOM bindings fail fast when the canonical contract is incomplete
+ok 35 - main chat DOM bindings fail fast when the canonical contract is incomplete
+  ---
+  duration_ms: 34.3823
+  type: 'test'
+  ...
+# Subtest: main chat DOM bindings resolve side pane elements when present
+ok 36 - main chat DOM bindings resolve side pane elements when present
+  ---
+  duration_ms: 37.2342
+  type: 'test'
+  ...
+# (node:70724) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/selection-reference.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: captureSelectionReference handles empty selection or missing window
+ok 37 - captureSelectionReference handles empty selection or missing window
+  ---
+  duration_ms: 186.6425
+  type: 'test'
+  ...
+# Subtest: captureSelectionReference extracts single message selection with provenance
+ok 38 - captureSelectionReference extracts single message selection with provenance
+  ---
+  duration_ms: 46.4155
+  type: 'test'
+  ...
+# Subtest: captureSelectionReference rejects cross-message selections
+ok 39 - captureSelectionReference rejects cross-message selections
+  ---
+  duration_ms: 38.7465
+  type: 'test'
+  ...
+# Subtest: validateReferenceList enforces count, duplicates, and total length limits
+ok 40 - validateReferenceList enforces count, duplicates, and total length limits
+  ---
+  duration_ms: 1.5901
+  type: 'test'
+  ...
+# (node:24764) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R01: Parent change deactivates old tab panel and hides non-visible tabs
+ok 41 - R01: Parent change deactivates old tab panel and hides non-visible tabs
+  ---
+  duration_ms: 307.1257
+  type: 'test'
+  ...
+# Subtest: R02: Reopening same child activates existing view without duplicate panels or mounts
+ok 42 - R02: Reopening same child activates existing view without duplicate panels or mounts
+  ---
+  duration_ms: 47.3051
+  type: 'test'
+  ...
+# Subtest: R03: Tab close during async mount disposes handle and removes panel without orphan state
+ok 43 - R03: Tab close during async mount disposes handle and removes panel without orphan state
+  ---
+  duration_ms: 32.4664
+  type: 'test'
+  ...
+# Subtest: R04: Agent configuration is resolved and reference length/count quota is enforced
+ok 44 - R04: Agent configuration is resolved and reference length/count quota is enforced
+  ---
+  duration_ms: 97.2857
+  type: 'test'
+  ...
+# Subtest: R05: Transport failure restores draft & refs; persistence failure blocks close with unsaved state
+ok 45 - R05: Transport failure restores draft & refs; persistence failure blocks close with unsaved state
+  ---
+  duration_ms: 133.1958
+  type: 'test'
+  ...
+# Subtest: R06: Reference added during active send is preserved across completion
+ok 46 - R06: Reference added during active send is preserved across completion
+  ---
+  duration_ms: 58.7354
+  type: 'test'
+  ...
+# Subtest: R07: Stable history filtering excludes isPendingStream, preserves tool_calls & attachments
+ok 47 - R07: Stable history filtering excludes isPendingStream, preserves tool_calls & attachments
+  ---
+  duration_ms: 3.6037
+  type: 'test'
+  ...
+# Subtest: R08: Service reports snapshot and IPC errors as ok:false
+ok 48 - R08: Service reports snapshot and IPC errors as ok:false
+  ---
+  duration_ms: 1.6668
+  type: 'test'
+  ...
+# Subtest: R09: Text selection outside authorized message is rejected
+ok 49 - R09: Text selection outside authorized message is rejected
+  ---
+  duration_ms: 18.5899
+  type: 'test'
+  ...
+# Subtest: R10: Metadata includes snapshot & boundary; tab close does not delete snapshot file
+ok 50 - R10: Metadata includes snapshot & boundary; tab close does not delete snapshot file
+  ---
+  duration_ms: 1989.8563
+  type: 'test'
+  ...
+# Subtest: R11: Transport completion does not leave cancelled status
+ok 51 - R11: Transport completion does not leave cancelled status
+  ---
+  duration_ms: 77.4496
+  type: 'test'
+  ...
+# Subtest: R12: Send-to-main blocks cross-topic contamination
+ok 52 - R12: Send-to-main blocks cross-topic contamination
+  ---
+  duration_ms: 51.6255
+  type: 'test'
+  ...
+# Subtest: R13: Persistence retry and explicit discard restore ready state
+ok 53 - R13: Persistence retry and explicit discard restore ready state
+  ---
+  duration_ms: 68.1383
+  type: 'test'
+  ...
+# Subtest: R14: Draft and uncommitted references preserved across tab close and reopen
+ok 54 - R14: Draft and uncommitted references preserved across tab close and reopen
+  ---
+  duration_ms: 31.1211
+  type: 'test'
+  ...
+# Subtest: R15: Send-to-main validates both item ID and topic ID provenance
+ok 55 - R15: Send-to-main validates both item ID and topic ID provenance
+  ---
+  duration_ms: 53.6507
+  type: 'test'
+  ...
+# Subtest: all side-chat IPCs deny remote, foreign window, subframe and guest senders before touching data
+ok 56 - all side-chat IPCs deny remote, foreign window, subframe and guest senders before touching data
+  ---
+  duration_ms: 572.5824
+  type: 'test'
+  ...
+# Subtest: side-chat metadata and snapshots cannot alter a real topic or rebind a child to another parent
+ok 57 - side-chat metadata and snapshots cannot alter a real topic or rebind a child to another parent
+  ---
+  duration_ms: 2953.4254
+  type: 'test'
+  ...
+# Subtest: junction ancestors cannot redirect creation, reads or deletion into another directory
+ok 58 - junction ancestors cannot redirect creation, reads or deletion into another directory
+  ---
+  duration_ms: 261.8732
+  type: 'test'
+  ...
+# Subtest: the selection "ask in side pane" button survives message-list re-renders
+ok 59 - the selection "ask in side pane" button survives message-list re-renders
+  ---
+  duration_ms: 779.7652
+  type: 'test'
+  ...
+# Subtest: side chat is enabled and wired to the selection button and message context menu
+ok 60 - side chat is enabled and wired to the selection button and message context menu
+  ---
+  duration_ms: 0.6147
+  type: 'test'
+  ...
+# (node:51536) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ZCode Parity: createSideChatDescriptor defines ephemeral: true and type: selection-side-chat
+ok 61 - ZCode Parity: createSideChatDescriptor defines ephemeral: true and type: selection-side-chat
+  ---
+  duration_ms: 45.7228
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Closing selection-side-chat destroys runtime and is explicitly excluded from recentlyClosedTabs
+ok 62 - ZCode Parity: Closing selection-side-chat destroys runtime and is explicitly excluded from recentlyClosedTabs
+  ---
+  duration_ms: 407.3007
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: onTabClosed deletes recovery snapshot from main authority to prevent resurrection on restart
+ok 63 - ZCode Parity: onTabClosed deletes recovery snapshot from main authority to prevent resurrection on restart
+  ---
+  duration_ms: 1.0994
+  type: 'test'
+  ...
+# (node:53740) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Full Side Chat lifecycle integration: open, refer, send, and close
+ok 64 - Full Side Chat lifecycle integration: open, refer, send, and close
+  ---
+  duration_ms: 450.1808
+  type: 'test'
+  ...
+# Subtest: Dual stream concurrency: cancelling side chat does not abort main chat stream
+ok 65 - Dual stream concurrency: cancelling side chat does not abort main chat stream
+  ---
+  duration_ms: 149.4906
+  type: 'test'
+  ...
+# Subtest: Parent context snapshot inheritance (P1): child sends frozen parent context without persisting it to child topic
+ok 66 - Parent context snapshot inheritance (P1): child sends frozen parent context without persisting it to child topic
+  ---
+  duration_ms: 103.4243
+  type: 'test'
+  ...
+# Subtest: filterStableHistory filters transient/streaming messages and extracts stable turns
+ok 67 - filterStableHistory filters transient/streaming messages and extracts stable turns
+  ---
+  duration_ms: 3.774
+  type: 'test'
+  ...
+# Subtest: sideChatHandlers handles metadata lifecycle and snapshot creation with isolated filesystem
+ok 68 - sideChatHandlers handles metadata lifecycle and snapshot creation with isolated filesystem
+  ---
+  duration_ms: 2597.4546
+  type: 'test'
+  ...
+# Subtest: side-chat create-child/delete-child keep the child out of the topic list and never delete real topics
+ok 69 - side-chat create-child/delete-child keep the child out of the topic list and never delete real topics
+  ---
+  duration_ms: 1027.3864
+  type: 'test'
+  ...
+# (node:88120) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: model picker lists the real model catalog instead of a built-in fake list
+ok 70 - model picker lists the real model catalog instead of a built-in fake list
+  ---
+  duration_ms: 344.3804
+  type: 'test'
+  ...
+# Subtest: without any configured model the side chat does not invent one and refuses to send
+ok 71 - without any configured model the side chat does not invent one and refuses to send
+  ---
+  duration_ms: 119.8758
+  type: 'test'
+  ...
+# Subtest: model search filters the catalog
+ok 72 - model search filters the catalog
+  ---
+  duration_ms: 78.1659
+  type: 'test'
+  ...
+# Subtest: an unused parent-snapshot side chat re-captures the parent right before its first message
+ok 73 - an unused parent-snapshot side chat re-captures the parent right before its first message
+  ---
+  duration_ms: 71.698
+  type: 'test'
+  ...
+# Subtest: references-only mode never sends parent history and never refreshes the snapshot
+ok 74 - references-only mode never sends parent history and never refreshes the snapshot
+  ---
+  duration_ms: 112.3483
+  type: 'test'
+  ...
+# Subtest: a side conversation send does not touch the main topic unread state or item list
+ok 75 - a side conversation send does not touch the main topic unread state or item list
+  ---
+  duration_ms: 2.3194
+  type: 'test'
+  ...
+# Subtest: no hard-coded fallback model remains in the side chat stack
+ok 76 - no hard-coded fallback model remains in the side chat stack
+  ---
+  duration_ms: 1.2663
+  type: 'test'
+  ...
+# Subtest: side chat title excerpt collapses whitespace with a real whitespace regex
+ok 77 - side chat title excerpt collapses whitespace with a real whitespace regex
+  ---
+  duration_ms: 1.1214
+  type: 'test'
+  ...
+# (node:82492) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/chat/sideChatSessionService.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createSideChatDescriptor validates parent and childTopicId and enforces distinct topics
+ok 78 - createSideChatDescriptor validates parent and childTopicId and enforces distinct topics
+  ---
+  duration_ms: 45.4219
+  type: 'test'
+  ...
+# Subtest: createChildTopicForAgent delegates to electronAPI and returns normalized outcome
+ok 79 - createChildTopicForAgent delegates to electronAPI and returns normalized outcome
+  ---
+  duration_ms: 1.0722
+  type: 'test'
+  ...
+# Subtest: createChildTopicForAgent never falls back to creating a real agent topic
+ok 80 - createChildTopicForAgent never falls back to creating a real agent topic
+  ---
+  duration_ms: 0.3223
+  type: 'test'
+  ...
+# Subtest: dedupeSideChatCreation coalesces concurrent creations for the same key
+ok 81 - dedupeSideChatCreation coalesces concurrent creations for the same key
+  ---
+  duration_ms: 46.9445
+  type: 'test'
+  ...
+# Subtest: deleteSideChatChild delegates to electronAPI and normalizes outcome
+ok 82 - deleteSideChatChild delegates to electronAPI and normalizes outcome
+  ---
+  duration_ms: 1.2164
+  type: 'test'
+  ...
+# Subtest: freezeParentHistory filters out transient or streaming messages and clones stable ones
+ok 83 - freezeParentHistory filters out transient or streaming messages and clones stable ones
+  ---
+  duration_ms: 0.8293
+  type: 'test'
+  ...
+# Subtest: saveSideChatMetadata, getSideChatMetadata, listSideChatsForParent, deleteSideChatMetadata handle contracts
+ok 84 - saveSideChatMetadata, getSideChatMetadata, listSideChatsForParent, deleteSideChatMetadata handle contracts
+  ---
+  duration_ms: 1.9217
+  type: 'test'
+  ...
+# (node:476) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: mountSideChatSurface builds shell, loads history, and transitions to ready
+ok 85 - mountSideChatSurface builds shell, loads history, and transitions to ready
+  ---
+  duration_ms: 301.5654
+  type: 'test'
+  ...
+# Subtest: submitting side chat formats reference cards and dispatches message
+ok 86 - submitting side chat formats reference cards and dispatches message
+  ---
+  duration_ms: 132.294
+  type: 'test'
+  ...
+# Subtest: createSideChatSurfaceOwner wraps mountTab provider contract
+ok 87 - createSideChatSurfaceOwner wraps mountTab provider contract
+  ---
+  duration_ms: 91.2394
+  type: 'test'
+  ...
+# Subtest: mountSideChatSurface keeps a minimal composer and offers send-to-main on assistant messages
+ok 88 - mountSideChatSurface keeps a minimal composer and offers send-to-main on assistant messages
+  ---
+  duration_ms: 90.9343
+  type: 'test'
+  ...
+# (node:64804) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ZCode Parity: Switching to a topic with no side chats automatically collapses the side pane
+ok 89 - ZCode Parity: Switching to a topic with no side chats automatically collapses the side pane
+  ---
+  duration_ms: 272.8337
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Switching back to a topic with side chats restores tabs and auto-expands
+ok 90 - ZCode Parity: Switching back to a topic with side chats restores tabs and auto-expands
+  ---
+  duration_ms: 46.9043
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Explicit collapse preference is remembered per topic (sidePaneCollapsedByOwner)
+ok 91 - ZCode Parity: Explicit collapse preference is remembered per topic (sidePaneCollapsedByOwner)
+  ---
+  duration_ms: 58.5497
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Per-topic active tab is remembered (activeTabByOwner)
+ok 92 - ZCode Parity: Per-topic active tab is remembered (activeTabByOwner)
+  ---
+  duration_ms: 61.2271
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Closing the last side chat tab automatically collapses side pane
+ok 93 - ZCode Parity: Closing the last side chat tab automatically collapses side pane
+  ---
+  duration_ms: 47.2765
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: toggleChatBtn only operates on current parent chat tabs
+ok 94 - ZCode Parity: toggleChatBtn only operates on current parent chat tabs
+  ---
+  duration_ms: 30.697
+  type: 'test'
+  ...
+# (node:94416) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Parity: SidePaneState closeOtherTabs and closeAllTabs transitions
+ok 95 - Parity: SidePaneState closeOtherTabs and closeAllTabs transitions
+  ---
+  duration_ms: 3.2135
+  type: 'test'
+  ...
+# Subtest: Parity: SidePaneController closeOtherTabs and closeAllTabs dispose views and update DOM
+ok 96 - Parity: SidePaneController closeOtherTabs and closeAllTabs dispose views and update DOM
+  ---
+  duration_ms: 396.4899
+  type: 'test'
+  ...
+# Subtest: Parity: + Add Menu Popover opens and routes actions
+ok 97 - Parity: + Add Menu Popover opens and routes actions
+  ---
+  duration_ms: 98.9716
+  type: 'test'
+  ...
+# Subtest: Parity: Tab Right-Click Context Menu triggers actions
+ok 98 - Parity: Tab Right-Click Context Menu triggers actions
+  ---
+  duration_ms: 87.0816
+  type: 'test'
+  ...
+# Subtest: Parity: Open Tab Launcher buttons activate chat and notifications
+ok 99 - Parity: Open Tab Launcher buttons activate chat and notifications
+  ---
+  duration_ms: 57.6078
+  type: 'test'
+  ...
+# Subtest: Parity: Side Chat Model Picker supports interactive switching
+ok 100 - Parity: Side Chat Model Picker supports interactive switching
+  ---
+  duration_ms: 93.1967
+  type: 'test'
+  ...
+# Subtest: Parity: ZCode Subtle Border & Header Divider Contract
+ok 101 - Parity: ZCode Subtle Border & Header Divider Contract
+  ---
+  duration_ms: 71.624
+  type: 'test'
+  ...
+# (node:92776) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SidePaneController initializes and renders tabs into tabListElement
+ok 102 - SidePaneController initializes and renders tabs into tabListElement
+  ---
+  duration_ms: 262.7288
+  type: 'test'
+  ...
+# Subtest: SidePaneController showNotifications and openChat mount views and sync visibility
+ok 103 - SidePaneController showNotifications and openChat mount views and sync visibility
+  ---
+  duration_ms: 77.6449
+  type: 'test'
+  ...
+# (node:85748) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-resizer-owner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createSidePaneResizerOwner initializes VCPSidebarResizer with direction -1 and pointer events
+ok 104 - createSidePaneResizerOwner initializes VCPSidebarResizer with direction -1 and pointer events
+  ---
+  duration_ms: 3.3509
+  type: 'test'
+  ...
+# Subtest: createSidePaneResizerOwner notifies width commit and binds lifecycle scope
+ok 105 - createSidePaneResizerOwner notifies width commit and binds lifecycle scope
+  ---
+  duration_ms: 1.5648
+  type: 'test'
+  ...
+# (node:7436) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createInitialSidePaneState provides immutable defaults with notifications tab
+ok 106 - createInitialSidePaneState provides immutable defaults with notifications tab
+  ---
+  duration_ms: 2.421
+  type: 'test'
+  ...
+# Subtest: setVisible returns new frozen snapshot
+ok 107 - setVisible returns new frozen snapshot
+  ---
+  duration_ms: 0.5273
+  type: 'test'
+  ...
+# Subtest: setPreferredWidth clamps to bounds
+ok 108 - setPreferredWidth clamps to bounds
+  ---
+  duration_ms: 0.4828
+  type: 'test'
+  ...
+# Subtest: openChatTab validates descriptor and avoids duplicate child topics
+ok 109 - openChatTab validates descriptor and avoids duplicate child topics
+  ---
+  duration_ms: 2.1928
+  type: 'test'
+  ...
+# Subtest: closeTab handles fallback and protects notifications tab
+ok 110 - closeTab handles fallback and protects notifications tab
+  ---
+  duration_ms: 0.6537
+  type: 'test'
+  ...
+# Subtest: getVisibleTabs filters chat tabs by parent conversation reference
+ok 111 - getVisibleTabs filters chat tabs by parent conversation reference
+  ---
+  duration_ms: 2.8113
+  type: 'test'
+  ...
+# Subtest: global tools retain selection and visibility across topic changes
+ok 112 - global tools retain selection and visibility across topic changes
+  ---
+  duration_ms: 1.1316
+  type: 'test'
+  ...
+# (node:95784) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: search ranking: title prefix beats word prefix beats substring beats hint beats type
+ok 113 - search ranking: title prefix beats word prefix beats substring beats hint beats type
+  ---
+  duration_ms: 4.6264
+  type: 'test'
+  ...
+# Subtest: tab presentation helpers: type labels and search hints
+ok 114 - tab presentation helpers: type labels and search hints
+  ---
+  duration_ms: 0.7608
+  type: 'test'
+  ...
+# Subtest: resolveTabsOverflow uses the min-width budget and ignores where the add button lives
+ok 115 - resolveTabsOverflow uses the min-width budget and ignores where the add button lives
+  ---
+  duration_ms: 0.3595
+  type: 'test'
+  ...
+# Subtest: drag helpers: closest center and arrayMove semantics
+ok 116 - drag helpers: closest center and arrayMove semantics
+  ---
+  duration_ms: 17.2152
+  type: 'test'
+  ...
+# Subtest: SidePaneState.reorderTabs moves tabs but keeps notifications first
+ok 117 - SidePaneState.reorderTabs moves tabs but keeps notifications first
+  ---
+  duration_ms: 1.7381
+  type: 'test'
+  ...
+# Subtest: controller: reorderTab re-renders tabs in the new order
+ok 118 - controller: reorderTab re-renders tabs in the new order
+  ---
+  duration_ms: 363.4484
+  type: 'test'
+  ...
+# Subtest: controller: middle click closes a tab without activating it
+ok 119 - controller: middle click closes a tab without activating it
+  ---
+  duration_ms: 110.1638
+  type: 'test'
+  ...
+# Subtest: controller: closed non-chat tabs are remembered and can really be reopened
+ok 120 - controller: closed non-chat tabs are remembered and can really be reopened
+  ---
+  duration_ms: 106.9488
+  type: 'test'
+  ...
+# Subtest: controller: tabs marked reopenable:false are not remembered; list is capped at 10
+ok 121 - controller: tabs marked reopenable:false are not remembered; list is capped at 10
+  ---
+  duration_ms: 376.597
+  type: 'test'
+  ...
+# Subtest: controller: the tab overview is keyboard driven like ZCode Command (arrows, Enter, Escape)
+ok 122 - controller: the tab overview is keyboard driven like ZCode Command (arrows, Enter, Escape)
+  ---
+  duration_ms: 101.798
+  type: 'test'
+  ...
+1..122
+# tests 122
+# suites 0
+# pass 122
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 7231.7418

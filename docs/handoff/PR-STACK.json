@@ -1,0 +1,2138 @@
+{
+  "original": "325ce1c9daede619fa48d07a9c741940e89ccab6",
+  "base": "283255750376e645ec3e355dbfb84730371014cc",
+  "excluded": [
+    "artifacts/diorama/echo.png",
+    "artifacts/diorama/helix.png",
+    "artifacts/diorama/memory.png",
+    "artifacts/diorama/water.png",
+    "outputs/round3/electron-extra-results.json",
+    "outputs/round3/electron-model-popup.png",
+    "outputs/round3/electron-narrow.png",
+    "outputs/round3/electron-results.json",
+    "outputs/round3/electron-wide.png",
+    "outputs/round4/before-restart.png",
+    "outputs/round4/deep-electron-results.json",
+    "outputs/round4/electron-extra-results.json",
+    "outputs/round4/electron-model-popup.png",
+    "outputs/round4/electron-narrow.png",
+    "outputs/round4/electron-results.json",
+    "outputs/round4/electron-wide.png",
+    "outputs/round4/fresh-empty-menu.png",
+    "outputs/round4/menu-results.json",
+    "scratch/belle_back.png",
+    "scratch/belle_front.png",
+    "scratch/belle_side.png",
+    "scratch/belle_three_quarter.png",
+    "scratch/canvasui_dithered_object_0.txt",
+    "scratch/capture_nova_3d.cjs",
+    "scratch/convert_anbi.cjs",
+    "scratch/convert_belle.cjs",
+    "scratch/convert_keqing_to_glb.py",
+    "scratch/current_glb_img_0.png",
+    "scratch/current_glb_img_1.png",
+    "scratch/current_glb_img_2.png",
+    "scratch/direct_fbx_bust.png",
+    "scratch/direct_glb_bust.png",
+    "scratch/echo-reference",
+    "scratch/final_glb_verification.png",
+    "scratch/genshin_amber/A_Texture/hair.bmp",
+    "scratch/genshin_amber/A_Texture/skin.bmp",
+    "scratch/genshin_amber/A_Texture/toon_defo.bmp",
+    "scratch/genshin_amber/A_Texture/技能.png",
+    "scratch/genshin_amber/A_Texture/服.png",
+    "scratch/genshin_amber/A_Texture/服A.png",
+    "scratch/genshin_amber/A_Texture/表情.png",
+    "scratch/genshin_amber/A_Texture/面1.png",
+    "scratch/genshin_amber/A_Texture/髪.png",
+    "scratch/genshin_amber/amber.pmd",
+    "scratch/genshin_keqing/K_Texture/skin.bmp",
+    "scratch/genshin_keqing/K_Texture/toon_defo.bmp",
+    "scratch/genshin_keqing/K_Texture/服.png",
+    "scratch/genshin_keqing/K_Texture/肌.png",
+    "scratch/genshin_keqing/K_Texture/表情.png",
+    "scratch/genshin_keqing/K_Texture/面.png",
+    "scratch/genshin_keqing/K_Texture/髪.png",
+    "scratch/genshin_keqing/keqing.pmd",
+    "scratch/genshin_lumine/H_Texture/表情.png",
+    "scratch/genshin_lumine/H_Texture/髪.png",
+    "scratch/genshin_lumine/lumine.pmd",
+    "scratch/inspect_main_render.cjs",
+    "scratch/iteration-progress.json",
+    "scratch/perfect_glb_test.cjs",
+    "scratch/render_test_model.cjs",
+    "scratch/rms.txt",
+    "scratch/test_Belle_Body_1.png",
+    "scratch/test_Belle_Body_2.png",
+    "scratch/test_Belle_Face.png",
+    "scratch/test_alpha_render.cjs",
+    "scratch/test_anbi_flipY_true.png",
+    "scratch/test_anime_npr.cjs",
+    "scratch/test_belle_alpha.png",
+    "scratch/test_belle_flipY_true.png",
+    "scratch/test_belle_flipped_fix.png",
+    "scratch/test_belle_in_halo.png",
+    "scratch/test_belle_invert_uv.png",
+    "scratch/test_belle_sweetspot.png",
+    "scratch/test_canvas_tex.png",
+    "scratch/test_flipped_canvas.png",
+    "scratch/test_framing.cjs",
+    "scratch/test_hide_spotted.cjs",
+    "scratch/test_keqing.glb",
+    "scratch/test_no_spotted.png",
+    "scratch/test_pristine_all_modes.cjs",
+    "scratch/test_render_anbi.cjs",
+    "scratch/test_render_angles.cjs",
+    "scratch/test_render_belle.cjs",
+    "scratch/test_sobel_all_modes.cjs",
+    "scratch/test_sobel_outline.cjs",
+    "scratch/test_true_unflipped.cjs",
+    "scratch/test_unflipped_result.png",
+    "scratch/test_unlit_anime.cjs",
+    "scratch/test_uv_fix.cjs",
+    "scratch/test_uv_fix_result.png",
+    "scratch/zzz_anbi/Anbi_Body_D.png",
+    "scratch/zzz_anbi/Anbi_Face_D.png",
+    "scratch/zzz_anbi/Anbi_Hair_D.png",
+    "scratch/zzz_anbi/anbi.fbx",
+    "scratch/zzz_anbi/anbi.glb",
+    "scratch/zzz_belle/Belle_Body_Map1_D.png",
+    "scratch/zzz_belle/Belle_Body_Map2_D.png",
+    "scratch/zzz_belle/Belle_Body_Map2_M.png",
+    "scratch/zzz_belle/Belle_Face_D.png",
+    "scratch/zzz_belle/belle.fbx",
+    "scratch/zzz_belle/belle.glb",
+    "scratch/zzz_belle/extracted_img_0.png",
+    "scratch/zzz_belle/extracted_img_1.png",
+    "scratch/zzz_belle/extracted_img_2.png",
+    "uv.lock",
+    "work/round3/electron-extra-runtime.log",
+    "work/round3/electron-runtime.log",
+    "work/round4/deep-electron-runtime.log",
+    "work/round4/electron-extra-runtime.log",
+    "work/round4/electron-runtime.log",
+    "work/round4/menu-runtime.log"
+  ],
+  "branches": [
+    {
+      "number": 1,
+      "slug": "shell-composer-notifications",
+      "title": "主界面、语音输入、模型选择与通知卡片",
+      "branch": "pr/zcode-01-shell-composer-notifications",
+      "parent": "283255750376e645ec3e355dbfb84730371014cc",
+      "head": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "DESIGN.md",
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "docs/contracts/ui-dynamic-style-ownership.json",
+        "docs/contracts/zcode-port-scope.json",
+        "main.html",
+        "main.js",
+        "modules/chatManager.js",
+        "modules/notificationCenter.js",
+        "modules/notificationRenderer.js",
+        "modules/renderer/mainChatDomBindings.js",
+        "modules/settingsManager.js",
+        "modules/ui-system/next-shell/notification-menu-controller.js",
+        "modules/ui-system/settings/group-slots.js",
+        "renderer.js",
+        "scripts/check-chat-kernel-consumers.mjs",
+        "scripts/check-design-system-boundary.mjs",
+        "scripts/check-global-settings-section-ownership.mjs",
+        "scripts/check-next-delta-contract.mjs",
+        "scripts/check-ui-system.mjs",
+        "scripts/next-delta-shared-baseline.json",
+        "scripts/test-appearance-engine.mjs",
+        "scripts/test-ui-system.mjs",
+        "styles/appearance.css",
+        "styles/components.css",
+        "styles/themes.css",
+        "styles/ui-next.css",
+        "styles/ui-system/chat-input.css",
+        "styles/ui-system/components.css",
+        "styles/ui-system/notification-center.css",
+        "styles/ui-system/notifications.css",
+        "styles/ui-system/settings.css",
+        "styles/ui-system/shell.css",
+        "styles/ui-system/showcase.css",
+        "styles/ui-system/sidebar.css",
+        "styles/ui-system/tokens.css",
+        "styles/ui-system/webawesome-adapter.css",
+        "tests/chat-kernel-scratch-isolation.test.mjs",
+        "tests/content-pipeline.test.mjs",
+        "tests/dsh-voice-interaction.test.js",
+        "tests/notification-center.test.js",
+        "tests/notification-change-audit.test.js"
+      ],
+      "preQualityHead": "2db131c740ee5cdfba859116aada228a92ae0fa6",
+      "beforeControlBoundaryHead": "a92a4294c8555b45a8863f987505e954f79217c6",
+      "beforeTransitionalStyleHead": "5b5389bdb2198842e7c1a441072a385197e4b9fd",
+      "beforeEvidenceIsolationHead": "f98c9aacbc7593898818ffc51c3b9c390ac9f801",
+      "beforeRecoveryHead": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766"
+    },
+    {
+      "number": 2,
+      "slug": "sidepane-sidechat",
+      "title": "通用侧栏框架与独立侧聊生命周期",
+      "branch": "pr/zcode-02-sidepane-sidechat",
+      "parent": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766",
+      "head": "a80f12559288c593ed87eee5a9b9274cc4c0ddff",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "main.js",
+        "modules/chat/chatHistoryPersistence.js",
+        "modules/chat/chatOperation.js",
+        "modules/chat/sideChatSessionService.js",
+        "modules/chat/streamConsumerRegistry.js",
+        "modules/chatManager.js",
+        "modules/event-listeners.js",
+        "modules/ipc/applicationSender.js",
+        "modules/ipc/sideChatHandlers.js",
+        "modules/renderer/mainChatSettingsPresentationOwner.js",
+        "modules/renderer/messageContextMenu.js",
+        "modules/renderer/sideChatSurfaceOwner.js",
+        "modules/ui-system/side-pane/selection-reference.js",
+        "modules/ui-system/side-pane/side-pane-controller.js",
+        "modules/ui-system/side-pane/side-pane-resizer-owner.js",
+        "modules/ui-system/side-pane/side-pane-state.js",
+        "modules/ui-system/side-pane/side-pane-tab-dnd.js",
+        "modules/ui-system/side-pane/side-pane-tab-utils.js",
+        "modules/uiManager.js",
+        "preloads/api/sideChat.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/side-pane-side-chat-extras.css",
+        "styles/ui-system/side-pane-tabs.css",
+        "styles/ui-system/side-pane.css",
+        "tests/chat-history-persistence.test.mjs",
+        "tests/chat-manager-selection-race.test.js",
+        "tests/helpers/trusted-main-sender.cjs",
+        "tests/main-chat-dom-bindings.test.mjs",
+        "tests/selection-reference.test.mjs",
+        "tests/side-chat-audit-probes.test.mjs",
+        "tests/side-chat-authorization.test.mjs",
+        "tests/side-chat-entry-points.test.mjs",
+        "tests/side-chat-ephemeral-zcode-parity.test.mjs",
+        "tests/side-chat-integration.test.mjs",
+        "tests/side-chat-ipc-metadata.test.mjs",
+        "tests/side-chat-model-and-context.test.mjs",
+        "tests/side-chat-session-service.test.mjs",
+        "tests/side-chat-surface-owner.test.mjs",
+        "tests/side-chat-topic-binding-parity.test.mjs",
+        "tests/side-pane-advanced-parity.test.mjs",
+        "tests/side-pane-controller.test.mjs",
+        "tests/side-pane-resizer-owner.test.mjs",
+        "tests/side-pane-state.test.mjs",
+        "tests/side-pane-tab-strip.test.mjs"
+      ],
+      "preQualityHead": "f7bb2190569573ba66fda67f774cef04dc5e3187",
+      "beforeControlBoundaryHead": "53639d6d1c35397478dc4dc99759923d3710803c",
+      "beforeTransitionalStyleHead": "6269a20ce0a9763b247177f6c1c3f526722b8144",
+      "beforeEvidenceIsolationHead": "ec0e61833c211b02e8517c35753754fbb2514660",
+      "beforeRecoveryHead": "a80f12559288c593ed87eee5a9b9274cc4c0ddff"
+    },
+    {
+      "number": 3,
+      "slug": "git-backend",
+      "title": "Git 分支、提交图与变更统计接口",
+      "branch": "pr/zcode-03-git-backend",
+      "parent": "a80f12559288c593ed87eee5a9b9274cc4c0ddff",
+      "head": "efb3db3ce3172dd2cdc663c56972204eff8e1ead",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "modules/ipc/gitHandlers.js",
+        "modules/ipc/projectForgeHandlers.js",
+        "modules/services/gitService.js",
+        "preloads/api/projectForge.js",
+        "scripts/next-delta-shared-baseline.json",
+        "tests/git-service.test.js"
+      ],
+      "preQualityHead": "80dc0f913e82febb3e5273700fd3827b0dc8a158",
+      "beforeControlBoundaryHead": "c636e9e27597445517ce2a9975e996988d5d6fba",
+      "beforeTransitionalStyleHead": "d5f1e8106601d8ba11367193bafbb30736183e01",
+      "beforeEvidenceIsolationHead": "d5d31f6846a53187d4cb7b42837c8e419e5208a9",
+      "beforeRecoveryHead": "efb3db3ce3172dd2cdc663c56972204eff8e1ead"
+    },
+    {
+      "number": 4,
+      "slug": "notes-code-viewer",
+      "title": "笔记、代码查看与共享笔记窗口样式",
+      "branch": "pr/zcode-04-notes-code-viewer",
+      "parent": "efb3db3ce3172dd2cdc663c56972204eff8e1ead",
+      "head": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "Notemodules/notes.css",
+        "Notemodules/notes.html",
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ipc/notesHandlers.js",
+        "modules/renderer/contentProcessor.js",
+        "modules/ui-system/line-diff.js",
+        "modules/ui-system/side-pane/codeViewerSideProvider.js",
+        "modules/ui-system/side-pane/notesSideProvider.js",
+        "preloads/api/notes.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/app-surfaces/app-surface-content.css",
+        "styles/app-surfaces/app-surface-notes.css",
+        "styles/app-surfaces/app-surface-shell.css",
+        "styles/app-surfaces/app-surface-tokens.css",
+        "styles/app-surfaces/app-surfaces.css",
+        "tests/line-diff-budget.test.mjs",
+        "tests/notes-side-provider-races.test.mjs"
+      ],
+      "preQualityHead": "e0b59dc8f9ca6a093135834b807b68bfe1d4757e",
+      "beforeControlBoundaryHead": "9115757496f07b404223b0af2fba711f82c42e4f",
+      "beforeTransitionalStyleHead": "4ba88bf31fcf8de285399767f59025d48693e931",
+      "beforeEvidenceIsolationHead": "570461ce0dc989764e78af5620c1f902cbef3972",
+      "beforeRecoveryHead": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3"
+    },
+    {
+      "number": 5,
+      "slug": "browser",
+      "title": "隔离的内置浏览器",
+      "branch": "pr/zcode-05-browser",
+      "parent": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3",
+      "head": "b645544f5012ba28dcd90743970b66d7e0e42fd2",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "main.js",
+        "modules/ipc/browserHandlers.js",
+        "modules/ui-system/side-pane/browserSideProvider.js",
+        "preloads/api/browser.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "tests/browser-handlers.test.js"
+      ],
+      "preQualityHead": "32b2caab3a0290e5ceafab1d40d33bb68807ef1b",
+      "beforeControlBoundaryHead": "bb04f873dee301acfb142115a4d3cb374399bd17",
+      "beforeTransitionalStyleHead": "ddf9bacd64efa32d493e43a048a91b7e0a7649df",
+      "beforeEvidenceIsolationHead": "7f6599c3a4229d28c072bb898d803d2d26a04a63",
+      "beforeRecoveryHead": "b645544f5012ba28dcd90743970b66d7e0e42fd2"
+    },
+    {
+      "number": 6,
+      "slug": "terminal-command-runs",
+      "title": "终端镜像、链接与命令运行记录",
+      "branch": "pr/zcode-06-terminal-command-runs",
+      "parent": "b645544f5012ba28dcd90743970b66d7e0e42fd2",
+      "head": "02ae8840c5708ac2b7880fefd4c29043a54fcf40",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+        "VCPDistributedServer/Plugin/PowerShellExecutor/gui/PowerShellViewer.js",
+        "VCPDistributedServer/Plugin/PowerShellExecutor/nativeHelperPath.js",
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "docs/contracts/zcode-port-scope.json",
+        "main.html",
+        "main.js",
+        "modules/bootstrap/packed-runtime.js",
+        "modules/ipc/terminalHandlers.js",
+        "modules/ui-system/side-pane/terminalLinks.js",
+        "modules/ui-system/side-pane/terminalSideProvider.js",
+        "modules/ui-system/side-pane/terminalTheme.js",
+        "modules/ui-system/side-pane/toolOutputSideProvider.js",
+        "package.json",
+        "preloads/api/terminal.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/side-pane-tool-output.css",
+        "tests/side-pane-terminal-links.test.mjs",
+        "tests/side-pane-terminal-theme.test.mjs",
+        "tests/side-pane-tool-output.test.mjs",
+        "tests/terminal-handlers.test.js",
+        "tests/terminal-native-helper.test.js",
+        "tests/terminal-package-closure.test.js",
+        "vendor/xterm/LICENSE",
+        "vendor/xterm/xterm-addon-fit.js",
+        "vendor/xterm/xterm.css",
+        "vendor/xterm/xterm.js"
+      ],
+      "preQualityHead": "4fca53699379469f91181726732233df4c438aea",
+      "beforeControlBoundaryHead": "273cd390cf6fe3073406eff734a4621753f76727",
+      "beforeTransitionalStyleHead": "6b38860376f9e4734677d9a399e0c573aea80c2e",
+      "beforeEvidenceIsolationHead": "caa1da481d345b27b0d62d6047f9fe9bccb705b3",
+      "beforeRecoveryHead": "50e51485eecae8a6211a56295f22eb6decc442a1"
+    },
+    {
+      "number": 7,
+      "slug": "plan-detail",
+      "title": "V工程计划详情",
+      "branch": "pr/zcode-07-plan-detail",
+      "parent": "02ae8840c5708ac2b7880fefd4c29043a54fcf40",
+      "head": "6647fc85792003d533aecac6215c3b035ad60e43",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/project-plan-model.js",
+        "modules/ui-system/side-pane/planDetailSideProvider.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/side-pane-plan.css",
+        "styles/ui-system/status-tokens.css",
+        "tests/side-pane-plan-detail.test.mjs"
+      ],
+      "preQualityHead": "a6ef4b6a0640f5d0a9ddd24a09c2485b6b415f8d",
+      "beforeControlBoundaryHead": "d3fc078740b82d78fe2a104833dbab87d6ce960b",
+      "beforeTransitionalStyleHead": "94b5691d961df5f03d1ce937c87c4a981f3f964f",
+      "beforeEvidenceIsolationHead": "48c6164a980f428518934d0206a33ab77f3664bf",
+      "beforeRecoveryHead": "407b04072a2c91e5fa7e148ab545e7abf55a1f92"
+    },
+    {
+      "number": 8,
+      "slug": "git-pane",
+      "title": "Git 变更、AI 批次与 diff 标签",
+      "branch": "pr/zcode-08-git-pane",
+      "parent": "6647fc85792003d533aecac6215c3b035ad60e43",
+      "head": "c43760ea815157ce3af592d6319ad39bfb6cfb2d",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/git-file-diff.js",
+        "modules/ui-system/side-pane/gitSideProvider.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/side-pane-git-extras.css",
+        "tests/side-pane-git-ai-scope.test.mjs",
+        "tests/side-pane-git-real-backend.test.mjs",
+        "tests/side-pane-universal-provider.test.mjs"
+      ],
+      "preQualityHead": "b4f6eb4f22ce880aa288e357f619e93f92bc0ebf",
+      "beforeControlBoundaryHead": "ca8384d4cb5510d88517b7edf46cca65b5d1218c",
+      "beforeTransitionalStyleHead": "5de82521cad9292e25dad9bb9c19db95c7eded7f",
+      "beforeEvidenceIsolationHead": "28d47dae1d1b421ad366212b0faed04ed657ad30",
+      "beforeRecoveryHead": "3c225a80b058bd01023374bac8db4efaa57c4ff4"
+    },
+    {
+      "number": 9,
+      "slug": "file-summary",
+      "title": "消息内文件摘要与 Git 行数",
+      "branch": "pr/zcode-09-file-summary",
+      "parent": "c43760ea815157ce3af592d6319ad39bfb6cfb2d",
+      "head": "2571aaf68d36ff8815bcc15b7b6d547dd5707572",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/message-file-changes.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/message-file-changes.css",
+        "tests/git-file-diff.test.mjs",
+        "tests/message-file-changes-projectforge.test.mjs",
+        "tests/message-file-changes.test.mjs"
+      ],
+      "preQualityHead": "180efc0ed87b6e5716674b11f9e0f878eb165503",
+      "beforeControlBoundaryHead": "1cce6cca2b64139afa88374b35865c28fe76735b",
+      "beforeTransitionalStyleHead": "baef3958d5f250db785f3856ee4737004f16009f",
+      "beforeEvidenceIsolationHead": "4e4ad405b397d5cb4c0e20f57bc0f6ee12690520",
+      "beforeRecoveryHead": "56eac23a636e8e7de48e58e7b2f3abc5bde671c7"
+    },
+    {
+      "number": 10,
+      "slug": "conversation-status",
+      "title": "跟随会话的状态面板",
+      "branch": "pr/zcode-10-conversation-status",
+      "parent": "2571aaf68d36ff8815bcc15b7b6d547dd5707572",
+      "head": "32340973c26784cd55f2e892b1f75a6daff8fac6",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/conversation-scope.js",
+        "modules/ui-system/conversation-status-panel.js",
+        "modules/ui-system/git-graph-layout.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/status-panel.css",
+        "styles/ui-system/status-tokens.css",
+        "tests/conversation-scope.test.mjs",
+        "tests/conversation-status-panel.test.mjs",
+        "tests/conversation-status-races.test.mjs"
+      ],
+      "preQualityHead": "8b13999624ecf0fa27a3cb762911d1a16dea2300",
+      "beforeControlBoundaryHead": "006416ae9e3fd85d4b7e9761c82865c8a7fbde59",
+      "beforeTransitionalStyleHead": "81e427d9e391977141367d21b2a5e6ece74f7c0e",
+      "beforeEvidenceIsolationHead": "bb8fb505cd0cd9c1accd6c9818a32197abe2f99a",
+      "beforeRecoveryHead": "1adf3db6a417b43a08bb1452d9bb87bece0e6da1"
+    },
+    {
+      "number": 11,
+      "slug": "model-trajectory",
+      "title": "模型调用轨迹记录、IPC 与查看器",
+      "branch": "pr/zcode-11-model-trajectory",
+      "parent": "32340973c26784cd55f2e892b1f75a6daff8fac6",
+      "head": "49f33574eb44d9bb6b57274199bf664e22a6e2e0",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "Groupmodules/groupchat.js",
+        "Groupmodules/topicTitleManager.js",
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "docs/contracts/zcode-port-scope.json",
+        "main.html",
+        "main.js",
+        "modules/ipc/chatHandlers.js",
+        "modules/ipc/modelTrajectoryHandlers.js",
+        "modules/modelTrajectory.js",
+        "modules/modelTrajectoryStorage.js",
+        "modules/ui-system/side-pane/modelTrajectoryModel.js",
+        "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
+        "preloads/api/modelTrajectory.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/side-pane-model-trajectory.css",
+        "tests/model-trajectory-bounds.test.js",
+        "tests/model-trajectory-handlers.test.js",
+        "tests/model-trajectory-model.test.mjs",
+        "tests/model-trajectory-recorder.test.js",
+        "tests/model-trajectory-recovery.test.js",
+        "tests/preload-registry.test.js",
+        "tests/side-pane-model-trajectory.test.mjs"
+      ],
+      "preQualityHead": "cdd39dccaa4b9adc9bee8ddacc4a7d7028e99666",
+      "beforeControlBoundaryHead": "9fdaccb34cb0cfd86df4ea77a3515cc5738ef7c8",
+      "beforeTransitionalStyleHead": "b330054709f171416bfd11eb9a8826cf20873e4b",
+      "beforeEvidenceIsolationHead": "603c07dfde1c7f6c95346ce62f1c513c052dd7c8",
+      "beforeRecoveryHead": "8e91aae834c7da5d7ad76584412ab680233b2a00"
+    },
+    {
+      "number": 12,
+      "slug": "turn-navigation",
+      "title": "轮次导航与滚动跟随释放",
+      "branch": "pr/zcode-12-turn-navigation",
+      "parent": "49f33574eb44d9bb6b57274199bf664e22a6e2e0",
+      "head": "416759adf8d258fd526c888301b7d8006129809d",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/chat-scroll-release.js",
+        "modules/ui-system/conversation-turn-navigator.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/turn-navigator.css",
+        "tests/chat-scroll-release.test.mjs",
+        "tests/conversation-turn-navigator.test.mjs"
+      ],
+      "preQualityHead": "b252701d1d5665a564c4355d761e1722914a22fa",
+      "beforeControlBoundaryHead": "4bdbfaa948074079db22a95fc1c3e5a639036df7",
+      "beforeTransitionalStyleHead": "37a581efb6506f4adcf8daf5358e2c2f0c65d8ac",
+      "beforeEvidenceIsolationHead": "af4580b67930d871821b4cd6f64cc161e0844d1d",
+      "beforeRecoveryHead": "f0315d9ca285c85867150b36f097696e31407aa3"
+    },
+    {
+      "number": 13,
+      "slug": "message-metadata",
+      "title": "消息时间与回复耗时",
+      "branch": "pr/zcode-13-message-metadata",
+      "parent": "416759adf8d258fd526c888301b7d8006129809d",
+      "head": "b4658657310f3a07b4d0c596b603186b1661089c",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/message-meta-enhancer.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/message-meta.css",
+        "tests/message-meta-enhancer.test.mjs"
+      ],
+      "preQualityHead": "8e1b952743daf22efdcbbfeac29ee4c73a623fa9",
+      "beforeControlBoundaryHead": "0b6adcf3581020118d6380e82d66206e1af1e1a1",
+      "beforeTransitionalStyleHead": "2c04335d7d87cb1496e1191dd0148d1be3310577",
+      "beforeEvidenceIsolationHead": "cb48e0de10d7cc5ece07d49d306d2a987aa16276",
+      "beforeRecoveryHead": "868f2b6c1eb4620d7a71ccb62fb0c88199cfef8e"
+    },
+    {
+      "number": 14,
+      "slug": "conversation-find",
+      "title": "对话内查找",
+      "branch": "pr/zcode-14-conversation-find",
+      "parent": "b4658657310f3a07b4d0c596b603186b1661089c",
+      "head": "300fc735d6a7e4c8a3610c0b1ec3407f373a5d6b",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/conversation-find.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/conversation-find.css",
+        "tests/conversation-find.test.mjs"
+      ],
+      "preQualityHead": "35280c50e03cfc99753af3c77a4aff36250a224e",
+      "beforeControlBoundaryHead": "2fbeb9a079c5c5fd5d2a14e3180a1792f281299b",
+      "beforeTransitionalStyleHead": "7d9d37bbd7914f7dd05cee0c41f726941c7730c5",
+      "beforeEvidenceIsolationHead": "1ae2819bbe1bf35258899af78243ef1ba74400ce",
+      "beforeRecoveryHead": "72cd2218caf618aaf11cc610f1f4b0edcf3f5b85"
+    },
+    {
+      "number": 15,
+      "slug": "selection-quote",
+      "title": "划词引用",
+      "branch": "pr/zcode-15-selection-quote",
+      "parent": "300fc735d6a7e4c8a3610c0b1ec3407f373a5d6b",
+      "head": "12ca725ced81407ed3465e3798e912b275c3be0c",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/selection-quote-action.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/selection-quote.css",
+        "tests/selection-quote-action.test.mjs"
+      ],
+      "preQualityHead": "89e22bc9185d171534d48635423b92256d33afb3",
+      "beforeControlBoundaryHead": "5946cc077801f69c00fdbdd88d08933b0f4760d2",
+      "beforeTransitionalStyleHead": "890e4dd60e893d1760a9a308655ae02424d3ad93",
+      "beforeEvidenceIsolationHead": "a83453793a14fe87a1972e45e67d251b9be71ef1",
+      "beforeRecoveryHead": "02401e15fb337742df7625381de97ec001266ace"
+    },
+    {
+      "number": 16,
+      "slug": "suggested-prompts",
+      "title": "新话题空状态与建议提示词",
+      "branch": "pr/zcode-16-suggested-prompts",
+      "parent": "12ca725ced81407ed3465e3798e912b275c3be0c",
+      "head": "504b3c6df040d100d438de9232d7bde0c2fd0e98",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/chatManager.js",
+        "modules/ui-system/draft-suggested-prompts.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/draft-suggestions.css",
+        "tests/draft-suggested-prompts.test.mjs"
+      ],
+      "preQualityHead": "b9882634ac0fe50643e27cb5da55161482077444",
+      "beforeControlBoundaryHead": "f62a6a8a4424ab980b4086fb2a47990ee0e32760",
+      "beforeTransitionalStyleHead": "745e08462658a8426ddb374467481b523bcd0107",
+      "beforeEvidenceIsolationHead": "e811379581c4591eb88262c076e34e1fed76a420",
+      "beforeRecoveryHead": "fe32da466389aef7ade7ae6b57994e3ba868bba4"
+    },
+    {
+      "number": 17,
+      "slug": "send-queue",
+      "title": "按话题持久化的发送队列",
+      "branch": "pr/zcode-17-send-queue",
+      "parent": "504b3c6df040d100d438de9232d7bde0c2fd0e98",
+      "head": "83c40f5f44fcb740891a231afe426b1688ff9775",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "Groupmodules/groupchat.js",
+        "Groupmodules/grouprenderer.js",
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/chatManager.js",
+        "modules/ui-system/send-queue.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/send-queue.css",
+        "tests/group-queue-admission.test.js",
+        "tests/send-queue.test.mjs"
+      ],
+      "preQualityHead": "9dd4f799fdd9ea715d8aa928f850e813c9effe85",
+      "beforeControlBoundaryHead": "55e12d5928a44c302c50a2eda6844e0821be0948",
+      "beforeTransitionalStyleHead": "3c1a0dec17e6a5631695c5800f25097db56fa902",
+      "beforeEvidenceIsolationHead": "8988fdcf44cc844e6ba1ee00edb664fa3a3314b1",
+      "beforeRecoveryHead": "ce96ae828d37bc464baaffb352f7ef804b8cd6ef"
+    },
+    {
+      "number": 18,
+      "slug": "message-export",
+      "title": "选中消息 Markdown 导出",
+      "branch": "pr/zcode-18-message-export",
+      "parent": "83c40f5f44fcb740891a231afe426b1688ff9775",
+      "head": "5a3002b444515672425679b9348a101f3f8041d0",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/message-export.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/message-export.css",
+        "tests/message-export.test.mjs"
+      ],
+      "preQualityHead": "4708ece5c5b9037feb3acffc9671743edbe0fa08",
+      "beforeControlBoundaryHead": "b5b68dff229a71145601334aa94e8425a72d792d",
+      "beforeTransitionalStyleHead": "837870395891b2d6c54bb93c3ee16d14dad9aa6e",
+      "beforeEvidenceIsolationHead": "5daa8646e398d7d4cea78fe3e038c6917ac8c599",
+      "beforeRecoveryHead": "78c3f4669152c773eb72ffb645243d5dd9ec221b"
+    },
+    {
+      "number": 19,
+      "slug": "slash-commands",
+      "title": "输入框斜杠命令",
+      "branch": "pr/zcode-19-slash-commands",
+      "parent": "5a3002b444515672425679b9348a101f3f8041d0",
+      "head": "509e71d26a44bc17cead917077d483321f848682",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/slash-commands.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/slash-commands.css",
+        "tests/slash-commands.test.mjs"
+      ],
+      "preQualityHead": "3aeb3ea8988c1b462fb5377b923bd4ef606e5f6e",
+      "beforeControlBoundaryHead": "47b02b99aae09c71e5fdc7cacc1b821d61e8e6f4",
+      "beforeTransitionalStyleHead": "a23bc8ca0193e95ff9c1a4809a9d9cda4ed20734",
+      "beforeEvidenceIsolationHead": "067f048be8f149e085ba96779e3a4d7a2a1a871b",
+      "beforeRecoveryHead": "90236ce59e44788647e8614465700efcd8ffaac5"
+    },
+    {
+      "number": 20,
+      "slug": "command-center",
+      "title": "命令、会话与文件快速跳转",
+      "branch": "pr/zcode-20-command-center",
+      "parent": "509e71d26a44bc17cead917077d483321f848682",
+      "head": "635e306edf5abe2254aa9883d425d6b0c1066213",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "main.html",
+        "modules/ui-system/command-center.js",
+        "renderer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "styles/ui-system/command-center.css",
+        "tests/command-center.test.mjs"
+      ],
+      "preQualityHead": "31e889f50303a62950b89306e80eb63e29f2c8a3",
+      "beforeControlBoundaryHead": "61d6e399616aeb02ad97d0925a3f6fc364e941b2",
+      "beforeTransitionalStyleHead": "797c9ceeaee575f1b84dd59be3f36621748d4f26",
+      "beforeEvidenceIsolationHead": "4cc4c83d96868c1d0f8b3c1e4636f786471f630a",
+      "beforeRecoveryHead": "6703063d1b08952c20e9c87775c3a1ae1b4742ff"
+    },
+    {
+      "number": 21,
+      "slug": "widget-bridge",
+      "title": "HTML 组件宿主桥",
+      "branch": "pr/zcode-21-widget-bridge",
+      "parent": "635e306edf5abe2254aa9883d425d6b0c1066213",
+      "head": "719bfdb83de447a132e749c05c8f947b6bfa5eb2",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "docs/contracts/generated/chat-event-graph.json",
+        "modules/renderer/contentProcessor.js",
+        "modules/renderer/widgetBridge.js",
+        "scripts/next-delta-shared-baseline.json",
+        "tests/widget-bridge.test.mjs"
+      ],
+      "preQualityHead": "2057f746c7ff8085d1ac19020c118fab56b43684",
+      "beforeControlBoundaryHead": "47fec990d1c51663d48a70871df099b4dacd3dd8",
+      "beforeTransitionalStyleHead": "696b8a4d1878b7acbe7aebf04b7007cb1a8ed565",
+      "beforeEvidenceIsolationHead": "f7c13c5a5951aec45a034046049112dea5f4d2c3",
+      "beforeRecoveryHead": "2e6807cb2a1ec2b7a16edc87754a8c16fa9ff405"
+    },
+    {
+      "number": 22,
+      "slug": "history-performance",
+      "title": "长话题高度批量读写",
+      "branch": "pr/zcode-22-history-performance",
+      "parent": "719bfdb83de447a132e749c05c8f947b6bfa5eb2",
+      "head": "46819283d397dab31cf6de182b2a90240dd5b80b",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ],
+      "files": [
+        "docs/chat-kernel-consumer-report.json",
+        "modules/renderer/visibilityOptimizer.js",
+        "scripts/next-delta-shared-baseline.json",
+        "tests/visibility-optimizer-height-batch.test.mjs"
+      ],
+      "preQualityHead": "21e5d541388dad135378be0ee086f98073f4fc2c",
+      "beforeControlBoundaryHead": "08cdcb78d21600762eedb0d347f0e9d439a9fd88",
+      "beforeTransitionalStyleHead": "6d534d4daf0cbaa3652690f3cb9ad56a677d91fb",
+      "beforeEvidenceIsolationHead": "3bd069dd6fd02e1b26fb2de67bfeb6c7dd7389cd",
+      "beforeRecoveryHead": "86541fb5aa776b49910507dad6ee04074744908e"
+    }
+  ],
+  "repairSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+  "documentation": {
+    "number": 23,
+    "slug": "review-docs",
+    "title": "需求、交接、审查、修复与来源材料",
+    "branch": "pr/zcode-23-review-docs",
+    "parent": "46819283d397dab31cf6de182b2a90240dd5b80b",
+    "head": null,
+    "headResolution": "Resolve pr/zcode-23-review-docs; its own commit SHA is intentionally omitted inside committed documents to avoid circular hashes."
+  },
+  "integration": {
+    "fullUiSystem": "passed",
+    "matrix": [
+      {
+        "label": "full-ui-gate",
+        "status": 0,
+        "tests": 46,
+        "pass": 46,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "label": "feature-regressions",
+        "status": 0,
+        "tests": 358,
+        "pass": 358,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "label": "chat-kernel",
+        "status": 0,
+        "tests": 189,
+        "pass": 189,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "label": "event-graph",
+        "status": 0
+      },
+      {
+        "label": "consumers",
+        "status": 0
+      },
+      {
+        "label": "chat-contracts",
+        "status": 0
+      }
+    ],
+    "allLayersFullUiGate": [
+      {
+        "number": 1,
+        "branch": "pr/zcode-01-shell-composer-notifications",
+        "head": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766",
+        "status": 0
+      },
+      {
+        "number": 2,
+        "branch": "pr/zcode-02-sidepane-sidechat",
+        "head": "a80f12559288c593ed87eee5a9b9274cc4c0ddff",
+        "status": 0
+      },
+      {
+        "number": 3,
+        "branch": "pr/zcode-03-git-backend",
+        "head": "efb3db3ce3172dd2cdc663c56972204eff8e1ead",
+        "status": 0
+      },
+      {
+        "number": 4,
+        "branch": "pr/zcode-04-notes-code-viewer",
+        "head": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3",
+        "status": 0
+      },
+      {
+        "number": 5,
+        "branch": "pr/zcode-05-browser",
+        "head": "b645544f5012ba28dcd90743970b66d7e0e42fd2",
+        "status": 0
+      },
+      {
+        "number": 6,
+        "branch": "pr/zcode-06-terminal-command-runs",
+        "head": "02ae8840c5708ac2b7880fefd4c29043a54fcf40",
+        "status": 0
+      },
+      {
+        "number": 7,
+        "branch": "pr/zcode-07-plan-detail",
+        "head": "6647fc85792003d533aecac6215c3b035ad60e43",
+        "status": 0
+      },
+      {
+        "number": 8,
+        "branch": "pr/zcode-08-git-pane",
+        "head": "c43760ea815157ce3af592d6319ad39bfb6cfb2d",
+        "status": 0
+      },
+      {
+        "number": 9,
+        "branch": "pr/zcode-09-file-summary",
+        "head": "2571aaf68d36ff8815bcc15b7b6d547dd5707572",
+        "status": 0
+      },
+      {
+        "number": 10,
+        "branch": "pr/zcode-10-conversation-status",
+        "head": "32340973c26784cd55f2e892b1f75a6daff8fac6",
+        "status": 0
+      },
+      {
+        "number": 11,
+        "branch": "pr/zcode-11-model-trajectory",
+        "head": "49f33574eb44d9bb6b57274199bf664e22a6e2e0",
+        "status": 0
+      },
+      {
+        "number": 12,
+        "branch": "pr/zcode-12-turn-navigation",
+        "head": "416759adf8d258fd526c888301b7d8006129809d",
+        "status": 0
+      },
+      {
+        "number": 13,
+        "branch": "pr/zcode-13-message-metadata",
+        "head": "b4658657310f3a07b4d0c596b603186b1661089c",
+        "status": 0
+      },
+      {
+        "number": 14,
+        "branch": "pr/zcode-14-conversation-find",
+        "head": "300fc735d6a7e4c8a3610c0b1ec3407f373a5d6b",
+        "status": 0
+      },
+      {
+        "number": 15,
+        "branch": "pr/zcode-15-selection-quote",
+        "head": "12ca725ced81407ed3465e3798e912b275c3be0c",
+        "status": 0
+      },
+      {
+        "number": 16,
+        "branch": "pr/zcode-16-suggested-prompts",
+        "head": "504b3c6df040d100d438de9232d7bde0c2fd0e98",
+        "status": 0
+      },
+      {
+        "number": 17,
+        "branch": "pr/zcode-17-send-queue",
+        "head": "83c40f5f44fcb740891a231afe426b1688ff9775",
+        "status": 0
+      },
+      {
+        "number": 18,
+        "branch": "pr/zcode-18-message-export",
+        "head": "5a3002b444515672425679b9348a101f3f8041d0",
+        "status": 0
+      },
+      {
+        "number": 19,
+        "branch": "pr/zcode-19-slash-commands",
+        "head": "509e71d26a44bc17cead917077d483321f848682",
+        "status": 0
+      },
+      {
+        "number": 20,
+        "branch": "pr/zcode-20-command-center",
+        "head": "635e306edf5abe2254aa9883d425d6b0c1066213",
+        "status": 0
+      },
+      {
+        "number": 21,
+        "branch": "pr/zcode-21-widget-bridge",
+        "head": "719bfdb83de447a132e749c05c8f947b6bfa5eb2",
+        "status": 0
+      },
+      {
+        "number": 22,
+        "branch": "pr/zcode-22-history-performance",
+        "head": "46819283d397dab31cf6de182b2a90240dd5b80b",
+        "status": 0
+      }
+    ],
+    "relativeImports": [
+      {
+        "branch": "pr/zcode-01-shell-composer-notifications",
+        "scanned": 9,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-02-sidepane-sidechat",
+        "scanned": 21,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-03-git-backend",
+        "scanned": 4,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-04-notes-code-viewer",
+        "scanned": 7,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-05-browser",
+        "scanned": 5,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-06-terminal-command-runs",
+        "scanned": 12,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-07-plan-detail",
+        "scanned": 3,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-08-git-pane",
+        "scanned": 3,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-09-file-summary",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-10-conversation-status",
+        "scanned": 4,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-11-model-trajectory",
+        "scanned": 11,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-12-turn-navigation",
+        "scanned": 3,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-13-message-metadata",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-14-conversation-find",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-15-selection-quote",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-16-suggested-prompts",
+        "scanned": 3,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-17-send-queue",
+        "scanned": 5,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-18-message-export",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-19-slash-commands",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-20-command-center",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-21-widget-bridge",
+        "scanned": 2,
+        "missing": []
+      },
+      {
+        "branch": "pr/zcode-22-history-performance",
+        "scanned": 1,
+        "missing": []
+      }
+    ],
+    "runtime": {
+      "productionParity": {
+        "pass": true,
+        "repairSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+        "functionalTip": "46819283d397dab31cf6de182b2a90240dd5b80b",
+        "differences": [
+          "docs/handoff/ADVERSARIAL-REVIEW.md",
+          "docs/handoff/HANDOFF.md",
+          "docs/handoff/PR-STACK.json",
+          "docs/handoff/PR-STACK.md",
+          "docs/handoff/REQUIREMENTS-vs-upstream.md",
+          "docs/handoff/review-probes/README.md",
+          "docs/handoff/review-probes/additional-probes.mjs",
+          "docs/handoff/review-probes/additional-results.json",
+          "docs/handoff/review-probes/adversarial-probes.mjs",
+          "docs/handoff/review-probes/adversarial-results.json",
+          "docs/handoff/review-probes/source-tests.json",
+          "scripts/next-delta-shared-baseline.json",
+          "vendor/zcode/ATTRIBUTION.md",
+          "vendor/zcode/LICENSE",
+          "vendor/zcode/NOTICE.md",
+          "vendor/zcode/THIRD-PARTY-NOTICES.md"
+        ],
+        "scope": "Functional code and tests identical. Documentation and protected-file baseline rationale differ by intended split ownership."
+      },
+      "fileAttribution": {
+        "pass": true,
+        "before": [
+          {
+            "path": "C:/failed.js",
+            "op": "write"
+          }
+        ],
+        "after": [],
+        "sourceBefore": "59de8d87",
+        "fixedSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+        "scope": "Synthetic equal-count concurrent tool transcript; no real file write"
+      },
+      "widget": {
+        "pass": true,
+        "checks": [
+          "focused iframe cannot auto-send",
+          "synthetic click cannot approve",
+          "trusted mouse click sends exactly once",
+          "topic switch invalidates confirmation"
+        ],
+        "verifiedSourceParity": {
+          "before": "19703d9",
+          "after": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+          "files": [
+            {
+              "file": "modules/renderer/contentProcessor.js",
+              "sha256": "f9d410bd54176c352bdb673164c137e2ae63e5ad7f73e2570e80e23e240f6281"
+            },
+            {
+              "file": "modules/renderer/widgetBridge.js",
+              "sha256": "cb1ca076277460bb0080321ca44a4ba339b96e81c0e55b9c196953e0ca376833"
+            },
+            {
+              "file": "styles/ui-system/tokens.css",
+              "sha256": "bc003f433fbb9cb1ed360bddd4c3c59b43a19e13d31e7fa2d3a1fa207462e560"
+            },
+            {
+              "file": "styles/ui-system/status-panel.css",
+              "sha256": "b88c0849fb69c1789bed6c29ad63adda754992c611643c3ef39fa66d0d41fae7"
+            }
+          ],
+          "dependencyConfigurationUnchanged": true
+        }
+      },
+      "packedNative": {
+        "pass": true,
+        "electron": "44.0.0",
+        "abi": "149",
+        "checks": [
+          "packaged native binding loaded",
+          "packaged dependency manifests present",
+          "real PTY input/output",
+          "external Node can read physical unpacked Python confirmation script"
+        ]
+      },
+      "packedTerminal": {
+        "pass": true,
+        "electron": "44.0.0",
+        "checks": [
+          "packaged IPC terminalCreate",
+          "real input/output",
+          "exit event",
+          "restart new PID and output",
+          "view detaches without killing shared shell"
+        ]
+      },
+      "packedSourceParity": {
+        "pass": true,
+        "manifestFiles": 143,
+        "verifiedPackagedClosure": {
+          "ok": true,
+          "failures": []
+        },
+        "finalSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+        "terminalScopedSourceParity": [
+          {
+            "file": "modules/ipc/applicationSender.js",
+            "sha256": "b482142fad31b488716f69bcc6ec23f17417f506ffec8c0602a595f22a694e0c"
+          },
+          {
+            "file": "modules/ipc/terminalHandlers.js",
+            "sha256": "e6bbbec5eff76305e5e66ddd3364aac6ccbd81b05ea79747886a5f20a11c2381"
+          },
+          {
+            "file": "preloads/api/terminal.js",
+            "sha256": "bd1aa1e19711f4cc5766d8e3393b108541806fd3f33c96689456cd44c3026dc2"
+          },
+          {
+            "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+            "sha256": "87e134e8be0dc8b8923a36b53163bbb56eac2f192aeff41e0b64918ec424822a"
+          },
+          {
+            "file": "VCPDistributedServer/Plugin/PowerShellExecutor/nativeHelperPath.js",
+            "sha256": "05ec4e16117418eb1d3b2ce1612f48767364837e4f58e457f40e407ee40cbddc"
+          },
+          {
+            "file": "VCPDistributedServer/Plugin/PowerShellExecutor/plugin-manifest.json",
+            "sha256": "1b48dc04d8065c3bca3698b2b79413223024cbb4cb8f9b71aa07cfd729150415"
+          },
+          {
+            "file": "VCPDistributedServer/Plugin/PowerShellExecutor/AdminConfirm.py",
+            "sha256": "d447961cd4a69a6e69ce60d96033f41c18ceaa7bca5c0572a001a0266f76d862"
+          },
+          {
+            "file": "VCPDistributedServer/Plugin/PowerShellExecutor/gui/PowerShellViewer.js",
+            "sha256": "1b2fcce825844cacd943ac95d914ade48aa31ff1db506685ecd5983ec212a8d5"
+          }
+        ],
+        "scope": "Terminal-relevant modules match final source; package is not presented as the complete final release artifact."
+      }
+    }
+  },
+  "repairs": {
+    "findings": [
+      "F01",
+      "F02",
+      "F03",
+      "F04",
+      "F05",
+      "F06",
+      "F07",
+      "F08",
+      "F09",
+      "F10",
+      "F11",
+      "F12",
+      "F13",
+      "F14"
+    ],
+    "status": "implemented and regression verified",
+    "report": "REPAIR-REPORT.md"
+  }
+}

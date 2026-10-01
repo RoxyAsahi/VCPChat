@@ -1,0 +1,72 @@
+TAP version 13
+# (node:90416) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/work/first-layer-check/modules/ui-system/line-diff.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\work\\first-layer-check\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: large disjoint files stay below the matrix budget and preserve both complete sides
+ok 1 - large disjoint files stay below the matrix budget and preserve both complete sides
+  ---
+  duration_ms: 14.4395
+  type: 'test'
+  ...
+# Subtest: unique-line anchors preserve unchanged hunks across distant edits in a large file
+ok 2 - unique-line anchors preserve unchanged hunks across distant edits in a large file
+  ---
+  duration_ms: 22.9663
+  type: 'test'
+  ...
+# Subtest: line and character budgets reject before unbounded computation
+ok 3 - line and character budgets reject before unbounded computation
+  ---
+  duration_ms: 1.12
+  type: 'test'
+  ...
+# Subtest: small repeated-line diffs reconstruct input and use a minimal LCS edit count
+ok 4 - small repeated-line diffs reconstruct input and use a minimal LCS edit count
+  ---
+  duration_ms: 4.9081
+  type: 'test'
+  ...
+# Subtest: diff viewer pages DOM rows and preserves an intentionally empty new side
+ok 5 - diff viewer pages DOM rows and preserves an intentionally empty new side
+  ---
+  duration_ms: 552.476
+  type: 'test'
+  ...
+# (node:92164) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/work/first-layer-check/modules/ui-system/side-pane/notesSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\work\\first-layer-check\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: new note waits for an old in-flight write and never reuses its file path
+ok 6 - new note waits for an old in-flight write and never reuses its file path
+  ---
+  duration_ms: 152.2212
+  type: 'test'
+  ...
+# Subtest: a failed write preserves the editor on switch and blocks disposal until retry succeeds
+ok 7 - a failed write preserves the editor on switch and blocks disposal until retry succeeds
+  ---
+  duration_ms: 37.6212
+  type: 'test'
+  ...
+# Subtest: external editor replacement cannot inherit an old save completion, and close waits for all current edits
+ok 8 - external editor replacement cannot inherit an old save completion, and close waits for all current edits
+  ---
+  duration_ms: 22.9599
+  type: 'test'
+  ...
+# Subtest: grab uses the real message DOM, skips unfinished replies and excludes message chrome
+ok 9 - grab uses the real message DOM, skips unfinished replies and excludes message chrome
+  ---
+  duration_ms: 66.8432
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2718.6287

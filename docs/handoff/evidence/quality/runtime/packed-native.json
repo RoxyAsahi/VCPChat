@@ -1,0 +1,1 @@
+{"pass":true,"electron":"44.0.0","abi":"149","checks":["packaged native binding loaded","packaged dependency manifests present","real PTY input/output","external Node can read physical unpacked Python confirmation script"]}

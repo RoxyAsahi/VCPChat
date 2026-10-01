@@ -1,0 +1,228 @@
+TAP version 13
+# Subtest: consumer inventory excludes local probes and nested worktrees while retaining product descendants
+ok 1 - consumer inventory excludes local probes and nested worktrees while retaining product descendants
+  ---
+  duration_ms: 37.6981
+  type: 'test'
+  ...
+# (node:49552) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/work/first-layer-check/modules/renderer/contentPipeline.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\work\\first-layer-check\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: content pipeline keeps thought, tool, request and code protocols ordered and isolated
+ok 2 - content pipeline keeps thought, tool, request and code protocols ordered and isolated
+  ---
+  duration_ms: 7.0238
+  type: 'test'
+  ...
+# Subtest: stream-fast protocol path is intentionally lightweight and does not create protection maps
+ok 3 - stream-fast protocol path is intentionally lightweight and does not create protection maps
+  ---
+  duration_ms: 0.4379
+  type: 'test'
+  ...
+# [ChatVoiceComposer] 麦克风就绪耗时 0ms
+# Subtest: VoiceWaveform: 预渲染 80 根 SVG line 并正确挂载
+ok 4 - VoiceWaveform: 预渲染 80 根 SVG line 并正确挂载
+  ---
+  duration_ms: 3.4439
+  type: 'test'
+  ...
+# Subtest: VoiceWaveform: amplitude 振幅动态驱动竖线高度几何更新
+ok 5 - VoiceWaveform: amplitude 振幅动态驱动竖线高度几何更新
+  ---
+  duration_ms: 1.8813
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: captureInsertion 准确捕获光标选区与文本草稿快照
+ok 6 - ChatVoiceComposer: captureInsertion 准确捕获光标选区与文本草稿快照
+  ---
+  duration_ms: 0.3989
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: insertText 在草稿未发生变动时于原光标位置原子插入
+ok 7 - ChatVoiceComposer: insertText 在草稿未发生变动时于原光标位置原子插入
+  ---
+  duration_ms: 0.7307
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 草稿冲突拦截——录音期间手动修改草稿触发自愈状态
+ok 8 - ChatVoiceComposer: 草稿冲突拦截——录音期间手动修改草稿触发自愈状态
+  ---
+  duration_ms: 3.3915
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 草稿冲突放弃——用户点击取消或按 ESC 丢弃暂存
+ok 9 - ChatVoiceComposer: 草稿冲突放弃——用户点击取消或按 ESC 丢弃暂存
+  ---
+  duration_ms: 1.8658
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 窗口失焦 (Blur) 与标签隐藏自动终止录音防止偷录
+ok 10 - ChatVoiceComposer: 窗口失焦 (Blur) 与标签隐藏自动终止录音防止偷录
+  ---
+  duration_ms: 0.5901
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 会话/话题切换自动隔离未决录音
+ok 11 - ChatVoiceComposer: 会话/话题切换自动隔离未决录音
+  ---
+  duration_ms: 0.4872
+  type: 'test'
+  ...
+# Subtest: VoiceComposerView: setPhase 各阶段正确切换视觉与按钮呈现
+ok 12 - VoiceComposerView: setPhase 各阶段正确切换视觉与按钮呈现
+  ---
+  duration_ms: 1.3449
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 冲突状态下连续多句语音推送被累加暂存，不丢失前句
+ok 13 - ChatVoiceComposer: 冲突状态下连续多句语音推送被累加暂存，不丢失前句
+  ---
+  duration_ms: 0.9801
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 输入框 disabled 时点击麦克风不响应
+ok 14 - ChatVoiceComposer: 输入框 disabled 时点击麦克风不响应
+  ---
+  duration_ms: 0.5765
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: insertPendingDraftText 与 cancelCurrentVoiceSession 后还原输入框焦点
+ok 15 - ChatVoiceComposer: insertPendingDraftText 与 cancelCurrentVoiceSession 后还原输入框焦点
+  ---
+  duration_ms: 0.5824
+  type: 'test'
+  ...
+# Subtest: PassiveVoiceSentinel: 挂起态 (VAD suspended) 期间继续计算 RMS 振幅以供给波形
+ok 16 - PassiveVoiceSentinel: 挂起态 (VAD suspended) 期间继续计算 RMS 振幅以供给波形
+  ---
+  duration_ms: 4.2793
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 原声录音超时自动停止保护 (maxAudioDurationSeconds)
+ok 17 - ChatVoiceComposer: 原声录音超时自动停止保护 (maxAudioDurationSeconds)
+  ---
+  duration_ms: 90.4998
+  type: 'test'
+  ...
+# Subtest: mount creates hidden section headers and an empty placeholder
+ok 18 - mount creates hidden section headers and an empty placeholder
+  ---
+  duration_ms: 171.8421
+  type: 'test'
+  ...
+# Subtest: sections show per-state counts and the banner tracks pending approvals
+ok 19 - sections show per-state counts and the banner tracks pending approvals
+  ---
+  duration_ms: 33.7864
+  type: 'test'
+  ...
+# (node:86868) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the observer regroups automatically when an approval settles
+ok 20 - the observer regroups automatically when an approval settles
+  ---
+  duration_ms: 36.339
+  type: 'test'
+  ...
+# Subtest: filter chips drive list.dataset.filter and aria-pressed
+ok 21 - filter chips drive list.dataset.filter and aria-pressed
+  ---
+  duration_ms: 22.3389
+  type: 'test'
+  ...
+# Subtest: a filter with no matches shows the empty placeholder
+ok 22 - a filter with no matches shows the empty placeholder
+  ---
+  duration_ms: 24.0015
+  type: 'test'
+  ...
+# Subtest: resolved section is collapsed by default and the choice is persisted
+ok 23 - resolved section is collapsed by default and the choice is persisted
+  ---
+  duration_ms: 19.9335
+  type: 'test'
+  ...
+# Subtest: a stored expanded preference is honoured on mount
+ok 24 - a stored expanded preference is honoured on mount
+  ---
+  duration_ms: 17.6273
+  type: 'test'
+  ...
+# Subtest: the resolved clear button removes only resolved cards
+ok 25 - the resolved clear button removes only resolved cards
+  ---
+  duration_ms: 18.5456
+  type: 'test'
+  ...
+# Subtest: jumpToPending cycles through pending cards, skipping busy ones
+ok 26 - jumpToPending cycles through pending cards, skipping busy ones
+  ---
+  duration_ms: 35.9765
+  type: 'test'
+  ...
+# Subtest: jumpToPending leaves narrowing filters so the target is visible
+ok 27 - jumpToPending leaves narrowing filters so the target is visible
+  ---
+  duration_ms: 45.6108
+  type: 'test'
+  ...
+# Subtest: bulk reject needs a second click to confirm, then settles every pending card
+ok 28 - bulk reject needs a second click to confirm, then settles every pending card
+  ---
+  duration_ms: 18.9395
+  type: 'test'
+  ...
+# Subtest: the bulk confirmation lapses after the confirm window
+ok 29 - the bulk confirmation lapses after the confirm window
+  ---
+  duration_ms: 17.7107
+  type: 'test'
+  ...
+# Subtest: bulk approve skips requests that need an audit and reports them
+ok 30 - bulk approve skips requests that need an audit and reports them
+  ---
+  duration_ms: 23.8577
+  type: 'test'
+  ...
+# Subtest: settled cards are capped while pending approvals are never trimmed
+ok 31 - settled cards are capped while pending approvals are never trimmed
+  ---
+  duration_ms: 108.4988
+  type: 'test'
+  ...
+# Subtest: dispose removes injected nodes and stops reacting to changes
+ok 32 - dispose removes injected nodes and stops reacting to changes
+  ---
+  duration_ms: 29.7432
+  type: 'test'
+  ...
+# Subtest: mount without a list is a harmless no-op
+ok 33 - mount without a list is a harmless no-op
+  ---
+  duration_ms: 9.0265
+  type: 'test'
+  ...
+# [UI Helper] Modal "toolChangeAuditModal" instantiated from template.
+# Subtest: main-window tool approval exposes change audit and submits modal reason
+ok 34 - main-window tool approval exposes change audit and submits modal reason
+  ---
+  duration_ms: 772.3329
+  type: 'test'
+  ...
+# Subtest: ordinary tool approval does not expose change audit
+ok 35 - ordinary tool approval does not expose change audit
+  ---
+  duration_ms: 152.8677
+  type: 'test'
+  ...
+1..35
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2936.6601

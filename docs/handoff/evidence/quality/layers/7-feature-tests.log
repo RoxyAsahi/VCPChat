@@ -1,0 +1,56 @@
+TAP version 13
+# (node:92340) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-1/modules/ui-system/side-pane/planDetailSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-1\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: buildPlanModel maps todos, counts and stats
+ok 1 - buildPlanModel maps todos, counts and stats
+  ---
+  duration_ms: 3.1577
+  type: 'test'
+  ...
+# Subtest: resolveDefaultProject prefers the shared workspace, then most recently updated
+ok 2 - resolveDefaultProject prefers the shared workspace, then most recently updated
+  ---
+  duration_ms: 14.6108
+  type: 'test'
+  ...
+# Subtest: openPlanDetailTab opens a per-project tab with a searchable title
+ok 3 - openPlanDetailTab opens a per-project tab with a searchable title
+  ---
+  duration_ms: 148.2235
+  type: 'test'
+  ...
+# Subtest: openPlanDetailTab tells the user instead of opening an empty tab when there is no project
+ok 4 - openPlanDetailTab tells the user instead of opening an empty tab when there is no project
+  ---
+  duration_ms: 10.7454
+  type: 'test'
+  ...
+# Subtest: mountTab renders plan, files, timeline and reloads on matching change events
+ok 5 - mountTab renders plan, files, timeline and reloads on matching change events
+  ---
+  duration_ms: 716.4847
+  type: 'test'
+  ...
+# Subtest: mountTab shows a retryable empty state when the project cannot be read
+ok 6 - mountTab shows a retryable empty state when the project cannot be read
+  ---
+  duration_ms: 13.4453
+  type: 'test'
+  ...
+# Subtest: a failed refresh keeps the last plan on screen with a retry banner (ZCode keeps the last markdown)
+ok 7 - a failed refresh keeps the last plan on screen with a retry banner (ZCode keeps the last markdown)
+  ---
+  duration_ms: 384.9213
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3334.1606

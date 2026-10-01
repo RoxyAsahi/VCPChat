@@ -1,0 +1,1 @@
+{"pass":true,"electron":"44.0.0","checks":["packaged IPC terminalCreate","real input/output","exit event","restart new PID and output","view detaches without killing shared shell"]}

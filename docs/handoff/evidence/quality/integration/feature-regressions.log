@@ -1,0 +1,2464 @@
+TAP version 13
+# Subtest: guest URL allowlist keeps custom protocols out
+ok 1 - guest URL allowlist keeps custom protocols out
+  ---
+  duration_ms: 4.4265
+  type: 'test'
+  ...
+# Subtest: attachToWindow locks the partition and strips privileged web preferences
+ok 2 - attachToWindow locks the partition and strips privileged web preferences
+  ---
+  duration_ms: 3.946
+  type: 'test'
+  ...
+# Subtest: initialize denies guest permissions and only serves the main window
+ok 3 - initialize denies guest permissions and only serves the main window
+  ---
+  duration_ms: 3.5957
+  type: 'test'
+  ...
+# Subtest: consumer inventory excludes local probes and nested worktrees while retaining product descendants
+ok 4 - consumer inventory excludes local probes and nested worktrees while retaining product descendants
+  ---
+  duration_ms: 44.8728
+  type: 'test'
+  ...
+# [ChatManager] Initialized successfully.
+# Subtest: ChatManager publishes readiness only after synchronous listener setup completes
+ok 5 - ChatManager publishes readiness only after synchronous listener setup completes
+  ---
+  duration_ms: 247.1582
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a late assistant selection cannot overwrite the newer assistant topic and history
+ok 6 - a late assistant selection cannot overwrite the newer assistant topic and history
+  ---
+  duration_ms: 154.9169
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration selects the last durable assistant and topic
+ok 7 - startup restoration selects the last durable assistant and topic
+  ---
+  duration_ms: 62.424
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: startup restoration waits for the topic projection consumer
+ok 8 - startup restoration waits for the topic projection consumer
+  ---
+  duration_ms: 33.9733
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: an explicit selection supersedes an unfinished startup restoration
+ok 9 - an explicit selection supersedes an unfinished startup restoration
+  ---
+  duration_ms: 41.5287
+  type: 'test'
+  ...
+# Subtest: startup restoration ignores a deleted item
+ok 10 - startup restoration ignores a deleted item
+  ---
+  duration_ms: 28.1663
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: last-open persistence is ordered and awaited across rapid topic selections
+ok 11 - last-open persistence is ordered and awaited across rapid topic selections
+  ---
+  duration_ms: 70.5421
+  type: 'test'
+  ...
+# [ChatManager] Failed to start history watcher; continuing with loaded history: Error: controlled watcher failure
+#     at Object.failNextWatcherStart (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:295:37)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:474:13)
+#     at Test.runInAsyncScope (node:async_hooks:214:14)
+#     at Test.run (node:internal/test_runner/test:1047:25)
+#     at Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+#     at Test.postRun (node:internal/test_runner/test:1173:19)
+#     at Test.run (node:internal/test_runner/test:1101:12)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history watcher startup failure does not block assistant navigation
+ok 12 - history watcher startup failure does not block assistant navigation
+  ---
+  duration_ms: 39.3252
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a send delayed before VCP dispatch cannot mutate the newly selected topic
+ok 13 - a send delayed before VCP dispatch cannot mutate the newly selected topic
+  ---
+  duration_ms: 91.2781
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Failed to persist outgoing message: Error: controlled save failure
+#     at Object.failNextHistorySave (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:292:36)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:528:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: a failed durable save preserves the draft and retracts the optimistic message
+ok 14 - a failed durable save preserves the draft and retracts the optimistic message
+  ---
+  duration_ms: 46.6871
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a programmatic quick-action string sends its own content without consuming the composer draft
+ok 15 - a programmatic quick-action string sends its own content without consuming the composer draft
+  ---
+  duration_ms: 78.5091
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: an attachment added while the outgoing message is persisting remains in the draft
+ok 16 - an attachment added while the outgoing message is persisting remains in the draft
+  ---
+  duration_ms: 47.1159
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: stream ownership is published before upstream startup resolves
+ok 17 - stream ownership is published before upstream startup resolves
+  ---
+  duration_ms: 38.7693
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# 发送消息或处理VCP响应时出错 Error: controlled VCP failure
+#     at Object.failNextVcpRequest (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:298:28)
+#     at TestContext.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\tests\\chat-manager-selection-race.test.js:636:13)
+#     at async Test.run (node:internal/test_runner/test:1054:7)
+#     at async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+# [ChatManager] Initialized successfully.
+# Subtest: failed VCP startup does not rewrite history to remove an unpersisted thinking message
+ok 18 - failed VCP startup does not rewrite history to remove an unpersisted thinking message
+  ---
+  duration_ms: 45.9046
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a second send cannot enter the same topic while the first is starting
+ok 19 - a second send cannot enter the same topic while the first is starting
+  ---
+  duration_ms: 82.49
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale history load for agent:agent-b:topic-b-2
+# [ChatManager] Initialized successfully.
+# Subtest: a late topic watcher cannot replace a newer topic history
+ok 20 - a late topic watcher cannot replace a newer topic history
+  ---
+  duration_ms: 44.867
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a topic created for an old assistant cannot switch the new assistant view
+ok 21 - a topic created for an old assistant cannot switch the new assistant view
+  ---
+  duration_ms: 86.7976
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-newest
+# [displayTopicTimestampBubble] Topic topic-a-newest not found or has no createdAt for agent agent-a.
+# [ChatManager] Initialized successfully.
+# Subtest: only the newest concurrent topic creation may select its result
+ok 22 - only the newest concurrent topic creation may select its result
+  ---
+  duration_ms: 30.8615
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Ignoring stale topic deletion completion { id: 'agent-a', type: 'agent' }
+# [ChatManager] Initialized successfully.
+# [ChatManager] Initialized successfully.
+# Subtest: a deletion completed for an old assistant cannot rewrite the new assistant
+ok 23 - a deletion completed for an old assistant cannot rewrite the new assistant
+  ---
+  duration_ms: 32.7914
+  type: 'test'
+  ...
+# Subtest: ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+ok 24 - ChatManager dispose retracts Canvas subscriptions and ignores late Canvas events
+  ---
+  duration_ms: 31.3662
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after selection changes cannot mutate the new conversation
+ok 25 - a history-file sync resolving after selection changes cannot mutate the new conversation
+  ---
+  duration_ms: 35.6574
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: a history-file sync resolving after dispose cannot mutate history or the DOM
+ok 26 - a history-file sync resolving after dispose cannot mutate history or the DOM
+  ---
+  duration_ms: 34.7385
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 25 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history projection keeps an active stream in the newest batch and final floor
+ok 27 - history projection keeps an active stream in the newest batch and final floor
+  ---
+  duration_ms: 65.968
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history load reconciles an active stream after replacing the Surface projection
+ok 28 - history load reconciles an active stream after replacing the Surface projection
+  ---
+  duration_ms: 33.3329
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: history sync does not delete a terminal message that commits while the file read is in flight
+ok 29 - history sync does not delete a terminal message that commits while the file read is in flight
+  ---
+  duration_ms: 32.3404
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Initialized successfully.
+# Subtest: JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+ok 30 - JEV history sync cannot delete a pending user bubble from a pre-commit file snapshot
+  ---
+  duration_ms: 35.7248
+  type: 'test'
+  ...
+# [ChatManager] 开始加载话题历史，共 1 条消息
+# [ChatManager] 话题历史加载完成
+# [ChatManager] Started file watcher for new topic: topic-a-created
+# [displayTopicTimestampBubble] Topic topic-a-created not found or has no createdAt for agent agent-a.
+# Subtest: creating a topic commits a selection event after the empty history identity changes
+ok 31 - creating a topic commits a selection event after the empty history identity changes
+  ---
+  duration_ms: 35.3616
+  type: 'test'
+  ...
+# (node:91560) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/contentPipeline.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: content pipeline keeps thought, tool, request and code protocols ordered and isolated
+ok 32 - content pipeline keeps thought, tool, request and code protocols ordered and isolated
+  ---
+  duration_ms: 11.4941
+  type: 'test'
+  ...
+# Subtest: stream-fast protocol path is intentionally lightweight and does not create protection maps
+ok 33 - stream-fast protocol path is intentionally lightweight and does not create protection maps
+  ---
+  duration_ms: 1.0473
+  type: 'test'
+  ...
+# (node:84732) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/conversation-find.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: navigation keys and wrap-around selection follow ZCode
+ok 34 - navigation keys and wrap-around selection follow ZCode
+  ---
+  duration_ms: 3.0129
+  type: 'test'
+  ...
+# Subtest: collectFindRanges matches case-insensitively in message text and skips buttons and the thinking indicator
+ok 35 - collectFindRanges matches case-insensitively in message text and skips buttons and the thinking indicator
+  ---
+  duration_ms: 251.7174
+  type: 'test'
+  ...
+# Subtest: Ctrl+F opens the bar, highlights, counts, navigates with Enter / Shift+Enter and closes with Esc
+ok 36 - Ctrl+F opens the bar, highlights, counts, navigates with Enter / Shift+Enter and closes with Esc
+  ---
+  duration_ms: 949.7092
+  type: 'test'
+  ...
+# Subtest: prefills the selected text, keeps the position when streaming changes the DOM and follows new matches
+ok 37 - prefills the selected text, keeps the position when streaming changes the DOM and follows new matches
+  ---
+  duration_ms: 549.6092
+  type: 'test'
+  ...
+# Subtest: ignores Ctrl+F without messages, with synthetic events, and lets the global button reach searchManager
+ok 38 - ignores Ctrl+F without messages, with synthetic events, and lets the global button reach searchManager
+  ---
+  duration_ms: 66.1587
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without a chat container
+ok 39 - mount is a no-op without a chat container
+  ---
+  duration_ms: 17.2577
+  type: 'test'
+  ...
+# Subtest: a match that runs away during a long scroll (layout shifts) is re-scrolled until it is in view
+ok 40 - a match that runs away during a long scroll (layout shifts) is re-scrolled until it is in view
+  ---
+  duration_ms: 1891.031
+  type: 'test'
+  ...
+# (node:10952) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/conversation-scope.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a conversation that never touched ProjectForge or the terminal has an empty scope
+ok 41 - a conversation that never touched ProjectForge or the terminal has an empty scope
+  ---
+  duration_ms: 4.0142
+  type: 'test'
+  ...
+# Subtest: project ids come from CreateProject results and later requests, most recently mentioned first
+ok 42 - project ids come from CreateProject results and later requests, most recently mentioned first
+  ---
+  duration_ms: 4.051
+  type: 'test'
+  ...
+# Subtest: PowerShellExecutor commands preserve shell whitespace, other tools are ignored
+ok 43 - PowerShellExecutor commands preserve shell whitespace, other tools are ignored
+  ---
+  duration_ms: 0.8699
+  type: 'test'
+  ...
+# Subtest: messages with array content are read too, and the signature changes only when the scope does
+ok 44 - messages with array content are read too, and the signature changes only when the scope does
+  ---
+  duration_ms: 1.3417
+  type: 'test'
+  ...
+# Subtest: quoted whitespace and equal-size command sets have different identities
+ok 45 - quoted whitespace and equal-size command sets have different identities
+  ---
+  duration_ms: 0.5201
+  type: 'test'
+  ...
+# (node:76648) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/conversation-status-panel.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: helpers: branch filtering, project selection, todo mapping and commit message
+ok 46 - helpers: branch filtering, project selection, todo mapping and commit message
+  ---
+  duration_ms: 33.4345
+  type: 'test'
+  ...
+# Subtest: helpers: todo focus window, mini metric, variant and switch-blocked parsing
+ok 47 - helpers: todo focus window, mini metric, variant and switch-blocked parsing
+  ---
+  duration_ms: 2.3037
+  type: 'test'
+  ...
+# Subtest: git graph layout: linear history stays on one lane, merges add a lane
+ok 48 - git graph layout: linear history stays on one lane, merges add a lane
+  ---
+  duration_ms: 2.9742
+  type: 'test'
+  ...
+# Subtest: panel renders Git 工具 rows and 进程 from V工程 todos, with mini capsule fallback
+ok 49 - panel renders Git 工具 rows and 进程 from V工程 todos, with mini capsule fallback
+  ---
+  duration_ms: 670.6731
+  type: 'test'
+  ...
+# Subtest: without git or todos the panel stays as an entry capsule that opens the Git tab
+ok 50 - without git or todos the panel stays as an entry capsule that opens the Git tab
+  ---
+  duration_ms: 139.6823
+  type: 'test'
+  ...
+# Subtest: a workspace that is not a git repo shows a Git 工具 entry instead of disappearing
+ok 51 - a workspace that is not a git repo shows a Git 工具 entry instead of disappearing
+  ---
+  duration_ms: 97.6474
+  type: 'test'
+  ...
+# Subtest: pickEntryMetric asks for a workspace first
+ok 52 - pickEntryMetric asks for a workspace first
+  ---
+  duration_ms: 0.5789
+  type: 'test'
+  ...
+# Subtest: branch popover filters, switches and offers create / graph in the footer
+ok 53 - branch popover filters, switches and offers create / graph in the footer
+  ---
+  duration_ms: 234.2905
+  type: 'test'
+  ...
+# Subtest: create-branch dialog creates and switches
+ok 54 - create-branch dialog creates and switches
+  ---
+  duration_ms: 167.5181
+  type: 'test'
+  ...
+# Subtest: a checkout blocked by local changes opens the commit-and-switch flow
+ok 55 - a checkout blocked by local changes opens the commit-and-switch flow
+  ---
+  duration_ms: 228.3799
+  type: 'test'
+  ...
+# Subtest: commit dialog stages unique paths, commits with a generated message and pushes
+ok 56 - commit dialog stages unique paths, commits with a generated message and pushes
+  ---
+  duration_ms: 212.1794
+  type: 'test'
+  ...
+# Subtest: push dialog sets the upstream automatically for a branch without one
+ok 57 - push dialog sets the upstream automatically for a branch without one
+  ---
+  duration_ms: 154.7334
+  type: 'test'
+  ...
+# Subtest: git graph dialog draws commits and lanes
+ok 58 - git graph dialog draws commits and lanes
+  ---
+  duration_ms: 169.0211
+  type: 'test'
+  ...
+# Subtest: panel lists recent AI commands from the built-in terminal and opens their output
+ok 59 - panel lists recent AI commands from the built-in terminal and opens their output
+  ---
+  duration_ms: 147.5225
+  type: 'test'
+  ...
+# Subtest: the panel shows up for running commands even without git or a plan
+ok 60 - the panel shows up for running commands even without git or a plan
+  ---
+  duration_ms: 90.051
+  type: 'test'
+  ...
+# Subtest: scoped panel: a conversation that never used a V工程 shows no status at all
+ok 61 - scoped panel: a conversation that never used a V工程 shows no status at all
+  ---
+  duration_ms: 74.0595
+  type: 'test'
+  ...
+# Subtest: scoped panel: switching conversation swaps the plan, the Git workspace and the command list
+ok 62 - scoped panel: switching conversation swaps the plan, the Git workspace and the command list
+  ---
+  duration_ms: 115.8416
+  type: 'test'
+  ...
+# Subtest: scoped panel: a project from another workspace brings its own plan but no unrelated Git workspace
+ok 63 - scoped panel: a project from another workspace brings its own plan but no unrelated Git workspace
+  ---
+  duration_ms: 96.8708
+  type: 'test'
+  ...
+# Subtest: scoped panel: a project mentioned after the history loaded appears without switching
+ok 64 - scoped panel: a project mentioned after the history loaded appears without switching
+  ---
+  duration_ms: 989.9321
+  type: 'test'
+  ...
+# Subtest: switching workspace while staging cannot commit or push the new workspace
+ok 65 - switching workspace while staging cannot commit or push the new workspace
+  ---
+  duration_ms: 176.0468
+  type: 'test'
+  ...
+# (node:36400) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/conversation-status-panel.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: late A plan resolve cannot overwrite the refreshed B conversation
+ok 66 - late A plan resolve cannot overwrite the refreshed B conversation
+  ---
+  duration_ms: 606.0672
+  type: 'test'
+  ...
+# Subtest: late A plan reject cannot overwrite the refreshed B conversation
+ok 67 - late A plan reject cannot overwrite the refreshed B conversation
+  ---
+  duration_ms: 124.4597
+  type: 'test'
+  ...
+# Subtest: disposal invalidates a delayed workspace result without mounting or committing a plan
+ok 68 - disposal invalidates a delayed workspace result without mounting or committing a plan
+  ---
+  duration_ms: 54.2605
+  type: 'test'
+  ...
+# (node:92856) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/conversation-turn-navigator.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: resolveBarVisualState follows the ZCode mountain table
+ok 69 - resolveBarVisualState follows the ZCode mountain table
+  ---
+  duration_ms: 3.3976
+  type: 'test'
+  ...
+# Subtest: buildPreviewText keeps two paragraphs, collapses whitespace and truncates
+ok 70 - buildPreviewText keeps two paragraphs, collapses whitespace and truncates
+  ---
+  duration_ms: 0.8199
+  type: 'test'
+  ...
+# Subtest: buildTurnNavigatorItems derives assistant previews and running state
+ok 71 - buildTurnNavigatorItems derives assistant previews and running state
+  ---
+  duration_ms: 1.9996
+  type: 'test'
+  ...
+# Subtest: resolveActiveTurnKey picks the visible query nearest the viewport top, else the nearest above
+ok 72 - resolveActiveTurnKey picks the visible query nearest the viewport top, else the nearest above
+  ---
+  duration_ms: 0.6959
+  type: 'test'
+  ...
+# Subtest: collectTurnEntries groups assistant messages under the preceding user message and ignores the thinking indicator
+ok 73 - collectTurnEntries groups assistant messages under the preceding user message and ignores the thinking indicator
+  ---
+  duration_ms: 239.5129
+  type: 'test'
+  ...
+# Subtest: mounts a rail for two or more queries, reflects the active one and jumps on click
+ok 74 - mounts a rail for two or more queries, reflects the active one and jumps on click
+  ---
+  duration_ms: 907.5677
+  type: 'test'
+  ...
+# Subtest: hides below the minimum width, follows streaming previews and topic switches, and disposes cleanly
+ok 75 - hides below the minimum width, follows streaming previews and topic switches, and disposes cleanly
+  ---
+  duration_ms: 863.685
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without a chat container
+ok 76 - mount is a no-op without a chat container
+  ---
+  duration_ms: 13.2095
+  type: 'test'
+  ...
+# [ChatVoiceComposer] 麦克风就绪耗时 0ms
+# Subtest: VoiceWaveform: 预渲染 80 根 SVG line 并正确挂载
+ok 77 - VoiceWaveform: 预渲染 80 根 SVG line 并正确挂载
+  ---
+  duration_ms: 5.3962
+  type: 'test'
+  ...
+# Subtest: VoiceWaveform: amplitude 振幅动态驱动竖线高度几何更新
+ok 78 - VoiceWaveform: amplitude 振幅动态驱动竖线高度几何更新
+  ---
+  duration_ms: 2.1631
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: captureInsertion 准确捕获光标选区与文本草稿快照
+ok 79 - ChatVoiceComposer: captureInsertion 准确捕获光标选区与文本草稿快照
+  ---
+  duration_ms: 0.5535
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: insertText 在草稿未发生变动时于原光标位置原子插入
+ok 80 - ChatVoiceComposer: insertText 在草稿未发生变动时于原光标位置原子插入
+  ---
+  duration_ms: 0.8501
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 草稿冲突拦截——录音期间手动修改草稿触发自愈状态
+ok 81 - ChatVoiceComposer: 草稿冲突拦截——录音期间手动修改草稿触发自愈状态
+  ---
+  duration_ms: 5.3247
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 草稿冲突放弃——用户点击取消或按 ESC 丢弃暂存
+ok 82 - ChatVoiceComposer: 草稿冲突放弃——用户点击取消或按 ESC 丢弃暂存
+  ---
+  duration_ms: 2.5791
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 窗口失焦 (Blur) 与标签隐藏自动终止录音防止偷录
+ok 83 - ChatVoiceComposer: 窗口失焦 (Blur) 与标签隐藏自动终止录音防止偷录
+  ---
+  duration_ms: 0.8549
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 会话/话题切换自动隔离未决录音
+ok 84 - ChatVoiceComposer: 会话/话题切换自动隔离未决录音
+  ---
+  duration_ms: 0.4404
+  type: 'test'
+  ...
+# Subtest: VoiceComposerView: setPhase 各阶段正确切换视觉与按钮呈现
+ok 85 - VoiceComposerView: setPhase 各阶段正确切换视觉与按钮呈现
+  ---
+  duration_ms: 1.3034
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 冲突状态下连续多句语音推送被累加暂存，不丢失前句
+ok 86 - ChatVoiceComposer: 冲突状态下连续多句语音推送被累加暂存，不丢失前句
+  ---
+  duration_ms: 1.0949
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 输入框 disabled 时点击麦克风不响应
+ok 87 - ChatVoiceComposer: 输入框 disabled 时点击麦克风不响应
+  ---
+  duration_ms: 0.8682
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: insertPendingDraftText 与 cancelCurrentVoiceSession 后还原输入框焦点
+ok 88 - ChatVoiceComposer: insertPendingDraftText 与 cancelCurrentVoiceSession 后还原输入框焦点
+  ---
+  duration_ms: 0.6338
+  type: 'test'
+  ...
+# Subtest: PassiveVoiceSentinel: 挂起态 (VAD suspended) 期间继续计算 RMS 振幅以供给波形
+ok 89 - PassiveVoiceSentinel: 挂起态 (VAD suspended) 期间继续计算 RMS 振幅以供给波形
+  ---
+  duration_ms: 5.1324
+  type: 'test'
+  ...
+# Subtest: ChatVoiceComposer: 原声录音超时自动停止保护 (maxAudioDurationSeconds)
+ok 90 - ChatVoiceComposer: 原声录音超时自动停止保护 (maxAudioDurationSeconds)
+  ---
+  duration_ms: 118.7643
+  type: 'test'
+  ...
+# (node:19032) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/git-file-diff.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: path helpers: separators, case, longest workspace root and suffix matching
+ok 91 - path helpers: separators, case, longest workspace root and suffix matching
+  ---
+  duration_ms: 5.8309
+  type: 'test'
+  ...
+# Subtest: resolver reads +N -N from a real repository and distinguishes clean / outside / binary
+ok 92 - resolver reads +N -N from a real repository and distinguishes clean / outside / binary
+  ---
+  duration_ms: 4471.4018
+  type: 'test'
+  ...
+# Subtest: resolver degrades quietly without a git api, without workspaces and outside a repository
+ok 93 - resolver degrades quietly without a git api, without workspaces and outside a repository
+  ---
+  duration_ms: 335.3849
+  type: 'test'
+  ...
+# Subtest: file summary fetches stats only when expanded and opens the diff from the counts
+ok 94 - file summary fetches stats only when expanded and opens the diff from the counts
+  ---
+  duration_ms: 3240.592
+  type: 'test'
+  ...
+# Subtest: opening the git tab with a focus path expands that file, both for a new and an already-mounted tab
+ok 95 - opening the git tab with a focus path expands that file, both for a new and an already-mounted tab
+  ---
+  duration_ms: 2861.6175
+  type: 'test'
+  ...
+# Subtest: parsePorcelainV2 handles branch headers, spaces, renames, conflicts and untracked files
+ok 96 - parsePorcelainV2 handles branch headers, spaces, renames, conflicts and untracked files
+  ---
+  duration_ms: 6.5617
+  type: 'test'
+  ...
+# Subtest: chunkPaths keeps every path and splits long argument lists
+ok 97 - chunkPaths keeps every path and splits long argument lists
+  ---
+  duration_ms: 1.3516
+  type: 'test'
+  ...
+# Subtest: status → stage → unstage → commit round trip on a real repository
+ok 98 - status → stage → unstage → commit round trip on a real repository
+  ---
+  duration_ms: 9018.999
+  type: 'test'
+  ...
+# Subtest: unstaged diff reads the working tree; discard restores tracked files and hands untracked ones to the remover
+ok 99 - unstaged diff reads the working tree; discard restores tracked files and hands untracked ones to the remover
+  ---
+  duration_ms: 5096.2251
+  type: 'test'
+  ...
+# Subtest: sub-directory workspace: status is scoped, outside paths are rejected, commit refuses foreign staged files
+ok 100 - sub-directory workspace: status is scoped, outside paths are rejected, commit refuses foreign staged files
+  ---
+  duration_ms: 3019.9331
+  type: 'test'
+  ...
+# Subtest: branches: list, create, switch and refuse unsafe cases
+ok 101 - branches: list, create, switch and refuse unsafe cases
+  ---
+  duration_ms: 8620.0469
+  type: 'test'
+  ...
+# Subtest: commit graph pages through visible history with refs
+ok 102 - commit graph pages through visible history with refs
+  ---
+  duration_ms: 3564.649
+  type: 'test'
+  ...
+# Subtest: change summary counts tracked and untracked text lines
+ok 103 - change summary counts tracked and untracked text lines
+  ---
+  duration_ms: 2204.7233
+  type: 'test'
+  ...
+# Subtest: non-repository directory reports isRepo=false
+ok 104 - non-repository directory reports isRepo=false
+  ---
+  duration_ms: 144.2846
+  type: 'test'
+  ...
+# Subtest: git IPC accepts only exact application pages, including embedded query parameters
+ok 105 - git IPC accepts only exact application pages, including embedded query parameters
+  ---
+  duration_ms: 1.3682
+  type: 'test'
+  ...
+# Subtest: group stable admission ID shares concurrent work and skips durable replay
+ok 106 - group stable admission ID shares concurrent work and skips durable replay
+  ---
+  duration_ms: 293.3493
+  type: 'test'
+  ...
+# Subtest: group validation and failed persistence reject admission
+ok 107 - group validation and failed persistence reject admission
+  ---
+  duration_ms: 224.275
+  type: 'test'
+  ...
+# (node:87248) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/line-diff.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: large disjoint files stay below the matrix budget and preserve both complete sides
+ok 108 - large disjoint files stay below the matrix budget and preserve both complete sides
+  ---
+  duration_ms: 17.5853
+  type: 'test'
+  ...
+# Subtest: unique-line anchors preserve unchanged hunks across distant edits in a large file
+ok 109 - unique-line anchors preserve unchanged hunks across distant edits in a large file
+  ---
+  duration_ms: 41.4687
+  type: 'test'
+  ...
+# Subtest: line and character budgets reject before unbounded computation
+ok 110 - line and character budgets reject before unbounded computation
+  ---
+  duration_ms: 2.307
+  type: 'test'
+  ...
+# Subtest: small repeated-line diffs reconstruct input and use a minimal LCS edit count
+ok 111 - small repeated-line diffs reconstruct input and use a minimal LCS edit count
+  ---
+  duration_ms: 7.2197
+  type: 'test'
+  ...
+# Subtest: diff viewer pages DOM rows and preserves an intentionally empty new side
+ok 112 - diff viewer pages DOM rows and preserves an intentionally empty new side
+  ---
+  duration_ms: 1028.3462
+  type: 'test'
+  ...
+# (node:56396) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/message-file-changes.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the real "✅ SUCCESS" status keeps FileOperator calls and "❌ ERROR" drops them
+ok 113 - the real "✅ SUCCESS" status keeps FileOperator calls and "❌ ERROR" drops them
+  ---
+  duration_ms: 17.6266
+  type: 'test'
+  ...
+# Subtest: ProjectForge: a file created and then edited is one new file whose stats are the final line count
+ok 114 - ProjectForge: a file created and then edited is one new file whose stats are the final line count
+  ---
+  duration_ms: 4.2027
+  type: 'test'
+  ...
+# Subtest: ProjectForge: edits of an existing file add up their +/- and keep the edit label
+ok 115 - ProjectForge: edits of an existing file add up their +/- and keep the edit label
+  ---
+  duration_ms: 1.3585
+  type: 'test'
+  ...
+# Subtest: ProjectForge: "未写入" / "内容无变化" results are reported as SUCCESS by the plugin host but are not changes
+ok 116 - ProjectForge: "未写入" / "内容无变化" results are reported as SUCCESS by the plugin host but are not changes
+  ---
+  duration_ms: 4.9849
+  type: 'test'
+  ...
+# Subtest: ProjectForge: RemoveFile, MoveFile and MoveCode are read from their results
+ok 117 - ProjectForge: RemoveFile, MoveFile and MoveCode are read from their results
+  ---
+  duration_ms: 2.8344
+  type: 'test'
+  ...
+# Subtest: ProjectForge: read-only commands are ignored; unconfirmed requests are not claimed as changes
+ok 118 - ProjectForge: read-only commands are ignored; unconfirmed requests are not claimed as changes
+  ---
+  duration_ms: 0.9778
+  type: 'test'
+  ...
+# Subtest: findProjectRoots reads CreateProject and GetProject results; a later one replaces an earlier one
+ok 119 - findProjectRoots reads CreateProject and GetProject results; a later one replaces an earlier one
+  ---
+  duration_ms: 2.1699
+  type: 'test'
+  ...
+# Subtest: ProjectForge rows show exact counts at once and open the file through the project root created in an earlier message
+ok 120 - ProjectForge rows show exact counts at once and open the file through the project root created in an earlier message
+  ---
+  duration_ms: 330.7471
+  type: 'test'
+  ...
+# Subtest: ProjectForge rows whose project root is unknown still list the file but cannot be opened
+ok 121 - ProjectForge rows whose project root is unknown still list the file but cannot be opened
+  ---
+  duration_ms: 62.0681
+  type: 'test'
+  ...
+# (node:88116) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/message-file-changes.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: parseToolFields reads plain and ESCAPE fields without being cut by fake end markers
+ok 122 - parseToolFields reads plain and ESCAPE fields without being cut by fake end markers
+  ---
+  duration_ms: 2.5612
+  type: 'test'
+  ...
+# Subtest: extractFileChanges lists write/edit/delete/move operations and ignores reads and other tools
+ok 123 - extractFileChanges lists write/edit/delete/move operations and ignores reads and other tools
+  ---
+  duration_ms: 10.0032
+  type: 'test'
+  ...
+# Subtest: batch requests (command1/filePath1…) are expanded
+ok 124 - batch requests (command1/filePath1…) are expanded
+  ---
+  duration_ms: 0.8049
+  type: 'test'
+  ...
+# Subtest: same path collapses to one entry: write beats edit, a later delete wins
+ok 125 - same path collapses to one entry: write beats edit, a later delete wins
+  ---
+  duration_ms: 1.0785
+  type: 'test'
+  ...
+# Subtest: failed and unconfirmed calls are never claimed as file changes
+ok 126 - failed and unconfirmed calls are never claimed as file changes
+  ---
+  duration_ms: 4.7983
+  type: 'test'
+  ...
+# Subtest: tool requests quoted inside code fences are not file changes
+ok 127 - tool requests quoted inside code fences are not file changes
+  ---
+  duration_ms: 1.8483
+  type: 'test'
+  ...
+# Subtest: renders a collapsible summary after streaming ends and opens files on click
+ok 128 - renders a collapsible summary after streaming ends and opens files on click
+  ---
+  duration_ms: 366.6377
+  type: 'test'
+  ...
+# Subtest: messages without file changes get nothing; dispose is idempotent
+ok 129 - messages without file changes get nothing; dispose is idempotent
+  ---
+  duration_ms: 86.9632
+  type: 'test'
+  ...
+# Subtest: attempt state distinguishes success, failure, pending and ambiguous pairing
+ok 130 - attempt state distinguishes success, failure, pending and ambiguous pairing
+  ---
+  duration_ms: 3.5549
+  type: 'test'
+  ...
+# Subtest: equal-count concurrent calls without IDs cannot attribute success to a requested path
+ok 131 - equal-count concurrent calls without IDs cannot attribute success to a requested path
+  ---
+  duration_ms: 1.3544
+  type: 'test'
+  ...
+# Subtest: results preceding a request do not confirm it; later sequential requests remain attributable
+ok 132 - results preceding a request do not confirm it; later sequential requests remain attributable
+  ---
+  duration_ms: 1.5795
+  type: 'test'
+  ...
+# Subtest: recursive redaction protects objects, arrays, cycles, depth and getters without mutating the request
+ok 133 - recursive redaction protects objects, arrays, cycles, depth and getters without mutating the request
+  ---
+  duration_ms: 3.4873
+  type: 'test'
+  ...
+# Subtest: single huge UTF-8 record and repeated writes never exceed the actual file byte budget
+ok 134 - single huge UTF-8 record and repeated writes never exceed the actual file byte budget
+  ---
+  duration_ms: 881.1006
+  type: 'test'
+  ...
+# Subtest: running stream snapshots bound aggregate text, reasoning and tool payloads before finish
+ok 135 - running stream snapshots bound aggregate text, reasoning and tool payloads before finish
+  ---
+  duration_ms: 150.6003
+  type: 'test'
+  ...
+# Subtest: tail reads and persistence use asynchronous IO, tolerate a legacy oversized file and flag truncation
+ok 136 - tail reads and persistence use asynchronous IO, tolerate a legacy oversized file and flag truncation
+  ---
+  duration_ms: 261.2625
+  type: 'test'
+  ...
+# Subtest: hashed session filenames cannot collide and legacy records are filtered by exact session key
+ok 137 - hashed session filenames cannot collide and legacy records are filtered by exact session key
+  ---
+  duration_ms: 321.0584
+  type: 'test'
+  ...
+# Subtest: clear invalidates current recording handles and later finish cannot resurrect cleared records
+ok 138 - clear invalidates current recording handles and later finish cannot resurrect cleared records
+  ---
+  duration_ms: 14.5713
+  type: 'test'
+  ...
+# Subtest: clear takes effect before its IO completes and cannot be followed by a stale finish
+ok 139 - clear takes effect before its IO completes and cannot be followed by a stale finish
+  ---
+  duration_ms: 49.3649
+  type: 'test'
+  ...
+# Subtest: clearing immediately after finish cancels the already queued snapshot
+ok 140 - clearing immediately after finish cancels the already queued snapshot
+  ---
+  duration_ms: 16.5999
+  type: 'test'
+  ...
+# Subtest: normalized multipart inputs share a single character budget
+ok 141 - normalized multipart inputs share a single character budget
+  ---
+  duration_ms: 1.2131
+  type: 'test'
+  ...
+# Subtest: recording opt-out invalidates handles and queued snapshots
+ok 142 - recording opt-out invalidates handles and queued snapshots
+  ---
+  duration_ms: 7.7071
+  type: 'test'
+  ...
+# Subtest: retention expires old legacy logs and bounds total recorder-owned files
+ok 143 - retention expires old legacy logs and bounds total recorder-owned files
+  ---
+  duration_ms: 21.2963
+  type: 'test'
+  ...
+# Subtest: request budget includes tool identities, names and image URLs across all messages
+ok 144 - request budget includes tool identities, names and image URLs across all messages
+  ---
+  duration_ms: 31.3685
+  type: 'test'
+  ...
+# Subtest: lists, clears and watches trajectory records for the main window only
+ok 145 - lists, clears and watches trajectory records for the main window only
+  ---
+  duration_ms: 656.854
+  type: 'test'
+  ...
+# (node:76212) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/modelTrajectoryModel.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: duration and labels follow ZCode formatting
+ok 146 - duration and labels follow ZCode formatting
+  ---
+  duration_ms: 2.126
+  type: 'test'
+  ...
+# Subtest: TOOL_REQUEST blocks in assistant text become tool calls and are removed from the prose
+ok 147 - TOOL_REQUEST blocks in assistant text become tool calls and are removed from the prose
+  ---
+  duration_ms: 5.4504
+  type: 'test'
+  ...
+# Subtest: VCP result blocks inside a user message become separate tool messages, failures are errors
+ok 148 - VCP result blocks inside a user message become separate tool messages, failures are errors
+  ---
+  duration_ms: 2.9605
+  type: 'test'
+  ...
+# Subtest: output rows: reasoning, prose, and tool calls from both OpenAI tool_calls and request blocks
+ok 149 - output rows: reasoning, prose, and tool calls from both OpenAI tool_calls and request blocks
+  ---
+  duration_ms: 1.0361
+  type: 'test'
+  ...
+# Subtest: timeline shows the full context first, then only new non-assistant messages; title calls stay whole
+ok 150 - timeline shows the full context first, then only new non-assistant messages; title calls stay whole
+  ---
+  duration_ms: 1.8674
+  type: 'test'
+  ...
+# Subtest: summary adds tokens, flags estimates and lists models once
+ok 151 - summary adds tokens, flags estimates and lists models once
+  ---
+  duration_ms: 0.8722
+  type: 'test'
+  ...
+# Subtest: search folds whitespace and case, maps back to source offsets, and reaches tool names
+ok 152 - search folds whitespace and case, maps back to source offsets, and reaches tool names
+  ---
+  duration_ms: 2.5346
+  type: 'test'
+  ...
+# Subtest: a VCP server error relayed as a normal stream is not reported as a clean finish
+ok 153 - a VCP server error relayed as a normal stream is not reported as a clean finish
+  ---
+  duration_ms: 0.4838
+  type: 'test'
+  ...
+# Subtest: normalizeMessage handles strings, part arrays, images and tool calls without storing base64
+ok 154 - normalizeMessage handles strings, part arrays, images and tool calls without storing base64
+  ---
+  duration_ms: 6.4413
+  type: 'test'
+  ...
+# Subtest: estimateTokens counts CJK per character and latin per ~4 characters
+ok 155 - estimateTokens counts CJK per character and latin per ~4 characters
+  ---
+  duration_ms: 0.6787
+  type: 'test'
+  ...
+# Subtest: streamed call accumulates text, reasoning, tool calls, finish reason and usage
+ok 156 - streamed call accumulates text, reasoning, tool calls, finish reason and usage
+  ---
+  duration_ms: 160.2965
+  type: 'test'
+  ...
+# Subtest: non-stream response, missing usage estimate, errors and aborts
+ok 157 - non-stream response, missing usage estimate, errors and aborts
+  ---
+  duration_ms: 148.5255
+  type: 'test'
+  ...
+# Subtest: list returns only the most recent records and says so; clear removes the file; sessions are isolated
+ok 158 - list returns only the most recent records and says so; clear removes the file; sessions are isolated
+  ---
+  duration_ms: 444.7022
+  type: 'test'
+  ...
+# Subtest: oversized files are compacted to the newest records; corrupt lines are skipped
+ok 159 - oversized files are compacted to the newest records; corrupt lines are skipped
+  ---
+  duration_ms: 808.1615
+  type: 'test'
+  ...
+# Subtest: subscribers hear about start, finish and clear; a throwing subscriber does not break recording
+ok 160 - subscribers hear about start, finish and clear; a throwing subscriber does not break recording
+  ---
+  duration_ms: 12.7217
+  type: 'test'
+  ...
+# Subtest: beginTrajectoryCall is a safe no-op before the shared recorder is configured
+ok 161 - beginTrajectoryCall is a safe no-op before the shared recorder is configured
+  ---
+  duration_ms: 0.6333
+  type: 'test'
+  ...
+# Subtest: session key and source come from the request context (group beats agent)
+ok 162 - session key and source come from the request context (group beats agent)
+  ---
+  duration_ms: 1.9295
+  type: 'test'
+  ...
+# Subtest: topic title generation is recorded as a title call when it knows its topic, and not at all without one
+ok 163 - topic title generation is recorded as a title call when it knows its topic, and not at all without one
+  ---
+  duration_ms: 513.1988
+  type: 'test'
+  ...
+# Subtest: retention removes only recorder-shaped orphan temporaries, including interrupted policy writes
+ok 164 - retention removes only recorder-shaped orphan temporaries, including interrupted policy writes
+  ---
+  duration_ms: 54.5854
+  type: 'test'
+  ...
+# Subtest: clearing a session removes its crashed-write body without touching another session temporary
+ok 165 - clearing a session removes its crashed-write body without touching another session temporary
+  ---
+  duration_ms: 70.3716
+  type: 'test'
+  ...
+# Subtest: retention during an atomic write preserves the active temporary until commit
+ok 166 - retention during an atomic write preserves the active temporary until commit
+  ---
+  duration_ms: 39.1527
+  type: 'test'
+  ...
+# Subtest: clear markers survive expiry so recently copied legacy data cannot resurrect cleared history
+ok 167 - clear markers survive expiry so recently copied legacy data cannot resurrect cleared history
+  ---
+  duration_ms: 43.2445
+  type: 'test'
+  ...
+# (node:92092) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/notesSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: new note waits for an old in-flight write and never reuses its file path
+ok 168 - new note waits for an old in-flight write and never reuses its file path
+  ---
+  duration_ms: 249.9448
+  type: 'test'
+  ...
+# Subtest: a failed write preserves the editor on switch and blocks disposal until retry succeeds
+ok 169 - a failed write preserves the editor on switch and blocks disposal until retry succeeds
+  ---
+  duration_ms: 54.2735
+  type: 'test'
+  ...
+# Subtest: external editor replacement cannot inherit an old save completion, and close waits for all current edits
+ok 170 - external editor replacement cannot inherit an old save completion, and close waits for all current edits
+  ---
+  duration_ms: 35.3326
+  type: 'test'
+  ...
+# Subtest: grab uses the real message DOM, skips unfinished replies and excludes message chrome
+ok 171 - grab uses the real message DOM, skips unfinished replies and excludes message chrome
+  ---
+  duration_ms: 108.3449
+  type: 'test'
+  ...
+# Subtest: mount creates hidden section headers and an empty placeholder
+ok 172 - mount creates hidden section headers and an empty placeholder
+  ---
+  duration_ms: 280.0864
+  type: 'test'
+  ...
+# Subtest: sections show per-state counts and the banner tracks pending approvals
+ok 173 - sections show per-state counts and the banner tracks pending approvals
+  ---
+  duration_ms: 60.9372
+  type: 'test'
+  ...
+# (node:61032) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the observer regroups automatically when an approval settles
+ok 174 - the observer regroups automatically when an approval settles
+  ---
+  duration_ms: 51.0831
+  type: 'test'
+  ...
+# Subtest: filter chips drive list.dataset.filter and aria-pressed
+ok 175 - filter chips drive list.dataset.filter and aria-pressed
+  ---
+  duration_ms: 53.9403
+  type: 'test'
+  ...
+# Subtest: a filter with no matches shows the empty placeholder
+ok 176 - a filter with no matches shows the empty placeholder
+  ---
+  duration_ms: 32.6633
+  type: 'test'
+  ...
+# Subtest: resolved section is collapsed by default and the choice is persisted
+ok 177 - resolved section is collapsed by default and the choice is persisted
+  ---
+  duration_ms: 65.3841
+  type: 'test'
+  ...
+# Subtest: a stored expanded preference is honoured on mount
+ok 178 - a stored expanded preference is honoured on mount
+  ---
+  duration_ms: 39.1605
+  type: 'test'
+  ...
+# Subtest: the resolved clear button removes only resolved cards
+ok 179 - the resolved clear button removes only resolved cards
+  ---
+  duration_ms: 36.7408
+  type: 'test'
+  ...
+# Subtest: jumpToPending cycles through pending cards, skipping busy ones
+ok 180 - jumpToPending cycles through pending cards, skipping busy ones
+  ---
+  duration_ms: 53.3854
+  type: 'test'
+  ...
+# Subtest: jumpToPending leaves narrowing filters so the target is visible
+ok 181 - jumpToPending leaves narrowing filters so the target is visible
+  ---
+  duration_ms: 81.2987
+  type: 'test'
+  ...
+# Subtest: bulk reject needs a second click to confirm, then settles every pending card
+ok 182 - bulk reject needs a second click to confirm, then settles every pending card
+  ---
+  duration_ms: 42.1244
+  type: 'test'
+  ...
+# Subtest: the bulk confirmation lapses after the confirm window
+ok 183 - the bulk confirmation lapses after the confirm window
+  ---
+  duration_ms: 34.8326
+  type: 'test'
+  ...
+# Subtest: bulk approve skips requests that need an audit and reports them
+ok 184 - bulk approve skips requests that need an audit and reports them
+  ---
+  duration_ms: 42.4209
+  type: 'test'
+  ...
+# Subtest: settled cards are capped while pending approvals are never trimmed
+ok 185 - settled cards are capped while pending approvals are never trimmed
+  ---
+  duration_ms: 226.4911
+  type: 'test'
+  ...
+# Subtest: dispose removes injected nodes and stops reacting to changes
+ok 186 - dispose removes injected nodes and stops reacting to changes
+  ---
+  duration_ms: 50.217
+  type: 'test'
+  ...
+# Subtest: mount without a list is a harmless no-op
+ok 187 - mount without a list is a harmless no-op
+  ---
+  duration_ms: 10.6765
+  type: 'test'
+  ...
+# (node:80172) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/send-queue.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: resolveReorderAnchor / moveQueueItem port ZCode drag semantics
+ok 188 - resolveReorderAnchor / moveQueueItem port ZCode drag semantics
+  ---
+  duration_ms: 5.2577
+  type: 'test'
+  ...
+# Subtest: Enter while a reply streams queues the draft instead of sending, and drains in order once idle
+ok 189 - Enter while a reply streams queues the draft instead of sending, and drains in order once idle
+  ---
+  duration_ms: 393.2078
+  type: 'test'
+  ...
+# Subtest: modifier keys, IME and attachment drafts bypass the queue
+ok 190 - modifier keys, IME and attachment drafts bypass the queue
+  ---
+  duration_ms: 32.9092
+  type: 'test'
+  ...
+# Subtest: stopping the reply pauses the queue with a resume banner; resume sends the next item
+ok 191 - stopping the reply pauses the queue with a resume banner; resume sends the next item
+  ---
+  duration_ms: 140.0351
+  type: 'test'
+  ...
+# Subtest: a dispatch that never starts streaming puts the message back and pauses
+ok 192 - a dispatch that never starts streaming puts the message back and pauses
+  ---
+  duration_ms: 275.7599
+  type: 'test'
+  ...
+# Subtest: reorder by drop, edit back into the composer, remove and send-now
+ok 193 - reorder by drop, edit back into the composer, remove and send-now
+  ---
+  duration_ms: 222.0097
+  type: 'test'
+  ...
+# Subtest: queues are per topic: switching away pauses the old one and the new topic starts empty
+ok 194 - queues are per topic: switching away pauses the old one and the new topic starts empty
+  ---
+  duration_ms: 111.1705
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without the composer footer, dispose is idempotent
+ok 195 - mount is a no-op without the composer footer, dispose is idempotent
+  ---
+  duration_ms: 68.6374
+  type: 'test'
+  ...
+# Subtest: queues persist per context, restore paused after a restart, and clear when emptied
+ok 196 - queues persist per context, restore paused after a restart, and clear when emptied
+  ---
+  duration_ms: 226.041
+  type: 'test'
+  ...
+# Subtest: corrupt or foreign persisted data is ignored
+ok 197 - corrupt or foreign persisted data is ignored
+  ---
+  duration_ms: 84.6892
+  type: 'test'
+  ...
+# Subtest: capacity rejects the 51st item without consuming its draft
+ok 198 - capacity rejects the 51st item without consuming its draft
+  ---
+  duration_ms: 3212.2804
+  type: 'test'
+  ...
+# Subtest: pending admission survives reload, timeout never retries, and acceptance removes only its own item
+ok 199 - pending admission survives reload, timeout never retries, and acceptance removes only its own item
+  ---
+  duration_ms: 205.3673
+  type: 'test'
+  ...
+# Subtest: busy transitions do not acknowledge a dispatch, nor do later model failures requeue an admitted message
+ok 200 - busy transitions do not acknowledge a dispatch, nor do later model failures requeue an admitted message
+  ---
+  duration_ms: 135.9544
+  type: 'test'
+  ...
+# (node:84076) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: R01: Parent change deactivates old tab panel and hides non-visible tabs
+ok 201 - R01: Parent change deactivates old tab panel and hides non-visible tabs
+  ---
+  duration_ms: 339.6457
+  type: 'test'
+  ...
+# Subtest: R02: Reopening same child activates existing view without duplicate panels or mounts
+ok 202 - R02: Reopening same child activates existing view without duplicate panels or mounts
+  ---
+  duration_ms: 59.5625
+  type: 'test'
+  ...
+# Subtest: R03: Tab close during async mount disposes handle and removes panel without orphan state
+ok 203 - R03: Tab close during async mount disposes handle and removes panel without orphan state
+  ---
+  duration_ms: 48.6453
+  type: 'test'
+  ...
+# Subtest: R04: Agent configuration is resolved and reference length/count quota is enforced
+ok 204 - R04: Agent configuration is resolved and reference length/count quota is enforced
+  ---
+  duration_ms: 105.0715
+  type: 'test'
+  ...
+# Subtest: R05: Transport failure restores draft & refs; persistence failure blocks close with unsaved state
+ok 205 - R05: Transport failure restores draft & refs; persistence failure blocks close with unsaved state
+  ---
+  duration_ms: 149.1115
+  type: 'test'
+  ...
+# Subtest: R06: Reference added during active send is preserved across completion
+ok 206 - R06: Reference added during active send is preserved across completion
+  ---
+  duration_ms: 53.2056
+  type: 'test'
+  ...
+# Subtest: R07: Stable history filtering excludes isPendingStream, preserves tool_calls & attachments
+ok 207 - R07: Stable history filtering excludes isPendingStream, preserves tool_calls & attachments
+  ---
+  duration_ms: 2.2947
+  type: 'test'
+  ...
+# Subtest: R08: Service reports snapshot and IPC errors as ok:false
+ok 208 - R08: Service reports snapshot and IPC errors as ok:false
+  ---
+  duration_ms: 0.9937
+  type: 'test'
+  ...
+# Subtest: R09: Text selection outside authorized message is rejected
+ok 209 - R09: Text selection outside authorized message is rejected
+  ---
+  duration_ms: 24.6881
+  type: 'test'
+  ...
+# Subtest: R10: Metadata includes snapshot & boundary; tab close does not delete snapshot file
+ok 210 - R10: Metadata includes snapshot & boundary; tab close does not delete snapshot file
+  ---
+  duration_ms: 337.8722
+  type: 'test'
+  ...
+# Subtest: R11: Transport completion does not leave cancelled status
+ok 211 - R11: Transport completion does not leave cancelled status
+  ---
+  duration_ms: 84.6678
+  type: 'test'
+  ...
+# Subtest: R12: Send-to-main blocks cross-topic contamination
+ok 212 - R12: Send-to-main blocks cross-topic contamination
+  ---
+  duration_ms: 57.1126
+  type: 'test'
+  ...
+# Subtest: R13: Persistence retry and explicit discard restore ready state
+ok 213 - R13: Persistence retry and explicit discard restore ready state
+  ---
+  duration_ms: 45.7678
+  type: 'test'
+  ...
+# Subtest: R14: Draft and uncommitted references preserved across tab close and reopen
+ok 214 - R14: Draft and uncommitted references preserved across tab close and reopen
+  ---
+  duration_ms: 37.9125
+  type: 'test'
+  ...
+# Subtest: R15: Send-to-main validates both item ID and topic ID provenance
+ok 215 - R15: Send-to-main validates both item ID and topic ID provenance
+  ---
+  duration_ms: 85.5573
+  type: 'test'
+  ...
+# Subtest: all side-chat IPCs deny remote, foreign window, subframe and guest senders before touching data
+ok 216 - all side-chat IPCs deny remote, foreign window, subframe and guest senders before touching data
+  ---
+  duration_ms: 66.3565
+  type: 'test'
+  ...
+# Subtest: side-chat metadata and snapshots cannot alter a real topic or rebind a child to another parent
+ok 217 - side-chat metadata and snapshots cannot alter a real topic or rebind a child to another parent
+  ---
+  duration_ms: 1659.8402
+  type: 'test'
+  ...
+# Subtest: junction ancestors cannot redirect creation, reads or deletion into another directory
+ok 218 - junction ancestors cannot redirect creation, reads or deletion into another directory
+  ---
+  duration_ms: 197.8427
+  type: 'test'
+  ...
+# Subtest: the selection "ask in side pane" button survives message-list re-renders
+ok 219 - the selection "ask in side pane" button survives message-list re-renders
+  ---
+  duration_ms: 897.3179
+  type: 'test'
+  ...
+# Subtest: side chat is enabled and wired to the selection button and message context menu
+ok 220 - side chat is enabled and wired to the selection button and message context menu
+  ---
+  duration_ms: 0.5369
+  type: 'test'
+  ...
+# (node:82544) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ZCode Parity: createSideChatDescriptor defines ephemeral: true and type: selection-side-chat
+ok 221 - ZCode Parity: createSideChatDescriptor defines ephemeral: true and type: selection-side-chat
+  ---
+  duration_ms: 50.1969
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Closing selection-side-chat destroys runtime and is explicitly excluded from recentlyClosedTabs
+ok 222 - ZCode Parity: Closing selection-side-chat destroys runtime and is explicitly excluded from recentlyClosedTabs
+  ---
+  duration_ms: 357.2163
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: onTabClosed deletes recovery snapshot from main authority to prevent resurrection on restart
+ok 223 - ZCode Parity: onTabClosed deletes recovery snapshot from main authority to prevent resurrection on restart
+  ---
+  duration_ms: 1.1479
+  type: 'test'
+  ...
+# (node:88680) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Full Side Chat lifecycle integration: open, refer, send, and close
+ok 224 - Full Side Chat lifecycle integration: open, refer, send, and close
+  ---
+  duration_ms: 558.3683
+  type: 'test'
+  ...
+# Subtest: Dual stream concurrency: cancelling side chat does not abort main chat stream
+ok 225 - Dual stream concurrency: cancelling side chat does not abort main chat stream
+  ---
+  duration_ms: 164.1437
+  type: 'test'
+  ...
+# Subtest: Parent context snapshot inheritance (P1): child sends frozen parent context without persisting it to child topic
+ok 226 - Parent context snapshot inheritance (P1): child sends frozen parent context without persisting it to child topic
+  ---
+  duration_ms: 99.5987
+  type: 'test'
+  ...
+# Subtest: filterStableHistory filters transient/streaming messages and extracts stable turns
+ok 227 - filterStableHistory filters transient/streaming messages and extracts stable turns
+  ---
+  duration_ms: 2.0394
+  type: 'test'
+  ...
+# Subtest: sideChatHandlers handles metadata lifecycle and snapshot creation with isolated filesystem
+ok 228 - sideChatHandlers handles metadata lifecycle and snapshot creation with isolated filesystem
+  ---
+  duration_ms: 500.2231
+  type: 'test'
+  ...
+# Subtest: side-chat create-child/delete-child keep the child out of the topic list and never delete real topics
+ok 229 - side-chat create-child/delete-child keep the child out of the topic list and never delete real topics
+  ---
+  duration_ms: 205.5033
+  type: 'test'
+  ...
+# (node:74952) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: model picker lists the real model catalog instead of a built-in fake list
+ok 230 - model picker lists the real model catalog instead of a built-in fake list
+  ---
+  duration_ms: 362.7685
+  type: 'test'
+  ...
+# Subtest: without any configured model the side chat does not invent one and refuses to send
+ok 231 - without any configured model the side chat does not invent one and refuses to send
+  ---
+  duration_ms: 147.4916
+  type: 'test'
+  ...
+# Subtest: model search filters the catalog
+ok 232 - model search filters the catalog
+  ---
+  duration_ms: 58.5189
+  type: 'test'
+  ...
+# Subtest: an unused parent-snapshot side chat re-captures the parent right before its first message
+ok 233 - an unused parent-snapshot side chat re-captures the parent right before its first message
+  ---
+  duration_ms: 101.868
+  type: 'test'
+  ...
+# Subtest: references-only mode never sends parent history and never refreshes the snapshot
+ok 234 - references-only mode never sends parent history and never refreshes the snapshot
+  ---
+  duration_ms: 98.6426
+  type: 'test'
+  ...
+# Subtest: a side conversation send does not touch the main topic unread state or item list
+ok 235 - a side conversation send does not touch the main topic unread state or item list
+  ---
+  duration_ms: 2.7898
+  type: 'test'
+  ...
+# Subtest: no hard-coded fallback model remains in the side chat stack
+ok 236 - no hard-coded fallback model remains in the side chat stack
+  ---
+  duration_ms: 1.3797
+  type: 'test'
+  ...
+# Subtest: side chat title excerpt collapses whitespace with a real whitespace regex
+ok 237 - side chat title excerpt collapses whitespace with a real whitespace regex
+  ---
+  duration_ms: 1.2775
+  type: 'test'
+  ...
+# (node:74032) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/chat/sideChatSessionService.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createSideChatDescriptor validates parent and childTopicId and enforces distinct topics
+ok 238 - createSideChatDescriptor validates parent and childTopicId and enforces distinct topics
+  ---
+  duration_ms: 46.6178
+  type: 'test'
+  ...
+# Subtest: createChildTopicForAgent delegates to electronAPI and returns normalized outcome
+ok 239 - createChildTopicForAgent delegates to electronAPI and returns normalized outcome
+  ---
+  duration_ms: 1.3311
+  type: 'test'
+  ...
+# Subtest: createChildTopicForAgent never falls back to creating a real agent topic
+ok 240 - createChildTopicForAgent never falls back to creating a real agent topic
+  ---
+  duration_ms: 0.3782
+  type: 'test'
+  ...
+# Subtest: dedupeSideChatCreation coalesces concurrent creations for the same key
+ok 241 - dedupeSideChatCreation coalesces concurrent creations for the same key
+  ---
+  duration_ms: 26.7929
+  type: 'test'
+  ...
+# Subtest: deleteSideChatChild delegates to electronAPI and normalizes outcome
+ok 242 - deleteSideChatChild delegates to electronAPI and normalizes outcome
+  ---
+  duration_ms: 0.8691
+  type: 'test'
+  ...
+# Subtest: freezeParentHistory filters out transient or streaming messages and clones stable ones
+ok 243 - freezeParentHistory filters out transient or streaming messages and clones stable ones
+  ---
+  duration_ms: 0.6669
+  type: 'test'
+  ...
+# Subtest: saveSideChatMetadata, getSideChatMetadata, listSideChatsForParent, deleteSideChatMetadata handle contracts
+ok 244 - saveSideChatMetadata, getSideChatMetadata, listSideChatsForParent, deleteSideChatMetadata handle contracts
+  ---
+  duration_ms: 1.9575
+  type: 'test'
+  ...
+# (node:61784) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/sideChatSurfaceOwner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: mountSideChatSurface builds shell, loads history, and transitions to ready
+ok 245 - mountSideChatSurface builds shell, loads history, and transitions to ready
+  ---
+  duration_ms: 396.518
+  type: 'test'
+  ...
+# Subtest: submitting side chat formats reference cards and dispatches message
+ok 246 - submitting side chat formats reference cards and dispatches message
+  ---
+  duration_ms: 142.4524
+  type: 'test'
+  ...
+# Subtest: createSideChatSurfaceOwner wraps mountTab provider contract
+ok 247 - createSideChatSurfaceOwner wraps mountTab provider contract
+  ---
+  duration_ms: 47.5473
+  type: 'test'
+  ...
+# Subtest: mountSideChatSurface keeps a minimal composer and offers send-to-main on assistant messages
+ok 248 - mountSideChatSurface keeps a minimal composer and offers send-to-main on assistant messages
+  ---
+  duration_ms: 164.0982
+  type: 'test'
+  ...
+# (node:58736) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ZCode Parity: Switching to a topic with no side chats automatically collapses the side pane
+ok 249 - ZCode Parity: Switching to a topic with no side chats automatically collapses the side pane
+  ---
+  duration_ms: 331.051
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Switching back to a topic with side chats restores tabs and auto-expands
+ok 250 - ZCode Parity: Switching back to a topic with side chats restores tabs and auto-expands
+  ---
+  duration_ms: 62.7024
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Explicit collapse preference is remembered per topic (sidePaneCollapsedByOwner)
+ok 251 - ZCode Parity: Explicit collapse preference is remembered per topic (sidePaneCollapsedByOwner)
+  ---
+  duration_ms: 71.1465
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Per-topic active tab is remembered (activeTabByOwner)
+ok 252 - ZCode Parity: Per-topic active tab is remembered (activeTabByOwner)
+  ---
+  duration_ms: 75.9761
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: Closing the last side chat tab automatically collapses side pane
+ok 253 - ZCode Parity: Closing the last side chat tab automatically collapses side pane
+  ---
+  duration_ms: 36.0767
+  type: 'test'
+  ...
+# Subtest: ZCode Parity: toggleChatBtn only operates on current parent chat tabs
+ok 254 - ZCode Parity: toggleChatBtn only operates on current parent chat tabs
+  ---
+  duration_ms: 47.6209
+  type: 'test'
+  ...
+# (node:14252) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Parity: SidePaneState closeOtherTabs and closeAllTabs transitions
+ok 255 - Parity: SidePaneState closeOtherTabs and closeAllTabs transitions
+  ---
+  duration_ms: 3.7983
+  type: 'test'
+  ...
+# Subtest: Parity: SidePaneController closeOtherTabs and closeAllTabs dispose views and update DOM
+ok 256 - Parity: SidePaneController closeOtherTabs and closeAllTabs dispose views and update DOM
+  ---
+  duration_ms: 405.5005
+  type: 'test'
+  ...
+# Subtest: Parity: + Add Menu Popover opens and routes actions
+ok 257 - Parity: + Add Menu Popover opens and routes actions
+  ---
+  duration_ms: 118.5523
+  type: 'test'
+  ...
+# Subtest: Parity: Tab Right-Click Context Menu triggers actions
+ok 258 - Parity: Tab Right-Click Context Menu triggers actions
+  ---
+  duration_ms: 75.0931
+  type: 'test'
+  ...
+# Subtest: Parity: Open Tab Launcher buttons activate chat and notifications
+ok 259 - Parity: Open Tab Launcher buttons activate chat and notifications
+  ---
+  duration_ms: 42.8832
+  type: 'test'
+  ...
+# Subtest: Parity: Side Chat Model Picker supports interactive switching
+ok 260 - Parity: Side Chat Model Picker supports interactive switching
+  ---
+  duration_ms: 71.0657
+  type: 'test'
+  ...
+# Subtest: Parity: ZCode Subtle Border & Header Divider Contract
+ok 261 - Parity: ZCode Subtle Border & Header Divider Contract
+  ---
+  duration_ms: 13.0618
+  type: 'test'
+  ...
+# (node:87348) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SidePaneController initializes and renders tabs into tabListElement
+ok 262 - SidePaneController initializes and renders tabs into tabListElement
+  ---
+  duration_ms: 272.0386
+  type: 'test'
+  ...
+# Subtest: SidePaneController showNotifications and openChat mount views and sync visibility
+ok 263 - SidePaneController showNotifications and openChat mount views and sync visibility
+  ---
+  duration_ms: 75.4406
+  type: 'test'
+  ...
+# (node:53892) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/gitSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: filterAiTouched aligns absolute / relative / windows paths by suffix
+ok 264 - filterAiTouched aligns absolute / relative / windows paths by suffix
+  ---
+  duration_ms: 5.0489
+  type: 'test'
+  ...
+# Subtest: latestAiBatch picks the newest batch
+ok 265 - latestAiBatch picks the newest batch
+  ---
+  duration_ms: 0.5342
+  type: 'test'
+  ...
+# Subtest: the 上一轮 source narrows changes to the newest V工程 batch and follows V工程 updates
+ok 266 - the 上一轮 source narrows changes to the newest V工程 batch and follows V工程 updates
+  ---
+  duration_ms: 1144.4501
+  type: 'test'
+  ...
+# Subtest: a change announced by the status panel refreshes the tab, and the tab ignores its own announcements
+ok 267 - a change announced by the status panel refreshes the tab, and the tab ignores its own announcements
+  ---
+  duration_ms: 218.5554
+  type: 'test'
+  ...
+# Subtest: a legacy stored "all" source falls back to unstaged
+ok 268 - a legacy stored "all" source falls back to unstaged
+  ---
+  duration_ms: 38.0469
+  type: 'test'
+  ...
+# (node:88912) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/gitSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: GitSideProvider lists and diffs the changes of a real repository
+ok 269 - GitSideProvider lists and diffs the changes of a real repository
+  ---
+  duration_ms: 4102.5416
+  type: 'test'
+  ...
+# Subtest: GitSideProvider shows an add-workspace action when none are registered
+ok 270 - GitSideProvider shows an add-workspace action when none are registered
+  ---
+  duration_ms: 20.8986
+  type: 'test'
+  ...
+# (node:18228) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/modelTrajectorySideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: trajectoryKeyFor matches the recorder key
+ok 271 - trajectoryKeyFor matches the recorder key
+  ---
+  duration_ms: 2.26
+  type: 'test'
+  ...
+# Subtest: openModelTrajectoryTab opens the singleton tab
+ok 272 - openModelTrajectoryTab opens the singleton tab
+  ---
+  duration_ms: 198.1983
+  type: 'test'
+  ...
+# Subtest: mountTab renders summary, call cards, deltas, and error block
+ok 273 - mountTab renders summary, call cards, deltas, and error block
+  ---
+  duration_ms: 215.1423
+  type: 'test'
+  ...
+# Subtest: rows toggle, expand-all and per-kind menu switches follow the command versions
+ok 274 - rows toggle, expand-all and per-kind menu switches follow the command versions
+  ---
+  duration_ms: 108.2849
+  type: 'test'
+  ...
+# Subtest: search counts matches, handles no-match, and Escape closes
+ok 275 - search counts matches, handles no-match, and Escape closes
+  ---
+  duration_ms: 689.8561
+  type: 'test'
+  ...
+# Subtest: a collapsed row containing the active match is revealed
+ok 276 - a collapsed row containing the active match is revealed
+  ---
+  duration_ms: 288.3287
+  type: 'test'
+  ...
+# Subtest: copy button copies the message content
+ok 277 - copy button copies the message content
+  ---
+  duration_ms: 113.0665
+  type: 'test'
+  ...
+# Subtest: change events reload only for the current session
+ok 278 - change events reload only for the current session
+  ---
+  duration_ms: 379.3436
+  type: 'test'
+  ...
+# Subtest: empty and no-conversation states, list errors, clear
+ok 279 - empty and no-conversation states, list errors, clear
+  ---
+  duration_ms: 162.1747
+  type: 'test'
+  ...
+# Subtest: switching conversation reloads through the selection subscription, and dispose unsubscribes
+ok 280 - switching conversation reloads through the selection subscription, and dispose unsubscribes
+  ---
+  duration_ms: 125.6488
+  type: 'test'
+  ...
+# Subtest: truncated notice and dispose cleanup
+ok 281 - truncated notice and dispose cleanup
+  ---
+  duration_ms: 56.6397
+  type: 'test'
+  ...
+# (node:73932) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/planDetailSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: buildPlanModel maps todos, counts and stats
+ok 282 - buildPlanModel maps todos, counts and stats
+  ---
+  duration_ms: 4.6309
+  type: 'test'
+  ...
+# Subtest: resolveDefaultProject prefers the shared workspace, then most recently updated
+ok 283 - resolveDefaultProject prefers the shared workspace, then most recently updated
+  ---
+  duration_ms: 45.5322
+  type: 'test'
+  ...
+# Subtest: openPlanDetailTab opens a per-project tab with a searchable title
+ok 284 - openPlanDetailTab opens a per-project tab with a searchable title
+  ---
+  duration_ms: 167.4649
+  type: 'test'
+  ...
+# Subtest: openPlanDetailTab tells the user instead of opening an empty tab when there is no project
+ok 285 - openPlanDetailTab tells the user instead of opening an empty tab when there is no project
+  ---
+  duration_ms: 22.4725
+  type: 'test'
+  ...
+# Subtest: mountTab renders plan, files, timeline and reloads on matching change events
+ok 286 - mountTab renders plan, files, timeline and reloads on matching change events
+  ---
+  duration_ms: 802.9839
+  type: 'test'
+  ...
+# Subtest: mountTab shows a retryable empty state when the project cannot be read
+ok 287 - mountTab shows a retryable empty state when the project cannot be read
+  ---
+  duration_ms: 27.197
+  type: 'test'
+  ...
+# Subtest: a failed refresh keeps the last plan on screen with a retry banner (ZCode keeps the last markdown)
+ok 288 - a failed refresh keeps the last plan on screen with a retry banner (ZCode keeps the last markdown)
+  ---
+  duration_ms: 431.808
+  type: 'test'
+  ...
+# (node:91964) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-resizer-owner.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createSidePaneResizerOwner initializes VCPSidebarResizer with direction -1 and pointer events
+ok 289 - createSidePaneResizerOwner initializes VCPSidebarResizer with direction -1 and pointer events
+  ---
+  duration_ms: 3.5924
+  type: 'test'
+  ...
+# Subtest: createSidePaneResizerOwner notifies width commit and binds lifecycle scope
+ok 290 - createSidePaneResizerOwner notifies width commit and binds lifecycle scope
+  ---
+  duration_ms: 0.8849
+  type: 'test'
+  ...
+# (node:79980) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-state.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: createInitialSidePaneState provides immutable defaults with notifications tab
+ok 291 - createInitialSidePaneState provides immutable defaults with notifications tab
+  ---
+  duration_ms: 3.7911
+  type: 'test'
+  ...
+# Subtest: setVisible returns new frozen snapshot
+ok 292 - setVisible returns new frozen snapshot
+  ---
+  duration_ms: 0.4764
+  type: 'test'
+  ...
+# Subtest: setPreferredWidth clamps to bounds
+ok 293 - setPreferredWidth clamps to bounds
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: openChatTab validates descriptor and avoids duplicate child topics
+ok 294 - openChatTab validates descriptor and avoids duplicate child topics
+  ---
+  duration_ms: 1.8899
+  type: 'test'
+  ...
+# Subtest: closeTab handles fallback and protects notifications tab
+ok 295 - closeTab handles fallback and protects notifications tab
+  ---
+  duration_ms: 1.1395
+  type: 'test'
+  ...
+# Subtest: getVisibleTabs filters chat tabs by parent conversation reference
+ok 296 - getVisibleTabs filters chat tabs by parent conversation reference
+  ---
+  duration_ms: 3.0834
+  type: 'test'
+  ...
+# Subtest: global tools retain selection and visibility across topic changes
+ok 297 - global tools retain selection and visibility across topic changes
+  ---
+  duration_ms: 1.0064
+  type: 'test'
+  ...
+# (node:54432) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: search ranking: title prefix beats word prefix beats substring beats hint beats type
+ok 298 - search ranking: title prefix beats word prefix beats substring beats hint beats type
+  ---
+  duration_ms: 6.4445
+  type: 'test'
+  ...
+# Subtest: tab presentation helpers: type labels and search hints
+ok 299 - tab presentation helpers: type labels and search hints
+  ---
+  duration_ms: 2.0993
+  type: 'test'
+  ...
+# Subtest: resolveTabsOverflow uses the min-width budget and ignores where the add button lives
+ok 300 - resolveTabsOverflow uses the min-width budget and ignores where the add button lives
+  ---
+  duration_ms: 1.0201
+  type: 'test'
+  ...
+# Subtest: drag helpers: closest center and arrayMove semantics
+ok 301 - drag helpers: closest center and arrayMove semantics
+  ---
+  duration_ms: 0.869
+  type: 'test'
+  ...
+# Subtest: SidePaneState.reorderTabs moves tabs but keeps notifications first
+ok 302 - SidePaneState.reorderTabs moves tabs but keeps notifications first
+  ---
+  duration_ms: 2.0678
+  type: 'test'
+  ...
+# Subtest: controller: reorderTab re-renders tabs in the new order
+ok 303 - controller: reorderTab re-renders tabs in the new order
+  ---
+  duration_ms: 359.0792
+  type: 'test'
+  ...
+# Subtest: controller: middle click closes a tab without activating it
+ok 304 - controller: middle click closes a tab without activating it
+  ---
+  duration_ms: 100.3235
+  type: 'test'
+  ...
+# Subtest: controller: closed non-chat tabs are remembered and can really be reopened
+ok 305 - controller: closed non-chat tabs are remembered and can really be reopened
+  ---
+  duration_ms: 89.1625
+  type: 'test'
+  ...
+# Subtest: controller: tabs marked reopenable:false are not remembered; list is capped at 10
+ok 306 - controller: tabs marked reopenable:false are not remembered; list is capped at 10
+  ---
+  duration_ms: 309.9887
+  type: 'test'
+  ...
+# Subtest: controller: the tab overview is keyboard driven like ZCode Command (arrows, Enter, Escape)
+ok 307 - controller: the tab overview is keyboard driven like ZCode Command (arrows, Enter, Escape)
+  ---
+  duration_ms: 74.6007
+  type: 'test'
+  ...
+# (node:92380) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/terminalLinks.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: url candidates lose trailing punctuation and unbalanced closing brackets
+ok 308 - url candidates lose trailing punctuation and unbalanced closing brackets
+  ---
+  duration_ms: 4.5199
+  type: 'test'
+  ...
+# Subtest: a buffer line yields 1-based link ranges
+ok 309 - a buffer line yields 1-based link ranges
+  ---
+  duration_ms: 1.7263
+  type: 'test'
+  ...
+# Subtest: the terminal tab opens clicked links through onOpenUrl
+ok 310 - the terminal tab opens clicked links through onOpenUrl
+  ---
+  duration_ms: 565.0389
+  type: 'test'
+  ...
+# Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+# Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+# Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+# (node:9816) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/terminalTheme.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: dark theme gets the dark ANSI palette and keeps token background / foreground
+ok 311 - dark theme gets the dark ANSI palette and keeps token background / foreground
+  ---
+  duration_ms: 528.4167
+  type: 'test'
+  ...
+# Subtest: light theme (data attribute or class) gets the light palette
+ok 312 - light theme (data attribute or class) gets the light palette
+  ---
+  duration_ms: 109.5171
+  type: 'test'
+  ...
+# Subtest: normalizeCssColor falls back / passes through without a canvas
+ok 313 - normalizeCssColor falls back / passes through without a canvas
+  ---
+  duration_ms: 13.1617
+  type: 'test'
+  ...
+# Subtest: mounted terminal: frame background follows the xterm theme and switches with the light/dark theme
+ok 314 - mounted terminal: frame background follows the xterm theme and switches with the light/dark theme
+  ---
+  duration_ms: 147.7972
+  type: 'test'
+  ...
+# (node:86928) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/toolOutputSideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: formatRunDuration and status labels
+ok 315 - formatRunDuration and status labels
+  ---
+  duration_ms: 3.1685
+  type: 'test'
+  ...
+# Subtest: openToolOutputTab opens the singleton tab
+ok 316 - openToolOutputTab opens the singleton tab
+  ---
+  duration_ms: 176.5529
+  type: 'test'
+  ...
+# Subtest: mountTab follows the latest run, streams updates, and lets the user pick another
+ok 317 - mountTab follows the latest run, streams updates, and lets the user pick another
+  ---
+  duration_ms: 683.4544
+  type: 'test'
+  ...
+# Subtest: openToolOutputTab with a runId selects that run in an already-mounted tab
+ok 318 - openToolOutputTab with a runId selects that run in an already-mounted tab
+  ---
+  duration_ms: 75.1597
+  type: 'test'
+  ...
+# Subtest: a run requested before the tab mounts is honoured
+ok 319 - a run requested before the tab mounts is honoured
+  ---
+  duration_ms: 21.0794
+  type: 'test'
+  ...
+# Subtest: shows a helpful empty state when no command has run
+ok 320 - shows a helpful empty state when no command has run
+  ---
+  duration_ms: 25.2592
+  type: 'test'
+  ...
+# Subtest: scrolling up pauses following and freezes the output; returning to the bottom resumes with the latest
+ok 321 - scrolling up pauses following and freezes the output; returning to the bottom resumes with the latest
+  ---
+  duration_ms: 355.0803
+  type: 'test'
+  ...
+# Subtest: a failed output query shows an inline error with a retry instead of a toast
+ok 322 - a failed output query shows an inline error with a retry instead of a toast
+  ---
+  duration_ms: 64.3483
+  type: 'test'
+  ...
+# (node:71088) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/ui-system/side-pane/side-pane-controller.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: SidePaneState: exports TAB_KINDS and supports generic openTab
+ok 323 - SidePaneState: exports TAB_KINDS and supports generic openTab
+  ---
+  duration_ms: 4.1889
+  type: 'test'
+  ...
+# Subtest: SidePaneController: registers and dispatches universal tab providers
+ok 324 - SidePaneController: registers and dispatches universal tab providers
+  ---
+  duration_ms: 258.7358
+  type: 'test'
+  ...
+# Subtest: NotesSideProvider: mounts sub-screen notes UI and supports autosave, chat insert, and grab
+ok 325 - NotesSideProvider: mounts sub-screen notes UI and supports autosave, chat insert, and grab
+  ---
+  duration_ms: 900.0246
+  type: 'test'
+  ...
+# Subtest: computeLineDiff: accurately computes LCS line diffs and statistics
+ok 326 - computeLineDiff: accurately computes LCS line diffs and statistics
+  ---
+  duration_ms: 2.0806
+  type: 'test'
+  ...
+# Subtest: detectLanguage: resolves extensions to correct identifiers and display tags
+ok 327 - detectLanguage: resolves extensions to correct identifiers and display tags
+  ---
+  duration_ms: 0.6559
+  type: 'test'
+  ...
+# Subtest: CodeViewerSideProvider: mounts code viewer, toggles wrap, diff mode, and inserts to chat
+ok 328 - CodeViewerSideProvider: mounts code viewer, toggles wrap, diff mode, and inserts to chat
+  ---
+  duration_ms: 53.6839
+  type: 'test'
+  ...
+# Subtest: GitSideProvider: mirrors the ZCode GitPane — source select, flat change cards, expandable diff, context menu
+ok 329 - GitSideProvider: mirrors the ZCode GitPane — source select, flat change cards, expandable diff, context menu
+  ---
+  duration_ms: 217.5041
+  type: 'test'
+  ...
+# Subtest: SidePaneController: header toggle opens the launcher when side chat is disabled
+ok 330 - SidePaneController: header toggle opens the launcher when side chat is disabled
+  ---
+  duration_ms: 29.3085
+  type: 'test'
+  ...
+# Subtest: CodeViewerSideProvider: menu-opened viewer browses workspace files with the real source API shapes
+ok 331 - CodeViewerSideProvider: menu-opened viewer browses workspace files with the real source API shapes
+  ---
+  duration_ms: 96.2481
+  type: 'test'
+  ...
+# Subtest: TerminalSideProvider: mirrors the shared terminal session, wires input/output, and only closes its own view on dispose
+ok 332 - TerminalSideProvider: mirrors the shared terminal session, wires input/output, and only closes its own view on dispose
+  ---
+  duration_ms: 295.5238
+  type: 'test'
+  ...
+# Subtest: TerminalSideProvider: shows an error instead of a dead terminal when the shell cannot start
+ok 333 - TerminalSideProvider: shows an error instead of a dead terminal when the shell cannot start
+  ---
+  duration_ms: 70.467
+  type: 'test'
+  ...
+# Subtest: normalizeBrowserInput: fills in schemes and refuses unsafe protocols
+ok 334 - normalizeBrowserInput: fills in schemes and refuses unsafe protocols
+  ---
+  duration_ms: 0.9768
+  type: 'test'
+  ...
+# Subtest: BrowserSideProvider: isolated webview, address bar navigation and popup routing
+ok 335 - BrowserSideProvider: isolated webview, address bar navigation and popup routing
+  ---
+  duration_ms: 50.6297
+  type: 'test'
+  ...
+# Subtest: rejects callers that are not the main window page
+ok 336 - rejects callers that are not the main window page
+  ---
+  duration_ms: 5.1982
+  type: 'test'
+  ...
+# Subtest: mirrors the shared terminal session: input, output, resize, workspace jump
+ok 337 - mirrors the shared terminal session: input, output, resize, workspace jump
+  ---
+  duration_ms: 4556.3868
+  type: 'test'
+  ...
+# Subtest: several views share one session; closing a view leaves the session running
+ok 338 - several views share one session; closing a view leaves the session running
+  ---
+  duration_ms: 371.29
+  type: 'test'
+  ...
+# Subtest: a page that navigates away or is destroyed only drops its views
+ok 339 - a page that navigates away or is destroyed only drops its views
+  ---
+  duration_ms: 1.7881
+  type: 'test'
+  ...
+# C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17
+# var consoleProcessList = getConsoleProcessList(shellPid);
+#                          ^
+# Error: AttachConsole failed
+#     at Object.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17:26)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14)
+#     at Object..js (node:internal/modules/cjs/loader:1895:10)
+#     at Module.load (node:internal/modules/cjs/loader:1465:32)
+#     at Function._load (node:internal/modules/cjs/loader:1282:12)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+#     at node:internal/main/run_main_module:36:49
+# Node.js v22.17.1
+# Subtest: reports the shell exiting and can restart it, clearing the views
+ok 340 - reports the shell exiting and can restart it, clearing the views
+  ---
+  duration_ms: 3004.9072
+  type: 'test'
+  ...
+# [PowerShellExecutor] 正在清理资源...
+# [PowerShellExecutor] 正在终止 1 个子进程...
+# [PowerShellExecutor] 进程 (PID: 92128) 已终止。
+# [PowerShellExecutor] Settings file watcher stopped.
+# Subtest: records AI commands as runs: listed, readable and pushed to watching pages
+ok 341 - records AI commands as runs: listed, readable and pushed to watching pages
+  ---
+  duration_ms: 1160.2682
+  type: 'test'
+  ...
+# C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17
+# var consoleProcessList = getConsoleProcessList(shellPid);
+#                          ^
+# Error: AttachConsole failed
+#     at Object.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17:26)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14)
+#     at Object..js (node:internal/modules/cjs/loader:1895:10)
+#     at Module.load (node:internal/modules/cjs/loader:1465:32)
+#     at Function._load (node:internal/modules/cjs/loader:1282:12)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+#     at node:internal/main/run_main_module:36:49
+# Node.js v22.17.1
+# C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17
+# var consoleProcessList = getConsoleProcessList(shellPid);
+#                          ^
+# Error: AttachConsole failed
+#     at Object.<anonymous> (C:\\Users\\CHENXI\\Documents\\Codex\\2026-09-25\\vcpchat-ui-zcode-zcode-clone-vcpchatui\\work\\VCPChat-zcode-ui\\node_modules\\node-pty\\lib\\conpty_console_list_agent.js:17:26)
+#     at Module._compile (node:internal/modules/cjs/loader:1730:14)
+#     at Object..js (node:internal/modules/cjs/loader:1895:10)
+#     at Module.load (node:internal/modules/cjs/loader:1465:32)
+#     at Function._load (node:internal/modules/cjs/loader:1282:12)
+#     at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+#     at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+#     at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+#     at node:internal/main/run_main_module:36:49
+# Node.js v22.17.1
+# Subtest: development helper uses the real source file
+ok 342 - development helper uses the real source file
+  ---
+  duration_ms: 8.9279
+  type: 'test'
+  ...
+# Subtest: ASAR helper resolves to the physical unpacked directory
+ok 343 - ASAR helper resolves to the physical unpacked directory
+  ---
+  duration_ms: 16.5194
+  type: 'test'
+  ...
+# Subtest: an already unpacked path is not rewritten again
+ok 344 - an already unpacked path is not rewritten again
+  ---
+  duration_ms: 20.7297
+  type: 'test'
+  ...
+# Subtest: missing physical helper does not fall back to a virtual ASAR entry
+ok 345 - missing physical helper does not fall back to a virtual ASAR entry
+  ---
+  duration_ms: 7.5134
+  type: 'test'
+  ...
+# Subtest: both confirmation callers reject a missing helper and clean up their temporary file without spawning
+ok 346 - both confirmation callers reject a missing helper and clean up their temporary file without spawning
+  ---
+  duration_ms: 134.8991
+  type: 'test'
+  ...
+# Subtest: packaged terminal includes its executor, GUI, admin helper and native dependencies
+ok 347 - packaged terminal includes its executor, GUI, admin helper and native dependencies
+  ---
+  duration_ms: 54.7307
+  type: 'test'
+  ...
+# [VisibilityOptimizer] Initialized with global interceptors
+# [VisibilityOptimizer] Destroyed
+# [VisibilityOptimizer] Initialized with global interceptors
+# [VisibilityOptimizer] Destroyed
+# (node:95784) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/visibilityOptimizer.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: registering many messages measures them all before freezing any height
+ok 348 - registering many messages measures them all before freezing any height
+  ---
+  duration_ms: 235.6471
+  type: 'test'
+  ...
+# Subtest: a message removed before the frame is skipped, and a zero height is not frozen
+ok 349 - a message removed before the frame is skipped, and a zero height is not frozen
+  ---
+  duration_ms: 26.3042
+  type: 'test'
+  ...
+# (node:48996) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/split-checkout/modules/renderer/widgetBridge.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\split-checkout\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: state key is stable per message and html, and absent without a message id
+ok 350 - state key is stable per message and html, and absent without a message id
+  ---
+  duration_ms: 7.2991
+  type: 'test'
+  ...
+# Subtest: bridge script exposes window.vcp and talks to the host through postMessage
+ok 351 - bridge script exposes window.vcp and talks to the host through postMessage
+  ---
+  duration_ms: 4.2097
+  type: 'test'
+  ...
+# Subtest: bridge script survives hostile state and frame ids
+ok 352 - bridge script survives hostile state and frame ids
+  ---
+  duration_ms: 1.241
+  type: 'test'
+  ...
+# Subtest: channel persists state and only answers its own frame
+ok 353 - channel persists state and only answers its own frame
+  ---
+  duration_ms: 1.3553
+  type: 'test'
+  ...
+# [ContentProcessor] Widget request rejected: not-confirmed
+# Subtest: follow-up messages require a fresh host confirmation and are rate limited
+ok 354 - follow-up messages require a fresh host confirmation and are rate limited
+  ---
+  duration_ms: 15.7149
+  type: 'test'
+  ...
+# Subtest: readGlobals follows the app theme attribute
+ok 355 - readGlobals follows the app theme attribute
+  ---
+  duration_ms: 149.8853
+  type: 'test'
+  ...
+# Subtest: HTML preview embeds the bridge and restores saved state for the same message
+ok 356 - HTML preview embeds the bridge and restores saved state for the same message
+  ---
+  duration_ms: 183.7802
+  type: 'test'
+  ...
+# Subtest: iframe focus and repeated messages cannot replace a per-request host decision
+ok 357 - iframe focus and repeated messages cannot replace a per-request host decision
+  ---
+  duration_ms: 4.636
+  type: 'test'
+  ...
+# Subtest: a confirmation completed after the originating conversation changes cannot send into the new conversation
+ok 358 - a confirmation completed after the originating conversation changes cannot send into the new conversation
+  ---
+  duration_ms: 1.3014
+  type: 'test'
+  ...
+1..358
+# tests 358
+# suites 0
+# pass 358
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 32491.7592

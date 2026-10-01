@@ -1,0 +1,1319 @@
+{
+  "base": "283255750376e645ec3e355dbfb84730371014cc",
+  "source": "325ce1c9daede619fa48d07a9c741940e89ccab6",
+  "repairSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+  "branches": 23,
+  "oneCommitPerLayer": true,
+  "allHeadsAndParentsMatch": true,
+  "fullUiSystemPassed": true,
+  "allFunctionalLayersFullUiSystemPassed": true,
+  "functionalLayers": [
+    {
+      "number": 1,
+      "head": "ad24c9b35668c25aa6e1229e0c9c1eeaebcd3766",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "head": "a80f12559288c593ed87eee5a9b9274cc4c0ddff",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "head": "efb3db3ce3172dd2cdc663c56972204eff8e1ead",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "head": "efe20c4a0fa284f8c0f751a4ca6e805304410ed3",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 5,
+      "head": "b645544f5012ba28dcd90743970b66d7e0e42fd2",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "head": "02ae8840c5708ac2b7880fefd4c29043a54fcf40",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 7,
+      "head": "6647fc85792003d533aecac6215c3b035ad60e43",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 8,
+      "head": "c43760ea815157ce3af592d6319ad39bfb6cfb2d",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 9,
+      "head": "2571aaf68d36ff8815bcc15b7b6d547dd5707572",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "head": "32340973c26784cd55f2e892b1f75a6daff8fac6",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "head": "49f33574eb44d9bb6b57274199bf664e22a6e2e0",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 12,
+      "head": "416759adf8d258fd526c888301b7d8006129809d",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "head": "b4658657310f3a07b4d0c596b603186b1661089c",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "head": "300fc735d6a7e4c8a3610c0b1ec3407f373a5d6b",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 15,
+      "head": "12ca725ced81407ed3465e3798e912b275c3be0c",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "head": "504b3c6df040d100d438de9232d7bde0c2fd0e98",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "head": "83c40f5f44fcb740891a231afe426b1688ff9775",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 18,
+      "head": "5a3002b444515672425679b9348a101f3f8041d0",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 19,
+      "head": "509e71d26a44bc17cead917077d483321f848682",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 20,
+      "head": "635e306edf5abe2254aa9883d425d6b0c1066213",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 21,
+      "head": "719bfdb83de447a132e749c05c8f947b6bfa5eb2",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    },
+    {
+      "number": 22,
+      "head": "46819283d397dab31cf6de182b2a90240dd5b80b",
+      "checks": [
+        {
+          "label": "event-graph",
+          "exit": 0
+        },
+        {
+          "label": "consumers",
+          "exit": 0
+        },
+        {
+          "label": "renderer",
+          "exit": 0
+        },
+        {
+          "label": "main",
+          "exit": 0
+        },
+        {
+          "label": "next-delta",
+          "exit": 0
+        },
+        {
+          "label": "chat-contracts",
+          "exit": 0
+        },
+        {
+          "label": "classic-retirement",
+          "exit": 0
+        },
+        {
+          "label": "css",
+          "exit": 0
+        },
+        {
+          "label": "feature-tests",
+          "exit": 0
+        },
+        {
+          "label": "full-ui-gate",
+          "exit": 0
+        }
+      ]
+    }
+  ],
+  "matrix": [
+    {
+      "label": "full-ui-gate",
+      "status": 0,
+      "tests": 46,
+      "pass": 46,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "label": "feature-regressions",
+      "status": 0,
+      "tests": 358,
+      "pass": 358,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "label": "chat-kernel",
+      "status": 0,
+      "tests": 189,
+      "pass": 189,
+      "fail": 0,
+      "skipped": 0
+    },
+    {
+      "label": "event-graph",
+      "status": 0
+    },
+    {
+      "label": "consumers",
+      "status": 0
+    },
+    {
+      "label": "chat-contracts",
+      "status": 0
+    }
+  ],
+  "relativeImports": [
+    {
+      "branch": "pr/zcode-01-shell-composer-notifications",
+      "scanned": 9,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-02-sidepane-sidechat",
+      "scanned": 21,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-03-git-backend",
+      "scanned": 4,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-04-notes-code-viewer",
+      "scanned": 7,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-05-browser",
+      "scanned": 5,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-06-terminal-command-runs",
+      "scanned": 12,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-07-plan-detail",
+      "scanned": 3,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-08-git-pane",
+      "scanned": 3,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-09-file-summary",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-10-conversation-status",
+      "scanned": 4,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-11-model-trajectory",
+      "scanned": 11,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-12-turn-navigation",
+      "scanned": 3,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-13-message-metadata",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-14-conversation-find",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-15-selection-quote",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-16-suggested-prompts",
+      "scanned": 3,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-17-send-queue",
+      "scanned": 5,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-18-message-export",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-19-slash-commands",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-20-command-center",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-21-widget-bridge",
+      "scanned": 2,
+      "missing": []
+    },
+    {
+      "branch": "pr/zcode-22-history-performance",
+      "scanned": 1,
+      "missing": []
+    }
+  ],
+  "runtime": {
+    "productionParity": {
+      "pass": true,
+      "repairSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+      "functionalTip": "46819283d397dab31cf6de182b2a90240dd5b80b",
+      "differences": [
+        "docs/handoff/ADVERSARIAL-REVIEW.md",
+        "docs/handoff/HANDOFF.md",
+        "docs/handoff/PR-STACK.json",
+        "docs/handoff/PR-STACK.md",
+        "docs/handoff/REQUIREMENTS-vs-upstream.md",
+        "docs/handoff/review-probes/README.md",
+        "docs/handoff/review-probes/additional-probes.mjs",
+        "docs/handoff/review-probes/additional-results.json",
+        "docs/handoff/review-probes/adversarial-probes.mjs",
+        "docs/handoff/review-probes/adversarial-results.json",
+        "docs/handoff/review-probes/source-tests.json",
+        "scripts/next-delta-shared-baseline.json",
+        "vendor/zcode/ATTRIBUTION.md",
+        "vendor/zcode/LICENSE",
+        "vendor/zcode/NOTICE.md",
+        "vendor/zcode/THIRD-PARTY-NOTICES.md"
+      ],
+      "scope": "Functional code and tests identical. Documentation and protected-file baseline rationale differ by intended split ownership."
+    },
+    "fileAttribution": {
+      "pass": true,
+      "before": [
+        {
+          "path": "C:/failed.js",
+          "op": "write"
+        }
+      ],
+      "after": [],
+      "sourceBefore": "59de8d87",
+      "fixedSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+      "scope": "Synthetic equal-count concurrent tool transcript; no real file write"
+    },
+    "widget": {
+      "pass": true,
+      "checks": [
+        "focused iframe cannot auto-send",
+        "synthetic click cannot approve",
+        "trusted mouse click sends exactly once",
+        "topic switch invalidates confirmation"
+      ],
+      "verifiedSourceParity": {
+        "before": "19703d9",
+        "after": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+        "files": [
+          {
+            "file": "modules/renderer/contentProcessor.js",
+            "sha256": "f9d410bd54176c352bdb673164c137e2ae63e5ad7f73e2570e80e23e240f6281"
+          },
+          {
+            "file": "modules/renderer/widgetBridge.js",
+            "sha256": "cb1ca076277460bb0080321ca44a4ba339b96e81c0e55b9c196953e0ca376833"
+          },
+          {
+            "file": "styles/ui-system/tokens.css",
+            "sha256": "bc003f433fbb9cb1ed360bddd4c3c59b43a19e13d31e7fa2d3a1fa207462e560"
+          },
+          {
+            "file": "styles/ui-system/status-panel.css",
+            "sha256": "b88c0849fb69c1789bed6c29ad63adda754992c611643c3ef39fa66d0d41fae7"
+          }
+        ],
+        "dependencyConfigurationUnchanged": true
+      }
+    },
+    "packedNative": {
+      "pass": true,
+      "electron": "44.0.0",
+      "abi": "149",
+      "checks": [
+        "packaged native binding loaded",
+        "packaged dependency manifests present",
+        "real PTY input/output",
+        "external Node can read physical unpacked Python confirmation script"
+      ]
+    },
+    "packedTerminal": {
+      "pass": true,
+      "electron": "44.0.0",
+      "checks": [
+        "packaged IPC terminalCreate",
+        "real input/output",
+        "exit event",
+        "restart new PID and output",
+        "view detaches without killing shared shell"
+      ]
+    },
+    "packedSourceParity": {
+      "pass": true,
+      "manifestFiles": 143,
+      "verifiedPackagedClosure": {
+        "ok": true,
+        "failures": []
+      },
+      "finalSource": "fc0ac5c38a4920421facbf20921df4ba009b2cde",
+      "terminalScopedSourceParity": [
+        {
+          "file": "modules/ipc/applicationSender.js",
+          "sha256": "b482142fad31b488716f69bcc6ec23f17417f506ffec8c0602a595f22a694e0c"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "sha256": "e6bbbec5eff76305e5e66ddd3364aac6ccbd81b05ea79747886a5f20a11c2381"
+        },
+        {
+          "file": "preloads/api/terminal.js",
+          "sha256": "bd1aa1e19711f4cc5766d8e3393b108541806fd3f33c96689456cd44c3026dc2"
+        },
+        {
+          "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+          "sha256": "87e134e8be0dc8b8923a36b53163bbb56eac2f192aeff41e0b64918ec424822a"
+        },
+        {
+          "file": "VCPDistributedServer/Plugin/PowerShellExecutor/nativeHelperPath.js",
+          "sha256": "05ec4e16117418eb1d3b2ce1612f48767364837e4f58e457f40e407ee40cbddc"
+        },
+        {
+          "file": "VCPDistributedServer/Plugin/PowerShellExecutor/plugin-manifest.json",
+          "sha256": "1b48dc04d8065c3bca3698b2b79413223024cbb4cb8f9b71aa07cfd729150415"
+        },
+        {
+          "file": "VCPDistributedServer/Plugin/PowerShellExecutor/AdminConfirm.py",
+          "sha256": "d447961cd4a69a6e69ce60d96033f41c18ceaa7bca5c0572a001a0266f76d862"
+        },
+        {
+          "file": "VCPDistributedServer/Plugin/PowerShellExecutor/gui/PowerShellViewer.js",
+          "sha256": "1b2fcce825844cacd943ac95d914ade48aa31ff1db506685ecd5983ec212a8d5"
+        }
+      ],
+      "scope": "Terminal-relevant modules match final source; package is not presented as the complete final release artifact."
+    }
+  },
+  "limitations": [
+    "Unsigned Windows unpacked product tested, not signed NSIS install/upgrade",
+    "Admin confirmation needs local Pythonw/Tk; no real UAC or Tk GUI confirmation executed",
+    "macOS/Linux, real VCP server group model calls, live voice and full-app visual/long-term soak not verified",
+    "node-pty Windows cleanup helper AttachConsole warning preserved",
+    "command association uses text, not topicId; unknown exit status is neutral"
+  ],
+  "finalization": "Document branch and bundle checks are recorded in the external output after final commit."
+}

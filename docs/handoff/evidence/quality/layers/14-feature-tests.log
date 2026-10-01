@@ -1,0 +1,56 @@
+TAP version 13
+# (node:66292) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/conversation-find.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: navigation keys and wrap-around selection follow ZCode
+ok 1 - navigation keys and wrap-around selection follow ZCode
+  ---
+  duration_ms: 2.2702
+  type: 'test'
+  ...
+# Subtest: collectFindRanges matches case-insensitively in message text and skips buttons and the thinking indicator
+ok 2 - collectFindRanges matches case-insensitively in message text and skips buttons and the thinking indicator
+  ---
+  duration_ms: 120.7094
+  type: 'test'
+  ...
+# Subtest: Ctrl+F opens the bar, highlights, counts, navigates with Enter / Shift+Enter and closes with Esc
+ok 3 - Ctrl+F opens the bar, highlights, counts, navigates with Enter / Shift+Enter and closes with Esc
+  ---
+  duration_ms: 680.2136
+  type: 'test'
+  ...
+# Subtest: prefills the selected text, keeps the position when streaming changes the DOM and follows new matches
+ok 4 - prefills the selected text, keeps the position when streaming changes the DOM and follows new matches
+  ---
+  duration_ms: 523.2568
+  type: 'test'
+  ...
+# Subtest: ignores Ctrl+F without messages, with synthetic events, and lets the global button reach searchManager
+ok 5 - ignores Ctrl+F without messages, with synthetic events, and lets the global button reach searchManager
+  ---
+  duration_ms: 46.8454
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without a chat container
+ok 6 - mount is a no-op without a chat container
+  ---
+  duration_ms: 9.446
+  type: 'test'
+  ...
+# Subtest: a match that runs away during a long scroll (layout shifts) is re-scrolled until it is in view
+ok 7 - a match that runs away during a long scroll (layout shifts) is re-scrolled until it is in view
+  ---
+  duration_ms: 1838.4809
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5188.2225

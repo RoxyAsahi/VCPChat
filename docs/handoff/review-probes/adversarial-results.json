@@ -1,0 +1,49 @@
+[
+  {
+    "id": "trajectory-byte-limit",
+    "limit": 1024,
+    "actual": 8702,
+    "secretRetained": true
+  },
+  {
+    "id": "trajectory-key-collision",
+    "sameFile": true
+  },
+  {
+    "id": "file-summary-mismatch",
+    "changes": [
+      {
+        "path": "failed.txt",
+        "op": "write"
+      },
+      {
+        "path": "pending.txt",
+        "op": "write"
+      }
+    ]
+  },
+  {
+    "id": "global-tab-switch",
+    "visible": false,
+    "active": "notifications",
+    "tabs": [
+      "notifications",
+      "git"
+    ]
+  },
+  {
+    "id": "sidechat-sender",
+    "unauthorizedSuccess": true
+  },
+  {
+    "id": "status-stale-plan",
+    "visibleText": "minimize-2Git 工具chevron-downfile-diff更改+0 -0git-branchBchevron-downarrow-up-from-line提交或推送进程chevron-down0/1arrow-rightA-old-task",
+    "oldPlanShown": true
+  },
+  {
+    "id": "queue-truncation",
+    "inMemory": 51,
+    "persisted": 50,
+    "lostLastDraft": true
+  }
+]

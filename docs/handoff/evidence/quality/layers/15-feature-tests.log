@@ -1,0 +1,56 @@
+TAP version 13
+# (node:88060) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-3/modules/ui-system/selection-quote-action.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-3\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: toMarkdownQuote prefixes every line and keeps blank lines as a bare marker
+ok 1 - toMarkdownQuote prefixes every line and keeps blank lines as a bare marker
+  ---
+  duration_ms: 1.7951
+  type: 'test'
+  ...
+# Subtest: buildQuoteInsertion separates the quote from earlier text and leaves room to keep typing
+ok 2 - buildQuoteInsertion separates the quote from earlier text and leaves room to keep typing
+  ---
+  duration_ms: 1.6543
+  type: 'test'
+  ...
+# Subtest: resolveQuoteButtonPosition follows the side-chat button, else sits above the selection and flips below at the top
+ok 3 - resolveQuoteButtonPosition follows the side-chat button, else sits above the selection and flips below at the top
+  ---
+  duration_ms: 0.5897
+  type: 'test'
+  ...
+# Subtest: shows only for a long enough selection inside a message, quotes it into the composer and clears the selection
+ok 4 - shows only for a long enough selection inside a message, quotes it into the composer and clears the selection
+  ---
+  duration_ms: 260.2976
+  type: 'test'
+  ...
+# Subtest: refuses oversized selections with a notice and keeps following the side-chat button
+ok 5 - refuses oversized selections with a notice and keeps following the side-chat button
+  ---
+  duration_ms: 67.8529
+  type: 'test'
+  ...
+# Subtest: mount is a no-op without a chat container
+ok 6 - mount is a no-op without a chat container
+  ---
+  duration_ms: 9.5054
+  type: 'test'
+  ...
+# Subtest: sent quotes: paragraphs where every line starts with > become blockquotes, nothing else is touched
+ok 7 - sent quotes: paragraphs where every line starts with > become blockquotes, nothing else is touched
+  ---
+  duration_ms: 68.0902
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2342.007

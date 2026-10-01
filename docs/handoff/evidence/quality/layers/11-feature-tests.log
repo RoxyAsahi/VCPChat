@@ -1,0 +1,336 @@
+TAP version 13
+# Subtest: recursive redaction protects objects, arrays, cycles, depth and getters without mutating the request
+ok 1 - recursive redaction protects objects, arrays, cycles, depth and getters without mutating the request
+  ---
+  duration_ms: 3.5379
+  type: 'test'
+  ...
+# Subtest: single huge UTF-8 record and repeated writes never exceed the actual file byte budget
+ok 2 - single huge UTF-8 record and repeated writes never exceed the actual file byte budget
+  ---
+  duration_ms: 107.8862
+  type: 'test'
+  ...
+# Subtest: running stream snapshots bound aggregate text, reasoning and tool payloads before finish
+ok 3 - running stream snapshots bound aggregate text, reasoning and tool payloads before finish
+  ---
+  duration_ms: 24.659
+  type: 'test'
+  ...
+# Subtest: tail reads and persistence use asynchronous IO, tolerate a legacy oversized file and flag truncation
+ok 4 - tail reads and persistence use asynchronous IO, tolerate a legacy oversized file and flag truncation
+  ---
+  duration_ms: 23.4643
+  type: 'test'
+  ...
+# Subtest: hashed session filenames cannot collide and legacy records are filtered by exact session key
+ok 5 - hashed session filenames cannot collide and legacy records are filtered by exact session key
+  ---
+  duration_ms: 42.9315
+  type: 'test'
+  ...
+# Subtest: clear invalidates current recording handles and later finish cannot resurrect cleared records
+ok 6 - clear invalidates current recording handles and later finish cannot resurrect cleared records
+  ---
+  duration_ms: 9.6534
+  type: 'test'
+  ...
+# Subtest: clear takes effect before its IO completes and cannot be followed by a stale finish
+ok 7 - clear takes effect before its IO completes and cannot be followed by a stale finish
+  ---
+  duration_ms: 9.1167
+  type: 'test'
+  ...
+# Subtest: clearing immediately after finish cancels the already queued snapshot
+ok 8 - clearing immediately after finish cancels the already queued snapshot
+  ---
+  duration_ms: 11.5462
+  type: 'test'
+  ...
+# Subtest: normalized multipart inputs share a single character budget
+ok 9 - normalized multipart inputs share a single character budget
+  ---
+  duration_ms: 1.4127
+  type: 'test'
+  ...
+# Subtest: recording opt-out invalidates handles and queued snapshots
+ok 10 - recording opt-out invalidates handles and queued snapshots
+  ---
+  duration_ms: 5.145
+  type: 'test'
+  ...
+# Subtest: retention expires old legacy logs and bounds total recorder-owned files
+ok 11 - retention expires old legacy logs and bounds total recorder-owned files
+  ---
+  duration_ms: 19.842
+  type: 'test'
+  ...
+# Subtest: request budget includes tool identities, names and image URLs across all messages
+ok 12 - request budget includes tool identities, names and image URLs across all messages
+  ---
+  duration_ms: 23.8843
+  type: 'test'
+  ...
+# Subtest: lists, clears and watches trajectory records for the main window only
+ok 13 - lists, clears and watches trajectory records for the main window only
+  ---
+  duration_ms: 523.3392
+  type: 'test'
+  ...
+# (node:26284) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/modelTrajectoryModel.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: duration and labels follow ZCode formatting
+ok 14 - duration and labels follow ZCode formatting
+  ---
+  duration_ms: 2.1265
+  type: 'test'
+  ...
+# Subtest: TOOL_REQUEST blocks in assistant text become tool calls and are removed from the prose
+ok 15 - TOOL_REQUEST blocks in assistant text become tool calls and are removed from the prose
+  ---
+  duration_ms: 5.3249
+  type: 'test'
+  ...
+# Subtest: VCP result blocks inside a user message become separate tool messages, failures are errors
+ok 16 - VCP result blocks inside a user message become separate tool messages, failures are errors
+  ---
+  duration_ms: 2.2564
+  type: 'test'
+  ...
+# Subtest: output rows: reasoning, prose, and tool calls from both OpenAI tool_calls and request blocks
+ok 17 - output rows: reasoning, prose, and tool calls from both OpenAI tool_calls and request blocks
+  ---
+  duration_ms: 0.8185
+  type: 'test'
+  ...
+# Subtest: timeline shows the full context first, then only new non-assistant messages; title calls stay whole
+ok 18 - timeline shows the full context first, then only new non-assistant messages; title calls stay whole
+  ---
+  duration_ms: 1.4155
+  type: 'test'
+  ...
+# Subtest: summary adds tokens, flags estimates and lists models once
+ok 19 - summary adds tokens, flags estimates and lists models once
+  ---
+  duration_ms: 0.719
+  type: 'test'
+  ...
+# Subtest: search folds whitespace and case, maps back to source offsets, and reaches tool names
+ok 20 - search folds whitespace and case, maps back to source offsets, and reaches tool names
+  ---
+  duration_ms: 2.5386
+  type: 'test'
+  ...
+# Subtest: a VCP server error relayed as a normal stream is not reported as a clean finish
+ok 21 - a VCP server error relayed as a normal stream is not reported as a clean finish
+  ---
+  duration_ms: 0.5482
+  type: 'test'
+  ...
+# Subtest: normalizeMessage handles strings, part arrays, images and tool calls without storing base64
+ok 22 - normalizeMessage handles strings, part arrays, images and tool calls without storing base64
+  ---
+  duration_ms: 6.2674
+  type: 'test'
+  ...
+# Subtest: estimateTokens counts CJK per character and latin per ~4 characters
+ok 23 - estimateTokens counts CJK per character and latin per ~4 characters
+  ---
+  duration_ms: 0.6211
+  type: 'test'
+  ...
+# Subtest: streamed call accumulates text, reasoning, tool calls, finish reason and usage
+ok 24 - streamed call accumulates text, reasoning, tool calls, finish reason and usage
+  ---
+  duration_ms: 41.4227
+  type: 'test'
+  ...
+# Subtest: non-stream response, missing usage estimate, errors and aborts
+ok 25 - non-stream response, missing usage estimate, errors and aborts
+  ---
+  duration_ms: 50.0181
+  type: 'test'
+  ...
+# Subtest: list returns only the most recent records and says so; clear removes the file; sessions are isolated
+ok 26 - list returns only the most recent records and says so; clear removes the file; sessions are isolated
+  ---
+  duration_ms: 64.9945
+  type: 'test'
+  ...
+# Subtest: oversized files are compacted to the newest records; corrupt lines are skipped
+ok 27 - oversized files are compacted to the newest records; corrupt lines are skipped
+  ---
+  duration_ms: 46.0077
+  type: 'test'
+  ...
+# Subtest: subscribers hear about start, finish and clear; a throwing subscriber does not break recording
+ok 28 - subscribers hear about start, finish and clear; a throwing subscriber does not break recording
+  ---
+  duration_ms: 7.6382
+  type: 'test'
+  ...
+# Subtest: beginTrajectoryCall is a safe no-op before the shared recorder is configured
+ok 29 - beginTrajectoryCall is a safe no-op before the shared recorder is configured
+  ---
+  duration_ms: 0.5808
+  type: 'test'
+  ...
+# Subtest: session key and source come from the request context (group beats agent)
+ok 30 - session key and source come from the request context (group beats agent)
+  ---
+  duration_ms: 1.2537
+  type: 'test'
+  ...
+# Subtest: topic title generation is recorded as a title call when it knows its topic, and not at all without one
+ok 31 - topic title generation is recorded as a title call when it knows its topic, and not at all without one
+  ---
+  duration_ms: 112.694
+  type: 'test'
+  ...
+# Subtest: retention removes only recorder-shaped orphan temporaries, including interrupted policy writes
+ok 32 - retention removes only recorder-shaped orphan temporaries, including interrupted policy writes
+  ---
+  duration_ms: 25.9065
+  type: 'test'
+  ...
+# Subtest: clearing a session removes its crashed-write body without touching another session temporary
+ok 33 - clearing a session removes its crashed-write body without touching another session temporary
+  ---
+  duration_ms: 27.0535
+  type: 'test'
+  ...
+# Subtest: retention during an atomic write preserves the active temporary until commit
+ok 34 - retention during an atomic write preserves the active temporary until commit
+  ---
+  duration_ms: 22.6203
+  type: 'test'
+  ...
+# Subtest: clear markers survive expiry so recently copied legacy data cannot resurrect cleared history
+ok 35 - clear markers survive expiry so recently copied legacy data cannot resurrect cleared history
+  ---
+  duration_ms: 18.5974
+  type: 'test'
+  ...
+# Subtest: 注册表加载成功，每个角色都有可见 API
+ok 36 - 注册表加载成功，每个角色都有可见 API
+  ---
+  duration_ms: 2.5826
+  type: 'test'
+  ...
+# Subtest: 除本地 API 外，每个条目都声明了 IPC 通道
+ok 37 - 除本地 API 外，每个条目都声明了 IPC 通道
+  ---
+  duration_ms: 0.7668
+  type: 'test'
+  ...
+# Subtest: 群聊队列中断与 JEV 群聊 API 对 chat 角色可见，且主进程已注册
+ok 38 - 群聊队列中断与 JEV 群聊 API 对 chat 角色可见，且主进程已注册
+  ---
+  duration_ms: 0.7925
+  type: 'test'
+  ...
+# Subtest: 主聊天语音 API 对 chat 可见，且不存在私自存盘的录音通道
+ok 39 - 主聊天语音 API 对 chat 可见，且不存在私自存盘的录音通道
+  ---
+  duration_ms: 0.4376
+  type: 'test'
+  ...
+# Subtest: 置顶 API 只对 utility 可见
+ok 40 - 置顶 API 只对 utility 可见
+  ---
+  duration_ms: 2.7369
+  type: 'test'
+  ...
+# Subtest: 使用角色 preload 的窗口都显式设置了 sandbox: false
+ok 41 - 使用角色 preload 的窗口都显式设置了 sandbox: false
+  ---
+  duration_ms: 13.4295
+  type: 'test'
+  ...
+# Subtest: 侧栏面板调用的 API 对 chat 角色可见（否则调用会被“权限已隔离”拒绝）
+ok 42 - 侧栏面板调用的 API 对 chat 角色可见（否则调用会被“权限已隔离”拒绝）
+  ---
+  duration_ms: 1.6653
+  type: 'test'
+  ...
+# (node:91472) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-01/requirements-vs-upstream-md-ai-r1/work/gates-worker-2/modules/ui-system/side-pane/modelTrajectorySideProvider.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-01\\requirements-vs-upstream-md-ai-r1\\work\\gates-worker-2\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: trajectoryKeyFor matches the recorder key
+ok 43 - trajectoryKeyFor matches the recorder key
+  ---
+  duration_ms: 2.68
+  type: 'test'
+  ...
+# Subtest: openModelTrajectoryTab opens the singleton tab
+ok 44 - openModelTrajectoryTab opens the singleton tab
+  ---
+  duration_ms: 140.8384
+  type: 'test'
+  ...
+# Subtest: mountTab renders summary, call cards, deltas, and error block
+ok 45 - mountTab renders summary, call cards, deltas, and error block
+  ---
+  duration_ms: 233.7043
+  type: 'test'
+  ...
+# Subtest: rows toggle, expand-all and per-kind menu switches follow the command versions
+ok 46 - rows toggle, expand-all and per-kind menu switches follow the command versions
+  ---
+  duration_ms: 84.6796
+  type: 'test'
+  ...
+# Subtest: search counts matches, handles no-match, and Escape closes
+ok 47 - search counts matches, handles no-match, and Escape closes
+  ---
+  duration_ms: 667.2645
+  type: 'test'
+  ...
+# Subtest: a collapsed row containing the active match is revealed
+ok 48 - a collapsed row containing the active match is revealed
+  ---
+  duration_ms: 237.4204
+  type: 'test'
+  ...
+# Subtest: copy button copies the message content
+ok 49 - copy button copies the message content
+  ---
+  duration_ms: 61.4412
+  type: 'test'
+  ...
+# Subtest: change events reload only for the current session
+ok 50 - change events reload only for the current session
+  ---
+  duration_ms: 341.7072
+  type: 'test'
+  ...
+# Subtest: empty and no-conversation states, list errors, clear
+ok 51 - empty and no-conversation states, list errors, clear
+  ---
+  duration_ms: 126.0444
+  type: 'test'
+  ...
+# Subtest: switching conversation reloads through the selection subscription, and dispose unsubscribes
+ok 52 - switching conversation reloads through the selection subscription, and dispose unsubscribes
+  ---
+  duration_ms: 121.9279
+  type: 'test'
+  ...
+# Subtest: truncated notice and dispose cleanup
+ok 53 - truncated notice and dispose cleanup
+  ---
+  duration_ms: 31.2963
+  type: 'test'
+  ...
+1..53
+# tests 53
+# suites 0
+# pass 53
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4471.9343
