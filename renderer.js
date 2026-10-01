@@ -22,7 +22,7 @@ import { createSidePaneController } from './modules/ui-system/side-pane/side-pan
 import { createNotesSideProvider } from './modules/ui-system/side-pane/notesSideProvider.js';
 import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/codeViewerSideProvider.js';
 
-
+import { createBrowserSideProvider } from './modules/ui-system/side-pane/browserSideProvider.js';
 
 
 
@@ -1256,9 +1256,13 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
             sidePaneController.registerProvider('code-viewer', codeViewerSideProvider);
 
+            const browserSideProvider = createBrowserSideProvider({
+                document,
+                api: chatAPI || window.electronAPI,
+                sidePaneController
+            });
             
-            
-            
+            sidePaneController.registerProvider('browser', browserSideProvider);
 
             
 
