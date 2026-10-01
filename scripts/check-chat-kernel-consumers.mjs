@@ -10,10 +10,15 @@ const packageScripts = JSON.parse(read('package.json')).scripts || {};
 
 const ignoredProductionDirectoryNames = new Set([
     '.git',
+    'artifacts',
     'docs',
     'node_modules',
     'screenshots',
     'scripts',
+    'scratch',
+    // Local worktrees, runtime probes and deliverables are outside product ownership.
+    'work',
+    'outputs',
     'tests',
     'vendor',
 ]);

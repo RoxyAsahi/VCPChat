@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import postcss from 'postcss';
 import { JSDOM } from 'jsdom';
+import { parse as parseJavaScript } from '@babel/parser';
 
 const root = process.cwd();
 const styleDir = path.join(root, 'styles', 'ui-system');
@@ -139,11 +140,27 @@ const inlineStyleCompatibilityAllowlist = new Set([
     path.join(moduleDir, 'typed-field-owners.js'), // Settings snapshot projection updates canonical dependent rows.
 ]);
 
+// Runtime geometry has a bounded, reviewed property contract. New colors/font literals cannot hide behind a file-level exception.
+const dynamicStyleOwners = JSON.parse(fs.readFileSync(path.join(root,'docs/contracts/ui-dynamic-style-ownership.json'),'utf8'));
 for (const file of filesIn(moduleDir, '.js')) {
     const source = fs.readFileSync(file, 'utf8');
-    if (/\bstyle\s*=|\.style\./.test(source) && !inlineStyleCompatibilityAllowlist.has(file)) {
-        report(file, 'contains inline style mutation');
+    if (inlineStyleCompatibilityAllowlist.has(file)) continue;
+    const owner = dynamicStyleOwners[path.relative(moduleDir,file).replaceAll('\\','/')];
+    const approved = new Set(owner?.properties || []);
+    const ast = parseJavaScript(source,{sourceType:'unambiguous'});
+    const propertyOf = node => node?.computed ? node.property?.value : node?.property?.name;
+    function inspect(node) {
+        if (!node || typeof node !== 'object') return;
+        if (node.type === 'AssignmentExpression' && node.left?.type === 'MemberExpression') {
+            const left = node.left;
+            if (propertyOf(left.object) === 'style' && !approved.has(propertyOf(left))) report(file, 'unowned dynamic style property: '+String(propertyOf(left)));
+            if (propertyOf(left) === 'style') report(file,'assigning the entire style object is forbidden');
+        }
+        if (node.type === 'CallExpression' && propertyOf(node.callee?.object) === 'style') report(file,'style method requires an explicit property contract');
+        if (node.type === 'StringLiteral' && /style\s*=\s*["']/i.test(node.value)) report(file,'inline HTML styles must be declared in CSS');
+        for (const value of Object.values(node)) if (Array.isArray(value)) value.forEach(inspect); else if(value && typeof value === 'object') inspect(value);
     }
+    inspect(ast);
 }
 
 const runtimeFile = path.join(moduleDir, 'vcp-ui.js');

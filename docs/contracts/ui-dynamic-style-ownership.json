@@ -1,0 +1,111 @@
+{
+  "conversation-find.js": {
+    "properties": [
+      "position"
+    ],
+    "reason": "Measured search dock anchors to its scrolling host."
+  },
+  "conversation-status-panel.js": {
+    "properties": [
+      "left",
+      "top",
+      "position",
+      "height",
+      "gridTemplateColumns"
+    ],
+    "reason": "Viewport-clamped popovers and computed commit-graph geometry."
+  },
+  "conversation-turn-navigator.js": {
+    "properties": [
+      "opacity",
+      "transform",
+      "top",
+      "height",
+      "position"
+    ],
+    "reason": "Viewport position and progress-driven turn markers."
+  },
+  "message-export.js": {
+    "properties": [
+      "left",
+      "bottom"
+    ],
+    "reason": "Selection dock follows the selected message bounds."
+  },
+  "selection-quote-action.js": {
+    "properties": [
+      "left",
+      "top",
+      "display"
+    ],
+    "reason": "Selection anchor geometry and visibility."
+  },
+  "side-pane/browserSideProvider.js": {
+    "properties": [
+      "display"
+    ],
+    "reason": "Owned browser failure, permission and menu visibility."
+  },
+  "side-pane/gitSideProvider.js": {
+    "properties": [
+      "left",
+      "top"
+    ],
+    "reason": "Context menu is clamped to current pointer and viewport."
+  },
+  "side-pane/planDetailSideProvider.js": {
+    "properties": [
+      "width"
+    ],
+    "reason": "Numeric completion percentage for a progress bar."
+  },
+  "side-pane/side-pane-controller.js": {
+    "properties": [
+      "width",
+      "opacity",
+      "display",
+      "position",
+      "left",
+      "top",
+      "zIndex"
+    ],
+    "reason": "Resizable pane transitions and viewport menu placement."
+  },
+  "side-pane/side-pane-resizer-owner.js": {
+    "properties": [
+      "width",
+      "cursor",
+      "userSelect",
+      "transition"
+    ],
+    "reason": "Pointer-owned resize geometry and temporary drag state, restored on teardown."
+  },
+  "side-pane/side-pane-tab-dnd.js": {
+    "properties": [
+      "transform",
+      "transition",
+      "zIndex"
+    ],
+    "reason": "Measured drag displacement, reset after drag."
+  },
+  "side-pane/terminalSideProvider.js": {
+    "properties": [
+      "background"
+    ],
+    "reason": "xterm surface uses the resolved terminal theme background."
+  },
+  "side-pane/terminalTheme.js": {
+    "properties": [
+      "color"
+    ],
+    "reason": "Detached CSS color probe converts an inherited theme value for xterm."
+  },
+  "slash-commands.js": {
+    "properties": [
+      "left",
+      "width",
+      "bottom"
+    ],
+    "reason": "Popup follows composer bounds in the current viewport."
+  }
+}

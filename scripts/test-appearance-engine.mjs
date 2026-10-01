@@ -139,7 +139,7 @@ assert.match(appearanceCss, /\.vcp-material-optics\s*\{[^}]*position:\s*fixed/s)
 assert.match(appearanceCss, /html\[data-vcp-radius="square"\] \.vcp-ui-scope/);
 assert.doesNotMatch(appearanceCss, /data-ui-mode/);
 assert.match(appearanceCss, /--vcp-ui-font-family:\s*var\(--vcp-appearance-font-family\)/);
-assert.match(appearanceCss, /\.chat-input-card\s*\{\s*border-radius:\s*var\(--vcp-ui-composer-radius, 24px\)/s);
+assert.match(appearanceCss, /\.chat-input-card\s*\{\s*border-radius:\s*var\(--vcp-ui-composer-radius, 16px\)/s);
 assert.match(appearanceCss, /--vcp-ui-shell-radius:\s*0px/);
 assert.match(appearanceCss, /--vcp-ui-shell-radius:\s*18px/);
 assert.match(appearanceCss, /data-vcp-shell-radius="tuned"/);
@@ -147,6 +147,7 @@ assert.match(appearanceCss, /--vcp-ui-sidebar-item-radius:\s*10px/);
 assert.match(appearanceCss, /data-vcp-surface-effect="liquid"\] \.next-ui-navigation-material/);
 assert.doesNotMatch(appearanceCss, /data-vcp-surface="custom"\] \.main-content/);
 const nextCss = fs.readFileSync('styles/ui-next.css', 'utf8');
+assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.container::before\s*\{[^}]*backdrop-filter:\s*var\(--next-backdrop-filter\)/s, 'shared plane paints the continuous navigation material');
 assert.match(nextCss, /data-vcp-wallpaper-scope="panel"\] body\s*\{[^}]*background-image:\s*none\s*!important/s);
 assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] body\s*\{[^}]*background-image:\s*var\(--next-wallpaper\)\s*!important/s);
 assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.next-ui-main-panel\s*\{[^}]*linear-gradient/s);
@@ -154,8 +155,8 @@ assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.next-ui-navigation-
     'global wallpaper disables the viewport-sized material filter');
 assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.next-ui-topbar\s*\{[^}]*backdrop-filter:\s*var\(--next-backdrop-filter\)/s,
     'global wallpaper applies glass locally to the topbar');
-assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.sidebar\s*\{[^}]*backdrop-filter:\s*var\(--next-backdrop-filter\)/s,
-    'global wallpaper applies glass locally to the sidebar');
+assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.sidebar\s*\{[^}]*backdrop-filter:\s*none\s*!important/s,
+    'sidebar uses the shared material plane');
 assert.match(nextCss, /data-vcp-wallpaper-scope="global"\] \.next-ui-main-panel\s*\{[^}]*backdrop-filter:\s*none\s*!important/s,
     'global wallpaper keeps the main chat wallpaper sharp');
 assert.match(nextCss, /#vcp-we-wallpaper-web/, 'dynamic and web wallpaper planes share the resolved geometry contract');

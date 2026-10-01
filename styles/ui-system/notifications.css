@@ -23,6 +23,11 @@
         flex: 0 0 auto;
     }
 
+    /* 聊天标题栏不再放通知铃铛：它与「侧边聊天」同为打开侧边栏，通知走侧边栏的固定页签 */
+    html .vcp-ui-scope #nextUiChatNotificationHost {
+        display: none;
+    }
+
     html .vcp-ui-scope #toggleNotificationsBtn {
         width: var(--vcp-ui-control-md);
         min-width: var(--vcp-ui-control-md);

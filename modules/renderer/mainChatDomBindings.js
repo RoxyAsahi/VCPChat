@@ -60,10 +60,21 @@ export function createMainChatDomBindings(document) {
         toggleAssistantBtn: byId(document, 'toggleAssistantBtn'),
         toggleSidebarModeBtn: byId(document, 'toggleSidebarModeBtn'),
         openModelSelectBtn: byId(document, 'openModelSelectBtn'),
+        vcpSidePane: byId(document, 'vcpSidePane'),
+        sidePaneTabs: document.querySelector('.side-pane-tabs'),
+        sidePaneContentContainer: document.querySelector('.side-pane-content-container'),
+        toggleSidePaneChatBtn: byId(document, 'toggleSidePaneChatBtn'),
+        closeSidePaneBtn: byId(document, 'closeSidePaneBtn'),
+        addSidePaneChatBtn: byId(document, 'addSidePaneChatBtn'),
     };
 
     for (const required of ['itemListUl', 'chatMessagesDiv', 'messageInput', 'sendMessageBtn']) {
         if (!bindings[required]) throw new Error(`MainChatDomBindings missing required node: ${required}`);
     }
     return Object.freeze(bindings);
+}
+
+export function resolveMainChatCommandTarget(document, name) {
+    const ids = {newTopic:'nextUiCreateTopicBtn',theme:'nextUiThemeBtn',settings:'nextUiSettingsBtn',themeStore:'nextUiThemeStoreBtn'};
+    return ids[name] ? document.getElementById(ids[name]) : null;
 }

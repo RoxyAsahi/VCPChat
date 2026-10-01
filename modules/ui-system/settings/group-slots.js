@@ -143,7 +143,7 @@
         svg.setAttribute('stroke-linejoin', 'round');
         svg.setAttribute('aria-hidden', 'true');
         svg.setAttribute('focusable', 'false');
-        svg.style.flex = '0 0 auto';
+        svg.classList.add('vcp-group-detail-icon');
 
         const paths = type === 'start'
             ? [

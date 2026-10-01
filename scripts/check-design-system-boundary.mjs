@@ -9,18 +9,9 @@ const root = process.cwd();
 // local `upstream/main` ref may be older still. Both make accepted product
 // changes look like design-system violations. Environment overrides remain
 // available when a PR intentionally audits against a newly reviewed snapshot.
-const sourceRef = process.env.VCP_DESIGN_SOURCE_REF || (() => {
-    try {
-        return execFileSync('git', ['merge-base', 'HEAD', 'origin/main'], { cwd: root, encoding: 'utf8' }).trim();
-    } catch {
-        return 'HEAD';
-    }
-})();
-// Compare the reviewed subtraction snapshot against the current product main
-// as the second ancestry boundary. The snapshot is intentionally not itself
-// the upstream ref: this branch may contain unrelated upstream product work
-// that is already present on main and must not be reported as a design delta.
-const upstreamRef = process.env.VCP_UPSTREAM_REF || 'origin/main';
+const reviewedPortScope = JSON.parse(fs.readFileSync(path.join(root, 'docs/contracts/zcode-port-scope.json'), 'utf8'));
+const sourceRef = process.env.VCP_DESIGN_SOURCE_REF || reviewedPortScope.baseline;
+const upstreamRef = process.env.VCP_UPSTREAM_REF || reviewedPortScope.baseline;
 const failures = [];
 
 const forbiddenPaths = [
@@ -398,6 +389,10 @@ const allowedSourceDifferences = new Set([
     'modules/event-listeners.js',
     'modules/renderer/middleClickHandler.js',
 ]);
+for (const entry of reviewedPortScope.files) {
+    if (typeof entry.path !== 'string' || entry.path.includes('..') || path.isAbsolute(entry.path)) throw new Error('Invalid reviewed port path');
+    allowedSourceDifferences.add(entry.path);
+}
 const allowedSourceDifferencePatterns = [
     // Settings schema/UIUX and its bridge are the active design-system surface
     // for this PR. Keep the subtraction audit scoped to these owned paths;
@@ -447,14 +442,23 @@ const allowedSourceDifferencePatterns = [
     /^rust_assistant_engine\/ui\/assistant\.(?:js|html)$/,
     /^Flowlockmodules\/flowlock-integration\.js$/,
     /^modules\/event-listeners\.js$/,
-    /^tests\/(?:chat-|content-|stream-|memory-chat-repository|window-stream-runtime|render-dependencies|main-chat-surface-adapter|vcp-stream-bridge)/,
+    /^tests\/(?:chat-|content-|stream-|memory-chat-repository|window-stream-runtime|render-dependencies|main-chat-surface-adapter|vcp-stream-bridge|side-pane|side-chat|selection-reference)/,
+    /^modules\/ui-system\/side-pane\//,
+    /^modules\/renderer\/sideChatSurfaceOwner\.js$/,
+    /^modules\/ipc\/sideChatHandlers\.js$/,
+    /^preloads\/api\/sideChat\.js$/,
+    /^artifacts\/diorama\//,
+    /^modules\/loom\/webcore\/comfyui-main-world-bridge\.js$/,
     /^(?:Agenttaskmodules|Forummodules|Logmodules|Memomodules|PluginManagerModules|VCPHumanToolBox|VchatManager)\//,
     /^Notemodules\/notemini\.(?:html|js|css)$/,
+    /^(?:scratch|work|outputs)\//,
+    /^uv\.lock$/,
 ];
 
 const upstreamClassicPatterns = [
     /^(?:Agenttaskmodules|Forummodules|Logmodules|Memomodules|PluginManagerModules|VCPHumanToolBox|VchatManager)\//,
-    /^Notemodules\/notes\.(?:html|js|css)$/,
+    // Notes HTML/CSS are an explicitly reviewed App Surface feature; its business JS remains upstream.
+    /^Notemodules\/notes\.js$/,
     /^Notemodules\/notemini\.(?:html|js|css)$/,
     /^Translatormodules\/translator\.(?:html|js|css)$/,
     /^RAGmodules\/RAG_Observer\.html$/,
@@ -607,7 +611,7 @@ try {
         failures.push(`${file}: differs from ${sourceRef} outside the subtraction allowlist`);
     }
 } catch {
-    console.warn(`[DesignBoundary] Source ref ${sourceRef} is unavailable; skipped byte-parity audit.`);
+    failures.push(`[DesignBoundary] Source ref ${sourceRef} is unavailable; byte-parity audit failed.`);
 }
 
 try {
@@ -619,7 +623,7 @@ try {
         failures.push(`${file}: excluded Next surface must remain byte-identical to ${upstreamRef}`);
     }
 } catch {
-    console.warn(`[DesignBoundary] Upstream ref ${upstreamRef} is unavailable; skipped Classic parity audit.`);
+    failures.push(`[DesignBoundary] Upstream ref ${upstreamRef} is unavailable; Classic parity audit failed.`);
 }
 
 if (failures.length) {

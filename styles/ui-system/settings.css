@@ -11,3 +11,5 @@
 @import url('./settings-portal.css');
 @import url('./settings-stream-animation.css');
 @import url('./settings-sidebar.css');
+
+html .vcp-group-detail-icon:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; }

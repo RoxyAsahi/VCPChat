@@ -202,17 +202,16 @@ const settingsManager = (() => {
         const groupSettingsExists = groupSettingsContainer && typeof groupSettingsContainer.style !== 'undefined';
 
         if (currentSelectedItem.id) {
-            if (!currentSelectedItem.type) {
-                currentSelectedItem.type = type || 'agent';
-            }
+            const itemType = currentSelectedItem.type || type || 'agent';
             if (selectedItemNameForSettingsSpan) {
                 selectedItemNameForSettingsSpan.textContent = currentSelectedItem.name || currentSelectedItem.id;
             }
 
-            if (currentSelectedItem.type === 'agent') {
-                if (!currentSelectedItem.config && electronAPI?.getAgentConfig) {
+            if (itemType === 'agent') {
+                let agentConfig = currentSelectedItem.config;
+                if (!agentConfig && electronAPI?.getAgentConfig) {
                     try {
-                        currentSelectedItem.config = await electronAPI.getAgentConfig(currentSelectedItem.id);
+                        agentConfig = await electronAPI.getAgentConfig(currentSelectedItem.id);
                     } catch (err) {
                         console.warn(`[SettingsManager] Failed to fetch agent config for ${currentSelectedItem.id}:`, err);
                     }
@@ -220,8 +219,8 @@ const settingsManager = (() => {
                 const viewToken = settingsSurface?.show?.('agent', { id: currentSelectedItem.id });
                 if (itemSettingsContainerTitle) itemSettingsContainerTitle.textContent = 'Agent 设置: ';
                 if (deleteItemBtn) deleteItemBtn.textContent = '删除此 Agent';
-                await populateAgentSettingsForm(currentSelectedItem.id, (currentSelectedItem.config || currentSelectedItem), viewToken);
-            } else if (currentSelectedItem.type === 'group') {
+                await populateAgentSettingsForm(currentSelectedItem.id, (agentConfig || currentSelectedItem), viewToken);
+            } else if (itemType === 'group') {
                 settingsSurface?.show?.('group', { id: currentSelectedItem.id });
                 if (itemSettingsContainerTitle) itemSettingsContainerTitle.textContent = '群组设置: ';
                 if (deleteItemBtn) deleteItemBtn.textContent = '删除此群组';

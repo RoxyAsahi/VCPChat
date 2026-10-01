@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="vendor/fontawesome-v6/fontawesome-v6.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="styles/compact-sidebar.css">
+    <link rel="stylesheet" href="styles/ui-system/notification-center.css">
     <script src="modules/ui-system/lifecycle-scope.js"></script>
     <script src="modules/ui-system/performance-recorder.js"></script>
     <script src="modules/ui-system/task-handle.js"></script>
@@ -483,9 +484,17 @@
                             </path>
                         </svg>
                     </button>
+                    <button id="voiceChatBtn" class="header-button" type="button" title="语音聊天"
+                        style="margin-right: 5px; display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"
+                            stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="5" y="1.5" width="6" height="9" rx="3"></rect>
+                            <path d="M2.35 8.675C3.075 11.3 5.2 13.125 8 13.125C10.8 13.125 12.925 11.3 13.65 8.675M8 13.125V15"></path>
+                        </svg>
+                    </button>
 
                     <button id="currentAgentSettingsBtn" class="header-button" type="button" title="当前Agent设置" style="display: none;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 110 44" width="110" height="44"
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="2.6 0 97 44" width="97" height="44"
                             aria-hidden="true">
                             <g transform="translate(1 2) scale(1.62)" stroke="currentColor" stroke-width="2" fill="none"
                                 stroke-linejoin="round" stroke-linecap="round">
@@ -497,20 +506,11 @@
                             </g>
                             <g fill="currentColor" font-family="system-ui, -apple-system, sans-serif" font-size="15"
                                 font-weight="500">
-                                <text x="45" y="17">CREATE</text>
-                                <text x="45" y="33">TOPIC</text>
+                                <text x="45" y="19">CREATE</text>
+                                <text x="45" y="35">TOPIC</text>
                             </g>
                         </svg>
                         <span class="button-label">新建聊天话题</span>
-                    </button>
-                    <button id="voiceChatBtn" class="header-button" type="button" title="语音聊天"
-                        style="margin-right: 5px; display: none;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M12 19v3"></path>
-                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                            <rect x="9" y="2" width="6" height="13" rx="3"></rect>
-                        </svg>
                     </button>
                     <span id="nextUiChatNotificationHost" class="next-ui-notification-toggle-host"></span>
                 </div>
@@ -548,6 +548,11 @@
                 <div class="chat-messages" id="chatMessages">
                 </div>
             </div>
+            <!-- 放在 #chatMessages 之外：消息列表重渲染会清空它，按钮不能跟着被删 -->
+            <button id="floatingSelectionSideChatBtn" class="floating-selection-side-chat-btn vcp-ui-scope" type="button" style="display:none;" title="在侧边栏提问" aria-label="在侧边栏提问">
+                <span class="vcp-ui-icon" style="font-size:14px;">chat_bubble</span>
+                <span>在侧栏提问</span>
+            </button>
             <footer class="chat-input-area vcp-ui-scope" aria-label="消息输入区">
                 <div class="chat-input-card">
                     <div class="attachment-preview-area" id="attachmentPreviewArea"></div>
@@ -605,13 +610,12 @@
                 </div>
             </footer>
           </main>
-          <div class="resizer" id="resizerRight"></div>
+          <div class="resizer vcp-ui-scope" id="resizerRight"></div>
           <aside class="notifications-sidebar vcp-ui-scope" id="notificationsSidebar">
             <header class="notifications-header">
-                <h4 id="notificationTitle" style="display: none;">VCP 通知</h4>
-                <div class="datetime-container">
-                    <div id="digitalClock" class="digital-clock"></div>
-                    <div id="dateDisplay" class="date-display"></div>
+                <div class="notifications-status" id="vcpLogConnectionStatus" data-status="unknown" role="status" aria-live="polite">
+                    <span class="notifications-status-dot" aria-hidden="true"></span>
+                    <span class="notifications-status-text">VCPLog: 未连接</span>
                 </div>
 
                 <div class="next-ui-notification-actions">
@@ -628,26 +632,6 @@
                     </button>
                     <div id="nextUiNotificationMenu" class="next-ui-notification-menu" role="menu"
                         aria-label="通知选项" hidden>
-                        <button id="nextUiNotificationForum" class="next-ui-notification-menu-item"
-                            type="button" role="menuitem" title="打开论坛">
-                            <span class="vcp-ui-icon" aria-hidden="true">forum</span>
-                            <span>论坛</span>
-                        </button>
-                        <button id="nextUiNotificationMemo" class="next-ui-notification-menu-item"
-                            type="button" role="menuitem" title="打开记忆">
-                            <span class="vcp-ui-icon" aria-hidden="true">sticky_note_2</span>
-                            <span>记忆</span>
-                        </button>
-                        <button id="nextUiNotificationLog" class="next-ui-notification-menu-item"
-                            type="button" role="menuitem" title="打开 VCP 日志">
-                            <span class="vcp-ui-icon" aria-hidden="true">scroll_text</span>
-                            <span>VCP 日志</span>
-                        </button>
-                        <button id="nextUiNotificationObserver" class="next-ui-notification-menu-item"
-                            type="button" role="menuitem" title="打开 VCP 监听">
-                            <span class="vcp-ui-icon" aria-hidden="true">activity</span>
-                            <span>VCP 监听</span>
-                        </button>
                         <button id="nextUiNotificationFilterToggle" class="next-ui-notification-menu-item"
                             type="button" role="menuitemcheckbox" aria-checked="false"
                             title="切换通知过滤模式">
@@ -660,28 +644,55 @@
                             <span class="vcp-ui-icon" aria-hidden="true">settings</span>
                             <span>通知栏设置</span>
                         </button>
-                        <div class="next-ui-notification-menu-divider" role="separator"></div>
-                        <button id="nextUiNotificationClear" class="next-ui-notification-menu-item danger"
-                            type="button" role="menuitem">
-                            <span class="vcp-ui-icon" aria-hidden="true">trash_2</span>
-                            <span>清空通知</span>
-                        </button>
                     </div>
                 </div>
                 <span id="nextUiPanelNotificationHost" class="next-ui-notification-toggle-host"></span>
             </header>
-            <div class="notifications-status" id="vcpLogConnectionStatus">
-                VCPLog: 未连接
+            <div class="notification-pending-banner" id="notificationPendingBanner" role="region" aria-label="待审批" hidden>
+                <button type="button" class="notification-pending-summary" data-action="jump-next"
+                    title="定位到下一个待审批" aria-label="定位到下一个待审批">
+                    <span class="vcp-ui-icon" aria-hidden="true">gpp_maybe</span>
+                    <span class="notification-pending-text"><strong data-role="pending-count">0</strong> 项待审批</span>
+                    <span class="vcp-ui-icon notification-pending-jump" aria-hidden="true">keyboard_arrow_down</span>
+                </button>
+                <div class="notification-pending-actions">
+                    <button type="button" class="notification-pending-btn is-reject" data-action="reject-all"
+                        title="拒绝全部待审批（需再点一次确认）"><span data-role="label">全部拒绝</span></button>
+                    <button type="button" class="notification-pending-btn is-approve" data-action="approve-all"
+                        title="允许全部待审批（需再点一次确认；含内容变更的请求需逐条审计）"><span data-role="label">全部允许</span></button>
+                </div>
+            </div>
+            <div class="notification-toolbar" id="notificationToolbar" role="group" aria-label="筛选通知">
+                <button type="button" class="notification-chip" data-filter="all" aria-pressed="true">全部<span class="notification-chip-count"></span></button>
+                <button type="button" class="notification-chip" data-filter="pending" aria-pressed="false">待审批<span class="notification-chip-count"></span></button>
+                <button type="button" class="notification-chip" data-filter="error" aria-pressed="false">错误<span class="notification-chip-count"></span></button>
+                <button type="button" class="notification-chip" data-filter="resolved" aria-pressed="false">已处理<span class="notification-chip-count"></span></button>
+                <button id="nextUiNotificationClear" class="notification-toolbar-clear" type="button"
+                    title="清空通知（保留待审批）" aria-label="清空通知">
+                    <span class="vcp-ui-icon" aria-hidden="true">delete_sweep</span>
+                </button>
             </div>
             <ul class="notifications-list" id="notificationsList">
             </ul>
-            <div id="inviteAgentButtonsContainer" class="invite-agent-buttons-container" hidden
-                style="padding: 10px; border-top: 1px solid var(--border-color); margin-top:10px;">
+            <div id="inviteAgentButtonsContainer" class="invite-agent-buttons-container" hidden>
                 <!-- 邀请发言按钮将由 JavaScript 动态填充到这里 -->
             </div>
-            <hr class="section-divider">
             <div id="vchatAppTray" class="notes-section">
-                <!-- App tray UI -->
+                <div class="notification-dock-links" role="group" aria-label="通知相关快捷入口">
+                    <button id="nextUiNotificationForum" class="notification-dock-btn" type="button" title="打开论坛" aria-label="打开论坛">
+                        <span class="vcp-ui-icon" aria-hidden="true">forum</span>
+                    </button>
+                    <button id="nextUiNotificationMemo" class="notification-dock-btn" type="button" title="打开记忆" aria-label="打开记忆">
+                        <span class="vcp-ui-icon" aria-hidden="true">sticky_note_2</span>
+                    </button>
+                    <button id="nextUiNotificationLog" class="notification-dock-btn" type="button" title="打开 VCP 日志" aria-label="打开 VCP 日志">
+                        <span class="vcp-ui-icon" aria-hidden="true">scroll_text</span>
+                    </button>
+                    <button id="nextUiNotificationObserver" class="notification-dock-btn" type="button" title="打开 VCP 监听" aria-label="打开 VCP 监听">
+                        <span class="vcp-ui-icon" aria-hidden="true">activity</span>
+                    </button>
+                </div>
+                <span class="notification-dock-sep" aria-hidden="true"></span>
                 <div id="appTrayPinnedApps" class="app-tray-pinned-apps"></div>
                 <button id="appTrayMoreBtn" class="app-tray-more-btn" type="button"
                     aria-label="更多应用" aria-controls="appTrayDrawer" aria-expanded="false" aria-haspopup="true"
@@ -1335,6 +1346,7 @@
 
     <script src="modules/topicSummarizer.js"></script>
     <script src="modules/notificationRenderer.js"></script>
+    <script src="modules/notificationCenter.js"></script>
     <script src="modules/voice/wavAudioEncoder.js"></script>
     <script src="modules/voice/speechDirectiveMatcher.js"></script>
     <script src="modules/voice/audioRecorder.js"></script>

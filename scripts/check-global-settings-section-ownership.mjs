@@ -44,6 +44,7 @@ const controlProbeAllowlist = new Map([
     ['userUseThemeColorsInChat', 'absent upstream as well; pre-existing optional control'],
     ['stripRegexListContainer', 'absent upstream as well; pre-existing optional container'],
     ['streamAnimationDurationValue', 'schema-rendered output label; not a static main.html id'],
+    ['agentModelInput', 'fallback alias in getAgentControl for agentModel; form element is #agentModel'],
 ]);
 // M4 起设置分区没有静态标记：JS 绑定的 id 必须存在于 main.html（模态壳、
 // 导航与非设置域）或 schema 编译产物之中（包含全局设置与侧边栏设置 schema）。

@@ -1,0 +1,865 @@
+{
+  "baseline": "283255750376e645ec3e355dbfb84730371014cc",
+  "files": [
+    {
+      "path": "DESIGN.md",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "docs/chat-kernel-consumer-report.json",
+      "feature": "history-performance"
+    },
+    {
+      "path": "docs/contracts/generated/chat-event-graph.json",
+      "feature": "widget-bridge"
+    },
+    {
+      "path": "main.html",
+      "feature": "command-center"
+    },
+    {
+      "path": "main.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/chatManager.js",
+      "feature": "suggested-prompts"
+    },
+    {
+      "path": "modules/notificationCenter.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "modules/notificationRenderer.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "modules/renderer/mainChatDomBindings.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "modules/settingsManager.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "modules/ui-system/next-shell/notification-menu-controller.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "renderer.js",
+      "feature": "command-center"
+    },
+    {
+      "path": "scripts/check-design-system-boundary.mjs",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "scripts/check-global-settings-section-ownership.mjs",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "scripts/check-next-delta-contract.mjs",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "scripts/next-delta-shared-baseline.json",
+      "feature": "history-performance"
+    },
+    {
+      "path": "scripts/test-ui-system.mjs",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/appearance.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/components.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/themes.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-next.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/chat-input.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/components.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/notification-center.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/notifications.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/shell.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/showcase.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/sidebar.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/tokens.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "styles/ui-system/webawesome-adapter.css",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "tests/dsh-voice-interaction.test.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "tests/notification-center.test.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "tests/notification-change-audit.test.js",
+      "feature": "shell-composer-notifications"
+    },
+    {
+      "path": "modules/chat/chatHistoryPersistence.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/chat/chatOperation.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/chat/sideChatSessionService.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/chat/streamConsumerRegistry.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/event-listeners.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ipc/sideChatHandlers.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/renderer/mainChatSettingsPresentationOwner.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/renderer/messageContextMenu.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/renderer/sideChatSurfaceOwner.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/selection-reference.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/side-pane-controller.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/side-pane-resizer-owner.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/side-pane-state.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ui-system/side-pane/side-pane-tab-utils.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/uiManager.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "preloads/api/sideChat.js",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "scripts/check-chat-kernel-consumers.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "styles/ui-system/side-pane-side-chat-extras.css",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "styles/ui-system/side-pane-tabs.css",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "styles/ui-system/side-pane.css",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/chat-history-persistence.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/main-chat-dom-bindings.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/selection-reference.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-audit-probes.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-entry-points.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-ephemeral-zcode-parity.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-integration.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-ipc-metadata.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-model-and-context.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-session-service.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-surface-owner.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-chat-topic-binding-parity.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-pane-advanced-parity.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-pane-controller.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-pane-resizer-owner.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-pane-state.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "tests/side-pane-tab-strip.test.mjs",
+      "feature": "sidepane-sidechat"
+    },
+    {
+      "path": "modules/ipc/gitHandlers.js",
+      "feature": "git-backend"
+    },
+    {
+      "path": "modules/ipc/projectForgeHandlers.js",
+      "feature": "git-backend"
+    },
+    {
+      "path": "modules/services/gitService.js",
+      "feature": "git-backend"
+    },
+    {
+      "path": "preloads/api/projectForge.js",
+      "feature": "git-backend"
+    },
+    {
+      "path": "tests/git-service.test.js",
+      "feature": "git-backend"
+    },
+    {
+      "path": "Notemodules/notes.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "Notemodules/notes.html",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "modules/ipc/notesHandlers.js",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "modules/renderer/contentProcessor.js",
+      "feature": "widget-bridge"
+    },
+    {
+      "path": "modules/ui-system/side-pane/codeViewerSideProvider.js",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "modules/ui-system/side-pane/notesSideProvider.js",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "preloads/api/notes.js",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "styles/app-surfaces/app-surface-content.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "styles/app-surfaces/app-surface-notes.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "styles/app-surfaces/app-surface-shell.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "styles/app-surfaces/app-surface-tokens.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "styles/app-surfaces/app-surfaces.css",
+      "feature": "notes-code-viewer"
+    },
+    {
+      "path": "modules/ipc/browserHandlers.js",
+      "feature": "browser"
+    },
+    {
+      "path": "modules/ui-system/side-pane/browserSideProvider.js",
+      "feature": "browser"
+    },
+    {
+      "path": "preloads/api/browser.js",
+      "feature": "browser"
+    },
+    {
+      "path": "tests/browser-handlers.test.js",
+      "feature": "browser"
+    },
+    {
+      "path": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "VCPDistributedServer/Plugin/PowerShellExecutor/gui/PowerShellViewer.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ipc/terminalHandlers.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ui-system/side-pane/terminalLinks.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ui-system/side-pane/terminalSideProvider.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ui-system/side-pane/terminalTheme.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ui-system/side-pane/toolOutputSideProvider.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "package.json",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "preloads/api/terminal.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "styles/ui-system/side-pane-tool-output.css",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/side-pane-terminal-links.test.mjs",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/side-pane-terminal-theme.test.mjs",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/side-pane-tool-output.test.mjs",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/terminal-handlers.test.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "vendor/xterm/LICENSE",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "vendor/xterm/xterm-addon-fit.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "vendor/xterm/xterm.css",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "vendor/xterm/xterm.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "modules/ui-system/project-plan-model.js",
+      "feature": "plan-detail"
+    },
+    {
+      "path": "modules/ui-system/side-pane/planDetailSideProvider.js",
+      "feature": "plan-detail"
+    },
+    {
+      "path": "styles/ui-system/side-pane-plan.css",
+      "feature": "plan-detail"
+    },
+    {
+      "path": "styles/ui-system/status-tokens.css",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "tests/side-pane-plan-detail.test.mjs",
+      "feature": "plan-detail"
+    },
+    {
+      "path": "modules/ui-system/git-file-diff.js",
+      "feature": "git-pane"
+    },
+    {
+      "path": "modules/ui-system/side-pane/gitSideProvider.js",
+      "feature": "git-pane"
+    },
+    {
+      "path": "styles/ui-system/side-pane-git-extras.css",
+      "feature": "git-pane"
+    },
+    {
+      "path": "tests/side-pane-git-ai-scope.test.mjs",
+      "feature": "git-pane"
+    },
+    {
+      "path": "tests/side-pane-git-real-backend.test.mjs",
+      "feature": "git-pane"
+    },
+    {
+      "path": "tests/side-pane-universal-provider.test.mjs",
+      "feature": "git-pane"
+    },
+    {
+      "path": "modules/ui-system/message-file-changes.js",
+      "feature": "file-summary"
+    },
+    {
+      "path": "styles/ui-system/message-file-changes.css",
+      "feature": "file-summary"
+    },
+    {
+      "path": "tests/git-file-diff.test.mjs",
+      "feature": "file-summary"
+    },
+    {
+      "path": "tests/message-file-changes-projectforge.test.mjs",
+      "feature": "file-summary"
+    },
+    {
+      "path": "tests/message-file-changes.test.mjs",
+      "feature": "file-summary"
+    },
+    {
+      "path": "modules/ui-system/conversation-scope.js",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "modules/ui-system/conversation-status-panel.js",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "modules/ui-system/git-graph-layout.js",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "styles/ui-system/status-panel.css",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "tests/conversation-scope.test.mjs",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "tests/conversation-status-panel.test.mjs",
+      "feature": "conversation-status"
+    },
+    {
+      "path": "Groupmodules/groupchat.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "Groupmodules/topicTitleManager.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/ipc/chatHandlers.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/ipc/modelTrajectoryHandlers.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/modelTrajectory.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/ui-system/side-pane/modelTrajectoryModel.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "preloads/api/modelTrajectory.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "styles/ui-system/side-pane-model-trajectory.css",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "tests/model-trajectory-handlers.test.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "tests/model-trajectory-model.test.mjs",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "tests/model-trajectory-recorder.test.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "tests/preload-registry.test.js",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "tests/side-pane-model-trajectory.test.mjs",
+      "feature": "model-trajectory"
+    },
+    {
+      "path": "modules/ui-system/chat-scroll-release.js",
+      "feature": "turn-navigation"
+    },
+    {
+      "path": "modules/ui-system/conversation-turn-navigator.js",
+      "feature": "turn-navigation"
+    },
+    {
+      "path": "styles/ui-system/turn-navigator.css",
+      "feature": "turn-navigation"
+    },
+    {
+      "path": "tests/chat-scroll-release.test.mjs",
+      "feature": "turn-navigation"
+    },
+    {
+      "path": "tests/conversation-turn-navigator.test.mjs",
+      "feature": "turn-navigation"
+    },
+    {
+      "path": "modules/ui-system/message-meta-enhancer.js",
+      "feature": "message-metadata"
+    },
+    {
+      "path": "styles/ui-system/message-meta.css",
+      "feature": "message-metadata"
+    },
+    {
+      "path": "tests/message-meta-enhancer.test.mjs",
+      "feature": "message-metadata"
+    },
+    {
+      "path": "modules/ui-system/conversation-find.js",
+      "feature": "conversation-find"
+    },
+    {
+      "path": "styles/ui-system/conversation-find.css",
+      "feature": "conversation-find"
+    },
+    {
+      "path": "tests/conversation-find.test.mjs",
+      "feature": "conversation-find"
+    },
+    {
+      "path": "modules/ui-system/selection-quote-action.js",
+      "feature": "selection-quote"
+    },
+    {
+      "path": "styles/ui-system/selection-quote.css",
+      "feature": "selection-quote"
+    },
+    {
+      "path": "tests/selection-quote-action.test.mjs",
+      "feature": "selection-quote"
+    },
+    {
+      "path": "modules/ui-system/draft-suggested-prompts.js",
+      "feature": "suggested-prompts"
+    },
+    {
+      "path": "styles/ui-system/draft-suggestions.css",
+      "feature": "suggested-prompts"
+    },
+    {
+      "path": "tests/draft-suggested-prompts.test.mjs",
+      "feature": "suggested-prompts"
+    },
+    {
+      "path": "modules/ui-system/send-queue.js",
+      "feature": "send-queue"
+    },
+    {
+      "path": "styles/ui-system/send-queue.css",
+      "feature": "send-queue"
+    },
+    {
+      "path": "tests/send-queue.test.mjs",
+      "feature": "send-queue"
+    },
+    {
+      "path": "modules/ui-system/message-export.js",
+      "feature": "message-export"
+    },
+    {
+      "path": "styles/ui-system/message-export.css",
+      "feature": "message-export"
+    },
+    {
+      "path": "tests/message-export.test.mjs",
+      "feature": "message-export"
+    },
+    {
+      "path": "modules/ui-system/slash-commands.js",
+      "feature": "slash-commands"
+    },
+    {
+      "path": "styles/ui-system/slash-commands.css",
+      "feature": "slash-commands"
+    },
+    {
+      "path": "tests/slash-commands.test.mjs",
+      "feature": "slash-commands"
+    },
+    {
+      "path": "modules/ui-system/command-center.js",
+      "feature": "command-center"
+    },
+    {
+      "path": "styles/ui-system/command-center.css",
+      "feature": "command-center"
+    },
+    {
+      "path": "tests/command-center.test.mjs",
+      "feature": "command-center"
+    },
+    {
+      "path": "modules/renderer/widgetBridge.js",
+      "feature": "widget-bridge"
+    },
+    {
+      "path": "tests/widget-bridge.test.mjs",
+      "feature": "widget-bridge"
+    },
+    {
+      "path": "modules/renderer/visibilityOptimizer.js",
+      "feature": "history-performance"
+    },
+    {
+      "path": "tests/visibility-optimizer-height-batch.test.mjs",
+      "feature": "history-performance"
+    },
+    {
+      "path": "Groupmodules/grouprenderer.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/ADVERSARIAL-REVIEW.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/HANDOFF.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/PR-STACK.json",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/PR-STACK.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/REQUIREMENTS-vs-upstream.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/README.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/additional-probes.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/additional-results.json",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/adversarial-probes.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/adversarial-results.json",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/handoff/review-probes/source-tests.json",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "modules/bootstrap/packed-runtime.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "modules/ipc/applicationSender.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "modules/modelTrajectoryStorage.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "modules/ui-system/line-diff.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "modules/ui-system/settings/group-slots.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "scripts/check-ui-system.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "scripts/test-appearance-engine.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "styles/ui-system/settings.css",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/chat-manager-selection-race.test.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/content-pipeline.test.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/conversation-status-races.test.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/helpers/trusted-main-sender.cjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/line-diff-budget.test.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/model-trajectory-bounds.test.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/notes-side-provider-races.test.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/side-chat-authorization.test.mjs",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "vendor/zcode/ATTRIBUTION.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "vendor/zcode/LICENSE",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "vendor/zcode/NOTICE.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "vendor/zcode/THIRD-PARTY-NOTICES.md",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "docs/contracts/ui-dynamic-style-ownership.json",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/terminal-package-closure.test.js",
+      "feature": "quality-repair"
+    },
+    {
+      "path": "tests/group-queue-admission.test.js",
+      "feature": "send-queue"
+    },
+    {
+      "path": "tests/chat-kernel-scratch-isolation.test.mjs",
+      "feature": "quality-evidence-isolation"
+    }
+  ]
+}

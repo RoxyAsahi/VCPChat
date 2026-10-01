@@ -19,6 +19,33 @@ import { createMainChatSettingsPresentationOwner } from './modules/renderer/main
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 侧边辅助聊天总开关：关闭时只保留侧栏的通知/笔记/Git/代码查看等标签，聊天入口全部隐藏。
+const SIDE_CHAT_ENABLED = false;
+
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
 import { chatManager } from './modules/chatManager.js';
@@ -126,6 +153,8 @@ const {
     leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight,
     agentSearchInput, notificationTitleElement, digitalClockElement,
     dateDisplayElement, toggleAssistantBtn, toggleSidebarModeBtn, openModelSelectBtn,
+    vcpSidePane, sidePaneTabs, sidePaneContentContainer,
+    toggleSidePaneChatBtn, closeSidePaneBtn, addSidePaneChatBtn,
 } = createMainChatDomBindings(document);
 // 模态框及其内部元素现在延迟加载，不再在顶层缓存引用
 let globalSettingsForm = null;
@@ -168,7 +197,7 @@ import { setupEventListeners } from './modules/event-listeners.js';
 import { createChatContext } from './modules/chat/chatContext.js';
 import { createChatRepository } from './modules/chat/chatRepository.js';
 import { createMainChatComposition } from './modules/renderer/mainChatComposition.js';
-import { createMainChatDomBindings } from './modules/renderer/mainChatDomBindings.js';
+import { createMainChatDomBindings, resolveMainChatCommandTarget } from './modules/renderer/mainChatDomBindings.js';
 import { createMainChatStateAuthority } from './modules/chat/mainChatStateAuthority.js';
 import { createNonStreamingEventConsumer } from './modules/renderer/nonStreamingEventConsumer.js';
 import { createChatPresentationState } from './modules/chat/chatPresentationState.js';
@@ -228,6 +257,7 @@ const mainChatSettingsPresentationOwner = createMainChatSettingsPresentationOwne
     elements: {
         leftSidebar,
         rightNotificationsSidebar,
+        vcpSidePane,
         vcpLogConnectionStatus: vcpLogConnectionStatusDiv,
         toggleAssistant: toggleAssistantBtn,
         toggleSidebarMode: toggleSidebarModeBtn,
@@ -411,6 +441,9 @@ mainChatSettingsPresentationOwner.configureStartup({
     } else {
         console.error('[RENDERER_INIT] trayManager module not found!');
     }
+
+    // 通知面板分组、待审批横幅与筛选（卡片仍由 notificationRenderer 生成）
+    window.notificationCenter?.mount?.({ document });
 
     if (window.topTabManager) {
         window.topTabManager.init();
@@ -904,6 +937,7 @@ mainChatSettingsPresentationOwner.configureStartup({
                 elements: {
                     leftSidebar: document.querySelector('.sidebar'),
                     rightNotificationsSidebar: document.getElementById('notificationsSidebar'),
+                    vcpSidePane,
                     resizerLeft: document.getElementById('resizerLeft'),
                     resizerRight: document.getElementById('resizerRight'),
                     digitalClockElement: document.getElementById('digitalClock'),
@@ -916,6 +950,9 @@ mainChatSettingsPresentationOwner.configureStartup({
         } else {
             console.error('[RENDERER_INIT] uiManager module not found!');
         }
+
+        // Initialize Workspace Side Pane Controller (ZCode style)
+        
 
         // Initialize Filter Manager
         if (window.filterManager) {

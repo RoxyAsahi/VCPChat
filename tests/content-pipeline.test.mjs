@@ -11,7 +11,7 @@ test('content pipeline keeps thought, tool, request and code protocols ordered a
     });
     const input = [
         '<think>\nprivate reasoning\n</think>',
-        '[RESULT: **raw tool output**]',
+        '[[VCP调用结果信息汇总:\n- 工具名称: Demo\n- 执行状态: ✅ SUCCESS\n- 返回内容: **raw tool output**\nVCP调用结果结束]]',
         '<<<[TOOL_REQUEST]>>> tool_name:「始」Demo「末」 <<<[END_TOOL_REQUEST]>>>',
         '```js\nconst marker = "not a tool result";\n```'
     ].join('\n');

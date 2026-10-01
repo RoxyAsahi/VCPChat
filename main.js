@@ -1451,8 +1451,9 @@ if (!gotTheLock) {
         // 工作区索引在后台预热，不阻塞首屏。
         workspaceHandlers.initialize({ settingsManager: appSettingsManager, logger: console });
         projectForgeHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
-        gitHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
+        gitHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService, mainWindow });
         sourceHandlers.initialize({ workspaceService: workspaceHandlers.workspaceService });
+        // 必须早于 chatHandlers.initialize：聊天请求一发出就要有记录器
 
         translatorHandlers.initialize({
             mainWindow,
@@ -1857,6 +1858,7 @@ if (!gotTheLock) {
         if (fs.existsSync(readyFile)) {
             fs.unlinkSync(readyFile);
         }
+
 
         // 1. 停止所有底层监听器
         console.log('[Main] App is quitting. Stopping all listeners...');
