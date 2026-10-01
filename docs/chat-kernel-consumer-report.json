@@ -5342,19 +5342,19 @@
         },
         {
           "file": "modules/renderer/visibilityOptimizer.js",
-          "line": 344,
+          "line": 348,
           "surface": "shared-renderer",
           "snippet": "if (window.pretextBridge && typeof window.pretextBridge.rememberHeight === 'function' && messageId) {"
         },
         {
           "file": "modules/renderer/visibilityOptimizer.js",
-          "line": 344,
+          "line": 348,
           "surface": "shared-renderer",
           "snippet": "if (window.pretextBridge && typeof window.pretextBridge.rememberHeight === 'function' && messageId) {"
         },
         {
           "file": "modules/renderer/visibilityOptimizer.js",
-          "line": 346,
+          "line": 350,
           "surface": "shared-renderer",
           "snippet": "window.pretextBridge.rememberHeight(messageId, height);"
         },
@@ -16560,10 +16560,10 @@
       "mutableMaps": 0
     },
     "modules/renderer/visibilityOptimizer.js": {
-      "windowReferences": 13,
+      "windowReferences": 14,
       "documentReferences": 0,
       "electronReferences": 0,
-      "timers": 9,
+      "timers": 14,
       "listeners": 1,
       "mutableMaps": 1
     },
