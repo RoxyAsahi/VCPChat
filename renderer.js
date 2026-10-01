@@ -28,7 +28,7 @@ import { createPlanDetailSideProvider } from './modules/ui-system/side-pane/plan
 import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
 import { createModelTrajectorySideProvider } from './modules/ui-system/side-pane/modelTrajectorySideProvider.js';
 import { createConversationStatusPanel } from './modules/ui-system/conversation-status-panel.js';
-
+import { createConversationTurnNavigator } from './modules/ui-system/conversation-turn-navigator.js';
 
 
 
@@ -1322,9 +1322,9 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
             conversationStatusPanel.mount();
             ownedRendererSubscriptions.add({ dispose: () => conversationStatusPanel.dispose() });
-            
-            
-            
+            const conversationTurnNavigator = createConversationTurnNavigator({ document, messagesRoot: chatMessagesDiv });
+            conversationTurnNavigator.mount();
+            ownedRendererSubscriptions.add({ dispose: () => conversationTurnNavigator.dispose() });
             
             
             

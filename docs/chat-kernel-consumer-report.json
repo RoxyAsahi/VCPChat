@@ -578,11 +578,13 @@
     "modules/ui-system/appearance-studio.js",
     "modules/ui-system/ask-nova-modal.js",
     "modules/ui-system/avatar-picker.js",
+    "modules/ui-system/chat-scroll-release.js",
     "modules/ui-system/component-manifest.js",
     "modules/ui-system/component-showcase.js",
     "modules/ui-system/contribution-registry.js",
     "modules/ui-system/conversation-scope.js",
     "modules/ui-system/conversation-status-panel.js",
+    "modules/ui-system/conversation-turn-navigator.js",
     "modules/ui-system/git-file-diff.js",
     "modules/ui-system/git-graph-layout.js",
     "modules/ui-system/interactive-chat-app.js",
@@ -797,6 +799,7 @@
     "tests/chat-presentation-skin.test.mjs",
     "tests/chat-presentation-state.test.mjs",
     "tests/chat-repository.test.mjs",
+    "tests/chat-scroll-release.test.mjs",
     "tests/chat-surface-slots.test.mjs",
     "tests/chat-surface.test.mjs",
     "tests/chat-theme-plugin.test.mjs",
@@ -17032,6 +17035,14 @@
       "listeners": 1,
       "mutableMaps": 0
     },
+    "modules/ui-system/chat-scroll-release.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
     "modules/ui-system/component-manifest.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -17071,6 +17082,14 @@
       "timers": 5,
       "listeners": 33,
       "mutableMaps": 1
+    },
+    "modules/ui-system/conversation-turn-navigator.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 5,
+      "listeners": 6,
+      "mutableMaps": 0
     },
     "modules/ui-system/git-file-diff.js": {
       "windowReferences": 0,
@@ -18578,7 +18597,7 @@
     },
     "renderer.js": {
       "windowReferences": 148,
-      "documentReferences": 66,
+      "documentReferences": 67,
       "electronReferences": 39,
       "timers": 2,
       "listeners": 3,
