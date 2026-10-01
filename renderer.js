@@ -24,7 +24,7 @@ import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/code
 import { createTerminalSideProvider } from './modules/ui-system/side-pane/terminalSideProvider.js';
 import { createBrowserSideProvider } from './modules/ui-system/side-pane/browserSideProvider.js';
 
-
+import { createPlanDetailSideProvider } from './modules/ui-system/side-pane/planDetailSideProvider.js';
 import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
 
 
@@ -1269,12 +1269,25 @@ mainChatSettingsPresentationOwner.configureStartup({
             }));
             sidePaneController.registerProvider('browser', browserSideProvider);
 
-            
+            const openProjectForgeWindow = () => {
+                const btn = document.querySelector('[data-action="open-project-forge-window"]');
+                if (btn) {
+                    btn.click();
+                } else if (chatAPI?.desktopCreateEmbeddedVchatApp) {
+                    chatAPI.desktopCreateEmbeddedVchatApp('open-project-forge-window');
+                }
+            };
 
             
             
-            
-            
+            const planDetailSideProvider = createPlanDetailSideProvider({
+                document,
+                api: chatAPI || window.electronAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions,
+                onOpenProjectForge: openProjectForgeWindow
+            });
+            sidePaneController.registerProvider('plan-detail', planDetailSideProvider);
             const toolOutputSideProvider = createToolOutputSideProvider({
                 document,
                 api: chatAPI || window.electronAPI,

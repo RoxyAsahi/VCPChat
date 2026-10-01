@@ -598,6 +598,7 @@
     "modules/ui-system/next-shell/overlay-coordinator.js",
     "modules/ui-system/next-ui-apps.js",
     "modules/ui-system/performance-recorder.js",
+    "modules/ui-system/project-plan-model.js",
     "modules/ui-system/settings-bridge.js",
     "modules/ui-system/settings/agent-disclosures.js",
     "modules/ui-system/settings/agent-model-picker-directory.js",
@@ -627,6 +628,7 @@
     "modules/ui-system/side-pane/browserSideProvider.js",
     "modules/ui-system/side-pane/codeViewerSideProvider.js",
     "modules/ui-system/side-pane/notesSideProvider.js",
+    "modules/ui-system/side-pane/planDetailSideProvider.js",
     "modules/ui-system/side-pane/selection-reference.js",
     "modules/ui-system/side-pane/side-pane-controller.js",
     "modules/ui-system/side-pane/side-pane-resizer-owner.js",
@@ -1074,7 +1076,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1351,
+          "line": 1364,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "onSelectionChange",
@@ -1082,7 +1084,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1575,
+          "line": 1588,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -1090,7 +1092,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1611,
+          "line": 1624,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -1098,7 +1100,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1661,
+          "line": 1674,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -1106,7 +1108,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1662,
+          "line": 1675,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -3861,13 +3863,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1539,
+          "line": 1552,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1547,
+          "line": 1560,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3929,13 +3931,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1476,
+          "line": 1489,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1477,
+          "line": 1490,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -4129,7 +4131,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1686,
+          "line": 1699,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4330,13 +4332,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1669,
+          "line": 1682,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1670,
+          "line": 1683,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4564,7 +4566,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1513,
+          "line": 1526,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4892,7 +4894,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1361,
+          "line": 1374,
           "syntax": "dot-assignment",
           "snippet": "if (SIDE_CHAT_ENABLED) window.openSideChatWithSelection = async (contextParams = null) => {"
         }
@@ -4900,7 +4902,7 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1469,
+          "line": 1482,
           "surface": "main-window",
           "snippet": "await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });"
         }
@@ -6721,25 +6723,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 1514,
+          "line": 1527,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1634,
+          "line": 1647,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1634,
+          "line": 1647,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1635,
+          "line": 1648,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -6974,13 +6976,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1567,
+          "line": 1580,
           "surface": "main-window",
           "snippet": "if (window.TavernManager?.togglePopover) {"
         },
         {
           "file": "renderer.js",
-          "line": 1568,
+          "line": 1581,
           "surface": "main-window",
           "snippet": "window.TavernManager.togglePopover(quickNewTopicBtn);"
         }
@@ -7208,13 +7210,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1516,
+          "line": 1529,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1562,
+          "line": 1575,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7858,7 +7860,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1689,
+          "line": 1702,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -8077,7 +8079,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1515,
+          "line": 1528,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -8192,7 +8194,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1527,
+          "line": 1540,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -10663,7 +10665,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1330,
+          "line": 1343,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
@@ -17162,6 +17164,14 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/ui-system/project-plan-model.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
     "modules/ui-system/settings-bridge.js": {
       "windowReferences": 13,
       "documentReferences": 57,
@@ -17393,6 +17403,14 @@
       "timers": 1,
       "listeners": 8,
       "mutableMaps": 1
+    },
+    "modules/ui-system/side-pane/planDetailSideProvider.js": {
+      "windowReferences": 3,
+      "documentReferences": 2,
+      "electronReferences": 1,
+      "timers": 1,
+      "listeners": 5,
+      "mutableMaps": 0
     },
     "modules/ui-system/side-pane/selection-reference.js": {
       "windowReferences": 2,
@@ -18435,9 +18453,9 @@
       "mutableMaps": 0
     },
     "renderer.js": {
-      "windowReferences": 139,
-      "documentReferences": 61,
-      "electronReferences": 33,
+      "windowReferences": 142,
+      "documentReferences": 63,
+      "electronReferences": 34,
       "timers": 2,
       "listeners": 3,
       "mutableMaps": 0
