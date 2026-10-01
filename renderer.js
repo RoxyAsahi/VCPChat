@@ -29,7 +29,7 @@ import { createToolOutputSideProvider } from './modules/ui-system/side-pane/tool
 import { createModelTrajectorySideProvider } from './modules/ui-system/side-pane/modelTrajectorySideProvider.js';
 import { createConversationStatusPanel } from './modules/ui-system/conversation-status-panel.js';
 import { createConversationTurnNavigator } from './modules/ui-system/conversation-turn-navigator.js';
-
+import { createMessageMetaEnhancer } from './modules/ui-system/message-meta-enhancer.js';
 
 
 
@@ -1325,9 +1325,9 @@ mainChatSettingsPresentationOwner.configureStartup({
             const conversationTurnNavigator = createConversationTurnNavigator({ document, messagesRoot: chatMessagesDiv });
             conversationTurnNavigator.mount();
             ownedRendererSubscriptions.add({ dispose: () => conversationTurnNavigator.dispose() });
-            
-            
-            
+            const messageMetaEnhancer = createMessageMetaEnhancer({ document, messagesRoot: chatMessagesDiv });
+            messageMetaEnhancer.mount();
+            ownedRendererSubscriptions.add({ dispose: () => messageMetaEnhancer.dispose() });
             const gitFileDiffResolver = createGitFileDiffResolver({ api: chatAPI || window.electronAPI || window.utilityAPI });
             const messageFileChanges = createMessageFileChanges({
                 document,

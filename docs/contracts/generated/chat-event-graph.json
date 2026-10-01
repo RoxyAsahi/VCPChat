@@ -351,6 +351,7 @@
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
     "modules/ui-system/message-file-changes.js",
+    "modules/ui-system/message-meta-enhancer.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
     "modules/ui-system/next-shell/app-tab-host.js",
     "modules/ui-system/next-shell/assistant-search-controller.js",

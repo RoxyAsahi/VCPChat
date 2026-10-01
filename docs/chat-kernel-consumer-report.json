@@ -594,6 +594,7 @@
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
     "modules/ui-system/message-file-changes.js",
+    "modules/ui-system/message-meta-enhancer.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
     "modules/ui-system/next-shell/app-tab-host.js",
     "modules/ui-system/next-shell/assistant-search-controller.js",
@@ -17163,6 +17164,14 @@
       "listeners": 3,
       "mutableMaps": 3
     },
+    "modules/ui-system/message-meta-enhancer.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 2
+    },
     "modules/ui-system/next-shell/account-menu-controller.js": {
       "windowReferences": 7,
       "documentReferences": 13,
@@ -18597,7 +18606,7 @@
     },
     "renderer.js": {
       "windowReferences": 148,
-      "documentReferences": 67,
+      "documentReferences": 68,
       "electronReferences": 39,
       "timers": 2,
       "listeners": 3,

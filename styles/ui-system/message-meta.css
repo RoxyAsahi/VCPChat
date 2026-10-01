@@ -1,0 +1,20 @@
+/*
+ * 消息头部的附加信息（modules/ui-system/message-meta-enhancer.js）：回答用时等。
+ * 版式跟 .message-timestamp 一致，排在时间后面。
+ */
+
+html .message-item .message-duration:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    order: 5;
+    font-size: calc(1em * 0.72);
+    color: var(--secondary-text);
+    opacity: 0.8;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+html .message-item .message-duration:where(.vcp-ui-scope, .vcp-ui-scope *)::before {
+    content: "·";
+    margin-right: 8px;
+    opacity: 0.6;
+}
