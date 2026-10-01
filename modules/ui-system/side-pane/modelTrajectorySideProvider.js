@@ -229,7 +229,7 @@ export function createModelTrajectorySideProvider({
                     badge.title = metadata.ids;
                     body.appendChild(badge);
                 }
-                const meta = h('span', 'side-traj-row-meta', `${formatDuration(record.durationMs)} · ${formatDateTime(record.startedAt)}`);
+                const meta = h('span', 'side-traj-row-meta', formatClockTime(record.startedAt));
                 meta.title = formatDateTime(record.startedAt);
                 const copyText = messageContent(message);
                 const copyBtn = iconButton('content_copy', '复制内容', async event => {
