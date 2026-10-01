@@ -336,6 +336,7 @@
     "modules/ui-system/ask-nova-modal.js",
     "modules/ui-system/avatar-picker.js",
     "modules/ui-system/chat-scroll-release.js",
+    "modules/ui-system/command-center.js",
     "modules/ui-system/component-manifest.js",
     "modules/ui-system/component-showcase.js",
     "modules/ui-system/contribution-registry.js",
@@ -1313,6 +1314,37 @@
           "line": 41,
           "kind": "ipc-send",
           "match": "invoke('continue-jev-group-chat'"
+        }
+      ]
+    },
+    {
+      "name": "conversations",
+      "producers": [
+        {
+          "file": "modules/ui-system/command-center.js",
+          "line": 297,
+          "kind": "ipc-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ui-system/command-center.js",
+          "line": 297,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/command-center.js",
+          "line": 297,
+          "kind": "custom-event-listener",
+          "match": "on('conversations'"
+        },
+        {
+          "file": "modules/ui-system/command-center.js",
+          "line": 297,
+          "kind": "ipc-send",
+          "match": "on('conversations'"
         }
       ]
     },
@@ -6716,14 +6748,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1539,
+          "line": 1576,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1539,
+          "line": 1576,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8846,7 +8878,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1629,
+          "line": 1666,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8854,7 +8886,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1629,
+          "line": 1666,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

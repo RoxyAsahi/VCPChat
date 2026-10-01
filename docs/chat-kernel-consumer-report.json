@@ -579,6 +579,7 @@
     "modules/ui-system/ask-nova-modal.js",
     "modules/ui-system/avatar-picker.js",
     "modules/ui-system/chat-scroll-release.js",
+    "modules/ui-system/command-center.js",
     "modules/ui-system/component-manifest.js",
     "modules/ui-system/component-showcase.js",
     "modules/ui-system/contribution-registry.js",
@@ -1138,7 +1139,15 @@
         },
         {
           "file": "renderer.js",
-          "line": 1444,
+          "line": 1447,
+          "surface": "main-window",
+          "access": "explicit-provider",
+          "member": "selectItem",
+          "snippet": "await chatManager.selectItem(row.itemId, row.itemType, row.itemName, row.itemAvatar, config, row.topicId ? { preferredTopicId: row.topicId } : {});"
+        },
+        {
+          "file": "renderer.js",
+          "line": 1481,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "onSelectionChange",
@@ -1146,7 +1155,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1668,
+          "line": 1705,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "displayNoItemSelected",
@@ -1154,7 +1163,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1704,
+          "line": 1741,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "selectTopic",
@@ -1162,7 +1171,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1754,
+          "line": 1791,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -1170,7 +1179,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1755,
+          "line": 1792,
           "surface": "main-window",
           "access": "explicit-provider",
           "member": "syncHistoryFromFile",
@@ -3925,13 +3934,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1632,
+          "line": 1669,
           "surface": "main-window",
           "snippet": "if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1640,
+          "line": 1677,
           "surface": "main-window",
           "snippet": "window.emoticonManager.togglePanel(emoticonTriggerBtn);"
         }
@@ -3993,13 +4002,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1569,
+          "line": 1606,
           "surface": "main-window",
           "snippet": "if (window.filterManager) {"
         },
         {
           "file": "renderer.js",
-          "line": 1570,
+          "line": 1607,
           "surface": "main-window",
           "snippet": "window.filterManager.init({"
         }
@@ -4193,7 +4202,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1779,
+          "line": 1816,
           "surface": "main-window",
           "snippet": "flowlockManager: window.flowlockManager,"
         }
@@ -4394,13 +4403,13 @@
       "production": [
         {
           "file": "renderer.js",
-          "line": 1762,
+          "line": 1799,
           "surface": "main-window",
           "snippet": "if (window.initializeFlowlockIntegration) {"
         },
         {
           "file": "renderer.js",
-          "line": 1763,
+          "line": 1800,
           "surface": "main-window",
           "snippet": "window.initializeFlowlockIntegration({"
         }
@@ -4628,7 +4637,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1606,
+          "line": 1643,
           "surface": "main-window",
           "snippet": "itemListManager: window.itemListManager,"
         }
@@ -4956,7 +4965,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1454,
+          "line": 1491,
           "syntax": "dot-assignment",
           "snippet": "if (SIDE_CHAT_ENABLED) window.openSideChatWithSelection = async (contextParams = null) => {"
         }
@@ -4970,7 +4979,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1562,
+          "line": 1599,
           "surface": "main-window",
           "snippet": "await window.openSideChatWithSelection({ selectedText, message: { id: sourceMessageId } });"
         }
@@ -6791,25 +6800,25 @@
         },
         {
           "file": "renderer.js",
-          "line": 1607,
+          "line": 1644,
           "surface": "main-window",
           "snippet": "settingsManager: window.settingsManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1727,
+          "line": 1764,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1727,
+          "line": 1764,
           "surface": "main-window",
           "snippet": "if (window.settingsManager && typeof window.settingsManager.reloadAgentSettings === 'function') {"
         },
         {
           "file": "renderer.js",
-          "line": 1728,
+          "line": 1765,
           "surface": "main-window",
           "snippet": "const result = await window.settingsManager.reloadAgentSettings(agentId);"
         }
@@ -7044,13 +7053,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1660,
+          "line": 1697,
           "surface": "main-window",
           "snippet": "if (window.TavernManager?.togglePopover) {"
         },
         {
           "file": "renderer.js",
-          "line": 1661,
+          "line": 1698,
           "surface": "main-window",
           "snippet": "window.TavernManager.togglePopover(quickNewTopicBtn);"
         }
@@ -7278,13 +7287,13 @@
         },
         {
           "file": "renderer.js",
-          "line": 1609,
+          "line": 1646,
           "surface": "main-window",
           "snippet": "topicListManager: window.topicListManager,"
         },
         {
           "file": "renderer.js",
-          "line": 1655,
+          "line": 1692,
           "surface": "main-window",
           "snippet": "window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready"
         }
@@ -7928,7 +7937,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1782,
+          "line": 1819,
           "surface": "main-window",
           "snippet": "uiHelperFunctions: window.uiHelperFunctions,"
         },
@@ -8147,7 +8156,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1608,
+          "line": 1645,
           "surface": "main-window",
           "snippet": "uiManager: window.uiManager,"
         }
@@ -8262,7 +8271,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 1620,
+          "line": 1657,
           "surface": "main-window",
           "snippet": "getAppearance: () => window.VCPAppearance,"
         }
@@ -10733,7 +10742,7 @@
       "definitions": [
         {
           "file": "renderer.js",
-          "line": 1423,
+          "line": 1460,
           "syntax": "dot-assignment",
           "snippet": "window.vcpSidePaneController = sidePaneController;"
         }
@@ -17080,6 +17089,14 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/ui-system/command-center.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 1,
+      "listeners": 12,
+      "mutableMaps": 0
+    },
     "modules/ui-system/component-manifest.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -18689,9 +18706,9 @@
       "mutableMaps": 0
     },
     "renderer.js": {
-      "windowReferences": 151,
-      "documentReferences": 76,
-      "electronReferences": 40,
+      "windowReferences": 153,
+      "documentReferences": 77,
+      "electronReferences": 42,
       "timers": 2,
       "listeners": 3,
       "mutableMaps": 0

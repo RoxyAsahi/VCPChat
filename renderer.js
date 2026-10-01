@@ -37,7 +37,7 @@ import { createSlashCommands } from './modules/ui-system/slash-commands.js';
 import { createMessageExport } from './modules/ui-system/message-export.js';
 import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
 import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
-
+import { createCommandCenter } from './modules/ui-system/command-center.js';
 import { createSendQueue } from './modules/ui-system/send-queue.js';
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
 import {
@@ -1414,10 +1414,47 @@ mainChatSettingsPresentationOwner.configureStartup({
             if (unbindSendQueueSelection) ownedRendererSubscriptions.add({ dispose: unbindSendQueueSelection });
             const unbindExportSelection = chatManager.onSelectionChange?.(() => messageExport.cancel());
             if (unbindExportSelection) ownedRendererSubscriptions.add({ dispose: unbindExportSelection });
-            
-            
-            
-            
+            const commandCenterApi = chatAPI || window.electronAPI;
+            const commandCenter = createCommandCenter({
+                document,
+                getCommands: () => [
+                    { id: 'new-topic', title: '新建话题', description: '在当前 Agent 下新建一个话题', keywords: ['new', 'topic', '话题'], run: appActions.newTopic },
+                    ...(appActions.sideChat ? [{ id: 'side-chat', title: '侧栏提问', description: '打开侧栏辅助聊天', keywords: ['side', 'btw'], run: appActions.sideChat }] : []),
+                    { id: 'find', title: '对话内查找', description: '在当前对话里查找文字', keywords: ['find', '查找'], shortcut: 'Ctrl+F', run: () => appActions.find('') },
+                    { id: 'export-messages', title: '导出选中消息', description: '勾选消息后复制为 Markdown 或保存为 .md 文件', keywords: ['export', '导出', 'markdown'], run: appActions.exportMessages },
+                    { id: 'global-search', title: '全局搜索聊天记录', description: '跨话题搜索全部聊天记录', keywords: ['search', '搜索'], run: appActions.globalSearch },
+                    { id: 'agent-settings', title: '当前 Agent 设置', description: '打开当前 Agent 的设置', keywords: ['settings', '设置', 'agent'], run: appActions.agentSettings },
+                    { id: 'global-settings', title: '全局设置', description: '服务器地址、外观等全局选项', keywords: ['settings', '设置', 'config'], run: clickCommand('settings') },
+                    { id: 'toggle-theme', title: '切换明暗主题', description: '在明亮 / 暗色主题之间切换', keywords: ['theme', 'dark', 'light', '主题'], run: appActions.toggleTheme },
+                    { id: 'theme-store', title: '选择主题', description: '打开主题列表', keywords: ['theme', '主题'], run: clickCommand('themeStore') },
+                    { id: 'git-panel', title: '打开 Git 面板', description: '在右侧栏查看工作区的 Git 状态', keywords: ['git', '版本', 'diff'], run: () => gitSideProvider.openGitTab() },
+                    { id: 'model-trajectory', title: '打开调用轨迹', description: '在右侧栏查看每次模型调用的请求、响应和 token 用量', keywords: ['trajectory', 'trace', 'token', '轨迹', '调用'], run: appActions.modelTrajectory },
+                    { id: 'tool-output', title: '打开命令输出', description: '在右侧栏查看终端命令的输出', keywords: ['output', 'command', '命令', '输出'], run: () => toolOutputSideProvider.openToolOutputTab() },
+                    { id: 'plan-detail', title: '打开计划详情', description: '在右侧栏查看 V工程 的计划详情', keywords: ['plan', '计划', '工程'], run: () => planDetailSideProvider.openPlanDetailTab() }
+                ],
+                loadConversationSources: async () => {
+                    const [agents, groups] = await Promise.all([
+                        commandCenterApi.getAgents?.(),
+                        commandCenterApi.getAgentGroups?.()
+                    ]);
+                    return {
+                        agents: Array.isArray(agents) ? agents : [],
+                        groups: Array.isArray(groups) ? groups : []
+                    };
+                },
+                selectConversation: async (row) => {
+                    const config = row.itemConfig || {};
+                    await chatManager.selectItem(row.itemId, row.itemType, row.itemName, row.itemAvatar, config, row.topicId ? { preferredTopicId: row.topicId } : {});
+                },
+                searchFiles: async (query) => {
+                    const result = await window.electronAPI?.searchWorkspaceFiles?.(query, { limit: 30 });
+                    return result?.success ? result.results : [];
+                },
+                openFile: (file) => codeViewerSideProvider.openViewer({ filePath: file.path }),
+                notify: (text, type) => uiHelperFunctions?.showToastNotification?.(text, type)
+            });
+            commandCenter.mount();
+            ownedRendererSubscriptions.add({ dispose: () => commandCenter.dispose() });
 
             globalThis.vcpSidePaneController = sidePaneController;
             window.vcpSidePaneController = sidePaneController;
