@@ -1,5 +1,6 @@
 // modules/renderer/contentProcessor.js
 import * as cssTree from '../../node_modules/css-tree/dist/csstree.esm.js';
+import { buildBridgeScript, createWidgetChannel, readGlobals, widgetStateKey } from './widgetBridge.js';
 
 /** Creates one rendered-content interaction owner for one MessageRenderer instance. */
 export function createContentProcessor() {
@@ -810,9 +811,37 @@ function setupHtmlPreview(preElement, htmlContent) {
 
     let previewFrame = null;
     let messageHandler = null;
+    let widgetChannel = null;
+    let cancelWidgetConfirmation = null;
+    const requestWidgetConfirmation = text => new Promise(resolve => {
+        const bar = ownerDocument.createElement('div');
+        bar.className = 'vcp-widget-confirmation vcp-ui-scope';
+        bar.setAttribute('role', 'group');
+        bar.setAttribute('aria-label', '确认组件跟进消息');
+        const preview = ownerDocument.createElement('p');
+        preview.textContent = `组件请求发送：${text}`;
+        const send = ownerDocument.createElement('button');
+        send.type = 'button'; send.textContent = '发送这条消息';
+        const cancel = ownerDocument.createElement('button');
+        cancel.type = 'button'; cancel.textContent = '取消';
+        let settled = false;
+        const finish = approved => {
+            if (settled) return; settled = true; bar.remove(); cancelWidgetConfirmation = null; resolve(approved);
+        };
+        send.addEventListener('click', event => { if (event.isTrusted) finish(true); });
+        cancel.addEventListener('click', () => finish(false));
+        cancelWidgetConfirmation = () => finish(false);
+        bar.append(preview, send, cancel); container.append(bar);
+    });
+    let themeObserver = null;
     const frameId = `vcp-frame-${Math.random().toString(36).substr(2, 9)}`;
 
     const destroyPreview = () => {
+        themeObserver?.disconnect();
+        themeObserver = null;
+        cancelWidgetConfirmation?.();
+        widgetChannel?.dispose();
+        widgetChannel = null;
         if (messageHandler) {
             ownerWindow.removeEventListener('message', messageHandler);
             messageHandler = null;
@@ -862,11 +891,41 @@ function setupHtmlPreview(preElement, htmlContent) {
                 // 🟢 先设置iframe的初始高度为当前代码块高度
                 previewFrame.style.height = currentHeight + 'px';
 
+                let widgetStorage = null;
+                try { widgetStorage = ownerWindow.localStorage; } catch (_e) { /* 无存储时组件状态不持久化 */ }
+                const ownerItem = mainRefs.currentSelectedItemRef?.get?.();
+                const ownerTopic = mainRefs.currentTopicIdRef?.get?.();
+                const isWidgetCurrent = () => {
+                    const item = mainRefs.currentSelectedItemRef?.get?.();
+                    return container.isConnected && item?.id === ownerItem?.id && item?.type === ownerItem?.type
+                        && mainRefs.currentTopicIdRef?.get?.() === ownerTopic;
+                };
+                widgetChannel = createWidgetChannel({
+                    frame: previewFrame,
+                    frameId,
+                    storage: widgetStorage,
+                    storageKey: widgetStateKey(preElement.closest('.message-item')?.dataset?.messageId, htmlContent),
+                    sendMessage: text => sendMessageViaMainChat(text),
+                    requestConfirmation: requestWidgetConfirmation,
+                    isCurrent: isWidgetCurrent,
+                    onRejected: reason => console.warn('[ContentProcessor] Widget request rejected:', reason)
+                });
+                const bridgeScript = buildBridgeScript({
+                    frameId,
+                    state: widgetChannel.loadState(),
+                    globals: readGlobals(ownerDocument)
+                });
+                if (ownerDocument.body && typeof ownerWindow.MutationObserver === 'function') {
+                    themeObserver = new ownerWindow.MutationObserver(() => widgetChannel?.pushGlobals(readGlobals(ownerDocument)));
+                    themeObserver.observe(ownerDocument.body, { attributes: true, attributeFilter: ['data-vcp-theme'] });
+                }
+
                 previewFrame.srcdoc = `
                     <!DOCTYPE html>
                     <html>
                     <head>
                         <meta charset="UTF-8">
+                        <script>${bridgeScript}</script>
                         <style>
                             html, body { margin: 0; padding: 0; overflow: hidden; height: auto; }
                             body {
@@ -906,6 +965,7 @@ function setupHtmlPreview(preElement, htmlContent) {
                 `;
 
                 messageHandler = (msg) => {
+                    if (widgetChannel?.handle(msg)) return;
                     if (
                         !previewFrame ||
                         msg.source !== previewFrame.contentWindow ||

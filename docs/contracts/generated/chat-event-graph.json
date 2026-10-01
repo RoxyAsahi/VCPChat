@@ -270,6 +270,7 @@
     "modules/renderer/topicSelectionReadiness.js",
     "modules/renderer/ttsSurfaceOwner.js",
     "modules/renderer/visibilityOptimizer.js",
+    "modules/renderer/widgetBridge.js",
     "modules/renderer/windowStreamRuntime.js",
     "modules/searchManager.js",
     "modules/services/attachmentDialogState.js",
@@ -3767,7 +3768,12 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 924,
+          "line": 984,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/widgetBridge.js",
+          "line": 59,
           "kind": "custom-event-listener"
         },
         {
@@ -3830,7 +3836,13 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 924,
+          "line": 984,
+          "kind": "custom-event-listener",
+          "match": "addEventListener('message'"
+        },
+        {
+          "file": "modules/renderer/widgetBridge.js",
+          "line": 59,
           "kind": "custom-event-listener",
           "match": "addEventListener('message'"
         },
@@ -5049,12 +5061,12 @@
       "consumers": [
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1061,
+          "line": 1121,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1105,
+          "line": 1165,
           "kind": "preload-subscription"
         },
         {
@@ -5066,13 +5078,13 @@
       "evidence": [
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1061,
+          "line": 1121,
           "kind": "preload-subscription",
           "match": "onMessage("
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1105,
+          "line": 1165,
           "kind": "preload-subscription",
           "match": "onMessage("
         },
@@ -9346,6 +9358,25 @@
           "line": 123,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp:git-focus-path'"
+        }
+      ]
+    },
+    {
+      "name": "vcp:set_globals",
+      "producers": [
+        {
+          "file": "modules/renderer/widgetBridge.js",
+          "line": 64,
+          "kind": "custom-event-dispatch"
+        }
+      ],
+      "consumers": [],
+      "evidence": [
+        {
+          "file": "modules/renderer/widgetBridge.js",
+          "line": 64,
+          "kind": "custom-event-dispatch",
+          "match": "dispatchEvent(new CustomEvent('vcp:set_globals'"
         }
       ]
     },
