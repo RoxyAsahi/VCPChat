@@ -19,8 +19,8 @@ import { createMainChatSettingsPresentationOwner } from './modules/renderer/main
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
-
-
+import { createNotesSideProvider } from './modules/ui-system/side-pane/notesSideProvider.js';
+import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/codeViewerSideProvider.js';
 
 
 
@@ -1236,11 +1236,25 @@ mainChatSettingsPresentationOwner.configureStartup({
                     return [];
                 }
             });
-            
-            
+            const notesSideProvider = createNotesSideProvider({
+                electronAPI: chatAPI,
+                utilityAPI: window.utilityAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions,
+                onOpenFullNotes: () => {
+                    const notesBtn = document.querySelector('[data-action="open-notes-window"]');
+                    notesBtn?.click?.();
+                }
+            });
+            sidePaneController.registerProvider('notes', notesSideProvider);
 
-            
-            
+            const codeViewerSideProvider = createCodeViewerSideProvider({
+                document,
+                api: chatAPI || window.utilityAPI || window.electronAPI,
+                uiHelper: uiHelperFunctions,
+                sidePaneController
+            });
+            sidePaneController.registerProvider('code-viewer', codeViewerSideProvider);
 
             
             

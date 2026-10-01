@@ -335,6 +335,7 @@
     "modules/ui-system/interactive-chat-app.js",
     "modules/ui-system/lifecycle-inspector.js",
     "modules/ui-system/lifecycle-scope.js",
+    "modules/ui-system/line-diff.js",
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
@@ -377,6 +378,8 @@
     "modules/ui-system/settings/settings-sidebar-slots.js",
     "modules/ui-system/settings/settings-sidebar-surface.js",
     "modules/ui-system/settlement.js",
+    "modules/ui-system/side-pane/codeViewerSideProvider.js",
+    "modules/ui-system/side-pane/notesSideProvider.js",
     "modules/ui-system/side-pane/selection-reference.js",
     "modules/ui-system/side-pane/side-pane-controller.js",
     "modules/ui-system/side-pane/side-pane-resizer-owner.js",
@@ -3699,7 +3702,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 886,
+          "line": 924,
           "kind": "custom-event-listener"
         },
         {
@@ -3762,7 +3765,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 886,
+          "line": 924,
           "kind": "custom-event-listener",
           "match": "addEventListener('message'"
         },
@@ -4742,6 +4745,25 @@
       ]
     },
     {
+      "name": "onAttachmentInTextEditor(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ui-system/side-pane/codeViewerSideProvider.js",
+          "line": 599,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/side-pane/codeViewerSideProvider.js",
+          "line": 599,
+          "kind": "preload-subscription",
+          "match": "onAttachmentInTextEditor("
+        }
+      ]
+    },
+    {
       "name": "onCancel(",
       "producers": [],
       "consumers": [
@@ -4921,12 +4943,12 @@
       "consumers": [
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1023,
+          "line": 1061,
           "kind": "preload-subscription"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1067,
+          "line": 1105,
           "kind": "preload-subscription"
         },
         {
@@ -4938,13 +4960,13 @@
       "evidence": [
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1023,
+          "line": 1061,
           "kind": "preload-subscription",
           "match": "onMessage("
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 1067,
+          "line": 1105,
           "kind": "preload-subscription",
           "match": "onMessage("
         },
@@ -6601,14 +6623,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1418,
+          "line": 1432,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1418,
+          "line": 1432,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8374,7 +8396,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1508,
+          "line": 1522,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8382,7 +8404,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1508,
+          "line": 1522,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }
