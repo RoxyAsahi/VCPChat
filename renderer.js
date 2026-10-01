@@ -33,7 +33,7 @@ import { createMessageMetaEnhancer } from './modules/ui-system/message-meta-enha
 import { createConversationFind } from './modules/ui-system/conversation-find.js';
 import { createSelectionQuoteAction } from './modules/ui-system/selection-quote-action.js';
 import { createDraftSuggestedPrompts } from './modules/ui-system/draft-suggested-prompts.js';
-
+import { createSlashCommands } from './modules/ui-system/slash-commands.js';
 import { createMessageExport } from './modules/ui-system/message-export.js';
 import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
 import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
@@ -1352,7 +1352,14 @@ mainChatSettingsPresentationOwner.configureStartup({
             const draftSuggestedPrompts = createDraftSuggestedPrompts({ document });
             draftSuggestedPrompts.mount();
             ownedRendererSubscriptions.add({ dispose: () => draftSuggestedPrompts.dispose() });
-            
+            const clickById = (id, missingMessage) => () => {
+                const button = document.getElementById(id);
+                if (!button || button.disabled || button.style.display === 'none') {
+                    if (missingMessage) uiHelperFunctions?.showToastNotification?.(missingMessage, 'warning');
+                    return;
+                }
+                button.click();
+            };
             const messageExport = createMessageExport({
                 document,
                 messagesRoot: chatMessagesDiv,
@@ -1367,10 +1374,28 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
             messageExport.mount();
             ownedRendererSubscriptions.add({ dispose: () => messageExport.dispose() });
-            
-            
-            
-            
+            const clickCommand = (name, unavailableMessage = '') => () => {
+                const target = resolveMainChatCommandTarget(document, name);
+                if (target) target.click();
+                else if (unavailableMessage) uiHelperFunctions?.showToastNotification?.(unavailableMessage, 'warning');
+            };
+            const appActions = {
+                exportMessages: () => messageExport.start(),
+                modelTrajectory: () => modelTrajectorySideProvider.openModelTrajectoryTab(),
+                newTopic: clickCommand('newTopic', '请先选择一个 Agent'),
+                ...(SIDE_CHAT_ENABLED ? { sideChat: () => window.openSideChatWithSelection?.() } : {}),
+                find: (query) => conversationFind.open(query),
+                globalSearch: () => {
+                    const event = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true });
+                    event.vcpFindBypass = true;
+                    window.dispatchEvent(event);
+                },
+                agentSettings: clickById('currentAgentSettingsBtn', '请先选择一个 Agent'),
+                toggleTheme: clickCommand('theme')
+            };
+            const slashCommands = createSlashCommands({ document, actions: appActions });
+            slashCommands.mount();
+            ownedRendererSubscriptions.add({ dispose: () => slashCommands.dispose() });
             const sendQueue = createSendQueue({
                 document,
                 sendButton: sendMessageBtn,

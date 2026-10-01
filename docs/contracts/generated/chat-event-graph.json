@@ -416,6 +416,7 @@
     "modules/ui-system/side-pane/terminalTheme.js",
     "modules/ui-system/side-pane/toolOutputSideProvider.js",
     "modules/ui-system/sidebar-resizer.js",
+    "modules/ui-system/slash-commands.js",
     "modules/ui-system/standalone-chat-app.js",
     "modules/ui-system/startup-theme-gate.js",
     "modules/ui-system/state-channel.js",
@@ -6715,14 +6716,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1514,
+          "line": 1539,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1514,
+          "line": 1539,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8845,7 +8846,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1604,
+          "line": 1629,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8853,7 +8854,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1604,
+          "line": 1629,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }
