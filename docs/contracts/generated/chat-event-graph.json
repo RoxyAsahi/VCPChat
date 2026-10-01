@@ -343,6 +343,7 @@
     "modules/ui-system/conversation-scope.js",
     "modules/ui-system/conversation-status-panel.js",
     "modules/ui-system/conversation-turn-navigator.js",
+    "modules/ui-system/draft-suggested-prompts.js",
     "modules/ui-system/git-file-diff.js",
     "modules/ui-system/git-graph-layout.js",
     "modules/ui-system/interactive-chat-app.js",
@@ -5218,14 +5219,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 2309,
+          "line": 2312,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 2309,
+          "line": 2312,
           "kind": "preload-subscription",
           "match": "onSelectionChange("
         }

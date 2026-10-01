@@ -586,6 +586,7 @@
     "modules/ui-system/conversation-scope.js",
     "modules/ui-system/conversation-status-panel.js",
     "modules/ui-system/conversation-turn-navigator.js",
+    "modules/ui-system/draft-suggested-prompts.js",
     "modules/ui-system/git-file-diff.js",
     "modules/ui-system/git-graph-layout.js",
     "modules/ui-system/interactive-chat-app.js",
@@ -2236,7 +2237,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2206,
+          "line": 2209,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "removeMessageById",
@@ -2244,7 +2245,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2217,
+          "line": 2220,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageContent",
@@ -2252,7 +2253,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2218,
+          "line": 2221,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "updateMessageContent",
@@ -2260,7 +2261,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 2233,
+          "line": 2236,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "renderMessage",
@@ -4123,7 +4124,7 @@
         },
         {
           "file": "modules/chatManager.js",
-          "line": 1967,
+          "line": 1970,
           "surface": "shared-renderer",
           "snippet": "if (currentSelectedItem?.type === 'agent' && window.flowlockManager?.isAgentLocked?.(currentSelectedItem.id)) {"
         },
@@ -17102,6 +17103,14 @@
       "listeners": 6,
       "mutableMaps": 0
     },
+    "modules/ui-system/draft-suggested-prompts.js": {
+      "windowReferences": 0,
+      "documentReferences": 2,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 2,
+      "mutableMaps": 0
+    },
     "modules/ui-system/git-file-diff.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -18624,7 +18633,7 @@
     },
     "renderer.js": {
       "windowReferences": 148,
-      "documentReferences": 70,
+      "documentReferences": 71,
       "electronReferences": 39,
       "timers": 2,
       "listeners": 3,

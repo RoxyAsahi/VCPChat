@@ -1,0 +1,50 @@
+/*
+ * 新话题空状态里的推荐提示词（modules/ui-system/draft-suggested-prompts.js）。
+ * 空状态本身是 pointer-events: none 的装饰层，这里的按钮要单独打开指针事件。
+ * 颜色沿用 ui-next.css 的 --next-* 变量。
+ */
+html .vcp-draft-suggestions:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: 640px;
+    margin-top: 14px;
+    pointer-events: auto;
+}
+html .vcp-draft-suggestions[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+
+html .vcp-draft-suggestion:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 14px;
+    border: 1px solid var(--next-border, var(--vcp-ui-port-color-rgba-127-127-127-0-3));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--secondary-bg, var(--vcp-ui-port-color-15191f)) 78%, transparent);
+    color: color-mix(in srgb, var(--next-text, var(--primary-text)) 88%, var(--next-muted, var(--vcp-ui-port-color-888)));
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
+    line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+html .vcp-draft-suggestion:hover:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 14%, var(--secondary-bg, var(--vcp-ui-port-color-15191f)));
+    border-color: color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 55%, transparent);
+    color: var(--next-text, var(--primary-text));
+    transform: translateY(-1px);
+}
+html .vcp-draft-suggestion:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    outline: 2px solid color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 60%, transparent);
+    outline-offset: 2px;
+}
+html .vcp-draft-suggestion-refresh:where(.vcp-ui-scope, .vcp-ui-scope *) { width: 30px; padding: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    html .vcp-draft-suggestion:where(.vcp-ui-scope, .vcp-ui-scope *) { transition: none; }
+    html .vcp-draft-suggestion:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { transform: none; }
+}

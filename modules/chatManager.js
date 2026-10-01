@@ -1923,6 +1923,9 @@ export const chatManager = (() => {
                     messageRenderer.clearChat();
                     // messageRenderer.renderMessage({ role: 'system', content: `新话题 "${result.topicName}" 已开始。`, timestamp: Date.now() });
                 }
+                // A freshly created topic is empty just like a reopened empty one; without this only the
+                // "created at" bubble showed and the empty-state content (suggested prompts) never appeared.
+                setNextUiEmptyStateActive(true, 'empty-topic');
                 localStorage.setItem(`lastActiveTopic_${itemId}_${itemType}`, result.topicId);
                 
                 // 🔧 关键修复：为新建的话题启动文件监听器

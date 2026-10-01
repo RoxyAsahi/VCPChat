@@ -32,7 +32,7 @@ import { createConversationTurnNavigator } from './modules/ui-system/conversatio
 import { createMessageMetaEnhancer } from './modules/ui-system/message-meta-enhancer.js';
 import { createConversationFind } from './modules/ui-system/conversation-find.js';
 import { createSelectionQuoteAction } from './modules/ui-system/selection-quote-action.js';
-
+import { createDraftSuggestedPrompts } from './modules/ui-system/draft-suggested-prompts.js';
 
 
 import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
@@ -1349,9 +1349,9 @@ mainChatSettingsPresentationOwner.configureStartup({
             });
             selectionQuoteAction.mount();
             ownedRendererSubscriptions.add({ dispose: () => selectionQuoteAction.dispose() });
-            
-            
-            
+            const draftSuggestedPrompts = createDraftSuggestedPrompts({ document });
+            draftSuggestedPrompts.mount();
+            ownedRendererSubscriptions.add({ dispose: () => draftSuggestedPrompts.dispose() });
             
             
             
