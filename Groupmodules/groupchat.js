@@ -771,7 +771,16 @@ async function deleteAgentGroup(groupId) {
  * @param {function} getAgentConfigById - 函数，用于根据Agent ID获取其完整配置 (agentId) => Promise<AgentConfig|null>
  * @returns {Promise<void>}
  */
+const queuedUserAdmissions = new Map();
 async function handleGroupChatMessage(groupId, topicId, userMessage, sendStreamChunkToRenderer, getAgentConfigById) {
+    const key = JSON.stringify([groupId, topicId, userMessage?.id]);
+    if (userMessage?.id && queuedUserAdmissions.has(key)) return queuedUserAdmissions.get(key);
+    const admission = performGroupChatMessage(groupId, topicId, userMessage, sendStreamChunkToRenderer, getAgentConfigById);
+    if (userMessage?.id) queuedUserAdmissions.set(key, admission);
+    try { return await admission; } finally { if (queuedUserAdmissions.get(key) === admission) queuedUserAdmissions.delete(key); }
+}
+
+async function performGroupChatMessage(groupId, topicId, userMessage, sendStreamChunkToRenderer, getAgentConfigById) {
     console.log('[GroupChat] handleGroupChatMessage invoked.');
     const queueContext = createGroupQueueContext(groupId, topicId);
     console.log('[GroupChat] mainAppPaths:', mainAppPaths ? JSON.stringify(Object.keys(mainAppPaths)) : 'undefined/null');
@@ -783,7 +792,7 @@ async function handleGroupChatMessage(groupId, topicId, userMessage, sendStreamC
         if (typeof sendStreamChunkToRenderer === 'function') {
             sendStreamChunkToRenderer({ type: 'error', error: '群聊模块关键路径或依赖未正确初始化。', messageId: userMessage.id || Date.now(), context: { groupId, topicId, isGroupMessage: true } });
         }
-        return;
+        throw new Error('群聊模块未初始化');
     }
 
     const groupConfig = await getAgentGroupConfig(groupId);
@@ -792,7 +801,7 @@ async function handleGroupChatMessage(groupId, topicId, userMessage, sendStreamC
         if (typeof sendStreamChunkToRenderer === 'function') {
             sendStreamChunkToRenderer({ type: 'error', error: `未找到群组配置: ${groupId}`, messageId: userMessage.id || Date.now(), context: { groupId, topicId, isGroupMessage: true } });
         }
-        return;
+        throw new Error('未找到群组配置');
     }
 
      const groupHistoryPath = path.join(mainAppPaths.USER_DATA_DIR, groupId, 'topics', topicId, 'history.json');
@@ -802,6 +811,7 @@ async function handleGroupChatMessage(groupId, topicId, userMessage, sendStreamC
          groupHistory = await fs.readJson(groupHistoryPath);
      }
 
+    if (userMessage?.id && groupHistory.some(message => message.role === 'user' && message.id === userMessage.id)) return;
     const globalVcpSettings = await getVcpGlobalSettings();
     const userNameForMessage = userMessage.name || globalVcpSettings.userName || '用户';
 

@@ -1315,9 +1315,9 @@ window.GroupRenderer = (() => {
         }
     }
 
-    async function handleSendGroupMessage() {
-        const content = mainRendererElements.messageInput.value.trim();
-        const attachedFiles = mainRendererFunctions.getAttachedFiles(); // Get from renderer.js
+    async function handleSendGroupMessage(request = null) {
+        const content = typeof request?.content === 'string' ? request.content : mainRendererElements.messageInput.value.trim();
+        const attachedFiles = Array.isArray(request?.attachments) ? request.attachments : mainRendererFunctions.getAttachedFiles(); // Get from renderer.js
 
         if (!content && attachedFiles.length === 0) return;
 
@@ -1390,7 +1390,7 @@ window.GroupRenderer = (() => {
                 text: content
             },
             timestamp: Date.now(),
-            id: `msg_${Date.now()}_user_${Math.random().toString(36).substring(2, 9)}`,
+            id: request?.messageId || `msg_${Date.now()}_user_${Math.random().toString(36).substring(2, 9)}`,
             attachments: uiAttachments
         };
 
@@ -1405,10 +1405,12 @@ window.GroupRenderer = (() => {
 
         messageRenderer.renderMessage(userMessageForUI); // Render user's own message in UI
 
-        mainRendererElements.messageInput.value = '';
-        mainRendererFunctions.clearAttachedFiles();
-        mainRendererFunctions.updateAttachmentPreview();
-        uiHelper.autoResizeTextarea(mainRendererElements.messageInput);
+        if (!request) {
+            mainRendererElements.messageInput.value = '';
+            mainRendererFunctions.clearAttachedFiles();
+            mainRendererFunctions.updateAttachmentPreview();
+            uiHelper.autoResizeTextarea(mainRendererElements.messageInput);
+        }
         // mainRendererElements.messageInput.focus();
 
         // Message object for IPC to backend (uses combined text content)
@@ -1433,7 +1435,8 @@ window.GroupRenderer = (() => {
             );
             pendingGroupUserMessageIds.delete(userMessageForUI.id);
 
-            if (result.error) {
+            if (result?.success !== true) {
+                if (request?.propagateError) throw new Error(result?.error || '群聊未确认接收消息');
                 // console.error("Sending group chat message failed (main process response):", result.error); // 根据用户要求移除此报错
                 // messageRenderer.renderMessage({ // 根据用户要求移除此报错
                 //     role: 'system',
@@ -1444,9 +1447,11 @@ window.GroupRenderer = (() => {
                 // Success means the message was handed off to groupchat.js for processing.
                 // Responses will come via 'vcp-group-stream-chunk'.
                 console.log("Group message sent to main process for handling.");
+                return { accepted: true, messageId: userMessageForUI.id };
             }
         } catch (error) {
             pendingGroupUserMessageIds.delete(userMessageForUI.id);
+            if (request?.propagateError) throw error;
             // console.error('发送群聊消息时出错:', error); // 根据用户要求移除此报错
             // messageRenderer.renderMessage({ // 根据用户要求移除此报错
             //     role: 'system',

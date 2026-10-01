@@ -370,6 +370,7 @@
     "modules/ui-system/performance-recorder.js",
     "modules/ui-system/project-plan-model.js",
     "modules/ui-system/selection-quote-action.js",
+    "modules/ui-system/send-queue.js",
     "modules/ui-system/settings-bridge.js",
     "modules/ui-system/settings/agent-disclosures.js",
     "modules/ui-system/settings/agent-model-picker-directory.js",
@@ -5219,14 +5220,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 2312,
+          "line": 2321,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 2312,
+          "line": 2321,
           "kind": "preload-subscription",
           "match": "onSelectionChange("
         }
@@ -6694,14 +6695,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1492,
+          "line": 1503,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1492,
+          "line": 1503,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8758,11 +8759,73 @@
       ]
     },
     {
+      "name": "vcp-queue-edit",
+      "producers": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 217,
+          "kind": "ipc-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 217,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 217,
+          "kind": "custom-event-listener",
+          "match": "on('vcp-queue-edit'"
+        },
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 217,
+          "kind": "ipc-send",
+          "match": "on('vcp-queue-edit'"
+        }
+      ]
+    },
+    {
+      "name": "vcp-queue-remove",
+      "producers": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 218,
+          "kind": "ipc-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 218,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 218,
+          "kind": "custom-event-listener",
+          "match": "on('vcp-queue-remove'"
+        },
+        {
+          "file": "modules/ui-system/send-queue.js",
+          "line": 218,
+          "kind": "ipc-send",
+          "match": "on('vcp-queue-remove'"
+        }
+      ]
+    },
+    {
       "name": "vcp-renderer-ready",
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1582,
+          "line": 1593,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8770,7 +8833,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1582,
+          "line": 1593,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

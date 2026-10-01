@@ -1360,6 +1360,9 @@ export const chatManager = (() => {
         };
 
         if (!content && attachedFiles.length === 0) return;
+        if (request?.expectedContextKey && request.expectedContextKey !== `${currentSelectedItem.type || 'agent'}:${currentSelectedItem.id}:${currentTopicId}`) {
+            throw new Error('排队消息所属话题已经改变。');
+        }
         if (!currentSelectedItem.id || !currentTopicId) {
             const error = new Error('请先选择一个项目和话题。');
             if (!request?.conversation) uiHelper.showToastNotification(error.message, 'error');
@@ -1385,12 +1388,8 @@ export const chatManager = (() => {
                 return;
             }
             if (groupRenderer && typeof groupRenderer.handleSendGroupMessage === 'function') {
-                groupRenderer.handleSendGroupMessage(
-                    currentSelectedItem.id,
-                    currentTopicId,
-                    { text: content, attachments: attachedFiles.map(af => ({ type: af.file.type, src: af.localPath, name: af.originalName, size: af.file.size })) },
-                    globalSettings.userName || '用户'
-                );
+                const result = await groupRenderer.handleSendGroupMessage(request ? { content, attachments: attachedFiles, messageId: request.messageId, propagateError: request.propagateError } : null);
+                if (result?.accepted) request?.onAccepted?.({ messageId: result.messageId });
             } else {
                 uiHelper.showToastNotification("群聊功能模块未加载，无法发送消息。", 'error');
             }
@@ -1426,12 +1425,20 @@ export const chatManager = (() => {
             }
         }
 
+        const stableMessageId = typeof request?.messageId === 'string' ? request.messageId : null;
+        if (stableMessageId) {
+            const existing = await getHistory(sendContext.agentId, sendContext.itemType, sendContext.topicId);
+            if (Array.isArray(existing) && existing.some(message => message?.id === stableMessageId && message.role === 'user')) {
+                request?.onAccepted?.({ messageId: stableMessageId });
+                return;
+            }
+        }
         const userMessage = {
             role: 'user',
             name: globalSettings.userName || '用户',
             content: content, // Use raw content for UI
             timestamp: Date.now(),
-            id: `msg_${Date.now()}_user_${Math.random().toString(36).substring(2, 9)}`,
+            id: stableMessageId || `msg_${Date.now()}_user_${Math.random().toString(36).substring(2, 9)}`,
             attachments: uiAttachments
         };
         
@@ -1470,6 +1477,8 @@ export const chatManager = (() => {
             if (request?.propagateError) throw error;
             return;
         }
+
+        request?.onAccepted?.({ messageId: userMessage.id });
 
         // Consume only the exact draft transaction that was durably saved.
         // Both the text and attachment-array identity must still match, so an

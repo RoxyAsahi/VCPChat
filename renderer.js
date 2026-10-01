@@ -38,7 +38,7 @@ import { createDraftSuggestedPrompts } from './modules/ui-system/draft-suggested
 import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
 import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
 
-
+import { createSendQueue } from './modules/ui-system/send-queue.js';
 import { createSideChatSurfaceOwner } from './modules/renderer/sideChatSurfaceOwner.js';
 import {
     createSideChatDescriptor,
@@ -1360,11 +1360,22 @@ mainChatSettingsPresentationOwner.configureStartup({
             
             
             
-            
-            
-            
-            
-            
+            const sendQueue = createSendQueue({
+                document,
+                sendButton: sendMessageBtn,
+                getContext: () => {
+                    const item = currentSelectedItemRef?.get?.();
+                    const topicId = currentTopicIdRef?.get?.();
+                    return item?.id && topicId ? { key: `${item.type || 'agent'}:${item.id}:${topicId}` } : null;
+                },
+                hasAttachments: () => (mainChatAttachmentOwner.ref.get() || []).length > 0,
+                sendText: (text, transaction) => chatManager.handleSendMessage({ content: text, attachments: [], propagateError: true, messageId: transaction.id, expectedContextKey: transaction.key, onAccepted: transaction.onAccepted }),
+                notify: (text, type) => uiHelperFunctions?.showToastNotification?.(text, type)
+            });
+            sendQueue.mount();
+            ownedRendererSubscriptions.add({ dispose: () => sendQueue.dispose() });
+            const unbindSendQueueSelection = chatManager.onSelectionChange?.(() => sendQueue.refresh());
+            if (unbindSendQueueSelection) ownedRendererSubscriptions.add({ dispose: unbindSendQueueSelection });
             
             
             

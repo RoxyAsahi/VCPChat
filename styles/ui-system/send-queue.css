@@ -1,0 +1,115 @@
+/*
+ * 输入框上方的「待发送消息」队列（modules/ui-system/send-queue.js）。
+ * 面板放在 .chat-input-area 里、输入卡片之前，下沿塞到卡片后面（卡片 z-index: 1），和 ZCode 的队列面板一样贴着 composer。
+ */
+html .vcp-queue-panel:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: relative;
+    z-index: 0;
+    box-sizing: border-box;
+    width: 100%;
+    margin-bottom: -16px;
+    padding: 6px 6px 22px;
+    border: 1px solid color-mix(in srgb, var(--border-color, var(--vcp-ui-port-color-888)) 45%, transparent);
+    border-radius: 18px 18px 0 0;
+    background: color-mix(in srgb, var(--secondary-bg, var(--vcp-ui-port-color-15191f)) 88%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--primary-text, inherit);
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
+}
+html .vcp-queue-panel[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+
+html .vcp-queue-title:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    padding: 2px 8px 4px;
+    color: var(--secondary-text, var(--vcp-ui-port-color-888));
+    font-size: calc(var(--vcp-ui-font-size) - 2px);
+}
+
+html .vcp-queue-banner:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--border-color, var(--vcp-ui-port-color-888)) 50%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 6%, transparent);
+}
+html .vcp-queue-banner-text:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 1; min-width: 0; }
+html .vcp-queue-resume:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex-shrink: 0;
+    padding: 3px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--button-bg, var(--vcp-ui-port-color-3b82f6));
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+html .vcp-queue-resume:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { background: color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 14%, transparent); }
+
+html .vcp-queue-list:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+html .vcp-queue-item:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px 3px 6px;
+    border-radius: 10px;
+    transition: background-color 0.15s ease;
+}
+html .vcp-queue-item:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 8%, transparent); }
+html .vcp-queue-item.dragging:where(.vcp-ui-scope, .vcp-ui-scope *) { opacity: 0.5; }
+
+html .vcp-queue-grip:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--secondary-text, var(--vcp-ui-port-color-888));
+    cursor: grab;
+}
+html .vcp-queue-text:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html .vcp-queue-send-now:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .vcp-queue-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+html .vcp-queue-send-now:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    gap: 4px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 10%, transparent);
+}
+html .vcp-queue-send-now:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 18%, transparent); }
+html .vcp-queue-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--secondary-text, var(--vcp-ui-port-color-888));
+}
+html .vcp-queue-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 12%, transparent);
+    color: var(--primary-text, inherit);
+}
