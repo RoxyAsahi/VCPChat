@@ -860,6 +860,14 @@
     {
       "path": "tests/chat-kernel-scratch-isolation.test.mjs",
       "feature": "quality-evidence-isolation"
+    },
+    {
+      "path": "VCPDistributedServer/Plugin/PowerShellExecutor/nativeHelperPath.js",
+      "feature": "terminal-command-runs"
+    },
+    {
+      "path": "tests/terminal-native-helper.test.js",
+      "feature": "terminal-command-runs"
     }
   ]
 }

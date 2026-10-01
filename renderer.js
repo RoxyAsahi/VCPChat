@@ -21,11 +21,11 @@ import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js
 import { createSidePaneController } from './modules/ui-system/side-pane/side-pane-controller.js';
 import { createNotesSideProvider } from './modules/ui-system/side-pane/notesSideProvider.js';
 import { createCodeViewerSideProvider } from './modules/ui-system/side-pane/codeViewerSideProvider.js';
-
+import { createTerminalSideProvider } from './modules/ui-system/side-pane/terminalSideProvider.js';
 import { createBrowserSideProvider } from './modules/ui-system/side-pane/browserSideProvider.js';
 
 
-
+import { createToolOutputSideProvider } from './modules/ui-system/side-pane/toolOutputSideProvider.js';
 
 
 
@@ -1261,7 +1261,12 @@ mainChatSettingsPresentationOwner.configureStartup({
                 api: chatAPI || window.electronAPI,
                 sidePaneController
             });
-            
+            sidePaneController.registerProvider('terminal', createTerminalSideProvider({
+                document,
+                api: chatAPI || window.electronAPI,
+                sidePaneController,
+                onOpenUrl: (url) => browserSideProvider.openBrowserTab({ url, forceNew: true })
+            }));
             sidePaneController.registerProvider('browser', browserSideProvider);
 
             
@@ -1270,8 +1275,13 @@ mainChatSettingsPresentationOwner.configureStartup({
             
             
             
-            
-            
+            const toolOutputSideProvider = createToolOutputSideProvider({
+                document,
+                api: chatAPI || window.electronAPI,
+                sidePaneController,
+                uiHelper: uiHelperFunctions
+            });
+            sidePaneController.registerProvider('tool-output', toolOutputSideProvider);
             
             
             

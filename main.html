@@ -39,6 +39,7 @@
     <link rel="stylesheet" href="styles/compact-sidebar.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-tabs.css">
+    <link rel="stylesheet" href="styles/ui-system/side-pane-tool-output.css">
     <link rel="stylesheet" href="styles/ui-system/side-pane-side-chat-extras.css">
     <link rel="stylesheet" href="styles/ui-system/notification-center.css">
     <script src="modules/ui-system/lifecycle-scope.js"></script>
@@ -658,13 +659,19 @@
                     </button>
                     
                     
-                    
+                    <button type="button" class="side-pane-menu-item" data-action="tool-output">
+                        <span class="vcp-ui-icon">terminal</span>
+                        <span>命令输出</span>
+                    </button>
                     
                     <button type="button" class="side-pane-menu-item" data-action="code-viewer">
                         <span class="vcp-ui-icon">code</span>
                         <span>代码审阅</span>
                     </button>
-                    
+                    <button type="button" class="side-pane-menu-item" data-action="terminal">
+                        <span class="vcp-ui-icon">terminal</span>
+                        <span>终端</span>
+                    </button>
                     <button type="button" class="side-pane-menu-item" data-action="browser">
                         <span class="vcp-ui-icon">public</span>
                         <span>浏览器</span>
@@ -827,13 +834,19 @@
                                 </button>
                                 
                                 
-                                
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="tool-output">
+                                    <span class="vcp-ui-icon">terminal</span>
+                                    <span class="side-pane-open-tab-button-label">命令输出</span>
+                                </button>
                                 
                                 <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="code-viewer">
                                     <span class="vcp-ui-icon">code</span>
                                     <span class="side-pane-open-tab-button-label">代码审阅</span>
                                 </button>
-                                
+                                <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="terminal">
+                                    <span class="vcp-ui-icon">terminal</span>
+                                    <span class="side-pane-open-tab-button-label">终端</span>
+                                </button>
                                 <button type="button" class="side-pane-open-tab-button" data-side-pane-open-tab-item="browser">
                                     <span class="vcp-ui-icon">public</span>
                                     <span class="side-pane-open-tab-button-label">浏览器</span>
