@@ -1,0 +1,80 @@
+/*
+ * 导出选中消息（modules/ui-system/message-export.js）：选择模式下的复选框、选中态和底部操作条。
+ */
+html .vcp-export-mode .message-item:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    box-sizing: border-box;
+    padding-left: 30px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+html .vcp-export-mode .message-item.system:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .vcp-export-mode .message-item.thinking:where(.vcp-ui-scope, .vcp-ui-scope *) { cursor: default; }
+html .vcp-export-mode .message-item > *:not(.vcp-export-check):where(.vcp-ui-scope, .vcp-ui-scope *) { pointer-events: none; }
+
+html .vcp-export-check:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: absolute;
+    top: 8px;
+    left: 4px;
+    z-index: 3;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 45%, transparent);
+    border-radius: 5px;
+    background: var(--secondary-bg, var(--vcp-ui-port-color-fff));
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+html .vcp-export-check.checked:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    border-color: var(--button-bg, var(--vcp-ui-port-color-3b82f6));
+    background: var(--button-bg, var(--vcp-ui-port-color-3b82f6));
+}
+html .vcp-export-check.checked:where(.vcp-ui-scope, .vcp-ui-scope *)::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 9px;
+    border: solid var(--vcp-ui-port-color-fff);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+html .vcp-export-mode .message-item.vcp-export-selected:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 9%, transparent);
+    border-radius: 12px;
+}
+
+html .vcp-export-dock:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    z-index: 10040;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px 8px 16px;
+    transform: translateX(-50%);
+    border: 1px solid color-mix(in srgb, var(--border-color, var(--vcp-ui-port-color-888)) 60%, transparent);
+    border-radius: 16px;
+    background: var(--secondary-bg, var(--vcp-ui-port-color-15191f));
+    color: var(--primary-text, inherit);
+    box-shadow: 0 12px 36px var(--vcp-ui-port-color-rgba-0-0-0-0-28);
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
+}
+html .vcp-export-dock[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+html .vcp-export-count:where(.vcp-ui-scope, .vcp-ui-scope *) { margin-right: 6px; color: var(--secondary-text, var(--vcp-ui-port-color-888)); white-space: nowrap; }
+html .vcp-export-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    padding: 5px 12px;
+    border: 0;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 10%, transparent);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+html .vcp-export-btn:hover:not(:disabled):where(.vcp-ui-scope, .vcp-ui-scope *) { background: color-mix(in srgb, var(--primary-text, var(--vcp-ui-port-color-888)) 18%, transparent); }
+html .vcp-export-btn:disabled:where(.vcp-ui-scope, .vcp-ui-scope *) { opacity: 0.45; cursor: default; }
+html .vcp-export-primary:where(.vcp-ui-scope, .vcp-ui-scope *) { background: var(--button-bg, var(--vcp-ui-port-color-3b82f6)); color: var(--vcp-ui-port-color-fff); }
+html .vcp-export-primary:hover:not(:disabled):where(.vcp-ui-scope, .vcp-ui-scope *) { background: color-mix(in srgb, var(--button-bg, var(--vcp-ui-port-color-3b82f6)) 85%, var(--vcp-ui-port-color-000)); }

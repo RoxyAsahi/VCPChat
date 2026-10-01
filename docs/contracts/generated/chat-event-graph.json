@@ -352,6 +352,7 @@
     "modules/ui-system/line-diff.js",
     "modules/ui-system/lucide-adapter.js",
     "modules/ui-system/material-runtime.js",
+    "modules/ui-system/message-export.js",
     "modules/ui-system/message-file-changes.js",
     "modules/ui-system/message-meta-enhancer.js",
     "modules/ui-system/next-shell/account-menu-controller.js",
@@ -5051,6 +5052,25 @@
       ]
     },
     {
+      "name": "onMessageClick(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ui-system/message-export.js",
+          "line": 128,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/message-export.js",
+          "line": 128,
+          "kind": "preload-subscription",
+          "match": "onMessageClick("
+        }
+      ]
+    },
+    {
       "name": "onOpenSideChat(",
       "producers": [],
       "consumers": [
@@ -6695,14 +6715,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 1503,
+          "line": 1514,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1503,
+          "line": 1514,
           "kind": "custom-event-listener",
           "match": "addEventListener('selectionchange'"
         }
@@ -8825,7 +8845,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1593,
+          "line": 1604,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8833,7 +8853,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1593,
+          "line": 1604,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

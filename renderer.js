@@ -34,7 +34,7 @@ import { createConversationFind } from './modules/ui-system/conversation-find.js
 import { createSelectionQuoteAction } from './modules/ui-system/selection-quote-action.js';
 import { createDraftSuggestedPrompts } from './modules/ui-system/draft-suggested-prompts.js';
 
-
+import { createMessageExport } from './modules/ui-system/message-export.js';
 import { createMessageFileChanges } from './modules/ui-system/message-file-changes.js';
 import { createGitFileDiffResolver } from './modules/ui-system/git-file-diff.js';
 
@@ -1353,9 +1353,20 @@ mainChatSettingsPresentationOwner.configureStartup({
             draftSuggestedPrompts.mount();
             ownedRendererSubscriptions.add({ dispose: () => draftSuggestedPrompts.dispose() });
             
-            
-            
-            
+            const messageExport = createMessageExport({
+                document,
+                messagesRoot: chatMessagesDiv,
+                getHistory: () => mainHistoryRef.get(),
+                getTitle: () => {
+                    const item = currentSelectedItemRef?.get?.();
+                    const topic = item?.config?.topics?.find?.(entry => entry.id === currentTopicIdRef?.get?.());
+                    return topic?.name || item?.name || '聊天记录';
+                },
+                saveMarkdown: (payload) => (chatAPI || window.electronAPI).exportTopicAsMarkdown(payload),
+                notify: (text, type) => uiHelperFunctions?.showToastNotification?.(text, type)
+            });
+            messageExport.mount();
+            ownedRendererSubscriptions.add({ dispose: () => messageExport.dispose() });
             
             
             
@@ -1376,8 +1387,8 @@ mainChatSettingsPresentationOwner.configureStartup({
             ownedRendererSubscriptions.add({ dispose: () => sendQueue.dispose() });
             const unbindSendQueueSelection = chatManager.onSelectionChange?.(() => sendQueue.refresh());
             if (unbindSendQueueSelection) ownedRendererSubscriptions.add({ dispose: unbindSendQueueSelection });
-            
-            
+            const unbindExportSelection = chatManager.onSelectionChange?.(() => messageExport.cancel());
+            if (unbindExportSelection) ownedRendererSubscriptions.add({ dispose: unbindExportSelection });
             
             
             
