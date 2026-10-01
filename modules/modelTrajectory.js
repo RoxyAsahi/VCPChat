@@ -334,6 +334,24 @@ function createModelTrajectoryRecorder({
     return { begin, list, clear, subscribe, getDirectory: () => rootDir, fileOf };
 }
 
+/** 话题的轨迹键：群聊按 群组 + 话题，单聊按 Agent + 话题；上下文不全时归到 unscoped。 */
+function sessionKeyFromContext(context) {
+    const owner = context?.groupId || context?.agentId;
+    const topic = context?.topicId;
+    return owner && topic ? `${owner}__${topic}` : 'unscoped';
+}
+
+function sourceFromContext(context, kind) {
+    const group = Boolean(context?.isGroupMessage || context?.groupId);
+    return {
+        kind: kind || (group ? 'group' : 'main'),
+        ...(context?.agentId ? { agentId: String(context.agentId) } : {}),
+        ...(context?.agentName ? { agentName: String(context.agentName) } : {}),
+        ...(context?.groupId ? { groupId: String(context.groupId) } : {}),
+        ...(context?.topicId ? { topicId: String(context.topicId) } : {})
+    };
+}
+
 const NOOP_CALL = Object.freeze({ id: null, chunk() {}, finish() {} });
 let sharedRecorder = null;
 
@@ -349,7 +367,7 @@ function getSharedRecorder() {
 
 function beginTrajectoryCall(args) {
     try {
-        return sharedRecorder ? sharedRecorder.begin(args) : NOOP_CALL;
+        return sharedRecorder && args ? sharedRecorder.begin(args) : NOOP_CALL;
     } catch (_error) {
         return NOOP_CALL;
     }
@@ -360,6 +378,8 @@ module.exports = {
     configureSharedRecorder,
     getSharedRecorder,
     beginTrajectoryCall,
+    sessionKeyFromContext,
+    sourceFromContext,
     normalizeMessage,
     estimateTokens,
     sanitizeFileKey

@@ -157,3 +157,45 @@ test('beginTrajectoryCall is a safe no-op before the shared recorder is configur
     call.finish();
     assert.equal(call.id, null);
 });
+
+test('session key and source come from the request context (group beats agent)', () => {
+    const { sessionKeyFromContext, sourceFromContext } = require('../modules/modelTrajectory');
+    assert.equal(sessionKeyFromContext({ agentId: 'a1', topicId: 't1' }), 'a1__t1');
+    assert.equal(sessionKeyFromContext({ groupId: 'g1', agentId: 'a1', topicId: 't1' }), 'g1__t1');
+    assert.equal(sessionKeyFromContext({ agentId: 'a1' }), 'unscoped');
+    assert.equal(sessionKeyFromContext(null), 'unscoped');
+    assert.deepEqual(sourceFromContext({ agentId: 'a1', agentName: 'Nova', topicId: 't1' }), { kind: 'main', agentId: 'a1', agentName: 'Nova', topicId: 't1' });
+    assert.equal(sourceFromContext({ groupId: 'g1', isGroupMessage: true }).kind, 'group');
+    assert.equal(sourceFromContext({ agentId: 'a1' }, 'title').kind, 'title');
+});
+
+test('topic title generation is recorded as a title call when it knows its topic, and not at all without one', async () => {
+    const { configureSharedRecorder } = require('../modules/modelTrajectory');
+    const topicTitleManager = require('../Groupmodules/topicTitleManager');
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-trajectory-title-'));
+    const recorder = configureSharedRecorder({ rootDir });
+    const realFetch = globalThis.fetch;
+    let bodies = [];
+    globalThis.fetch = async (_url, init) => {
+        bodies.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ model: 'title-m', choices: [{ message: { content: '周报整理' }, finish_reason: 'stop' }], usage: { prompt_tokens: 40, completion_tokens: 4, total_tokens: 44 } }) };
+    };
+    try {
+        const history = [{ role: 'user', content: '帮我整理周报', name: '用户' }, { role: 'assistant', content: '好的', name: 'Nova' }];
+        const settings = { vcpUrl: 'http://127.0.0.1:1/v1/chat/completions', vcpApiKey: 'sk-real-key', userName: '用户', topicSummaryModel: 'title-m' };
+        assert.equal(await topicTitleManager.generateTitleForHistory(history, settings, { agentId: 'a1', topicId: 't1' }), '周报整理');
+        await topicTitleManager.generateTitleForHistory(history, settings);
+        const { records } = await recorder.list('a1__t1');
+        assert.equal(records.length, 1);
+        assert.equal(records[0].source.kind, 'title');
+        assert.equal(records[0].model.modelId, 'title-m');
+        assert.equal(records[0].response.text, '周报整理');
+        assert.equal(records[0].response.usage.totalTokens, 44);
+        assert.equal(JSON.stringify(records[0]).includes('sk-real-key'), false);
+        assert.equal((await recorder.list('unscoped')).records.length, 0);
+        assert.equal(bodies.length, 2);
+    } finally {
+        globalThis.fetch = realFetch;
+        fs.rmSync(rootDir, { recursive: true, force: true });
+    }
+});

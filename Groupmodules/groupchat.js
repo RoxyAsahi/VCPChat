@@ -5,6 +5,7 @@ const path = require('path');
 const { ipcMain } = require('electron');
 const crypto = require('crypto');
 const contextSanitizer = require('../modules/contextSanitizer');
+const { beginTrajectoryCall, sessionKeyFromContext, sourceFromContext } = require('../modules/modelTrajectory');
 const fileManager = require('../modules/fileManager');
 const canvasHandlers = require('../modules/ipc/canvasHandlers');
 const tavernHandlers = require('../modules/ipc/tavernHandlers');
@@ -1213,6 +1214,14 @@ ${canvasData.errors || 'No errors'}
             }, GROUP_TTFT_TIMEOUT_MS);
             registerActiveGroupRequest(messageIdForAgentResponse, controller, groupId, topicId);
 
+            const trajectoryCall = beginTrajectoryCall({
+                sessionKey: sessionKeyFromContext({ groupId, topicId }),
+                requestId: messageIdForAgentResponse,
+                source: sourceFromContext({ groupId, topicId, agentId, agentName, isGroupMessage: true }),
+                model: modelConfigForAgent.model,
+                params: { temperature: modelConfigForAgent.temperature, max_tokens: modelConfigForAgent.max_tokens, stream: modelConfigForAgent.stream },
+                messages: messagesForAI
+            });
             let response;
             try {
                 response = await fetch(resolveGroupChatUrl(globalVcpSettings.vcpUrl, globalVcpSettings.enableVcpToolInjection), {
@@ -1229,6 +1238,7 @@ ${canvasData.errors || 'No errors'}
                     signal: controller.signal
                 });
             } catch (fetchError) {
+            trajectoryCall.finish({ error: fetchError, aborted: fetchError?.name === 'AbortError' });
                 clearTimeout(activeTimer);
                 if (fetchError.name === 'AbortError') {
                     console.log(`[GroupChat] VCP fetch for ${agentName} was aborted before stream began.`);
@@ -1244,6 +1254,7 @@ ${canvasData.errors || 'No errors'}
             }
 
             if (!response.ok) {
+            trajectoryCall.finish({ error: { name: 'HTTPError', message: `VCP request failed: ${response.status}` } });
                 const errorText = await response.text();
                 console.error(`[GroupChat] VCP request failed for ${agentName}. Status: ${response.status}, Response Text:`, errorText);
                 let errorData = { message: `Server returned status ${response.status}`, details: errorText };
@@ -1303,6 +1314,7 @@ ${canvasData.errors || 'No errors'}
                         while (true) {
                             const { done, value } = await reader.read();
                             if (done) {
+                            trajectoryCall.finish();
                                 clearTimeout(activeTimer);
                                 console.log(`[GroupChat] VCP stream ended for ${agentName} (msgId: ${messageIdForAgentResponse})`);
                                 const finalAiResponseEntry = { role: 'assistant', name: agentName, agentId: agentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: accumulatedResponse, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
@@ -1320,6 +1332,7 @@ ${canvasData.errors || 'No errors'}
                                 if (line.startsWith('data: ')) {
                                     const jsonData = line.substring(5).trim();
                                     if (jsonData === '[DONE]') {
+                                    trajectoryCall.finish();
                                         console.log(`[GroupChat] VCP stream explicit [DONE] for ${agentName} (msgId: ${messageIdForAgentResponse})`);
                                         const doneAiResponseEntry = { role: 'assistant', name: agentName, agentId: agentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: accumulatedResponse, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
                                         groupHistory.push(doneAiResponseEntry);
@@ -1331,6 +1344,7 @@ ${canvasData.errors || 'No errors'}
                                     }
                                     try {
                                         const parsedChunk = JSON.parse(jsonData);
+                                        trajectoryCall.chunk(parsedChunk);
 
                                         // 更全面的安全检查，处理各种可能的响应格式
                                         let hasContent = false;
@@ -1386,6 +1400,7 @@ ${canvasData.errors || 'No errors'}
                             }
                         }
                     } catch (streamError) {
+                        trajectoryCall.finish({ error: streamError, aborted: streamError?.name === 'AbortError' });
                         if (isWatchdogAbort(streamError, controller)) {
                             // 看门狗熔断：reader 抛出的是 abort 的字符串原因，没有 .message；已收到的内容（可能含已执行的工具调用和结果）要留下
                             console.warn(`[GroupChat] VCP stream for ${agentName} (msgId: ${messageIdForAgentResponse}) stopped by the idle watchdog.`);
@@ -1427,6 +1442,7 @@ ${canvasData.errors || 'No errors'}
             } else { // Non-streaming response
                 console.log(`[GroupChat] VCP Response: Non-streaming for ${agentName}`);
                 const vcpResponseJson = await response.json();
+                trajectoryCall.finish({ response: vcpResponseJson });
                 const aiResponseContent = vcpResponseJson.choices && vcpResponseJson.choices.length > 0 ? vcpResponseJson.choices[0].message.content : "[AI failed to generate a valid response]";
 
                 const aiResponseEntry = { role: 'assistant', name: agentName, agentId: agentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: aiResponseContent, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
@@ -1828,6 +1844,14 @@ ${canvasData.errors || 'No errors'}
         }, GROUP_TTFT_TIMEOUT_MS);
         registerActiveGroupRequest(messageIdForAgentResponse, controller, groupId, topicId);
 
+        const trajectoryCall = beginTrajectoryCall({
+            sessionKey: sessionKeyFromContext({ groupId, topicId }),
+            requestId: messageIdForAgentResponse,
+            source: sourceFromContext({ groupId, topicId, agentId: invitedAgentId, agentName, isGroupMessage: true }),
+            model: modelConfigForAgent.model,
+            params: { temperature: modelConfigForAgent.temperature, max_tokens: modelConfigForAgent.max_tokens, stream: modelConfigForAgent.stream },
+            messages: messagesForAI
+        });
         let response;
         try {
             response = await fetch(resolveGroupChatUrl(globalVcpSettings.vcpUrl, globalVcpSettings.enableVcpToolInjection), {
@@ -1845,6 +1869,7 @@ ${canvasData.errors || 'No errors'}
                 signal: controller.signal
             });
         } catch (fetchError) {
+        trajectoryCall.finish({ error: fetchError, aborted: fetchError?.name === 'AbortError' });
             clearTimeout(activeTimer);
             if (fetchError.name === 'AbortError') {
                 console.log(`[GroupChat Invite] VCP fetch for ${agentName} was aborted before stream began.`);
@@ -1861,6 +1886,7 @@ ${canvasData.errors || 'No errors'}
         }
 
         if (!response.ok) {
+        trajectoryCall.finish({ error: { name: 'HTTPError', message: `VCP request failed: ${response.status}` } });
             const errorText = await response.text();
             console.error(`[GroupChat Invite] VCP request failed for ${agentName}. Status: ${response.status}, Response Text:`, errorText);
             let errorData = { message: `Server returned status ${response.status}`, details: errorText };
@@ -1915,6 +1941,7 @@ ${canvasData.errors || 'No errors'}
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done) {
+                        trajectoryCall.finish();
                             clearTimeout(activeTimer);
                             const finalAiResponseEntry = { role: 'assistant', name: agentName, agentId: invitedAgentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: accumulatedResponse, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
                             groupHistory = await appendGroupHistoryMessage(groupId, topicId, finalAiResponseEntry);
@@ -1930,6 +1957,7 @@ ${canvasData.errors || 'No errors'}
                             if (line.startsWith('data: ')) {
                                 const jsonData = line.substring(5).trim();
                                 if (jsonData === '[DONE]') {
+                                trajectoryCall.finish();
                                     const doneAiResponseEntry = { role: 'assistant', name: agentName, agentId: invitedAgentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: accumulatedResponse, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
                                     groupHistory = await appendGroupHistoryMessage(groupId, topicId, doneAiResponseEntry);
                                     if (typeof sendStreamChunkToRenderer === 'function') {
@@ -1939,6 +1967,7 @@ ${canvasData.errors || 'No errors'}
                                 }
                                 try {
                                     const parsedChunk = JSON.parse(jsonData);
+                                    trajectoryCall.chunk(parsedChunk);
 
                                     // 更全面的安全检查，处理各种可能的响应格式
                                     let hasContent = false;
@@ -1995,6 +2024,7 @@ ${canvasData.errors || 'No errors'}
                         }
                     }
                 } catch (streamError) {
+                    trajectoryCall.finish({ error: streamError, aborted: streamError?.name === 'AbortError' });
                     if (isWatchdogAbort(streamError, controller)) {
                         console.warn(`[GroupChat Invite] VCP stream for ${agentName} (msgId: ${messageIdForAgentResponse}) stopped by the idle watchdog.`);
                         const partialContent = withWatchdogNote(accumulatedResponse, GROUP_CHUNK_IDLE_TIMEOUT_MS);
@@ -2030,6 +2060,7 @@ ${canvasData.errors || 'No errors'}
             await processStreamForInvitedAgent();
         } else { // Non-streaming response
             const vcpResponseJson = await response.json();
+            trajectoryCall.finish({ response: vcpResponseJson });
             const aiResponseContent = vcpResponseJson.choices && vcpResponseJson.choices.length > 0 ? vcpResponseJson.choices[0].message.content : "[AI failed to generate a valid response (invite)]";
 
             const aiResponseEntry = { role: 'assistant', name: agentName, agentId: invitedAgentId, model: modelConfigForAgent.model, modelSource: modelResolution.usingUnifiedModel ? 'group_unified' : 'agent', content: aiResponseContent, timestamp: Date.now(), id: messageIdForAgentResponse, isGroupMessage: true, groupId, topicId, avatarUrl: agentConfig.avatarUrl, avatarColor: agentConfig.avatarCalculatedColor };
@@ -2246,7 +2277,7 @@ async function regenerateGroupTopicTitle(groupId, topicId) {
             return { success: false, error: '请先在全局设置中配置 VCP 服务器 URL。' };
         }
 
-        const newTitle = await topicTitleManager.generateTitleForHistory(groupHistory, globalVcpSettings);
+        const newTitle = await topicTitleManager.generateTitleForHistory(groupHistory, globalVcpSettings, { groupId, topicId });
         if (!newTitle) {
             return { success: false, error: 'AI 未能生成有效的话题标题。' };
         }
