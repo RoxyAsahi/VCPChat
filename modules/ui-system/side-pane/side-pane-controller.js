@@ -739,7 +739,7 @@ export function createSidePaneController({
 
             state = SidePaneState.openTab(state, rawTab);
             const targetTabId = state.activeTabId;
-            if (rawTab.scopeMode === 'topic' && state.parent && rawTab.descriptor?.parent && SidePaneState.matchesConversation(rawTab.descriptor.parent, state.parent)) {
+            if (state.parent && SidePaneState.matchesConversation(SidePaneState.getTabParent(rawTab), state.parent)) {
                 const parentKey = SidePaneState.getParentKey(state.parent);
                 collapsedByParent.set(parentKey, false);
                 activeTabByParent.set(parentKey, targetTabId);
