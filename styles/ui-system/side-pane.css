@@ -130,14 +130,6 @@ html #vcpSidePane .notifications-sidebar.active:where(.vcp-ui-scope, .vcp-ui-sco
     transition: none;
 }
 
-html #vcpSidePane .notifications-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    height: 38px;
-    min-height: 38px;
-    padding: 0 12px;
-    border-bottom: 1px solid var(--zcode-header-divider, var(--vcp-ui-border));
-    background: transparent;
-}
-
 
 /* --- Side Pane Tab Bar --- */
 html .side-pane-tab-bar:where(.vcp-ui-scope, .vcp-ui-scope *) {
@@ -260,6 +252,44 @@ html .side-pane-tab .tab-title:where(.vcp-ui-scope, .vcp-ui-scope *) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* 通知标签上的 VCPLog 连接点：紧跟标题，颜色随 data-status */
+html .side-pane-tab.has-status .tab-title:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 1 auto;
+}
+
+html .side-pane-tab-status:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    margin-left: 2px;
+    border-radius: 50%;
+    background: var(--vcp-ui-text-3);
+}
+
+html .side-pane-tab-status[data-status="open"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-success);
+}
+
+html .side-pane-tab-status[data-status="connecting"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-warning);
+    animation: side-pane-tab-status-pulse 1.4s ease-in-out infinite;
+}
+
+html .side-pane-tab-status:is([data-status="closed"], [data-status="error"]):where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-danger);
+}
+
+@keyframes side-pane-tab-status-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html .side-pane-tab-status:where(.vcp-ui-scope, .vcp-ui-scope *) {
+        animation: none;
+    }
 }
 
 html .side-pane-tab .tab-icon:where(.vcp-ui-scope, .vcp-ui-scope *),
