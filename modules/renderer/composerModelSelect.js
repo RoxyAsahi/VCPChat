@@ -10,7 +10,7 @@
 .vcp-model-select:not([hidden]) ~ :is(#sendMessageBtn, .chat-send-button) { margin-left: 0 !important; }
 .vcp-model-select[hidden] { display: none !important; }
 .vcp-model-select-trigger {
-    display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 8px; max-width: 200px;
+    display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 8px; max-width: min(200px, 100%); min-width: 0;
     border: 0; border-radius: 8px; background: transparent; cursor: pointer;
     color: var(--vcp-ui-text-2, #a7afb1); font: inherit; font-size: 13px; line-height: 20px;
     transition: background-color .15s, color .15s;
@@ -18,7 +18,7 @@
 .vcp-model-select-trigger:hover, .vcp-model-select-trigger[aria-expanded="true"] {
     background: var(--vcp-ui-interactive-hover, rgba(127,127,127,.16)); color: var(--vcp-ui-text-0, currentColor);
 }
-.vcp-model-select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vcp-model-select-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vcp-model-select-trigger svg { width: 12px; height: 12px; opacity: .7; flex: none; }
 .vcp-model-select-menu {
     position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 1000; width: 280px; padding: 4px;
