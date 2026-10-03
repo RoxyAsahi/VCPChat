@@ -47,12 +47,12 @@ test('tab presentation helpers: type labels and search hints', () => {
 });
 
 test('resolveTabsOverflow uses the min-width budget and ignores where the add button lives', () => {
-    // 3 个标签 60*3 + 4*2 = 188，加 gap 4 与按钮 28 = 220
-    assert.equal(resolveTabsOverflow({ addButtonInside: true, addButtonWidth: 28, tabCount: 3, viewportWidth: 220 }), false);
-    assert.equal(resolveTabsOverflow({ addButtonInside: true, addButtonWidth: 28, tabCount: 3, viewportWidth: 200 }), true);
+    // 3 个标签 96 + 32*2 + 4*2 = 168，加 gap 4 与按钮 28 = 200
+    assert.equal(resolveTabsOverflow({ addButtonInside: true, addButtonWidth: 28, tabCount: 3, viewportWidth: 200 }), false);
+    assert.equal(resolveTabsOverflow({ addButtonInside: true, addButtonWidth: 28, tabCount: 3, viewportWidth: 198 }), true);
     // 按钮在外面时视口更窄，判定结果保持一致
-    assert.equal(resolveTabsOverflow({ addButtonInside: false, addButtonWidth: 28, tabCount: 3, viewportWidth: 192 }), false);
-    assert.equal(resolveTabsOverflow({ addButtonInside: false, addButtonWidth: 28, tabCount: 3, viewportWidth: 172 }), true);
+    assert.equal(resolveTabsOverflow({ addButtonInside: false, addButtonWidth: 28, tabCount: 3, viewportWidth: 172 }), false);
+    assert.equal(resolveTabsOverflow({ addButtonInside: false, addButtonWidth: 28, tabCount: 3, viewportWidth: 170 }), true);
 });
 
 test('drag helpers: closest center and arrayMove semantics', () => {
