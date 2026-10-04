@@ -30,7 +30,7 @@ const REFRESH_DEBOUNCE_MS = 200;
 const FILTER_DEBOUNCE_MS = 300;
 
 const STATUS_LABEL = Object.freeze({ completed: '已完成', inProgress: '进行中', pending: '待处理' });
-const STATUS_ICON = Object.freeze({ completed: 'check_circle', inProgress: 'progress_activity', pending: 'radio_button_unchecked' });
+const STATUS_ICON = Object.freeze({ completed: 'check_circle', inProgress: 'arrow_forward', pending: 'radio_button_unchecked' });
 
 /** 话题里一个话题一个计划标签（工程在标签里切换）；不在话题里时一个工程一个标签。 */
 export function planTabId(projectId, parentRef = null) {
@@ -398,16 +398,15 @@ export function createPlanDetailSideProvider({
                     return section('计划', '', null, h('div', 'side-plan-empty', '这个工程还没有计划条目'));
                 }
                 const list = h('ol', 'side-plan-todos');
-                model.items.forEach((item, index) => {
+                model.items.forEach(item => {
                     const row = h('li', `side-plan-todo status-${item.status}${item.blocked ? ' blocked' : ''}`);
                     row.dataset.todoStatus = item.status;
                     row.dataset.todoId = item.id;
                     const mark = h('span', 'side-plan-todo-mark');
-                    mark.appendChild(icon(item.blocked ? 'cancel' : STATUS_ICON[item.status], item.status === 'inProgress' && !item.blocked ? 'spin' : ''));
+                    mark.appendChild(icon(item.blocked ? 'cancel' : STATUS_ICON[item.status]));
                     const text = h('div', 'side-plan-todo-text');
-                    const title = h('div', 'side-plan-todo-title');
-                    title.append(h('span', 'side-plan-todo-seq', String(index + 1)), h('span', '', item.content));
-                    text.appendChild(title);
+                    // Preserve the task text and ordered-list semantics without adding a second visible number.
+                    text.appendChild(h('div', 'side-plan-todo-title', item.content));
                     const sub = [item.blocked ? '已阻塞' : STATUS_LABEL[item.status], item.updatedBy, when(item.updatedAt)]
                         .filter(Boolean).join(' · ');
                     text.appendChild(h('div', 'side-plan-todo-sub', sub));
