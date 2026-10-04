@@ -43,6 +43,11 @@ class SettingsValidator {
             console.log('Fixed invalid chatPresentationMode');
         }
 
+        if (validated.chatHeaderStyle !== 'classic' && validated.chatHeaderStyle !== 'capsule') {
+            validated.chatHeaderStyle = 'classic';
+            hasIssues = true;
+        }
+
         if (!['auto', 'zh', 'en', 'yue', 'ja', 'ko'].includes(validated.localSttLanguage)) {
             validated.localSttLanguage = 'auto';
         }
@@ -300,6 +305,7 @@ class SettingsManager extends EventEmitter {
                 cardRadius: 'tuned'
             },
             enableWideChatLayout: false,
+            chatHeaderStyle: 'classic',
             chatPresentationMode: 'bubble',
             chatBubbleMaxWidthDefault: 82,
             chatBubbleMaxWidthNotifications: 90,

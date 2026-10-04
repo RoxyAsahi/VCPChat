@@ -896,12 +896,15 @@ export function setupEventListeners(deps) {
     const chatAgentPill = document.getElementById('chatAgentPill');
     if (chatAgentPill) {
         chatAgentPill.addEventListener('click', () => {
+            // 原版标题栏里这只是一行标题，只有胶囊样式才可点击
+            if (!window.vcpChatHeader?.isCapsule?.()) return;
             const currentSelectedItem = refs.currentSelectedItem?.get?.();
             if (currentSelectedItem?.id && mainRendererFunctions.displaySettingsForItem) {
                 mainRendererFunctions.displaySettingsForItem();
             }
         });
         chatAgentPill.addEventListener('keydown', (e) => {
+            if (e.target !== chatAgentPill) return;
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 chatAgentPill.click();

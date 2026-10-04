@@ -180,13 +180,8 @@
         gap: 2px;
     }
 
-    /* Pill actions (voice call, new topic) sit apart instead of touching. */
-    html .vcp-ui-scope .chat-actions:has(.chat-action-pill-btn) {
-        gap: 6px;
-    }
-
     /* Common header-button shell (both square icon buttons and wide create-topic button) */
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn) {
+    html .vcp-ui-scope .chat-actions .header-button {
         height: 28px;
         min-height: 28px;
         margin: 0;
@@ -204,27 +199,27 @@
     }
 
     /* Square icon buttons */
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):not(#currentAgentSettingsBtn) {
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn) {
         width: 28px;
         min-width: 28px;
         padding: 0;
     }
 
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):not(#currentAgentSettingsBtn) svg {
+    html .vcp-ui-scope .chat-actions .header-button:not(#currentAgentSettingsBtn) svg {
         width: 16px;
         height: 16px;
         flex: 0 0 16px;
     }
 
     /* Special wide capsule button for "CREATE TOPIC" */
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn)#currentAgentSettingsBtn {
+    html .vcp-ui-scope .chat-actions .header-button#currentAgentSettingsBtn {
         width: auto;
         min-width: auto;
         padding: 0 8px;
         flex-shrink: 0;
     }
 
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn)#currentAgentSettingsBtn svg {
+    html .vcp-ui-scope .chat-actions .header-button#currentAgentSettingsBtn svg {
         width: 40px;
         height: 18px;
         flex-shrink: 0;
@@ -232,30 +227,30 @@
         transform: none;
     }
 
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn)#currentAgentSettingsBtn svg text {
+    html .vcp-ui-scope .chat-actions .header-button#currentAgentSettingsBtn svg text {
         transform: translateY(0.3px);
     }
 
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):hover {
+    html .vcp-ui-scope .chat-actions .header-button:hover {
         color: var(--vcp-ui-port-color-ffffff);
         background: var(--vcp-ui-port-color-rgba-255-255-255-0-05);
     }
 
-    html .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+    html .vcp-ui-scope .chat-actions .header-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
         color: var(--vcp-ui-port-color-ffffff);
         background: var(--vcp-ui-port-color-rgba-255-255-255-0-10);
     }
 
-    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn), html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn) {
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button, html body.light-theme .vcp-ui-scope .chat-actions .header-button {
         color: var(--vcp-ui-port-color-262626);
     }
 
-    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):hover, html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):hover {
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:hover, html body.light-theme .vcp-ui-scope .chat-actions .header-button:hover {
         color: var(--vcp-ui-port-color-000000);
         background: var(--vcp-ui-port-color-rgba-0-0-0-0-05);
     }
 
-    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]), html body.light-theme .vcp-ui-scope .chat-actions .header-button:not(.chat-action-pill-btn):is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
+    html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .chat-actions .header-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]), html body.light-theme .vcp-ui-scope .chat-actions .header-button:is(.active, .is-active, [aria-expanded="true"], [aria-pressed="true"]) {
         color: var(--vcp-ui-port-color-000000);
         background: var(--vcp-ui-port-color-rgba-0-0-0-0-08);
     }
