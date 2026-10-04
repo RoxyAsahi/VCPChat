@@ -8241,7 +8241,7 @@
       "producers": [
         {
           "file": "modules/inputEnhancer.js",
-          "line": 573,
+          "line": 583,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8249,7 +8249,7 @@
       "evidence": [
         {
           "file": "modules/inputEnhancer.js",
-          "line": 573,
+          "line": 583,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-active-workspace-changed'"
         }

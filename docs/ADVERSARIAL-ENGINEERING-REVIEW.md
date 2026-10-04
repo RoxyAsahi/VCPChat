@@ -148,6 +148,38 @@
 
 实际窗口隔离临时 iframe 加载当前 helper 与真实 coordinator、仅使用受控内存 transport：立即关闭返回 true，form/owner 仍连接；重开编辑 Newer 后旧保存失败，窗口仍打开、draft=Newer、durable=Initial、status=error。没有写入用户设置，原窗口状态保持一致。该验证和组件测试 **不证明完整 SettingsBridge/typed/legacy owner 或 IPC 文件持久化端到端都已正确**；这些层仍需沿调用链检查，不能扩大证据范围。
 
+## 第五轮：输入生命周期与插件目标身份
+
+继续整体审查；已完成的计划侧栏分栏（`ecb9067a`）没有重新修改。先核实当前 HEAD 与工作区，保留用户原有 `styles/themes.css` 改动。
+
+本轮深入读取 DSH 的 `ui-attachment/src/client/index.ts`、`ComposerAttachments.tsx`、`drop-events.ts` 以及 plugin/drop/composer 测试：展示插件只登记槽位，附件接收回调由 conversation owner 提供；document/window 拖拽监听由每次 effect 安装并返回精确 cleanup，disabled 时禁止转交文件，非文件拖拽保持原生行为。plugin 测试验证 fiber 注销后四个槽位消失；composer 测试覆盖目录识别、嵌套拖拽、退出窗口、blocked drop、移除与重试，而不是只数事件监听器。
+
+ZCode 的 `v4/composer/useComposerAttachments.ts` 已读接口与 scope 构造、上传执行、runtime 失效/重建、附件入队和全局白板引用门控分支（未读完整大 hook）：scope 含 workspace identity 与 scopeId，上传还按具体 controller 身份检查进度、成功与失败；更换 runtime 时撤销旧 controller，等待新 session 后才重排队。全局 add-to-chat 只由聚焦 composer 消费且匹配 workspace，effect 返回对应取消订阅。`mentions/providers/fileMentionProvider.ts` 与 `activePromptInputToken.ts` 完整读取：结果按 service/workspace/connection/query/limit 校验，effect cleanup 使旧读取失效；光标移动仍在同一未改 token 内时保持候选查询。这里的启示是输入资源归实例、异步结果归 scope 和 occurrence；这些参考逻辑不直接证明我们的实现正确。
+
+### R13：实例退役必须释放自己的订阅
+
+`inputEnhancer.js` 原先仅把 preload 文件订阅交给可选 renderer listener owner，实例自己的 dispose 不释放；初始化替换实例时旧订阅一直保留到整个 renderer 销毁。DOM 监听交给外部 owner 后同样没有局部清理。修复为实例和 renderer 都能清理对应资源：DOM remove 对同一 handler 幂等，preload unsubscribe 使用一次释放包装，避免两个 owner 重复调用底层取消函数。没有把同步 DOM owner 的 dispose 擅自解释为等待全部异步工作；生产 renderer 仍显式调用 input enhancer 的 dispose。
+
+### R14：重复销毁必须等待同一个在途工作屏障
+
+旧实现第一次 dispose 标记 inactive 并等待任务，第二次直接返回，可能让第二个 teardown 调用者在文件处理结束前继续释放后续资源。现在保存并复用 disposal Promise；标记 inactive 与资源撤销仍立即发生，迟到结果不投影到附件/预览。主窗口的 renderer 组合和 preload `on()` 实现已核实，后者返回精确 removeListener 函数。
+
+原 `input-enhancer-owner.test.mjs` 缺少 document，且第二项依赖第一项的全局 window/import 状态，因此不能证明上述生命周期。改为每项独立 JSDOM realm、真实 DOM、明确进入 IPC 与完成的受控 Promise，并在 teardown 关闭窗口。测试验证真实拖拽在 owner dispose 后不再生效、所有 dispose 调用者均等待、单实例释放订阅、重初始化只保留一个订阅、旧回调不投影、与 renderer 同时退役只取消一次。没有依赖固定睡眠或替换 globalThis。
+
+### R15：同级名称歧义不能按目录枚举顺序选写入目标
+
+`pluginAgentOperationService.findAgent()` 在 `62b936a7` 引入 ID > 精确全名 > 前缀 > 双向包含的优先级；旧测试把“唯一精确名 + 一个前缀名”当成歧义，确实已过期。但改动同时删掉了同级多候选的拒绝逻辑，两个精确名或两个同级模糊名会取目录枚举的首项。修复只拒绝最高匹配层级的多个候选，提示使用 Agent ID；唯一精确名优先与显式 ID 规则保留。
+
+通过真正的 `CreateTopic` 命令验证精确/前缀/包含三种同级歧义在任何写入前拒绝、双方配置未变；另验证唯一精确名成功写入正确目标，以及同名情况下显式 ID 仍能写入指定目标。没有将合法的新匹配规则回退为旧的全包含拒绝。
+
+修复前受控测试 **8 通过 / 5 失败**：三种歧义均缺少预期拒绝，两个输入生命周期场景分别提前结束或未释放旧订阅。修复后输入、笔记键盘、工作区提及、插件服务 **20/20**；相关 **227/227**、UI **121/121**；全量 **251 个测试文件通过、6 个失败、0 超时**。减少的两个失败文件就是输入 owner 与插件服务；剩余六项全部是 Scriptorium Electron 入口被 Node 运行的问题，仍待正确运行器验证。事件检查首次准确检出陈旧行号，生成后只更新输入工作区事件的位置，复验通过。
+
+实际工作区窗口的隔离 iframe 对比旧/新源码：重复 dispose 等待 false→true，单实例/重初始化取消订阅 0→1，保留订阅 3→1，迟到附件与预览均为 0。仅使用受控内存 API；截图后移除 iframe，原标签、草稿与主题快照一致，未 reload 主窗口。此验证不覆盖主进程文件持久化、话题切换中的附件归属或生产 composer 的所有入口；这些仍需沿调用链审查。
+
+本轮还扩大运行完整 `npm run check:ui-system`，不能继续用七项局部门禁代替它。聚合命令在第一项 `guard:design-subtraction` 停止；随后把其余 30 项逐项运行，27 项通过、3 项失败：`guard:next-delta` 读取已不存在的 `preloads/shared/catalog.js`；stylelint 指出 chat-input 与 side-pane-shell 各一个重复选择器；appearance-engine 的全局壁纸 sidebar backdrop-filter 字符串契约不匹配。相关脚本和 CSS 在本轮未改动，这些是新增发现的审查待办，不宣称产品行为已经有回归或门禁已经通过。
+
+design boundary 默认以 HEAD 与 origin/main 的 merge-base（`3bb5266b`）审查整条分支。375 个报告路径中，374 个在本轮开始的 HEAD 已与基准不同（按 `core.quotepath=false` 核对中文路径）；剩余一个是本轮增强的插件服务测试，处于这份历史“设计减法 PR”白名单之外。当前用户要求审查整个工程，该测试改动符合任务，但并不满足旧 PR 文件范围合同。没有扩张白名单、偷偷改基准或绕过失败。后续应区分一般工程质量检查与某个历史 PR 的范围检查，并核实缺失目录、重复规则的层叠语义与壁纸实际行为后修正适用契约。
+
 ## 验证与局限
 
 - 修改前新增 6 个故障用例：文件旧成功/旧失败、旧行触发、筛选旧成功/旧失败、关闭重开。全部能在原实现上失败。
@@ -156,12 +188,12 @@
 - 实际主窗口后来已有其他用户标签，未执行 reload；临时预览层使用当前工作区源码副本与真实渲染环境核验，并比较前后标签快照、草稿、主题，均保持一致。因此本轮不能声称主窗口既有控制器实例已热更新。
 - 本轮没有新模块或样式文件；事件图和样式检查均无需改动且检查通过。
 
-开始时 9 项失败不能成为永久豁免；第四轮已解决 1 个过期测试文件，目前剩 8 个：
+开始时 9 项失败不能成为永久豁免；第四、第五轮已解决三个失败文件，目前剩 6 个：
 
-1. `input-enhancer-owner.test.mjs`：两项在 `inputEnhancer.js:518` 访问未装配的 document 时失败，尚未测试到目标 owner 行为。需要核实 DOM 依赖契约并改善装配。
+1. `input-enhancer-owner.test.mjs`：第五轮已修正 DOM 装配并修复实例订阅释放、重复销毁屏障；当前三个受控场景通过。话题切换与完整文件 IPC 未据此宣称完成。
 2. 六个 `scriptorium-*-electron.test.js`：源码直接使用 Electron app/BrowserWindow，既有隔离脚本却统一用 Node；尚不能据此判断产品失败。需要正确运行入口、隔离窗口与导出产物验证。
 3. `ui-helpers-settings-close.test.js`：第四轮已解决过期契约，删除遗留死状态；当前交互测试及 coordinator 组件证据通过。完整生产 owner、SettingsBridge、IPC 与发布环境的保存行为仍未据此宣称完成。
-4. `plugin-agent-operation-service.test.cjs`：全量中的单项失败还需诊断。一次额外沙箱诊断触发临时文件 rename EPERM、错误恢复超时，已核实并结束仅由该诊断创建的父/子测试进程；不能把这次环境失败算成产品回归或替代全量结果。
+4. `plugin-agent-operation-service.test.cjs`：第五轮确认一个过期歧义断言与真实同级目标选择缺陷；已修复并通过 10 个服务测试。之前沙箱诊断的临时文件 rename EPERM 不能计为产品缺陷；本轮隔离实际文件写入没有该错误。
 
 ## 全范围覆盖账本与后续路径
 
@@ -174,7 +206,7 @@ Git 清单有 2384 个跟踪文件。按代码扩展名排除常见 vendor/asset
 | 聊天和辅助对话 | 尚无本轮深入结论 | 主聊天/辅助对话所有者、流/取消/重试/编辑、草稿、会话与工作区隔离，对照 reference lease/occurrence |
 | Git、ProjectForge、源码后端 | 本轮只追到 provider 读取与已有测试 | IPC/preload 契约、读写根目录约束、真实 Git 与回退竞态、并发快照、索引、错误分类、批次缓存、隐藏面板 I/O |
 | 主进程、其他服务与 Rust | 清单定位到 IPC/services、chat data/audio/assistant/indexer 等模块 | 主进程资源生命周期、异常恢复与服务装配、Rust 测试与接口、插件/工具调用、升级/打包运行闭包 |
-| 测试体系 | 三轮受控故障回归均先在旧实现失败；设置过期契约已修复，同构 stress 循环已换为组件行为；全量剩 8 个失败 | 修复其余失效装配与 Electron 运行器、核实断言覆盖、继续消除随意等待/源码字符串自证、区分单元/真实后端/窗口验证、检查门禁新分支覆盖 |
+| 测试体系 | 生命周期与同级名称回归先在旧实现失败；设置、输入 DOM、匹配契约过期装配已修正；全量剩 6 个 Electron 入口失败 | 正确运行 Electron 并验证实际产物、核实断言覆盖、继续消除随意等待/源码字符串自证、区分单元/真实后端/窗口验证、检查门禁新分支覆盖 |
 | UI/UX | 前两轮计划分栏有实际窗口证据；本轮正文错误归属修复 | 全入口、焦点、键盘、读屏、浅/深/磨砂、窄窗口、空/加载/错误/权限/断连、性能与隐藏页面行为；不能仅评估计划页 |
 | 可维护性与 AI 可读性 | 此记录包含参考路径、身份约束、故障证据和未覆盖范围；picker 的误导性复制文件头已纠正 | 入口/数据/生命周期图与实际依赖一致性、其余复制文件头、重复真相、隐式全局/魔法 key、生成规则、文档过期、合理模块边界与契约 |
 | 完成审计 | 未通过：上表仍有明确未覆盖范围 | 每个要求都需具体当前证据；不能用本轮修复或已有绿灯宣称全工程完成 |
