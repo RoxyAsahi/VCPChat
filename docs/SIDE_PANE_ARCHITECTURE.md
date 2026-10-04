@@ -26,6 +26,7 @@
 | `side-pane-types.js` | 只有 JSDoc 类型：`SidePaneTab`、`SidePaneTabType`、`SidePaneProvider`、`SidePaneTabHandle` 等契约 | 否 |
 | `side-pane-persistence.js` | 布局存档的序列化、带版本号的校验读取、防抖保存；按对话的记忆最多 50 条（LRU） | 否（只碰 storage） |
 | `side-pane-focus.js` | 焦点归属：记下打开副屏前的焦点，收起时送回；焦点不在副屏里时不挪 | 是（只调 `focus()`） |
+| `side-pane-tab-close-owner.js` | 按挂载 occurrence 合并关闭授权、提交关闭后等待清理、与控制器销毁共用一次 dispose | 否（通过组合者回调提交视图和状态变化） |
 | `side-pane-shortcuts.js` | 键盘快捷键：Ctrl/Cmd+Alt+B 开合，副屏内 Ctrl+PageUp/PageDown 切标签 | 是（window keydown） |
 | `side-pane-visibility.js` | 宽度比例（默认 45%，20%–65%）、开合动画、动画期间锁定内容宽度 | 是（写 `style.width`） |
 | `side-pane-tab-strip.js` | 标签条渲染、悬停提示、溢出布局与边缘渐隐、拖拽排序、方向键 / 中键关闭、通知标签上的连接状态点 | 是 |
@@ -48,6 +49,7 @@ sidePaneWiring
         ├─ side-pane-state            （纯函数）
         ├─ side-pane-persistence      （纯函数 + storage）
         ├─ side-pane-focus
+        ├─ side-pane-tab-close-owner
         ├─ side-pane-shortcuts
         ├─ side-pane-visibility
         ├─ side-pane-resizer-owner
@@ -208,6 +210,8 @@ provider 只能修改自己的视图，跨模块动作通过组合者注入的�
 读取时先看版本号，再逐项校验：坏 JSON、别的版本、不认识或不允许持久化的标签类型都直接丢掉。`sidePaneWiring` 登记完所有标签类型后调用 `controller.restoreLayout()`；在这之前控制器不会写存档，免得启动时的空布局把存档盖掉。保存做了 400ms 防抖，页面隐藏、卸载或控制器销毁时立刻写一次。
 
 辅助对话不走这套存档：宿主切换对话时调用辅助对话 owner 的 `restoreSessions`，从会话服务恢复。
+
+关闭等待 provider 的 `requestClose()`，同一 occurrence 的重复请求共享这次操作；拒绝或异常后允许重试。授权成功后同步移除标签和视图，再等待该 occurrence 的 dispose 与已捕获的 onClosed。因此等待旧清理期间，同 ID 的新打开不会被旧操作移除。控制器销毁与关闭共用一次 dispose，并等待已提交关闭的清理；仍未授权的关闭结果迟到时不删除业务资源。不可关闭标签不会进入授权或清理。焦点归属在授权结束、提交移除时读取。
 
 
 ## 8. 样式加载顺序

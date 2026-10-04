@@ -9,6 +9,7 @@ import { createSidePaneTabOverview } from './side-pane-tab-overview.js';
 import { createSidePaneTabMenu } from './side-pane-tab-menu.js';
 import { createSidePaneLauncher } from './side-pane-launcher.js';
 import { createSidePaneFocus } from './side-pane-focus.js';
+import { createSidePaneTabCloseOwner } from './side-pane-tab-close-owner.js';
 import { createSidePaneShortcuts } from './side-pane-shortcuts.js';
 import { createSidePaneLayoutStore, parseLayout, rememberBounded, serializeLayout } from './side-pane-persistence.js';
 
@@ -398,6 +399,41 @@ export function createSidePaneController({
         if (recentlyClosedTabs.length > RECENTLY_CLOSED_LIMIT) recentlyClosedTabs.pop();
     }
 
+    const tabCloseOwner = createSidePaneTabCloseOwner({
+        isDisposed: () => isDisposed,
+        getTab: tabId => state.tabs.find(tab => tab.id === tabId),
+        getEntry: tabId => mountedTabMap.get(tabId),
+        getOnClosed: tab => getTabType(tab.kind)?.onClosed,
+        cancelPendingMount,
+        retireTab(tab, entry, options) {
+            // Read current focus after authorization; the user may have moved elsewhere while it waited.
+            const ownedFocus = focus.ownsFocus();
+            const origin = doc.activeElement;
+            const closingFocusedTab = state.activeTabId === tab.id
+                || entry?.viewElement?.contains(origin)
+                || origin?.closest?.('[data-tab-id]')?.getAttribute('data-tab-id') === tab.id;
+            entry?.viewElement?.remove();
+            if (mountedTabMap.get(tab.id) === entry) mountedTabMap.delete(tab.id);
+            rememberClosed(tab);
+            const wasVisible = state.visible;
+            state = SidePaneState.closeTab(state, tab.id, options);
+            if (state.parent) {
+                const parentKey = parentKeyOf();
+                if (wasVisible && !state.visible) {
+                    rememberBounded(collapsedByParent, parentKey, true);
+                    activeTabByParent.delete(parentKey);
+                } else if (activeTabByParent.get(parentKey) === tab.id) {
+                    rememberBounded(activeTabByParent, parentKey, state.activeTabId);
+                }
+            }
+            renderTabList();
+            syncViewPanels();
+            syncDomVisibility();
+            if (!state.visible) focus.restoreAfterHide(ownedFocus);
+            else if (ownedFocus && closingFocusedTab) strip?.focusTab(state.activeTabId);
+        }
+    });
+
     controller = Object.freeze({
         getSnapshot() {
             return state;
@@ -689,53 +725,8 @@ export function createSidePaneController({
             return true;
         },
 
-        async closeTab(tabId, options = {}) {
-            if (isDisposed || !tabId || isNotificationsTab(tabId)) return;
-            const ownedFocus = focus.ownsFocus();
-            const entry = mountedTabMap.get(tabId);
-            if (!entry) cancelPendingMount(tabId);
-            if (entry) {
-                const closeResult = await entry.handle?.requestClose?.();
-                if (closeResult && closeResult.closed === false) {
-                    return; // 用户或进行中的操作拦下了关闭
-                }
-                // provider 拆不干净也要让标签关掉，不能卡在标签条上
-                try {
-                    await entry.handle?.dispose?.();
-                } catch (error) {
-                    console.error(`[SidePaneController] Failed to dispose tab "${tabId}":`, error);
-                }
-                entry.viewElement?.remove?.();
-                mountedTabMap.delete(tabId);
-            }
-            const tabObj = state.tabs.find(t => t.id === tabId);
-            if (tabObj) {
-                try {
-                    await getTabType(tabObj.kind)?.onClosed?.(tabObj);
-                } catch (error) {
-                    console.error(`[SidePaneController] onClosed failed for tab "${tabId}":`, error);
-                }
-                rememberClosed(tabObj);
-            }
-
-            const wasVisible = state.visible;
-            state = SidePaneState.closeTab(state, tabId, options);
-            if (state.parent) {
-                const parentKey = parentKeyOf();
-                if (wasVisible && !state.visible) {
-                    rememberBounded(collapsedByParent, parentKey, true);
-                    activeTabByParent.delete(parentKey);
-                } else if (activeTabByParent.get(parentKey) === tabId) {
-                    rememberBounded(activeTabByParent, parentKey, state.activeTabId);
-                }
-            }
-
-            renderTabList();
-            syncViewPanels();
-            syncDomVisibility();
-            // 焦点在别处（比如主输入框）时关标签不抢焦点；面板跟着收起时焦点回到打开前的位置
-            if (!state.visible) focus.restoreAfterHide(ownedFocus);
-            else if (ownedFocus) strip?.focusTab(state.activeTabId);
+        closeTab(tabId, options = {}) {
+            return tabCloseOwner.closeTab(tabId, options);
         },
 
         setParent(parentRef) {
@@ -784,16 +775,14 @@ export function createSidePaneController({
             layoutStore?.dispose();
 
             const disposePromises = [];
-            mountedTabMap.forEach((entry) => {
-                if (entry.handle?.dispose) {
-                    disposePromises.push(Promise.resolve().then(() => entry.handle.dispose()));
-                }
+            mountedTabMap.forEach((entry, tabId) => {
+                disposePromises.push(tabCloseOwner.disposeEntry(tabId, entry));
                 entry.viewElement?.remove?.();
             });
             mountedTabMap.clear();
             for (const tabId of pendingTabMounts.keys()) cancelPendingMount(tabId);
             tabTypes.clear();
-            await Promise.allSettled(disposePromises);
+            await Promise.allSettled([...disposePromises, tabCloseOwner.dispose()]);
         }
     });
 
