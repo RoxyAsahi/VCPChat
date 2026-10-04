@@ -972,6 +972,14 @@ html body.chat-header-capsule .chat-agent-pill {
                 border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* 连续曲率的胶囊：两端从直边上提前开始弯，直边接圆弧处不再有一下突变；端头仍是圆的 */
+@supports (corner-shape: superellipse(1.1)) {
+    html body.chat-header-capsule .chat-agent-pill {
+        border-radius: 23px / 50%;
+        corner-shape: superellipse(1.1);
+    }
+}
+
 html:not(.light-theme):not([data-vcp-theme="light"]) body.chat-header-capsule .chat-agent-pill {
     background: rgba(30, 31, 35, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.1);
