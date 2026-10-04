@@ -254,6 +254,7 @@
     "modules/renderer/markdownCodeDomainScanner.js",
     "modules/renderer/mediaLifecycle.js",
     "modules/renderer/messageContextMenu.js",
+    "modules/renderer/messenger-presentation.js",
     "modules/renderer/middleClickHandler.js",
     "modules/renderer/nonStreamingEventConsumer.js",
     "modules/renderer/ownedPreloadSubscription.js",
@@ -3066,7 +3067,7 @@
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1198,
+          "line": 1201,
           "kind": "custom-event-dispatch"
         },
         {
@@ -3134,7 +3135,7 @@
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1198,
+          "line": 1201,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('global-settings-updated'"
         },
@@ -4765,14 +4766,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1118,
+          "line": 1142,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1118,
+          "line": 1142,
           "kind": "custom-event-listener",
           "match": "addEventListener('notification-filter-changed'"
         },
@@ -4839,14 +4840,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1493,
+          "line": 1517,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1493,
+          "line": 1517,
           "kind": "preload-subscription",
           "match": "onCreateUnlockedTopic("
         }
@@ -4877,14 +4878,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1200,
+          "line": 1224,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1200,
+          "line": 1224,
           "kind": "preload-subscription",
           "match": "onDoToggleNotificationsSidebar("
         }
@@ -5174,14 +5175,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 2322,
+          "line": 2336,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 2322,
+          "line": 2336,
           "kind": "preload-subscription",
           "match": "onSelectionChange("
         }
@@ -8276,7 +8277,7 @@
       "producers": [
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1075,
+          "line": 1078,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8284,7 +8285,7 @@
       "evidence": [
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1075,
+          "line": 1078,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-appearance-studio-preview'"
         }
@@ -8624,7 +8625,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1053,
+          "line": 1060,
           "kind": "custom-event-dispatch"
         }
       ],
@@ -8632,7 +8633,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1053,
+          "line": 1060,
           "kind": "custom-event-dispatch",
           "match": "dispatchEvent(new CustomEvent('vcp-renderer-ready'"
         }

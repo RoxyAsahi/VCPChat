@@ -171,6 +171,8 @@
                         data-presentation-mode="panel" role="radio" aria-checked="false">统一</button>
                     <button type="button" class="chat-presentation-quick-option"
                         data-presentation-mode="immersive" role="radio" aria-checked="false">刊物</button>
+                    <button type="button" class="chat-presentation-quick-option"
+                        data-presentation-mode="messenger" role="radio" aria-checked="false">对话</button>
                 </div>
             </div>
             <button id="nextUiThemeStoreBtn" class="next-ui-icon-button" type="button" title="选择主题" aria-label="选择主题">
@@ -500,9 +502,12 @@
                 <div class="chat-agent-pill" id="chatAgentPill" role="button" tabindex="0" title="点击查看助手信息及设置">
                     <img id="chatAgentAvatar" class="chat-agent-pill-avatar" src="assets/icon.png" alt="" />
                     <h3 id="currentChatAgentName" class="chat-agent-pill-name">选择一个Agent开始聊天</h3>
-                    <svg class="chat-agent-pill-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
+                    <button id="chatAgentPillPanelBtn" class="chat-agent-pill-panel-btn" type="button" tabindex="-1"
+                        title="打开通知面板" aria-label="打开通知面板" aria-controls="notificationsSidebar">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="9 6 15 12 9 18"></polyline>
+                        </svg>
+                    </button>
                 </div>
                 <div class="chat-actions">
                     <button id="voiceChatBtn" class="header-button chat-action-pill-btn" type="button" title="语音聊天"
@@ -1494,6 +1499,7 @@
     <script src="modules/tavernRulesEngine.js"></script>
     <script src="Tavernmodules/tavern-manager.js"></script>
     <script src="Groupmodules/grouprenderer.js"></script>
+    <script src="modules/renderer/messenger-presentation.js"></script>
     <script type="module" src="modules/renderer/colorUtils.js"></script>
     <script type="module" src="modules/renderer/imageHandler.js"></script>
     <script type="module" src="modules/renderer/domBuilder.js"></script>

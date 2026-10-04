@@ -867,17 +867,56 @@ html .chat-agent-pill-name {
     line-height: 1;
 }
 
-html .chat-agent-pill-chevron {
-    width: 12px;
-    height: 12px;
-    opacity: 0.5;
+/* Hover reveals a chevron that opens the notifications panel. It is collapsed
+   (zero width, gap cancelled) at rest, and stays collapsed while the panel is
+   already open. */
+html .chat-agent-pill-panel-btn {
+    width: 0;
+    height: 20px;
+    margin: 0 0 0 -8px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    overflow: hidden;
+    color: var(--next-muted, currentColor);
+    background: transparent;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.15s ease,
+                color 0.15s ease,
+                background-color 0.15s ease;
 }
 
-html .chat-agent-pill:hover .chat-agent-pill-chevron {
-    opacity: 0.85;
-    transform: translateY(1px);
+html .chat-agent-pill-panel-btn svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+}
+
+html .chat-agent-pill:is(:hover, :focus-visible) .chat-agent-pill-panel-btn {
+    width: 20px;
+    margin: 0 -6px 0 -2px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+html .chat-agent-pill .chat-agent-pill-panel-btn:hover {
+    color: var(--next-text, currentColor);
+    background: var(--next-hover, rgba(0, 0, 0, 0.06));
+}
+
+html .main-content.notifications-sidebar-active .chat-agent-pill .chat-agent-pill-panel-btn {
+    width: 0;
+    margin: 0 0 0 -8px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Hide pill in empty state (when no agent selected) */
@@ -1263,24 +1302,41 @@ html .chat-actions .header-button {
     box-shadow: none;
 }
 
-html .chat-actions .header-button:not(#currentAgentSettingsBtn) {
+html .chat-actions .header-button:not(.chat-action-pill-btn) {
     min-width: 28px;
     width: 28px;
     padding: 0;
 }
 
-html .chat-actions .header-button#currentAgentSettingsBtn {
+/* Pill actions carry an icon and a label. Undo the fixed icon-button width and
+   the old CREATE TOPIC artwork sizing in components.css, whose ID selectors
+   would otherwise win and let the label spill onto the next pill. */
+html .chat-actions .header-button.chat-action-pill-btn:is(#voiceChatBtn, #currentAgentSettingsBtn) {
     width: auto;
-    min-width: auto;
-    padding: 0 8px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 11px 0 10px;
+    gap: 6px;
     flex-shrink: 0;
+    line-height: 1;
+}
+
+html .chat-actions .header-button.chat-action-pill-btn:is(#voiceChatBtn, #currentAgentSettingsBtn) svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    transform: none;
+}
+
+html .chat-actions .header-button.chat-action-pill-btn:is(#voiceChatBtn, #currentAgentSettingsBtn) .button-label {
+    display: inline-block;
 }
 
 html .chat-actions .header-button#voiceChatBtn {
     margin-right: 0 !important;
 }
 
-html .chat-actions .header-button:hover {
+html .chat-actions .header-button:not(.chat-action-pill-btn):hover {
     border: 0;
     color: var(--next-text);
     background: var(--next-hover);

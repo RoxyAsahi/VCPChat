@@ -36,7 +36,7 @@ class SettingsValidator {
             hasIssues = true;
         }
 
-        const allowedChatPresentationModes = new Set(['bubble', 'panel', 'immersive']);
+        const allowedChatPresentationModes = new Set(['bubble', 'panel', 'immersive', 'messenger']);
         if (!allowedChatPresentationModes.has(validated.chatPresentationMode)) {
             validated.chatPresentationMode = 'bubble';
             hasIssues = true;

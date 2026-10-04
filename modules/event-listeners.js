@@ -907,6 +907,14 @@ export function setupEventListeners(deps) {
                 chatAgentPill.click();
             }
         });
+
+        // 悬停时出现的箭头打开通知面板；面板已打开时箭头收起，不会再次切换。
+        document.getElementById('chatAgentPillPanelBtn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!document.getElementById('notificationsSidebar')?.classList.contains('active')) {
+                chatAPI.sendToggleNotificationsSidebar();
+            }
+        });
     }
 
     /**

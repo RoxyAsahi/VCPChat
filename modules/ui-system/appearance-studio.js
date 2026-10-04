@@ -220,7 +220,7 @@
             tuned: '原设计', follow: '跟随全局', square: '直角',
             small: '小圆角', medium: '中圆角', round: '大圆角', custom: '自定义'
         }),
-        presentation: Object.freeze({ bubble: '气泡', panel: '面板', immersive: '沉浸' }),
+        presentation: Object.freeze({ bubble: '气泡', panel: '面板', immersive: '沉浸', messenger: '对话' }),
         themeMode: Object.freeze({ light: '浅色', dark: '深色', system: '跟随系统' })
     });
     const DETAIL_RADIUS_FIELDS = Object.freeze([
@@ -697,6 +697,9 @@
                             </button>
                             <button type="button" data-appearance-key="presentation" data-appearance-value="immersive">
                                 <span class="vcp-appearance-chat-preview immersive" aria-hidden="true"><i></i></span><span class="vcp-appearance-tile-label">沉浸</span>
+                            </button>
+                            <button type="button" data-appearance-key="presentation" data-appearance-value="messenger">
+                                <span class="vcp-appearance-chat-preview messenger" aria-hidden="true"><i></i><i></i><i></i></span><span class="vcp-appearance-tile-label">对话</span>
                             </button>
                         </div>
                         </div>
