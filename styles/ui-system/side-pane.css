@@ -1004,7 +1004,8 @@ html .side-pane-launcher-address:where(.vcp-ui-scope, .vcp-ui-scope *) {
 html .side-pane-launcher-address[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-pane-launcher-address-error[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-pane-launcher-section[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
-html .side-pane-launcher-tabs[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+html .side-pane-launcher-tabs[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .side-pane-launcher-tab[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: none;
 }
 
@@ -1163,6 +1164,9 @@ html .side-pane-launcher-tabs:where(.vcp-ui-scope, .vcp-ui-scope *) {
 }
 
 html .side-pane-launcher-tab:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     height: 28px;
     padding: 0 12px;
     border: none;
@@ -1203,6 +1207,47 @@ html .side-pane-launcher-section:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+/* “通知”分类上的 VCPLog 连接圆点，颜色同原来通知标签上的那颗 */
+html .side-pane-launcher-tab-status:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 0 auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vcp-ui-text-3);
+}
+
+html .side-pane-launcher-tab-status[data-status="open"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-success);
+}
+
+html .side-pane-launcher-tab-status[data-status="connecting"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-warning);
+    animation: side-pane-tab-status-pulse 1.4s ease-in-out infinite;
+}
+
+html .side-pane-launcher-tab-status:is([data-status="closed"], [data-status="error"]):where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--vcp-ui-danger);
+}
+
+/* 通知页：头像和分类留在上面，通知列表占满剩下的高度并自己滚动 */
+html #sidePaneViewLauncher[data-launcher-segment="notifications"] .side-pane-open-tab-shell:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+html #sidePaneViewLauncher[data-launcher-segment="notifications"] .side-pane-open-tab-content:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 1;
+    min-height: 0;
+}
+
+html .side-pane-launcher-section[data-launcher-section="notifications"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 1;
+    min-height: 0;
+    margin: 0 -12px;
 }
 
 html .side-pane-launcher-app-grid:where(.vcp-ui-scope, .vcp-ui-scope *) {

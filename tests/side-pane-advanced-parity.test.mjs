@@ -386,6 +386,78 @@ test('Parity: the new tab page switches between tools and apps', async () => {
     dom.window.close();
 });
 
+// 现在的页面：通知不再单独一个视图，而是新标签页里的“通知”分类
+function hostNotificationsInLauncher(doc) {
+    doc.getElementById('sidePaneViewNotifications').remove();
+    const launcher = doc.getElementById('sidePaneViewLauncher');
+    launcher.querySelector('.side-pane-launcher-tabs').insertAdjacentHTML('beforeend',
+        '<button type="button" data-launcher-tab="notifications" aria-selected="false">通知<span class="side-pane-launcher-tab-status" data-status="unknown"></span></button>');
+    launcher.insertAdjacentHTML('beforeend', `
+        <section data-launcher-section="notifications" hidden>
+            <aside id="notificationsSidebar">
+                <div id="vcpLogConnectionStatus" data-status="unknown"><span class="notifications-status-text">VCPLog: 未连接</span></div>
+            </aside>
+        </section>`);
+}
+
+test('Parity: notifications live in the new tab page instead of the tab strip', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    hostNotificationsInLauncher(doc);
+    const launcher = doc.getElementById('sidePaneViewLauncher');
+    const tabs = launcher.querySelector('.side-pane-launcher-tabs');
+    const tools = launcher.querySelector('[data-launcher-section="tools"]');
+    const notifications = launcher.querySelector('[data-launcher-section="notifications"]');
+    const segment = tabs.querySelector('[data-launcher-tab="notifications"]');
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+    const stripTabIds = () => [...doc.querySelectorAll('.side-pane-tabs .side-pane-tab')].map(btn => btn.getAttribute('data-tab-id'));
+
+    // 首页就是新标签页的通知分类；标签条上不再有通知标签，没有应用来源时也有切换条
+    ctrl.setVisible(true, { animate: false });
+    assert.deepEqual(stripTabIds(), []);
+    assert.equal(launcher.hidden, false);
+    assert.equal(tabs.hidden, false);
+    assert.equal(tabs.querySelector('[data-launcher-tab="apps"]').hidden, true);
+    assert.equal(segment.getAttribute('aria-selected'), 'true');
+    assert.equal(notifications.hidden, false);
+    assert.equal(tools.hidden, true);
+    assert.equal(doc.getElementById('notificationsSidebar').classList.contains('active'), true);
+    assert.equal(launcher.dataset.launcherSegment, 'notifications');
+
+    // 连接状态挂在通知分类上
+    const status = doc.getElementById('vcpLogConnectionStatus');
+    status.dataset.status = 'open';
+    status.querySelector('.notifications-status-text').textContent = 'VCPLog: 已连接';
+    await tick();
+    assert.equal(segment.querySelector('.side-pane-launcher-tab-status').dataset.status, 'open');
+    assert.equal(segment.getAttribute('aria-label'), '通知，VCPLog 已连接');
+
+    // 切到工具：离开通知页；再点通知回来
+    tabs.querySelector('[data-launcher-tab="tools"]').click();
+    assert.equal(ctrl.getSnapshot().activeTabId, SidePaneState.LAUNCHER_TAB_ID);
+    assert.equal(tools.hidden, false);
+    assert.equal(notifications.hidden, true);
+    assert.equal(doc.getElementById('notificationsSidebar').classList.contains('active'), false);
+    segment.click();
+    assert.equal(ctrl.getSnapshot().activeTabId, SidePaneState.NOTIFICATIONS_TAB_ID);
+    assert.equal(notifications.hidden, false);
+
+    // 「+」打开的是工具页；打开的标签在标签条上，概览里也没有通知
+    doc.getElementById('addSidePaneChatBtn').click();
+    assert.equal(tools.hidden, false);
+    assert.equal(notifications.hidden, true);
+    ctrl.setParent({ itemType: 'agent', itemId: 'agent-1', topicId: 'parent' });
+    await ctrl.openChat(createDesc('s1', 'c1'));
+    assert.deepEqual(stripTabIds(), ['s1']);
+    assert.equal(launcher.hidden, true);
+    assert.deepEqual([...doc.querySelectorAll('#sidePaneOpenTabsList .side-pane-overview-item')].map(item => item.getAttribute('data-tab-id')), ['s1']);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
 test('Parity: entries can hide themselves with isAvailable', () => {
     const dom = createParityTestDOM();
     const doc = dom.window.document;
