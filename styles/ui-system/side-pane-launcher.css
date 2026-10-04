@@ -367,30 +367,29 @@ html .side-pane-launcher-app-label:where(.vcp-ui-scope, .vcp-ui-scope *) {
 html .side-pane-open-tab-list:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 html .side-pane-open-tab-button:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
     align-items: center;
-    gap: 12px;
-    height: 42px;
+    gap: 10px;
+    height: 36px;
     width: 100%;
     padding: 0 14px;
     border-radius: 10px;
     border: 1px solid var(--vcp-ui-port-color-rgba-255-255-255-0-06);
     background: var(--vcp-ui-port-color-26262b);
     color: var(--primary-text, var(--vcp-ui-port-color-f1f5f9));
-    font-size: var(--vcp-ui-font-size);
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
     cursor: pointer;
     box-sizing: border-box;
     transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 html body[data-vcp-theme="light"] .side-pane-open-tab-button:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    border-color: var(--vcp-ui-port-color-rgba-0-0-0-0-06);
+    border-color: transparent;
     background: var(--vcp-ui-port-color-ffffff);
-    box-shadow: var(--vcp-ui-shadow-sm);
     color: var(--primary-text, var(--vcp-ui-port-color-0f172a));
 }
 
@@ -403,8 +402,7 @@ html .side-pane-open-tab-button:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope
 
 html body[data-vcp-theme="light"] .side-pane-open-tab-button:hover:where(.vcp-ui-scope, .vcp-ui-scope *),
 html body[data-vcp-theme="light"] .side-pane-open-tab-button:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    background: var(--vcp-ui-port-color-f7f7f7);
-    border-color: var(--vcp-ui-port-color-rgba-0-0-0-0-1);
+    background: var(--vcp-ui-port-color-f0f0f0);
 }
 
 html .side-pane-open-tab-button-label:where(.vcp-ui-scope, .vcp-ui-scope *) {
@@ -417,9 +415,9 @@ html .side-pane-open-tab-button-label:where(.vcp-ui-scope, .vcp-ui-scope *) {
 }
 
 html .side-pane-open-tab-button .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    --vcp-ui-icon-size: 18px;
-    width: 18px;
-    height: 18px;
+    --vcp-ui-icon-size: 16px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
     opacity: 0.7;
 }
