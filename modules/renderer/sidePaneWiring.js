@@ -78,7 +78,7 @@ export function initWorkspaceSidePane({
         else if (shortcut?.action === 'cycle') controller.cycleTab(shortcut.delta);
     });
     if (typeof unsubscribeBrowserShortcut === 'function') subscriptions.add({ dispose: unsubscribeBrowserShortcut });
-    subscriptions.add(createSidePaneWorkspaceServices({ doc, win, chatAPI, chatManager, uiHelper, historyRef, codeViewerProvider: codeViewer.provider, gitProvider: git.provider, toolOutputProvider: toolOutput.provider, planDetailProvider: planDetail.provider, openProjectForge }));
+    subscriptions.add(createSidePaneWorkspaceServices({ doc, win, chatAPI, chatManager, uiHelper, historyRef, codeViewerProvider: codeViewer.provider, gitProvider: git.provider, toolOutputProvider: toolOutput.provider, planDetailProvider: planDetail.provider }));
     subscriptions.add(createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, uiHelper, selectedItemRef, controller }));
     subscriptions.add(createSidePaneHostBindings({ win, chatAPI, uiHelper, chatManager, selectedItemRef, topicIdRef, toggleChatBtn, controller, restoreSessions: sideChat.restoreSessions }));
     subscriptions.add(createFloatingSelectionButton({ doc, win, notify: (message, type) => uiHelper?.showToastNotification?.(message, type) }));
