@@ -11,6 +11,8 @@ html .side-plan-view:where(.vcp-ui-scope, .vcp-ui-scope *) { height: 100%; overf
  */
 html .side-plan-scope:where(.vcp-ui-scope, .vcp-ui-scope *) {
     height: 100%;
+    display: flex;
+    flex-direction: column;
     --side-plan-surface: color-mix(in srgb, var(--zc-fg) 5%, transparent);
     --side-plan-hover: color-mix(in srgb, var(--zc-fg) 7%, transparent);
     --side-plan-rule: color-mix(in srgb, var(--zc-fg) 10%, transparent);
@@ -19,9 +21,10 @@ html .side-plan-scope:where(.vcp-ui-scope, .vcp-ui-scope *) {
 
 
 html .side-plan-body:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
-    padding: 16px 14px 24px;
+    padding: 12px 14px 24px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -42,9 +45,8 @@ html .side-plan-error:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; fle
 html .side-plan-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 0 6px 14px;
-    border-bottom: 1px solid var(--side-plan-rule);
+    gap: 4px;
+    padding: 0 6px 10px;
     box-sizing: border-box;
 }
 html .side-plan-title-row:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -58,20 +60,36 @@ html .side-plan-icon-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
 html .side-plan-icon-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { background: var(--side-plan-hover); color: var(--zc-fg); }
 html .side-plan-icon-btn .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope *), html .side-plan-icon-btn svg:where(.vcp-ui-scope, .vcp-ui-scope *) { width: 15px; height: 15px; font-size: calc(var(--vcp-ui-font-size) + 1px); }
 
-html .side-plan-chip:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; padding: 1px 8px; border-radius: 999px; font-size: calc(var(--vcp-ui-font-size) - 3px); background: var(--side-plan-surface); color: var(--zc-fg-subtle); }
+html .side-plan-chip:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; padding: 0; font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); }
 html .side-plan-chip.status-active:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-success); }
 html .side-plan-chip.status-deleted:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-danger); }
 
-html .side-plan-meta:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: calc(var(--vcp-ui-font-size) - 2px); color: var(--zc-fg-subtle); }
+html .side-plan-meta:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); }
+html .side-plan-meta > span + span:where(.vcp-ui-scope, .vcp-ui-scope *)::before { content: '·'; margin-right: 10px; color: var(--zc-fg-subtle); }
 html .side-plan-root:where(.vcp-ui-scope, .vcp-ui-scope *) { font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 html .side-plan-warning:where(.vcp-ui-scope, .vcp-ui-scope *) { font-size: calc(var(--vcp-ui-font-size) - 2px); padding: 6px 10px; border-radius: 6px; background: var(--vcp-ui-port-color-rgba-217-119-6-0-12); color: var(--zc-warning); }
 
-html .side-plan-progress:where(.vcp-ui-scope, .vcp-ui-scope *) { display: block; width: 100%; height: 3px; margin-top: 2px; border: 0; border-radius: 999px; background: var(--side-plan-rule); color: var(--zc-success); overflow: hidden; appearance: none; }
+html .side-plan-progress:where(.vcp-ui-scope, .vcp-ui-scope *) { display: block; flex: 0 0 64px; width: 64px; height: 3px; border: 0; border-radius: 999px; background: var(--side-plan-rule); color: var(--zc-success); overflow: hidden; appearance: none; }
 html .side-plan-progress:where(.vcp-ui-scope, .vcp-ui-scope *)::-webkit-progress-bar { border-radius: inherit; background: var(--side-plan-rule); }
 html .side-plan-progress:where(.vcp-ui-scope, .vcp-ui-scope *)::-webkit-progress-value { border-radius: inherit; background: var(--zc-success); transition: width 240ms ease; }
-html .side-plan-progress-text:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 10px; font-size: calc(var(--vcp-ui-font-size) - 2px); color: var(--zc-fg-subtle); font-variant-numeric: tabular-nums; }
+html .side-plan-progress-text:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 4px 6px 10px; font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); font-variant-numeric: tabular-nums; }
 html .side-plan-progress-text .side-plan-pct:where(.vcp-ui-scope, .vcp-ui-scope *) { margin-left: auto; }
 html .side-plan-done:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-success); }
+
+/* Compact project chrome stays above the resident page scrollport. */
+html .side-plan-chrome:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; padding: 12px 14px 0; }
+html .side-plan-chrome[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .side-plan-page[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+html .side-plan-pages:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 4px; border-bottom: 1px solid var(--side-plan-rule); }
+html .side-plan-page-tab:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--zc-fg-subtle); font: inherit; font-size: calc(var(--vcp-ui-font-size) - 2px); cursor: pointer; }
+html .side-plan-page-tab:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); background: var(--side-plan-hover); }
+html .side-plan-page-tab[aria-selected="true"]:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); border-bottom-color: var(--zc-fg); font-weight: 600; }
+html .side-plan-page-count:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg-subtle); font-size: calc(var(--vcp-ui-font-size) - 3px); font-weight: 400; font-variant-numeric: tabular-nums; }
+html .side-plan-page:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-direction: column; gap: 14px; }
+html .side-plan-page[data-plan-page-panel="plan"] > .side-plan-section > .side-plan-section-title:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
+html .side-plan-project-details:where(.vcp-ui-scope, .vcp-ui-scope *) { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; margin: 6px; font-size: calc(var(--vcp-ui-font-size) - 2px); line-height: 1.5; }
+html .side-plan-project-details dt:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg-subtle); }
+html .side-plan-project-details dd:where(.vcp-ui-scope, .vcp-ui-scope *) { margin: 0; color: var(--zc-fg); overflow-wrap: anywhere; }
 
 /* ---- sections：表头是一行小字，不是一块按钮 ---- */
 html .side-plan-section:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-direction: column; gap: 2px; }
@@ -241,6 +259,8 @@ html .side-plan-revert-conflicts:where(.vcp-ui-scope, .vcp-ui-scope *) { margin:
 
 /* Preserve a clear keyboard focus target on the transparent rows and headers. */
 html .side-plan-icon-btn:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .side-plan-page-tab:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .side-plan-page:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-plan-section-title:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-plan-file-btn:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-plan-batch-head:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *),
