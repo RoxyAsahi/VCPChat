@@ -1211,7 +1211,7 @@ html .side-pane-launcher-section:where(.vcp-ui-scope, .vcp-ui-scope *) {
     gap: 4px;
 }
 
-/* 工具页：上面「工具」入口，下面「推荐」一排大图标，放不下时横向滚动 */
+/* 工具页：上面「工具」入口，下面「推荐」一排四个大图标 */
 html .side-pane-launcher-section[data-launcher-section="tools"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
     gap: 20px;
 }
@@ -1274,13 +1274,8 @@ html body[data-vcp-theme="light"] .side-pane-launcher-group-action:focus-visible
 
 html .side-pane-launcher-recommended-row:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 96px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 4px;
-    scrollbar-width: thin;
 }
 
 /* 通知页底部那排快捷入口挪进了新标签页的「推荐」，侧栏里不再重复显示 */

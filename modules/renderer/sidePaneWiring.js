@@ -551,17 +551,17 @@ export function initWorkspaceSidePane({
         }));
         return [...external, ...internal];
     };
-    // 工具页下方的「推荐」：原来通知页底部那排快捷入口（论坛、记忆、日志、监听）加上常用应用
-    const RECOMMENDED_APP_IDS = ['vchat-app-forum', 'vchat-app-memo', 'vchat-app-log', 'vchat-app-rag-observer'];
+    // 工具页下方的「推荐」：托盘的常用应用（最多 4 个，一排放得下），齿轮里改
+    const RECOMMENDED_LIMIT = 4;
     const recommendedIcons = createLauncherIconSet();
     const getLauncherRecommended = () => {
         const tray = win.trayManager;
         recommendedIcons.reset();
         const apps = new Map((tray?.getApps?.() || []).map(app => [app.id, app]));
-        const ids = [...new Set([...RECOMMENDED_APP_IDS, ...(tray?.getPinnedAppIds?.() || [])])];
-        return ids
+        return (tray?.getPinnedAppIds?.() || [])
             .map(id => apps.get(id))
             .filter(app => app && app.id !== 'vchat-app-main')
+            .slice(0, RECOMMENDED_LIMIT)
             .map(app => toLauncherApp(app, recommendedIcons));
     };
     if (win.trayManager?.getApps) {
