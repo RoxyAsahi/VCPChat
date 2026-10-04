@@ -432,6 +432,8 @@
     "modules/ui-system/side-pane/git/diff-model.js",
     "modules/ui-system/side-pane/gitSideProvider.js",
     "modules/ui-system/side-pane/menu-position.js",
+    "modules/ui-system/side-pane/plan-detail/node-view.js",
+    "modules/ui-system/side-pane/plan-detail/topic-activity.js",
     "modules/ui-system/side-pane/planDetailSideProvider.js",
     "modules/ui-system/side-pane/selection-reference.js",
     "modules/ui-system/side-pane/side-pane-controller.js",
