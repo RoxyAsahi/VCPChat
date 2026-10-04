@@ -50,7 +50,11 @@ export function initWorkspaceSidePane({
     subscriptions.add(controller);
 
     subscriptions.add(sideChat);
-    const openProjectForge = () => {
+    // 带工程号时让 V工程 页打开后直接定位到这个工程（projectforge.js 读同一个本地键）
+    const openProjectForge = (projectId) => {
+        if (typeof projectId === 'string' && projectId) {
+            try { win.localStorage.setItem('vcp-projectforge-focus', JSON.stringify({ id: projectId, at: Date.now() })); } catch (_e) { /* 打开窗口不受影响 */ }
+        }
         const launcher = doc.querySelector('[data-action="open-project-forge-window"]');
         if (launcher) launcher.click();
         else chatAPI?.desktopCreateEmbeddedVchatApp?.('open-project-forge-window');
