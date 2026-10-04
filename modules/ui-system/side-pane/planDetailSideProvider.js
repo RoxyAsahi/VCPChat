@@ -9,7 +9,7 @@
 
 'use strict';
 
-import { mapTodoItems, pickProjectsForWorkspace } from '../project-plan-model.js';
+import { mapTodoItems, pickProjectsForWorkspace, pickTopicProject } from '../project-plan-model.js';
 import { formatRelativeTime } from './side-pane-tab-utils.js';
 
 const STORAGE_KEY_WS = 'vcp-projectforge-git-workspace';
@@ -110,8 +110,10 @@ export function createPlanDetailSideProvider({
                     toast('这个话题还没用过 V工程：让助手用 ProjectForge 建好工程后，这里会显示它的计划', 'info');
                     return null;
                 }
-                id = used[0].id;
-                name = used[0].name;
+                // 和状态面板同一条规则：最近用过、有计划的工程
+                const picked = pickTopicProject(used);
+                id = picked.id;
+                name = picked.name;
             }
             if (!id) {
                 const project = await resolveDefaultProject(api, storage);
