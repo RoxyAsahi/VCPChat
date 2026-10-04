@@ -9,6 +9,16 @@ html body #floatingSelectionSideChatBtn[hidden]:where(.vcp-ui-scope, .vcp-ui-sco
     display: none;
 }
 
+/* 侧栏按钮取代铃铛：通知在新标签页里，右键监控面板和待审批角标都挪到侧栏按钮上 */
+html body:has(#vcpSidePane) #toggleNotificationsBtn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: none;
+}
+
+html body #toggleSidePaneChatBtn:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: relative;
+    overflow: visible;
+}
+
 /* --- Resize handle ---
    ui-next.css already gives #resizerRight its 4px gutter. Here it only gains
    the hover pill: 2px wide, inset from the card's rounded corners so it never
