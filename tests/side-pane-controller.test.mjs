@@ -172,6 +172,46 @@ test('SidePaneController mounts a tab once when it is opened twice concurrently'
     dom.window.close();
 });
 
+test('closing and reopening a pending tab creates a fresh mount even with the same id', async () => {
+    const { dom, root, options } = createPaneDom();
+    const mounts = [];
+    const disposed = [];
+    const controller = createSidePaneController({ ...options, providers: {
+        probe: { mountTab(tab, view) {
+            const pending = Promise.withResolvers();
+            view.textContent = tab.payload.version;
+            mounts.push({ version: tab.payload.version, view, ...pending });
+            return pending.promise;
+        } }
+    } });
+    const tab = { id: 'probe', kind: 'probe', title: 'Probe', closable: true, scopeMode: 'global' };
+    const first = controller.openTab({ ...tab, payload: { version: 'old' } });
+    try {
+        await controller.closeTab(tab.id);
+        const reopened = controller.openTab({ ...tab, payload: { version: 'new' } });
+        assert.equal(mounts.length, 2);
+        mounts[0].resolve({ dispose() { disposed.push('old'); } });
+        assert.equal(await first, null);
+        assert.deepEqual(disposed, ['old']);
+        const concurrent = controller.openTab({ ...tab, payload: { version: 'new' } });
+        assert.equal(mounts.length, 2, 'retiring the old occurrence must not remove the new pending mount');
+        const newest = { dispose() { disposed.push('new'); } };
+        mounts[1].resolve(newest);
+        assert.equal(await reopened, newest);
+        assert.equal(await concurrent, newest);
+        assert.equal(controller.getTabHandle(tab.id), newest);
+        assert.equal(root.querySelectorAll('[data-tab-id="probe"].side-pane-view').length, 1);
+        assert.equal(root.querySelector('[data-tab-id="probe"].side-pane-view').textContent, 'new');
+        await controller.closeTab(tab.id);
+        assert.deepEqual(disposed, ['old', 'new']);
+    } finally {
+        mounts.forEach(mount => mount.resolve({ dispose() {} }));
+        await first;
+        await controller.dispose();
+        dom.window.close();
+    }
+});
+
 test('SidePaneController does not leave an empty view behind when a mount fails', async () => {
     const { dom, root, options } = createPaneDom();
     const controller = createSidePaneController({

@@ -60,7 +60,7 @@ export function createSidePaneController({
     });
 
     const mountedTabMap = new Map(); // tabId -> { payload, viewElement, handle }
-    const pendingTabMounts = new Map(); // tabId -> Promise<entry | null>
+    const pendingTabMounts = new Map(); // tabId -> mount occurrence; reopening the same id starts a new lifetime
     const cleanupListeners = [];
     const recentlyClosedTabs = [];
     const tabTypes = new Map();
@@ -291,11 +291,20 @@ export function createSidePaneController({
 
     // ---- 标签视图挂载 ----
     // 同一个 tabId 只挂一次：并发打开时后来的调用等同一次挂载；挂载期间标签被关掉或控制器被销毁时，把刚挂上的拆掉
+    function cancelPendingMount(tabId) {
+        const pending = pendingTabMounts.get(tabId);
+        if (!pending) return;
+        pending.canceled = true;
+        pending.viewElement?.remove();
+        pendingTabMounts.delete(tabId);
+    }
+
     function ensureTabMounted(tabId, { provider, payload, ariaLabel = null }) {
         const mounted = mountedTabMap.get(tabId);
         if (mounted) return Promise.resolve(mounted);
-        if (pendingTabMounts.has(tabId)) return pendingTabMounts.get(tabId);
+        if (pendingTabMounts.has(tabId)) return pendingTabMounts.get(tabId).promise;
 
+        const pending = { promise: null, viewElement: null, canceled: false };
         const mounting = (async () => {
             let view = contentContainer?.querySelector(`[data-tab-id="${tabId}"]`);
             if (!view && contentContainer) {
@@ -307,6 +316,7 @@ export function createSidePaneController({
                 contentContainer.appendChild(view);
             }
             if (!view) return null;
+            pending.viewElement = view;
 
             let handle = null;
             try {
@@ -316,9 +326,14 @@ export function createSidePaneController({
                 view.remove?.();
                 throw error;
             }
-            if (isDisposed || !state.tabs.some(t => t.id === tabId)) {
-                await handle?.dispose?.();
-                view.remove?.();
+            if (isDisposed || pending.canceled || !state.tabs.some(t => t.id === tabId)) {
+                try {
+                    await handle?.dispose?.();
+                } catch (error) {
+                    console.error(`[SidePaneController] Failed to dispose canceled mount "${tabId}":`, error);
+                } finally {
+                    view.remove?.();
+                }
                 return null;
             }
             const entry = { payload, viewElement: view, handle };
@@ -326,10 +341,14 @@ export function createSidePaneController({
             return entry;
         })();
 
-        pendingTabMounts.set(tabId, mounting);
+        pending.promise = mounting;
+        pendingTabMounts.set(tabId, pending);
+        const forget = () => {
+            if (pendingTabMounts.get(tabId) === pending) pendingTabMounts.delete(tabId);
+        };
         mounting.then(
-            () => pendingTabMounts.delete(tabId),
-            () => pendingTabMounts.delete(tabId)
+            forget,
+            forget
         );
         return mounting;
     }
@@ -665,6 +684,7 @@ export function createSidePaneController({
             if (isDisposed || !tabId || isNotificationsTab(tabId)) return;
             const ownedFocus = focus.ownsFocus();
             const entry = mountedTabMap.get(tabId);
+            if (!entry) cancelPendingMount(tabId);
             if (entry) {
                 const closeResult = await entry.handle?.requestClose?.();
                 if (closeResult && closeResult.closed === false) {
@@ -762,6 +782,7 @@ export function createSidePaneController({
                 entry.viewElement?.remove?.();
             });
             mountedTabMap.clear();
+            for (const tabId of pendingTabMounts.keys()) cancelPendingMount(tabId);
             tabTypes.clear();
             await Promise.allSettled(disposePromises);
         }
