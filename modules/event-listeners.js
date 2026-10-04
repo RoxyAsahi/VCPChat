@@ -911,12 +911,11 @@ export function setupEventListeners(deps) {
             }
         });
 
-        // 悬停时出现的箭头打开通知面板；面板已打开时箭头收起，不会再次切换。
-        document.getElementById('chatAgentPillPanelBtn')?.addEventListener('click', (e) => {
+        // 悬停时出现的箭头展开侧栏，和标题栏右侧的展开按钮是同一个动作；侧栏已展开时箭头不出现。
+        document.getElementById('chatAgentPillPaneBtn')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (!document.getElementById('notificationsSidebar')?.classList.contains('active')) {
-                chatAPI.sendToggleNotificationsSidebar();
-            }
+            const expandBtn = document.getElementById('toggleSidePaneChatBtn');
+            if (expandBtn && !expandBtn.hidden) expandBtn.click();
         });
     }
 

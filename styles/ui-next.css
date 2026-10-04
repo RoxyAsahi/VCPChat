@@ -917,7 +917,7 @@ html body:not(.chat-header-capsule) .chat-agent-pill {
 
 html body:not(.chat-header-capsule) .chat-header-spacer,
 html body:not(.chat-header-capsule) .chat-agent-pill-avatar,
-html body:not(.chat-header-capsule) .chat-agent-pill-chevron {
+html body:not(.chat-header-capsule) .chat-agent-pill-pane-btn {
     display: none;
 }
 
@@ -927,7 +927,7 @@ html body.chat-header-capsule .chat-header {
     top: 0;
     left: 0;
     right: 0;
-    height: 48px;
+    height: 56px;
     padding: 8px 16px;
     display: flex;
     align-items: center;
@@ -955,9 +955,9 @@ html body.chat-header-capsule .chat-agent-pill {
     margin: 0 auto;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    height: 34px;
-    padding: 3px 12px 3px 6px;
+    gap: 9px;
+    height: 40px;
+    padding: 4px 16px 4px 5px;
     border-radius: 9999px;
     background: var(--next-surface-card, rgba(255, 255, 255, 0.85));
     border: 1px solid var(--next-border, rgba(0, 0, 0, 0.08));
@@ -996,8 +996,8 @@ html body.chat-header-capsule .chat-agent-pill:active {
 }
 
 html body.chat-header-capsule .chat-agent-pill-avatar {
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1007,7 +1007,7 @@ html body.chat-header-capsule .chat-agent-pill-avatar {
 html body.chat-header-capsule .chat-agent-pill-name {
     margin: 0;
     padding: 0;
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: 500;
     letter-spacing: -0.01em;
     color: var(--next-text, currentColor);
@@ -1018,17 +1018,54 @@ html body.chat-header-capsule .chat-agent-pill-name {
     line-height: 1;
 }
 
-html body.chat-header-capsule .chat-agent-pill-chevron {
-    width: 12px;
-    height: 12px;
-    opacity: 0.5;
+/* 悬停时才展开的朝右箭头，点击展开侧栏；平时宽度为 0（抵消 gap），侧栏已展开时不出现 */
+html body.chat-header-capsule .chat-agent-pill-pane-btn {
+    width: 0;
+    height: 22px;
+    margin: 0 0 0 -9px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    overflow: hidden;
+    color: var(--next-muted, currentColor);
+    background: transparent;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.15s ease,
+                color 0.15s ease,
+                background-color 0.15s ease;
 }
 
-html body.chat-header-capsule .chat-agent-pill:hover .chat-agent-pill-chevron {
-    opacity: 0.85;
-    transform: translateY(1px);
+html body.chat-header-capsule .chat-agent-pill-pane-btn svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+}
+
+html body.chat-header-capsule .chat-agent-pill:is(:hover, :focus-visible) .chat-agent-pill-pane-btn {
+    width: 22px;
+    margin: 0 -8px 0 -3px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+html body.chat-header-capsule .chat-agent-pill .chat-agent-pill-pane-btn:hover {
+    color: var(--next-text, currentColor);
+    background: var(--next-hover, rgba(0, 0, 0, 0.06));
+}
+
+html body.chat-header-capsule .chat-header:has(#toggleSidePaneChatBtn[hidden]) .chat-agent-pill .chat-agent-pill-pane-btn {
+    width: 0;
+    margin: 0 0 0 -9px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* 未选中助手时不显示胶囊 */
@@ -1054,7 +1091,7 @@ html body.chat-header-capsule .chat-header #currentAgentSettingsBtn {
 }
 
 html body.chat-header-capsule .chat-messages-container {
-    padding-top: 48px;
+    padding-top: 56px;
 }
 
 /* Shared input composer: keep the same horizontal inset in every presentation
