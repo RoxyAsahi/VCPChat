@@ -665,6 +665,7 @@ export function createSidePaneController({
             if (isDisposed) return;
             state = SidePaneState.showLauncher(state);
             renderLauncherProfile();
+            if (launcherTab === 'apps') renderLauncherApps();
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
@@ -919,10 +920,18 @@ export function createSidePaneController({
             syncLauncherAddress();
         },
 
-        /** provider() 返回 { name, avatarUrl, onEditAvatar? } 或 null（不显示） */
+        /** provider() 返回 { name, avatarUrl, onEditAvatar?, onRename?(name) } 或 null（不显示） */
         setLauncherProfileProvider(provider) {
             launcherProfileProvider = typeof provider === 'function' ? provider : null;
             renderLauncherProfile();
+        },
+
+        /** provider() 返回 [{ id, label, title?, open(), mountIcon?(button, iconHost) }]；不设置时只有工具页 */
+        setLauncherAppsProvider(provider) {
+            launcherAppsProvider = typeof provider === 'function' ? provider : null;
+            if (!launcherAppsProvider) launcherTab = 'tools';
+            syncLauncherSections();
+            if (launcherTab === 'apps') renderLauncherApps();
         },
 
         registerProvider(name, provider) {
@@ -1463,8 +1472,17 @@ export function createSidePaneController({
     const launcherProfileAvatar = launcherProfile?.querySelector?.('.side-pane-launcher-avatar') || null;
     const launcherProfileImage = launcherProfileAvatar?.querySelector?.('img') || null;
     const launcherProfileName = launcherProfile?.querySelector?.('.side-pane-launcher-name') || null;
+    const launcherTabs = launcherView?.querySelector?.('.side-pane-launcher-tabs') || null;
+    const launcherAppsSection = launcherView?.querySelector?.('[data-launcher-section="apps"]') || null;
+    const launcherAppGrid = launcherAppsSection?.querySelector?.('.side-pane-launcher-app-grid') || null;
     let launcherProfileProvider = null;
     let launcherProfileEdit = null;
+    let launcherProfileRename = null;
+    let launcherProfileNameValue = '';
+    let launcherNameEdit = null;
+    let launcherAppsProvider = null;
+    let launcherApps = new Map();
+    let launcherTab = 'tools';
 
     // 当前助手的头像和名字；每次打开新标签页时现取，改了头像或名字也能跟上
     function renderLauncherProfile() {
@@ -1477,8 +1495,15 @@ export function createSidePaneController({
         }
         launcherProfile.hidden = !profile;
         launcherProfileEdit = typeof profile?.onEditAvatar === 'function' ? profile.onEditAvatar : null;
+        launcherProfileRename = typeof profile?.onRename === 'function' ? profile.onRename : null;
         if (!profile) return;
-        if (launcherProfileName) launcherProfileName.textContent = profile.name || '';
+        launcherProfileNameValue = profile.name || '';
+        if (launcherProfileName) {
+            // 正在改名时不覆盖输入框
+            if (!launcherNameEdit) launcherProfileName.value = launcherProfileNameValue;
+            launcherProfileName.readOnly = !launcherProfileRename;
+            launcherProfileName.title = launcherProfileRename ? '编辑名称' : '';
+        }
         if (launcherProfileImage) {
             const src = profile.avatarUrl || 'assets/default_avatar.png';
             if (launcherProfileImage.getAttribute('src') !== src) launcherProfileImage.setAttribute('src', src);
@@ -1496,6 +1521,139 @@ export function createSidePaneController({
         };
         launcherProfileAvatar.addEventListener('click', onAvatarClick);
         cleanupListeners.push(() => launcherProfileAvatar.removeEventListener('click', onAvatarClick));
+    }
+
+    // 名字点一下就能改：回车或点别处保存，Esc 放弃；空名字不保存
+    if (launcherProfileName) {
+        const onNameFocus = () => {
+            if (launcherProfileName.readOnly || !launcherProfileRename) return;
+            launcherNameEdit = { rename: launcherProfileRename, original: launcherProfileNameValue };
+        };
+        const onNameKeydown = (e) => {
+            if (!launcherNameEdit) return;
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                launcherProfileName.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                launcherProfileName.value = launcherNameEdit.original;
+                launcherProfileName.blur();
+            }
+        };
+        const onNameBlur = async () => {
+            const edit = launcherNameEdit;
+            launcherNameEdit = null;
+            if (!edit) return;
+            const next = launcherProfileName.value.trim();
+            if (!next || next === edit.original) {
+                launcherProfileName.value = edit.original;
+                return;
+            }
+            launcherProfileName.value = next;
+            try {
+                const result = await edit.rename(next);
+                if (result === false || result?.error) throw new Error(result?.error || 'rename-failed');
+                if (launcherProfileNameValue === edit.original) launcherProfileNameValue = next;
+            } catch (error) {
+                console.warn('[SidePaneController] Failed to rename:', error);
+                if (!launcherNameEdit && launcherProfileName.value === next) launcherProfileName.value = edit.original;
+            }
+        };
+        launcherProfileName.addEventListener('focus', onNameFocus);
+        launcherProfileName.addEventListener('keydown', onNameKeydown);
+        launcherProfileName.addEventListener('blur', onNameBlur);
+        cleanupListeners.push(() => {
+            launcherProfileName.removeEventListener('focus', onNameFocus);
+            launcherProfileName.removeEventListener('keydown', onNameKeydown);
+            launcherProfileName.removeEventListener('blur', onNameBlur);
+        });
+    }
+
+    // 工具 / 应用 两页；没有应用来源时不显示切换条
+    function syncLauncherSections() {
+        if (!launcherAppsProvider) launcherTab = 'tools';
+        if (launcherTabs) {
+            launcherTabs.hidden = !launcherAppsProvider;
+            launcherTabs.querySelectorAll('[data-launcher-tab]').forEach(btn => {
+                const selected = btn.getAttribute('data-launcher-tab') === launcherTab;
+                btn.setAttribute('aria-selected', String(selected));
+                btn.tabIndex = selected ? 0 : -1;
+            });
+        }
+        if (launcherToolsSection) {
+            launcherToolsSection.hidden = launcherTab !== 'tools' || getAvailableOpenTabEntries().length === 0;
+        }
+        if (launcherAppsSection) launcherAppsSection.hidden = launcherTab !== 'apps';
+    }
+
+    function selectLauncherTab(tab) {
+        const next = tab === 'apps' && launcherAppsProvider ? 'apps' : 'tools';
+        if (next === launcherTab) return;
+        launcherTab = next;
+        syncLauncherSections();
+        if (launcherTab === 'apps') renderLauncherApps();
+    }
+
+    function renderLauncherApps() {
+        if (!launcherAppGrid) return;
+        let apps = [];
+        try {
+            apps = launcherAppsProvider?.() || [];
+        } catch (error) {
+            console.warn('[SidePaneController] Failed to read launcher apps:', error);
+        }
+        launcherApps = new Map();
+        const mounts = [];
+        launcherAppGrid.replaceChildren(...apps.filter(app => app?.id && !launcherApps.has(app.id)).map(app => {
+            launcherApps.set(app.id, app);
+            const btn = doc.createElement('button');
+            btn.type = 'button';
+            btn.className = 'side-pane-launcher-app';
+            btn.setAttribute('data-launcher-app', app.id);
+            if (app.title) btn.title = app.title;
+            const iconEl = doc.createElement('span');
+            iconEl.className = 'side-pane-launcher-app-icon';
+            iconEl.setAttribute('aria-hidden', 'true');
+            const labelEl = doc.createElement('span');
+            labelEl.className = 'side-pane-launcher-app-label';
+            labelEl.textContent = app.label || app.id;
+            btn.append(iconEl, labelEl);
+            if (typeof app.mountIcon === 'function') mounts.push(() => app.mountIcon(btn, iconEl));
+            return btn;
+        }));
+        mounts.forEach(mount => {
+            try {
+                mount();
+            } catch (error) {
+                console.warn('[SidePaneController] Failed to draw launcher app icon:', error);
+            }
+        });
+    }
+
+    async function runLauncherApp(appId) {
+        const app = launcherApps.get(appId);
+        if (!app || isDisposed) return;
+        try {
+            await app.open();
+        } catch (error) {
+            console.error(`[SidePaneController] Failed to open app "${appId}":`, error);
+        }
+    }
+
+    if (launcherTabs) {
+        const onTabsKeydown = (e) => {
+            if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+            const tabs = [...launcherTabs.querySelectorAll('[data-launcher-tab]')];
+            const index = tabs.findIndex(btn => btn.getAttribute('data-launcher-tab') === launcherTab);
+            const next = tabs[(index + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+            if (!next) return;
+            e.preventDefault();
+            selectLauncherTab(next.getAttribute('data-launcher-tab'));
+            next.focus();
+        };
+        launcherTabs.addEventListener('keydown', onTabsKeydown);
+        cleanupListeners.push(() => launcherTabs.removeEventListener('keydown', onTabsKeydown));
     }
 
     function createLauncherRow({ icon, label }) {
@@ -1530,7 +1688,7 @@ export function createSidePaneController({
             row.setAttribute('data-open-tab-entry', entry.id);
             return row;
         }));
-        if (launcherToolsSection) launcherToolsSection.hidden = entries.length === 0;
+        syncLauncherSections();
         if (resolvedAddChatTabBtn) {
             resolvedAddChatTabBtn.hidden = entries.length === 0;
             const label = entries.length === 1 ? entries[0].label : '新标签页';
@@ -1582,7 +1740,17 @@ export function createSidePaneController({
     if (launcherView) {
         const onLauncherClick = (e) => {
             const entryBtn = e.target.closest('[data-open-tab-entry]');
-            if (entryBtn) runOpenTabEntry(entryBtn.getAttribute('data-open-tab-entry'));
+            if (entryBtn) {
+                runOpenTabEntry(entryBtn.getAttribute('data-open-tab-entry'));
+                return;
+            }
+            const tabBtn = e.target.closest('[data-launcher-tab]');
+            if (tabBtn) {
+                selectLauncherTab(tabBtn.getAttribute('data-launcher-tab'));
+                return;
+            }
+            const appBtn = e.target.closest('[data-launcher-app]');
+            if (appBtn) runLauncherApp(appBtn.getAttribute('data-launcher-app'));
         };
         launcherView.addEventListener('click', onLauncherClick);
         cleanupListeners.push(() => launcherView.removeEventListener('click', onLauncherClick));

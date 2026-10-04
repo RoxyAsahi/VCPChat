@@ -782,11 +782,17 @@
                                     <img alt="" draggable="false">
                                     <span class="side-pane-launcher-avatar-edit vcp-ui-icon" aria-hidden="true">edit</span>
                                 </button>
-                                <h2 class="side-pane-launcher-name"></h2>
+                                <input type="text" class="side-pane-launcher-name" aria-label="名称" autocomplete="off" spellcheck="false" readonly>
                             </div>
-                            <section class="side-pane-launcher-section" data-launcher-section="tools" aria-label="工具">
-                                <h3 class="side-pane-launcher-section-title">工具</h3>
+                            <div class="side-pane-launcher-tabs" role="tablist" aria-label="新标签页分类" hidden>
+                                <button type="button" class="side-pane-launcher-tab" role="tab" data-launcher-tab="tools" aria-selected="true">工具</button>
+                                <button type="button" class="side-pane-launcher-tab" role="tab" data-launcher-tab="apps" aria-selected="false">应用</button>
+                            </div>
+                            <section class="side-pane-launcher-section" data-launcher-section="tools" role="tabpanel" aria-label="工具">
                                 <div class="side-pane-open-tab-list"></div>
+                            </section>
+                            <section class="side-pane-launcher-section" data-launcher-section="apps" role="tabpanel" aria-label="应用" hidden>
+                                <div class="side-pane-launcher-app-grid"></div>
                             </section>
                         </div>
                     </div>

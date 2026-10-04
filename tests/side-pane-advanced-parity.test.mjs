@@ -40,9 +40,14 @@ function createParityTestDOM() {
                     <p class="side-pane-launcher-address-error" hidden></p>
                     <div class="side-pane-launcher-profile" hidden>
                         <button type="button" class="side-pane-launcher-avatar"><img alt=""></button>
-                        <h2 class="side-pane-launcher-name"></h2>
+                        <input type="text" class="side-pane-launcher-name" readonly>
+                    </div>
+                    <div class="side-pane-launcher-tabs" hidden>
+                        <button type="button" data-launcher-tab="tools" aria-selected="true">工具</button>
+                        <button type="button" data-launcher-tab="apps" aria-selected="false">应用</button>
                     </div>
                     <section data-launcher-section="tools"><div class="side-pane-open-tab-list"></div></section>
+                    <section data-launcher-section="apps" hidden><div class="side-pane-launcher-app-grid"></div></section>
                 </section>
             </div>
         </aside>
@@ -246,7 +251,7 @@ test('Parity: the new tab page shows the current assistant and its avatar edit e
     assert.equal(profile.hidden, true, '没有提供者时不显示');
     ctrl.setLauncherProfileProvider(() => current);
     assert.equal(profile.hidden, false);
-    assert.equal(profile.querySelector('.side-pane-launcher-name').textContent, 'Nova');
+    assert.equal(profile.querySelector('.side-pane-launcher-name').value, 'Nova');
     assert.equal(profile.querySelector('img').getAttribute('src'), 'nova.png');
     assert.equal(avatar.getAttribute('aria-label'), '编辑头像');
     avatar.click();
@@ -256,7 +261,7 @@ test('Parity: the new tab page shows the current assistant and its avatar edit e
     current = { name: '群组', avatarUrl: '', onEditAvatar: null };
     doc.getElementById('addSidePaneChatBtn').click();
     await tick();
-    assert.equal(profile.querySelector('.side-pane-launcher-name').textContent, '群组');
+    assert.equal(profile.querySelector('.side-pane-launcher-name').value, '群组');
     assert.equal(profile.querySelector('img').getAttribute('src'), 'assets/default_avatar.png');
     assert.equal(avatar.disabled, true);
     avatar.click();
@@ -265,6 +270,117 @@ test('Parity: the new tab page shows the current assistant and its avatar edit e
     current = null;
     ctrl.showLauncher();
     assert.equal(profile.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: the new tab page name can be edited in place', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const name = doc.querySelector('.side-pane-launcher-name');
+    const renames = [];
+    let result = { success: true };
+    const current = { name: 'Nova', avatarUrl: '', onRename: (value) => { renames.push(value); return result; } };
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(name.readOnly, false);
+
+    const key = (value) => name.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: value, bubbles: true }));
+
+    // Esc 放弃
+    name.focus();
+    name.value = '临时';
+    key('Escape');
+    await tick();
+    assert.equal(name.value, 'Nova');
+    assert.deepEqual(renames, []);
+
+    // 空名字不保存
+    name.focus();
+    name.value = '   ';
+    key('Enter');
+    await tick();
+    assert.equal(name.value, 'Nova');
+    assert.deepEqual(renames, []);
+
+    // 回车保存，去掉首尾空格
+    name.focus();
+    name.value = ' Nova 2 ';
+    key('Enter');
+    await tick();
+    assert.deepEqual(renames, ['Nova 2']);
+    assert.equal(name.value, 'Nova 2');
+
+    // 保存失败时恢复原名
+    result = { error: 'disk' };
+    name.focus();
+    name.value = 'Nova 3';
+    key('Enter');
+    await tick();
+    assert.deepEqual(renames, ['Nova 2', 'Nova 3']);
+    assert.equal(name.value, 'Nova 2');
+
+    // 没有改名入口时只读
+    ctrl.setLauncherProfileProvider(() => ({ name: '群组', avatarUrl: '' }));
+    assert.equal(name.readOnly, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: the new tab page switches between tools and apps', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const launcher = doc.getElementById('sidePaneViewLauncher');
+    const tabs = launcher.querySelector('.side-pane-launcher-tabs');
+    const tools = launcher.querySelector('[data-launcher-section="tools"]');
+    const apps = launcher.querySelector('[data-launcher-section="apps"]');
+    const opened = [];
+    const mounted = [];
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+
+    assert.equal(tabs.hidden, true, '没有应用来源时只有工具页');
+    let providerCalls = 0;
+    ctrl.setLauncherAppsProvider(() => {
+        providerCalls += 1;
+        return [
+            { id: 'notes', label: '笔记', open: () => opened.push('notes'), mountIcon: (btn, host) => mounted.push([btn.getAttribute('data-launcher-app'), host.className]) },
+            { id: 'dice', label: '骰子', open: () => opened.push('dice') }
+        ];
+    });
+    assert.equal(tabs.hidden, false);
+    assert.equal(tools.hidden, false);
+    assert.equal(apps.hidden, true);
+    assert.equal(providerCalls, 0, '应用页没打开前不画图标');
+
+    doc.getElementById('addSidePaneChatBtn').click();
+    tabs.querySelector('[data-launcher-tab="apps"]').click();
+    assert.equal(tools.hidden, true);
+    assert.equal(apps.hidden, false);
+    assert.equal(tabs.querySelector('[data-launcher-tab="apps"]').getAttribute('aria-selected'), 'true');
+    const cards = [...apps.querySelectorAll('[data-launcher-app]')];
+    assert.deepEqual(cards.map(card => card.textContent), ['笔记', '骰子']);
+    assert.deepEqual(mounted, [['notes', 'side-pane-launcher-app-icon']]);
+
+    cards[1].click();
+    await tick();
+    assert.deepEqual(opened, ['dice']);
+
+    // 再次打开新标签页停在应用页并刷新列表
+    ctrl.showLauncher();
+    assert.equal(providerCalls, 2);
+    assert.equal(apps.hidden, false);
+
+    // 撤掉应用来源后回到工具页
+    ctrl.setLauncherAppsProvider(null);
+    assert.equal(tabs.hidden, true);
+    assert.equal(tools.hidden, false);
+    assert.equal(apps.hidden, true);
 
     await ctrl.dispose();
     dom.window.close();
