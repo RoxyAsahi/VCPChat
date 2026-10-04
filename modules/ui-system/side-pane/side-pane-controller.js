@@ -38,7 +38,6 @@ export function createSidePaneController({
     providers = {},
     tabTypes: initialTabTypes = [],
     openTabEntries = [],
-    onLauncherAddress = null,
     // { storage, key? }：传了才持久化布局；控制器调用 restoreLayout() 之前不会写入，免得空布局盖掉存档
     persistence = null
 }) {
@@ -177,7 +176,6 @@ export function createSidePaneController({
     const launcher = createSidePaneLauncher({
         contentContainer,
         addButton: resolvedAddTabButton,
-        onLauncherAddress,
         isNotificationsActive: () => isNotificationsTab(state.activeTabId),
         showNotifications: () => controller.showNotifications(),
         showLauncher: () => controller.showLauncher(),
@@ -564,10 +562,6 @@ export function createSidePaneController({
         /** 入口的可用状态变了（比如当前窗口不支持某能力）时调用，重新渲染菜单和引导页 */
         refreshOpenTabEntries() {
             if (!isDisposed) launcher.renderEntries();
-        },
-
-        setLauncherAddressHandler(handler) {
-            launcher.setAddressHandler(handler);
         },
 
         /** provider() 返回 { name, avatarUrl, onEditAvatar?, onRename?(name) } 或 null（不显示） */
