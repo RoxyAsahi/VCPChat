@@ -113,6 +113,14 @@ html #vcpSidePane.active:not(.is-animating):where(.vcp-ui-scope, .vcp-ui-scope *
     max-width: 65%;
 }
 
+/* 磨砂底：壁纸透过来会让侧栏的字看不清，用面板色压一层再模糊，和导航栏材质一致 */
+html #vcpSidePane.active:where(.vcp-ui-scope, .vcp-ui-scope *),
+html #vcpSidePane.is-animating:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background-color: color-mix(in srgb, var(--vcp-ui-color-panel, var(--vcp-ui-bg-primary)) 72%, transparent);
+    backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(1.28));
+    -webkit-backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(1.28));
+}
+
 html #vcpSidePane:not(.active):not(.is-animating):where(.vcp-ui-scope, .vcp-ui-scope *) {
     width: 0;
     min-width: 0;
