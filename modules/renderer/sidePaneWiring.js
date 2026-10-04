@@ -3,7 +3,7 @@ import { captureSelectionReference } from '../ui-system/side-pane/selection-refe
 import { createSideChatSurfaceOwner } from './sideChatSurfaceOwner.js';
 import { createNotesSideProvider } from '../ui-system/side-pane/notesSideProvider.js';
 import { createCodeViewerSideProvider } from '../ui-system/side-pane/codeViewerSideProvider.js';
-import { createBrowserSideProvider } from '../ui-system/side-pane/browserSideProvider.js';
+import { createBrowserSideProvider, resolveBrowserAddress } from '../ui-system/side-pane/browserSideProvider.js';
 import { createTerminalSideProvider } from '../ui-system/side-pane/terminalSideProvider.js';
 import { createToolOutputSideProvider } from '../ui-system/side-pane/toolOutputSideProvider.js';
 import { createPlanDetailSideProvider } from '../ui-system/side-pane/planDetailSideProvider.js';
@@ -374,6 +374,12 @@ export function initWorkspaceSidePane({
         .finally(() => messageFileChanges.mount());
     subscriptions.add({ dispose: () => messageFileChanges.dispose() });
     controller.registerOpenTabEntry({ id: 'browser', label: '浏览器', icon: 'public', order: 40, open: () => browserProvider.openBrowserTab() });
+    controller.setLauncherAddressHandler(async (text) => {
+        const result = resolveBrowserAddress(text);
+        if (!result || result.error) return result;
+        await browserProvider.openBrowserTab({ url: result.url, forceNew: true });
+        return result;
+    });
     // 终端与命令输出共用 PowerShellExecutor 的同一个会话；终端里的链接交给浏览器标签打开
     const terminalProvider = createTerminalSideProvider({
         document: doc,

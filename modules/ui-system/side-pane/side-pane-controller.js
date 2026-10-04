@@ -33,7 +33,8 @@ export function createSidePaneController({
     openTabEntries = [],
     onOpenSideChat = null,
     onTabClosed = null,
-    onRestoreSessions = null
+    onRestoreSessions = null,
+    onLauncherAddress = null
 }) {
     if (!root) {
         throw new TypeError('SidePaneController requires a root element');
@@ -44,7 +45,6 @@ export function createSidePaneController({
     const resolvedAddChatTabBtn = addChatTabBtn || doc.getElementById?.('addSidePaneChatBtn');
     const resolvedOverviewBtn = overviewBtn || doc.getElementById?.('sidePaneTabOverviewBtn');
     const resolvedOverviewPopover = overviewPopover || doc.getElementById?.('sidePaneTabOverviewPopover');
-    const resolvedAddMenuPopover = doc.getElementById?.('sidePaneAddMenuPopover');
     const resolvedTabContextMenu = doc.getElementById?.('sidePaneTabContextMenu');
 
     // ZCode parity: Proportional width ratio (sidePaneLayout.ts: SIDE_PANE_DEFAULT_EXPANDED_RATIO = 0.45)
@@ -339,7 +339,6 @@ export function createSidePaneController({
             tabItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                hideAddMenu();
                 hideTabTooltip();
                 showTabContextMenu(tab.id, e.clientX, e.clientY);
             });
@@ -914,6 +913,11 @@ export function createSidePaneController({
             if (!isDisposed) renderOpenTabEntries();
         },
 
+        setLauncherAddressHandler(handler) {
+            launcherAddressHandler = typeof handler === 'function' ? handler : null;
+            syncLauncherAddress();
+        },
+
         registerProvider(name, provider) {
             if (isDisposed) return;
             providers[name] = provider;
@@ -1309,13 +1313,6 @@ export function createSidePaneController({
         resolvedOverviewBtn?.setAttribute('aria-expanded', 'false');
     }
 
-    function hideAddMenu() {
-        if (resolvedAddMenuPopover) resolvedAddMenuPopover.hidden = true;
-        if (resolvedAddChatTabBtn?.hasAttribute('aria-haspopup')) {
-            resolvedAddChatTabBtn.setAttribute('aria-expanded', 'false');
-        }
-    }
-
     function hideTabContextMenu() {
         if (resolvedTabContextMenu) resolvedTabContextMenu.hidden = true;
         contextTargetTabId = null;
@@ -1323,7 +1320,6 @@ export function createSidePaneController({
 
     function hideAllMenus() {
         hideOverview();
-        hideAddMenu();
         hideTabContextMenu();
     }
 
@@ -1336,7 +1332,6 @@ export function createSidePaneController({
                 hideOverview();
                 return;
             }
-            hideAddMenu();
             hideTabContextMenu();
             resolvedOverviewPopover.hidden = false;
             resolvedOverviewBtn.setAttribute('aria-expanded', 'true');
@@ -1353,9 +1348,6 @@ export function createSidePaneController({
         if (isOpen(resolvedOverviewPopover) && !resolvedOverviewPopover.contains(target) && !resolvedOverviewBtn?.contains?.(target)) {
             hideOverview();
         }
-        if (isOpen(resolvedAddMenuPopover) && !resolvedAddMenuPopover.contains(target) && !resolvedAddChatTabBtn?.contains?.(target)) {
-            hideAddMenu();
-        }
         if (isOpen(resolvedTabContextMenu) && !resolvedTabContextMenu.contains(target)) {
             hideTabContextMenu();
         }
@@ -1370,10 +1362,6 @@ export function createSidePaneController({
             const returnTo = tabListElement?.querySelector?.(`[role="tab"][data-tab-id="${contextTargetTabId}"]`);
             hideTabContextMenu();
             returnTo?.focus?.();
-        } else if (isOpen(resolvedAddMenuPopover)) {
-            e.preventDefault();
-            hideAddMenu();
-            resolvedAddChatTabBtn?.focus?.();
         } else if (isOpen(resolvedOverviewPopover)) {
             e.preventDefault();
             hideOverview();
@@ -1421,7 +1409,6 @@ export function createSidePaneController({
     function showTabContextMenu(tabId, x, y) {
         if (!resolvedTabContextMenu) return;
         hideOverview();
-        hideAddMenu();
         contextTargetTabId = tabId;
         const closableVisible = SidePaneState.getClosableVisibleTabs(state);
         const setDisabled = (action, disabled) => {
@@ -1457,45 +1444,53 @@ export function createSidePaneController({
         cleanupListeners.push(() => resolvedTabContextMenu.removeEventListener('click', onContextMenuClick));
     }
 
-    // ---- 打开标签页的入口：新增菜单和引导页都从这里渲染，各模块自己登记 ----
-    const launcherList = contentContainer?.querySelector?.('#sidePaneViewLauncher .side-pane-open-tab-list') || null;
+    // ---- 新标签页（引导页）：上面地址栏，下面工具入口。工具入口由各模块自己登记 ----
+    const launcherView = contentContainer?.querySelector?.('#sidePaneViewLauncher') || null;
+    const launcherList = launcherView?.querySelector?.('.side-pane-open-tab-list') || null;
+    const launcherToolsSection = launcherView?.querySelector?.('[data-launcher-section="tools"]') || null;
+    const launcherAddressForm = launcherView?.querySelector?.('.side-pane-launcher-address') || null;
+    const launcherAddressInput = launcherAddressForm?.querySelector?.('input') || null;
+    const launcherAddressError = launcherView?.querySelector?.('.side-pane-launcher-address-error') || null;
+    let launcherAddressHandler = typeof onLauncherAddress === 'function' ? onLauncherAddress : null;
 
-    function createEntryButton(entry, className, labelClassName, role) {
+    function createLauncherRow({ icon, label }) {
         const btn = doc.createElement('button');
         btn.type = 'button';
-        btn.className = className;
-        if (role) btn.setAttribute('role', role);
-        btn.setAttribute('data-open-tab-entry', entry.id);
-        const icon = doc.createElement('span');
-        icon.className = 'vcp-ui-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = entry.icon || 'tab';
-        const label = doc.createElement('span');
-        label.className = labelClassName;
-        label.textContent = entry.label;
-        btn.append(icon, label);
+        btn.className = 'side-pane-open-tab-button';
+        const iconEl = doc.createElement('span');
+        iconEl.className = 'vcp-ui-icon';
+        iconEl.setAttribute('aria-hidden', 'true');
+        iconEl.textContent = icon || 'tab';
+        const labelEl = doc.createElement('span');
+        labelEl.className = 'side-pane-open-tab-button-label';
+        labelEl.textContent = label;
+        btn.append(iconEl, labelEl);
         return btn;
+    }
+
+    function syncLauncherAddress() {
+        if (launcherAddressForm) launcherAddressForm.hidden = !launcherAddressHandler;
+    }
+
+    function showLauncherAddressError(message) {
+        if (!launcherAddressError) return;
+        launcherAddressError.textContent = message || '';
+        launcherAddressError.hidden = !message;
     }
 
     function renderOpenTabEntries() {
         const entries = getAvailableOpenTabEntries();
-        if (resolvedAddMenuPopover) {
-            resolvedAddMenuPopover.replaceChildren(...entries.map(entry => createEntryButton(entry, 'side-pane-menu-item', 'side-pane-menu-item-label', 'menuitem')));
-        }
-        launcherList?.replaceChildren(...entries.map(entry => createEntryButton(entry, 'side-pane-open-tab-button', 'side-pane-open-tab-button-label')));
+        launcherList?.replaceChildren(...entries.map(entry => {
+            const row = createLauncherRow({ icon: entry.icon, label: entry.label });
+            row.setAttribute('data-open-tab-entry', entry.id);
+            return row;
+        }));
+        if (launcherToolsSection) launcherToolsSection.hidden = entries.length === 0;
         if (resolvedAddChatTabBtn) {
             resolvedAddChatTabBtn.hidden = entries.length === 0;
-            const label = entries.length === 1 ? entries[0].label : '打开标签页';
+            const label = entries.length === 1 ? entries[0].label : '新标签页';
             resolvedAddChatTabBtn.title = label;
             resolvedAddChatTabBtn.setAttribute('aria-label', label);
-            if (entries.length > 1) {
-                resolvedAddChatTabBtn.setAttribute('aria-haspopup', 'menu');
-                resolvedAddChatTabBtn.setAttribute('aria-expanded', String(isOpen(resolvedAddMenuPopover)));
-            } else {
-                hideAddMenu();
-                resolvedAddChatTabBtn.removeAttribute('aria-haspopup');
-                resolvedAddChatTabBtn.removeAttribute('aria-expanded');
-            }
         }
         scheduleTabLayout();
     }
@@ -1511,7 +1506,7 @@ export function createSidePaneController({
         }
     }
 
-    // 面板里没有可关的标签时展开：只有一个入口就直接打开它，否则显示引导页
+    // 面板里没有可关的标签时展开：只有一个入口就直接打开它，否则显示新标签页
     async function expandFromEmpty() {
         const entries = getAvailableOpenTabEntries();
         if (entries.length === 1) {
@@ -1522,38 +1517,59 @@ export function createSidePaneController({
     }
 
     if (resolvedAddChatTabBtn) {
+        // 和浏览器一样，「+」打开新标签页；只登记了一个入口时直接打开它
         const onAddClick = (e) => {
             e.stopPropagation();
             const entries = getAvailableOpenTabEntries();
+            if (entries.length === 0) return;
             if (entries.length === 1) {
                 runOpenTabEntry(entries[0].id);
                 return;
             }
-            if (!resolvedAddMenuPopover || entries.length === 0) return;
-            if (isOpen(resolvedAddMenuPopover)) {
-                hideAddMenu();
-                return;
-            }
-            hideOverview();
-            hideTabContextMenu();
-            resolvedAddMenuPopover.hidden = false;
-            resolvedAddChatTabBtn.setAttribute('aria-expanded', 'true');
-            focusFirstMenuItem(resolvedAddMenuPopover);
+            hideAllMenus();
+            controller.showLauncher();
+            launcherAddressInput?.focus?.();
         };
         resolvedAddChatTabBtn.addEventListener('click', onAddClick);
         cleanupListeners.push(() => resolvedAddChatTabBtn.removeEventListener('click', onAddClick));
     }
 
-    for (const host of [resolvedAddMenuPopover, launcherList]) {
-        if (!host) continue;
-        const onEntryClick = (e) => {
-            const btn = e.target.closest('[data-open-tab-entry]');
-            if (btn) runOpenTabEntry(btn.getAttribute('data-open-tab-entry'));
+    if (launcherView) {
+        const onLauncherClick = (e) => {
+            const entryBtn = e.target.closest('[data-open-tab-entry]');
+            if (entryBtn) runOpenTabEntry(entryBtn.getAttribute('data-open-tab-entry'));
         };
-        host.addEventListener('click', onEntryClick);
-        cleanupListeners.push(() => host.removeEventListener('click', onEntryClick));
+        launcherView.addEventListener('click', onLauncherClick);
+        cleanupListeners.push(() => launcherView.removeEventListener('click', onLauncherClick));
     }
-    wireMenuKeyboard(resolvedAddMenuPopover);
+
+    if (launcherAddressForm && launcherAddressInput) {
+        const onAddressSubmit = async (e) => {
+            e.preventDefault();
+            const text = launcherAddressInput.value.trim();
+            if (!text || !launcherAddressHandler) return;
+            try {
+                const result = await launcherAddressHandler(text);
+                if (result?.error) {
+                    showLauncherAddressError(result.error);
+                    return;
+                }
+                launcherAddressInput.value = '';
+                showLauncherAddressError('');
+            } catch (error) {
+                console.error('[SidePaneController] Failed to open address:', error);
+                showLauncherAddressError('打开失败');
+            }
+        };
+        const onAddressInput = () => showLauncherAddressError('');
+        launcherAddressForm.addEventListener('submit', onAddressSubmit);
+        launcherAddressInput.addEventListener('input', onAddressInput);
+        cleanupListeners.push(() => {
+            launcherAddressForm.removeEventListener('submit', onAddressSubmit);
+            launcherAddressInput.removeEventListener('input', onAddressInput);
+        });
+    }
+    syncLauncherAddress();
 
     openTabEntries.forEach(entry => controller.registerOpenTabEntry(entry));
 
