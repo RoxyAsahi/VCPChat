@@ -447,6 +447,22 @@ export function initWorkspaceSidePane({
         controller.setParent({ itemType: 'agent', itemId: item.id, topicId: topicId || '' });
         if (topicId) await controller.restoreSessions(item.id, topicId);
     };
+    // 新标签页顶部显示当前助手；点头像去设置页换头像（群组只显示）
+    const getLauncherProfile = () => {
+        const item = selectedItemRef.get();
+        if (!item?.id) return null;
+        return {
+            name: item.name || '',
+            avatarUrl: item.avatarUrl || '',
+            onEditAvatar: item.type === 'agent' ? () => {
+                win.uiManager?.switchToTab?.('settings');
+                doc.getElementById('agentAvatarInput')?.click();
+            } : null
+        };
+    };
+    controller.setLauncherProfileProvider(getLauncherProfile);
+    const unbindLauncherProfile = chatManager?.onSelectionChange?.(() => controller.setLauncherProfileProvider(getLauncherProfile));
+    if (unbindLauncherProfile) subscriptions.add({ dispose: unbindLauncherProfile });
     const unbindSelection = chatManager?.onSelectionChange?.(syncSidePaneParent);
     if (unbindSelection) subscriptions.add({ dispose: unbindSelection });
     const initialItem = selectedItemRef.get();

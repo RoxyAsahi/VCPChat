@@ -664,6 +664,7 @@ export function createSidePaneController({
         showLauncher() {
             if (isDisposed) return;
             state = SidePaneState.showLauncher(state);
+            renderLauncherProfile();
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
@@ -916,6 +917,12 @@ export function createSidePaneController({
         setLauncherAddressHandler(handler) {
             launcherAddressHandler = typeof handler === 'function' ? handler : null;
             syncLauncherAddress();
+        },
+
+        /** provider() 返回 { name, avatarUrl, onEditAvatar? } 或 null（不显示） */
+        setLauncherProfileProvider(provider) {
+            launcherProfileProvider = typeof provider === 'function' ? provider : null;
+            renderLauncherProfile();
         },
 
         registerProvider(name, provider) {
@@ -1452,6 +1459,44 @@ export function createSidePaneController({
     const launcherAddressInput = launcherAddressForm?.querySelector?.('input') || null;
     const launcherAddressError = launcherView?.querySelector?.('.side-pane-launcher-address-error') || null;
     let launcherAddressHandler = typeof onLauncherAddress === 'function' ? onLauncherAddress : null;
+    const launcherProfile = launcherView?.querySelector?.('.side-pane-launcher-profile') || null;
+    const launcherProfileAvatar = launcherProfile?.querySelector?.('.side-pane-launcher-avatar') || null;
+    const launcherProfileImage = launcherProfileAvatar?.querySelector?.('img') || null;
+    const launcherProfileName = launcherProfile?.querySelector?.('.side-pane-launcher-name') || null;
+    let launcherProfileProvider = null;
+    let launcherProfileEdit = null;
+
+    // 当前助手的头像和名字；每次打开新标签页时现取，改了头像或名字也能跟上
+    function renderLauncherProfile() {
+        if (!launcherProfile) return;
+        let profile = null;
+        try {
+            profile = launcherProfileProvider?.() || null;
+        } catch (error) {
+            console.warn('[SidePaneController] Failed to read launcher profile:', error);
+        }
+        launcherProfile.hidden = !profile;
+        launcherProfileEdit = typeof profile?.onEditAvatar === 'function' ? profile.onEditAvatar : null;
+        if (!profile) return;
+        if (launcherProfileName) launcherProfileName.textContent = profile.name || '';
+        if (launcherProfileImage) {
+            const src = profile.avatarUrl || 'assets/default_avatar.png';
+            if (launcherProfileImage.getAttribute('src') !== src) launcherProfileImage.setAttribute('src', src);
+        }
+        if (launcherProfileAvatar) {
+            launcherProfileAvatar.disabled = !launcherProfileEdit;
+            launcherProfileAvatar.title = launcherProfileEdit ? '编辑头像' : '';
+            launcherProfileAvatar.setAttribute('aria-label', launcherProfileEdit ? '编辑头像' : (profile.name || '头像'));
+        }
+    }
+
+    if (launcherProfileAvatar) {
+        const onAvatarClick = () => {
+            if (launcherProfileEdit) launcherProfileEdit();
+        };
+        launcherProfileAvatar.addEventListener('click', onAvatarClick);
+        cleanupListeners.push(() => launcherProfileAvatar.removeEventListener('click', onAvatarClick));
+    }
 
     function createLauncherRow({ icon, label }) {
         const btn = doc.createElement('button');

@@ -38,6 +38,10 @@ function createParityTestDOM() {
                 <section class="side-pane-view" id="sidePaneViewLauncher" data-tab-id="launcher" hidden>
                     <form class="side-pane-launcher-address" hidden><input type="text"></form>
                     <p class="side-pane-launcher-address-error" hidden></p>
+                    <div class="side-pane-launcher-profile" hidden>
+                        <button type="button" class="side-pane-launcher-avatar"><img alt=""></button>
+                        <h2 class="side-pane-launcher-name"></h2>
+                    </div>
                     <section data-launcher-section="tools"><div class="side-pane-open-tab-list"></div></section>
                 </section>
             </div>
@@ -223,6 +227,44 @@ test('Parity: the new tab page address bar hands the text to the handler', async
 
     ctrl.setLauncherAddressHandler(null);
     assert.equal(form.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: the new tab page shows the current assistant and its avatar edit entry', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const profile = doc.querySelector('.side-pane-launcher-profile');
+    const avatar = profile.querySelector('.side-pane-launcher-avatar');
+    const edits = [];
+    let current = { name: 'Nova', avatarUrl: 'nova.png', onEditAvatar: () => edits.push('Nova') };
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+
+    assert.equal(profile.hidden, true, '没有提供者时不显示');
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(profile.hidden, false);
+    assert.equal(profile.querySelector('.side-pane-launcher-name').textContent, 'Nova');
+    assert.equal(profile.querySelector('img').getAttribute('src'), 'nova.png');
+    assert.equal(avatar.getAttribute('aria-label'), '编辑头像');
+    avatar.click();
+    assert.deepEqual(edits, ['Nova']);
+
+    // 每次打开新标签页现取：换了助手（群组不能编辑、没有头像用默认图）
+    current = { name: '群组', avatarUrl: '', onEditAvatar: null };
+    doc.getElementById('addSidePaneChatBtn').click();
+    await tick();
+    assert.equal(profile.querySelector('.side-pane-launcher-name').textContent, '群组');
+    assert.equal(profile.querySelector('img').getAttribute('src'), 'assets/default_avatar.png');
+    assert.equal(avatar.disabled, true);
+    avatar.click();
+    assert.deepEqual(edits, ['Nova']);
+
+    current = null;
+    ctrl.showLauncher();
+    assert.equal(profile.hidden, true);
 
     await ctrl.dispose();
     dom.window.close();
