@@ -447,7 +447,8 @@ export function createSidePaneController({
             syncDomVisibility();
         },
 
-        activateTab(tabId) {
+        /** options.focus 为 false 时只切换，不把焦点挪进标签（后台恢复时用） */
+        activateTab(tabId, { focus: moveFocus = true } = {}) {
             if (isDisposed || !tabId) return;
             state = SidePaneState.activateTab(state, tabId);
             if (state.parent && !isNotificationsTab(tabId) && tabId !== SidePaneState.LAUNCHER_TAB_ID) {
@@ -459,7 +460,7 @@ export function createSidePaneController({
             strip?.scrollActiveIntoView();
             syncViewPanels();
             syncDomVisibility();
-            mountedTabMap.get(tabId)?.handle?.focus?.();
+            if (moveFocus) mountedTabMap.get(tabId)?.handle?.focus?.();
         },
 
         reorderTab(activeId, overId) {
