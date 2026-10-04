@@ -116,7 +116,8 @@ test('helpers: todo focus window, mini metric, variant and switch-blocked parsin
     assert.deepEqual(pickMiniMetric({ items: [], git: { added: 0, removed: 0, branch: { head: 'main' } } }), { kind: 'branch', icon: 'git-branch', text: 'main' });
 
     assert.equal(resolveVariant({ override: 'mini', width: 2000 }), 'mini');
-    assert.equal(resolveVariant({ width: 900 }), 'panel');
+    assert.equal(resolveVariant({ width: 1280 }), 'panel');
+    assert.equal(resolveVariant({ width: 1058 }), 'mini');
     assert.equal(resolveVariant({ width: 400 }), 'mini');
 
     const blocked = parseSwitchBlockedFiles('error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/a.js\n\tb.js\nPlease commit');
@@ -188,6 +189,29 @@ test('panel renders Git 变更 rows and 计划 from V工程 todos, with mini cap
 
     panel.dispose();
     assert.equal(q(doc, '.zc-status-layer'), null);
+});
+
+test('the message column makes room for the expanded panel and gets it back as a capsule', async () => {
+    const { doc, dom, panel } = setup();
+    const messages = doc.createElement('div');
+    messages.id = 'chatMessages';
+    messages.className = 'chat-messages';
+    q(doc, '.chat-messages-container').appendChild(messages);
+    panel.mount();
+    await flush();
+    assert.equal(q(doc, '.zc-status').dataset.displayMode, 'panel');
+    assert.equal(messages.classList.contains('zc-status-reserve'), true);
+    assert.match(messages.style.getPropertyValue('--zc-status-reserve'), /^\d+px$/);
+
+    click(dom, q(doc, '.zc-status-collapse'));
+    assert.equal(messages.classList.contains('zc-status-reserve'), false);
+    assert.equal(messages.style.getPropertyValue('--zc-status-reserve'), '');
+
+    click(dom, q(doc, '.zc-mini'));
+    assert.equal(messages.classList.contains('zc-status-reserve'), true);
+    panel.dispose();
+    assert.equal(messages.classList.contains('zc-status-reserve'), false);
+    dom.window.close();
 });
 
 test('without git or todos the panel stays as an entry capsule that opens the Git tab', async () => {

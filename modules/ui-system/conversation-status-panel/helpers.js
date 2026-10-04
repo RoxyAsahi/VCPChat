@@ -16,7 +16,8 @@ const COMPACT_TODO_THRESHOLD = 6;
 
 const TODO_FOCUS_WINDOW_SIZE = 3;
 
-const AUTO_PANEL_MIN_WIDTH = 640;
+// 和 ZCode 一致：聊天区够 1280 才自动展开，窄了（包括侧栏打开挤窄时）自动收成胶囊
+const AUTO_PANEL_MIN_WIDTH = 1280;
 
 export function filterBranches(branches, query) {
     const q = String(query || '').trim().toLowerCase();
