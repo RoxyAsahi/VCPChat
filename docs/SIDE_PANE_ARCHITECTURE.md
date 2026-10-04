@@ -104,6 +104,8 @@ sidePaneWiring
 | Ctrl+Alt+B（macOS 上 Cmd+Alt+B） | 开合副屏。展开时和点展开按钮一样：有待审批先看通知，没有标签时打开新标签页，否则回到这个对话上次的标签。AltGr 组合不触发 |
 | Ctrl+PageUp / Ctrl+PageDown | 焦点在副屏里时按标签条顺序切到上一个 / 下一个标签，首尾相接 |
 
+焦点在浏览器标签的网页里时，按键不会到主窗口。主进程在 `browserHandlers.js` 里用 `before-input-event` 截下这几个组合，经 `browser:side-pane-shortcut` 转给主窗口，由 `sidePaneWiring.js` 执行同样的动作。
+
 ---
 
 ## 4. Provider 契约
