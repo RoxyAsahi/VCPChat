@@ -6,6 +6,8 @@
 
 当前状态：**进行中，尚未完成全工程审查。** 本记录随后续审查更新，候选问题和已复现问题分开记录。
 
+已完成且不重复执行：**计划页 banner 调整与计划/施工线/变更文件分栏已在 `ecb9067a` 完成。** 用户明确要求不要在记忆压缩后重新做这一块；恢复工作时先核对提交、工作区和本账本，从未完成项继续。
+
 约定：在当前分支增加提交，不推送、不拆 PR；保留用户已有 `styles/themes.css` 改动。每个实现提交跑全量测试和检查，窗口验证后保留原标签、草稿和主题。新增回归测试必须能证明具体故障，不能只匹配源码字符串或复述实现。
 
 开始时的项目提交：`ecb9067a`。参考代码只读：
@@ -32,7 +34,7 @@
 | DSH | `packages/client/ui-dockkit/src/engine/controller.ts` 的控制器和意图提交前段 | 宿主内容通过工厂注入，kind 不被布局层解释；planner 决定操作，controller 记录并通知，空操作不通知。快照引用在布局变化前稳定。该设计支持外部状态持有者复用同一决策。 |
 | DSH | `packages/client/ui-dockkit/tests/controller.client.spec.ts` 的开合、布局与分栏用例 | 验证冗余操作不新增历史、显式复制独立内容、浮动时目标 pane 选择与分栏上限。测试面向用户意图和状态约束，未把全部实现私有步骤当契约。 |
 | DSH | `packages/client/ui-sidebar-right/src/client/tab-domain.ts` 的 occurrence 与同步、导航逻辑 | 内容 ID 和每次打开的 occurrence 身份分开；关闭或撤销打开时 abort；重新打开同 ID 是新生命周期。资源 pin 跟随 occurrence，隐藏视图不会直接释放内容。导航 revision 独立变化。 |
-| DSH | `packages/client/ui-sidebar-right/src/client/tab-registry.ts` 的登记契约 | 静态类型声明与运行时 body 分阶段，guide/title copy 可延迟读取。扩展覆盖 builtin 有显式排序和注销规则。keepMounted 是类型能力，并非所有内容统一常驻。其解析器全部碰撞路径仍待审查。 |
+| DSH | `packages/client/ui-sidebar-right/src/client/tab-registry.ts` 全部运行时实现 | 静态类型声明与运行时 body 分阶段；登记随 fiber effect 注销，具体 definition 身份保护 shadow/unregister；guide 缓存保持引用稳定。路由按 extension/builtin/fallback、pattern specificity、登记次序匹配，显式 kind 仍受 canOpen 限制。keepMounted 是类型能力，并非所有内容统一常驻；对应测试中段尚未全部读完。 |
 | DSH | `packages/client/ui-sidebar-right/src/client/persistence.ts` | 保存当前布局，不保存运行期 undo；schema 校验后还验证节点引用、身份计数、tab 唯一归属和 split 比例。损坏存档只清理对应 Session。 |
 | DSH | `packages/client/ui-sidebar-right/src/client/shell/close-focus.ts` | 先提交 DOM 移除，再仅在焦点属于关闭 pane 且未转移时恢复；从别处关闭不抢焦点。 |
 | DSH | `packages/client/ui-deliverables/src/client/host-read-store.ts` | lifetime 与 connection generation 各有 AbortController；reset 取消旧代次，dispose 等待 pending reads，发布前检查 signal。失败、missing、loading 与缓存重读策略由 policy 明确区分。 |
@@ -180,6 +182,28 @@ ZCode 的 `v4/composer/useComposerAttachments.ts` 已读接口与 scope 构造�
 
 design boundary 默认以 HEAD 与 origin/main 的 merge-base（`3bb5266b`）审查整条分支。375 个报告路径中，374 个在本轮开始的 HEAD 已与基准不同（按 `core.quotepath=false` 核对中文路径）；剩余一个是本轮增强的插件服务测试，处于这份历史“设计减法 PR”白名单之外。当前用户要求审查整个工程，该测试改动符合任务，但并不满足旧 PR 文件范围合同。没有扩张白名单、偷偷改基准或绕过失败。后续应区分一般工程质量检查与某个历史 PR 的范围检查，并核实缺失目录、重复规则的层叠语义与壁纸实际行为后修正适用契约。
 
+## 第六轮：真实 Electron 运行与失败信号
+
+本轮未修改计划页或生产编辑器。六个 Scriptorium 入口此前被统一用 Node 运行，失败发生在加载 Electron app/BrowserWindow，不能当成六个产品回归，也不能永久豁免。首先使用隔离 Electron profile 实跑旧入口：CDN、本地导出、网络字体和 VPPTX 四项通过；Markdown 输入与标题边界两项失败，均无超时。
+
+新增 `tests/helpers/electron-test-entry.cjs` 与 bootstrap：普通 `node --test` 注册一个真实集成用例，再启动仓库安装的 Electron；每次使用新建的 userData/session/logs 目录、隐藏 BrowserWindow，等待真实退出状态。截止或取消时只终止自己启动的进程树；结束后核对路径并删除自己的临时 profile。直接在未隔离的 Electron 入口运行会被拒绝。辅助文件不增加测试文件数量，没有绕过网络字体请求或用本地 stub 冒充通过。
+
+### R16：断言失败被提前退出吞掉
+
+旧 CDN 入口在 finally 调用 app.quit，catch 再设置不受支持的 app.exitCode；导出和网络字体也先 quit 再到失败处理。实际内核的受控失败探针表明，同一断言失败走旧退出路径返回 **0**，把 quit 移出 finally、成功/失败显式 app.exit(0/1) 后返回 **1**。修复后的父运行器检查真实退出码；失败输出随断言提供，不能再以普通进程成功结束判定测试通过。
+
+### 两项过期编辑契约
+
+Markdown 测试只派发 synthetic beforeinput 并要求 preventDefault，但生产在 `51d519c4` 已改为由浏览器执行普通文字 DOM 编辑，再在 input 中同步文档。synthetic beforeinput 自身不会执行该默认编辑。改用仅本测试窗口可调用的 preload/IPC 与 Chromium webContents.insertText，验证中文、emoji、ASCII 的真实输入、占位行替换、正文同步、焦点与光标。24 次相同循环收敛为三种有区别的输入；等待以源码条件和有界截止为准。原有受控 IME 用例保留，但不声称覆盖物理输入法的全部平台行为。
+
+标题边界测试仍期待 U+200B；当前 compiler 与局部编辑路径在 `70827d40` 已采用可见占位符 ↵。只更新该过期断言，保留边界编辑器、二次 Enter、DOM 几何和选区存活验证，没有为旧断言改变生产语义。
+
+六个真实 Electron 入口 **6/6**，全量 **257 个测试文件通过、0 失败、0 超时**；相关 **227/227**、UI **121/121**，七项常用检查通过。截图来自本轮创建的隐藏真实 Scriptorium 窗口：原生文字和边界 fixture 能渲染；这不证明所有远程媒体成功加载、全部生产 IPC/保存路径或全面视觉评审。原主窗口未 reload，临时窗口与 profile 已清理。
+
+扩展 UI 检查仍不全绿：聚合命令被历史 design boundary 拒绝，其余 30 项逐条运行 **27 通过、3 失败**，仍是缺失的 legacy preload catalog、两个重复 CSS 选择器、appearance-engine 全局壁纸断言。本轮未修改这些脚本或 CSS，也未扩张旧 PR 白名单。全量 Node 测试通过不等于这些工程检查通过，更不等于全工程审查完成。
+
+参考研究继续读完 DSH tab-registry 的运行时登记、guide 缓存、路由匹配与扩展/builtin 覆盖：登记与 fiber effect 绑定，注销比较具体 definition 身份；优先级分层后按 pattern specificity 与登记次序匹配，显式 kind 仍需 canOpen 许可。对应测试已读唯一性、shadow/unregister、显式 kind veto、fiber 注销与缓存稳定分支（中段尚未全部读完）。我们的 registerTabType 覆盖时可选 provider/launcher entry 是否留存旧登记仍是候选问题，尚未复现，不能写成已修复；不引入参考实现的扩展优先级机制来扩大产品范围。
+
 ## 验证与局限
 
 - 修改前新增 6 个故障用例：文件旧成功/旧失败、旧行触发、筛选旧成功/旧失败、关闭重开。全部能在原实现上失败。
@@ -188,10 +212,10 @@ design boundary 默认以 HEAD 与 origin/main 的 merge-base（`3bb5266b`）审
 - 实际主窗口后来已有其他用户标签，未执行 reload；临时预览层使用当前工作区源码副本与真实渲染环境核验，并比较前后标签快照、草稿、主题，均保持一致。因此本轮不能声称主窗口既有控制器实例已热更新。
 - 本轮没有新模块或样式文件；事件图和样式检查均无需改动且检查通过。
 
-开始时 9 项失败不能成为永久豁免；第四、第五轮已解决三个失败文件，目前剩 6 个：
+开始时 9 项失败不能成为永久豁免；第四、第五轮解决三个失败文件，第六轮按真实 Electron 环境处理剩余六项，当前全量无失败。以下保留原问题与证据边界：
 
 1. `input-enhancer-owner.test.mjs`：第五轮已修正 DOM 装配并修复实例订阅释放、重复销毁屏障；当前三个受控场景通过。话题切换与完整文件 IPC 未据此宣称完成。
-2. 六个 `scriptorium-*-electron.test.js`：源码直接使用 Electron app/BrowserWindow，既有隔离脚本却统一用 Node；尚不能据此判断产品失败。需要正确运行入口、隔离窗口与导出产物验证。
+2. 六个 `scriptorium-*-electron.test.js`：第六轮已使用隔离真实 Electron 运行，修正两项过期编辑断言和退出码误报；六项均通过。字体仍是外网集成，最小 IPC fixture 不覆盖全部生产处理器。
 3. `ui-helpers-settings-close.test.js`：第四轮已解决过期契约，删除遗留死状态；当前交互测试及 coordinator 组件证据通过。完整生产 owner、SettingsBridge、IPC 与发布环境的保存行为仍未据此宣称完成。
 4. `plugin-agent-operation-service.test.cjs`：第五轮确认一个过期歧义断言与真实同级目标选择缺陷；已修复并通过 10 个服务测试。之前沙箱诊断的临时文件 rename EPERM 不能计为产品缺陷；本轮隔离实际文件写入没有该错误。
 
@@ -206,9 +230,9 @@ Git 清单有 2384 个跟踪文件。按代码扩展名排除常见 vendor/asset
 | 聊天和辅助对话 | 尚无本轮深入结论 | 主聊天/辅助对话所有者、流/取消/重试/编辑、草稿、会话与工作区隔离，对照 reference lease/occurrence |
 | Git、ProjectForge、源码后端 | 本轮只追到 provider 读取与已有测试 | IPC/preload 契约、读写根目录约束、真实 Git 与回退竞态、并发快照、索引、错误分类、批次缓存、隐藏面板 I/O |
 | 主进程、其他服务与 Rust | 清单定位到 IPC/services、chat data/audio/assistant/indexer 等模块 | 主进程资源生命周期、异常恢复与服务装配、Rust 测试与接口、插件/工具调用、升级/打包运行闭包 |
-| 测试体系 | 生命周期与同级名称回归先在旧实现失败；设置、输入 DOM、匹配契约过期装配已修正；全量剩 6 个 Electron 入口失败 | 正确运行 Electron 并验证实际产物、核实断言覆盖、继续消除随意等待/源码字符串自证、区分单元/真实后端/窗口验证、检查门禁新分支覆盖 |
+| 测试体系 | 生命周期与同级名称回归先在旧实现失败；设置、输入 DOM、匹配契约过期装配已修正；六个入口已正确运行真实 Electron，当前全量 257/0 | 核实其余断言和生产 IPC/持久化覆盖、继续消除随意等待/源码字符串自证、区分单元/真实后端/窗口验证、检查门禁新分支覆盖 |
 | UI/UX | 前两轮计划分栏有实际窗口证据；本轮正文错误归属修复 | 全入口、焦点、键盘、读屏、浅/深/磨砂、窄窗口、空/加载/错误/权限/断连、性能与隐藏页面行为；不能仅评估计划页 |
 | 可维护性与 AI 可读性 | 此记录包含参考路径、身份约束、故障证据和未覆盖范围；picker 的误导性复制文件头已纠正 | 入口/数据/生命周期图与实际依赖一致性、其余复制文件头、重复真相、隐式全局/魔法 key、生成规则、文档过期、合理模块边界与契约 |
 | 完成审计 | 未通过：上表仍有明确未覆盖范围 | 每个要求都需具体当前证据；不能用本轮修复或已有绿灯宣称全工程完成 |
 
-下一轮继续补齐参考的资源、状态和生命周期链，沿具体 provider 的 cleanup 与设置生产 owner/IPC 路径验证，修正剩余测试装配与 Electron 运行分类。随后沿实际依赖进入聊天、服务、Rust、独立应用与发布链。检查边界要随证据扩展，不限制在新建的侧栏文件。
+下一轮继续补齐参考的资源、状态和生命周期链，沿具体 provider 的 cleanup 与设置生产 owner/IPC 路径验证，核实注册覆盖/注销以及剩余四项扩展检查的适用契约。随后沿实际依赖进入聊天、服务、Rust、独立应用与发布链。检查边界要随证据扩展，不限制在新建的侧栏文件。
