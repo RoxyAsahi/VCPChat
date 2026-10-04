@@ -687,6 +687,7 @@ export function createSidePaneController({
             state = SidePaneState.showLauncher(state);
             renderLauncherProfile();
             if (launcherTab === 'apps') renderLauncherApps();
+            else renderLauncherRecommended();
             renderTabList();
             syncViewPanels();
             syncDomVisibility();
@@ -953,6 +954,17 @@ export function createSidePaneController({
             if (!launcherAppsProvider) launcherTab = 'tools';
             syncLauncherSections();
             if (launcherTab === 'apps') renderLauncherApps();
+        },
+
+        /** 工具页下方「推荐」：provider() 同应用页的条目；onSettings 时标题旁出现设置按钮 */
+        setLauncherRecommendedProvider(provider, { onSettings = null } = {}) {
+            launcherRecommendedProvider = typeof provider === 'function' ? provider : null;
+            launcherRecommendedSettings = typeof onSettings === 'function' ? onSettings : null;
+            renderLauncherRecommended();
+        },
+
+        refreshLauncherRecommended() {
+            renderLauncherRecommended();
         },
 
         registerProvider(name, provider) {
@@ -1497,6 +1509,10 @@ export function createSidePaneController({
     const launcherAppsSection = launcherView?.querySelector?.('[data-launcher-section="apps"]') || null;
     const launcherAppGrid = launcherAppsSection?.querySelector?.('.side-pane-launcher-app-grid') || null;
     const launcherNotificationsSection = launcherView?.querySelector?.('[data-launcher-section="notifications"]') || null;
+    const launcherToolsGroup = launcherToolsSection?.querySelector?.('[data-launcher-group="tools"]') || null;
+    const launcherRecommendedGroup = launcherToolsSection?.querySelector?.('[data-launcher-group="recommended"]') || null;
+    const launcherRecommendedRow = launcherRecommendedGroup?.querySelector?.('.side-pane-launcher-recommended-row') || null;
+    const launcherRecommendedAction = launcherRecommendedGroup?.querySelector?.('.side-pane-launcher-group-action') || null;
     let launcherProfileProvider = null;
     let launcherProfileEdit = null;
     let launcherProfileRename = null;
@@ -1504,6 +1520,9 @@ export function createSidePaneController({
     let launcherNameEdit = null;
     let launcherAppsProvider = null;
     let launcherApps = new Map();
+    let launcherRecommendedProvider = null;
+    let launcherRecommendedSettings = null;
+    let launcherRecommended = new Map();
     let launcherTab = 'tools';
 
     // 当前助手的头像和名字；每次打开新标签页时现取，改了头像或名字也能跟上
@@ -1614,8 +1633,10 @@ export function createSidePaneController({
             });
         }
         if (launcherView) launcherView.dataset.launcherSegment = segment;
+        const hasEntries = getAvailableOpenTabEntries().length > 0;
+        if (launcherToolsGroup) launcherToolsGroup.hidden = !hasEntries;
         if (launcherToolsSection) {
-            launcherToolsSection.hidden = segment !== 'tools' || getAvailableOpenTabEntries().length === 0;
+            launcherToolsSection.hidden = segment !== 'tools' || (!hasEntries && launcherRecommended.size === 0);
         }
         if (launcherAppsSection) launcherAppsSection.hidden = segment !== 'apps';
         if (launcherNotificationsSection) launcherNotificationsSection.hidden = segment !== 'notifications';
@@ -1634,22 +1655,26 @@ export function createSidePaneController({
         }
         if (next === launcherTab) return;
         launcherTab = next;
-        syncLauncherSections();
         if (launcherTab === 'apps') renderLauncherApps();
+        else renderLauncherRecommended();
+        syncLauncherSections();
     }
 
-    function renderLauncherApps() {
-        if (!launcherAppGrid) return;
-        let apps = [];
+    function readLauncherItems(provider, what) {
         try {
-            apps = launcherAppsProvider?.() || [];
+            return provider?.() || [];
         } catch (error) {
-            console.warn('[SidePaneController] Failed to read launcher apps:', error);
+            console.warn(`[SidePaneController] Failed to read launcher ${what}:`, error);
+            return [];
         }
-        launcherApps = new Map();
+    }
+
+    // 应用页和推荐共用的大图标卡片；返回 id -> 条目，点击时按所在区域查表
+    function renderLauncherCards(container, apps) {
+        const registry = new Map();
         const mounts = [];
-        launcherAppGrid.replaceChildren(...apps.filter(app => app?.id && !launcherApps.has(app.id)).map(app => {
-            launcherApps.set(app.id, app);
+        container.replaceChildren(...apps.filter(app => app?.id && !registry.has(app.id)).map(app => {
+            registry.set(app.id, app);
             const btn = doc.createElement('button');
             btn.type = 'button';
             btn.className = 'side-pane-launcher-app';
@@ -1672,10 +1697,26 @@ export function createSidePaneController({
                 console.warn('[SidePaneController] Failed to draw launcher app icon:', error);
             }
         });
+        return registry;
     }
 
-    async function runLauncherApp(appId) {
-        const app = launcherApps.get(appId);
+    function renderLauncherApps() {
+        if (!launcherAppGrid) return;
+        launcherApps = renderLauncherCards(launcherAppGrid, readLauncherItems(launcherAppsProvider, 'apps'));
+    }
+
+    function renderLauncherRecommended() {
+        if (launcherRecommendedRow) {
+            const items = launcherRecommendedProvider ? readLauncherItems(launcherRecommendedProvider, 'recommendations') : [];
+            launcherRecommended = renderLauncherCards(launcherRecommendedRow, items);
+        }
+        if (launcherRecommendedGroup) launcherRecommendedGroup.hidden = launcherRecommended.size === 0;
+        if (launcherRecommendedAction) launcherRecommendedAction.hidden = !launcherRecommendedSettings;
+        syncLauncherSections();
+    }
+
+    async function runLauncherApp(appId, registry = launcherApps) {
+        const app = registry.get(appId);
         if (!app || isDisposed) return;
         try {
             await app.open();
@@ -1793,7 +1834,18 @@ export function createSidePaneController({
                 return;
             }
             const appBtn = e.target.closest('[data-launcher-app]');
-            if (appBtn) runLauncherApp(appBtn.getAttribute('data-launcher-app'));
+            if (appBtn) {
+                const registry = launcherRecommendedRow?.contains(appBtn) ? launcherRecommended : launcherApps;
+                runLauncherApp(appBtn.getAttribute('data-launcher-app'), registry);
+                return;
+            }
+            if (launcherRecommendedAction?.contains(e.target)) {
+                try {
+                    launcherRecommendedSettings?.();
+                } catch (error) {
+                    console.error('[SidePaneController] Failed to open recommendation settings:', error);
+                }
+            }
         };
         launcherView.addEventListener('click', onLauncherClick);
         cleanupListeners.push(() => launcherView.removeEventListener('click', onLauncherClick));

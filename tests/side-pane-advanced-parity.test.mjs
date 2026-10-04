@@ -458,6 +458,57 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     dom.window.close();
 });
 
+test('Parity: the tools page lists recommended apps under the tool rows', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const tools = doc.querySelector('#sidePaneViewLauncher [data-launcher-section="tools"]');
+    tools.innerHTML = `
+        <div data-launcher-group="tools"><div class="side-pane-open-tab-list"></div></div>
+        <div data-launcher-group="recommended" hidden>
+            <button type="button" class="side-pane-launcher-group-action" hidden></button>
+            <div class="side-pane-launcher-recommended-row"></div>
+        </div>`;
+    const recommended = tools.querySelector('[data-launcher-group="recommended"]');
+    const settings = recommended.querySelector('.side-pane-launcher-group-action');
+    const opened = [];
+    let settingsOpened = 0;
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+    ctrl.setLauncherAppsProvider(() => [{ id: 'forum', label: '论坛（全部）', open: () => opened.push('apps:forum') }]);
+
+    assert.equal(recommended.hidden, true, '没有推荐来源时不显示');
+    let pinned = ['forum', 'notes'];
+    ctrl.setLauncherRecommendedProvider(
+        () => pinned.map(id => ({ id, label: id, open: () => opened.push(`rec:${id}`) })),
+        { onSettings: () => { settingsOpened += 1; } }
+    );
+    ctrl.showLauncher();
+    assert.equal(recommended.hidden, false);
+    assert.equal(settings.hidden, false);
+    assert.deepEqual([...recommended.querySelectorAll('[data-launcher-app]')].map(card => card.textContent), ['forum', 'notes']);
+
+    // 推荐里的卡片和应用页同 id 也各开各的
+    recommended.querySelector('[data-launcher-app="forum"]').click();
+    await tick();
+    assert.deepEqual(opened, ['rec:forum']);
+
+    settings.click();
+    assert.equal(settingsOpened, 1);
+
+    // 常用应用改了以后刷新
+    pinned = ['music'];
+    ctrl.refreshLauncherRecommended();
+    assert.deepEqual([...recommended.querySelectorAll('[data-launcher-app]')].map(card => card.textContent), ['music']);
+
+    // 撤掉推荐来源后隐藏
+    ctrl.setLauncherRecommendedProvider(null);
+    assert.equal(recommended.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
 test('Parity: entries can hide themselves with isAvailable', () => {
     const dom = createParityTestDOM();
     const doc = dom.window.document;

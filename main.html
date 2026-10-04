@@ -680,7 +680,19 @@
                                 <button type="button" class="side-pane-launcher-tab" role="tab" data-launcher-tab="notifications" aria-selected="false">通知<span class="side-pane-launcher-tab-status" data-status="unknown" aria-hidden="true"></span></button>
                             </div>
                             <section class="side-pane-launcher-section" data-launcher-section="tools" role="tabpanel" aria-label="工具">
-                                <div class="side-pane-open-tab-list"></div>
+                                <div class="side-pane-launcher-group" data-launcher-group="tools">
+                                    <h3 class="side-pane-launcher-group-title">工具</h3>
+                                    <div class="side-pane-open-tab-list"></div>
+                                </div>
+                                <div class="side-pane-launcher-group" data-launcher-group="recommended" hidden>
+                                    <div class="side-pane-launcher-group-header">
+                                        <h3 class="side-pane-launcher-group-title">推荐</h3>
+                                        <button type="button" class="side-pane-launcher-group-action" title="选择推荐的应用" aria-label="选择推荐的应用" hidden>
+                                            <span class="vcp-ui-icon" aria-hidden="true">settings</span>
+                                        </button>
+                                    </div>
+                                    <div class="side-pane-launcher-recommended-row"></div>
+                                </div>
                             </section>
                             <section class="side-pane-launcher-section" data-launcher-section="apps" role="tabpanel" aria-label="应用" hidden>
                                 <div class="side-pane-launcher-app-grid"></div>
