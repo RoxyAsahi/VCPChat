@@ -149,7 +149,7 @@ test('git graph layout: linear history stays on one lane, merges add a lane', ()
     ]);
 });
 
-test('panel renders Git 工具 rows and 进程 from V工程 todos, with mini capsule fallback', async () => {
+test('panel renders Git 变更 rows and 计划 from V工程 todos, with mini capsule fallback', async () => {
     const { doc, panel, opened, dom } = setup();
     panel.mount();
     await flush();
@@ -157,13 +157,13 @@ test('panel renders Git 工具 rows and 进程 from V工程 todos, with mini cap
     const layer = q(doc, '.zc-status-layer');
     assert.equal(layer.hidden, false);
     assert.equal(q(doc, '.zc-status').dataset.displayMode, 'panel');
-    assert.match(layer.textContent, /Git 工具/);
+    assert.match(layer.textContent, /Git 变更/);
     assert.match(layer.textContent, /更改/);
     assert.match(layer.textContent, /\+5/);
     assert.match(layer.textContent, /-1/);
     assert.match(layer.textContent, /main/);
     assert.match(layer.textContent, /提交或推送/);
-    assert.match(layer.textContent, /进程/);
+    assert.match(layer.textContent, /计划/);
     assert.match(layer.textContent, /1\/3/);
     assert.match(layer.textContent, /写测试/);
     assert.equal(layer.querySelectorAll('[data-plan-status="inProgress"]').length, 1);
@@ -204,7 +204,7 @@ test('without git or todos the panel stays as an entry capsule that opens the Gi
     panel.dispose();
 });
 
-test('a workspace that is not a git repo shows a Git 工具 entry instead of disappearing', async () => {
+test('a workspace that is not a git repo shows a Git 变更 entry instead of disappearing', async () => {
     const { doc, panel } = setup({ api: {
         gitListWorkspaces: async () => ({ success: true, data: { workspaces: [{ id: 'w', alias: 'demo', path: '/x' }], activeWorkspaceId: 'w' } }),
         gitChangeSummary: async () => ({ success: false, error: 'not a repo' }),
@@ -212,13 +212,13 @@ test('a workspace that is not a git repo shows a Git 工具 entry instead of dis
     } });
     panel.mount();
     await flush();
-    assert.match(q(doc, '.zc-mini-entry').textContent, /Git 工具/);
+    assert.match(q(doc, '.zc-mini-entry').textContent, /Git 变更/);
     panel.dispose();
 });
 
 test('pickEntryMetric asks for a workspace first', () => {
     assert.equal(pickEntryMetric({ workspaceCount: 0 }).text, '添加工作区');
-    assert.equal(pickEntryMetric({ workspaceCount: 1, hasWorkspace: true }).text, 'Git 工具');
+    assert.equal(pickEntryMetric({ workspaceCount: 1, hasWorkspace: true }).text, 'Git 变更');
 });
 
 test('branch popover filters, switches and offers create / graph in the footer', async () => {
@@ -369,6 +369,7 @@ test('panel lists recent AI commands from the built-in terminal and opens their 
     assert.equal(watching, true);
     const rows = [...doc.querySelectorAll('[data-status-section="runs"] [data-run-id]')];
     assert.deepEqual(rows.map(row => row.dataset.runId), ['r2', 'r1'], 'runs older than the recent window are hidden');
+    assert.equal(doc.querySelector('[data-status-section="runs"] .zc-section-title').textContent, '命令输出', 'same name as the side pane tab');
     assert.equal(rows[0].dataset.runStatus, 'running');
     assert.match(rows[0].textContent, /npm test/);
 
@@ -455,7 +456,7 @@ test('scoped panel: switching conversation swaps the plan, the Git workspace and
     assert.equal(q(doc, '.zc-status-layer').hidden, true);
     assert.equal(doc.querySelectorAll('[data-status-section]').length, 0);
 
-    // 切到只发过 npm test 的话题：只剩那一条命令，没有进程和 Git
+    // 切到只发过 npm test 的话题：只剩那一条命令，没有计划和 Git
     await switchTo([{ role: 'assistant', content: psCall('npm test') }]);
     assert.deepEqual([...doc.querySelectorAll('[data-run-id]')].map(row => row.dataset.runId), ['theirs']);
     assert.equal(doc.querySelectorAll('[data-status-section="plan"]').length, 0);
