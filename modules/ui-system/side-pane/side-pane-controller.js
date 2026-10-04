@@ -374,11 +374,17 @@ export function createSidePaneController({
         rememberBounded(activeTabByParent, parentKey, tabId);
     }
 
-    function finishOpen(entry) {
+    function finishOpen(tabId, entry, origin) {
         if (isDisposed) return null;
         syncViewPanels();
         syncDomVisibility();
-        entry?.handle?.focus?.();
+        // A background mount can finish after another tab, conversation or input has taken focus.
+        const focusUnchanged = doc.activeElement === origin
+            || (doc.activeElement === doc.body && origin && !origin.isConnected);
+        if (state.visible && state.activeTabId === tabId && mountedTabMap.get(tabId) === entry
+            && SidePaneState.getVisibleTabs(state, state.parent).some(tab => tab.id === tabId) && focusUnchanged) {
+            entry?.handle?.focus?.();
+        }
         return entry?.handle || null;
     }
 
@@ -474,6 +480,8 @@ export function createSidePaneController({
         /** options.focus 为 false 时只切换，不把焦点挪进标签（后台恢复时用） */
         activateTab(tabId, { focus: moveFocus = true } = {}) {
             if (isDisposed || !tabId) return;
+            if (tabId !== SidePaneState.LAUNCHER_TAB_ID
+                && !SidePaneState.getVisibleTabs(state, state.parent).some(tab => tab.id === tabId)) return;
             state = SidePaneState.activateTab(state, tabId);
             if (state.parent && !isNotificationsTab(tabId) && tabId !== SidePaneState.LAUNCHER_TAB_ID) {
                 const parentKey = parentKeyOf();
@@ -538,14 +546,15 @@ export function createSidePaneController({
         async openTab(rawTab) {
             if (isDisposed || !rawTab) return null;
             focus.rememberOrigin();
+            const origin = doc.activeElement;
             const definition = getTabType(rawTab.kind);
             const resolved = definition?.toTab ? definition.toTab(rawTab, state.tabs) : rawTab;
             state = SidePaneState.openTab(state, definition ? {
                 icon: definition.icon, typeLabel: definition.label, searchHint: definition.searchHint,
                 ...resolved
             } : resolved);
-            const targetTabId = state.activeTabId;
-            const openedTab = state.tabs.find(t => t.id === resolved.id);
+            const targetTabId = String(resolved.id);
+            const openedTab = state.tabs.find(t => t.id === targetTabId);
             rememberOpened(SidePaneState.getTabParent(openedTab), targetTabId);
             renderTabList();
 
@@ -554,7 +563,7 @@ export function createSidePaneController({
                 payload: rawTab,
                 ariaLabel: resolved.title || '副屏视图'
             });
-            return finishOpen(entry);
+            return finishOpen(targetTabId, entry, origin);
         },
 
         /** 改已打开标签的标题或 payload（关掉后重新打开时用新的 payload），不切换标签 */

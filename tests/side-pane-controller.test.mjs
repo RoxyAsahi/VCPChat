@@ -212,6 +212,85 @@ test('closing and reopening a pending tab creates a fresh mount even with the sa
     }
 });
 
+test('opening a background conversation mounts its own tab without replacing the foreground handle', async () => {
+    const { dom, root, options } = createPaneDom();
+    const mounted = [];
+    const focused = [];
+    const handles = new Map();
+    const controller = createSidePaneController({ ...options, providers: {
+        probe: { async mountTab(tab, view) {
+            mounted.push(tab.id);
+            view.textContent = tab.title;
+            const handle = { focus() { focused.push(tab.id); }, dispose() {} };
+            handles.set(tab.id, handle);
+            return handle;
+        } }
+    } });
+    const a = { itemType: 'agent', itemId: 'nova', topicId: 'a' };
+    const b = { ...a, topicId: 'b' };
+    const tab = { kind: 'probe', closable: true, scopeMode: 'topic' };
+    try {
+        controller.setParent(a);
+        const foreground = await controller.openTab({ ...tab, id: 'a', title: 'A', parent: a });
+        const background = await controller.openTab({ ...tab, id: 'b', title: 'B', parent: b });
+        assert.deepEqual(mounted, ['a', 'b']);
+        assert.equal(background, handles.get('b'));
+        assert.notEqual(background, foreground);
+        assert.equal(controller.getTabHandle('a'), foreground);
+        assert.equal(controller.getSnapshot().activeTabId, 'a');
+        assert.deepEqual(focused, ['a']);
+        controller.activateTab('b');
+        assert.equal(controller.getSnapshot().activeTabId, 'a', 'a hidden conversation tab cannot be activated');
+        assert.equal(root.querySelector('.side-pane-view[data-tab-id="a"]').classList.contains('active'), true);
+        assert.equal(root.querySelector('.side-pane-view[data-tab-id="b"]').classList.contains('active'), false);
+        controller.setParent(b);
+        assert.equal(controller.getSnapshot().activeTabId, 'b');
+        assert.equal(root.querySelector('.side-pane-view[data-tab-id="b"]').classList.contains('active'), true);
+        assert.deepEqual(mounted, ['a', 'b'], 'switching to the owning conversation reuses its handle');
+    } finally {
+        await controller.dispose();
+        dom.window.close();
+    }
+});
+
+for (const action of ['select another tab', 'hide the pane', 'focus the main input', 'switch conversation']) {
+    test(`a late open does not steal focus after ${action}`, async () => {
+        const { dom, root, options } = createPaneDom();
+        const doc = dom.window.document;
+        const input = doc.createElement('input');
+        doc.body.append(input);
+        const pending = Promise.withResolvers();
+        let focused = 0;
+        const handle = { focus() { focused++; }, dispose() {} };
+        const controller = createSidePaneController({ ...options, providers: {
+            probe: { mountTab(tab, view) { view.textContent = tab.title; return pending.promise; } }
+        } });
+        const parent = { itemType: 'agent', itemId: 'nova', topicId: 'a' };
+        controller.setParent(parent);
+        const opened = controller.openTab({ id: 'slow', kind: 'probe', title: 'Slow', scopeMode: 'topic', parent });
+        try {
+            if (action === 'select another tab') controller.showNotifications();
+            else if (action === 'hide the pane') controller.setVisible(false);
+            else if (action === 'focus the main input') input.focus();
+            else controller.setParent({ ...parent, topicId: 'b' });
+            const before = controller.getSnapshot();
+            pending.resolve(handle);
+            assert.equal(await opened, handle, 'the caller still receives its own mounted handle');
+            assert.equal(focused, 0);
+            assert.equal(controller.getSnapshot().activeTabId, before.activeTabId);
+            assert.equal(controller.getSnapshot().visible, before.visible);
+            if (action === 'focus the main input') assert.equal(doc.activeElement, input);
+            if (action === 'hide the pane') assert.equal(root.classList.contains('active'), false);
+            else if (action !== 'focus the main input') assert.equal(root.querySelector('.side-pane-view[data-tab-id="slow"]').classList.contains('active'), false);
+        } finally {
+            pending.resolve(handle);
+            await opened;
+            await controller.dispose();
+            dom.window.close();
+        }
+    });
+}
+
 test('SidePaneController does not leave an empty view behind when a mount fails', async () => {
     const { dom, root, options } = createPaneDom();
     const controller = createSidePaneController({

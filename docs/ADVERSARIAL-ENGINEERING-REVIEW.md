@@ -42,6 +42,11 @@
 | DSH | `packages/client/ui-deliverables/src/client/review-definition.ts` | 资源地址的 session/事件 sequence 是内容身份，文件 index 是导航参数；二者不混成每点一文件就开新内容。 |
 | DSH | `packages/client/ui-plan/src/client/PlanPreview.tsx` | 资源 loading/none/failed 和临时预览过期明确区分；body 和 title 从同一资源读值。 |
 | DSH | `packages/client/ui-plan/tests/plan-resource.client.spec.ts` | 验证完整 subagent 地址、固定历史 cursor、stream 释放，以及取消发生在 page 完成/stream 关闭时仍不发布。对应资源 provider 实现尚需继续逐行追踪。 |
+| DSH | `packages/client/ui-plan/src/client/plan-resource.ts` | 已追踪实现：follow 收到 snapshot 后退出并关闭 stream，关闭后再次检查取消；分页固定 throughSeq/beforeSeq，查找精确调用，typed remote error 保留。它验证了测试中的取消边界，而不是仅给 UI 增加 loading。 |
+| DSH | `packages/client/ui-sidebar-right/src/client/session-view.ts` | Session view 的引用、tab occurrence、已提交根的 mount 和 retired/disposed 状态分开；retainTab 的释放幂等，retire 等待已提交根卸载后才释放 view 引用。 |
+| DSH | `packages/client/ui-dockkit/src/engine/planner.ts` 的内容查找、open、duplicate、place 与 drop 前段 | `planOpenContent` 显式返回本次选中的 tabId；内容查找受 kind 约束，revealIfOpened=false 创建新 occurrence；复制保留内容身份但创建独立 tabId。place 的 strip index 修正和浮动宿主转换分别处理。drop 后段仍未覆盖。 |
+| ZCode | `packages/ui/src/lib/workspaceSidePane.ts` 的 BrowserUse scope/event/residency 分支 | 后台 ready 允许登记 guest，但仅 origin workspace、remote session、owner task 全部匹配时 reveal；迟到 visibility 只选择现有同 generation 的 shell，不能重建关闭页。residency 另有运行代次。 |
+| ZCode | `packages/ui/src/hooks/useAppPanels.ts` 的单标签关闭与 close-other 前段 | 浏览器先获得 main authority，终端显式回收常驻 PTY；关闭限定 parent。此 React 回调及浏览器授权本身的异步竞态仍需追踪，不能因为是参考实现就假定全部安全。 |
 
 先前 UI 调整还读过两者的 Todo/计划样式与 DSH `SegmentedTabs`。它们支撑布局参考，但不能作为生命周期、性能或后端正确性的证明。
 
@@ -85,6 +90,30 @@
 
 证据：修复前重开只挂载 1 次，受控回归失败；修复后新旧 handle、DOM 和 dispose 分离。旧结果先于新挂载完成时，再并发打开仍复用新挂载，最终只有一个新 view。
 
+## 第二轮：话题归属与迟到聚焦
+
+### R5：后台打开返回前台 handle
+
+`side-pane-controller.js` 的 openTab 使用 `state.activeTabId` 作为挂载目标。然而纯状态模块按话题归属决定是否激活：在 A 话题打开 B 的标签时，活动 ID 仍为 A。于是控制器没有挂载 B，直接返回 A 的 handle；如果前台没有挂载，错误的 provider 还可能装到前台 ID 上。
+
+修复：挂载 ID 从本次 toTab 解析结果取得，按状态模块的字符串 ID 规范使用。保留 raw payload 给类型自己的 provider 适配器，不把辅助对话 descriptor 契约误改成通用 tab。后台标签获得独立 handle、隐藏 view，切到其话题后复用；不影响前台内容或聚焦。
+
+### R6：隐藏话题的激活会把当前正文变空
+
+状态 activateTab 只检查全量标签是否存在；控制器还把该 ID 写入当前话题激活记忆，并聚焦其 handle。旧实现可以从 A 话题直接激活隐藏的 B 页，DOM 投影又按话题隐藏 B，因此出现没有活动正文的状态。
+
+修复：状态转换和控制器入口均检查当前话题可见性；无效激活不改快照、话题记忆或焦点。launcher 和常驻通知继续按原规则使用。纯状态的既有话题用例增加直接激活的身份断言，控制器用例验证背景 handle 不会被激活。
+
+### R7：异步打开完成后抢走后续焦点
+
+旧 finishOpen 无条件调用 handle.focus。受控挂载期间切到通知、收起侧栏、切话题，或者聚焦主输入框，迟到完成仍会调用旧页面 focus。
+
+修复：完成时核对目标活动 ID、可见话题、展开状态及当前挂载 entry，焦点仍是打开时的元素（或该元素已被移除而落到 body）才聚焦。已有正常打开聚焦和同 occurrence 并发挂载测试继续通过；API 仍向后台调用者返回自身 handle。
+
+证据：新增 5 个行为用例在旧实现全部失败；修复后 32 项控制器、状态、焦点、持久化测试通过。实际主窗口中的隔离临时 iframe 运行旧/新源码：旧返回 a、外话题激活变 b、主输入框丢焦；新返回 b、活动标签保留 a、输入框保持焦点。截图仅证明这些临时资源与焦点流程，不冒充业务页面的视觉设计评审。主窗口未 reload；原标签、草稿、主题保持一致，临时框架已移除。
+
+本轮全量 248 个测试文件通过、9 个已知失败、0 超时，逐条失败与第一轮一致；相关 221/221、UI 121/121，七项检查通过。没有新增模块或样式，事件图检查通过，无需改变生成结果。
+
 ## 验证与局限
 
 - 修改前新增 6 个故障用例：文件旧成功/旧失败、旧行触发、筛选旧成功/旧失败、关闭重开。全部能在原实现上失败。
@@ -97,7 +126,7 @@
 
 1. `input-enhancer-owner.test.mjs`：两项在 `inputEnhancer.js:518` 访问未装配的 document 时失败，尚未测试到目标 owner 行为。需要核实 DOM 依赖契约并改善装配。
 2. 六个 `scriptorium-*-electron.test.js`：源码直接使用 Electron app/BrowserWindow，既有隔离脚本却统一用 Node；尚不能据此判断产品失败。需要正确运行入口、隔离窗口与导出产物验证。
-3. `ui-helpers-settings-close.test.js`：有实际 DOM fixture 和 flush 契约，根因还未定位，不能先归类为过期测试。
+3. `ui-helpers-settings-close.test.js`：第二轮独立重跑复现，两项均因 closeModal 立即移除 active、flush 在后台执行而失败；modalClosePromises 声明存在但未登记关闭操作。还需追踪设置 bridge、调用者及该行为的变更意图，判断保存失败时的实际恢复契约，不能先归类为过期测试或贸然改成阻塞关闭。
 4. `plugin-agent-operation-service.test.cjs`：全量中的单项失败还需诊断。一次额外沙箱诊断触发临时文件 rename EPERM、错误恢复超时，已核实并结束仅由该诊断创建的父/子测试进程；不能把这次环境失败算成产品回归或替代全量结果。
 
 ## 全范围覆盖账本与后续路径
@@ -107,7 +136,7 @@ Git 清单有 2384 个跟踪文件。按代码扩展名排除常见 vendor/asset
 | 范围 | 当前证据 | 仍需完成 |
 | --- | --- | --- |
 | 参考侧栏实现细节 | 上表列出已读逻辑；DSH occurrence/资源 policy、ZCode request/workspace 边界已落到复现修复 | 继续读完整 state/planner、资源 provider、browser/terminal/subagent、布局/持久化与对应错误路径测试；记录取舍，不能只数文件 |
-| 我们的侧栏架构和生命周期 | 控制器挂载、关闭、销毁以及 picker/计划筛选已复现验证 | 其他 provider、注册覆盖/注销、异步 requestClose、跨话题 openTab、还原与后台驻留、动态缓存容量、订阅归属 |
+| 我们的侧栏架构和生命周期 | 挂载 occurrence、picker/计划筛选、跨话题 openTab/activateTab、迟到 focus 已复现修复；正常焦点和持久化回归通过 | 其他 provider、注册覆盖/注销、异步 requestClose/onClosed、关闭与控制器销毁并发、还原与后台驻留、动态缓存容量、订阅归属 |
 | 聊天和辅助对话 | 尚无本轮深入结论 | 主聊天/辅助对话所有者、流/取消/重试/编辑、草稿、会话与工作区隔离，对照 reference lease/occurrence |
 | Git、ProjectForge、源码后端 | 本轮只追到 provider 读取与已有测试 | IPC/preload 契约、读写根目录约束、真实 Git 与回退竞态、并发快照、索引、错误分类、批次缓存、隐藏面板 I/O |
 | 主进程、其他服务与 Rust | 清单定位到 IPC/services、chat data/audio/assistant/indexer 等模块 | 主进程资源生命周期、异常恢复与服务装配、Rust 测试与接口、插件/工具调用、升级/打包运行闭包 |
@@ -116,4 +145,4 @@ Git 清单有 2384 个跟踪文件。按代码扩展名排除常见 vendor/asset
 | 可维护性与 AI 可读性 | 此记录包含参考路径、身份约束、故障证据和未覆盖范围；picker 的误导性复制文件头已纠正 | 入口/数据/生命周期图与实际依赖一致性、其余复制文件头、重复真相、隐式全局/魔法 key、生成规则、文档过期、合理模块边界与契约 |
 | 完成审计 | 未通过：上表仍有明确未覆盖范围 | 每个要求都需具体当前证据；不能用本轮修复或已有绿灯宣称全工程完成 |
 
-下一轮先把参考的资源、状态和生命周期链补齐，并核查已发现的跨话题 openTab / 异步关闭候选，同时修正测试装配与运行分类。随后沿实际依赖进入聊天、IPC、服务、Rust、独立应用与发布链。检查边界要随证据扩展，不限制在新建的侧栏文件。
+下一轮继续补齐参考的资源、状态和生命周期链，核查异步关闭候选及设置 close/flush 契约，修正测试装配与运行分类。随后沿实际依赖进入聊天、IPC、服务、Rust、独立应用与发布链。检查边界要随证据扩展，不限制在新建的侧栏文件。
