@@ -539,6 +539,12 @@ test('Parity: tab context menu is scoped, keyboard friendly and closes on Escape
     doc.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal(contextMenu.hidden, true);
 
+    // 点进浏览器标签的 webview 时主页面只会失焦，菜单也要收起
+    openMenuOn('s1');
+    assert.equal(contextMenu.hidden, false);
+    dom.window.dispatchEvent(new dom.window.Event('blur'));
+    assert.equal(contextMenu.hidden, true);
+
     // 通知页不能关，但能关掉其他
     openMenuOn('notifications');
     assert.equal(isDisabled('close-tab'), true);
