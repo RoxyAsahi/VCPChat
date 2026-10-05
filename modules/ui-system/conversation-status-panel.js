@@ -30,9 +30,6 @@ const STORAGE_KEY_WS = 'vcp-projectforge-git-workspace';
 const STORAGE_KEY_VARIANT = 'vcp-status-panel-variant';
 const POLL_INTERVAL_MS = 15000;
 const RESCOPE_DEBOUNCE_MS = 700;
-const RESERVE_CLASS = 'zc-status-reserve';
-const RESERVE_VAR = '--zc-status-reserve';
-const RESERVE_GAP_PX = 16;
 
 // ------------------------------------------------------------------ component
 
@@ -83,7 +80,6 @@ export function createConversationStatusPanel({
     let pollTimer = null;
     let resizeObserver = null;
     let mounted = false;
-    let reserveBase = null; // 让位前消息列自己的右内边距
 
 
 
@@ -332,7 +328,6 @@ export function createConversationStatusPanel({
 
     function render(force = false) {
         renderPanel(force);
-        syncReserve();
     }
 
     function renderPanel(force) {
@@ -393,35 +388,6 @@ export function createConversationStatusPanel({
         aside.appendChild(body);
     }
 
-    // 面板展开时消息列给它让出右侧（ZCode 同样让正文列让位），收成胶囊或隐藏时还回去。
-    // 消息列本来留的边距已经够（比如居中窄列）就不动。
-    function syncReserve() {
-        const root = messagesRoot || doc.getElementById('chatMessages');
-        if (!root) return;
-        const reserving = mounted && !disposed && !layer.hidden && aside.dataset.displayMode === 'panel';
-        const applied = root.classList.contains(RESERVE_CLASS);
-        let next = null;
-        if (reserving) {
-            const base = applied && reserveBase !== null ? reserveBase : (parseFloat(win.getComputedStyle(root).paddingRight) || 0);
-            if (!applied) reserveBase = base;
-            const needed = Math.ceil(root.getBoundingClientRect().right - aside.getBoundingClientRect().left + RESERVE_GAP_PX);
-            if (needed > base) next = `${needed}px`;
-        }
-        if (next === (applied ? root.style.getPropertyValue(RESERVE_VAR) : null)) return;
-        // 让位会改变消息高度：原本停在底部的保持在底部
-        const scroller = root.closest('.chat-messages-container') || root.parentElement;
-        const atBottom = scroller ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 4 : false;
-        if (next) {
-            root.style.setProperty(RESERVE_VAR, next);
-            root.classList.add(RESERVE_CLASS);
-        } else {
-            root.classList.remove(RESERVE_CLASS);
-            root.style.removeProperty(RESERVE_VAR);
-            reserveBase = null;
-        }
-        if (atBottom && scroller) scroller.scrollTop = scroller.scrollHeight;
-    }
-
     // ------------------------------------------------------------------ mount / dispose
 
     function measureHost() {
@@ -432,8 +398,6 @@ export function createConversationStatusPanel({
         if (width !== hostWidth) {
             hostWidth = width;
             render();
-        } else {
-            syncReserve();
         }
     }
 
@@ -542,7 +506,6 @@ export function createConversationStatusPanel({
         pushDialogOwner.dispose();
         gitGraphOwner.dispose();
         sectionsOwner.dispose();
-        syncReserve();
         layer.remove();
         portal.remove();
     }
