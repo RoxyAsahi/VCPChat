@@ -1,6 +1,6 @@
 /* --- Side pane motion ---
  * 侧栏里的弹层统一用一套进出场：淡入 + 从 96% 放大 + 朝触发点方向挪 2px，120ms。
- * 和 ZCode 的 dropdown/popover（fade-in-0 zoom-in-95 slide-in-from-*-2）同一语法，
+ * 和常见的 dropdown/popover 进场（fade-in + zoom-in-95 + 2px slide）同一语法，
  * 时长和曲线取自 tokens.css。
  *
  * 弹层仍然只靠 hidden 开关：@starting-style 给出场起点，display 用 allow-discrete

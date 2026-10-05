@@ -45,7 +45,7 @@ export function createConversationStatusPanel({
     getTopicKey = null,
     // 话题的工作区换了（切话题，或话题新用上某个 V工程）时通知外面，Git 标签据此跟过去
     onScopeWorkspace = null,
-    // 给了 getHistory，面板就跟着当前会话走（和 ZCode 的面板跟着 session 一样）：
+    // 给了 getHistory，面板就跟着当前会话走：
     // 只显示这个话题的聊天记录里碰过的 V工程（进程 + 它所在工作区的 Git）和它发起过的命令。
     // 不给就保持旧行为：整个应用共用一份。
     getHistory = null,
@@ -277,7 +277,7 @@ export function createConversationStatusPanel({
             nextPlan = await loadPlan(nextWorkspace, projects, nextScope.batchIds);
         } catch { /* 所有失败结果也只能由当前 generation 提交 */ }
         if (disposed || seq !== refreshSeq) return;
-        // 对照 ZCode workspaceKey 的归属规则：异步 helper 只返回局部结果，当前会话一次提交。
+        // 工作区归属规则：异步 helper 只返回局部结果，当前会话一次提交。
         scopedProjects = projects;
         const workspaceChanged = workspace?.id !== nextWorkspace?.id;
         if (workspaceChanged) { closeAllPopovers(); for (const modal of [...modals]) modal.close(); }
