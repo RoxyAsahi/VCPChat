@@ -12,6 +12,7 @@ import { createSideChatMessageActions } from './side-chat/message-actions.js';
 import { createSideChatReferences } from './side-chat/references.js';
 import { createSideChatPersistence } from './side-chat/persistence.js';
 import { createSideChatModelPicker } from './side-chat/model-picker.js';
+import { createSideChatAttachments } from './side-chat/attachments.js';
 import { createSideChatDraftCache } from './side-chat/draft-cache.js';
 import { createChatSurface } from '../chat/chatSurface.js';
 import { createChatOperations } from '../chat/chatOperation.js';
@@ -77,7 +78,7 @@ export async function mountSideChatSurface(container, {
         descriptor,
         escapeHtml
     });
-    const { root, form, textarea, sendBtn, stopBtn, statusText, persistenceBadge, referenceList, modelPickerBtn, modelPopover, modelNameSpan } = shellOwner;
+    const { root, form, textarea, sendBtn, stopBtn, statusText, persistenceBadge, referenceList, modelPickerBtn, modelPopover, modelNameSpan, attachBtn, emoticonBtn, attachmentPreview } = shellOwner;
 
     let currentDescriptor = {
         ...descriptor,
@@ -128,9 +129,21 @@ export async function mountSideChatSurface(container, {
         root,
         sendBtn,
         statusText,
-        textarea
+        textarea,
+        toolButtons: [attachBtn, emoticonBtn]
     });
     const { updateStatus, updateEmptyState, updateComposerState } = composerStateOwner;
+
+    const attachmentsOwner = createSideChatAttachments({
+        chatCapabilities,
+        descriptor,
+        attachBtn,
+        emoticonBtn,
+        previewArea: attachmentPreview,
+        textarea,
+        getWindow: () => doc.defaultView,
+        onChange: () => updateComposerState()
+    });
 
     const scrollingOwner = createSideChatScrolling({
         store,
@@ -205,6 +218,7 @@ export async function mountSideChatSurface(container, {
                 referencesOwner.dispose();
                 persistenceOwner.dispose();
                 modelPickerOwner.dispose();
+                attachmentsOwner.dispose();
                 childScope?.dispose?.('side-chat-unavailable');
                 container.replaceChildren();
             },
@@ -299,11 +313,12 @@ export async function mountSideChatSurface(container, {
         }
 
         const rawText = textarea.value.trim();
-        if (!rawText && references.length === 0) return;
+        if (!rawText && references.length === 0 && attachmentsOwner.count === 0) return;
 
         const submittedText = rawText;
         const submittedReferenceIds = new Set(references.map(r => r.id));
         const submittedReferences = [...references];
+        const submittedAttachments = attachmentsOwner.take();
 
         // Compose payload with references if present
         let payload = rawText;
@@ -328,6 +343,7 @@ export async function mountSideChatSurface(container, {
 
         form.setAttribute('aria-busy', 'true');
         textarea.disabled = true;
+        attachmentsOwner.setDisabled(true);
         sendBtn.hidden = true;
         stopBtn.hidden = false;
         updateStatus('生成中...');
@@ -344,6 +360,7 @@ export async function mountSideChatSurface(container, {
             for (const ref of submittedReferences) {
                 if (!references.some(r => r.id === ref.id)) references.unshift(ref);
             }
+            attachmentsOwner.restore(submittedAttachments);
             renderReferences();
             scheduleInputSave();
         };
@@ -352,7 +369,7 @@ export async function mountSideChatSurface(container, {
             if (needsSnapshotRefresh()) await refreshSnapshot();
             const result = await surface.sendMessage({
                 content: payload,
-                attachments: [],
+                attachments: submittedAttachments,
                 input: textarea,
                 domRenderer: surface.renderer,
                 propagateError: true
@@ -527,6 +544,7 @@ export async function mountSideChatSurface(container, {
             referencesOwner.dispose();
             persistenceOwner.dispose();
             modelPickerOwner.dispose();
+            attachmentsOwner.dispose();
             submitInteractiveContent = null;
             form.removeEventListener('submit', onSubmit);
             stopBtn.removeEventListener('click', onStop);
