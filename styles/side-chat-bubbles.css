@@ -3,7 +3,7 @@
  * 辅助对话（侧栏）的消息气泡：始终使用对话模式（chat-messenger.css）的样式。
  *
  *   - 不显示头像和名字；
- *   - 用户：右侧全圆角胶囊，最宽 85%；
+ *   - 用户：右侧全圆角胶囊，最宽 85%，底色沿用普通气泡模式的磨砂色；
  *   - 助手：浅灰/深灰底的圆角气泡，占满整列，侧栏窄，不再限制到 560px；
  *   - 思考中的气泡保留：侧栏没有对话模式底部的工作状态行。
  * 主题文件的气泡规则带 !important，所以底色、圆角、边框也用 !important 覆盖；
@@ -13,9 +13,6 @@
 
 .side-chat-messages-container {
     --side-chat-radius: 15px;
-    --side-chat-user-bg: #f2f2f2;
-    --side-chat-user-text: #0d0d0d;
-    --side-chat-user-code-bg: rgba(0, 0, 0, 0.08);
     --side-chat-agent-bg: #262626;
     --side-chat-agent-text: #ececec;
     --side-chat-agent-code-bg: rgba(255, 255, 255, 0.08);
@@ -23,9 +20,6 @@
 }
 
 body.light-theme .side-chat-messages-container {
-    --side-chat-user-bg: #000000;
-    --side-chat-user-text: #ffffff;
-    --side-chat-user-code-bg: rgba(255, 255, 255, 0.16);
     --side-chat-agent-bg: #efefef;
     --side-chat-agent-text: #111111;
     --side-chat-agent-code-bg: rgba(0, 0, 0, 0.05);
@@ -62,7 +56,7 @@ html body .side-chat-messages-container .message-item.assistant .details-and-bub
     align-items: stretch;
 }
 
-html body .side-chat-messages-container .message-item .md-content {
+html body .side-chat-messages-container .message-item:is(.user, .assistant) .md-content {
     box-sizing: border-box;
     padding: 6px 12px;
     border: 0 !important;
@@ -84,8 +78,8 @@ html body .side-chat-messages-container .message-item.user .md-content {
     max-width: 85% !important;
     padding: 7px 14px;
     border-radius: 18px !important;
-    background: var(--side-chat-user-bg) !important;
-    color: var(--side-chat-user-text) !important;
+    /* 底色和文字色交给主题的普通用户气泡（磨砂渐变），这里只改形状。
+       侧栏本身已做背景模糊，消息列表又带底部淡出遮罩，气泡不再单独模糊。 */
 }
 
 /* 流式输出不套流光边框（animations.css），和对话模式一致 */
@@ -122,11 +116,6 @@ html body .side-chat-messages-container .message-item .md-content :not(pre) > co
     font-size: 0.86em;
     background: var(--side-chat-agent-code-bg);
     color: var(--side-chat-agent-code-text);
-}
-
-html body .side-chat-messages-container .message-item.user .md-content :not(pre) > code {
-    background: var(--side-chat-user-code-bg);
-    color: inherit;
 }
 
 html body .side-chat-messages-container .message-item .md-content > pre,
