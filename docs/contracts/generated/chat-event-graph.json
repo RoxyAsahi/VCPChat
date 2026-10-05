@@ -430,10 +430,11 @@
     "modules/ui-system/side-pane/git/cards.js",
     "modules/ui-system/side-pane/git/context-menu.js",
     "modules/ui-system/side-pane/git/diff-model.js",
-    "modules/ui-system/side-pane/gitSideProvider.js",
+    "modules/ui-system/side-pane/git/git-view.js",
     "modules/ui-system/side-pane/menu-position.js",
     "modules/ui-system/side-pane/plan-detail/node-view.js",
     "modules/ui-system/side-pane/plan-detail/page-navigation.js",
+    "modules/ui-system/side-pane/plan-detail/project-picker.js",
     "modules/ui-system/side-pane/plan-detail/topic-activity.js",
     "modules/ui-system/side-pane/planDetailSideProvider.js",
     "modules/ui-system/side-pane/selection-reference.js",
@@ -457,7 +458,6 @@
     "modules/ui-system/side-pane/tab-types/browser.js",
     "modules/ui-system/side-pane/tab-types/chat.js",
     "modules/ui-system/side-pane/tab-types/code-viewer.js",
-    "modules/ui-system/side-pane/tab-types/git.js",
     "modules/ui-system/side-pane/tab-types/notifications.js",
     "modules/ui-system/side-pane/tab-types/plan-detail.js",
     "modules/ui-system/side-pane/tab-types/terminal.js",
@@ -1254,7 +1254,7 @@
       "consumers": [
         {
           "file": "modules/uiManager.js",
-          "line": 391,
+          "line": 417,
           "kind": "custom-event-listener"
         }
       ],
@@ -1267,7 +1267,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 391,
+          "line": 417,
           "kind": "custom-event-listener",
           "match": "addEventListener('compact-sidebar-open-topics'"
         }
@@ -5407,7 +5407,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 176,
+          "line": 202,
           "kind": "preload-subscription"
         }
       ],
@@ -5426,7 +5426,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 176,
+          "line": 202,
           "kind": "preload-subscription",
           "match": "onThemeUpdated("
         }
@@ -9142,25 +9142,6 @@
       ]
     },
     {
-      "name": "vcp:git-focus-path",
-      "producers": [
-        {
-          "file": "modules/ui-system/side-pane/gitSideProvider.js",
-          "line": 73,
-          "kind": "custom-event-dispatch"
-        }
-      ],
-      "consumers": [],
-      "evidence": [
-        {
-          "file": "modules/ui-system/side-pane/gitSideProvider.js",
-          "line": 73,
-          "kind": "custom-event-dispatch",
-          "match": "dispatchEvent(new CustomEvent('vcp:git-focus-path'"
-        }
-      ]
-    },
-    {
       "name": "voice-chat-data",
       "producers": [
         {
@@ -10026,11 +10007,5 @@
       "contractId": "ui.webawesome.dynamic-event-adapter"
     }
   ],
-  "undiscovered": [
-    {
-      "file": "modules/ui-system/side-pane/gitSideProvider.js",
-      "line": 81,
-      "reason": "dynamic CustomEvent name: FOLLOW_WORKSPACE_EVENT"
-    }
-  ]
+  "undiscovered": []
 }

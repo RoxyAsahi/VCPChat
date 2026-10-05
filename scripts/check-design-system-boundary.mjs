@@ -185,6 +185,9 @@ const allowedSourceDifferences = new Set([
     'modules/ui-system/state-channel.js',
     'modules/ui-system/settlement.js',
     'modules/ui-system/surface-controller.js',
+    // Reviewed sidebar gesture lifecycle: pointer identity/final release,
+    // cancellation without persistence, and deferred-begin disposal safety.
+    'modules/ui-system/sidebar-resizer.js',
     'modules/ui-system/next-shell/overlay-coordinator.js',
     'modules/ui-system/next-shell/embedded-app-controller.js',
     'modules/ui-system/next-shell/app-tab-host.js',

@@ -420,3 +420,59 @@ DSH 的 controller、retention、stream、terminal 行为测试本轮读完，�
 沙箱初次测试在受限 Temp 内遇到原子重命名/realpath/junction 的 EPERM；停掉该轮后使用正常本机权限、隔离测试数据重新验证，保留原失败与正常运行日志。证据位于聊天工作区 `outputs/engineering-review/round-11/`，包括全量摘要与逐文件日志、实际窗口 8 组对照、截图、负例与剩余基线分类。当前窗口最终无临时 iframe，未重载，标签/草稿/主题保持原样。
 
 全工程审查目标仍在进行。已修复的 guard 引用问题不能替代未审查的共享业务差异；历史 PR 范围检查也不能通过批量放宽白名单来消除。下一步优先针对这些实际差异和底层布局/关闭生命周期补齐证据，并继续主进程、聊天、Git/源码与发布链审查；完成的计划页不再重做。
+
+## 第十二轮：拖拽必须有明确的结束方式和资源归属
+
+本轮不修改已完成的计划页。并行聊天将 Git 变更移入 V工程计划标签（`1f37c9d3`），并调整了标签条样式；这些生产文件不属于本轮提交范围。参考仓库继续只读，参考测试没有运行。
+
+### R32：底层 resizer 把取消、销毁和松手都当成提交
+
+原 `sidebar-resizer.js` 不核对 pointer identity；第二次按下会结束并保存上一手势。松手只 flush 最后一次 move，遗漏 pointerup 的最终坐标。pointercancel 和 dispose 同样走保存路径；失去 capture 或窗口失焦没有取消处理。排队的 beforeBegin continuation 在销毁后或已经松手后仍能启动拖拽。
+
+现在每个手势保存起始坐标、宽度和 pointer ID；只接收这个 pointer 的移动/结束。正常松手用最终坐标计算并提交一次。取消、lostpointercapture、blur、dispose 只撤销排队更新、解绑监听、释放 capture 和结束临时样式，保留已显示的宽度，不保存偏好。清理先退休手势，再释放 capture，避免同步的 lostpointercapture 重入。disposed refresh、按键和旧 continuation 不再修改页面；延迟开始期间也监听松手/取消/失焦，旧 continuation 不能冒充后续的新手势。
+
+RAF 合并仍只应用最新坐标，起点不随中间绘制改变；鼠标兼容路径仍保留。没有添加拖拽动画、入口或宽度产品规则。正常松手最终坐标与取消不保存属于故障修复，因此本轮没有以“行为完全不变”的纯拆分来描述。
+
+### R33：临时拖拽样式必须恢复原值
+
+侧栏 adapter 先设置 isDisposed，再调用底层 dispose；原 onActiveChange(false) 因此被丢弃，body 的 cursor/user-select、pane transition 和 active class 会残留。普通结束时直接写空字符串也会抹掉调用前的行内样式。左侧 uiManager 的 resizer 有同一清空问题。
+
+两个 owner 都在开始时记录具体 body、CSS 声明的值/优先级及原 class 状态，结束时精确恢复；本轮不引入全局样式状态。adapter 的 dispose 在 finally 中恢复，不能因抑制 disposed 回调而漏掉清理。实际 Chromium 验证 `crosshair !important`、`user-select: text !important` 和 `opacity 120ms !important` 得到恢复。这里的 JSDOM 对 cursor priority 的支持不足，单元测试只验证其可表达的值/class，优先级由真实窗口验证，未为迁就模拟器改变实现。
+
+### R34：初始化监听捕获不能代替运行时资源所有权
+
+uiManager 原先丢弃工厂返回的 resizer。初始化阶段捕获的 down/key 监听不包含拖拽后新增的 document 监听、RAF 和 capture；重复初始化又会叠加旧实例。提交后的设置写入也没有进入 manager 的任务集合，dispose 可在持久化未结束时返回。
+
+现在 manager 保存实例集合，重新初始化前销毁旧实例，dispose 在等待异步任务前释放拖拽资源，并追踪已提交的设置写入。测试用受控 Promise 证明 dispose 等待已经提交的写入，而界面清理立即发生；另验证重初始化后一次方向键只写一次，销毁未结束拖拽不会保存宽度。
+
+### 参考实现的具体差别
+
+| 参考源码 | 已核实的细节 | 本轮采用与边界 |
+| --- | --- | --- |
+| DSH `ui-layout/src/client/AppFrame.tsx` 的 DragHandle | 冻结起点，核对 pointer ID，最终 pointerup 坐标先更新，cancel/lost capture/卸载取消 RAF 并释放 capture。 | 采用明确区分完成和取消的生命周期。我们维持自身宽度约束和持久化格式。 |
+| ZCode `app-shell/WorkspaceShellLayout.tsx`，本轮读 539 起的 drag apply、开始/移动/结束和 separator JSX | 拖动直接更新 CSS 变量与宽度 ref，结束才提交 React state；pointer ID 一致；JSX 的 pointercancel 明确传 true，禁止保存。正常结束使用宽度 ref，不像 DSH 重算最终 up 坐标。 | 不把参考实现当作无缺陷模板，也不复制它的 React 状态层；保留我们的 RAF 合并并采用 DSH 的最终坐标处理。 |
+| ZCode `components/ui/resizable.tsx`（完整读完） | Group/Panel/Separator 由 react-resizable-panels 提供；持久化用布局回调，separator 有独立焦点规则。 | 不把封装组件误称为其自写 pointer capture 实现。 |
+| ZCode `app-shell/useAnimatedResizablePanel.ts`、`lib/workspaceSidebarResizeState.ts`（完整读完） | 开合过渡与实际拖动标识分离；transitionend 只接受自身 flex-grow，240ms 兜底；退出清理 timer/RAF，resize 结束移除标识并发事件。 | 支持拖动期间禁止 easing、资源在所属 owner 内清理；未改变我们的开合动画。 |
+| ZCode `lib/workspaceSidebarDrag.ts`（完整读完） | 工作区条目排序按实际项目身份、全局索引和折叠尺寸计算占位移动。 | 这是条目排序，不是面板宽度拖拽；不混用二者的结论。 |
+
+DSH 的 onDrag 直接调用 setSidebar/setRightbar，onEnd 只清 dragging；它没有与我们等价的 onCommit 回调。本轮“不因取消而落盘”以我们的设置持久化契约和 ZCode 的 cancelled 分支为依据，不能宣称 DSH 也采用相同的落盘时机。
+
+### 有效验证与事件图限制
+
+新增 **15 个**基于真实 DOM EventTarget、受控 RAF 和 Promise 的结果测试；同一组在 HEAD 原始三个模块上 **0/15**，修复后 **15/15**。加上已有 adapter/manager 测试，聚焦 **20/20**。测试核实最终宽度、持久化次数、迟到回调、pointer 归属、capture、样式和销毁等待，而非 grep 源码断言。本轮新测试文件低于 500 行，没有新增生产模块或 CSS。
+
+现有 Electron 主窗口里通过临时 iframe 加载生产工厂/owner，对原始和修复代码发真实 CDP 鼠标事件。确认原生 capture 已建立；原版松手保存 320px，修复后按最终坐标保存 380px；原版 lost capture 后继续更新并保存，修复后取消；adapter 和左侧 manager 的销毁样式对照也成立。四项原版失败、修复后通过。截图已检查，iframe/focus 临时状态 finally 清除；主窗口未重载，标签、草稿及主题属性保持原样。这不是整个应用的视觉验收。
+
+事件图重新生成并审查。用当前 HEAD 源码在内存重新运行生成器，再与工作树结果去掉 line 字段比较，证明本轮 resizer 修改只改变 uiManager 的四个定位行号。项目选择器/Git view 的文件迁移和 `vcp:git-focus-path` 删除来自已提交的并行修改，没有把未提交的其他生产变更混入。design boundary 只新增精确的 `sidebar-resizer.js` 已审查路径及理由，未批量放宽历史 392 项。
+
+**R35 尚未修复的有效性缺口**：现行扫描器匹配裸 CustomEvent，漏掉 `win.CustomEvent`；也不识别常量名 addEventListener。已提交的 `git/git-view.js` 实际发送并接收 `vcp:git-follow-workspace`，但图中没有它，undiscovered 仍为 0。事件图 --check 只证明生成结果没有过期，不能证明语义完整。下一轮需要以独立源码 fixture 验证这类构造/监听形式，并改进扫描与契约登记，不能用扩展白名单隐藏它。
+
+### 全量检查与后续范围
+
+全量 **261 个测试文件通过，0 失败、0 超时**；7 项常规 guard 全部通过，UI **121/121**，侧栏专项 **257/257**，本轮聚焦 **20/20**，bootstrap **46/46**。所有生产修复在全量运行开始前完成；随后只新增准确的 design-boundary 审查路径并单独重新运行该检查，未修改其余生产代码。
+
+扩展 **28/30** 通过；余下仍为 8 个共享业务文件的审查哈希不一致，以及并行计划页 CSS 的两个重复选择器（本轮日志 57、141 行，首处 47 行）。整体 check:ui-system 另被历史 design boundary 的 **392 个路径**阻断，均已在当前 HEAD 存在差异；本轮 resizer 的精确白名单补充未扩大这些历史豁免。未刷新共享哈希或修改计划页。
+
+新测试使用隔离测试数据、正常本机权限完成真实 rename/junction/PTY 检查，未把沙箱权限故障混作生产回归。证据保存在聊天工作区 `outputs/engineering-review/round-12/`，包含逐文件全量日志、受控原版失败、常规和扩展检查、真实窗口对照及事件图覆盖限制。
+
+全工程目标仍未完成。后续继续审查事件发现缺口、共享业务基线的实际差异、侧栏隐藏/切换期间的手势归属，以及主进程、聊天、Git/源码、Rust 和发布链。侧栏隐藏是否应显式取消正在拖拽的 owner，目前只读到 visibility 同步与 dispose 分开的路径，尚未完成复现，不把它当作已修复缺陷。不会重做已经完成的计划页。
