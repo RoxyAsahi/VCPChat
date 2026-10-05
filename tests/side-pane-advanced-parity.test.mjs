@@ -513,6 +513,10 @@ test('Parity: tab context menu is scoped, keyboard friendly and closes on Escape
     const contextMenu = doc.getElementById('sidePaneTabContextMenu');
     const ctrl = createController(dom);
 
+    // 外壳的 backdrop-filter 会把 fixed 菜单的定位和背后内容都带偏，所以菜单挂在 body 下
+    assert.equal(contextMenu.parentNode, doc.body);
+    assert.ok(contextMenu.classList.contains('vcp-ui-scope'));
+
     ctrl.setParent({ itemType: 'agent', itemId: 'agent-1', topicId: 'parent' });
     await ctrl.openTab({ kind: 'chat', descriptor: createDesc('s1', 'c1') });
 
@@ -549,6 +553,7 @@ test('Parity: tab context menu is scoped, keyboard friendly and closes on Escape
     assert.equal(ctrl.getSnapshot().activeTabId, 's1');
 
     await ctrl.dispose();
+    assert.notEqual(contextMenu.parentNode, doc.body, 'dispose puts the menu back');
     dom.window.close();
 });
 

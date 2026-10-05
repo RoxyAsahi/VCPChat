@@ -15,6 +15,17 @@ export function createSidePaneTabMenu({ menu, getClosableTabs, onAction, onShow 
     const cleanups = [];
     let targetTabId = null;
 
+    // 侧栏外壳带 backdrop-filter：留在里面时 fixed 按外壳定位（位置偏），
+    // 菜单自己的毛玻璃也会把后面的侧栏内容画空。挂到 body 下，dispose 时放回原处。
+    const home = { parent: menu.parentNode, next: menu.nextSibling };
+    if (doc.body && home.parent !== doc.body) {
+        menu.classList.add('vcp-ui-scope');
+        doc.body.appendChild(menu);
+        cleanups.push(() => {
+            if (home.parent?.isConnected) home.parent.insertBefore(menu, home.next?.parentNode === home.parent ? home.next : null);
+        });
+    }
+
     const isOpen = () => !menu.hidden;
 
     function hide() {
