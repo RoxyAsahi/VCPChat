@@ -177,11 +177,13 @@ html .side-plan-done:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-suc
 html .side-plan-chrome:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; }
 html .side-plan-chrome[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-plan-page[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
-html .side-plan-pages:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 4px; margin: 4px 14px 0; border-bottom: 1px solid var(--side-plan-rule); }
-html .side-plan-page-tab:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--zc-fg-subtle); font: inherit; font-size: calc(var(--vcp-ui-font-size) - 2px); cursor: pointer; }
+html .side-plan-pages:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 4px; margin: 4px 14px 0; border-bottom: 1px solid var(--side-plan-rule); overflow-x: auto; scrollbar-width: none; container-type: inline-size; }
+html .side-plan-page-tab:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 6px; white-space: nowrap; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--zc-fg-subtle); font: inherit; font-size: calc(var(--vcp-ui-font-size) - 2px); cursor: pointer; }
 html .side-plan-page-tab:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); background: var(--side-plan-hover); }
 html .side-plan-page-tab[aria-selected="true"]:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); border-bottom-color: var(--zc-fg); font-weight: 600; }
 html .side-plan-page-count:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg-subtle); font-size: calc(var(--vcp-ui-font-size) - 3px); font-weight: 400; font-variant-numeric: tabular-nums; }
+/* 窄的时候页签只留名字不换行，再窄就横向滑动 */
+@container (max-width: 360px) { html .side-plan-page-count:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; } }
 html .side-plan-page:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-direction: column; gap: 14px; }
 html .side-plan-page[data-plan-page-panel="plan"] > .side-plan-section > .side-plan-section-title:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
 html .side-plan-project-details:where(.vcp-ui-scope, .vcp-ui-scope *) { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; margin: 6px; font-size: calc(var(--vcp-ui-font-size) - 2px); line-height: 1.5; }
