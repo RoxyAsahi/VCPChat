@@ -143,6 +143,14 @@ export function createSidePaneResizerOwner({
     handle?.addEventListener?.('keydown', onKeydown);
 
     const owner = Object.freeze({
+        cancel() {
+            if (isDisposed) return;
+            try {
+                resizer?.cancel?.();
+            } finally {
+                restoreDragStyles();
+            }
+        },
         refresh() {
             if (!isDisposed) resizer?.refresh?.();
         },

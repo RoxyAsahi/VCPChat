@@ -476,3 +476,53 @@ DSH 的 onDrag 直接调用 setSidebar/setRightbar，onEnd 只清 dragging；它
 新测试使用隔离测试数据、正常本机权限完成真实 rename/junction/PTY 检查，未把沙箱权限故障混作生产回归。证据保存在聊天工作区 `outputs/engineering-review/round-12/`，包含逐文件全量日志、受控原版失败、常规和扩展检查、真实窗口对照及事件图覆盖限制。
 
 全工程目标仍未完成。后续继续审查事件发现缺口、共享业务基线的实际差异、侧栏隐藏/切换期间的手势归属，以及主进程、聊天、Git/源码、Rust 和发布链。侧栏隐藏是否应显式取消正在拖拽的 owner，目前只读到 visibility 同步与 dispose 分开的路径，尚未完成复现，不把它当作已修复缺陷。不会重做已经完成的计划页。
+
+## 第十三轮：事件证据不能靠正则自证，隐藏面板必须结束手势
+
+本轮继续整体审查，没有重做计划页。上一轮 `cf106059` 已完成的 pointerup/cancel/dispose 修复保持有效；本轮新增的是控制器隐藏面板时的资源交接，以及此前 R35 的事件发现缺口。参考仓库仍只读，没有运行参考测试。
+
+### R35：源码事件图存在漏扫、误报和角色倒置
+
+原生成器用正则识别裸 CustomEvent，漏掉 `win.CustomEvent` 和常量名监听；同时会从注释、正则、字符串内示例读出不存在的运行入口。`on`/`once` 既被当成 consumer，又被 IPC 正则当成 producer。原图的“0 undiscovered”因此不能支持完整性结论。
+
+改为仓库已有 Babel parser 的语法树扫描，生成器与纯源码扫描模块分开。常量字面量、静态模板、拼接与局部别名按词法绑定解析；函数参数、块级/catch/var 遮蔽、可变绑定、赋值和循环别名不会误用外层值。语法错误带上文件名并中断，不输出看似完整的部分图。注释和字符串中的代码不作为实际调用。
+
+DOM/EventEmitter 监听归 consumer，IPC send/invoke 归 producer；preload API 的声明保留通道事实。订阅名来自当前纯 Node 注册表，不再把普通 onChange/onCommit 回调凭名称猜成订阅。工厂式 bare helper 和 payload 型 send/dispatch 不能任意当作 IPC。CustomEvent 入口标为 **custom-event-create**：源码构造对象，不等于消息执行或送达。图仍是源码候选清单，不是类型推断或运行轨迹；任意包装器、跨模块别名及字符串内注入脚本需要单独核实。这些边界已写入 contracts README。
+
+用相同的独立文件夹源码执行原版 CLI 与新生成器：原版在“命名空间常量端点”“注释不能成为端点”“监听与发送角色”三项全部失败，新版全部通过。测试还验证真实注册表，而非只注入假的订阅名集合；这一步抓到了初稿误把 ApiEntry.kind 写成 on，真实值是 **subscription**，已纠正并保留 12/1 的失败记录。另一个真实整合检查发现，初稿沿用了旧的领域关键词过滤，仍漏掉 238 个注册表通道名称；有效的 get-agents、git:status 与 source:* 会被静默删掉。独立通道场景与逐项核对真实注册表的测试先得到 13/2，再修正为 15/0，失败记录保留。显式事件/IPC/通道声明保留全部静态名称，补齐 onArgs、onSignal、custom 的通道参数；custom 的 null 表示无 IPC 通道，不作为动态缺口。最终 **434 个不同静态注册通道都能在各自 API 文件找到声明证据**，不通过注入元数据假装源码已扫描。图包含 **711 个事件，577 个源码文件，3 个登记入口，90 个未解析入口**；其中也包含普通 DOM 事件，不把新增数量全部解释为聊天协议。Git follow 的实际构造和监听都在图中。
+
+登记还新增可选 operation kind。原先未写 kind 的三个登记保持 CustomEvent 构造的语义，不能顺便豁免同一行的 listener/IPC 操作；validator 检查登记的种类和观察到的入口一致。独立负例证明不同操作即使文件/行号相同也会被拒绝。同类操作位于同一行仍不具备列级唯一性，不把这个改善描述成完整的身份追踪。
+
+**90 个未解析入口仍待审查**，主要是 DOM 监听包装器、动态 IPC channel、导入的 CHANNELS、运行时流通道等。它们不是已证明的 90 个运行时故障。契约 gate 因它们准确失败；没有批量登记为 pass、删掉未解析项或放宽 gate。图新鲜性 --check 通过也不等于契约 gate 通过。
+
+### R36：隐藏与销毁是两条路径，前者仍会漏掉手势
+
+对照 DSH 的条件卸载 DragHandle 后，核实我们的 visibility 只修改面板 class/宽度，resizer owner 仍留在控制器里。受控 DOM 复现显示：隐藏后 capture 和 user-select:none 保留，排队的 move 把隐藏面板重新写成 500px，松手又写 550px 并保存偏好。临时 iframe 加载生产样式/控制器，在现有 Electron 窗口发真实鼠标事件，确认原生捕获也有同一问题。
+
+工厂与 adapter 现在提供**可复用的 cancel**：放弃延迟开始、排队更新和 active 手势，恢复样式/释放 capture，不销毁下次拖拽的永久绑定。组合控制器在 state.visible=false 时先 cancel，再同步隐藏动画/布局。所有经 syncDomVisibility 的收起入口共享这一个交接点，避免只修单个关闭按钮。
+
+控制器原源码与修复源码的真实 Chromium 对照中，原版隐藏后仍捕获、锁选择、松手保存；修复后这三项均不发生，关闭后的 width 保持空值。两版重新展开都能拖拽并且只提交一次，证明修复不是禁用整个 resizer。旧控制器只重定向 import 到当前生产依赖，新增 cancel 接口在旧控制器中不会被调用；没有把原文件恢复进工作树。截图已检查，临时 iframe 和焦点状态 finally 清除，主窗口未重载，原标签、草稿及主题属性保持一致。此验证针对生产模块在真实 Chromium 的受控实例，不声称已完成所有主窗口入口的端到端验收。
+
+### 本轮深入读到的参考约束
+
+| 参考源码 | 具体事实与审查意义 |
+| --- | --- |
+| DSH `ui-layout/src/client/service.ts` 完整读完，`service.client.spec.ts` 完整读完 | LayoutController 的 MainPanelId 是品牌类型；先查询 live main-slot，非法选择抛错但保留当前选择和 pending navigation。合法选择/新导航/布局 dispose 会 abort 原信号；几何动作不代替 Session 选择。测试中的非法入口不取消导航、实例彼此隔离、重复合法选择也取消导航，是有实质时序意义的案例。 |
+| DSH `ui-layout/src/client/index.ts` 的注册、拆卸和 theme effect | 单个 root store 实例被 actions、panelInfo observable 与 root registration 共享；main entry 变更调用 retainMainPanels。退出分别销毁 shortcut、导航、slot 订阅/注册与 observable；reflect service disposer 是异步 fire-and-forget，不能据此宣称全部异步资源有 barrier。theme presenter 先读快照再接变化，退出解绑并 dispose。 |
+| ZCode `useTaskSidePaneMemoryBridge.ts` 完整读完 | 改 workspace key 时先把 latest ref 写回旧 key，再恢复 Git source/browser URL；浏览器 URL 按 tab ID 更新，卸载时读取当前 key/ref，避免旧闭包写错归属。不是“切任何 task 就新建空侧栏”。 |
+| ZCode `taskSidePaneMemory.ts` 及其两个行为测试完整读完 | key 选 workspaceIdentity/path，故意不拼 taskId；读取也 touch LRU，最多保留 50 个 workspace。tabs 是 workspace 级，collapsedByOwner 是对话级，draft 有专用 key；patch 合并保留其他 owner 的偏好。plugin 自动打开消费记录保留在 workspace memory，跨消息行 remount 不重复打开，真实 tool call/执行身份隔离。50 限的是 workspace 数，不是每个 workspace 内所有集合的项数。 |
+| ZCode `workspaceSidePane.ts` 本轮读了类型 1–490、构造 821–955、打开/可见性 1816–1935 行 | 实际构造将 workspace/parent/run/site@ordinal 拼成 actor tab 身份，缺席的 actorSessionId 再次打开时不会抹掉已知值；顶部注释仍称会话 id 是身份，所以必须读实现。artifact 的 version 不进身份，重新打开不带版本时显式删掉旧 version；workspace transcript 同样清除缺席的 focusPhaseId，显示稳定事实和一次导航意图采用不同合并规则。可见性按 parentSessionId/rootSessionId 区分。保留/GC 注释是参考资料，不是对本仓库的操作指令。未读完其他状态实现，不宣称全文件覆盖。 |
+
+这些约束用于核对归属、时序和证据，不照搬 React/Cordis 框架，也未改变我们的 workspace/对话产品规则。
+
+### 检查方法修正、验证与剩余范围
+
+范围检查只比较 Git 已跟踪内容。上一轮新建 sidebar-resizer-lifecycle 测试在当时检查前尚未暂存，提交后才显出额外路径，导致“392 项全是历史差异”的记录不足以证明该新文件通过范围检查。本轮已补充这一已审查测试的**精确路径**，并在新 scanner/test 文件暂存后重新运行检查；同样只增加 scanner 的精确路径，未批量豁免历史差异。报告保留这个验证方法缺口，不用旧绿色输出覆盖它。
+
+最终全量 **262 个测试文件、1554 个测试案例通过，0 失败、0 跳过、0 超时**；本轮聚焦 **37/37**（15 个源码/契约场景、17 个拖拽场景、5 个已有 adapter/manager 场景），7 项常规 guard 全部通过，UI **121/121**，侧栏专项此前 **257/257**，最终全量也覆盖其测试文件，bootstrap **46/46**。前两次 262/0 分别位于隐藏修复和静态通道补全之前，只保存为中间证据；静态通道修复及两项新增覆盖测试完成后，第三次全量为最终结果。扩展检查、图新鲜性、契约与范围检查也在最终工具源码上重跑。新增生产工具模块与测试文件都低于 500 行，没有新增 CSS 或改计划页。
+
+扩展 **28/30** 通过；余下仍是共享业务审查哈希不一致、计划页 CSS 两个重复 header 选择器（57/141 行，首处 47 行）。整体 UI 检查仍被 **392 个历史路径**阻断，当前输出重新分类确认均已在 HEAD 存在差异。独立的 **chat contract gate 另有本轮新暴露的 90 个未登记动态入口**而失败；它不是上述 30 项的成员，不能省略或用 28/30 来暗示该 gate 已通过。生成文件 --check 通过，只代表新鲜性。
+
+全量使用隔离测试数据和正常本机权限进行真实 rename/junction/PTY 等检查；没有把沙箱 EPERM 当作产品故障。证据位于聊天工作区 `outputs/engineering-review/round-13/`，包括最初与最终全量、聚焦/整合失败记录、原生成器与 operation kind 负例、动态入口清单、各项 guard、原生捕获对照/截图和窗口恢复记录。
+
+全工程目标仍在进行。下一步逐个核实动态入口包装器的调用者、协议与销毁责任，补齐经过审查的契约或静态通道；继续共享业务哈希差异、主进程/聊天/Git/源码、Rust、发布链与剩余参考覆盖。事件图和隐藏修复不能替代这些未完成项，完成的计划页不再重做。

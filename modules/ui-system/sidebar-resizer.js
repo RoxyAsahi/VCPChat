@@ -167,6 +167,10 @@
         handle.addEventListener(eventNames.down, begin);
         handle.addEventListener('keydown', keydown);
         return {
+            cancel() {
+                abandonBegin();
+                cancel();
+            },
             refresh() {
                 if (disposed) return;
                 applyValue(normalize(getValue()), getBounds() || {});

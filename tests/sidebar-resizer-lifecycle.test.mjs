@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { createSidePaneResizerOwner } from '../modules/ui-system/side-pane/side-pane-resizer-owner.js';
+import { createSidePaneController } from '../modules/ui-system/side-pane/side-pane-controller.js';
 
 const source = fs.readFileSync(new URL('../modules/ui-system/sidebar-resizer.js', import.meta.url), 'utf8');
 const managerSource = fs.readFileSync(new URL('../modules/uiManager.js', import.meta.url), 'utf8');
@@ -182,6 +183,56 @@ test('RAF coalesces to the latest coordinate against a stable drag origin', () =
         assert.deepEqual(f.applied, [360, 380, 390]);
         assert.deepEqual(f.committed, [390]);
     } finally { f.close(); }
+});
+
+test('cancel retires a deferred start without disabling the next gesture', () => {
+    let resume;
+    const f = fixture({ beforeBegin(_event, continuation) { resume = continuation; return false; } });
+    try {
+        f.emit(f.handle, 'pointerdown', 100);
+        const oldResume = resume;
+        f.resizer.cancel(); oldResume();
+        assert.deepEqual(f.active, []);
+        f.emit(f.handle, 'pointerdown', 140); resume();
+        f.emit(f.doc, 'pointerup', 160);
+        assert.deepEqual(f.committed, [320]);
+    } finally { f.close(); }
+});
+
+test('hiding the pane cancels capture, late movement and persistence but reopening can resize', async () => {
+    const f = fixture(), writes = [];
+    const previous = { window: globalThis.window, document: globalThis.document };
+    let controller;
+    try {
+        f.resizer.dispose();
+        globalThis.window = f.win; globalThis.document = f.doc;
+        f.win.PointerEvent = f.win.MouseEvent;
+        f.pane.classList.add('vcp-side-pane', 'active');
+        f.pane.innerHTML = '<div class="side-pane-tabs"></div><div class="side-pane-content-container"><section id="sidePaneViewNotifications"></section></div>';
+        f.doc.body.style.userSelect = 'text';
+        controller = createSidePaneController({ root: f.pane, resizerHandle: f.handle,
+            tabListElement: f.pane.querySelector('.side-pane-tabs'), contentContainer: f.pane.querySelector('.side-pane-content-container'),
+            electronAPI: { saveSettings: async patch => { writes.push(patch); return { success: true }; } } });
+        controller.setVisible(true, { animate: false });
+        f.emit(f.handle, 'pointerdown', 900);
+        f.emit(f.doc, 'pointermove', 850);
+        controller.setVisible(false, { animate: false });
+        assert.equal(controller.getSnapshot().visible, false);
+        assert.equal(f.capture(), null);
+        assert.equal(f.doc.body.style.userSelect, 'text');
+        f.scheduled.forEach(callback => callback());
+        f.emit(f.doc, 'pointerup', 800);
+        assert.equal(f.pane.style.width, '');
+        assert.equal(writes.length, 0);
+        controller.setVisible(true, { animate: false });
+        f.emit(f.handle, 'pointerdown', 900);
+        f.emit(f.doc, 'pointerup', 880);
+        assert.equal(writes.length, 1);
+        assert.equal(controller.getSnapshot().preferredWidth, 320);
+    } finally {
+        await controller?.dispose(); f.close();
+        for (const [name, value] of Object.entries(previous)) { if (value === undefined) delete globalThis[name]; else globalThis[name] = value; }
+    }
 });
 
 test('mouse fallback commits the last release coordinate and cancels on leaving the document', () => {
