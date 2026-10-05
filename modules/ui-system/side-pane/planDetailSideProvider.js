@@ -339,6 +339,10 @@ export function createPlanDetailSideProvider({
                 refreshBtn.addEventListener('click', () => load());
                 actions.appendChild(refreshBtn);
                 if (onOpenProjectForge) {
+                    // 和浏览器工具栏的前进后退胶囊一样：两颗按钮之间一根细竖线
+                    const divider = h('span', 'side-plan-actions-divider');
+                    divider.setAttribute('aria-hidden', 'true');
+                    actions.appendChild(divider);
                     const forgeBtn = button('side-plan-icon-btn side-plan-forge', null, '完整记录与回退（V工程 页）');
                     forgeBtn.appendChild(icon('open_in_new'));
                     forgeBtn.addEventListener('click', () => onOpenProjectForge(project.id));

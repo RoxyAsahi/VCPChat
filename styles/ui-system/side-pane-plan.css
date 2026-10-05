@@ -51,18 +51,45 @@ html .side-plan-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
 }
 html .side-plan-title-row:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; align-items: center; gap: 8px; min-width: 0; }
 html .side-plan-title:where(.vcp-ui-scope, .vcp-ui-scope *) { margin: 0; font-size: calc(var(--vcp-ui-font-size) + 1px); font-weight: 600; line-height: 1.3; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--zc-fg); }
-html .side-plan-actions:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 2px; flex: 0 0 auto; margin-right: -4px; }
+/* 标题行右侧的状态和按钮做成浏览器工具栏那样的胶囊：淡底、细边框、全圆角 */
+html .side-plan-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-plan-pill-bg: color-mix(in srgb, var(--zc-fg) 6%, transparent);
+    --side-plan-pill-border: color-mix(in srgb, var(--zc-fg) 10%, transparent);
+    --side-plan-pill-divider: color-mix(in srgb, var(--zc-fg) 22%, transparent);
+    --side-plan-pill-shadow: none;
+}
+html body:is(.light-theme, [data-vcp-theme="light"]) .side-plan-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-plan-pill-bg: color-mix(in srgb, var(--vcp-ui-bg-primary, Canvas) 88%, transparent);
+    --side-plan-pill-border: color-mix(in srgb, var(--zc-fg) 8%, transparent);
+    --side-plan-pill-shadow: 0 1px 2px color-mix(in srgb, var(--zc-fg) 6%, transparent);
+}
+html .side-plan-actions:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+    height: 32px; padding: 0 3px;
+    border: 1px solid var(--side-plan-pill-border); border-radius: 999px;
+    background: var(--side-plan-pill-bg); box-shadow: var(--side-plan-pill-shadow);
+    box-sizing: border-box;
+}
+html .side-plan-actions-divider:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: none; width: 1px; height: 16px; margin: 0 3px; background: var(--side-plan-pill-divider); }
 html .side-plan-icon-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
+    width: 26px; height: 26px; padding: 0; border: 0; border-radius: 999px;
     background: transparent; color: var(--zc-fg-subtle); cursor: pointer;
 }
 html .side-plan-icon-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { background: var(--side-plan-hover); color: var(--zc-fg); }
 html .side-plan-icon-btn .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope *), html .side-plan-icon-btn svg:where(.vcp-ui-scope, .vcp-ui-scope *) { width: 15px; height: 15px; font-size: calc(var(--vcp-ui-font-size) + 1px); }
 
-html .side-plan-chip:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; padding: 0; font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); }
-html .side-plan-chip.status-active:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-success); }
-html .side-plan-chip.status-deleted:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-danger); }
+html .side-plan-chip:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 0 auto; display: inline-flex; align-items: center;
+    height: 24px; padding: 0 10px;
+    border: 1px solid var(--side-plan-pill-border); border-radius: 999px;
+    background: var(--side-plan-pill-bg); box-shadow: var(--side-plan-pill-shadow);
+    font-size: calc(var(--vcp-ui-font-size) - 2px); line-height: 1; color: var(--zc-fg-subtle);
+    box-sizing: border-box;
+}
+html .side-plan-chip.status-review:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-warning); border-color: color-mix(in srgb, var(--zc-warning) 30%, transparent); background: color-mix(in srgb, var(--zc-warning) 8%, var(--side-plan-pill-bg)); }
+html .side-plan-chip.status-active:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-success); border-color: color-mix(in srgb, var(--zc-success) 30%, transparent); background: color-mix(in srgb, var(--zc-success) 8%, var(--side-plan-pill-bg)); }
+html .side-plan-chip.status-deleted:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-danger); border-color: color-mix(in srgb, var(--zc-danger) 30%, transparent); background: color-mix(in srgb, var(--zc-danger) 8%, var(--side-plan-pill-bg)); }
 
 html .side-plan-meta:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: calc(var(--vcp-ui-font-size) - 3px); color: var(--zc-fg-subtle); }
 html .side-plan-meta > span + span:where(.vcp-ui-scope, .vcp-ui-scope *)::before { content: '·'; margin-right: 10px; color: var(--zc-fg-subtle); }
