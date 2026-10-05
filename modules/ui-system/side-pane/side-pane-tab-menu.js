@@ -46,7 +46,7 @@ export function createSidePaneTabMenu({ menu, getClosableTabs, onAction, onShow 
         setDisabled('close-all', closable.length === 0);
         menu.hidden = false;
         placeMenuAt(menu, x, y, doc.defaultView, 8);
-        menu.querySelector('[role="menuitem"]:not([disabled])')?.focus?.();
+        menu.querySelector('[role="menuitem"]:not([disabled])')?.focus?.({ preventScroll: true });
     }
 
     const onClick = async (e) => {
