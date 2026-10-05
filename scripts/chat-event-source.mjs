@@ -65,21 +65,43 @@ function indexScopes(ast) {
             }
         }
     }
-    function stringValue(node, scope, seen = new Set()) {
-        if (node?.type === 'StringLiteral') return node.value;
-        if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis[0].value.cooked;
+    const unknown = () => ({ values: new Set(), complete: false });
+    const literal = value => typeof value === 'string' ? { values: new Set([value]), complete: true } : unknown();
+    // Bound branch expansion while retaining the fact that analysis is partial.
+    const limit = 64;
+    function combine(left, right, concatenate) {
+        const values = new Set();
+        let complete = left.complete && right.complete;
+        const add = value => {
+            if (values.has(value)) return;
+            if (values.size < limit) values.add(value);
+            else complete = false;
+        };
+        if (concatenate) for (const a of left.values) for (const b of right.values) add(a + b);
+        else for (const value of [...left.values, ...right.values]) add(value);
+        return { values, complete };
+    }
+    function stringValues(node, scope, seen = new Set()) {
+        if (node?.type === 'StringLiteral') return literal(node.value);
+        if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) return literal(node.quasis[0].value.cooked);
+        if (node?.type === 'ConditionalExpression') {
+            return combine(stringValues(node.consequent, scope, seen), stringValues(node.alternate, scope, seen), false);
+        }
         if (node?.type === 'BinaryExpression' && node.operator === '+') {
-            const left = stringValue(node.left, scope, seen), right = stringValue(node.right, scope, seen);
-            return typeof left === 'string' && typeof right === 'string' ? left + right : null;
+            return combine(stringValues(node.left, scope, seen), stringValues(node.right, scope, seen), true);
         }
         if (node?.type === 'Identifier') {
             const found = binding(node.name, scope);
-            if (!found?.value || seen.has(found)) return null;
-            return stringValue(found.value, found.scope, new Set([...seen, found]));
+            if (!found?.value || seen.has(found)) return unknown();
+            return stringValues(found.value, found.scope, new Set([...seen, found]));
         }
-        return null;
+        return unknown();
     }
-    return { nodes, scopes, stringValue };
+    function stringValue(node, scope) {
+        const { values, complete } = stringValues(node, scope);
+        return complete && values.size === 1 ? [...values][0] : null;
+    }
+    return { nodes, scopes, stringValue, stringValues };
 }
 
 export function isChatEventName(name) {
@@ -91,22 +113,21 @@ export function isChatEventName(name) {
 // strings are resolved; imported names and runtime values remain explicit.
 export function scanChatEventSource({ file, source, dynamicRegistrations = [], subscriptionNames = new Set() }) {
     const ast = parse(source, { sourceType: 'unambiguous', allowReturnOutsideFunction: true, plugins: ['jsx'] });
-    const { nodes, scopes, stringValue } = indexScopes(ast);
+    const { nodes, scopes, stringValue, stringValues } = indexScopes(ast);
     const events = [], registeredDynamic = [], undiscovered = [];
     function record(node, argument, role, kind, reason, domainOnly = false) {
-        const name = stringValue(argument, scopes.get(node));
+        const { values, complete } = stringValues(argument, scopes.get(node));
         const line = node.loc.start.line;
         const registration = dynamicRegistrations.find(site => site.file === file && site.line === line
             && (site.kind || 'custom-event-create') === kind);
-        if (typeof name === 'string') {
+        for (const name of values) {
             if (!domainOnly || isChatEventName(name)) events.push({ name, role, file, line, kind, match: source.slice(node.start, argument?.end ?? node.end) });
-            // Keep observing reviewed sites whose const value is now known.
-            if (registration) registeredDynamic.push({ file, line, kind, reason, contractId: registration.contractId });
-        } else {
-            const entry = { file, line, reason: `${reason}: ${argument ? source.slice(argument.start, argument.end) : '<missing>'}` };
-            if (registration) registeredDynamic.push({ ...entry, kind, contractId: registration.contractId });
-            else undiscovered.push(entry);
         }
+        const entry = { file, line, reason: complete ? reason : `${reason}: ${argument ? source.slice(argument.start, argument.end) : '<missing>'}` };
+        // A known branch never excuses an unknown sibling or a truncated set.
+        // Reviewed sites remain observed when their complete value becomes known.
+        if (registration) registeredDynamic.push({ ...entry, kind, contractId: registration.contractId });
+        else if (!complete) undiscovered.push(entry);
     }
     for (const node of nodes) {
         if (node.type === 'NewExpression' && ['CustomEvent', 'CustomEventConstructor'].includes(memberName(node.callee))) {

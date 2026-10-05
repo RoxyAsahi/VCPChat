@@ -224,3 +224,46 @@ test('every real preload channel has a source declaration in its own API domain'
         && event.evidence.some(site => site.file === 'preloads/api/' + api.domain + '.js' && site.kind === 'preload-channel-definition')));
     assert.deepEqual(missing.map(api => ({ name: api.name, channel: api.channel, domain: api.domain })), []);
 });
+
+
+test('conditional channel aliases and concatenation inventory every finite source branch', () => {
+    const f = fixture({ 'modules/finite.js': "function route(embedded) { const choice = embedded ? 'child' : 'host'; const channel = 'vcp:' + choice; ipcRenderer.send(channel); window.addEventListener(channel, listener); }" });
+    try {
+        const g = f.graph();
+        assert.deepEqual(g.events.map(event => event.name), ['vcp:child', 'vcp:host']);
+        assert.ok(g.events.every(event => event.producers.length === 1 && event.consumers.length === 1));
+        assert.deepEqual(g.undiscovered, []);
+    } finally { f.close(); }
+});
+
+test('a known conditional branch cannot conceal its unresolved sibling', () => {
+    const f = fixture({ 'modules/partial.js': "function route(channel) { ipcRenderer.send(flag ? 'known-close' : channel); }" });
+    try {
+        const g = f.graph();
+        assert.deepEqual(g.events.map(event => event.name), ['known-close']);
+        assert.equal(g.undiscovered.length, 1);
+        assert.match(g.undiscovered[0].reason, /channel/);
+    } finally { f.close(); }
+});
+
+test('large finite branch products retain evidence while remaining explicitly incomplete', () => {
+    const expression = Array.from({ length: 7 }, (_, i) => "(flag" + i + " ? 'a' : 'b')").join(' + ');
+    const f = fixture({ 'modules/product.js': 'ipcRenderer.invoke(' + expression + ');' });
+    try {
+        const g = f.graph();
+        assert.ok(g.events.length > 0 && g.events.length < 128);
+        assert.ok(g.events.every(event => /^[ab]{7}$/.test(event.name)));
+        assert.equal(g.undiscovered.length, 1, 'bounded analysis must not certify exhaustive coverage');
+    } finally { f.close(); }
+});
+
+test('both actual closeWindow runtime channels have a source producer without changing the window', async () => {
+    const { createRequire } = await import('node:module');
+    const entry = createRequire(import.meta.url)('../preloads/core/registry.js').loadRegistry().get('closeWindow').entry;
+    const sent = [];
+    for (const isEmbeddedSurface of [false, true]) entry.build({ isEmbeddedSurface, ipcRenderer: { send: channel => sent.push(channel) } })();
+    assert.deepEqual(sent, ['close-window', 'embedded-vchat-app:request-close']);
+    const g = buildChatEventGraph();
+    for (const name of sent) assert.ok(g.events.find(event => event.name === name)?.producers.some(site => site.file === 'preloads/api/window.js' && site.kind === 'event-send'));
+    assert.ok(!g.undiscovered.some(site => site.file === 'preloads/api/window.js'));
+});

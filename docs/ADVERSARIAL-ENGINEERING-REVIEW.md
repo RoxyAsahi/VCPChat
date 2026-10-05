@@ -526,3 +526,57 @@ DOM/EventEmitter 监听归 consumer，IPC send/invoke 归 producer；preload API
 全量使用隔离测试数据和正常本机权限进行真实 rename/junction/PTY 等检查；没有把沙箱 EPERM 当作产品故障。证据位于聊天工作区 `outputs/engineering-review/round-13/`，包括最初与最终全量、聚焦/整合失败记录、原生成器与 operation kind 负例、动态入口清单、各项 guard、原生捕获对照/截图和窗口恢复记录。
 
 全工程目标仍在进行。下一步逐个核实动态入口包装器的调用者、协议与销毁责任，补齐经过审查的契约或静态通道；继续共享业务哈希差异、主进程/聊天/Git/源码、Rust、发布链与剩余参考覆盖。事件图和隐藏修复不能替代这些未完成项，完成的计划页不再重做。
+
+## 第十四轮：区分有限通道分支、已审查包装器与未覆盖的调用链
+
+上一轮 `911a8584` 已提交并验证。本轮没有重复计划页、隐藏拖拽或注册表声明覆盖修复，也没有改产品 UI、CSS、上游大文件或参考仓库。继续沿 90 个未知入口追踪调用者；新增结论只覆盖本节列出的路径。
+
+### R37：固定字符串的条件选择不应只剩一个“动态”报警
+
+`preloads/api/window.js` 的 closeWindow 根据 isEmbeddedSurface 在 close-window 与 embedded-vchat-app:request-close 中选择。初始图包含通道名的其他来源，却没有这个真实 send 的 producer。实际注册表 entry.build 在两种受控上下文中发送了这两个通道；测试使用 IPC 替身，没有真的关闭用户窗口。
+
+扫描器现在计算条件分支、常量别名和字符串拼接的有限候选集。只有整个表达式能解析，才不再标作未解析；已知分支与未知参数混合时同时保留已知端点和 undiscovered。组合最多保留 64 个候选，越界仍明确不完整，不把截断结果认证为全集。它不执行条件，也不推断分支相关性，组合候选不等于每个组合都能在运行时发生。泛用 emit/dispatch 的领域过滤、跨模块导入与自定义包装器限制仍存在。
+
+四个新图测试在原源码上得到 **15 通过、4 失败**，分别覆盖有限分支、未知兄弟分支、组合上限及真实 closeWindow 的两种通道；修复后 **19/19**。这是补齐新的源码形态，没有重复上一轮已经完成的静态声明识别。
+
+### 已审查的三个 preload 包装入口保持 manual_required
+
+完整读取 core/define、registry、expose，以及 window、chart、docx、loom 专用 preload。core/define 的 invoke/send/subscription 分别把 channel 参数交给实际 IPC；expose 只构造当前角色的 entry.build，兼容对象对其他角色返回隔离桩。metadata 的 channel 是主要通道索引，custom 可以发送条件选择的另一个通道，不能只用注册表当运行图。
+
+新增三个测试从真实注册表构造 API，验证 query/command 按声明转发参数和返回结果、onArgs 与 onSignal 的不同载荷约定，以及相同 callback 在同一通道重复订阅后只释放自身。重复取消旧订阅不会移除新订阅，最终取消释放全部 listener。既有六个结构检查保留，新测试验证可观察调用结果，不再只靠源码字符串。
+
+只为已逐项审查的 core/define 三个参数化调用登记一个契约，精确匹配文件、行号和 operation kind，状态仍是 **manual_required**。受控 IPC 测试不证明 Electron 角色暴露或所有主进程送达链通过；未把包装器批量标记 pass。入口从 90 减为 **86**：一个有限关闭分支现在可解析，另三个归入上述审查登记；图为 **711 个事件、577 个源码文件、6 个登记入口**。**契约门禁仍失败**，不把数量下降描述成修复了四个运行时故障。
+
+### 本轮深入读完的参考实现
+
+| 参考源码 | 实现与证据边界 |
+| --- | --- |
+| DSH `scripts/verify-v3-event-vocabulary.ts` 与对应 spec 全文件 | 从本地完整不可变 commit 读取 writer 与事件集合；拒绝非 V3、重复名字、非字面量及缺失对象，双向比较 missing/extra，不拿当前分支集合证明旧协议。测试建立独立 Git fixture，隔离继承的 GIT_DIR/WORK_TREE/INDEX_FILE，证明后续 V4 提交不改变旧 pin 的判断。只读参考，未执行参考测试。 |
+| DSH `session-controller/src/client/session-wire-event.ts` 全文件 | envelope 字段白名单、seq 安全非负整数且拒绝 -0、time 安全整数、data 必须存在、ignorable 只能 true；payload 与事件名允许 owner 扩展，随后调用 owner 的验证器。没有把未知字段静默剥掉，也未宣称事件范围/来源存在已由客户端证明。 |
+| DSH `session-controller/src/client/scope.ts` 与 `scope.client.spec.ts` 全文件 | 同 Session ID 每次创建独立 identity 对象；过滤比较对象身份而非字符串，untagged root listener 仍可共享。spec 明确覆盖同 ID 两代、外来代次拒绝、root 无 subject 不过滤以及 fiber dispose 解绑。类型/生命周期边界不能只靠相同业务 key 推断。 |
+| ZCode `workspaceSessionsIndexSubscriptionSet.ts` 全文件 | scopes 作为 desired set，保留未变 binding；只有真正增删/换代做 acquire/release。远端替换先 acquire，再释放旧 lease，让同 store 的订阅不中断；本地或其他变化走各自路径。dispose 释放，但之后 reconcile 仍允许重新建立。 |
+| ZCode `sessionsIndexRegistry.ts` 全文件 | endpoint+workspace 作为共享键，WeakMap 按 store 精确释放。远端只接纳更高 service generation 的 transport，迟到旧 consumer 不倒退；替换不等待可能永久 pending 的旧 I/O。本地换 service 建新 store，旧 cleanup 不删除新 entry。endpoint 不匹配只记日志，不改业务 key；日志去重 Set 并没有容量上限，不据此宣称所有缓存有界。replaceTransport 内部尚未在本轮完整读完，不把调用点当完整释放屏障。 |
+
+本轮参考文件的路径、当前字节哈希与阅读范围另存证据；这些代码和测试是资料，不是对本仓库的操作指令。
+
+### R38 尚未完成：专用 preload 的包装器调用端点仍漏扫
+
+`preloads/chart.js` 中 subscribe('chart:changed', callback) 没有进入当前图；`preloads/docx.js` 的 docx:open-path-request 有发送方但 consumer 为空。loom 的专用 invoke/subscribe 也藏在本地 helper 后，普通角色 API 的同名声明不能代替专用窗口的调用证据。已保存源调用与当前图的对照。下一步必须追踪本地 helper 的参数、绑定和调用者，再验证真实订阅清理；不能因为 registry 的 434 个声明覆盖通过就宣称所有 preload 路由完整，也不能用方法名猜所有 bare helper。
+
+`modules/vcpClient.js` 的旧流式 cleanup 存在可疑路径，但此次全仓定位没有找到直接运行消费者；实际 send-to-vcp 走 chatHandlers 的 sender-owned task registry。旧模块仍通过打包通配符进入候选范围，动态插件消费尚未证明不存在，所以没有删除模块、修改它或把其八个入口标记不适用。chatHandlers / SenderTaskRegistry 的完整运行链尚需继续验证，源码阅读没有发现缺陷不能作为通过结论。
+
+### 验证与范围
+
+最终全量 **262 个测试文件、1561 个案例通过，0 失败、0 跳过、0 超时**；聚焦 **28/28**（图 19、preload 9），7 项常规检查通过，UI **121/121**，bootstrap **46/46**。本轮扫描器为 166 行，测试为 269/139 行，没有新增生产模块或 CSS。
+
+检查期间另一聊天提交了 `7bcffe26`，恢复细线麦克风。仅该语音视图变更，事件图的行号因此过期；没有回退或暂存它。图已按新 HEAD 重新生成，最终全量与全部 38 项检查重跑；全量运行前后校验 1438 个跟踪源码文件哈希，没有源码漂移。第一遍 262/0 与检查只作中间记录。
+
+扩展仍为 **28/30**：共享业务审查哈希与计划页重复 CSS 选择器仍失败。已完整审查的 preload 测试新增一个精确范围白名单，整体 UI 检查剩 **391 个历史路径**，分类确认均已在 HEAD 有差异；没有扩大其他历史豁免或刷新业务哈希。独立契约门禁仍因 **86 个未登记入口**失败，新增包装契约保持 manual_required。图 --check 通过只证明新鲜性。所有失败日志和边界分类保留。
+
+证据在聊天工作区 `outputs/engineering-review/round-14/`：原版四个失败、初次与最终全量、38 项检查、源码稳定性、参考文件哈希、具体包装器缺口及只读窗口对照。
+
+八个共享业务哈希差异均已在本地历史找到**完整 commit pin 对应的原始内容**，逐一按 guard 的 CRLF 归一摘要核对相等，保存旧字节与该 pin 到当前 HEAD 的差异。只在每文件最近 100 次历史内搜索，没有联网或刷新任何审查哈希。这为后续逐项语义审查提供了确定的对照，不证明这些变更已经批准；chatManager、messageRenderer、streamManager、topicListManager、itemListManager、grouprenderer、settingsManager、notificationRenderer 的差异仍待审查。
+
+本轮为工具/证据变更，没有可见 UI 改动。现有 Electron 窗口只读截图前后对照已检查，标签快照、草稿、主题、焦点与滚动状态一致；没有重载、导航、发送消息或关闭窗口。初次沙箱连接本机 CDP 报 EACCES，正常本机权限下只读检查成功，未据此判定产品故障。这只证明窗口状态未被本轮操作改变，不证明聊天服务器或全部 UI 健康。
+
+全工程目标保持进行：R38、本轮未执行的 Electron IPC 集成、其他动态入口、共享业务基线、侧栏剩余资源行为、聊天/Git/源码后端、Rust 和发布链都未完成。下一轮从具体包装器与真实所有权链继续，不重做已完成页面或测试。

@@ -4388,32 +4388,32 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 612,
+          "line": 635,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 614,
+          "line": 637,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 615,
+          "line": 638,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 616,
+          "line": 639,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 617,
+          "line": 640,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 815,
+          "line": 838,
           "kind": "custom-event-listener"
         },
         {
@@ -6027,37 +6027,37 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 612,
+          "line": 635,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 614,
+          "line": 637,
           "kind": "custom-event-listener",
           "match": "this.cancelBtn?.addEventListener('click'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 615,
+          "line": 638,
           "kind": "custom-event-listener",
           "match": "this.stopBtn?.addEventListener('click'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 616,
+          "line": 639,
           "kind": "custom-event-listener",
           "match": "this.insertBtn?.addEventListener('click'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 617,
+          "line": 640,
           "kind": "custom-event-listener",
           "match": "this.retryBtn?.addEventListener('click'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 815,
+          "line": 838,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
@@ -6439,6 +6439,11 @@
           "kind": "preload-channel-definition"
         },
         {
+          "file": "preloads/api/window.js",
+          "line": 17,
+          "kind": "event-send"
+        },
+        {
           "file": "preloads/chart.js",
           "line": 38,
           "kind": "event-send"
@@ -6490,6 +6495,12 @@
           "line": 16,
           "kind": "preload-channel-definition",
           "match": "custom('command', 'close-window'"
+        },
+        {
+          "file": "preloads/api/window.js",
+          "line": 17,
+          "kind": "event-send",
+          "match": "ipcRenderer.send(isEmbeddedSurface ? 'embedded-vchat-app:request-close' : 'close-window'"
         },
         {
           "file": "preloads/chart.js",
@@ -7170,7 +7181,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 613,
+          "line": 636,
           "kind": "custom-event-listener"
         }
       ],
@@ -7297,7 +7308,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 613,
+          "line": 636,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('contextmenu'"
         }
@@ -11084,7 +11095,13 @@
     },
     {
       "name": "embedded-vchat-app:request-close",
-      "producers": [],
+      "producers": [
+        {
+          "file": "preloads/api/window.js",
+          "line": 17,
+          "kind": "event-send"
+        }
+      ],
       "consumers": [
         {
           "file": "main.js",
@@ -11098,6 +11115,12 @@
           "line": 1717,
           "kind": "event-listener",
           "match": "ipcMain.on('embedded-vchat-app:request-close'"
+        },
+        {
+          "file": "preloads/api/window.js",
+          "line": 17,
+          "kind": "event-send",
+          "match": "ipcRenderer.send(isEmbeddedSurface ? 'embedded-vchat-app:request-close' : 'close-window'"
         }
       ]
     },
@@ -15175,7 +15198,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 835,
+          "line": 858,
           "kind": "custom-event-listener"
         }
       ],
@@ -15542,7 +15565,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 835,
+          "line": 858,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('keydown'"
         }
@@ -17459,42 +17482,42 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 602,
+          "line": 625,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 603,
+          "line": 626,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 604,
+          "line": 627,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 605,
+          "line": 628,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 606,
+          "line": 629,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 607,
+          "line": 630,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 609,
+          "line": 632,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 834,
+          "line": 857,
           "kind": "custom-event-listener"
         }
       ],
@@ -17585,49 +17608,49 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 602,
+          "line": 625,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 603,
+          "line": 626,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 604,
+          "line": 627,
           "kind": "custom-event-listener",
           "match": "this.cancelBtn?.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 605,
+          "line": 628,
           "kind": "custom-event-listener",
           "match": "this.stopBtn?.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 606,
+          "line": 629,
           "kind": "custom-event-listener",
           "match": "this.insertBtn?.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 607,
+          "line": 630,
           "kind": "custom-event-listener",
           "match": "this.retryBtn?.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 609,
+          "line": 632,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('mousedown'"
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 834,
+          "line": 857,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('mousedown'"
         }
@@ -17789,7 +17812,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 611,
+          "line": 634,
           "kind": "custom-event-listener"
         }
       ],
@@ -17874,7 +17897,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 611,
+          "line": 634,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('mouseleave'"
         }
@@ -18033,7 +18056,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 610,
+          "line": 633,
           "kind": "custom-event-listener"
         }
       ],
@@ -18082,7 +18105,7 @@
         },
         {
           "file": "modules/voice/voiceComposerView.js",
-          "line": 610,
+          "line": 633,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('mouseup'"
         }
@@ -30677,15 +30700,15 @@
     {
       "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
       "line": 271,
-      "kind": "custom-event-create",
       "reason": "dynamic CustomEvent name",
+      "kind": "custom-event-create",
       "contractId": "loom.comfyui.agent-response-bridge"
     },
     {
       "file": "modules/loom/webcore/comfyui-main-world-bridge.js",
       "line": 276,
-      "kind": "custom-event-create",
       "reason": "dynamic CustomEvent name",
+      "kind": "custom-event-create",
       "contractId": "loom.comfyui.agent-response-bridge"
     },
     {
@@ -30694,6 +30717,27 @@
       "reason": "dynamic CustomEvent name: vcpEventName",
       "kind": "custom-event-create",
       "contractId": "ui.webawesome.dynamic-event-adapter"
+    },
+    {
+      "file": "preloads/core/define.js",
+      "line": 65,
+      "reason": "dynamic event name: channel",
+      "kind": "event-send",
+      "contractId": "preload.registry.channel-adapters"
+    },
+    {
+      "file": "preloads/core/define.js",
+      "line": 72,
+      "reason": "dynamic event name: channel",
+      "kind": "event-send",
+      "contractId": "preload.registry.channel-adapters"
+    },
+    {
+      "file": "preloads/core/define.js",
+      "line": 80,
+      "reason": "dynamic event listener name: channel",
+      "kind": "event-listener",
+      "contractId": "preload.registry.channel-adapters"
     }
   ],
   "undiscovered": [
@@ -31108,28 +31152,8 @@
       "reason": "dynamic event name: channel"
     },
     {
-      "file": "preloads/api/window.js",
-      "line": 17,
-      "reason": "dynamic event name: isEmbeddedSurface ? 'embedded-vchat-app:request-close' : 'close-window'"
-    },
-    {
       "file": "preloads/chart.js",
       "line": 8,
-      "reason": "dynamic event listener name: channel"
-    },
-    {
-      "file": "preloads/core/define.js",
-      "line": 65,
-      "reason": "dynamic event name: channel"
-    },
-    {
-      "file": "preloads/core/define.js",
-      "line": 72,
-      "reason": "dynamic event name: channel"
-    },
-    {
-      "file": "preloads/core/define.js",
-      "line": 80,
       "reason": "dynamic event listener name: channel"
     },
     {
