@@ -101,6 +101,9 @@ export async function mountSideChatSurface(container, {
     let hasUnsavedChanges = false;
     let lastPersistenceError = null;
     let pendingSaveHistory = null;
+    // 渲染器和会话在聊天能力就绪后才创建；右键菜单通过这里取用
+    let liveRenderer = null;
+    let liveConversation = null;
     const references = []; // { id, text, sourceMessageId }
 
     const store = Object.freeze({
@@ -158,10 +161,14 @@ export async function mountSideChatSurface(container, {
         descriptor,
         doc,
         root,
+        textarea,
+        getHistory: () => liveConversation?.historyRef?.get?.() || [],
+        removeMessage: (messageId) => liveRenderer?.removeMessageById?.(messageId, true),
+        isBusy: () => form.hasAttribute('aria-busy'),
+        onComposerFilled: () => scheduleInputSave(),
         updateEmptyState: (...args) => updateEmptyState(...args),
         pinToBottomIfSticky
     });
-    const { extractTextFromContentDiv, attachMessageActions, syncMessageActions } = messageActionsOwner;
 
     const referencesOwner = createSideChatReferences({
         store,
@@ -240,12 +247,14 @@ export async function mountSideChatSurface(container, {
     });
 
     const renderer = rendererOwner.renderer;
+    liveRenderer = renderer;
 
     // Supply frozen parent snapshot context if present (P1 context inheritance)
     const enhancedConversation = Object.freeze({
         ...rendererOwner.conversation,
         getContextHistory: () => (currentDescriptor.contextMode === 'parent-snapshot' ? [...snapshotMessages] : [])
     });
+    liveConversation = enhancedConversation;
 
     const operations = createChatOperations({
         send: async (request) => {
@@ -415,7 +424,6 @@ export async function mountSideChatSurface(container, {
                 stopBtn.hidden = true;
                 updateComposerState();
                 updateEmptyState();
-                // 回答结束时"填入主聊"按钮才显示出来（只是类名变化，观察器看不到），贴底阅读时补滚这一行
                 pinToBottomIfSticky();
             }
         }

@@ -238,49 +238,7 @@ html body[data-vcp-theme="light"] .side-chat-status-unsaved:where(.vcp-ui-scope,
     border: 1px solid var(--vcp-ui-port-color-rgba-245-158-11-0-35);
 }
 
-/* --- Message actions ("填入主聊") --- */
-html .side-chat-message-actions:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    display: flex;
-    justify-content: flex-start;
-    margin-top: 4px;
-}
-
-/* 流式生成或思考中的回答还不完整，不提供填入主聊 */
-html .message-item.streaming .side-chat-message-actions:where(.vcp-ui-scope, .vcp-ui-scope *),
-html .message-item.thinking .side-chat-message-actions:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    display: none;
-}
-
-html .side-chat-send-to-main-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border-color, var(--vcp-ui-port-color-rgba-255-255-255-0-1));
-    background: var(--vcp-ui-port-color-rgba-255-255-255-0-06);
-    color: var(--secondary-text, var(--vcp-ui-port-color-rgba-241-245-249-0-75));
-    font-size: calc(var(--vcp-ui-font-size) - 3px);
-    white-space: nowrap;
-    flex-shrink: 0;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-html .side-chat-send-to-main-btn .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-chat-reference-box .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope *) {
     --vcp-ui-icon-size: 12px;
-}
-
-html body[data-vcp-theme="light"] .side-chat-send-to-main-btn:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    background: var(--vcp-ui-port-color-rgba-0-0-0-0-04);
-    border: 1px solid var(--border-color, var(--vcp-ui-port-color-rgba-0-0-0-0-12));
-    color: var(--secondary-text, var(--vcp-ui-port-color-475569));
-}
-
-html .side-chat-send-to-main-btn:hover:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    background: var(--accent-bg, var(--vcp-ui-port-color-3b82f6));
-    color: var(--vcp-ui-port-color-ffffff);
-    border-color: var(--accent-bg, var(--vcp-ui-port-color-3b82f6));
 }
 
