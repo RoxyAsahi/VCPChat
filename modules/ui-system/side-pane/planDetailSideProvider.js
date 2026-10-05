@@ -447,19 +447,24 @@ export function createPlanDetailSideProvider({
                 return summary;
             }
 
+            // 一行放下：「本话题」已在上面的路径里，时间靠右、最先被挤成省略号
             function renderStats() {
                 const { project } = model;
                 const stats = h('div', 'side-plan-stats');
+                const lastAt = (iso) => {
+                    const el = h('span', 'side-plan-stats-time', when(iso));
+                    el.title = `最近施工 ${when(iso)}`;
+                    return el;
+                };
                 if (activity) {
                     const s = activity.stats;
                     stats.append(
-                        h('span', 'side-plan-stats-scope', '本话题'),
                         h('span', '', `${s.batchCount} 批`),
                         h('span', '', `${s.nodeCount} 次改动`),
                         h('span', '', `${s.fileCount} 个文件`),
                         diffStat(s.added, s.removed)
                     );
-                    if (s.lastAt) stats.appendChild(h('span', '', `最近 ${when(s.lastAt)}`));
+                    if (s.lastAt) stats.appendChild(lastAt(s.lastAt));
                 } else {
                     const s = project.stats || {};
                     stats.append(
@@ -467,7 +472,7 @@ export function createPlanDetailSideProvider({
                         h('span', '', `${s.fileCount || 0} 个文件`),
                         diffStat(s.added, s.removed)
                     );
-                    if (s.lastAt) stats.appendChild(h('span', '', `最近 ${when(s.lastAt)}`));
+                    if (s.lastAt) stats.appendChild(lastAt(s.lastAt));
                 }
                 return stats;
             }

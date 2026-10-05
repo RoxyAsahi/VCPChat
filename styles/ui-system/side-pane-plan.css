@@ -272,8 +272,9 @@ html .side-plan-contributor-batches:where(.vcp-ui-scope, .vcp-ui-scope *) { colo
 
 /* ---- header: project switch and topic stats ---- */
 html .side-plan-select option:where(.vcp-ui-scope, .vcp-ui-scope *) { background: var(--zc-popover); color: var(--zc-fg); }
-html .side-plan-stats:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: calc(var(--vcp-ui-font-size) - 2px); color: var(--vcp-ui-text-2, var(--zc-fg-subtle)); font-variant-numeric: tabular-nums; }
-html .side-plan-stats-scope:where(.vcp-ui-scope, .vcp-ui-scope *) { padding: 0 6px; border-radius: 999px; background: var(--side-plan-surface); color: var(--zc-fg); }
+html .side-plan-stats:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: calc(var(--vcp-ui-font-size) - 2px); color: var(--vcp-ui-text-2, var(--zc-fg-subtle)); font-variant-numeric: tabular-nums; }
+html .side-plan-stats > *:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: none; }
+html .side-plan-stats > .side-plan-stats-time:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 1 auto; min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---- history: filters, expanded batches and node rows ---- */
 html .side-plan-history:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-direction: column; gap: 8px; }
