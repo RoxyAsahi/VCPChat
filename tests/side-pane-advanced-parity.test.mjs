@@ -439,6 +439,78 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     dom.window.close();
 });
 
+test('Parity: the tools page shows a VCPLog card that opens the notifications', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    hostNotificationsInLauncher(doc);
+    const launcher = doc.getElementById('sidePaneViewLauncher');
+    const tools = launcher.querySelector('[data-launcher-section="tools"]');
+    tools.insertAdjacentHTML('beforeend', `
+        <div class="side-pane-launcher-group" data-launcher-group="notifications" hidden>
+            <button type="button" class="side-pane-launcher-notice" data-status="unknown">
+                <span class="side-pane-launcher-notice-icon"><span class="vcp-ui-icon">notifications</span><span class="side-pane-launcher-notice-dot"></span></span>
+                <span class="side-pane-launcher-notice-body">
+                    <span class="side-pane-launcher-notice-title"></span>
+                    <span class="side-pane-launcher-notice-meta"></span>
+                </span>
+            </button>
+        </div>`);
+    doc.getElementById('notificationsSidebar').insertAdjacentHTML('beforeend', `
+        <div id="notificationToolbar">
+            <button data-filter="pending">待审批<span class="notification-chip-count"></span></button>
+            <button data-filter="error">错误<span class="notification-chip-count"></span></button>
+        </div>`);
+    const group = tools.querySelector('[data-launcher-group="notifications"]');
+    const card = group.querySelector('.side-pane-launcher-notice');
+    const title = card.querySelector('.side-pane-launcher-notice-title');
+    const meta = card.querySelector('.side-pane-launcher-notice-meta');
+    const icon = card.querySelector('.vcp-ui-icon');
+    const ctrl = createController(dom);
+
+    // 没有工具入口也显示工具页，卡片在里面
+    ctrl.setVisible(true, { animate: false });
+    launcher.querySelector('[data-launcher-tab="tools"]').click();
+    await tick();
+    assert.equal(tools.hidden, false);
+    assert.equal(group.hidden, false);
+    assert.equal(card.dataset.status, 'unknown');
+    assert.equal(title.textContent, 'VCPLog 未连接');
+    assert.equal(meta.textContent, '未连接');
+    assert.equal(icon.textContent, 'notifications_off');
+
+    const status = doc.getElementById('vcpLogConnectionStatus');
+    status.dataset.status = 'open';
+    status.querySelector('.notifications-status-text').textContent = 'VCPLog: 已连接';
+    await tick();
+    assert.equal(card.dataset.status, 'open');
+    assert.equal(title.textContent, 'VCPLog 已连接');
+    assert.equal(meta.textContent, '暂无待处理');
+    assert.equal(icon.textContent, 'notifications');
+
+    // 通知中心更新计数后卡片跟着变
+    doc.querySelector('#notificationToolbar [data-filter="pending"] .notification-chip-count').textContent = '2';
+    doc.querySelector('#notificationToolbar [data-filter="error"] .notification-chip-count').textContent = '1';
+    await tick();
+    assert.equal(meta.textContent, '2 项待审批 · 1 条错误');
+    assert.equal(card.dataset.attention, 'pending');
+
+    // 断开时把原因放在第二行
+    status.dataset.status = 'closed';
+    status.querySelector('.notifications-status-text').textContent = 'VCPLog: 连接已断开 (1006)';
+    await tick();
+    assert.equal(title.textContent, 'VCPLog 未连接');
+    assert.equal(meta.textContent, '连接已断开 (1006) · 2 项待审批 · 1 条错误');
+    assert.match(card.getAttribute('aria-label'), /打开通知$/);
+
+    card.click();
+    assert.equal(ctrl.getSnapshot().activeTabId, SidePaneState.NOTIFICATIONS_TAB_ID);
+    assert.equal(launcher.querySelector('[data-launcher-section="notifications"]').hidden, false);
+    assert.equal(tools.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
 test('Parity: the tools page lists recommended apps under the tool rows', async () => {
     const dom = createParityTestDOM();
     const doc = dom.window.document;

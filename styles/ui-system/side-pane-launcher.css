@@ -406,3 +406,107 @@ html .side-pane-open-tab-button .vcp-ui-icon:where(.vcp-ui-scope, .vcp-ui-scope 
     opacity: 0.7;
 }
 
+
+/* 工具分类里的通知卡片：VCPLog 连没连上 + 待办数，点开就是通知分类 */
+html .side-pane-launcher-notice:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-pane-notice-tone: var(--vcp-ui-text-3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: 10px;
+    background: var(--side-pane-card-bg);
+    color: var(--vcp-ui-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background 0.12s ease;
+}
+
+html .side-pane-launcher-notice:hover:where(.vcp-ui-scope, .vcp-ui-scope *),
+html .side-pane-launcher-notice:focus-visible:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    background: var(--side-pane-card-hover-bg);
+    outline: none;
+}
+
+html .side-pane-launcher-notice[data-status="open"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-pane-notice-tone: var(--vcp-ui-success);
+}
+
+html .side-pane-launcher-notice[data-status="connecting"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-pane-notice-tone: var(--vcp-ui-warning);
+}
+
+html .side-pane-launcher-notice:is([data-status="closed"], [data-status="error"]):where(.vcp-ui-scope, .vcp-ui-scope *) {
+    --side-pane-notice-tone: var(--vcp-ui-danger);
+}
+
+html .side-pane-launcher-notice-icon:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    color: var(--side-pane-notice-tone);
+    background: color-mix(in srgb, var(--side-pane-notice-tone) 14%, transparent);
+    --vcp-ui-icon-size: 17px;
+}
+
+html .side-pane-launcher-notice-dot:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 2px solid var(--side-pane-card-bg);
+    background: var(--side-pane-notice-tone);
+}
+
+html .side-pane-launcher-notice[data-status="connecting"] .side-pane-launcher-notice-dot:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    animation: side-pane-tab-status-pulse 1.4s ease-in-out infinite;
+}
+
+html .side-pane-launcher-notice-body:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+html .side-pane-launcher-notice-title:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    overflow: hidden;
+    font-size: calc(var(--vcp-ui-font-size) - 1px);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html .side-pane-launcher-notice-meta:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    overflow: hidden;
+    font-size: calc(var(--vcp-ui-font-size) - 2px);
+    color: var(--vcp-ui-text-3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html .side-pane-launcher-notice[data-attention="pending"] .side-pane-launcher-notice-meta:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    color: var(--vcp-ui-warning);
+}
+
+html .side-pane-launcher-notice[data-attention="error"] .side-pane-launcher-notice-meta:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    color: var(--vcp-ui-danger);
+}
+
+html .side-pane-launcher-notice-chevron:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 0 0 auto;
+    opacity: 0.45;
+    --vcp-ui-icon-size: 16px;
+}
