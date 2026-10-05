@@ -43,11 +43,13 @@ html .side-plan-empty:where(.vcp-ui-scope, .vcp-ui-scope *) {
 html .side-plan-error:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
 /* ---- header ---- */
+/* 和 Git 变更、浏览器的顶栏同一套尺寸：上下 7px、左右 10px，底下一条分隔线 */
 html .side-plan-header:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 0 6px 10px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--zcode-header-divider, var(--vcp-ui-port-color-rgba-255-255-255-0-06));
     box-sizing: border-box;
 }
 html .side-plan-title-row:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -88,9 +90,9 @@ html .side-plan-title:where(.vcp-ui-scope, .vcp-ui-scope *) {
 
 /* 工程切换菜单：挂在 scope 上，落在面包屑胶囊正下方 */
 html .side-plan-picker:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    position: absolute; top: 48px; left: 20px; z-index: 20;
+    position: absolute; top: 43px; left: 10px; z-index: 20;
     display: flex; flex-direction: column;
-    width: min(320px, calc(100% - 40px)); max-height: min(360px, calc(100% - 64px));
+    width: min(320px, calc(100% - 20px)); max-height: min(360px, calc(100% - 56px));
     padding: 4px; box-sizing: border-box;
     border: 1px solid var(--zc-border); border-radius: 12px;
     background: var(--zc-menu, var(--zc-popover)); box-shadow: var(--zc-shadow-lg);
@@ -169,10 +171,10 @@ html .side-plan-progress-text .side-plan-pct:where(.vcp-ui-scope, .vcp-ui-scope 
 html .side-plan-done:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-success); }
 
 /* Compact project chrome stays above the resident page scrollport. */
-html .side-plan-chrome:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; padding: 12px 14px 0; }
+html .side-plan-chrome:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 0 0 auto; }
 html .side-plan-chrome[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *),
 html .side-plan-page[hidden]:where(.vcp-ui-scope, .vcp-ui-scope *) { display: none; }
-html .side-plan-pages:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 4px; border-bottom: 1px solid var(--side-plan-rule); }
+html .side-plan-pages:where(.vcp-ui-scope, .vcp-ui-scope *) { display: flex; gap: 4px; margin: 4px 14px 0; border-bottom: 1px solid var(--side-plan-rule); }
 html .side-plan-page-tab:where(.vcp-ui-scope, .vcp-ui-scope *) { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--zc-fg-subtle); font: inherit; font-size: calc(var(--vcp-ui-font-size) - 2px); cursor: pointer; }
 html .side-plan-page-tab:hover:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); background: var(--side-plan-hover); }
 html .side-plan-page-tab[aria-selected="true"]:where(.vcp-ui-scope, .vcp-ui-scope *) { color: var(--zc-fg); border-bottom-color: var(--zc-fg); font-weight: 600; }
