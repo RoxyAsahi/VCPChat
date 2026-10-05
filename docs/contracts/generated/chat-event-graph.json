@@ -2514,6 +2514,25 @@
       ]
     },
     {
+      "name": "chart:changed",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/chart.js",
+          "line": 41,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/chart.js",
+          "line": 41,
+          "kind": "event-listener",
+          "match": "subscribe('chart:changed'"
+        }
+      ]
+    },
+    {
       "name": "chart:delete",
       "producers": [
         {
@@ -2634,6 +2653,25 @@
           "line": 18,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('chart:dock'"
+        }
+      ]
+    },
+    {
+      "name": "chart:floating-changed",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/chart.js",
+          "line": 21,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/chart.js",
+          "line": 21,
+          "kind": "event-listener",
+          "match": "subscribe('chart:floating-changed'"
         }
       ]
     },
@@ -2855,6 +2893,25 @@
       ]
     },
     {
+      "name": "chart:request-diagnostics",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/chart.js",
+          "line": 43,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/chart.js",
+          "line": 43,
+          "kind": "event-listener",
+          "match": "subscribe('chart:request-diagnostics'"
+        }
+      ]
+    },
+    {
       "name": "chart:runtime-error",
       "producers": [
         {
@@ -2944,6 +3001,25 @@
           "line": 27,
           "kind": "event-send",
           "match": "ipcRenderer.send('chart:runtime-status'"
+        }
+      ]
+    },
+    {
+      "name": "chart:select",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/chart.js",
+          "line": 42,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/chart.js",
+          "line": 42,
+          "kind": "event-listener",
+          "match": "subscribe('chart:select'"
         }
       ]
     },
@@ -10335,6 +10411,25 @@
       ]
     },
     {
+      "name": "docx:agent-checkpoint-proposed",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/docx.js",
+          "line": 61,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/docx.js",
+          "line": 61,
+          "kind": "event-listener",
+          "match": "subscribe('docx:agent-checkpoint-proposed'"
+        }
+      ]
+    },
+    {
       "name": "docx:choose-open",
       "producers": [
         {
@@ -10410,7 +10505,13 @@
           "kind": "event-send"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "preloads/docx.js",
+          "line": 58,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
         {
           "file": "modules/ipc/docxHandlers.js",
@@ -10423,6 +10524,12 @@
           "line": 1241,
           "kind": "event-send",
           "match": "docxWindow.webContents.send('docx:open-path-request'"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 58,
+          "kind": "event-listener",
+          "match": "subscribe('docx:open-path-request'"
         }
       ]
     },
@@ -12945,6 +13052,11 @@
           "file": "preloads/docx.js",
           "line": 43,
           "kind": "event-send"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 42,
+          "kind": "event-send"
         }
       ],
       "consumers": [
@@ -12978,6 +13090,12 @@
           "line": 43,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('get-current-theme'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 42,
+          "kind": "event-send",
+          "match": "invoke('get-current-theme'"
         }
       ]
     },
@@ -13621,8 +13739,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 144,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 144,
+          "kind": "event-listener",
+          "match": "handle('git:change-summary'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 35,
@@ -13640,8 +13770,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 107,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 107,
+          "kind": "event-listener",
+          "match": "handle('git:commit'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 29,
@@ -13659,8 +13801,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 139,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 139,
+          "kind": "event-listener",
+          "match": "handle('git:commit-graph'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 34,
@@ -13678,8 +13832,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 133,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 133,
+          "kind": "event-listener",
+          "match": "handle('git:create-branch'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 33,
@@ -13697,8 +13863,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 88,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 88,
+          "kind": "event-listener",
+          "match": "handle('git:diff'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 25,
@@ -13716,8 +13894,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 101,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 101,
+          "kind": "event-listener",
+          "match": "handle('git:discard'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 28,
@@ -13735,8 +13925,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 126,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 126,
+          "kind": "event-listener",
+          "match": "handle('git:list-branches'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 31,
@@ -13754,8 +13956,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 81,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 81,
+          "kind": "event-listener",
+          "match": "handle('git:list-workspaces'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 23,
@@ -13773,8 +13987,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 112,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 112,
+          "kind": "event-listener",
+          "match": "handle('git:push'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 30,
@@ -13792,8 +14018,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 118,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 118,
+          "kind": "event-listener",
+          "match": "handle('git:reveal-path'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 36,
@@ -13811,8 +14049,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 97,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 97,
+          "kind": "event-listener",
+          "match": "handle('git:stage'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 26,
@@ -13830,8 +14080,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 86,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 86,
+          "kind": "event-listener",
+          "match": "handle('git:status'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 24,
@@ -13849,8 +14111,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 128,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 128,
+          "kind": "event-listener",
+          "match": "handle('git:switch-branch'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 32,
@@ -13868,8 +14142,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 99,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/gitHandlers.js",
+          "line": 99,
+          "kind": "event-listener",
+          "match": "handle('git:unstage'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 27,
@@ -16502,21 +16788,461 @@
       ]
     },
     {
+      "name": "loom:clear-session",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 31,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2335,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2335,
+          "kind": "event-listener",
+          "match": "handle('loom:clear-session'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 31,
+          "kind": "event-send",
+          "match": "invoke('loom:clear-session'"
+        }
+      ]
+    },
+    {
+      "name": "loom:close-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 30,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2334,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2334,
+          "kind": "event-listener",
+          "match": "handle('loom:close-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 30,
+          "kind": "event-send",
+          "match": "invoke('loom:close-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:create-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 24,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2328,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2328,
+          "kind": "event-listener",
+          "match": "handle('loom:create-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 24,
+          "kind": "event-send",
+          "match": "invoke('loom:create-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:create-persistent-web-agent-target",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2324,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2324,
+          "kind": "event-listener",
+          "match": "handle('loom:create-persistent-web-agent-target'"
+        }
+      ]
+    },
+    {
+      "name": "loom:delete-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 27,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2331,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2331,
+          "kind": "event-listener",
+          "match": "handle('loom:delete-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 27,
+          "kind": "event-send",
+          "match": "invoke('loom:delete-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:device-candidates",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 51,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/loom.js",
+          "line": 51,
+          "kind": "event-listener",
+          "match": "subscribe('loom:device-candidates'"
+        }
+      ]
+    },
+    {
+      "name": "loom:edit-app-sources",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 26,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2330,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2330,
+          "kind": "event-listener",
+          "match": "handle('loom:edit-app-sources'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 26,
+          "kind": "event-send",
+          "match": "invoke('loom:edit-app-sources'"
+        }
+      ]
+    },
+    {
+      "name": "loom:execute-web-agent-action",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2326,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2326,
+          "kind": "event-listener",
+          "match": "handle('loom:execute-web-agent-action'"
+        }
+      ]
+    },
+    {
+      "name": "loom:export-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 35,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2338,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2338,
+          "kind": "event-listener",
+          "match": "handle('loom:export-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 35,
+          "kind": "event-send",
+          "match": "invoke('loom:export-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:get-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 21,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2320,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2320,
+          "kind": "event-listener",
+          "match": "handle('loom:get-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 21,
+          "kind": "event-send",
+          "match": "invoke('loom:get-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:get-rendered-text",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 23,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2322,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2322,
+          "kind": "event-listener",
+          "match": "handle('loom:get-rendered-text'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 23,
+          "kind": "event-send",
+          "match": "invoke('loom:get-rendered-text'"
+        }
+      ]
+    },
+    {
+      "name": "loom:get-runtime-source",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 22,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2321,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2321,
+          "kind": "event-listener",
+          "match": "handle('loom:get-runtime-source'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 22,
+          "kind": "event-send",
+          "match": "invoke('loom:get-runtime-source'"
+        }
+      ]
+    },
+    {
+      "name": "loom:get-web-agent-page-info",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2323,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2323,
+          "kind": "event-listener",
+          "match": "handle('loom:get-web-agent-page-info'"
+        }
+      ]
+    },
+    {
+      "name": "loom:import-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 36,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2339,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2339,
+          "kind": "event-listener",
+          "match": "handle('loom:import-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 36,
+          "kind": "event-send",
+          "match": "invoke('loom:import-app'"
+        }
+      ]
+    },
+    {
       "name": "loom:list-apps",
       "producers": [
         {
           "file": "preloads/api/loom.js",
           "line": 13,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 19,
+          "kind": "event-send"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2318,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2318,
+          "kind": "event-listener",
+          "match": "handle('loom:list-apps'"
+        },
         {
           "file": "preloads/api/loom.js",
           "line": 13,
           "kind": "preload-channel-definition",
           "match": "invoke('loom:list-apps'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 19,
+          "kind": "event-send",
+          "match": "invoke('loom:list-apps'"
+        }
+      ]
+    },
+    {
+      "name": "loom:list-open-apps",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 20,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2319,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2319,
+          "kind": "event-listener",
+          "match": "handle('loom:list-open-apps'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 20,
+          "kind": "event-send",
+          "match": "invoke('loom:list-open-apps'"
         }
       ]
     },
@@ -16527,15 +17253,69 @@
           "file": "preloads/api/loom.js",
           "line": 14,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 29,
+          "kind": "event-send"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2333,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2333,
+          "kind": "event-listener",
+          "match": "handle('loom:open-app'"
+        },
         {
           "file": "preloads/api/loom.js",
           "line": 14,
           "kind": "preload-channel-definition",
           "match": "invoke('loom:open-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 29,
+          "kind": "event-send",
+          "match": "invoke('loom:open-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:open-app-folder",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 37,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2341,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2341,
+          "kind": "event-listener",
+          "match": "handle('loom:open-app-folder'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 37,
+          "kind": "event-send",
+          "match": "invoke('loom:open-app-folder'"
         }
       ]
     },
@@ -16546,15 +17326,69 @@
           "file": "preloads/api/loom.js",
           "line": 12,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 33,
+          "kind": "event-send"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2337,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2337,
+          "kind": "event-listener",
+          "match": "handle('loom:open-manager'"
+        },
         {
           "file": "preloads/api/loom.js",
           "line": 12,
           "kind": "preload-channel-definition",
           "match": "invoke('loom:open-manager'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 33,
+          "kind": "event-send",
+          "match": "invoke('loom:open-manager'"
+        }
+      ]
+    },
+    {
+      "name": "loom:open-skill-manager",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 34,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2340,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2340,
+          "kind": "event-listener",
+          "match": "handle('loom:open-skill-manager'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 34,
+          "kind": "event-send",
+          "match": "invoke('loom:open-skill-manager'"
         }
       ]
     },
@@ -16572,6 +17406,11 @@
           "file": "preloads/api/loom.js",
           "line": 15,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 49,
+          "kind": "event-listener"
         }
       ],
       "evidence": [
@@ -16586,6 +17425,105 @@
           "line": 15,
           "kind": "preload-channel-definition",
           "match": "on('loom:registry-changed'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 49,
+          "kind": "event-listener",
+          "match": "subscribe('loom:registry-changed'"
+        }
+      ]
+    },
+    {
+      "name": "loom:reload-registry",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 32,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2336,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2336,
+          "kind": "event-listener",
+          "match": "handle('loom:reload-registry'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 32,
+          "kind": "event-send",
+          "match": "invoke('loom:reload-registry'"
+        }
+      ]
+    },
+    {
+      "name": "loom:save-app",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 25,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2329,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2329,
+          "kind": "event-listener",
+          "match": "handle('loom:save-app'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 25,
+          "kind": "event-send",
+          "match": "invoke('loom:save-app'"
+        }
+      ]
+    },
+    {
+      "name": "loom:set-enabled",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 28,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2332,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2332,
+          "kind": "event-listener",
+          "match": "handle('loom:set-enabled'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 28,
+          "kind": "event-send",
+          "match": "invoke('loom:set-enabled'"
         }
       ]
     },
@@ -16617,6 +17555,87 @@
           "line": 16,
           "kind": "preload-channel-definition",
           "match": "on('loom:share-text-to-input'"
+        }
+      ]
+    },
+    {
+      "name": "loom:shell-action",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 40,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2352,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2352,
+          "kind": "event-listener",
+          "match": "handle('loom:shell-action'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 40,
+          "kind": "event-send",
+          "match": "invoke('loom:shell-action'"
+        }
+      ]
+    },
+    {
+      "name": "loom:shell-ready",
+      "producers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 39,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2347,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/loom/VCPLoomManager.js",
+          "line": 2347,
+          "kind": "event-listener",
+          "match": "handle('loom:shell-ready'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 39,
+          "kind": "event-send",
+          "match": "invoke('loom:shell-ready'"
+        }
+      ]
+    },
+    {
+      "name": "loom:shell-state",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "preloads/loom.js",
+          "line": 50,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "preloads/loom.js",
+          "line": 50,
+          "kind": "event-listener",
+          "match": "subscribe('loom:shell-state'"
         }
       ]
     },
@@ -24676,13 +25695,25 @@
           "kind": "event-send"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "preloads/docx.js",
+          "line": 62,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
         {
           "file": "modules/ipc/docxHandlers.js",
           "line": 186,
           "kind": "event-send",
           "match": "docxWindow.webContents.send('scriptorium:agent-request'"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 62,
+          "kind": "event-listener",
+          "match": "subscribe('scriptorium:agent-request'"
         }
       ]
     },
@@ -26194,8 +27225,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 74,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 74,
+          "kind": "event-listener",
+          "match": "handle('source:check'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 42,
@@ -26213,8 +27256,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 56,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 56,
+          "kind": "event-listener",
+          "match": "handle('source:list-files'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 39,
@@ -26232,8 +27287,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 58,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 58,
+          "kind": "event-listener",
+          "match": "handle('source:read-file'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 40,
@@ -26251,8 +27318,20 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 63,
+          "kind": "event-listener"
+        }
+      ],
       "evidence": [
+        {
+          "file": "modules/ipc/sourceHandlers.js",
+          "line": 63,
+          "kind": "event-listener",
+          "match": "handle('source:write-file'"
+        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 41,
@@ -27253,6 +28332,21 @@
           "file": "preloads/api/theme.js",
           "line": 11,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/chart.js",
+          "line": 44,
+          "kind": "event-listener"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 55,
+          "kind": "event-listener"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 43,
+          "kind": "event-listener"
         }
       ],
       "evidence": [
@@ -27267,6 +28361,24 @@
           "line": 11,
           "kind": "preload-channel-definition",
           "match": "on('theme-updated'"
+        },
+        {
+          "file": "preloads/chart.js",
+          "line": 44,
+          "kind": "event-listener",
+          "match": "subscribe('theme-updated'"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 55,
+          "kind": "event-listener",
+          "match": "subscribe('theme-updated'"
+        },
+        {
+          "file": "preloads/loom.js",
+          "line": 43,
+          "kind": "event-listener",
+          "match": "subscribe('theme-updated'"
         }
       ]
     },
@@ -30225,6 +31337,11 @@
           "file": "preloads/api/window.js",
           "line": 23,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 56,
+          "kind": "event-listener"
         }
       ],
       "evidence": [
@@ -30239,6 +31356,12 @@
           "line": 23,
           "kind": "preload-channel-definition",
           "match": "onSignal('window-maximized'"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 56,
+          "kind": "event-listener",
+          "match": "subscribe('window-maximized'"
         }
       ]
     },
@@ -30306,6 +31429,11 @@
           "file": "preloads/api/window.js",
           "line": 24,
           "kind": "preload-channel-definition"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 57,
+          "kind": "event-listener"
         }
       ],
       "evidence": [
@@ -30320,6 +31448,12 @@
           "line": 24,
           "kind": "preload-channel-definition",
           "match": "onSignal('window-unmaximized'"
+        },
+        {
+          "file": "preloads/docx.js",
+          "line": 57,
+          "kind": "event-listener",
+          "match": "subscribe('window-unmaximized'"
         }
       ]
     },

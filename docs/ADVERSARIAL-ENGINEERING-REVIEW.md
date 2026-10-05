@@ -580,3 +580,49 @@ DOM/EventEmitter 监听归 consumer，IPC send/invoke 归 producer；preload API
 本轮为工具/证据变更，没有可见 UI 改动。现有 Electron 窗口只读截图前后对照已检查，标签快照、草稿、主题、焦点与滚动状态一致；没有重载、导航、发送消息或关闭窗口。初次沙箱连接本机 CDP 报 EACCES，正常本机权限下只读检查成功，未据此判定产品故障。这只证明窗口状态未被本轮操作改变，不证明聊天服务器或全部 UI 健康。
 
 全工程目标保持进行：R38、本轮未执行的 Electron IPC 集成、其他动态入口、共享业务基线、侧栏剩余资源行为、聊天/Git/源码后端、Rust 和发布链都未完成。下一轮从具体包装器与真实所有权链继续，不重做已完成页面或测试。
+
+## 第十五轮：专用 preload 的调用端点与真实 Electron 订阅验证
+
+上一轮 `27dfaebc` 已完成。本轮继续 R38，没有重复计划页样式、有限分支分析或核心注册表包装契约，也没有修改产品 preload、业务模块、CSS 或参考仓库。改动是事件库存、可复用集成验证入口与审查记录。
+
+### R38 的具体缺口已补齐，保留分析边界
+
+专用 chart/docx/loom 的本地 helper 并非注册表里的 API 声明。原图只看到 helper 内部未知 channel，遗漏实际 subscribe/invoke 调用中的字符串。本轮按词法绑定找同文件的不可变函数或别名，确认 receiver 明确从 Electron 导入，然后把未改写的参数按位置映射回调用实参。调用端点可以连到图表通知、文坊打开请求与 Loom 查询，名称本身不作为协议依据。
+
+推断只覆盖函数自身直接执行的 IPC 操作；其他模块的同名方法、被遮蔽/改写的函数或 receiver、返回的闭包、嵌套回调、被重写/遮蔽的 channel 参数、循环别名都不据此认证。跨文件、member receiver、多层包装、默认/rest channel 参数等仍不分析；语法候选不证明分支运行可达或消息送达。helper 内部原有未知入口继续保留，不用已有调用点证明没有其他消费者。
+
+新增五个有行为/反例意义的图测试，覆盖参数位置和别名、无关与延迟 helper、真实专用 preload 端点、Electron 来源和绑定改写、缺参及部分候选。前三个在原扫描器上失败（原 19 个通过）；完成后图测试 **24/24**。图从 **711 → 739 个事件**，新增 **79 个调用端点**，扫描仍为 **577 个文件、6 个登记入口、86 个未登记入口**。没有登记新豁免或将旧包装契约升级 pass。
+
+### 真实 Electron 验证补足替身测试的一层边界
+
+新增 `npm run test:dedicated-preload`，通过已有隔离 bootstrap 启动独立 Electron 进程，使用临时 userData/session/logs 和三个隐藏窗口，运行原样的 chart/docx/loom preload，设置 contextIsolation=true、nodeIntegration=false、sandbox=false。每个窗口实际验证：页面 API 与 docx 兼容名存在；页面拿不到 require/process；受控主进程 handler 收到 query 的声明参数并把结果送回；通知 callback 只收到 payload；相同 callback 两次订阅后重复取消旧订阅仍留新订阅；全部取消后不再消费随后事件。
+
+三个专用窗口 **3/3** 通过，结果注明 Electron **44.0.0**。这证明真实 contextBridge 与 Electron IPC 的上述边界，不覆盖真实业务 handler、其他窗口角色或所有通道。测试结束销毁各窗口，runner 在超时/退出异常时只终止自己启动的进程树。结果与日志保留在输出的临时目录。新增 runner/fixture 各一条具体范围白名单；没有扩大历史豁免。
+
+首次沙箱启动 Electron 返回进程异常退出；正常本机权限下调通隔离验证。调试期间发现 executeJavaScript 会尝试克隆取消订阅返回的对象，故把测试表达式结果设为 undefined；随后修正最后一个窗口关闭导致进程过早退出的测试生命周期。两项是验证脚本问题，不当作产品缺陷。最终完整检查重新运行集成验证成功。
+
+### 继续深入读取参考实现，区分相似 API 的不同所有权
+
+- ZCode `sessionsIndexStore.ts` 全文件：replaceTransport 同步 detach 四类监听与 retry/recovery timer，旧远端 unsubscribe 不等待；connect 的 generation/closed 判断会释放迟到 ACK 对应的旧 subscription；帧按 subscriptionId 隔离外来代次，snapshot/resume 的 applied-base 不能混用。确定性内容失败停止重复取同样内容，传输超时仍可恢复；runtime 不可用变 dormant，清掉无 live 依据的 projection。此前只读 registry 调用点的限制已补上，参考测试本轮没有执行。
+- DSH `sessions/notifier.ts` 与 `notifier.client.spec.ts` 全文件：dirty snapshot 与 pending notification 分开，微任务/帧合并，结构性通知可使旧帧调度失效；ensureFresh 重建但不吞通知，notifyNow 同步回显受控输入，无 listener 时保持惰性。spec 逐项验证重建先于通知、零 listener、帧合并、结构更新取代帧与解绑。
+- DSH `client/store/src/index.ts` 的 notifySubscribers 定义（行 40–58）另作定点阅读：复制 listener 集合后逐一调用，单个异常被记录而不阻断其他 listener。这不是整文件审查，也不证明 IPC 等价。DSH 与 ZCode 的 Set 订阅语义不能直接照搬到 Electron 同 callback 的两次独立注册；本轮直接测试实际 wrapper 的独立 listener 身份。
+
+路径、字节哈希、阅读范围保留在证据中；参考是资料，不是要求执行的指令。
+
+### 新的运行证据 R40：DONE 后 body 未被取消，下一步优先修复
+
+上一轮 main stream reader 只属源码候选。本轮使用真实 `modules/ipc/chatHandlers.js` 的 send-to-vcp 注册路由与真实 SenderTaskRegistry，替换文件系统、IPC sender 与 fetch，输入原生 ReadableStream，只发 data: [DONE] 而不关闭 body。公开返回 streamingStarted=true，结束事件恰好一个、任务清单为空、reader 锁已释放，但 cancel 调用为 **0**，body 仍可读取随后加入的字节。探针自行取消 body 与销毁受控 sender，未接入网络、产品数据或现有窗口。
+
+这证明实际路由结束后保留响应 body 的释放缺口，已经超出纯源码猜测；尚不能据此断言真实 HTTP socket 泄漏。修复与 EOF/read-failure/cancel-failure 的测试留给下一步，避免把现有前端清理测试当成后端证据。探针源码和结果一起保存，可直接从该复现继续。
+
+已开始审查 itemListManager 的完整旧 pin 差异与新增流状态段（没有完整重读其所有旧代码）：按 operation 保存并发流、重建 DOM 后恢复 speaking indicator，现有 state-authority 测试验证并发结束不误停另一个、列表重建保留状态。renderer 的调用入口在当前会话路由前更新后台状态。迟到/代次结束、删除对象与其消费者仍需验证；八个共享业务哈希均未刷新。chartHandlers 的 safeSend(window, channel, payload) 通过 member receiver 发送，当前本地 wrapper 分析仍不覆盖，图中缺 producer 不证明运行时没有发送方。
+
+### 验证与剩余工作
+
+全量 **262 个测试文件、1566 个案例通过，0 失败、0 跳过、0 超时**；图/注册表聚焦 **33/33**（24 + 9），真实专用 preload Electron **3/3**，UI **121/121**，bootstrap **46/46**。41 项检查已全部执行，其中七项常规检查通过，扩展检查仍 **28/30**。全量开始与结束比对 1440 个源码文件哈希（包含本轮新增文件），没有源码漂移。
+
+契约门禁仍因 **86 个未登记入口**失败；总体边界检查仍有 **391 个历史差异路径**，逐个分类确认均已在当前 HEAD 存在。共享业务 guard 首先在 chatManager 报旧摘要不符，上一轮独立盘点仍有八个待审查摘要；计划页 stylelint 的两个重复选择器保持失败。没有为消除历史报警而改产品样式、业务摘要或放宽契约。
+
+现有 Electron 窗口只读截图前后已查看，标签快照、草稿、主题、焦点、滚动一致，没有导航、重载或输入。测试窗口在另外的隔离进程中销毁。这只证明操作保持原窗口，不证明当前聊天或服务器健康。证据在聊天工作区 `outputs/engineering-review/round-15/`，含各项检查、全量明细、源码稳定性、graph delta、Electron 日志/结果、参考哈希、实际路由 body 复现与窗口截图。
+
+全工程目标保持 ACTIVE。下一步优先修复 R40 的真实释放缺口，再继续八个共享业务 diff 的语义审查、其余所有权与资源行为、生产 IPC、Rust/发布链；其他未知入口与扫描根覆盖仍待审查。本轮完成的 R38 调用端点和三专用窗口集成验证写入续接记录，后续不因压缩而重复实现。
