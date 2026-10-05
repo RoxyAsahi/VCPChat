@@ -915,3 +915,22 @@ test('entry identity changes replace the whole declaration, while invalid replac
         dom.window.close();
     }
 });
+
+test('Side pane overlays animate in and out and respect reduced motion', () => {
+    const html = fs.readFileSync(new URL('../main.html', import.meta.url), 'utf8');
+    assert.match(html, /side-pane-side-chat-extras\.css">\s*<link rel="stylesheet" href="styles\/ui-system\/side-pane-motion\.css">/);
+    const motion = fs.readFileSync(new URL('../styles/ui-system/side-pane-motion.css', import.meta.url), 'utf8');
+    for (const cls of ['side-pane-tab-overview-popover', 'side-pane-context-menu', 'side-chat-model-popover']) {
+        assert.ok(motion.includes(`.${cls}[hidden]`), `${cls} has a hidden state to fade out to`);
+    }
+    assert.match(motion, /display var\(--vcp-motion-duration-fast\) allow-discrete/);
+    assert.match(motion, /@starting-style/);
+    const reduced = motion.slice(motion.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const sel of ['.side-pane-launcher-tabs', '.side-pane-launcher-tab-status[data-status]', '.side-pane-launcher-notice-dot', '.side-traj-call.flash', '.side-git-refresh-btn.spinning']) {
+        assert.ok(reduced.includes(sel), `reduced motion covers ${sel}`);
+    }
+    const launcher = fs.readFileSync(new URL('../styles/ui-system/side-pane-launcher.css', import.meta.url), 'utf8');
+    assert.match(launcher, /\.side-pane-launcher-tabs:where\(\.vcp-ui-scope, \.vcp-ui-scope \*\)::before \{[^}]*transform: translateX\(calc\(var\(--side-pane-segment-index\) \* 100%\)\)/);
+    const bubbles = fs.readFileSync(new URL('../styles/side-chat-bubbles.css', import.meta.url), 'utf8');
+    assert.match(bubbles, /#chatContextMenu\[data-side-chat-menu="true"\] \{[^}]*animation: side-chat-menu-in/);
+});

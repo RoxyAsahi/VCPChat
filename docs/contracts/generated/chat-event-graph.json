@@ -3659,7 +3659,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 247,
+          "line": 254,
           "kind": "custom-event-listener"
         },
         {
@@ -5180,7 +5180,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 247,
+          "line": 254,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('click'"
         },
@@ -7439,7 +7439,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 246,
+          "line": 253,
           "kind": "custom-event-listener"
         },
         {
@@ -7564,7 +7564,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 246,
+          "line": 253,
           "kind": "custom-event-listener",
           "match": "root?.addEventListener('contextmenu'"
         },
@@ -15510,7 +15510,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 248,
+          "line": 255,
           "kind": "custom-event-listener"
         },
         {
@@ -15855,7 +15855,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 248,
+          "line": 255,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
