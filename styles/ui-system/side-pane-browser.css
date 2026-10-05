@@ -34,7 +34,7 @@ html body:is(.light-theme, [data-vcp-theme="light"]) .side-browser-toolbar:where
     --side-browser-pill-border: color-mix(in srgb, var(--vcp-ui-text-primary, currentColor) 9%, transparent);
     --side-browser-pill-border-strong: color-mix(in srgb, var(--vcp-ui-text-primary, currentColor) 22%, transparent);
     --side-browser-pill-shadow: 0 1px 2px color-mix(in srgb, var(--vcp-ui-text-primary, currentColor) 8%, transparent);
-    background: color-mix(in srgb, var(--highlight-text, var(--vcp-ui-accent, currentColor)) 2%, color-mix(in srgb, var(--vcp-ui-text-primary, currentColor) 2%, var(--secondary-bg, Canvas)));
+    background: color-mix(in srgb, var(--highlight-text, var(--vcp-ui-accent, currentColor)) 1%, color-mix(in srgb, var(--vcp-ui-text-primary, currentColor) 1%, var(--secondary-bg, Canvas)));
 }
 
 html .side-browser-nav:where(.vcp-ui-scope, .vcp-ui-scope *),
