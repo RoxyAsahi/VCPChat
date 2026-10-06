@@ -30,6 +30,10 @@ export function createSidePaneController({
     tabListElement,
     contentContainer,
     toggleNotificationsBtn = null,
+    // 通知面板本体：通知页签展开时加 active
+    notificationsPanel = null,
+    // notification-center 状态 { counts, connection }；不传就用页面里登记的那一份
+    notificationState = null,
     expandButton = null,
     closeSidePaneBtn = null,
     addTabButton = null,
@@ -107,7 +111,7 @@ export function createSidePaneController({
                 targetHost.append(toggleNotificationsBtn);
             }
         }
-        doc.getElementById('notificationsSidebar')?.classList.toggle('active', isNotifActive);
+        notificationsPanel?.classList.toggle('active', isNotifActive);
 
         // 展开按钮只在面板收起时出现；面板里有自己的收起按钮
         if (expandButton) {
@@ -210,19 +214,17 @@ export function createSidePaneController({
         return launcher.hostsNotifications ? tabs.filter(tab => !isNotificationsTab(tab.id)) : tabs;
     };
 
-    // VCPLog 连接状态不单独占一行：通知标签和新标签页的通知分类上各一个小圆点，悬停/读屏给出全文
-    const connectionStatusEl = doc.getElementById('vcpLogConnectionStatus');
-    const readConnectionStatus = () => (connectionStatusEl ? {
-        status: connectionStatusEl.dataset.status || 'unknown',
-        text: connectionStatusEl.querySelector('.notifications-status-text')?.textContent.trim() || ''
-    } : null);
-
-    // 新标签页的通知卡片还要带上待审批/错误数，直接读通知中心渲染好的筛选条计数
-    const notificationToolbarEl = doc.getElementById('notificationToolbar');
-    const readChipCount = (filter) => Number(notificationToolbarEl?.querySelector(`[data-filter="${filter}"] .notification-chip-count`)?.textContent.trim()) || 0;
+    // VCPLog 连接状态不单独占一行：通知标签和新标签页的通知分类上各一个小圆点，悬停/读屏给出全文。
+    // 新标签页的通知卡片还要带上待审批/错误数。两样都从通知中心发布的状态里读。
+    const notificationChannel = notificationState || win?.VCPStateChannels?.get?.('notification-center') || null;
+    const readConnectionStatus = () => {
+        const connection = notificationChannel?.get?.()?.connection;
+        return connection ? { status: connection.status || 'unknown', text: String(connection.text || '').trim() } : null;
+    };
     const readLauncherStatus = () => {
         const current = readConnectionStatus();
-        return current ? { ...current, pending: readChipCount('pending'), errors: readChipCount('error') } : null;
+        const counts = notificationChannel?.get?.()?.counts || {};
+        return current ? { ...current, pending: Number(counts.pending) || 0, errors: Number(counts.error) || 0 } : null;
     };
 
     if (tabListElement) {
@@ -284,16 +286,9 @@ export function createSidePaneController({
         strip?.syncStatus();
     }
 
-    if (connectionStatusEl && typeof win.MutationObserver === 'function') {
-        const statusObserver = new win.MutationObserver(syncConnectionStatus);
-        statusObserver.observe(connectionStatusEl, { attributes: true, attributeFilter: ['data-status'], childList: true, characterData: true, subtree: true });
-        cleanupListeners.push(() => statusObserver.disconnect());
-    }
-
-    if (connectionStatusEl && notificationToolbarEl && typeof win.MutationObserver === 'function') {
-        const countObserver = new win.MutationObserver(() => launcher.syncStatus(readLauncherStatus()));
-        countObserver.observe(notificationToolbarEl, { childList: true, characterData: true, subtree: true });
-        cleanupListeners.push(() => countObserver.disconnect());
+    if (typeof notificationChannel?.subscribe === 'function') {
+        const offNotificationState = notificationChannel.subscribe(syncConnectionStatus, { immediate: false });
+        cleanupListeners.push(() => offNotificationState());
     }
 
     function renderTabList() {
