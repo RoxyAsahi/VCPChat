@@ -136,7 +136,7 @@ class SettingsValidator {
         const appearanceDefaults = defaultSettings.appearanceProfile;
         const appearanceOptions = {
             density: new Set(['compact', 'comfortable', 'relaxed']),
-            toolPresentation: new Set(['legacy', 'compact', 'grouped']),
+            toolPresentation: new Set(['legacy', 'compact', 'grouped', 'inline', 'process']),
             toolExpansion: new Set(['attention', 'none', 'all']),
             radius: new Set(['square', 'small', 'medium', 'round', 'custom']),
             typography: new Set(['system', 'humanist', 'serif']),

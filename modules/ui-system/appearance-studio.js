@@ -725,12 +725,14 @@
                             <button type="button" data-appearance-key="toolPresentation" data-appearance-value="legacy">原有卡片</button>
                             <button type="button" data-appearance-key="toolPresentation" data-appearance-value="compact">紧凑单行</button>
                             <button type="button" data-appearance-key="toolPresentation" data-appearance-value="grouped">分组折叠</button>
+                            <button type="button" data-appearance-key="toolPresentation" data-appearance-value="inline">单行合并</button>
+                            <button type="button" data-appearance-key="toolPresentation" data-appearance-value="process">整轮折叠</button>
                         </div>
                         <div class="vcp-appearance-subsection"><h4>默认展开</h4><div class="vcp-appearance-segmented" role="group" aria-label="工具默认展开规则">
                             <button type="button" data-appearance-key="toolExpansion" data-appearance-value="attention">失败与待确认</button>
                             <button type="button" data-appearance-key="toolExpansion" data-appearance-value="none">全部收起</button>
                             <button type="button" data-appearance-key="toolExpansion" data-appearance-value="all">全部展开</button>
-                        </div><p class="vcp-appearance-mini-helper">使用当前界面密度和工具字体。旧记录的请求、结果分别计数，不自动配对；图片与媒体结果保留查看入口。</p></div>
+                        </div><p class="vcp-appearance-mini-helper">使用当前界面密度和工具字体。请求与结果各自保留；单行合并与整轮折叠只把紧跟在请求后的同名结果显示在同一行；图片与媒体结果保留查看入口。</p></div>
                     </section>
                     <section class="vcp-appearance-studio-section vcp-appearance-material-section" aria-labelledby="vcpAppearanceMaterialTitle">
                         <div class="vcp-appearance-studio-section-heading">

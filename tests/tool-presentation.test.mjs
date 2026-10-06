@@ -71,3 +71,48 @@ test('none expansion keeps rich rows folded until explicitly opened',()=>{
 test('unknown command names cannot inherit object prototype summaries',()=>{
  const f=fixture(req().replace('GetCode','constructor'));f.apply();assert.match(f.content.querySelector('.vcp-tool-row-title').textContent,/ProjectForge · constructor/);f.close();
 });
+const shell=(cmd)=>req().replaceAll('ProjectForge','PowerShellExecutor').replace('GetCode','ExecutePowerShell').replace('path:「始」demo/index.html「末」',`powershell:「始」${cmd}「末」`);
+const shellRes=(status,hash,body)=>res(status,hash,body).replaceAll('ProjectForge','PowerShellExecutor');
+const search=()=>req().replace('GetCode','SearchProjects').replace('path:「始」demo/index.html「末」','query:「始」createToolPresentation「末」');
+test('single-line merge folds only the adjacent same-name result into the request row',()=>{
+ const f=fixture(req()+res()+req()+shellRes('SUCCESS','x')+res('SUCCESS','late'),{toolPresentation:'inline',toolExpansion:'attention'});const del=f.content.querySelector('.vcp-tool-result-delete-btn');f.apply();
+ const blocks=[...f.content.querySelectorAll('.vcp-tool-presented')];
+ assert.equal(blocks[1].dataset.vcpToolMerged,'true');assert.equal(blocks[3].dataset.vcpToolMerged,undefined);assert.equal(blocks[4].dataset.vcpToolMerged,undefined);
+ assert.notEqual(blocks[0].dataset.vcpToolKey,blocks[1].dataset.vcpToolKey);assert.equal(blocks[1].querySelector('.vcp-tool-result-delete-btn'),del);
+ const row=blocks[0].querySelector('.vcp-tool-row-toggle');assert.match(row.textContent,/已读取/);assert.match(row.textContent,/demo\/index\.html/);
+ assert.equal(blocks[2].dataset.vcpToolPending,'true');assert.match(blocks[2].querySelector('.vcp-tool-row-toggle').textContent,/^读取/);
+ row.click();assert.ok(blocks[0].classList.contains('expanded'));assert.ok(blocks[1].classList.contains('expanded'));
+ blocks[1].querySelector('.vcp-tool-row-toggle').click();assert.equal(blocks[0].classList.contains('expanded'),false);assert.equal(blocks[1].classList.contains('expanded'),false);f.close();
+});
+test('single-line merge shows failures as a problem label with the first error line, and opens the pair',()=>{
+ const f=fixture(shell('npm test')+shellRes('ERROR','e','<p>Error: exit code 1</p><p>more</p>'),{toolPresentation:'inline',toolExpansion:'attention'});f.apply();
+ const [request,result]=f.content.querySelectorAll('.vcp-tool-presented');const state=request.querySelector('.vcp-tool-row-state');
+ assert.equal(state.textContent,'执行失败');assert.equal(state.title,'Error: exit code 1');assert.match(request.querySelector('.vcp-tool-row-resource').textContent,/npm test/);
+ assert.ok(request.classList.contains('expanded'));assert.ok(result.classList.contains('expanded'));f.close();
+});
+test('single-line merge groups consecutive commands and lookups, but not across text or kinds',()=>{
+ const f=fixture(shell('a')+shellRes('SUCCESS','1')+shell('b')+shellRes('ERROR','2')+req()+res('SUCCESS','3')+search()+'<p>说明</p>'+req(),{toolPresentation:'inline',toolExpansion:'none'});f.apply();
+ const groups=[...f.content.querySelectorAll('.vcp-tool-process')];assert.equal(groups.length,2);
+ assert.equal(groups[0].dataset.variant,'inline');assert.match(groups[0].querySelector('.vcp-tool-process-toggle').textContent,/终端2 个命令，1 个失败/);
+ assert.match(groups[1].querySelector('.vcp-tool-process-toggle').textContent,/查阅1 个文件，1 次搜索/);
+ assert.equal(f.content.lastElementChild.closest('.vcp-tool-process'),null);f.close();
+});
+test('turn fold collapses the finished process but keeps it out while streaming',()=>{
+ const html=req()+res()+'<p>中间说明</p>'+shell('dir')+shellRes('ERROR','e','<p>denied</p>')+'<p>最终回答</p>';
+ const f=fixture(html,{toolPresentation:'process',toolExpansion:'attention'});const message=f.content.closest('.message-item');message.classList.add('streaming');f.apply();
+ assert.equal(f.content.querySelector('.vcp-tool-process'),null);
+ message.classList.remove('streaming');f.presenter.capture(f.content);f.content.innerHTML=html;f.apply();
+ const fold=f.content.querySelector('.vcp-tool-process');assert.equal(fold.dataset.variant,'turn');assert.equal(fold.dataset.vcpBlockType,undefined);
+ assert.equal(fold.querySelector('.vcp-tool-process-toggle').dataset.vcpBlockType,'tool-process');
+ assert.match(fold.textContent,/已处理 · 2 次工具调用/);assert.match(fold.querySelector('.vcp-tool-process-stats').textContent,/1 个失败/);
+ assert.equal(fold.querySelector('.vcp-tool-process-body').hidden,true);assert.ok(fold.querySelector('.vcp-tool-process-body').textContent.includes('中间说明'));
+ assert.equal(f.content.lastElementChild.textContent,'最终回答');
+ const failedRow=fold.querySelector('[data-vcp-tool-call-state="failed"] .vcp-tool-row-resource');assert.equal(failedRow.textContent,'denied');f.close();
+});
+test('switching modes clears merge marks and legacy still restores the exact markup',()=>{
+ const f=fixture(req()+res()+shell('a')+shellRes('SUCCESS','x'),{toolPresentation:'inline'});const before=f.content.innerHTML;f.apply();
+ assert.ok(f.content.querySelector('[data-vcp-tool-merged]'));
+ f.p.toolPresentation='grouped';f.apply();assert.equal(f.content.querySelector('[data-vcp-tool-merged], [data-vcp-tool-kind], [data-vcp-tool-pending]'),null);
+ f.p.toolPresentation='process';f.apply();assert.ok(f.content.querySelector('.vcp-tool-process[data-variant="turn"]'));
+ f.p.toolPresentation='legacy';f.apply();assert.equal(f.content.innerHTML,before);f.close();
+});

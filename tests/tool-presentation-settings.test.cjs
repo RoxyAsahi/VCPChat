@@ -11,5 +11,9 @@ test('main-process validator retains tool modes on disk and across a new manager
   assert.equal(saved.appearanceProfile.toolPresentation,'grouped');assert.equal(saved.appearanceProfile.toolExpansion,'none');
   const restarted=new SettingsManager(file);
   const read=await restarted.readSettings();assert.equal(read.appearanceProfile.toolPresentation,'grouped');assert.equal(read.appearanceProfile.toolExpansion,'none');
+  for (const mode of ['inline','process']) {
+   await restarted.updateSettings({appearanceProfile:{...read.appearanceProfile,toolPresentation:mode}});
+   assert.equal((await new SettingsManager(file).readSettings()).appearanceProfile.toolPresentation,mode);
+  }
  } finally {assert.equal(path.dirname(path.resolve(dir)),path.resolve(os.tmpdir()));assert.ok(path.basename(dir).startsWith('vcp-tool-settings-'));fs.rmSync(dir,{recursive:true,force:true});}
 });

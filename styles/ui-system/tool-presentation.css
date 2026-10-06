@@ -147,3 +147,97 @@ html[data-ui-mode="next"] .vcp-tool-process-artifact {
     html[data-ui-mode="next"] .vcp-tool-process-toggle { flex-wrap: wrap; }
     html[data-ui-mode="next"] .vcp-tool-process-stats { margin-left: 16px; }
 }
+
+/* 单行合并 / 整轮折叠：无框单行，一次调用一行；紧跟的同名结果收进请求行，展开后才显示。 */
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) {
+    --vcp-tool-call-color: var(--vcp-ui-text-3, var(--vcp-ui-text-secondary));
+    --vcp-tool-call-hover: var(--vcp-ui-text-2, var(--vcp-ui-text-secondary));
+}
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-role-divider { margin: 4px 0; font-size: 11px; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-presented { margin: 2px 0; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) :is(.vcp-tool-row-toggle, .vcp-tool-process-toggle) {
+    width: auto;
+    max-width: 100%;
+    min-height: 24px;
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 1px 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--vcp-tool-call-color);
+    transition: color .1s;
+}
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) :is(.vcp-tool-row-toggle, .vcp-tool-process-toggle):hover { background: transparent; color: var(--vcp-tool-call-hover); }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) :is(.vcp-tool-row-toggle .vcp-tool-row-title, .vcp-tool-process-title) { flex: none; color: inherit; white-space: nowrap; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-process-stats { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-row-toggle .vcp-tool-row-resource {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    font-size: inherit;
+}
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-row-toggle .vcp-tool-row-state { flex: none; margin-left: 0; color: inherit; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-row-icon { display: inline-flex; flex: none; width: 16px; height: 16px; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-row-icon svg { width: 100%; height: 100%; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-row-diff { flex: none; font-family: var(--vcp-ui-font-mono, ui-monospace, Consolas, monospace); font-size: 11px; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) :is(.vcp-tool-row-toggle:hover, [aria-expanded="true"]) .vcp-tool-row-diff-add { color: var(--vcp-ui-success); }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) :is(.vcp-tool-row-toggle:hover, [aria-expanded="true"]) .vcp-tool-row-diff-del { color: var(--vcp-ui-danger, var(--vcp-ui-palette-red)); }
+/* 并入请求行的结果：收起时不占位，展开后只留一个小标题“输出”。
+ * 旧层给结果气泡写了 display:block !important，这里只能藏标题、去掉外边距，正文由上面的收起规则隐藏。 */
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) [data-vcp-tool-merged="true"]:not(.expanded) { margin: 0; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) [data-vcp-tool-merged="true"]:not(.expanded) > .vcp-tool-result-header { display: none; }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) [data-vcp-tool-merged="true"] .vcp-tool-row-toggle { min-height: 20px; padding-left: 24px; font-size: var(--vcp-ui-text-sm, 12px); }
+html[data-ui-mode="next"] :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) .vcp-tool-presented > :is(.vcp-tool-details, .vcp-tool-result-collapsible-content, .vcp-tool-call-summary-content) { padding: 8px 0 4px 24px; }
+/* 等待结果时动作词的微光，只在回复生成中出现。 */
+html[data-ui-mode="next"] .message-item.streaming :is([data-vcp-tool-presentation="inline"], [data-vcp-tool-presentation="process"]) [data-vcp-tool-pending="true"] .vcp-tool-row-title {
+    background: linear-gradient(90deg, var(--vcp-tool-call-color) 0%, var(--vcp-ui-text-primary) 50%, var(--vcp-tool-call-color) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: vcp-tool-call-shimmer 1.6s linear infinite;
+}
+@keyframes vcp-tool-call-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) {
+    html[data-ui-mode="next"] [data-vcp-tool-pending="true"] .vcp-tool-row-title { animation: none !important; }
+}
+
+/* 单行合并：动作词加粗，箭头在行尾、悬停或展开时出现；问题状态用虚线下划线，悬停看报错。 */
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] :is(.vcp-tool-row-toggle, .vcp-tool-process-toggle) { font-size: var(--vcp-ui-text-body, 14px); }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] :is(.vcp-tool-row-toggle .vcp-tool-row-title, .vcp-tool-process-title) { font-weight: 500; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] :is(.vcp-tool-row-toggle, .vcp-tool-process-toggle) > .vcp-tool-row-chevron { order: 1; opacity: 0; transition: opacity .2s, transform .2s; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] :is(.vcp-tool-row-toggle, .vcp-tool-process-toggle):is(:hover, [aria-expanded="true"]) > .vcp-tool-row-chevron { opacity: 1; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] [data-vcp-tool-call-state] .vcp-tool-row-state { text-decoration: underline dotted; text-underline-offset: 2px; cursor: help; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] .vcp-tool-process[data-variant="inline"] { margin: 2px 0; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] .vcp-tool-process[data-variant="inline"] .vcp-tool-process-stats { margin-left: 0; font-size: inherit; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] .vcp-tool-process[data-variant="inline"] > .vcp-tool-process-body { margin: 4px 0 4px 8px; padding-left: 14px; border-left: 1px solid var(--vcp-ui-border); }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] .vcp-tool-process[data-variant="inline"] > .vcp-tool-process-body > .vcp-tool-presented { margin: 2px 0; border-top: 0; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="inline"] .vcp-tool-process[data-variant="inline"] > .vcp-tool-process-artifact { border-top: 0; padding: 4px 0 4px 22px; }
+
+/* 整轮折叠：图标悬停换成箭头，标题与摘要之间用小圆点分隔，失败时摘要显示红色报错首行。 */
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-toggle { gap: 0; font-size: var(--vcp-ui-text-caption, 13px); }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-leading { position: relative; display: inline-flex; flex: none; width: 16px; height: 16px; margin-right: 6px; align-items: center; justify-content: center; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-leading .vcp-tool-row-icon { width: 14px; height: 14px; transition: opacity .1s; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-leading .vcp-tool-row-chevron { position: absolute; inset: 0; margin: auto; opacity: 0; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-toggle:is(:hover, [aria-expanded="true"]) .vcp-tool-row-leading .vcp-tool-row-icon { opacity: 0; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-toggle:is(:hover, [aria-expanded="true"]) .vcp-tool-row-leading .vcp-tool-row-chevron { opacity: 1; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-dot { flex: none; width: 2px; height: 2px; margin: 0 8px; border-radius: 1px; background: currentColor; opacity: .7; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-row-toggle :is(.vcp-tool-row-state, .vcp-tool-row-diff) { margin-left: 10px; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] [data-vcp-tool-call-state="failed"] .vcp-tool-row-toggle .vcp-tool-row-resource { color: var(--vcp-ui-danger, var(--vcp-ui-palette-red)); }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] { margin: 4px 0 10px; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] > .vcp-tool-process-toggle {
+    width: 100%;
+    min-height: 33px;
+    padding: 0 0 8px;
+    gap: 6px;
+    border-bottom: .5px solid var(--vcp-ui-border);
+    font-size: var(--vcp-ui-text-body, 14px);
+}
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] > .vcp-tool-process-toggle > .vcp-tool-row-chevron { order: 1; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] .vcp-tool-process-stats { margin-left: 0; color: var(--vcp-ui-danger, var(--vcp-ui-palette-red)); }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] > .vcp-tool-process-body { padding-top: 8px; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] > .vcp-tool-process-body > .vcp-tool-presented { margin: 2px 0; border-top: 0; }
+html[data-ui-mode="next"] [data-vcp-tool-presentation="process"] .vcp-tool-process[data-variant="turn"] > .vcp-tool-process-artifact { border-top: 0; padding: 6px 0; }
