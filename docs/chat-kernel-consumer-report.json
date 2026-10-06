@@ -1028,7 +1028,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 293,
+          "line": 309,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "sendMessage",
