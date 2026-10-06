@@ -10038,18 +10038,8 @@
           "kind": "event-listener"
         },
         {
-          "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 57,
-          "kind": "event-listener"
-        },
-        {
           "file": "modules/ipc/senderLifetime.js",
-          "line": 25,
-          "kind": "event-listener"
-        },
-        {
-          "file": "modules/ipc/terminalHandlers.js",
-          "line": 131,
+          "line": 30,
           "kind": "event-listener"
         },
         {
@@ -10099,20 +10089,8 @@
           "match": "mainWindow.webContents.once('destroyed'"
         },
         {
-          "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 57,
-          "kind": "event-listener",
-          "match": "sender.on('destroyed'"
-        },
-        {
           "file": "modules/ipc/senderLifetime.js",
-          "line": 25,
-          "kind": "event-listener",
-          "match": "sender.on('destroyed'"
-        },
-        {
-          "file": "modules/ipc/terminalHandlers.js",
-          "line": 131,
+          "line": 30,
           "kind": "event-listener",
           "match": "sender.on('destroyed'"
         },
@@ -10445,6 +10423,25 @@
       ]
     },
     {
+      "name": "did-navigate",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ipc/senderLifetime.js",
+          "line": 31,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/senderLifetime.js",
+          "line": 31,
+          "kind": "event-listener",
+          "match": "sender.on('did-navigate'"
+        }
+      ]
+    },
+    {
       "name": "did-start-loading",
       "producers": [],
       "consumers": [
@@ -10501,45 +10498,12 @@
       "producers": [],
       "consumers": [
         {
-          "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 58,
-          "kind": "event-listener"
-        },
-        {
-          "file": "modules/ipc/senderLifetime.js",
-          "line": 26,
-          "kind": "event-listener"
-        },
-        {
-          "file": "modules/ipc/terminalHandlers.js",
-          "line": 132,
-          "kind": "event-listener"
-        },
-        {
           "file": "modules/loom/VCPLoomManager.js",
           "line": 1739,
           "kind": "event-listener"
         }
       ],
       "evidence": [
-        {
-          "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 58,
-          "kind": "event-listener",
-          "match": "sender.on('did-start-navigation'"
-        },
-        {
-          "file": "modules/ipc/senderLifetime.js",
-          "line": 26,
-          "kind": "event-listener",
-          "match": "sender.on('did-start-navigation'"
-        },
-        {
-          "file": "modules/ipc/terminalHandlers.js",
-          "line": 132,
-          "kind": "event-listener",
-          "match": "sender.on('did-start-navigation'"
-        },
         {
           "file": "modules/loom/VCPLoomManager.js",
           "line": 1739,
@@ -18764,7 +18728,7 @@
       "producers": [
         {
           "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 36,
+          "line": 37,
           "kind": "event-send"
         }
       ],
@@ -18778,7 +18742,7 @@
       "evidence": [
         {
           "file": "modules/ipc/modelTrajectoryHandlers.js",
-          "line": 36,
+          "line": 37,
           "kind": "event-send",
           "match": "sender.send('model-trajectory:changed'"
         },
@@ -25104,6 +25068,11 @@
           "kind": "event-listener"
         },
         {
+          "file": "modules/ipc/senderLifetime.js",
+          "line": 32,
+          "kind": "event-listener"
+        },
+        {
           "file": "modules/ipc/voiceHandlers.js",
           "line": 570,
           "kind": "event-listener"
@@ -25142,6 +25111,12 @@
           "line": 193,
           "kind": "event-listener",
           "match": "win.webContents.once('render-process-gone'"
+        },
+        {
+          "file": "modules/ipc/senderLifetime.js",
+          "line": 32,
+          "kind": "event-listener",
+          "match": "sender.on('render-process-gone'"
         },
         {
           "file": "modules/ipc/voiceHandlers.js",
@@ -28570,14 +28545,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 295,
+          "line": 293,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 295,
+          "line": 293,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:cd'"
         },
@@ -28594,7 +28569,7 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 182,
+          "line": 180,
           "kind": "event-send"
         }
       ],
@@ -28608,7 +28583,7 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 182,
+          "line": 180,
           "kind": "event-send",
           "match": "emit('terminal:clear'"
         },
@@ -28632,14 +28607,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 267,
+          "line": 265,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 267,
+          "line": 265,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:command-run'"
         },
@@ -28682,14 +28657,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 258,
+          "line": 256,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 258,
+          "line": 256,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:command-runs'"
         },
@@ -28713,14 +28688,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 206,
+          "line": 204,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 206,
+          "line": 204,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:create'"
         },
@@ -28737,7 +28712,7 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 181,
+          "line": 179,
           "kind": "event-send"
         }
       ],
@@ -28751,7 +28726,7 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 181,
+          "line": 179,
           "kind": "event-send",
           "match": "emit('terminal:data'"
         },
@@ -28768,7 +28743,7 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 183,
+          "line": 181,
           "kind": "event-send"
         }
       ],
@@ -28782,7 +28757,7 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 183,
+          "line": 181,
           "kind": "event-send",
           "match": "emit('terminal:exit'"
         },
@@ -28806,14 +28781,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 240,
+          "line": 238,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 240,
+          "line": 238,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:kill'"
         },
@@ -28837,14 +28812,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 228,
+          "line": 226,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 228,
+          "line": 226,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:resize'"
         },
@@ -28868,14 +28843,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 246,
+          "line": 244,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 246,
+          "line": 244,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:restart'"
         },
@@ -28899,14 +28874,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 289,
+          "line": 287,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 289,
+          "line": 287,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:unwatch-command-runs'"
         },
@@ -28930,14 +28905,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 278,
+          "line": 276,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 278,
+          "line": 276,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:watch-command-runs'"
         },
@@ -28961,14 +28936,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 215,
+          "line": 213,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 215,
+          "line": 213,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:write'"
         },
@@ -32631,7 +32606,7 @@
     },
     {
       "file": "modules/ipc/terminalHandlers.js",
-      "line": 60,
+      "line": 61,
       "reason": "dynamic event name: channel",
       "kind": "event-send",
       "match": "sender.send(channel",
