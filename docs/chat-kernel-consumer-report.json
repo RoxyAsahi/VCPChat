@@ -920,6 +920,7 @@
     "tests/side-chat-ephemeral-parity.test.mjs",
     "tests/side-chat-integration.test.mjs",
     "tests/side-chat-ipc-metadata.test.mjs",
+    "tests/side-chat-message-delete.test.mjs",
     "tests/side-chat-model-and-context.test.mjs",
     "tests/side-chat-persistence-retry.test.mjs",
     "tests/side-chat-preparation-cancel.test.mjs",
@@ -1022,7 +1023,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 278,
+          "line": 282,
           "surface": "shared-renderer",
           "access": "explicit-provider",
           "member": "sendMessage",
