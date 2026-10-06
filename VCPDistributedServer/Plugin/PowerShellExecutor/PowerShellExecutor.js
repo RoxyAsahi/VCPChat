@@ -1060,7 +1060,16 @@ function createNewPtySession() {
         cols: lastKnownSize.cols,
         rows: lastKnownSize.rows,
         cwd: process.env.USERPROFILE || process.env.HOME,
-        env: process.env
+        env: {
+            ...process.env,
+            PAGER: 'cat',
+            GIT_PAGER: 'cat',
+            GIT_TERMINAL_PROMPT: '0',
+            GH_PAGER: '',
+            SYSTEMD_PAGER: 'cat',
+            AWS_PAGER: '',
+            MANPAGER: 'cat'
+        }
     });
     childProcesses.add(ptyProcess);
     const currentPtyProcess = ptyProcess;
@@ -1136,6 +1145,15 @@ function createNewPtySession() {
 
         const initializationCommand = [
             '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+            '$env:PAGER = "cat"',
+            '$env:GIT_PAGER = "cat"',
+            '$env:GIT_TERMINAL_PROMPT = "0"',
+            '$env:GH_PAGER = ""',
+            '$env:SYSTEMD_PAGER = "cat"',
+            '$env:AWS_PAGER = ""',
+            '$env:MANPAGER = "cat"',
+            'function global:more { param([string[]]$paths) if ($paths) { foreach ($file in $paths) { Get-Content $file } } else { $input } }',
+            'function global:help { Get-Help @args }',
             `$__vcpReady = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${encodedReadyBoundary}'))`,
             'Write-Host $__vcpReady',
             // 清掉握手留下的几行：侧栏只从就绪标记之后开始显示，ConPTY 的光标也得回到左上角，
@@ -1486,6 +1504,10 @@ function executeSingleCommandInPty(ptyProcess, singleCommand) {
             // PowerShell/PSReadLine 会先回显整行输入，若标记出现在回显里，就会被误判为真实输出。
             // 终端里也只留下一行短的脚本调用，而不是整段包装代码。
             const wrapperScript = [
+                // 关掉分页器和 Git 交互提示，否则 git log/help 等会停在分页界面，命令一直等不到结束标记。
+                `$env:PAGER = 'cat'`,
+                `$env:GIT_PAGER = 'cat'`,
+                `$env:GIT_TERMINAL_PROMPT = '0'`,
                 `Write-Host '${startBoundary}'`,
                 // 即使临时脚本发生 ParserError / RuntimeException，也必须输出 end boundary，
                 // 否则 AI 调用会一直等待直到超时。终止性错误要在结束标记之前打印，
@@ -1979,7 +2001,7 @@ async function processToolCall(args) {
             ptyProcess = null;
         }
         const command = commandEntries[0].value;
-        const fullCommand = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${command}`;
+        const fullCommand = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $env:PAGER = 'cat'; $env:GIT_PAGER = 'cat'; $env:GIT_TERMINAL_PROMPT = '0'; function global:more { param([string[]]$paths) if ($paths) { foreach ($file in $paths) { Get-Content $file } } else { $input } }; function global:help { Get-Help @args }; ${command}`;
         const output = await executeAdminCommand(fullCommand);
         if (output && typeof output === 'object' && Array.isArray(output.content)) {
             return output;

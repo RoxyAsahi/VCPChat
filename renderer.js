@@ -1055,6 +1055,7 @@ mainChatSettingsPresentationOwner.configureStartup({
             filterAgentList: uiHelperFunctions.filterAgentList,
             addNetworkPathInput: uiHelperFunctions.addNetworkPathInput,
             sendButtonAction: mainChatSendOwner.handleAction,
+            notifySendStateChanged: mainChatSendOwner.update,
             normalizeChatPresentationMode,
             applyChatPresentationMode,
             applyChatBubbleLayoutSettings,
