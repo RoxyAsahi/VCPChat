@@ -1662,7 +1662,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 142,
+          "line": 154,
           "kind": "custom-event-listener"
         },
         {
@@ -1762,7 +1762,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 142,
+          "line": 154,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('blur'"
         },
@@ -3735,7 +3735,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 227,
+          "line": 239,
           "kind": "custom-event-listener"
         },
         {
@@ -5273,7 +5273,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 227,
+          "line": 239,
           "kind": "custom-event-listener",
           "match": "statusText.addEventListener('click'"
         },
@@ -15042,7 +15042,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 137,
+          "line": 149,
           "kind": "custom-event-listener"
         },
         {
@@ -15217,7 +15217,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 137,
+          "line": 149,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
@@ -15659,7 +15659,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 243,
+          "line": 255,
           "kind": "custom-event-listener"
         },
         {
@@ -16012,7 +16012,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 243,
+          "line": 255,
           "kind": "custom-event-listener",
           "match": "statusText.addEventListener('keydown'"
         },
@@ -22877,7 +22877,7 @@
       "consumers": [
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 141,
+          "line": 153,
           "kind": "custom-event-listener"
         },
         {
@@ -22894,7 +22894,7 @@
       "evidence": [
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 141,
+          "line": 153,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('pagehide'"
         },
