@@ -46,6 +46,8 @@
             activeEmbeddedAction: result?.activeEmbeddedAction || null,
             tasks: Object.freeze(result?.tasks || []),
             chatTasks: Object.freeze(result?.chatTasks || []),
+            // 主进程各领域的激活状态：declared / loading / active / failed
+            domains: Object.freeze(result?.domains || []),
         });
     }
 

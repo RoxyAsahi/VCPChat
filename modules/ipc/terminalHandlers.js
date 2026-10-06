@@ -9,8 +9,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ipcMain } = require('electron');
+const { ipcMain: defaultIpcMain } = require('electron');
 const { createApplicationSenderGuard, resolveWindowWebContents } = require('./applicationSender');
+// initialize 可以传入领域激活器给的 ipcMain（见 domainActivator.js），不传就用 Electron 的
+let ipcMain = defaultIpcMain;
 let getMainWindow = () => null;
 
 const CHANNELS = [
@@ -190,7 +192,8 @@ function createView(event, options = {}) {
     return { id, pid: state.pid, shared: true };
 }
 
-function initialize({ workspaceService = null, executorLoader = null, mainWindow = null, getMainWindow: getWindow = null } = {}) {
+function initialize({ workspaceService = null, executorLoader = null, mainWindow = null, getMainWindow: getWindow = null, ipcMain: injectedIpcMain = null } = {}) {
+    ipcMain = injectedIpcMain || defaultIpcMain;
     getMainWindow = typeof getWindow === 'function' ? getWindow : () => mainWindow;
     workspaceServiceRef = workspaceService;
     if (typeof executorLoader === 'function') loadExecutor = executorLoader;
@@ -311,4 +314,4 @@ function disposeAll() {
     for (const sender of [...runWatchers.keys()]) stopRunWatcher(sender);
 }
 
-module.exports = { initialize, disposeAll };
+module.exports = { CHANNELS, initialize, disposeAll };
