@@ -2415,7 +2415,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/toolOutputSideProvider.js",
-          "line": 287,
+          "line": 290,
           "kind": "custom-event-listener"
         }
       ],
@@ -2614,7 +2614,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/toolOutputSideProvider.js",
-          "line": 287,
+          "line": 290,
           "kind": "custom-event-listener",
           "match": "picker.addEventListener('change'"
         }
@@ -21868,14 +21868,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 853,
+          "line": 861,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 853,
+          "line": 861,
           "kind": "preload-subscription",
           "match": "api?.onModelTrajectoryChanged("
         }
@@ -26804,7 +26804,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/toolOutputSideProvider.js",
-          "line": 181,
+          "line": 184,
           "kind": "custom-event-listener"
         },
         {
@@ -26880,7 +26880,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/toolOutputSideProvider.js",
-          "line": 181,
+          "line": 184,
           "kind": "custom-event-listener",
           "match": "outputWrap.addEventListener('scroll'"
         },
