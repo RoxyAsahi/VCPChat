@@ -11977,7 +11977,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 54,
+          "line": 62,
           "kind": "event-listener"
         },
         {
@@ -12303,7 +12303,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 54,
+          "line": 62,
           "kind": "event-listener",
           "match": "watcher.on?.('error'"
         },
@@ -12794,6 +12794,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/ui-system/sources/git-changes.js",
+          "line": 42,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/uiManager.js",
           "line": 412,
           "kind": "custom-event-listener"
@@ -12859,6 +12864,12 @@
           "line": 144,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('focus'"
+        },
+        {
+          "file": "modules/ui-system/sources/git-changes.js",
+          "line": 42,
+          "kind": "custom-event-listener",
+          "match": "win.addEventListener('focus'"
         },
         {
           "file": "modules/uiManager.js",
@@ -14027,14 +14038,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 177,
+          "line": 184,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 177,
+          "line": 184,
           "kind": "event-listener",
           "match": "handle('git:change-summary'"
         },
@@ -14077,14 +14088,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 140,
+          "line": 147,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 140,
+          "line": 147,
           "kind": "event-listener",
           "match": "handle('git:commit'"
         },
@@ -14108,14 +14119,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 172,
+          "line": 179,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 172,
+          "line": 179,
           "kind": "event-listener",
           "match": "handle('git:commit-graph'"
         },
@@ -14139,14 +14150,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 166,
+          "line": 173,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 166,
+          "line": 173,
           "kind": "event-listener",
           "match": "handle('git:create-branch'"
         },
@@ -14170,14 +14181,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 121,
+          "line": 128,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 121,
+          "line": 128,
           "kind": "event-listener",
           "match": "handle('git:diff'"
         },
@@ -14201,14 +14212,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 134,
+          "line": 141,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 134,
+          "line": 141,
           "kind": "event-listener",
           "match": "handle('git:discard'"
         },
@@ -14232,14 +14243,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 166,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 166,
           "kind": "event-listener",
           "match": "handle('git:list-branches'"
         },
@@ -14263,14 +14274,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 114,
+          "line": 121,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 114,
+          "line": 121,
           "kind": "event-listener",
           "match": "handle('git:list-workspaces'"
         },
@@ -14294,14 +14305,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 145,
+          "line": 152,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 145,
+          "line": 152,
           "kind": "event-listener",
           "match": "handle('git:push'"
         },
@@ -14325,14 +14336,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 151,
+          "line": 158,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 151,
+          "line": 158,
           "kind": "event-listener",
           "match": "handle('git:reveal-path'"
         },
@@ -14356,14 +14367,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 130,
+          "line": 137,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 130,
+          "line": 137,
           "kind": "event-listener",
           "match": "handle('git:stage'"
         },
@@ -14387,14 +14398,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 119,
+          "line": 126,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 119,
+          "line": 126,
           "kind": "event-listener",
           "match": "handle('git:status'"
         },
@@ -14418,14 +14429,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 161,
+          "line": 168,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 161,
+          "line": 168,
           "kind": "event-listener",
           "match": "handle('git:switch-branch'"
         },
@@ -14449,14 +14460,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 132,
+          "line": 139,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 132,
+          "line": 139,
           "kind": "event-listener",
           "match": "handle('git:unstage'"
         },
@@ -21671,14 +21682,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/sources/git-changes.js",
-          "line": 34,
+          "line": 45,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/sources/git-changes.js",
-          "line": 34,
+          "line": 45,
           "kind": "preload-subscription",
           "match": "api.onGitChanged("
         }
@@ -28108,14 +28119,14 @@
       "consumers": [
         {
           "file": "modules/ipc/stateSubscriptions.js",
-          "line": 151,
+          "line": 159,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/stateSubscriptions.js",
-          "line": 151,
+          "line": 159,
           "kind": "event-listener",
           "match": "ipcMain.handle('state:subscribe'"
         },
@@ -28139,14 +28150,14 @@
       "consumers": [
         {
           "file": "modules/ipc/stateSubscriptions.js",
-          "line": 155,
+          "line": 163,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/stateSubscriptions.js",
-          "line": 155,
+          "line": 163,
           "kind": "event-listener",
           "match": "ipcMain.handle('state:unsubscribe'"
         },
@@ -32593,7 +32604,7 @@
     },
     {
       "file": "modules/ipc/gitHandlers.js",
-      "line": 72,
+      "line": 74,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
@@ -32617,7 +32628,7 @@
     },
     {
       "file": "modules/ipc/stateSubscriptions.js",
-      "line": 124,
+      "line": 132,
       "reason": "dynamic event name: channel",
       "kind": "event-send",
       "match": "sender.send(channel",
