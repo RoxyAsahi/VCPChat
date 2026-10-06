@@ -30,6 +30,7 @@
             tasks: Object.freeze(globalObject.VCPTasks?.diagnostics?.snapshot?.() || []),
             contributions: globalObject.VCPContributions?.diagnostics?.snapshot?.() || null,
             states: Object.freeze(globalObject.VCPStateChannels?.diagnostics?.() || []),
+            sources: Object.freeze(globalObject.VCPSharedSources?.diagnostics?.() || []),
             shell: globalObject.VCPNextShellController?.getDiagnostics?.() || null,
             streams: streamDiagnosticsProvider?.() || null,
             performance: Object.freeze(globalObject.VCPPerformance?.snapshot?.() || []),

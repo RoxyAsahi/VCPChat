@@ -488,7 +488,7 @@
     "dynamicSites": [
       {
         "file": "modules/ipc/terminalHandlers.js",
-        "line": 57,
+        "line": 58,
         "kind": "event-send",
         "match": "sender.send(channel"
       }
@@ -845,7 +845,7 @@
     "dynamicSites": [
       {
         "file": "modules/ui-system/conversation-status-panel.js",
-        "line": 196,
+        "line": 200,
         "kind": "custom-event-create",
         "match": "new win.CustomEvent(changeEvent"
       }
@@ -902,7 +902,7 @@
     "dynamicSites": [
       {
         "file": "modules/ui-system/lifecycle-scope.js",
-        "line": 125,
+        "line": 129,
         "kind": "custom-event-listener",
         "match": "target.addEventListener(type"
       }
