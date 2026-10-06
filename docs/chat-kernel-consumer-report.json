@@ -917,6 +917,7 @@
     "tests/side-chat-audit-probes.test.mjs",
     "tests/side-chat-authorization.test.mjs",
     "tests/side-chat-delete-leftovers.test.mjs",
+    "tests/side-chat-draft-save.test.mjs",
     "tests/side-chat-entry-points.test.mjs",
     "tests/side-chat-ephemeral-parity.test.mjs",
     "tests/side-chat-integration.test.mjs",
@@ -16813,7 +16814,7 @@
       "documentReferences": 0,
       "electronReferences": 0,
       "timers": 1,
-      "listeners": 2,
+      "listeners": 3,
       "mutableMaps": 0
     },
     "modules/renderer/side-chat/references.js": {
