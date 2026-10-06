@@ -580,6 +580,15 @@
             refreshStatus();
         });
 
+        // 主窗口的 Git 标签换了工作区：存储变了，这边跟着换。storage 事件只发给别的窗口，自己 setItem 不会收到
+        window.addEventListener('storage', e => {
+            if (e.key !== GIT_WS_KEY || !e.newValue || e.newValue === git.workspaceId) return;
+            if (!git.workspaces.some(ws => ws.id === e.newValue)) return;
+            resetWorkspaceView(e.newValue);
+            renderWorkspaceSelect();
+            refreshStatus({ quiet: true });
+        });
+
         $('git-refresh-btn').addEventListener('click', () => refreshStatus());
 
         $('git-commit-message').addEventListener('input', syncActionButtons);

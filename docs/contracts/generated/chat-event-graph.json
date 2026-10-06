@@ -28231,6 +28231,25 @@
       ]
     },
     {
+      "name": "storage",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ui-system/sources/git-workspace.js",
+          "line": 34,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/sources/git-workspace.js",
+          "line": 34,
+          "kind": "custom-event-listener",
+          "match": "win.addEventListener('storage'"
+        }
+      ]
+    },
+    {
       "name": "submit",
       "producers": [],
       "consumers": [
