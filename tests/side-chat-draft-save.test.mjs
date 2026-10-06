@@ -8,6 +8,7 @@ import trustedSenderFixture from './helpers/trusted-main-sender.cjs';
 import { initialize } from '../modules/ipc/sideChatHandlers.js';
 import { saveSideChatMetadata } from '../modules/chat/sideChatSessionService.js';
 import { createSideChatPersistence } from '../modules/renderer/side-chat/persistence.js';
+import { createSideChatDraftStore } from '../modules/renderer/side-chat/draft-store.js';
 
 async function waitFor(predicate) {
     const deadline = Date.now() + 2000;
@@ -33,7 +34,8 @@ async function fixture(t) {
     const handlers = new Map();
     initialize({ USER_DATA_DIR: directory, mainWindow: trusted.mainWindow,
         ipcMain: { handle: (name, handler) => handlers.set(name, handler), removeHandler: name => handlers.delete(name) } });
-    const dom = new JSDOM('<textarea></textarea><span id="status"></span><button id="badge" hidden></button>');
+    const dom = new JSDOM('<textarea></textarea><span id="status"></span><button id="badge" hidden></button>', { url: 'https://side-chat.test', storageQuota: 2048 });
+    const drafts = createSideChatDraftStore({ getStorage: () => dom.window.localStorage });
     const doc = dom.window.document, textarea = doc.querySelector('textarea'), status = doc.getElementById('status');
     textarea.value = descriptor.draft;
     const store = { currentDescriptor: descriptor, currentModel: 'model', references: [], isHistoryLoaded: true, isDisposed: false };
@@ -42,6 +44,7 @@ async function fixture(t) {
     const owner = createSideChatPersistence({ store, descriptor, doc, textarea, statusText: status,
         persistenceBadge: doc.getElementById('badge'), repository: {}, getConversation: () => null,
         getSurface: () => { throw new Error('Metadata retry must not reload history'); },
+        saveDraft: (metadata, input) => drafts.save(metadata, input),
         updateStatus(text, type) { status.textContent = type === 'error' ? text : ''; },
         updateComposerState() {}, updateEmptyState() {},
         chatCapabilities: {
@@ -65,7 +68,7 @@ async function fixture(t) {
         assert.ok(directory.startsWith(os.tmpdir() + path.sep));
         await fs.rm(directory, { recursive: true, force: true });
     });
-    return { owner, store, status, textarea, toasts, dom, repair,
+    return { owner, store, status, textarea, toasts, dom, repair, drafts, descriptor,
         get settled() { return settled; },
         read: async () => JSON.parse(await fs.readFile(metadataPath, 'utf8')),
         setSave(fn) { saveOverride = fn; },
@@ -91,11 +94,13 @@ test('a real side metadata write failure is visible and retry saves the current 
     f.store.references = [{ id: 'ref', text: 'keep this selection', sourceMessageId: 'saved' }];
     f.store.currentModel = 'new-model';
     f.status.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    await waitFor(() => f.status.textContent === '');
+    await waitFor(() => f.status.textContent === '' && f.settled >= 2);
     const persisted = await f.read();
-    assert.equal(persisted.draft, 'my newest unsent work');
-    assert.equal(persisted.model, 'new-model');
-    assert.deepEqual(persisted.references, f.store.references);
+    assert.equal(persisted.composerStorage, 'local');
+    assert.equal(persisted.draft, undefined);
+    assert.equal(persisted.model, undefined);
+    assert.equal(persisted.references, undefined);
+    assert.deepEqual(f.drafts.read(f.descriptor).input, { draft: 'my newest unsent work', model: 'new-model', references: f.store.references });
     assert.equal(persisted.child.topicId, 'child');
     await f.owner.flushInputSave();
     assert.equal(f.status.getAttribute('role'), null);
@@ -120,13 +125,43 @@ test('pagehide flush saves an intentionally empty side draft and removes old ref
     const f = await fixture(t);
     f.store.references = [{ id: 'old', text: 'old selection' }];
     f.type('draft with selection'); await f.owner.flushInputSave();
-    assert.equal((await f.read()).references.length, 1);
+    assert.equal(f.drafts.read(f.descriptor).input.references.length, 1);
     f.store.references = []; f.type('');
-    const before = f.settled;
     f.dom.window.dispatchEvent(new f.dom.window.Event('pagehide'));
-    await waitFor(() => f.settled > before);
-    assert.equal((await f.read()).draft, '');
-    assert.deepEqual((await f.read()).references, []);
+    assert.equal(f.drafts.read(f.descriptor).input.draft, '');
+    assert.deepEqual(f.drafts.read(f.descriptor).input.references, []);
     assert.equal(f.status.textContent, '');
     assert.equal(f.toasts.length, 0);
+});
+
+test('browser quota failure retains input and the old file draft; retry saves current input without further IPC autosaves', async t => {
+    const f = await fixture(t);
+    f.type('x'.repeat(4096)); await f.owner.flushInputSave();
+    assert.equal(f.textarea.value.length, 4096);
+    assert.match(f.status.textContent, /未保存.*重试/);
+    assert.equal(f.toasts.length, 1);
+    assert.equal(f.settled, 0, 'Do not clear the legacy file when browser storage failed');
+    assert.equal((await f.read()).draft, 'old draft');
+    f.type('new input that fits');
+    f.status.click(); await waitFor(() => f.status.textContent === '' && f.settled > 0);
+    assert.equal(f.drafts.read(f.descriptor).input.draft, 'new input that fits');
+    const migrationCalls = f.settled;
+    f.type('another edit'); await f.owner.flushInputSave();
+    assert.equal(f.settled, migrationCalls, 'Typing after migration must never write metadata');
+    assert.equal(f.drafts.read(f.descriptor).input.draft, 'another edit');
+});
+
+test('browser draft scopes distinguish parents and children and preserve an explicit empty draft over old file content', async t => {
+    const f = await fixture(t), a = f.descriptor;
+    const b = { ...a, child: { ...a.child, topicId: 'other-child' } };
+    const c = { ...a, parent: { ...a.parent, topicId: 'other-parent' } };
+    assert.equal(f.drafts.save(a, { draft: 'child A' }).ok, true);
+    assert.equal(f.drafts.save(b, { draft: 'child B' }).ok, true);
+    assert.equal(f.drafts.read(c).input, null);
+    f.drafts.save(a, { draft: '', references: [], model: 'model' });
+    assert.equal(f.drafts.read(a).input.draft, '');
+    assert.equal(f.drafts.read(b).input.draft, 'child B');
+    f.drafts.remove(a);
+    assert.equal(f.drafts.read(a).input, null);
+    assert.equal(f.drafts.read(b).input.draft, 'child B');
 });
