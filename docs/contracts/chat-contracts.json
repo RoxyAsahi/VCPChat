@@ -921,7 +921,7 @@
     "dynamicSites": [
       {
         "file": "modules/ui-system/lifecycle-scope.js",
-        "line": 129,
+        "line": 131,
         "kind": "custom-event-listener",
         "match": "target.addEventListener(type"
       }
