@@ -835,6 +835,25 @@ export function createSidePaneController({
             };
         },
 
+        /** 给 VCPLifecycleInspector：每个标签的视图在不在、是否可见、隐藏了多久；不含标题和内容 */
+        getDiagnostics() {
+            const at = now();
+            return {
+                visible: state.visible,
+                tabs: state.tabs.map(tab => {
+                    const dormant = dormantTabs.get(tab.id);
+                    const times = viewTimes.get(tab.id);
+                    return {
+                        id: tab.id,
+                        kind: tab.kind,
+                        view: mountedTabMap.has(tab.id) ? 'live' : (dormant ? 'dormant' : (pendingTabMounts.has(tab.id) ? 'mounting' : 'unmounted')),
+                        visible: occurrences.get(tab.id)?.occurrence.isVisible() === true,
+                        hiddenMs: times?.hiddenSince != null ? at - times.hiddenSince : null,
+                        dormantReason: dormant?.reason || null
+                    };
+                })
+            };
+        },
 
         /**
          * 登记一个"打开标签页"入口，新增菜单和引导页都会列出它。返回注销函数。

@@ -119,6 +119,12 @@ test('a view hidden too long sleeps; the tab stays and remounts with what it sav
         assert.deepEqual(h.residency().live, ['probe:b']);
         assert.deepEqual(h.residency().dormant.map(({ tabId, reason }) => [tabId, reason]), [['probe:a', 'hidden']]);
         assert.ok(h.controller.getSnapshot().tabs.some(t => t.id === 'probe:a'));
+        const diagnostics = h.controller.getDiagnostics().tabs.filter(t => t.kind === 'probe');
+        assert.deepEqual(diagnostics.map(({ id, view, visible, dormantReason }) => ({ id, view, visible, dormantReason })), [
+            { id: 'probe:a', view: 'dormant', visible: false, dormantReason: 'hidden' },
+            { id: 'probe:b', view: 'live', visible: true, dormantReason: null }
+        ]);
+        assert.equal(diagnostics[1].hiddenMs, null);
 
         h.controller.activateTab('probe:a');
         await settle();

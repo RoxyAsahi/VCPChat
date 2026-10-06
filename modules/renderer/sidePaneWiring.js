@@ -50,6 +50,8 @@ export function initWorkspaceSidePane({
         persistence: { storage: win.localStorage }
     });
     subscriptions.add(controller);
+    const releaseDiagnostics = win.VCPLifecycleInspector?.setSidePaneDiagnosticsProvider?.(() => controller.getDiagnostics());
+    if (typeof releaseDiagnostics === 'function') subscriptions.add({ dispose: releaseDiagnostics });
 
     subscriptions.add(sideChat);
     // 带工程号时让 V工程 页打开后直接定位到这个工程
