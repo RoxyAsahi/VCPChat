@@ -4304,17 +4304,22 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1023,
+          "line": 497,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1029,
+          "line": 1076,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1043,
+          "line": 1082,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 1096,
           "kind": "custom-event-listener"
         },
         {
@@ -5885,19 +5890,25 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1023,
+          "line": 497,
+          "kind": "custom-event-listener",
+          "match": "retry.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 1076,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1029,
+          "line": 1082,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1043,
+          "line": 1096,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
@@ -24914,7 +24925,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1063,
+          "line": 1116,
           "kind": "custom-event-listener"
         },
         {
@@ -25008,7 +25019,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1063,
+          "line": 1116,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
