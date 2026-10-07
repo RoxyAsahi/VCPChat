@@ -127,3 +127,35 @@ test('a rejected catalog IPC shows an error instead of a permanent spinner', asy
         dom.window.close();
     }
 });
+
+test('reloading the list reuses the avatar URL so the browser cache can serve it', async () => {
+    const dom = new JSDOM('<!doctype html><html><body><ul id="agentList"></ul></body></html>', {
+        url: 'https://vcpchat.local/main.html', runScripts: 'outside-only'
+    });
+    const { window } = dom;
+    window.eval(source);
+    const avatarUrl = 'file:///data/Agents/ada/avatar.png?v=1700000000000';
+    window.itemListManager.init({
+        elements: { itemListUl: window.document.getElementById('agentList') },
+        electronAPI: {
+            getAgents: async () => [{ id: 'ada', name: 'Ada', avatarUrl }],
+            getAgentGroups: async () => [],
+            loadSettings: async () => ({ combinedItemOrder: [], vcpServerUrl: '' }),
+            getUnreadTopicCounts: async () => ({ success: true, counts: {} }),
+        },
+        refs: { currentSelectedItemRef: { get: () => ({ id: null }), set() {} } },
+        mainRendererFunctions: { selectItem() {} },
+        uiHelper: { showToastNotification() {} },
+    });
+    try {
+        const src = () => window.document.querySelector('#agentList li[data-item-id="ada"] img.avatar').getAttribute('src');
+        await window.itemListManager.loadItems();
+        const first = src();
+        await new Promise(resolve => setTimeout(resolve, 5));
+        await window.itemListManager.loadItems();
+        assert.equal(first, avatarUrl, 'the versioned URL from the main process is used as is');
+        assert.equal(src(), first, 'a refresh does not force every avatar to download again');
+    } finally {
+        dom.window.close();
+    }
+});

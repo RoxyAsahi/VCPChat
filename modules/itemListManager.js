@@ -897,7 +897,9 @@ window.itemListManager = (() => {
 
         const avatarImg = document.createElement('img');
         avatarImg.classList.add('avatar');
-        avatarImg.src = item.avatarUrl ? `${item.avatarUrl}${item.avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
+        // The main process versions avatar URLs by file mtime, so the URL is
+        // stable until the avatar changes and the browser cache can serve it.
+        avatarImg.src = item.avatarUrl || (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
         avatarImg.alt = `${item.name} 头像`;
         avatarImg.onerror = () => { avatarImg.src = (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png'); };
 
