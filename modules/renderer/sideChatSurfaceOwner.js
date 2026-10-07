@@ -35,7 +35,8 @@ export async function mountSideChatSurface(container, {
     chatCapabilities,
     scope = null,
     onStatusChange = null,
-    draftStore = null
+    draftStore = null,
+    restoredState = null
 } = {}) {
     if (!container || !container.ownerDocument) {
         throw new TypeError('mountSideChatSurface requires a valid container element');
@@ -116,6 +117,8 @@ export async function mountSideChatSurface(container, {
     let isDisposed = false;
     let isHistoryLoaded = false;
     let isDeletingMessage = false;
+    // 重新回复先存截短的历史再发送：这段 await 期间还没有 activeSendController，另起的发送会和它撞车
+    let isRegenerating = false;
     let isComposing = false;
     let activeOperation = null;
     let activeSendController = null;
@@ -181,6 +184,7 @@ export async function mountSideChatSurface(container, {
         root
     });
     const { pinToBottomIfSticky } = scrollingOwner;
+    scrollingOwner.restore(restoredState?.scroll);
 
     const liveRegenerateProxy = (id) => liveRegenerate?.(id);
     const messageEditor = createSideChatMessageEditor({
@@ -359,7 +363,7 @@ export async function mountSideChatSurface(container, {
     const onSubmit = async (event) => {
         event?.preventDefault?.();
         // 还在生成时不再起第二次发送：它失败后的清理会清掉正在进行的那次，停止按钮随之消失
-        if (isDisposed || !isHistoryLoaded || isDeletingMessage || activeSendController) return;
+        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController) return;
         if (!currentModel) {
             updateStatus('请先选择模型', 'error');
             return;
@@ -495,7 +499,16 @@ export async function mountSideChatSurface(container, {
 
     // 重新回复：截掉这条回答对应的提问及其后的所有消息，再用侧栏自己的模型和上下文把提问重新发出
     async function regenerate(assistantId) {
-        if (isDisposed || !isHistoryLoaded || isDeletingMessage || form.hasAttribute('aria-busy')) return;
+        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController || form.hasAttribute('aria-busy')) return;
+        isRegenerating = true;
+        try {
+            await regenerateNow(assistantId);
+        } finally {
+            isRegenerating = false;
+        }
+    }
+
+    async function regenerateNow(assistantId) {
         if (!currentModel) {
             updateStatus('请先选择模型', 'error');
             return;
@@ -543,7 +556,7 @@ export async function mountSideChatSurface(container, {
     submitInteractiveContent = (text) => {
         if (isDisposed) return;
         const notify = (message) => chatCapabilities?.uiHelper?.showToastNotification?.(message, 'warning');
-        if (activeSendController || isDeletingMessage || !isHistoryLoaded) {
+        if (activeSendController || isRegenerating || isDeletingMessage || !isHistoryLoaded) {
             notify('辅助对话正在处理上一条消息，请稍后再点。');
             return;
         }
@@ -584,6 +597,16 @@ export async function mountSideChatSurface(container, {
             return currentDescriptor;
         },
         surface,
+        // 隐藏久了控制器会让视图休眠（拆掉、再显示时重挂）；这些状态拆了会丢或会打断，期间不休眠。
+        // 输入框文字和引用不算：拆卸时由 draft-cache / draftStore 存下，重挂时还原
+        isBusy() {
+            return !isDisposed && (Boolean(activeSendController) || isRegenerating || isDeletingMessage
+                || hasUnsavedChanges || attachmentsOwner.count > 0 || messageEditor.isEditing()
+                || form.hasAttribute('aria-busy'));
+        },
+        captureState() {
+            return isDisposed ? null : { scroll: scrollingOwner.capture() };
+        },
         setVisible(visible) {
             if (visible && !isDisposed && isHistoryLoaded) {
                 textarea.focus();
@@ -721,12 +744,12 @@ export function createSideChatSurfaceOwner({
     let ownerDocument = doc;
     const draftStore = createSideChatDraftStore({ getStorage: () => ownerDocument?.defaultView?.localStorage });
     return Object.freeze({
-        async mountTab(descriptor, container, { scope: viewScope = null } = {}) {
+        async mountTab(descriptor, container, { scope: viewScope = null, restoredState = null } = {}) {
             ownerDocument ||= container.ownerDocument;
             const storedInput = draftStore.read(descriptor).input;
             if (storedInput) descriptor = { ...descriptor, ...storedInput };
             // 控制器给了 view scope 就挂在它下面，否则退回 provider 自己的 scope
-            const handle = await mountSurface(container, { descriptor, chatCapabilities, scope: viewScope || scope, draftStore });
+            const handle = await mountSurface(container, { descriptor, chatCapabilities, scope: viewScope || scope, draftStore, restoredState });
             return drafts.ownHandle(handle, descriptor);
         },
         readDraft: descriptor => draftStore.read(descriptor),
