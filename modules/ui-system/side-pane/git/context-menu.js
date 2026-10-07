@@ -15,6 +15,7 @@
 
 'use strict';
 
+import { moveMenuFocus } from '../menu-position.js';
 
 
 export function createGitContextMenu({
@@ -81,16 +82,7 @@ export function createGitContextMenu({
             return;
         }
         if (!contextMenu.contains(doc.activeElement)) return;
-        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-        const items = [...contextMenu.querySelectorAll('[role="menuitem"]:not([disabled])')];
-        if (!items.length) return;
-        event.preventDefault();
-        const current = items.indexOf(doc.activeElement);
-        let next = 0;
-        if (event.key === 'End') next = items.length - 1;
-        else if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
-        else if (event.key === 'ArrowUp') next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
-        items[next].focus();
+        moveMenuFocus(event, [...contextMenu.querySelectorAll('[role="menuitem"]:not([disabled])')]);
     }
 
     function openContextMenu(event, item) {
@@ -100,15 +92,16 @@ export function createGitContextMenu({
         menu.className = 'side-git-context-menu vcp-ui-scope';
         menu.setAttribute('role', 'menu');
         const entries = [
-            { icon: 'folder_open', label: '在文件管理器中打开', disabled: typeof api?.gitRevealPath !== 'function' || item.status === 'D', run: () => revealInFileManager(item) },
-            { icon: 'content_copy', label: '复制绝对路径', run: () => copyText(absolutePathOf(item), '绝对路径') },
-            { icon: 'content_copy', label: '复制相对路径', run: () => copyText(item.path, '相对路径') }
+            { action: 'reveal', icon: 'folder_open', label: '在文件管理器中打开', disabled: typeof api?.gitRevealPath !== 'function' || item.status === 'D', run: () => revealInFileManager(item) },
+            { action: 'copy-abs', icon: 'content_copy', label: '复制绝对路径', run: () => copyText(absolutePathOf(item), '绝对路径') },
+            { action: 'copy-rel', icon: 'content_copy', label: '复制相对路径', run: () => copyText(item.path, '相对路径') }
         ];
         entries.forEach((entry) => {
             const btn = doc.createElement('button');
             btn.type = 'button';
             btn.className = 'side-git-context-item';
             btn.setAttribute('role', 'menuitem');
+            btn.dataset.action = entry.action;
             btn.disabled = Boolean(entry.disabled);
             btn.innerHTML = `<span class="vcp-ui-icon" aria-hidden="true">${entry.icon}</span><span class="side-git-context-label"></span>`;
             btn.lastElementChild.textContent = entry.label;

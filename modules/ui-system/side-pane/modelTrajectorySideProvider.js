@@ -17,6 +17,7 @@
 'use strict';
 
 import { createSidePaneRootScope, pollWhileVisible } from './side-pane-occurrence.js';
+import { moveMenuFocus } from './menu-position.js';
 import {
     ROLE_LABELS, formatClockTime, formatDateTime, formatDuration, finishReasonLabel, effectiveFinishReason, sourceLabel,
     buildTimeline, summarizeRecords, buildSearchIndex, findTextMatches,
@@ -40,8 +41,6 @@ export const EXPANSION_KINDS = Object.freeze(['system', 'user', 'reasoning', 'as
 const EXPANSION_LABELS = Object.freeze({
     system: ROLE_LABELS.system, user: ROLE_LABELS.user, reasoning: '思考过程', assistant: ROLE_LABELS.assistant, 'tool-call': '工具调用', 'tool-result': ROLE_LABELS.tool
 });
-
-export const modelTrajectoryTabId = () => TAB_ID;
 
 /** 与主进程 sessionKeyFromContext 一致：群聊用群 id，否则用智能体 id，再接话题 id。 */
 export function trajectoryKeyFor(conversation) {
@@ -84,8 +83,7 @@ export function createModelTrajectorySideProvider({
                 title: '调用轨迹',
                 icon: 'monitoring',
                 closable: true,
-                scopeMode: 'global',
-                searchHint: '模型调用 请求 响应 token 轨迹'
+                scopeMode: 'global'
             });
             sidePaneController.setVisible?.(true);
             for (const instance of instances) instance.show(requestId);
@@ -133,6 +131,7 @@ export function createModelTrajectorySideProvider({
             let items = [];
             let loading = false;
             let loadError = '';
+            let loadErrorCode = '';
             let loadSeq = 0;
             let cancelReload = null;
             let cancelSearch = null;
@@ -184,6 +183,9 @@ export function createModelTrajectorySideProvider({
             const searchNext = iconButton('arrow_downward', '下一个匹配项', () => moveSearch(1));
             const searchClose = iconButton('close', '关闭搜索', () => closeSearch());
             searchBar.append(icon('search', 'side-traj-search-glyph'), searchInput, searchCount, searchPrev, searchNext, searchClose);
+            // data-action：与文案无关的稳定钩子
+            Object.entries({ search: searchBtn, 'expansion-menu': menuBtn, 'toggle-all': toggleAllBtn, 'open-directory': folderBtn, clear: clearBtn, refresh: refreshBtn, 'search-prev': searchPrev, 'search-next': searchNext, 'search-close': searchClose })
+                .forEach(([action, btn]) => { btn.dataset.action = action; });
             header.append(titleRow, summaryLine, searchBar);
 
             const menu = h('div', 'side-traj-menu');
@@ -520,6 +522,7 @@ export function createModelTrajectorySideProvider({
                 if (!has) { closeMenu(); closeSearch(); }
                 summaryLine.hidden = !has;
                 summaryLine.textContent = '';
+                summaryLine.dataset.callCount = String(records.length);
                 if (has) {
                     const summary = summarizeRecords(records);
                     summaryLine.appendChild(h('span', '', `${records.length} 次调用`));
@@ -542,21 +545,29 @@ export function createModelTrajectorySideProvider({
                 const records = data.records;
                 state.hidden = true;
                 state.className = 'side-traj-state';
+                // data-state：error / service-missing / no-conversation / loading / empty
+                let stateKey = '';
                 if (loadError) {
+                    stateKey = loadErrorCode || 'error';
                     state.hidden = false;
                     state.classList.add('error');
                     state.textContent = '';
                     state.append(h('p', '', '读取调用轨迹失败'), h('p', 'side-traj-state-detail', loadError));
                 } else if (!sessionKey) {
+                    stateKey = 'no-conversation';
                     state.hidden = false;
                     state.textContent = '请先在主聊天里选择一个智能体和话题。';
                 } else if (loading && records.length === 0) {
+                    stateKey = 'loading';
                     state.hidden = false;
                     state.textContent = '正在加载调用轨迹…';
                 } else if (records.length === 0) {
+                    stateKey = 'empty';
                     state.hidden = false;
                     state.textContent = '这个话题还没有模型调用记录。发一条消息后，每次发给模型的请求和它的回答都会记在这里。';
                 }
+                if (stateKey) state.dataset.state = stateKey;
+                else delete state.dataset.state;
                 truncatedNotice.hidden = !data.truncated;
             }
 
@@ -796,16 +807,7 @@ export function createModelTrajectorySideProvider({
                     closeMenu({ restoreFocus: true });
                     return;
                 }
-                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-                const items = [...menu.querySelectorAll('[role="menuitemcheckbox"]')];
-                if (!items.length) return;
-                event.preventDefault();
-                const current = items.indexOf(doc.activeElement);
-                let next = 0;
-                if (event.key === 'End') next = items.length - 1;
-                else if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
-                else if (event.key === 'ArrowUp') next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
-                items[next].focus();
+                moveMenuFocus(event, [...menu.querySelectorAll('[role="menuitemcheckbox"]')]);
             });
 
             // ---------------------------------------------------------------- 定位到某次调用（来自消息的「查看调用轨迹」）
@@ -851,15 +853,17 @@ export function createModelTrajectorySideProvider({
                     // 主进程没有这组接口（只刷新了页面、主进程还是旧的）时 invoke 会直接抛错，
                     // 不能让它冒出 mountTab，否则整页被移除、只剩空白
                     const missing = /No handler registered/i.test(String(error?.message || error));
-                    res = { success: false, error: missing ? '调用轨迹服务未启动，请完全退出并重新打开 VCPChat' : (error?.message || '读取调用轨迹失败') };
+                    res = { success: false, error: missing ? '调用轨迹服务未启动，请完全退出并重新打开 VCPChat' : (error?.message || '读取调用轨迹失败'), code: missing ? 'service-missing' : '' };
                 }
                 if (disposed() || seq !== loadSeq) return;
                 loading = false;
                 if (res?.success) {
                     data = res.data;
                     loadError = '';
+                    loadErrorCode = '';
                 } else {
                     loadError = res?.error || '读取调用轨迹失败';
+                    loadErrorCode = res?.code || '';
                 }
                 items = buildTimeline(data.records);
                 renderAll();
@@ -877,9 +881,15 @@ export function createModelTrajectorySideProvider({
 
             async function clearAll() {
                 if (!sessionKey) return;
-                const confirmed = typeof win.confirm === 'function' ? win.confirm('清空这个话题的全部调用轨迹？此操作不可撤销。') : true;
-                if (!confirmed) return;
-                const res = await api?.modelTrajectoryClear?.(sessionKey);
+                // 记下点按钮时的话题：确认框开着时切了会话，也只清这一个
+                const key = sessionKey;
+                const message = '清空这个话题的全部调用轨迹？此操作不可撤销。';
+                // 用应用自己的确认框；原生 window.confirm 会弹系统模态框卡住整个窗口，只在没有应用确认框时退回
+                const confirmed = typeof uiHelper?.showConfirmDialog === 'function'
+                    ? await uiHelper.showConfirmDialog(message, '清空调用轨迹', '清空', '取消', true)
+                    : (typeof win.confirm === 'function' ? win.confirm(message) : true);
+                if (!confirmed || disposed()) return;
+                const res = await api?.modelTrajectoryClear?.(key);
                 if (res?.success) toast('已清空调用轨迹', 'success');
                 else toast(res?.error || '清空失败', 'error');
             }

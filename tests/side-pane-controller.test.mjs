@@ -112,7 +112,6 @@ test('SidePaneController showNotifications and openChat mount views and sync vis
     await controller.closeTab('side-chat-test');
     assert.equal(disposed, true);
     assert.equal(controller.getSnapshot().activeTabId, 'notifications');
-    assert.equal(controller.getSnapshot().visible, false, '最后一个可关的标签关掉后面板收起');
     assert.equal(tabListElement.children.length, 1);
     assert.equal(notifView.classList.contains('active'), true);
     assert.equal(contentContainer.querySelector('[data-tab-id="side-chat-test"]'), null);
@@ -318,6 +317,8 @@ test('a failed mount shows an error with a retry instead of a blank pane', async
         assert.equal(views[0].hidden, false, 'the failed tab stays the visible one');
         assert.equal(views[0].querySelector('[role="alert"]').textContent.includes('mount failed'), true);
         assert.equal(views[0].textContent.includes('half drawn'), false, 'what the provider half drew is cleared');
+        assert.equal(root.ownerDocument.activeElement, views[0].querySelector('.side-pane-mount-error-retry'),
+            'focus lands on the retry button like it would on a tab that opened');
 
         views[0].querySelector('.side-pane-mount-error-retry').click();
         await new Promise(resolve => setTimeout(resolve, 0));

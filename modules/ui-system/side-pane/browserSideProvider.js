@@ -11,6 +11,7 @@
 'use strict';
 
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
+import { moveMenuFocus } from './menu-position.js';
 
 export const BROWSER_PARTITION = 'persist:vcp-side-browser';
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'about:']); // 同 browserHandlers.js：不开 file: 本地页
@@ -427,24 +428,19 @@ export function createBrowserSideProvider({
                 moreBtn.setAttribute('aria-expanded', 'true');
                 menu.querySelector('[role="menuitem"]:not([disabled])')?.focus();
             };
-            // 地址栏里打了一半就点走：回到当前页面的网址（setAddress 在聚焦时不改它，没有这一步会一直留着半截文字）
-            own.listen(address, 'blur', () => { address.value = currentUrl === 'about:blank' ? '' : currentUrl; });
+            // 地址栏里打了一半就点走：回到当前页面的网址（setAddress 在聚焦时不改它，没有这一步会一直留着半截文字）。
+            // 切到别的窗口（比如去复制网址）也会触发 blur，那时整个文档都没焦点，打了一半的字要留着
+            own.listen(address, 'blur', () => {
+                if (doc.hasFocus?.() === false) return;
+                address.value = currentUrl === 'about:blank' ? '' : currentUrl;
+            });
             own.listen(menu, 'keydown', (event) => {
                 if (event.key === 'Escape' || event.key === 'Tab') {
                     event.preventDefault();
                     closeMenu({ restoreFocus: true });
                     return;
                 }
-                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-                const items = Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled])'));
-                if (!items.length) return;
-                event.preventDefault();
-                const current = items.indexOf(doc.activeElement);
-                const next = event.key === 'Home' ? 0
-                    : event.key === 'End' ? items.length - 1
-                        : event.key === 'ArrowDown' ? (current + 1) % items.length
-                            : (current - 1 + items.length) % items.length;
-                items[next].focus();
+                moveMenuFocus(event, Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled])')));
             });
             const onDocumentPointerDown = (event) => {
                 if (!menu.hidden && !menu.contains(event.target) && !moreBtn.contains(event.target)) closeMenu();
