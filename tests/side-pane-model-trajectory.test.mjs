@@ -377,3 +377,67 @@ test('closing the trajectory tab while the push registration is pending leaves n
     assert.equal(env.state.lists.length, 0);
     assert.equal(env.view.innerHTML, '');
 });
+
+test('opening from a side chat reads the child topic and finds its reply; a main chat switch goes back to following', async () => {
+    const env = makeEnv({ recs: manyRecords(2) });
+    const handle = await env.provider.mountTab({ id: 'x' }, env.view);
+    assert.equal(env.state.lists.at(-1)[0], 'agent1__t1');
+
+    const child = { item: { id: 'agent1', name: '辅助对话 1' }, topicId: 'sidechat_1' };
+    await env.provider.openModelTrajectoryTab({ requestId: 'm1', conversation: child });
+    await wait(50);
+    assert.equal(env.state.lists.at(-1)[0], 'agent1__sidechat_1');
+    assert.ok(env.view.querySelectorAll('.side-traj-call')[1].classList.contains('flash'));
+    assert.equal(env.state.toasts.filter(text => /没有对应的调用记录/.test(text)).length, 0);
+
+    env.state.conversation = { item: { id: 'agent2', name: '另一个' }, topicId: 't9' };
+    env.state.conversationListeners[0]();
+    await wait(50);
+    assert.equal(env.state.lists.at(-1)[0], 'agent2__t9');
+
+    await env.provider.openModelTrajectoryTab({ requestId: 'm0', conversation: child });
+    await wait(50);
+    await env.provider.openModelTrajectoryTab();
+    await wait(50);
+    assert.equal(env.state.lists.at(-1)[0], 'agent2__t9', 'opening from the main chat follows the main chat again');
+    await handle.dispose();
+});
+
+test('rebuilding cards on every change does not pile up listener records on the view scope', async () => {
+    const env = makeEnv({ recs: manyRecords(3) });
+    const view = createSidePaneRootScope(null, 'test-view');
+    const handle = await env.provider.mountTab({ id: 'x' }, env.view, { scope: view });
+    const { diagnostics } = globalThis.VCPLifecycle;
+    const owned = () => diagnostics.snapshot().find(scope => scope.parentId === view.id).resources.length;
+    const before = owned();
+    for (let i = 0; i < 10; i++) {
+        env.state.recs = env.state.recs.map(record => ({ ...record, endedAt: record.endedAt + 1 }));
+        env.fire({ sessionKey: 'agent1__t1' });
+        await wait(150);
+    }
+    assert.ok(env.state.lists.length > 10, 'the cards were rebuilt on each change');
+    assert.equal(owned(), before);
+    // 行内的复制按钮仍然能用
+    env.view.querySelector('.side-traj-row-copy:not([disabled])').click();
+    await wait();
+    assert.equal(env.state.copied.length, 1);
+    await handle.dispose();
+    await view.dispose('test');
+});
+
+test('a reader parked at the top of the trajectory stays there while new calls arrive', async () => {
+    const env = makeEnv({ recs: manyRecords(4) });
+    const handle = await env.provider.mountTab({ id: 'x' }, env.view);
+    const scroller = env.view.querySelector('.side-traj-scroll');
+    // jsdom 没有布局：给出一个比视口高的内容
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => 5000 });
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 400 });
+    scroller.scrollTop = 0;
+    scroller.dispatchEvent(new env.dom.window.Event('scroll'));
+    env.state.recs = [...env.state.recs, ...manyRecords(6).slice(4)];
+    env.fire({ sessionKey: 'agent1__t1' });
+    await wait(150);
+    assert.equal(env.view.querySelectorAll('.side-traj-call').length, 6);
+    assert.equal(scroller.scrollTop, 0);
+    await handle.dispose();
+});

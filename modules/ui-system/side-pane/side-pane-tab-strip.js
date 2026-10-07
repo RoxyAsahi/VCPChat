@@ -2,7 +2,7 @@
 'use strict';
 
 import { createTabSortable } from './side-pane-tab-dnd.js';
-import { getTabIconName, resolveTabsOverflow } from './side-pane-tab-utils.js';
+import { findByTabId, getTabIconName, resolveTabsOverflow } from './side-pane-tab-utils.js';
 
 // 标签标题悬停提示、面板切换动画、可拖拽排序的标签
 const TAB_TOOLTIP_DELAY_MS = 1500;
@@ -12,7 +12,8 @@ const TAB_TOOLTIP_DELAY_MS = 1500;
  *   getTabs() / getActiveTabId()   当前要显示的标签
  *   isClosable(tab)                是否画关闭按钮
  *   statusTabId / getStatus()      带状态圆点的标签（通知）和它的 { status, text }
- *   onActivate / onClose / onReorder / onContextMenu / onRendered
+ *   onActivate(tabId, { focus }) / onClose / onReorder / onContextMenu / onRendered
+ *     键盘切换时传 { focus: false }：焦点留在标签上，不挪进面板
  */
 export function createSidePaneTabStrip({
     tabListElement,
@@ -85,15 +86,17 @@ export function createSidePaneTabStrip({
         let overflowing = true;
         if (addButton && addButtonHome) {
             const addInside = addButton.parentElement === tabListElement;
-            const measured = addButton.getBoundingClientRect?.().width || 0;
+            const addButtonWidth = addButton.getBoundingClientRect?.().width || 28;
+            const viewportWidth = tabListElement.clientWidth || 0;
             const overflow = resolveTabsOverflow({
                 addButtonInside: addInside,
-                addButtonWidth: measured || 28,
+                addButtonWidth,
                 tabCount: items.length,
-                viewportWidth: tabListElement.clientWidth || 0
+                viewportWidth
             });
-            // 视口宽度未知（隐藏或无布局）时保持在右侧操作区，避免来回搬动
-            overflowing = tabListElement.clientWidth ? overflow : true;
+            // 视口放不下一个新增按钮（面板收起时只剩内边距那几像素，或没有布局）就当宽度未知，按钮留在右侧操作区。
+            // 否则收起状态下两种摆法互相判成对方，按钮每帧搬来搬去，每次搬动都让整页样式重算。
+            overflowing = viewportWidth > addButtonWidth ? overflow : true;
             if (!overflowing && !addInside) {
                 tabListElement.appendChild(addButton);
             } else if (overflowing && addInside) {
@@ -133,7 +136,7 @@ export function createSidePaneTabStrip({
     function syncStatus() {
         const current = statusTabId ? getStatus() : null;
         if (!current) return;
-        const btn = tabListElement.querySelector(`.side-pane-tab[data-tab-id="${statusTabId}"]`);
+        const btn = findByTabId(tabListElement, '.side-pane-tab[data-tab-id]', statusTabId);
         const dot = btn?.querySelector('.side-pane-tab-status');
         if (!dot) return;
         const { status = 'unknown', text = '' } = current;
@@ -156,6 +159,7 @@ export function createSidePaneTabStrip({
         btn.setAttribute('aria-selected', String(isActive));
         btn.setAttribute('tabindex', isActive ? '0' : '-1');
         btn.setAttribute('data-tab-id', tab.id);
+        if (isClosable(tab)) btn.setAttribute('aria-keyshortcuts', 'Delete');
 
         const iconSpan = doc.createElement('span');
         iconSpan.className = 'tab-icon vcp-ui-icon';
@@ -230,6 +234,10 @@ export function createSidePaneTabStrip({
         getTabs().forEach(tab => {
             tabListElement.insertBefore(createTabItem(tab, tab.id === activeTabId), insertAnchor);
         });
+        // 激活的是新标签页或藏起来的通知时没有标签带 tabindex=0，给第一个，标签条仍能用 Tab 键进来
+        if (!tabListElement.querySelector('[role="tab"][tabindex="0"]')) {
+            tabListElement.querySelector('[role="tab"]')?.setAttribute('tabindex', '0');
+        }
         syncStatus();
         onRendered();
         layout();
@@ -259,16 +267,26 @@ export function createSidePaneTabStrip({
         cleanups.push(() => resizeObserver.disconnect());
     }
 
-    // 方向键 / Home / End 在标签之间移动并激活
+    // 方向键 / Home / End 在标签之间移动并激活（同 ZCode 用的 Radix Tabs：焦点跟着走、自动激活）；Delete 关掉聚焦的标签
     const onKeydown = (e) => {
         const tabButtons = Array.from(tabListElement.querySelectorAll('[role="tab"]'));
         if (tabButtons.length === 0) return;
+        if (e.key === 'Delete' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+            const focusedId = e.target?.closest?.('[role="tab"]')?.getAttribute('data-tab-id');
+            const focusedTab = focusedId ? getTabs().find(tab => tab.id === focusedId) : null;
+            if (focusedTab && isClosable(focusedTab)) {
+                e.preventDefault();
+                onClose(focusedId);
+            }
+            return;
+        }
         const currentIndex = tabButtons.findIndex(b => b.getAttribute('data-tab-id') === getActiveTabId());
         let targetIndex = currentIndex;
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             targetIndex = (currentIndex + 1) % tabButtons.length;
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-            targetIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+            // 当前是新标签页（不在标签条上）时，往左落到最后一个
+            targetIndex = currentIndex < 0 ? tabButtons.length - 1 : (currentIndex - 1 + tabButtons.length) % tabButtons.length;
         } else if (e.key === 'Home') {
             targetIndex = 0;
         } else if (e.key === 'End') {
@@ -278,8 +296,10 @@ export function createSidePaneTabStrip({
         }
         e.preventDefault();
         if (targetIndex !== currentIndex && targetIndex >= 0 && targetIndex < tabButtons.length) {
-            onActivate(tabButtons[targetIndex].getAttribute('data-tab-id'));
-            tabButtons[targetIndex].focus();
+            // 激活会重建标签条，旧按钮随之离开文档；焦点留在标签上（WAI-ARIA Tabs），按 id 找重建后的按钮
+            const targetId = tabButtons[targetIndex].getAttribute('data-tab-id');
+            onActivate(targetId, { focus: false });
+            findByTabId(tabListElement, '[role="tab"][data-tab-id]', targetId)?.focus?.();
         }
     };
     tabListElement.addEventListener('keydown', onKeydown);
@@ -294,7 +314,7 @@ export function createSidePaneTabStrip({
         syncStatus,
         hideTooltip,
         focusTab(tabId) {
-            tabListElement.querySelector(`[role="tab"][data-tab-id="${tabId}"]`)?.focus?.();
+            findByTabId(tabListElement, '[role="tab"][data-tab-id]', tabId)?.focus?.();
         },
         dispose() {
             disposed = true;

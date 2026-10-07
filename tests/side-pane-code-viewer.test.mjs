@@ -166,6 +166,49 @@ test('replaced picker rows no longer trigger reads after filtering', async () =>
     }
 });
 
+test('workspace picker is keyboard usable and returns focus to its toggle after opening a file', async () => {
+    const dom = new JSDOM('<section id="view"></section>', { url: 'https://vcpchat.local/' });
+    const doc = dom.window.document;
+    const provider = createCodeViewerSideProvider({ document: doc, uiHelper: null, api: {
+        async gitListWorkspaces() { return { success: true, data: { workspaces: [{ id: 'w', path: '/repo' }], activeWorkspaceId: 'w' } }; },
+        async sourceListFiles() { return { success: true, data: { files: ['a.js', 'b.js'] } }; },
+        async sourceReadFile(_workspace, path) { return { success: true, data: { text: path } }; }
+    } });
+    const view = doc.getElementById('view');
+    doc.body.appendChild(view);
+    const handle = await provider.mountTab({ title: '代码', payload: {} }, view);
+    try {
+        const filter = view.querySelector('.side-code-picker-filter');
+        const list = view.querySelector('.side-code-picker-list');
+        const toggle = view.querySelector('[aria-label="选择文件"]');
+        assert.equal(filter.getAttribute('aria-label'), '搜索文件名');
+        assert.notEqual(list.getAttribute('role'), 'listbox', 'rows are buttons, not options');
+        assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+        const key = (target, k) => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+        filter.focus();
+        key(filter, 'ArrowDown');
+        assert.equal(doc.activeElement?.dataset.path, 'a.js');
+        key(doc.activeElement, 'ArrowDown');
+        assert.equal(doc.activeElement?.dataset.path, 'b.js');
+        key(doc.activeElement, 'Home');
+        key(doc.activeElement, 'ArrowUp');
+        assert.equal(doc.activeElement, filter);
+
+        key(filter, 'ArrowDown');
+        doc.activeElement.click();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(handle.getCode(), 'a.js');
+        assert.equal(view.querySelector('.side-code-picker').classList.contains('is-collapsed'), true);
+        assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+        assert.equal(doc.activeElement, toggle, 'focus does not fall to body when the picker collapses');
+        assert.equal(view.querySelector('[data-path="a.js"]').getAttribute('aria-current'), 'true');
+    } finally {
+        handle.dispose();
+        dom.window.close();
+    }
+});
+
 function fileTab(filePath) {
     return { id: `code-viewer:${filePath}`, title: filePath.split('/').pop(), payload: { filePath } };
 }
@@ -307,4 +350,105 @@ test('large files only render the first preview chunk, cut at a line end', async
         handle.dispose();
         dom.window.close();
     }
+});
+
+test('the file button reveals a workspace file in the file manager and never opens it by association', async () => {
+    const dom = new JSDOM('<section id="view"></section>');
+    const doc = dom.window.document;
+    const revealed = [];
+    const toasts = [];
+    const opened = [];
+    const api = {
+        gitListWorkspaces: async () => ({ success: true, data: { workspaces: [{ id: 'ws1', path: 'C:\\proj' }] } }),
+        sourceReadFile: async () => ({ success: true, data: { content: 'x', encoding: 'utf8' } }),
+        gitRevealPath: async (wsId, rel) => { revealed.push([wsId, rel]); return { success: true }; },
+        openPythonAttachmentInTextEditor: (p) => opened.push(p),
+        sendOpenExternalLink: (p) => opened.push(p)
+    };
+    const provider = createCodeViewerSideProvider({ document: doc, api, uiHelper: { showToastNotification: (m, t) => toasts.push([m, t]) } });
+    const click = async (filePath) => {
+        const view = doc.createElement('section');
+        doc.body.append(view);
+        const handle = await provider.mountTab({ title: 'f', payload: { filePath } }, view);
+        view.querySelector('[data-action="open-external"]').click();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        await handle?.dispose?.();
+    };
+    await click('C:\\proj\\src\\a.js');
+    assert.deepEqual(revealed, [['ws1', 'src/a.js']]);
+    await click('C:\\Users\\me\\payload.bat');
+    assert.deepEqual(revealed.length, 1, 'a file outside the workspaces is not revealed');
+    assert.equal(toasts.at(-1)[0].includes('payload.bat'), true, 'its path is shown instead');
+    assert.deepEqual(opened, [], 'nothing is opened through a file association');
+    dom.window.close();
+});
+
+test('a path outside every workspace is only read after the user asks for it', async () => {
+    const dom = new JSDOM('<section id="view"></section>');
+    const doc = dom.window.document;
+    const reads = [];
+    const provider = createCodeViewerSideProvider({ document: doc, uiHelper: null, api: {
+        gitListWorkspaces: async () => ({ success: true, data: { workspaces: [{ id: 'ws1', path: 'C:\\proj' }] } }),
+        sourceReadFile: async () => ({ success: true, data: { text: 'in workspace' } }),
+        async getTextContent(filePath) { reads.push(filePath); return { text: 'PRIVATE KEY' }; }
+    } });
+    const view = doc.getElementById('view');
+    const handle = await provider.mountTab({ title: 'id_rsa', payload: { filePath: 'C:\\Users\\me\\.ssh\\id_rsa' } }, view);
+    try {
+        assert.deepEqual(reads, [], 'nothing is read before the user agrees');
+        assert.equal(handle.getCode(), '');
+        assert.match(view.textContent, /不在任何已登记的工作区里/);
+        assert.match(view.textContent, /\.ssh/);
+        const consent = [...view.querySelectorAll('button')].find(b => b.textContent === '读取这个文件');
+        consent.click();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        assert.deepEqual(reads, ['C:\\Users\\me\\.ssh\\id_rsa']);
+        assert.equal(handle.getCode(), 'PRIVATE KEY');
+
+        // 工作区里的文件照常直接读
+        const inside = doc.createElement('section');
+        doc.body.append(inside);
+        const insideHandle = await provider.mountTab({ title: 'a.js', payload: { filePath: 'C:\\proj\\a.js' } }, inside);
+        assert.equal(insideHandle.getCode(), 'in workspace');
+        insideHandle.dispose();
+    } finally {
+        handle.dispose();
+        dom.window.close();
+    }
+});
+
+test('code is rendered in chunks whose text and line numbers stay continuous', async () => {
+    const { CODE_CHUNK_LINES } = await import('../modules/ui-system/side-pane/code-viewer/editor.js');
+    const dom = new JSDOM('<section id="view"></section>');
+    const doc = dom.window.document;
+    const lineCount = CODE_CHUNK_LINES * 2 + 50;
+    const code = Array.from({ length: lineCount }, (_, i) => `line ${i + 1}`).join('\n');
+    const provider = createCodeViewerSideProvider({ document: doc, uiHelper: null, api: null });
+    const view = doc.getElementById('view');
+    const handle = await provider.mountTab({ title: 'chunks.txt', payload: { code, language: 'plaintext' } }, view);
+    try {
+        const codeChunks = view.querySelectorAll('.side-code-pre .side-code-chunk');
+        const gutterChunks = view.querySelectorAll('.side-code-gutter .side-code-chunk');
+        assert.equal(codeChunks.length, 3);
+        assert.deepEqual([...gutterChunks].map(chunk => chunk.children.length), [CODE_CHUNK_LINES, CODE_CHUNK_LINES, 50]);
+        assert.equal(view.querySelector('.side-code-pre').textContent, code);
+        assert.equal(view.querySelectorAll('.side-code-line-number').length, lineCount);
+        assert.equal([...view.querySelectorAll('.side-code-line-number')].at(-1).textContent, String(lineCount));
+    } finally {
+        handle.dispose();
+        dom.window.close();
+    }
+});
+
+test('highlighted html is split per line with spans that cross lines closed and reopened', async () => {
+    const { splitHighlightedLines } = await import('../modules/ui-system/side-pane/code-viewer/editor.js');
+    const html = '<span class="hljs-comment">/* a\nb */</span> x\n<span class="hljs-string">`c\n<span class="hljs-subst">${d}\ne</span>`</span>';
+    assert.deepEqual(splitHighlightedLines(html), [
+        '<span class="hljs-comment">/* a</span>',
+        '<span class="hljs-comment">b */</span> x',
+        '<span class="hljs-string">`c</span>',
+        '<span class="hljs-string"><span class="hljs-subst">${d}</span></span>',
+        '<span class="hljs-string"><span class="hljs-subst">e</span>`</span>'
+    ]);
+    assert.deepEqual(splitHighlightedLines(''), ['']);
 });

@@ -211,6 +211,29 @@ test('controller: the tab overview is keyboard driven (arrows, Enter, Escape)', 
     button.click();
     press('Escape');
     assert.equal(popover.hidden, true);
+
+    // 屏幕阅读器要能读到方向键选中的是哪一项：combobox + listbox + aria-activedescendant
+    button.click();
+    const list = doc.getElementById('sidePaneOpenTabsList');
+    assert.equal(input.getAttribute('role'), 'combobox');
+    assert.equal(input.getAttribute('aria-controls'), list.id);
+    assert.equal(list.getAttribute('role'), 'listbox');
+    press('ArrowDown');
+    const selected = doc.querySelector('.side-pane-overview-item.kbd-active');
+    assert.equal(selected.getAttribute('role'), 'option');
+    assert.equal(selected.getAttribute('aria-selected'), 'true');
+    assert.equal(input.getAttribute('aria-activedescendant'), selected.id);
+    assert.equal(doc.getElementById(selected.id), selected);
+
+    // 关闭按钮跟着整行重建掉了，焦点回到搜索框
+    const closeBtn = doc.querySelector('.side-pane-overview-item[data-tab-id="n2"] .side-pane-tab-close');
+    closeBtn.focus();
+    closeBtn.click();
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(doc.querySelector('.side-pane-overview-item[data-tab-id="n2"]'), null);
+    assert.equal(doc.activeElement, input);
+    assert.equal(input.hasAttribute('aria-activedescendant'), false, 'no stale id after a redraw');
     controller.dispose();
 });
 
@@ -249,4 +272,35 @@ test('controller: the 通知 tab mirrors the VCPLog connection status', async ()
     assert.equal(tab().querySelector('.tab-title').textContent, 'VCPLog 已连接');
     controller.dispose();
     dom.window.close();
+});
+
+test('tab strip: a collapsed pane (only padding left) keeps the add button home instead of moving it back and forth', async () => {
+    const { createSidePaneTabStrip } = await import('../modules/ui-system/side-pane/side-pane-tab-strip.js');
+    const dom = new JSDOM('<div id="tabs"></div><div id="actions"><button id="add"></button></div>');
+    const doc = dom.window.document;
+    const tabList = doc.getElementById('tabs');
+    const addButton = doc.getElementById('add');
+    const home = doc.getElementById('actions');
+    // 收起的面板宽度为 0，标签条只剩左右内边距那几像素
+    Object.defineProperty(tabList, 'clientWidth', { configurable: true, get: () => 4 });
+    addButton.getBoundingClientRect = () => ({ width: 28 });
+    let moves = 0;
+    new dom.window.MutationObserver(records => { moves += records.length; }).observe(home, { childList: true });
+    const strip = createSidePaneTabStrip({
+        tabListElement: tabList,
+        addButton,
+        getTabs: () => [],
+        getActiveTabId: () => null,
+        isClosable: () => true,
+        onActivate() {}, onClose() {}, onReorder() {}, onContextMenu() {}
+    });
+    try {
+        for (let i = 0; i < 6; i++) strip.layout();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(addButton.parentElement, home);
+        assert.equal(moves, 0);
+    } finally {
+        strip.dispose();
+        dom.window.close();
+    }
 });
