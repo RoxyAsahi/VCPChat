@@ -70,6 +70,7 @@ VCPChat/
 │       ├── mobile_sync.yml
 │       ├── rust_assistant_engine_build.yml
 │       ├── side_pane_e2e.yml
+│       ├── side_pane_windows.yml
 │       └── vcpchat-installer.yml
 ├── .snow/
 │   └── settings.json
