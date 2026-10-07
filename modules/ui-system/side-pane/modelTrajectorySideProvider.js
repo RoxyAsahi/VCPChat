@@ -61,17 +61,23 @@ export function createModelTrajectorySideProvider({
     const kind = 'model-trajectory';
     const win = doc.defaultView || window;
     const toast = (message, type = 'info') => uiHelper?.showToastNotification?.(message, type);
-    /** @type {Set<{focusCall: (requestId: string) => void}>} */
+    /** @type {Set<{show: (requestId: string | null) => void}>} */
     const instances = new Set();
     let requestedRequestId = null;
+    // 从辅助对话打开时看的是它的子话题（同 ZCode 打开时显式带上会话）；主聊天切换会话或从主聊天再打开时回到跟随主聊天
+    let pinnedConversation = null;
 
     return {
         kind,
 
-        /** 打开（或聚焦）调用轨迹标签；带 requestId（消息 id）时滚动到对应的那次调用。 */
-        async openModelTrajectoryTab({ requestId = null } = {}) {
+        /**
+         * 打开（或聚焦）调用轨迹标签；带 requestId（消息 id）时滚动到对应的那次调用。
+         * conversation（{ item: { id, name }, topicId }）指定要看的会话，不传就跟随主聊天当前会话。
+         */
+        async openModelTrajectoryTab({ requestId = null, conversation = null } = {}) {
             if (!sidePaneController) return null;
             requestedRequestId = requestId;
+            pinnedConversation = trajectoryKeyFor(conversation) ? conversation : null;
             const handle = await sidePaneController.openTab({
                 id: TAB_ID,
                 kind,
@@ -82,7 +88,7 @@ export function createModelTrajectorySideProvider({
                 searchHint: '模型调用 请求 响应 token 轨迹'
             });
             sidePaneController.setVisible?.(true);
-            if (requestId) for (const instance of instances) instance.focusCall(requestId);
+            for (const instance of instances) instance.show(requestId);
             handle?.focus?.();
             return handle;
         },
@@ -107,13 +113,16 @@ export function createModelTrajectorySideProvider({
                 node.setAttribute('aria-hidden', 'true');
                 return node;
             };
-            const iconButton = (name, label, onClick, className = '') => {
+            // 常驻按钮的监听归 own；卡片里的按钮每次重建卡片都会换新，监听跟着元素一起丢弃（inline），
+            // 不然每次刷新都往 own 上多记一条，连同闭包里整段消息文本一直留到视图释放
+            const iconButton = (name, label, onClick, className = '', { inline = false } = {}) => {
                 const btn = h('button', `side-traj-icon-btn ${className}`.trim());
                 btn.type = 'button';
                 btn.title = label;
                 btn.setAttribute('aria-label', label);
                 btn.appendChild(icon(name));
-                if (onClick) own.listen(btn, 'click', onClick);
+                if (onClick && inline) btn.addEventListener('click', onClick);
+                else if (onClick) own.listen(btn, 'click', onClick);
                 return btn;
             };
 
@@ -270,7 +279,7 @@ export function createModelTrajectorySideProvider({
                     } catch (_error) {
                         toast('复制失败', 'error');
                     }
-                }, 'side-traj-row-copy');
+                }, 'side-traj-row-copy', { inline: true });
                 copyBtn.disabled = !copyText;
                 head.append(chevron, label, body, meta, copyBtn);
 
@@ -551,6 +560,8 @@ export function createModelTrajectorySideProvider({
             function renderTimeline() {
                 const wasAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_THRESHOLD_PX;
                 const previousTop = scroller.scrollTop;
+                // 第一次画出内容时贴到底；之后只看读者原来在不在底部，停在顶部读第一条调用的人不会被拉走
+                const firstContent = timeline.childElementCount === 0;
                 const nextCache = new Map();
                 const fragment = doc.createDocumentFragment();
                 buildObserver?.disconnect();
@@ -576,7 +587,7 @@ export function createModelTrajectorySideProvider({
                 });
                 updateAllRows();
                 if (!doc.hidden) {
-                    stickToBottom = wasAtBottom || previousTop === 0;
+                    stickToBottom = wasAtBottom || firstContent;
                     if (stickToBottom) scroller.scrollTop = scroller.scrollHeight;
                     else scroller.scrollTop = previousTop;
                 }
@@ -777,7 +788,7 @@ export function createModelTrajectorySideProvider({
 
             // ---------------------------------------------------------------- 数据
             const currentKey = () => {
-                const conversation = getConversation?.() || null;
+                const conversation = pinnedConversation || getConversation?.() || null;
                 conversationLabel = conversation?.item?.name || '';
                 return trajectoryKeyFor(conversation);
             };
@@ -850,7 +861,14 @@ export function createModelTrajectorySideProvider({
                 if (change.sessionKey === sessionKey || change.sessionKey === currentKey()) reloadWhenShown(scheduleReload);
             };
 
-            const instance = { focusCall: requestId => { focusRequestId = requestId; if (!loading) renderAll(); } };
+            const instance = {
+                show: requestId => {
+                    if (requestId) focusRequestId = requestId;
+                    // 换了要看的会话（比如从辅助对话打开）先读那个会话，读完再定位
+                    if (currentKey() !== sessionKey) void load();
+                    else if (!loading) renderAll();
+                }
+            };
             instances.add(instance);
             own.own(() => instances.delete(instance), 'focus-request-target');
             own.own(() => {
@@ -876,6 +894,7 @@ export function createModelTrajectorySideProvider({
             // 切换智能体 / 话题（包括删掉当前助手）都由主聊天通知，接上了就不用轮询
             own.subscribe(() => {
                 const off = onConversationChange?.(() => {
+                    pinnedConversation = null;
                     if (!disposed() && currentKey() !== sessionKey) reloadWhenShown(() => void load());
                 });
                 followsConversation = typeof off === 'function';

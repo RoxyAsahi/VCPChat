@@ -156,6 +156,8 @@ export function mountGitView(host, {
 
     const store = Object.freeze({
         get currentWorkspaceId() { return currentWorkspaceId; },
+        // 状态条目的路径相对仓库根；工作区可能只是仓库的一个子目录
+        get currentToplevel() { return currentStatus?.toplevel || null; },
         get isDisposed() { return disposed(); }
     });
 
@@ -266,9 +268,19 @@ export function mountGitView(host, {
             return;
         }
         empty.hidden = true;
+        // 推送触发的重绘会换掉整张列表：记下焦点所在的行，重建后还给同一个文件（React 按 key 复用节点时焦点本来就不丢，
+        // ZCode/DSH 的列表都是这样）；那个文件没了就给同一位置的行
+        const focusedCard = list.contains(doc.activeElement) ? doc.activeElement.closest('.side-git-card') : null;
+        const focusKey = focusedCard?.dataset.key ?? null;
+        const focusIndex = focusedCard ? Array.prototype.indexOf.call(list.children, focusedCard) : -1;
         list.innerHTML = '';
         items.forEach(item => list.appendChild(buildCard(item)));
         cardsOwner.prefetch(items);
+        if (focusKey !== null) {
+            const cards = Array.from(list.querySelectorAll('.side-git-card'));
+            const target = cards.find(card => card.dataset.key === focusKey) || cards[Math.min(focusIndex, cards.length - 1)];
+            target?.querySelector('.side-git-row')?.focus?.({ preventScroll: true });
+        }
     }
 
     // ── 数据 ────────────────────────────────────────────────
@@ -315,9 +327,10 @@ export function mountGitView(host, {
             if (currentSource === AI_SOURCE && !aiBatchLoaded) await loadAiBatch();
             if (disposed() || requestedId !== currentWorkspaceId) return;
             // 推送触发的静默刷新：状态没变就不重绘（避免闪烁、丢 hover），有展开的 diff 时照常重绘。
+            // 状态里带着每个文件的增删行数，内容变了 key 也会变；变了就让缓存的 diff 作废（展开的那个保持展开，重新取）
             const statusKey = JSON.stringify(res.data);
             if (quiet && statusKey === lastStatusKey && !cardsOwner.hasExpanded()) { skipRender = true; return; }
-            if (statusKey !== lastStatusKey) { cardsOwner.clearDiff(); }
+            if (statusKey !== lastStatusKey) { cardsOwner.invalidate(); }
             lastStatusKey = statusKey;
         } catch (err) {
             if (quiet) return;

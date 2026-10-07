@@ -13,9 +13,9 @@
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
 
 export const BROWSER_PARTITION = 'persist:vcp-side-browser';
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'about:']);
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'about:']); // 同 browserHandlers.js：不开 file: 本地页
 const BLOCKED_ERROR_CODES = new Set([-3]); // ERR_ABORTED: a navigation replaced by another one
-const INVALID_URL_MESSAGE = '仅支持 http、https、file、about 地址';
+const INVALID_URL_MESSAGE = '仅支持 http、https、about 地址';
 // 网页弹窗最多把浏览器标签开到这么多，再多就只提示不开
 export const MAX_POPUP_BROWSER_TABS = 12;
 
@@ -147,6 +147,8 @@ export function createBrowserSideProvider({
             let domReady = false;
             let currentUrl = '';
             let loading = false;
+            // 静音的视频、摄像头预览也算在播：isCurrentlyAudible 只认出声的
+            let mediaPlaying = false;
             let lastFailure = null;
             let pendingUrl = '';
 
@@ -255,7 +257,7 @@ export function createBrowserSideProvider({
                 const changed = Boolean(url) && url !== currentUrl;
                 currentUrl = url || '';
                 // 关掉后从「最近关闭」重新打开时回到最后看的页面
-                if (changed && /^https?:|^file:/i.test(currentUrl)) sidePaneController?.updateTab?.(tab.id, { payload: { url: currentUrl } });
+                if (changed && /^https?:/i.test(currentUrl)) sidePaneController?.updateTab?.(tab.id, { payload: { url: currentUrl } });
                 if (doc.activeElement !== address) address.value = currentUrl === 'about:blank' ? '' : currentUrl;
                 address.title = currentUrl;
             };
@@ -302,7 +304,11 @@ export function createBrowserSideProvider({
                     }
                     syncControls();
                 });
+                on('media-started-playing', () => { mediaPlaying = true; });
+                on('media-paused', () => { mediaPlaying = false; });
                 on('did-navigate', (event) => {
+                    // 换了文档，旧页面的播放不会再发暂停
+                    mediaPlaying = false;
                     setAddress(event.url);
                     syncControls();
                 });
@@ -329,6 +335,7 @@ export function createBrowserSideProvider({
                 });
                 on('render-process-gone', (event) => {
                     loading = false;
+                    mediaPlaying = false;
                     lastFailure = { crashed: true };
                     showNotice({
                         title: '页面已停止响应',
@@ -351,6 +358,7 @@ export function createBrowserSideProvider({
                     webview = null;
                     domReady = false;
                     loading = false;
+                    mediaPlaying = false;
                     old.remove();
                 }
                 hideNotice();
@@ -492,9 +500,9 @@ export function createBrowserSideProvider({
                     if (result?.url) navigate(result.url);
                     return result;
                 },
-                // 还在加载或者在放声音的页面不休眠，休眠了再显示会从当前地址重新打开
+                // 还在加载、在放声音或在放视频的页面不休眠，休眠了再显示会从当前地址重新打开
                 isBusy() {
-                    if (loading) return true;
+                    if (loading || mediaPlaying) return true;
                     try {
                         return domReady && webview?.isCurrentlyAudible?.() === true;
                     } catch (_error) {

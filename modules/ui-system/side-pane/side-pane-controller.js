@@ -15,6 +15,7 @@ import { createSidePaneShortcuts } from './side-pane-shortcuts.js';
 import { createSidePaneLayoutStore, parseLayout, rememberBounded, serializeLayout } from './side-pane-persistence.js';
 import { createSidePaneRootScope, createTabOccurrence } from './side-pane-occurrence.js';
 import { selectDormantViews } from './side-pane-dormancy.js';
+import { findByTabId } from './side-pane-tab-utils.js';
 
 /** @typedef {import('./side-pane-types.js').SidePaneTab} SidePaneTab */
 /** @typedef {import('./side-pane-types.js').SidePaneTabType} SidePaneTabType */
@@ -245,7 +246,7 @@ export function createSidePaneController({
             isClosable: isClosableTab,
             statusTabId: SidePaneState.NOTIFICATIONS_TAB_ID,
             getStatus: readConnectionStatus,
-            onActivate: (tabId) => controller.activateTab(tabId),
+            onActivate: (tabId, options) => controller.activateTab(tabId, options),
             onClose: (tabId) => controller.closeTab(tabId),
             onReorder: (activeId, overId) => controller.reorderTab(activeId, overId),
             onContextMenu: (tabId, x, y) => tabMenu?.show(tabId, x, y),
@@ -279,7 +280,7 @@ export function createSidePaneController({
             menu: resolvedTabContextMenu,
             getClosableTabs: () => SidePaneState.getClosableVisibleTabs(state),
             onShow: () => overview?.hide(),
-            focusTab: (tabId) => strip?.focusTab(tabId),
+            focusTab: (tabId) => strip?.focusTab(state.tabs.some(t => t.id === tabId) ? tabId : state.activeTabId),
             onAction: async (action, tabId) => {
                 if (action === 'close-tab' && tabId) await controller.closeTab(tabId);
                 else if (action === 'close-others' && tabId) await controller.closeOtherTabs(tabId);
@@ -339,9 +340,10 @@ export function createSidePaneController({
     }
 
     // ---- 休眠 ----
-    // 计时看的是"在面板里是不是当前标签"，不看窗口有没有最小化：用户回来时看到的还是它，不该被换掉
+    // 计时看的是"在当前对话里是不是当前标签"，不看窗口有没有最小化，也不看面板是否收起：
+    // 用户重新展开时看到的还是它，不该被换掉（对照 ZCode shouldMountSidePaneContent、DSH TabLayout 收起时保留选中标签）
     function isTabPresented(tabId, { visibleTabIds, activeViewId } = getActiveView()) {
-        return !isDisposed && state.visible && tabId === activeViewId && visibleTabIds.has(tabId);
+        return !isDisposed && tabId === activeViewId && visibleTabIds.has(tabId);
     }
 
     function noteViewPresence(active = getActiveView()) {
@@ -470,6 +472,50 @@ export function createSidePaneController({
         pendingTabMounts.delete(tabId);
     }
 
+    // 挂载失败的标签：tabId -> 显示出错提示的视图
+    const failedMounts = new Map();
+
+    function clearMountFailure(tabId) {
+        failedMounts.get(tabId)?.remove?.();
+        failedMounts.delete(tabId);
+    }
+
+    function showMountFailure(tabId, view, error, mountOptions) {
+        view.replaceChildren();
+        const box = doc.createElement('div');
+        box.className = 'side-pane-mount-error';
+        box.setAttribute('role', 'alert');
+        const title = doc.createElement('div');
+        title.className = 'side-pane-mount-error-title';
+        title.textContent = '这个标签没能打开';
+        const detail = doc.createElement('div');
+        detail.className = 'side-pane-mount-error-detail';
+        detail.textContent = error?.message || String(error || '未知错误');
+        const retry = doc.createElement('button');
+        retry.type = 'button';
+        retry.className = 'side-pane-mount-error-retry';
+        retry.textContent = '重试';
+        retry.addEventListener('click', () => {
+            if (isDisposed || failedMounts.get(tabId) !== view) return;
+            const refocus = view.contains(doc.activeElement);
+            ensureTabMounted(tabId, mountOptions)
+                .then(entry => {
+                    if (!entry || isDisposed) return;
+                    syncViewPanels();
+                    if (refocus && state.activeTabId === tabId) entry.handle?.focus?.();
+                })
+                .catch(retryError => {
+                    console.error(`[SidePaneController] Retrying the mount of tab "${tabId}" failed:`, retryError);
+                    if (!isDisposed) syncViewPanels();
+                    if (refocus) failedMounts.get(tabId)?.querySelector?.('.side-pane-mount-error-retry')?.focus?.();
+                });
+        });
+        box.append(title, detail, retry);
+        view.append(box);
+        failedMounts.set(tabId, view);
+        syncViewPanels();
+    }
+
     function ensureTabMounted(tabId, { provider, payload, kind = payload?.kind, ariaLabel = null, onClosed = null }) {
         const mounted = mountedTabMap.get(tabId);
         if (mounted) return Promise.resolve(mounted);
@@ -477,7 +523,9 @@ export function createSidePaneController({
 
         const pending = { promise: null, viewElement: null, canceled: false, onClosed };
         const mounting = (async () => {
-            let view = contentContainer?.querySelector(`[data-tab-id="${tabId}"]`);
+            // 上次挂载失败留下的提示页不复用，换一个干净的视图重新挂
+            clearMountFailure(tabId);
+            let view = findByTabId(contentContainer, '[data-tab-id]', tabId);
             if (!view && contentContainer) {
                 view = doc.createElement('section');
                 view.className = 'side-pane-view';
@@ -504,9 +552,13 @@ export function createSidePaneController({
                     })
                     : null;
             } catch (error) {
-                // 挂载失败不留空的视图壳，下次显示时重新挂
                 await tabOccurrence.closeView('mount-failed').catch(() => {});
-                view.remove?.();
+                // 标签还在、侧栏没拆：留一页出错提示和重试按钮，不让用户对着空白页
+                if (!isDisposed && !pending.canceled && state.tabs.some(t => t.id === tabId)) {
+                    showMountFailure(tabId, view, error, { provider, payload, kind, ariaLabel, onClosed });
+                } else {
+                    view.remove?.();
+                }
                 throw error;
             }
             if (isDisposed || pending.canceled || !state.tabs.some(t => t.id === tabId)) {
@@ -539,8 +591,20 @@ export function createSidePaneController({
     }
 
     // 恢复出来的标签不在启动时挂载，第一次显示时才挂；焦点留在原处
+    // 批量关闭期间兜底激活的标签多半紧接着也要关，等整批关完再挂当时停着的那个
+    let batchClosing = 0;
+    async function closeBatch(tabs, options, onFocusMoved) {
+        batchClosing++;
+        try {
+            await tabCloseOwner.closeTabs(tabs, options, onFocusMoved);
+        } finally {
+            batchClosing--;
+            mountActiveIfNeeded();
+        }
+    }
+
     function mountActiveIfNeeded() {
-        if (isDisposed || !state.visible) return;
+        if (isDisposed || !state.visible || batchClosing > 0) return;
         const tabId = state.activeTabId;
         if (!tabId || mountedTabMap.has(tabId) || pendingTabMounts.has(tabId)) return;
         const tab = state.tabs.find(t => t.id === tabId);
@@ -600,6 +664,7 @@ export function createSidePaneController({
                 || entry?.viewElement?.contains(origin)
                 || origin?.closest?.('[data-tab-id]')?.getAttribute('data-tab-id') === tab.id;
             entry?.viewElement?.remove();
+            clearMountFailure(tab.id);
             if (mountedTabMap.get(tab.id) === entry) mountedTabMap.delete(tab.id);
             viewTimes.delete(tab.id);
             dormantTabs.delete(tab.id);
@@ -761,7 +826,7 @@ export function createSidePaneController({
             const revision = ++navigationRevision;
             const keptLifetime = tabCloseOwner.getLifetime(tabId);
             let expectedFocus = doc.activeElement;
-            await tabCloseOwner.closeTabs(closing, { collapseWhenEmpty: false }, (before, after) => {
+            await closeBatch(closing, { collapseWhenEmpty: false }, (before, after) => {
                 // Follow our synchronous close handoffs, not an unrelated focus change.
                 if (before === expectedFocus) expectedFocus = after;
             });
@@ -774,7 +839,7 @@ export function createSidePaneController({
         async closeAllTabs() {
             if (isDisposed) return;
             navigationRevision++;
-            await tabCloseOwner.closeTabs(SidePaneState.getClosableVisibleTabs(state));
+            await closeBatch(SidePaneState.getClosableVisibleTabs(state));
         },
 
         /**
@@ -799,13 +864,68 @@ export function createSidePaneController({
             rememberOpened(SidePaneState.getTabParent(openedTab), targetTabId);
             renderTabList();
 
-            const entry = await ensureTabMounted(targetTabId, {
+            const mounting = ensureTabMounted(targetTabId, {
                 provider: providers[rawTab.kind],
                 payload: rawTab,
                 onClosed: definition?.onClosed,
                 ariaLabel: resolved.title || '副屏视图'
             });
+            // 标签条已经切过去了，面板和内容区同一刻跟上，不等挂载完（慢的挂载期间不会是新标签配旧内容、或标签亮着面板却收着）
+            syncViewPanels();
+            syncDomVisibility();
+            const entry = await mounting;
             return finishOpen(targetTabId, entry, origin);
+        },
+
+        /**
+         * 在后台补回标签（比如切到话题后才读回来的辅助对话）：不抢激活、不挂载，也不改这个对话记下的收起状态。
+         * 切到这个对话时它还一个标签都没有，面板按「没有标签」自动收起了；补回之后照切换时本该有的样子重新定一次：
+         * 回到上次停的标签、按记下的收起状态展开或收起。期间用户自己动过面板就不再改。
+         * @param {Array<SidePaneTab | { kind: string }>} rawTabs
+         * @returns {Promise<string[]>} 补进来的标签 id；其中有标签因此显示出来时，等它挂好
+         */
+        async restoreTabs(rawTabs = []) {
+            if (isDisposed) return [];
+            const ownTabsBefore = state.parent
+                ? state.tabs.filter(tab => SidePaneState.matchesConversation(SidePaneState.getTabParent(tab), state.parent))
+                : [];
+            const untouchedFallback = state.parent && ownTabsBefore.length === 0 && !state.visible
+                && isNotificationsTab(state.activeTabId);
+            const added = [];
+            for (const rawTab of rawTabs) {
+                if (!rawTab) continue;
+                const definition = getTabType(rawTab.kind);
+                let resolved;
+                try {
+                    resolved = definition?.toTab ? definition.toTab(rawTab, state.tabs) : rawTab;
+                } catch (error) {
+                    console.error('[SidePaneController] Failed to restore tab:', error);
+                    continue;
+                }
+                const next = SidePaneState.restoreTabs(state, [definition ? {
+                    icon: definition.icon, typeLabel: definition.label, searchHint: definition.searchHint,
+                    ...resolved
+                } : resolved]);
+                if (next === state) continue;
+                state = next;
+                added.push(String(resolved.id));
+            }
+            if (added.length === 0) return added;
+            navigationRevision++;
+            if (untouchedFallback) {
+                const key = parentKeyOf();
+                state = SidePaneState.setParent(state, state.parent, {
+                    force: true,
+                    preferredTabId: activeTabByParent.get(key),
+                    collapsedPreference: collapsedByParent.get(key)
+                });
+            }
+            renderTabList();
+            syncViewPanels();
+            syncDomVisibility();
+            const mounting = pendingTabMounts.get(state.activeTabId);
+            if (mounting && added.includes(state.activeTabId)) await mounting.promise.catch(() => null);
+            return added;
         },
 
         /** 改已打开标签的标题或 payload（关掉后重新打开时用新的 payload），不切换标签 */
@@ -1004,6 +1124,7 @@ export function createSidePaneController({
                 entry.viewElement?.remove?.();
             });
             mountedTabMap.clear();
+            for (const tabId of [...failedMounts.keys()]) clearMountFailure(tabId);
             for (const tabId of pendingTabMounts.keys()) cancelPendingMount(tabId);
             tabRegistry.dispose();
             await Promise.allSettled([...disposePromises, tabCloseOwner.dispose()]);

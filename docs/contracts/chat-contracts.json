@@ -431,7 +431,7 @@
     "dynamicSites": [
       {
         "file": "modules/ipc/gitHandlers.js",
-        "line": 97,
+        "line": 96,
         "kind": "event-listener",
         "match": "ipcMain.handle(channel"
       }
@@ -469,7 +469,7 @@
     "dynamicSites": [
       {
         "file": "modules/ipc/sourceHandlers.js",
-        "line": 36,
+        "line": 32,
         "kind": "event-listener",
         "match": "ipcMain.handle(channel"
       }
@@ -526,7 +526,7 @@
     "dynamicSites": [
       {
         "file": "modules/ipc/terminalHandlers.js",
-        "line": 64,
+        "line": 65,
         "kind": "event-send",
         "match": "sender.send(channel"
       }
@@ -600,7 +600,7 @@
       },
       {
         "file": "modules/messageRenderer.js",
-        "line": 3328,
+        "line": 3319,
         "kind": "custom-event-listener",
         "match": "target.addEventListener(type"
       }
@@ -720,19 +720,19 @@
     "dynamicSites": [
       {
         "file": "modules/settingsManager.js",
-        "line": 711,
+        "line": 722,
         "kind": "custom-event-listener",
         "match": "target.addEventListener(type"
       },
       {
         "file": "modules/settingsManager.js",
-        "line": 2221,
+        "line": 2233,
         "kind": "custom-event-listener",
         "match": "element.addEventListener(eventName"
       },
       {
         "file": "modules/settingsManager.js",
-        "line": 2250,
+        "line": 2262,
         "kind": "custom-event-listener",
         "match": "systemPromptContainer.addEventListener(eventName"
       }
@@ -751,13 +751,13 @@
     "dynamicSites": [
       {
         "file": "modules/topicListManager.js",
-        "line": 34,
+        "line": 40,
         "kind": "custom-event-listener",
         "match": "target?.addEventListener?.(type"
       },
       {
         "file": "modules/topicListManager.js",
-        "line": 39,
+        "line": 45,
         "kind": "custom-event-listener",
         "match": "target?.addEventListener?.(type"
       }
@@ -1123,7 +1123,7 @@
     "dynamicSites": [
       {
         "file": "modules/ui-system/side-pane/browserSideProvider.js",
-        "line": 279,
+        "line": 281,
         "kind": "custom-event-listener",
         "match": "guest.addEventListener(name"
       }
