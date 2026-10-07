@@ -323,7 +323,6 @@ test('code is rendered in chunks whose text and line numbers stay continuous', a
         const gutterChunks = view.querySelectorAll('.side-code-gutter .side-code-chunk');
         assert.equal(codeChunks.length, 3);
         assert.deepEqual([...gutterChunks].map(chunk => chunk.children.length), [CODE_CHUNK_LINES, CODE_CHUNK_LINES, 50]);
-        assert.deepEqual([...codeChunks].map(chunk => chunk.style.getPropertyValue('--side-code-chunk-lines')), [String(CODE_CHUNK_LINES), String(CODE_CHUNK_LINES), '50']);
         assert.equal(view.querySelector('.side-code-pre').textContent, code);
         assert.equal(view.querySelectorAll('.side-code-line-number').length, lineCount);
         assert.equal([...view.querySelectorAll('.side-code-line-number')].at(-1).textContent, String(lineCount));

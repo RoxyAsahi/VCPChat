@@ -8,7 +8,8 @@
 // 整段高亮和逐行行号的成本随文件大小线性增长；超过这个字符数只预览开头，复制和插入仍用完整内容
 export const PREVIEW_CHAR_LIMIT = 256 * 1024;
 
-// 每块的行数：块越小滚动时补排越勤，越大切回标签时要排的越多；200 行约 3600px，比侧栏高出几屏
+// 每块的行数：块越小滚动时补排越勤，越大切回标签时要排的越多；200 行约 3600px，比侧栏高出几屏。
+// 样式表里块的占位高度按 200 × 18px 写死（side-pane-code-viewer.css 的 .side-code-chunk），改这里要一起改
 export const CODE_CHUNK_LINES = 200;
 
 /**
@@ -129,7 +130,7 @@ export function createCodeViewerEditor({
 
         // 行号栏和代码各按 CODE_CHUNK_LINES 行分块，块用 content-visibility:auto：滚出视口的块不参与样式和布局。
         // 大文件切回这个标签、聚焦时，浏览器只需要排视口里的那几块，开销不再随文件行数增长。
-        // 行高固定，两栏的块高度一致，行号仍然和代码对齐。
+        // 行高固定，两栏的块高度一致，行号仍然和代码对齐。最后一块不满 200 行，总是正常排版，不用占位高度。
         const gutter = doc.createElement('div');
         gutter.className = 'side-code-gutter';
         gutter.setAttribute('aria-hidden', 'true');
@@ -140,11 +141,9 @@ export function createCodeViewerEditor({
 
         for (let start = 0; start < lineCount; start += CODE_CHUNK_LINES) {
             const end = Math.min(lineCount, start + CODE_CHUNK_LINES);
-            const lines = String(end - start);
 
             const numbers = doc.createElement('div');
             numbers.className = 'side-code-chunk';
-            numbers.style.setProperty('--side-code-chunk-lines', lines);
             for (let idx = start + 1; idx <= end; idx++) {
                 const lineNum = doc.createElement('div');
                 lineNum.className = 'side-code-line-number';
@@ -155,7 +154,6 @@ export function createCodeViewerEditor({
 
             const text = doc.createElement('div');
             text.className = 'side-code-chunk';
-            text.style.setProperty('--side-code-chunk-lines', lines);
             // 块末尾补一个换行：块尾的换行不会多画一行，但 textContent 和复制出来的文本保持原样
             const tail = end < lineCount ? '\n' : '';
             if (lineHtml) text.innerHTML = lineHtml.slice(start, end).join('\n') + tail;
