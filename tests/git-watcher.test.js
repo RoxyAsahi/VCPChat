@@ -381,10 +381,15 @@ test('a real repository: a subscribed window hears about an edited file and a ne
     fs.writeFileSync(path.join(repo, 'b.txt'), 'new\n');
     const staged = await handlers.get('git:stage')(event, 'ws1', ['b.txt']);
     assert.equal(staged.success, true, staged.error);
-    assert.deepEqual(sender.sent[beforeStage], ['git:changed', { workspaceId: 'ws1', reason: 'stage' }]);
+    // absorb 在 git add 返回之后才调：机器忙时 index 写入到处理函数返回会超过 metadataMs，
+    // 监听可能先报一次 'files'。之后只许有这一次 'stage'
+    const reasons = () => sender.sent.slice(beforeStage).map(([, payload]) => payload.reason);
+    assert.deepEqual(sender.sent.at(-1), ['git:changed', { workspaceId: 'ws1', reason: 'stage' }]);
+    assert.ok(reasons().filter(reason => reason !== 'stage').every(reason => reason === 'files'), reasons().join());
     // stage 写 index 的事件不会在 300ms 后再推一次（b.txt 的写入发生在通知之前，也已包含）
     await new Promise(resolve => setTimeout(resolve, 2500));
-    assert.deepEqual(sender.sent.slice(beforeStage).map(([, payload]) => payload.reason), ['stage']);
+    assert.equal(reasons().at(-1), 'stage', reasons().join());
+    assert.equal(reasons().filter(reason => reason === 'stage').length, 1);
 });
 
 test('a repository the app can only partly watch tells subscribed windows, and later windows learn it on subscribing', { skip: gitAvailable ? false : 'git 不可用', timeout: 20_000 }, async t => {
