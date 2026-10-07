@@ -383,9 +383,10 @@ export function createSidePaneController({
         mountedTabMap.forEach((entry, tabId) => {
             const tab = state.tabs.find(t => t.id === tabId);
             if (!tab) return;
-            let busy = false;
+            // 正在关（确认框还开着）的标签不休眠，否则确认之后视图已经没了（同 ZCode residency policy 不淘汰进行中的操作）
+            let busy = tabCloseOwner.isClosing(tabId);
             try {
-                busy = entry.handle?.isBusy?.() === true;
+                busy = busy || entry.handle?.isBusy?.() === true;
             } catch (error) {
                 console.error(`[SidePaneController] Failed to ask tab "${tabId}" whether it is busy:`, error);
                 busy = true;
@@ -548,6 +549,7 @@ export function createSidePaneController({
             const viewScope = tabOccurrence.openView();
             // 挂载前先给出可见性，provider 一开始就知道要不要起轮询
             tabOccurrence.setVisible(isTabShown(tabId));
+            const visibleAtMount = tabOccurrence.occurrence.isVisible();
 
             const dormant = dormantTabs.get(tabId);
             let handle = null;
@@ -583,6 +585,16 @@ export function createSidePaneController({
             const entry = { payload, viewElement: view, handle, onClosed, occurrence: tabOccurrence };
             mountedTabMap.set(tabId, entry);
             if (dormantTabs.get(tabId) === dormant) dormantTabs.delete(tabId);
+            // 挂载期间可见性变了（折叠侧栏、切走标签）时 handle 还不在，那次 suspend/resume 落空了，这里补上
+            const visibleNow = tabOccurrence.occurrence.isVisible();
+            if (visibleNow !== visibleAtMount) {
+                try {
+                    if (visibleNow) handle?.resume?.();
+                    else handle?.suspend?.();
+                } catch (error) {
+                    console.error(`[SidePaneController] Failed to ${visibleNow ? 'resume' : 'suspend'} tab "${tabId}":`, error);
+                }
+            }
             return entry;
         })();
 
@@ -643,6 +655,14 @@ export function createSidePaneController({
             entry?.handle?.focus?.();
         }
         return entry?.handle || null;
+    }
+
+    // 打开失败时焦点和打开成功一样落到新标签上：那里只有出错页，就落在重试按钮上（键盘用户不用摸回去）
+    function focusMountFailure(tabId, origin) {
+        if (isDisposed || !state.visible || state.activeTabId !== tabId) return;
+        const focusUnchanged = doc.activeElement === origin
+            || (doc.activeElement === doc.body && origin && !origin.isConnected);
+        if (focusUnchanged) failedMounts.get(tabId)?.querySelector?.('.side-pane-mount-error-retry')?.focus?.();
     }
 
     // 临时标签（如辅助对话）不进“最近关闭”，其他标签都能重新打开
@@ -896,7 +916,13 @@ export function createSidePaneController({
             // 标签条已经切过去了，面板和内容区同一刻跟上，不等挂载完（慢的挂载期间不会是新标签配旧内容、或标签亮着面板却收着）
             syncViewPanels();
             syncDomVisibility();
-            const entry = await mounting;
+            let entry;
+            try {
+                entry = await mounting;
+            } catch (error) {
+                focusMountFailure(targetTabId, origin);
+                throw error;
+            }
             return finishOpen(targetTabId, entry, origin);
         },
 

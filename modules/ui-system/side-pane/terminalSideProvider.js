@@ -418,8 +418,8 @@ export function createTerminalSideProvider({
                 try {
                     xterm = await xtermLoader(doc);
                 } catch (err) {
-                    renderStatus({ text: `终端组件加载失败: ${err?.message || err}`, state: 'error' });
-                    return { focus() {}, dispose() { viewElement.innerHTML = ''; } };
+                    // 交给侧栏的出错页：带重试按钮，重试会重新加载 xterm，不用关掉标签再开
+                    throw new Error(`终端组件加载失败：${err?.message || err}`, { cause: err });
                 }
                 if (occurrence?.signal?.aborted) return null;
                 session = createSession(xterm, occurrence?.signal || null);
