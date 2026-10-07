@@ -6,7 +6,7 @@ import { createSidePaneController } from '../modules/ui-system/side-pane/side-pa
 import { waitFor } from './helpers/wait-for.mjs';
 
 // 侧栏终端和共享 PTY 的配合。尺寸：PTY 只有一个尺寸（终端窗口、侧栏标签、AI 命令共用），只有拿着焦点的视图改它，
-// 其余视图跟着 PTY 的真实尺寸画（同 DSH 的可写 / 只读视图）。输入：连上之前敲的字连上后补发。
+// 其余视图跟着 PTY 的真实尺寸画。输入：连上之前敲的字连上后补发。
 function fixture(t, { pty = { cols: 120, rows: 30 }, create = null } = {}) {
     const dom = new JSDOM('<input id="mainInput"><aside><div class="side-pane-tabs"></div><div class="side-pane-content-container"></div></aside>');
     const win = dom.window, doc = win.document, root = doc.querySelector('aside');
