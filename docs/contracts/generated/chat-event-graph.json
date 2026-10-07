@@ -7916,7 +7916,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1863,
+          "line": 1978,
           "kind": "event-listener"
         },
         {
@@ -8176,7 +8176,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1863,
+          "line": 1978,
           "kind": "event-listener",
           "match": "process.stdin.on('data'"
         },
@@ -11630,12 +11630,12 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 431,
+          "line": 542,
           "kind": "event-listener"
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1197,
+          "line": 1308,
           "kind": "event-listener"
         },
         {
@@ -11912,13 +11912,13 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 431,
+          "line": 542,
           "kind": "event-listener",
           "match": "writer.on('error'"
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1197,
+          "line": 1308,
           "kind": "event-listener",
           "match": "writer.on('error'"
         },
@@ -12486,12 +12486,12 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 430,
+          "line": 541,
           "kind": "event-listener"
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1194,
+          "line": 1305,
           "kind": "event-listener"
         },
         {
@@ -12513,13 +12513,13 @@
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 430,
+          "line": 541,
           "kind": "event-listener",
           "match": "writer.on('finish'"
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1194,
+          "line": 1305,
           "kind": "event-listener",
           "match": "writer.on('finish'"
         },
@@ -27740,7 +27740,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1890,
+          "line": 2005,
           "kind": "event-listener"
         },
         {
@@ -27764,7 +27764,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1890,
+          "line": 2005,
           "kind": "event-listener",
           "match": "process.on('SIGINT'"
         },
@@ -27792,7 +27792,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1885,
+          "line": 2000,
           "kind": "event-listener"
         },
         {
@@ -27816,7 +27816,7 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/FileOperator/FileOperator.js",
-          "line": 1885,
+          "line": 2000,
           "kind": "event-listener",
           "match": "process.on('SIGTERM'"
         },
