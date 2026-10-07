@@ -3612,12 +3612,12 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 837,
+          "line": 840,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 997,
+          "line": 1000,
           "kind": "custom-event-listener"
         },
         {
@@ -4342,17 +4342,17 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1161,
+          "line": 1165,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1167,
+          "line": 1171,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1181,
+          "line": 1185,
           "kind": "custom-event-listener"
         },
         {
@@ -5065,13 +5065,13 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 837,
+          "line": 840,
           "kind": "custom-event-listener",
           "match": "actionBtn.addEventListener('click'"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 997,
+          "line": 1000,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
@@ -5941,19 +5941,19 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1161,
+          "line": 1165,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1167,
+          "line": 1171,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1181,
+          "line": 1185,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
@@ -18231,7 +18231,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 926,
+          "line": 929,
           "kind": "custom-event-listener"
         },
         {
@@ -18278,7 +18278,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 926,
+          "line": 929,
           "kind": "custom-event-listener",
           "match": "ownerWindow.addEventListener('message'"
         },
@@ -25052,7 +25052,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1201,
+          "line": 1205,
           "kind": "custom-event-listener"
         },
         {
@@ -25152,7 +25152,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1201,
+          "line": 1205,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
