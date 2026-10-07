@@ -15,6 +15,7 @@ import { createSidePaneShortcuts } from './side-pane-shortcuts.js';
 import { createSidePaneLayoutStore, parseLayout, rememberBounded, serializeLayout } from './side-pane-persistence.js';
 import { createSidePaneRootScope, createTabOccurrence } from './side-pane-occurrence.js';
 import { selectDormantViews } from './side-pane-dormancy.js';
+import { findByTabId } from './side-pane-tab-utils.js';
 
 /** @typedef {import('./side-pane-types.js').SidePaneTab} SidePaneTab */
 /** @typedef {import('./side-pane-types.js').SidePaneTabType} SidePaneTabType */
@@ -477,7 +478,7 @@ export function createSidePaneController({
 
         const pending = { promise: null, viewElement: null, canceled: false, onClosed };
         const mounting = (async () => {
-            let view = contentContainer?.querySelector(`[data-tab-id="${tabId}"]`);
+            let view = findByTabId(contentContainer, tabId);
             if (!view && contentContainer) {
                 view = doc.createElement('section');
                 view.className = 'side-pane-view';
