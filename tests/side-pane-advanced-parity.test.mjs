@@ -446,7 +446,10 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     await ctrl.openTab({ kind: 'chat', descriptor: createDesc('s1', 'c1') });
     assert.deepEqual(stripTabIds(), ['s1']);
     assert.equal(launcher.hidden, true);
+    // 概览关着时不重建，打开后看它列了什么，再关上
+    doc.getElementById('sidePaneTabOverviewBtn').click();
     assert.deepEqual([...doc.querySelectorAll('#sidePaneOpenTabsList .side-pane-overview-item')].map(item => item.getAttribute('data-tab-id')), ['s1']);
+    doc.getElementById('sidePaneTabOverviewBtn').click();
 
     // 小房子回到新标签页上次停的分类：停在工具就回工具，停在通知就回通知
     const homeBtn = doc.getElementById('sidePaneHomeBtn');
@@ -873,7 +876,9 @@ test('tab type registration connects presentation, launcher availability and pro
     assert.equal(tab.icon, 'edit_note');
     assert.equal(tab.typeLabel, 'Custom notes');
     assert.equal(tab.searchHint, 'memo');
+    doc.getElementById('sidePaneTabOverviewBtn').click();
     assert.equal(doc.querySelector('[data-tab-id="custom-notes:1"] .vcp-side-pane-icon-base').textContent, 'edit_note');
+    doc.getElementById('sidePaneTabOverviewBtn').click();
     unregister();
     assert.equal(ctrl.getTabType('custom-notes'), null);
     assert.equal(doc.querySelector('[data-open-tab-entry="custom-notes"]'), null);
