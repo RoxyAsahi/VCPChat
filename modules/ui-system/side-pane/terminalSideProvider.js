@@ -19,6 +19,9 @@ const SINGLETON_TAB_ID = 'terminal:main';
 const XTERM_SCRIPT = 'vendor/xterm/xterm.js';
 const XTERM_FIT_SCRIPT = 'vendor/xterm/xterm-addon-fit.js';
 const XTERM_STYLE = 'vendor/xterm/xterm.css';
+// 容器尺寸变化后多久重新排版：平时 30ms；拖侧栏分隔条期间等停下 300ms
+const FIT_DEBOUNCE_MS = 30;
+const FIT_WHILE_RESIZING_MS = 300;
 // 连接建立前最多替用户攒这么多输入（敲键盘够用，大段粘贴不攒）
 const PENDING_INPUT_LIMIT = 4096;
 
@@ -552,7 +555,10 @@ export function createTerminalSideProvider({
                     // 释放是异步逐条进行的，这期间画面挪进暂存区引起的尺寸变化不再排 fit
                     if (!own.active) return;
                     cancelFit?.();
-                    cancelFit = own.timeout(session.fit, 30, 'fit-debounce');
+                    // 拖侧栏分隔条时停顿超过 30ms 就会重排一次、有焦点时还会改共享 PTY 的尺寸（ConPTY 每次都重排历史行）；
+                    // 拖动中等停下 300ms 再排（ZCode TerminalSession 拖动时 300ms 节流、松手补最终尺寸）
+                    const resizing = doc.body?.classList.contains('vcp-sidebar-resizing');
+                    cancelFit = own.timeout(session.fit, resizing ? FIT_WHILE_RESIZING_MS : FIT_DEBOUNCE_MS, 'fit-debounce');
                 }), screen, undefined, 'screen-resize');
             }
 
