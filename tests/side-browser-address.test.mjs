@@ -253,3 +253,20 @@ test('a page playing media stays busy even when muted, until it pauses or naviga
     handle.dispose();
     dom.window.close();
 });
+
+test('half-typed text in the address bar goes back to the page address when focus leaves', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { createBrowserSideProvider } = await import('../modules/ui-system/side-pane/browserSideProvider.js');
+    const dom = new JSDOM('<div id="view"></div>');
+    const provider = createBrowserSideProvider({ document: dom.window.document, api: null, sidePaneController: { updateTab() {} }, notify: () => {} });
+    const view = dom.window.document.getElementById('view');
+    const handle = await provider.mountTab({ id: 'browser:1', kind: 'browser', payload: {} }, view);
+    handle.navigate('https://example.com/');
+    const address = view.querySelector('input');
+    address.focus();
+    address.value = 'foo';
+    address.blur();
+    assert.equal(address.value, 'https://example.com/');
+    handle.dispose();
+    dom.window.close();
+});
