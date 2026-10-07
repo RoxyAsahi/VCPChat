@@ -339,6 +339,11 @@ export function createCodeViewerSideProvider({
                 viewElement.innerHTML = '';
                 return null;
             }
+            // 休眠只发生在隐藏时，那时 display:none 的 body 读出来的滚动都是 0：位置在可见时就记下
+            let lastScroll = { top: Number(restoredState?.scrollTop) || 0, left: Number(restoredState?.scrollLeft) || 0 };
+            own.listen(body, 'scroll', () => {
+                if (body.clientHeight > 0) lastScroll = { top: body.scrollTop, left: body.scrollLeft };
+            }, { passive: true });
 
             return {
                 focus() {
@@ -355,8 +360,8 @@ export function createCodeViewerSideProvider({
                         isWrapped,
                         mode: currentMode,
                         outsideWorkspaceAllowed: editorOwner.outsideWorkspaceAllowed,
-                        scrollTop: body.scrollTop,
-                        scrollLeft: body.scrollLeft
+                        scrollTop: body.clientHeight > 0 ? body.scrollTop : lastScroll.top,
+                        scrollLeft: body.clientHeight > 0 ? body.scrollLeft : lastScroll.left
                     };
                 },
                 /** 文件标签重新读盘；片段和差异是快照，不受影响 */

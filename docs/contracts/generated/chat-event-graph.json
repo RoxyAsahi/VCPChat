@@ -1276,14 +1276,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 174,
+          "line": 179,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 174,
+          "line": 179,
           "kind": "event-listener",
           "match": "guest.on('before-input-event'"
         }
@@ -1874,14 +1874,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 200,
+          "line": 205,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 200,
+          "line": 205,
           "kind": "event-listener",
           "match": "ipcMain.handle('browser:clear-data'"
         },
@@ -1905,14 +1905,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 189,
+          "line": 194,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 189,
+          "line": 194,
           "kind": "event-listener",
           "match": "ipcMain.handle('browser:open-external'"
         },
@@ -10032,14 +10032,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 156,
+          "line": 161,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 156,
+          "line": 161,
           "kind": "event-listener",
           "match": "host.on('did-attach-webview'"
         }
@@ -15078,14 +15078,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 158,
+          "line": 163,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 158,
+          "line": 163,
           "kind": "event-listener",
           "match": "guest.on('input-event'"
         }
@@ -15399,7 +15399,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 69,
+          "line": 72,
           "kind": "custom-event-listener"
         },
         {
@@ -15748,7 +15748,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 69,
+          "line": 72,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('keydown'"
         },
@@ -26487,7 +26487,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 67,
+          "line": 70,
           "kind": "custom-event-listener"
         },
         {
@@ -26552,7 +26552,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 67,
+          "line": 70,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('scroll'"
         },
@@ -29283,14 +29283,14 @@
       "consumers": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 71,
+          "line": 74,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 71,
+          "line": 74,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('touchmove'"
         }
@@ -29302,7 +29302,7 @@
       "consumers": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 70,
+          "line": 73,
           "kind": "custom-event-listener"
         },
         {
@@ -29314,7 +29314,7 @@
       "evidence": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 70,
+          "line": 73,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('touchstart'"
         },
@@ -31733,7 +31733,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 68,
+          "line": 71,
           "kind": "custom-event-listener"
         },
         {
@@ -31762,7 +31762,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 68,
+          "line": 71,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('wheel'"
         },
@@ -31791,7 +31791,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 173,
+          "line": 178,
           "kind": "event-listener"
         }
       ],
@@ -31804,7 +31804,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 173,
+          "line": 178,
           "kind": "event-listener",
           "match": "guest.on('will-attach-webview'"
         }
@@ -31840,7 +31840,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 170,
+          "line": 175,
           "kind": "event-listener"
         },
         {
@@ -31858,7 +31858,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 170,
+          "line": 175,
           "kind": "event-listener",
           "match": "guest.on('will-navigate'"
         },
@@ -31906,14 +31906,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 171,
+          "line": 176,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 171,
+          "line": 176,
           "kind": "event-listener",
           "match": "guest.on('will-redirect'"
         }
