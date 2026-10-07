@@ -809,6 +809,57 @@ export function createSidePaneController({
             return finishOpen(targetTabId, entry, origin);
         },
 
+        /**
+         * 在后台补回标签（比如切到话题后才读回来的辅助对话）：不抢激活、不挂载，也不改这个对话记下的收起状态。
+         * 切到这个对话时它还一个标签都没有，面板按「没有标签」自动收起了；补回之后照切换时本该有的样子重新定一次：
+         * 回到上次停的标签、按记下的收起状态展开或收起。期间用户自己动过面板就不再改。
+         * @param {Array<SidePaneTab | { kind: string }>} rawTabs
+         * @returns {Promise<string[]>} 补进来的标签 id；其中有标签因此显示出来时，等它挂好
+         */
+        async restoreTabs(rawTabs = []) {
+            if (isDisposed) return [];
+            const ownTabsBefore = state.parent
+                ? state.tabs.filter(tab => SidePaneState.matchesConversation(SidePaneState.getTabParent(tab), state.parent))
+                : [];
+            const untouchedFallback = state.parent && ownTabsBefore.length === 0 && !state.visible
+                && isNotificationsTab(state.activeTabId);
+            const added = [];
+            for (const rawTab of rawTabs) {
+                if (!rawTab) continue;
+                const definition = getTabType(rawTab.kind);
+                let resolved;
+                try {
+                    resolved = definition?.toTab ? definition.toTab(rawTab, state.tabs) : rawTab;
+                } catch (error) {
+                    console.error('[SidePaneController] Failed to restore tab:', error);
+                    continue;
+                }
+                const next = SidePaneState.restoreTabs(state, [definition ? {
+                    icon: definition.icon, typeLabel: definition.label, searchHint: definition.searchHint,
+                    ...resolved
+                } : resolved]);
+                if (next === state) continue;
+                state = next;
+                added.push(String(resolved.id));
+            }
+            if (added.length === 0) return added;
+            navigationRevision++;
+            if (untouchedFallback) {
+                const key = parentKeyOf();
+                state = SidePaneState.setParent(state, state.parent, {
+                    force: true,
+                    preferredTabId: activeTabByParent.get(key),
+                    collapsedPreference: collapsedByParent.get(key)
+                });
+            }
+            renderTabList();
+            syncViewPanels();
+            syncDomVisibility();
+            const mounting = pendingTabMounts.get(state.activeTabId);
+            if (mounting && added.includes(state.activeTabId)) await mounting.promise.catch(() => null);
+            return added;
+        },
+
         /** 改已打开标签的标题或 payload（关掉后重新打开时用新的 payload），不切换标签 */
         updateTab(tabId, patch = {}) {
             if (isDisposed || !tabId) return;
