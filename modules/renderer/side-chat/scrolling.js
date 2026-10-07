@@ -17,6 +17,8 @@ export function createSideChatScrolling({
     // 按距离底部而不是 scrollTop 定位才不会跳。用户自己一滚就放开
     let anchorFromBottom = null;
     let anchoredTop = null;
+    // 休眠只发生在隐藏时，那时 display:none 的容器量出来全是 0：可见时就记下最近的位置
+    let lastVisible = { stick: true };
 
     function pinToBottomIfSticky() {
         if (store.isDisposed || !root || root.clientHeight === 0) return;
@@ -44,6 +46,7 @@ export function createSideChatScrolling({
             else if (movedUp) stickToBottom = false;
             else if (distance < 48 && root.scrollTop > lastScrollTop + 1) stickToBottom = true;
             lastScrollTop = root.scrollTop;
+            lastVisible = measure();
         };
         // 用户意图先于 scroll 事件生效：流式期间 ResizeObserver 可能在滚轮产生的 scroll 事件之前
         // 把视图拽回底部，只靠 scroll 判断就会和滚轮打架（ZCode use-stick-to-bottom 同样监听 wheel 立即脱离）
@@ -100,15 +103,21 @@ export function createSideChatScrolling({
     }
 
     /** 休眠前存下：贴底的只记贴底，否则记离底部的距离。 */
-    function capture() {
-        if (!root || stickToBottom) return { stick: true };
+    function measure() {
+        if (stickToBottom) return { stick: true };
         return { stick: false, fromBottom: Math.max(0, root.scrollHeight - root.scrollTop) };
+    }
+
+    function capture() {
+        if (!root) return { stick: true };
+        return root.clientHeight > 0 ? measure() : lastVisible;
     }
 
     function restore(saved) {
         if (saved?.stick !== false || !Number.isFinite(saved.fromBottom)) return;
         stickToBottom = false;
         anchorFromBottom = saved.fromBottom;
+        lastVisible = { stick: false, fromBottom: saved.fromBottom };
         pinToBottomIfSticky();
     }
 

@@ -18,10 +18,13 @@ function setup() {
     };
     const root = win.document.getElementById('root');
     let scrollHeight = 1000;
-    Object.defineProperty(root, 'clientHeight', { get: () => 500 });
+    let clientHeight = 500;
+    Object.defineProperty(root, 'clientHeight', { get: () => clientHeight });
     Object.defineProperty(root, 'scrollHeight', { get: () => scrollHeight });
     const scrolling = createSideChatScrolling({ store: { isDisposed: false }, doc: win.document, root });
-    return { win, root, ro: observers[0], scrolling, grow: (px) => { scrollHeight += px; } };
+    // 标签切走后容器 display:none：量出来全是 0
+    const hide = () => { clientHeight = 0; scrollHeight = 0; root.scrollTop = 0; };
+    return { win, root, ro: observers[0], scrolling, hide, grow: (px) => { scrollHeight += px; } };
 }
 
 test('a reply that grows after the last pin is still followed to the bottom', async () => {
@@ -133,5 +136,24 @@ test('a remount after sleep keeps the reader the same distance from the bottom w
 test('a view that was following the bottom comes back following it', () => {
     const { scrolling } = setup();
     assert.deepEqual(scrolling.capture(), { stick: true });
+    scrolling.dispose();
+});
+
+test('a view put to sleep while hidden saves where the reader was, not the zeros a display:none box reports', () => {
+    const { win, root, scrolling, hide } = setup();
+    root.scrollTop = 500;
+    root.dispatchEvent(new win.Event('scroll'));
+    root.scrollTop = 300;
+    root.dispatchEvent(new win.Event('scroll'));
+    hide();
+    assert.deepEqual(scrolling.capture(), { stick: false, fromBottom: 700 });
+    scrolling.dispose();
+});
+
+test('a remounted view that sleeps again before the reader scrolls keeps the restored place', () => {
+    const { scrolling, hide } = setup();
+    scrolling.restore({ stick: false, fromBottom: 700 });
+    hide();
+    assert.deepEqual(scrolling.capture(), { stick: false, fromBottom: 700 });
     scrolling.dispose();
 });
