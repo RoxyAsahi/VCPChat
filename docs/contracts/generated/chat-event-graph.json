@@ -4201,7 +4201,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 219,
+          "line": 260,
           "kind": "custom-event-listener"
         },
         {
@@ -5774,7 +5774,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 219,
+          "line": 260,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
