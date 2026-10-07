@@ -30168,7 +30168,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1072,
+          "line": 1078,
           "kind": "custom-event-create"
         }
       ],
@@ -30176,7 +30176,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1072,
+          "line": 1078,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-renderer-ready'"
         }
