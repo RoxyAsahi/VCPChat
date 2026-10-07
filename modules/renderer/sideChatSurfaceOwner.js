@@ -251,7 +251,12 @@ export async function mountSideChatSurface(container, {
         modelPickerBtn,
         modelPopover,
         persistMetadata: () => persistenceOwner.saveComposerInput(),
-        onModelChange: model => { selectedItem.model = model; if (selectedItem.config) selectedItem.config.model = model; },
+        onModelChange: model => {
+            selectedItem.model = model;
+            if (selectedItem.config) selectedItem.config.model = model;
+            // 发送时提示过「请先选择模型」，选好之后别让这条错误还挂着
+            if (statusText?.textContent === '请先选择模型') updateStatus('就绪');
+        },
         updateComposerState: (...args) => updateComposerState(...args)
     });
     const { updateModel } = modelPickerOwner;
@@ -363,7 +368,7 @@ export async function mountSideChatSurface(container, {
     const onSubmit = async (event) => {
         event?.preventDefault?.();
         // 还在生成时不再起第二次发送：它失败后的清理会清掉正在进行的那次，停止按钮随之消失
-        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController) return;
+        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController || form.hasAttribute('aria-busy')) return;
         if (!currentModel) {
             updateStatus('请先选择模型', 'error');
             return;
@@ -530,6 +535,15 @@ export async function mountSideChatSurface(container, {
             _fileManagerData: att._fileManagerData || {}
         }));
         const kept = history.slice(0, questionIndex);
+        // 截断落盘期间就算这一轮在忙：否则这时按回车会另起一轮，两轮抢同一个停止按钮和内存里的历史
+        form.setAttribute('aria-busy', 'true');
+        textarea.disabled = true;
+        const releaseBusy = () => {
+            if (isDisposed) return;
+            form.removeAttribute('aria-busy');
+            textarea.disabled = false;
+            updateComposerState();
+        };
         let saved;
         try {
             saved = await repository.saveHistory(descriptor.child.itemId, 'agent', descriptor.child.topicId, kept);
@@ -537,6 +551,7 @@ export async function mountSideChatSurface(container, {
             saved = { error: error?.message || String(error) };
         }
         if (saved && (saved.success === false || saved.error)) {
+            releaseBusy();
             updateStatus(`重新回复失败：${saved.error || '保存历史出错'}`, 'error');
             return;
         }
