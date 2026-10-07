@@ -175,6 +175,7 @@ export async function mountSideChatSurface(container, {
         emoticonBtn,
         previewArea: attachmentPreview,
         textarea,
+        dropTarget: root,
         getWindow: () => doc.defaultView,
         onChange: () => updateComposerState()
     });
