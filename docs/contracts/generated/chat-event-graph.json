@@ -664,7 +664,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 243,
+          "line": 270,
           "kind": "custom-event-listener"
         },
         {
@@ -729,7 +729,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 243,
+          "line": 270,
           "kind": "custom-event-listener",
           "match": "signal?.addEventListener('abort'"
         },
@@ -2379,7 +2379,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 569,
+          "line": 579,
           "kind": "custom-event-listener"
         }
       ],
@@ -2554,7 +2554,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 569,
+          "line": 579,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('change'"
         }
@@ -3685,12 +3685,12 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 551,
+          "line": 562,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 554,
+          "line": 565,
           "kind": "custom-event-listener"
         },
         {
@@ -4255,87 +4255,87 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 335,
+          "line": 337,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 371,
+          "line": 373,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 408,
+          "line": 410,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 417,
+          "line": 419,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 530,
+          "line": 532,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 585,
+          "line": 595,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 591,
+          "line": 601,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 664,
+          "line": 674,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 691,
+          "line": 701,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 710,
+          "line": 720,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 730,
+          "line": 740,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 760,
+          "line": 771,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 775,
+          "line": 786,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 497,
+          "line": 498,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1076,
+          "line": 1077,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1082,
+          "line": 1083,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1096,
+          "line": 1097,
           "kind": "custom-event-listener"
         },
         {
@@ -5150,13 +5150,13 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 551,
+          "line": 562,
           "kind": "custom-event-listener",
           "match": "stopBtn.addEventListener('click'"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 554,
+          "line": 565,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('click'"
         },
@@ -5834,103 +5834,103 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 335,
+          "line": 337,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 371,
+          "line": 373,
           "kind": "custom-event-listener",
           "match": "crumbs.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 408,
+          "line": 410,
           "kind": "custom-event-listener",
           "match": "refreshBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 417,
+          "line": 419,
           "kind": "custom-event-listener",
           "match": "forgeBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 530,
+          "line": 532,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 585,
+          "line": 595,
           "kind": "custom-event-listener",
           "match": "toggle.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 591,
+          "line": 601,
           "kind": "custom-event-listener",
           "match": "clear.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 664,
+          "line": 674,
           "kind": "custom-event-listener",
           "match": "headBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 691,
+          "line": 701,
           "kind": "custom-event-listener",
           "match": "pick.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 710,
+          "line": 720,
           "kind": "custom-event-listener",
           "match": "pick.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 730,
+          "line": 740,
           "kind": "custom-event-listener",
           "match": "link.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 760,
+          "line": 771,
           "kind": "custom-event-listener",
           "match": "retry.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 775,
+          "line": 786,
           "kind": "custom-event-listener",
           "match": "retry.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 497,
+          "line": 498,
           "kind": "custom-event-listener",
           "match": "retry.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1076,
+          "line": 1077,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1082,
+          "line": 1083,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1096,
+          "line": 1097,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
@@ -7107,6 +7107,11 @@
           "file": "modules/renderer/sideChatSurfaceOwner.js",
           "line": 344,
           "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 560,
+          "kind": "custom-event-listener"
         }
       ],
       "evidence": [
@@ -7115,6 +7120,12 @@
           "line": 344,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('compositionend'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 560,
+          "kind": "custom-event-listener",
+          "match": "el.addEventListener('compositionend'"
         }
       ]
     },
@@ -7126,6 +7137,11 @@
           "file": "modules/renderer/sideChatSurfaceOwner.js",
           "line": 343,
           "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 559,
+          "kind": "custom-event-listener"
         }
       ],
       "evidence": [
@@ -7134,6 +7150,12 @@
           "line": 343,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('compositionstart'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 559,
+          "kind": "custom-event-listener",
+          "match": "el.addEventListener('compositionstart'"
         }
       ]
     },
@@ -7268,7 +7290,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 558,
+          "line": 569,
           "kind": "custom-event-listener"
         },
         {
@@ -7400,7 +7422,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 558,
+          "line": 569,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('contextmenu'"
         },
@@ -12655,14 +12677,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 152,
+          "line": 179,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 152,
+          "line": 179,
           "kind": "custom-event-listener",
           "match": "screen.addEventListener('focusin'"
         }
@@ -14834,7 +14856,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 544,
+          "line": 558,
           "kind": "custom-event-listener"
         },
         {
@@ -15026,7 +15048,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 544,
+          "line": 558,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('input'"
         },
@@ -21631,14 +21653,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 157,
+          "line": 184,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 157,
+          "line": 184,
           "kind": "preload-subscription",
           "match": "api.onTerminalClear("
         }
@@ -21669,14 +21691,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 154,
+          "line": 181,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 154,
+          "line": 181,
           "kind": "preload-subscription",
           "match": "api.onTerminalData("
         }
@@ -21688,14 +21710,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 160,
+          "line": 187,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 160,
+          "line": 187,
           "kind": "preload-subscription",
           "match": "api.onTerminalExit("
         }
@@ -24947,7 +24969,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1116,
+          "line": 1117,
           "kind": "custom-event-listener"
         },
         {
@@ -25041,7 +25063,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1116,
+          "line": 1117,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
@@ -28037,7 +28059,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 550,
+          "line": 561,
           "kind": "custom-event-listener"
         },
         {
@@ -28097,7 +28119,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 550,
+          "line": 561,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
@@ -29229,7 +29251,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-visibility.js",
-          "line": 104,
+          "line": 122,
           "kind": "custom-event-listener"
         },
         {
@@ -29247,7 +29269,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-visibility.js",
-          "line": 104,
+          "line": 122,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('transitionend'"
         },
