@@ -50,6 +50,7 @@
     "VCPDistributedServer/Plugin/ProjectForge/ProjectForgeService.js",
     "VCPDistributedServer/Plugin/ProjectForge/args.js",
     "VCPDistributedServer/Plugin/ProjectForge/engine.js",
+    "VCPDistributedServer/Plugin/ProjectForge/gui-revert-file.js",
     "VCPDistributedServer/Plugin/ProjectForge/indexerClient.js",
     "VCPDistributedServer/Plugin/ProjectForge/linkGraph.js",
     "VCPDistributedServer/Plugin/ProjectForge/resolvers.js",
