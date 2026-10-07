@@ -4222,17 +4222,17 @@
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 348,
+          "line": 351,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 372,
+          "line": 375,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 762,
+          "line": 768,
           "kind": "custom-event-listener"
         },
         {
@@ -5797,19 +5797,19 @@
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 348,
+          "line": 351,
           "kind": "custom-event-listener",
           "match": "more.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 372,
+          "line": 375,
           "kind": "custom-event-listener",
           "match": "head.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 762,
+          "line": 768,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
@@ -15587,7 +15587,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 373,
+          "line": 376,
           "kind": "custom-event-listener"
         },
         {
@@ -15987,7 +15987,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 373,
+          "line": 376,
           "kind": "custom-event-listener",
           "match": "head.addEventListener('keydown'"
         },
@@ -21658,14 +21658,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 890,
+          "line": 926,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 890,
+          "line": 926,
           "kind": "preload-subscription",
           "match": "api?.onModelTrajectoryChanged("
         }
