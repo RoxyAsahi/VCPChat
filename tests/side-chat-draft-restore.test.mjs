@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,7 @@ import { createSidePaneController } from '../modules/ui-system/side-pane/side-pa
 import { defineChatTabType } from '../modules/ui-system/side-pane/tab-types/chat.js';
 import { createSideChatDescriptor } from '../modules/chat/sideChatSessionService.js';
 import { createSideChatDraftStore, sideChatDraftKey } from '../modules/renderer/side-chat/draft-store.js';
+import { waitFor } from './helpers/wait-for.mjs';
 
 async function fixture(t, legacyInput = {}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-side-draft-restore-'));
@@ -153,11 +154,10 @@ test('a side chat put to sleep behind another tab keeps its draft, and a referen
     const tab = controller.getSnapshot().tabs.find(item => item.kind === 'chat');
     controller.activateTab(tab.id);
     controller.setVisible(true);
-    await new Promise(r => setTimeout(r, 20));
+    await waitFor(() => controller.getTabHandle(tab.id));
     controller.getTabHandle(tab.id).setDraft('half typed, then more');
     await controller.openTab({ id: 'note:1', kind: 'note', title: 'Note', closable: true, scopeMode: 'global' });
-    await new Promise(r => setTimeout(r, 120));
-    assert.equal(controller.getTabHandle(tab.id), null, 'the hidden side chat view went to sleep');
+    await waitFor(() => controller.getTabHandle(tab.id) === null, { message: 'the hidden side chat view went to sleep' });
     assert.deepEqual(controller.getViewResidency().dormant.map(entry => entry.tabId), [tab.id]);
 
     // 切回去的同一刻点「在侧栏提问」：视图还在重挂，引用要落进这个侧聊，不能另开一个
@@ -170,7 +170,6 @@ test('a side chat put to sleep behind another tab keeps its draft, and a referen
 });
 
 // 休眠场景：休眠/唤醒、切话题、退出都不能丢草稿、引用和模型
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function sleepableSideChat(t, opts = {}) {
     const f = await fixture(t, { composerStorage: 'local' });
     f.drafts.save(f.descriptor, { draft: 'start', references: [{ id: 'ref-1', text: 'first selection' }], model: 'm0' });
@@ -179,10 +178,11 @@ async function sleepableSideChat(t, opts = {}) {
     await s.wiring.restoreSessions('agent', 'parent');
     const tab = s.controller.getSnapshot().tabs.find(item => item.kind === 'chat');
     s.controller.activateTab(tab.id); s.controller.setVisible(true);
-    await sleep(20);
-    const hide = async () => { await s.controller.openTab({ id: 'note:' + Math.random(), kind: 'note', title: 'Note', closable: true, scopeMode: 'global' }); await sleep(120); };
-    const wake = async () => { s.controller.activateTab(tab.id); for (let i = 0; i < 50 && !s.controller.getTabHandle(tab.id); i++) await sleep(5); await sleep(20); return s.controller.getTabHandle(tab.id); };
-    return { f, s, tab, hide, wake, handle: () => s.controller.getTabHandle(tab.id) };
+    await waitFor(() => s.controller.getTabHandle(tab.id));
+    const coverWithNote = () => s.controller.openTab({ id: 'note:' + Math.random(), kind: 'note', title: 'Note', closable: true, scopeMode: 'global' });
+    const hide = async () => { await coverWithNote(); await waitFor(() => s.controller.getTabHandle(tab.id) === null, { message: 'side chat did not sleep' }); };
+    const wake = async () => { s.controller.activateTab(tab.id); return waitFor(() => s.controller.getTabHandle(tab.id), { message: 'side chat did not wake' }); };
+    return { f, s, tab, hide, wake, coverWithNote, handle: () => s.controller.getTabHandle(tab.id) };
 }
 
 test('a model picked in a side chat survives sleep', async t => {
@@ -197,10 +197,19 @@ test('a model picked in a side chat survives sleep', async t => {
 test('a draft typed inside the save debounce survives sleep and reaches storage', async t => {
     const p = await sleepableSideChat(t);
     const ta = p.f.doc.querySelector('.side-chat-textarea');
-    ta.value = 'typed fast'; ta.dispatchEvent(new p.f.dom.window.Event('input', { bubbles: true }));
-    await p.hide();
-    assert.equal(p.handle(), null);
-    assert.equal(p.f.drafts.read(p.f.descriptor).input.draft, 'typed fast');
+    // 接管计时器：400ms 的输入防抖确定还没到，只推进 30ms 的休眠
+    mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+    try {
+        ta.value = 'typed fast'; ta.dispatchEvent(new p.f.dom.window.Event('input', { bubbles: true }));
+        await p.coverWithNote();
+        assert.notEqual(p.handle(), null);
+        mock.timers.tick(30);
+        const stored = () => p.f.drafts.read(p.f.descriptor).input.draft;
+        // 视图释放是异步的：只冲刷 promise，不推进计时器
+        for (let i = 0; i < 50 && (p.handle() || stored() !== 'typed fast'); i++) await new Promise(resolve => setImmediate(resolve));
+        assert.equal(p.handle(), null);
+        assert.equal(stored(), 'typed fast');
+    } finally { mock.timers.reset(); }
     const h = await p.wake();
     assert.equal(h.getDraft(), 'typed fast');
 });
@@ -236,10 +245,8 @@ test('a side chat that sleeps after a topic switch keeps its draft when the topi
     const p = await sleepableSideChat(t, { dormancy: { otherTopicMs: 30 } });
     p.handle().setDraft('topic draft');
     p.s.controller.setParent({ ...p.f.descriptor.parent, topicId: 'other' });
-    await sleep(150);
-    assert.equal(p.handle(), null, 'slept after leaving the topic');
+    await waitFor(() => p.handle() === null, { message: 'slept after leaving the topic' });
     p.s.controller.setParent(p.f.descriptor.parent);
-    for (let i = 0; i < 50 && !p.handle(); i++) await sleep(5);
-    await sleep(20);
-    assert.equal(p.handle()?.getDraft(), 'topic draft');
+    const h = await waitFor(() => p.handle(), { message: 'side chat did not wake' });
+    assert.equal(h.getDraft(), 'topic draft');
 });
