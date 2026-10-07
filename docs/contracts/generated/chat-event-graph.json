@@ -1721,7 +1721,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 254,
+          "line": 255,
           "kind": "custom-event-listener"
         },
         {
@@ -1837,7 +1837,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 254,
+          "line": 255,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener('blur'"
         },
@@ -3652,12 +3652,12 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 216,
+          "line": 295,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 265,
+          "line": 356,
           "kind": "custom-event-listener"
         },
         {
@@ -4202,7 +4202,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 229,
+          "line": 230,
           "kind": "custom-event-listener"
         },
         {
@@ -4212,7 +4212,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 260,
+          "line": 261,
           "kind": "custom-event-listener"
         },
         {
@@ -4392,22 +4392,22 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 152,
+          "line": 153,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 162,
+          "line": 163,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 178,
+          "line": 179,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 235,
+          "line": 236,
           "kind": "custom-event-listener"
         },
         {
@@ -5113,13 +5113,13 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 216,
+          "line": 295,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('click'"
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 265,
+          "line": 356,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('click'"
         },
@@ -5773,7 +5773,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 229,
+          "line": 230,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('click'"
         },
@@ -5785,7 +5785,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 260,
+          "line": 261,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
@@ -6001,25 +6001,25 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 152,
+          "line": 153,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 162,
+          "line": 163,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 178,
+          "line": 179,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 235,
+          "line": 236,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
@@ -7308,7 +7308,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 264,
+          "line": 352,
           "kind": "custom-event-listener"
         },
         {
@@ -7338,7 +7338,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 247,
+          "line": 248,
           "kind": "custom-event-listener"
         },
         {
@@ -7439,7 +7439,7 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 264,
+          "line": 352,
           "kind": "custom-event-listener",
           "match": "root?.addEventListener('contextmenu'"
         },
@@ -7475,7 +7475,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 247,
+          "line": 248,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('contextmenu'"
         },
@@ -12704,6 +12704,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 354,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
           "line": 194,
           "kind": "custom-event-listener"
@@ -12715,6 +12720,12 @@
           "line": 140,
           "kind": "custom-event-listener",
           "match": "itemListUl.addEventListener('focusin'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 354,
+          "kind": "custom-event-listener",
+          "match": "root?.addEventListener('focusin'"
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
@@ -14895,7 +14906,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 189,
+          "line": 190,
           "kind": "custom-event-listener"
         }
       ],
@@ -15088,7 +15099,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 189,
+          "line": 190,
           "kind": "custom-event-listener",
           "match": "searchInput.addEventListener('input'"
         }
@@ -15406,7 +15417,17 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 266,
+          "line": 286,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 353,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 357,
           "kind": "custom-event-listener"
         },
         {
@@ -15621,17 +15642,17 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 215,
+          "line": 216,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 253,
+          "line": 254,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 305,
+          "line": 312,
           "kind": "custom-event-listener"
         },
         {
@@ -15762,7 +15783,19 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 266,
+          "line": 286,
+          "kind": "custom-event-listener",
+          "match": "menu.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 353,
+          "kind": "custom-event-listener",
+          "match": "root?.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 357,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
@@ -16020,19 +16053,19 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 215,
+          "line": 216,
           "kind": "custom-event-listener",
           "match": "searchInput.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 253,
+          "line": 254,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 305,
+          "line": 312,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('keydown'"
         },
@@ -23096,7 +23129,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 252,
+          "line": 253,
           "kind": "custom-event-listener"
         },
         {
@@ -23154,7 +23187,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 252,
+          "line": 253,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
@@ -26556,7 +26589,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 262,
+          "line": 269,
           "kind": "custom-event-listener"
         },
         {
@@ -26626,7 +26659,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 262,
+          "line": 269,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('scroll'"
         },
