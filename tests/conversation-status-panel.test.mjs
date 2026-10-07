@@ -280,6 +280,49 @@ test('branch popover filters, switches and offers create / graph in the footer',
     panel.dispose();
 });
 
+test('an agent changing files while the branch popover is open neither closes it nor makes the next click do nothing', async () => {
+    let added = 5;
+    let branchListGate = null;
+    const { doc, panel, dom } = setup({ api: {
+        gitChangeSummary: async () => ({ success: true, data: { files: 2, added: added++, removed: 1, branch: { head: 'main', ahead: 0, behind: 0, upstream: 'origin/main' }, remotes: ['origin'] } }),
+        gitListBranches: async () => {
+            if (branchListGate) await branchListGate.promise;
+            return { success: true, data: { current: 'main', branches: [{ name: 'main', current: true }, { name: 'dev', current: false }] } };
+        }
+    } });
+    panel.mount();
+    await flush();
+
+    click(dom, q(doc, '.zc-row-branch'));
+    await flush();
+    const pop = q(doc, '.zc-branch-popover');
+    const input = q(pop, '.zc-command-input');
+    input.value = 'de';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    await panel.refresh();
+    await flush();
+    assert.equal(q(doc, '.zc-branch-popover'), pop, 'the popover the user is typing in stays open');
+    assert.equal(q(pop, '.zc-command-input').value, 'de');
+    assert.match(q(doc, '.zc-status-panel, aside').textContent, /\+5/, 'the panel waits to repaint until the popover closes');
+
+    doc.body.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true }));
+    await flush();
+    assert.equal(q(doc, '.zc-branch-popover'), null);
+    assert.match(q(doc, '.zc-status-panel, aside').textContent, /\+6/, 'the deferred repaint ran once it closed');
+
+    // 点分支按钮时正好来了一次刷新：浮层照样打开
+    let release;
+    branchListGate = { promise: new Promise(resolve => { release = resolve; }) };
+    click(dom, q(doc, '.zc-row-branch'));
+    const refreshing = panel.refresh();
+    release();
+    await refreshing;
+    await flush();
+    assert.ok(q(doc, '.zc-branch-popover'));
+    panel.dispose();
+});
+
 test('create-branch dialog creates and switches', async () => {
     const { doc, panel, calls, dom } = setup();
     panel.mount();
@@ -377,6 +420,47 @@ test('git graph dialog draws commits and lanes', async () => {
 
     click(dom, dialog.querySelectorAll('.zc-graph-row')[1]);
     assert.match(q(doc, '.zc-graph-detail').textContent, /b2b2b2b/);
+    panel.dispose();
+});
+
+test('git graph keeps its scroll position on select and load more; a refresh drops a load more already in flight', async () => {
+    const page = (from, count) => Array.from({ length: count }, (_, i) => {
+        const n = from + i;
+        return { hash: `h${String(n).padStart(6, '0')}`, parents: [`h${String(n + 1).padStart(6, '0')}`], author: 'Roxy', time: 1790000000 - n, subject: `提交 ${n}`, refs: [] };
+    });
+    let gate = null;
+    const { doc, panel, dom } = setup({ api: {
+        gitCommitGraph: async (_id, { skip }) => {
+            if (gate) await gate.promise;
+            return { success: true, data: { commits: page(skip, 50), hasMore: true } };
+        }
+    } });
+    panel.mount();
+    await flush();
+    await panel.openGitGraphDialog();
+    const dialog = q(doc, '.zc-graph-dialog');
+    q(dialog, '.zc-graph-scroll').scrollTop = 900;
+
+    click(dom, dialog.querySelectorAll('.zc-graph-row')[30]);
+    assert.equal(q(dialog, '.zc-graph-scroll').scrollTop, 900, 'opening a commit detail keeps the list where it was');
+    assert.match(q(doc, '.zc-graph-detail').textContent, /h000030/);
+
+    click(dom, q(dialog, '.zc-graph-load-more'));
+    await flush();
+    assert.equal(dialog.querySelectorAll('.zc-graph-row').length, 100);
+    assert.equal(q(dialog, '.zc-graph-scroll').scrollTop, 900, 'loading more keeps the list where it was');
+
+    // 加载更多还没回来时刷新：旧的那页回来后不能追加到刷新后的列表上
+    let release;
+    gate = { promise: new Promise(resolve => { release = resolve; }) };
+    click(dom, q(dialog, '.zc-graph-load-more'));
+    click(dom, q(dialog, '.zc-graph-refresh'));
+    gate = null;
+    release();
+    await flush();
+    await flush();
+    assert.equal(dialog.querySelectorAll('.zc-graph-row').length, 50);
+    assert.equal(new Set([...dialog.querySelectorAll('.zc-graph-row')].map(row => row.dataset.hash)).size, 50);
     panel.dispose();
 });
 
