@@ -175,11 +175,7 @@ export function createSideChatWiring({
             return null;
         }
 
-        const handle = await getController().openTab({ kind: 'chat', descriptor });
-        if (options?.reference && handle?.addReference) {
-            handle.addReference(options.reference);
-        }
-        return handle;
+        return getController().openTab({ kind: 'chat', descriptor });
     }
 
     async function openSideChat(options = {}) {
@@ -219,9 +215,12 @@ export function createSideChatWiring({
             }
         }
 
-        // 同一父会话下并发的创建请求合并为一次，避免连点产生多个子会话
-        return dedupeSideChatCreation(`${currentItem.id}:${currentTopicId}`,
+        // 同一父会话下并发的创建请求合并为一次，避免连点产生多个子会话。
+        // 引用由每个调用方在创建完成后各自加上：合并进来的第二次「在侧栏提问」不能把自己的引用丢掉（同 ZCode SessionPane）
+        const handle = await dedupeSideChatCreation(`${currentItem.id}:${currentTopicId}`,
             () => createSideChat(options, currentItem, currentTopicId));
+        if (options?.reference && handle?.addReference) handle.addReference(options.reference);
+        return handle;
     }
 
     async function restoreSessions(agentId, parentTopicId) {
