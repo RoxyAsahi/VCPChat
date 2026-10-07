@@ -501,6 +501,8 @@ try {
     report.failure = String(error.stack || error);
     console.error(error.message || error);
     if (errors.length) console.error(errors.map(e => `[${e.phase}] ${e.source}: ${e.text}`).join('\n'));
+    // CI 里拿不到界面，把 Electron 日志尾部直接打出来
+    try { console.error('--- electron.log (tail) ---\n' + fs.readFileSync(path.join(data, 'electron.log'), 'utf8').split('\n').slice(-80).join('\n')); } catch { /* 还没启动 */ }
 } finally {
     report.finishedAt = new Date().toISOString();
     fs.writeFileSync(path.join(data, 'smoke-report.json'), JSON.stringify(report, null, 1));

@@ -119,10 +119,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies (including Electron runtime)
+      # 和 mobile_sync 打包任务一样：先装依赖不跑原生脚本，再按 Electron 的 ABI 重编原生模块，
+      # 按 Node ABI 编出来的原生模块（better-sqlite3 等）在 Electron 里加载不了
+      - name: Install package graph without native lifecycle scripts
         env:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
-        run: npm ci --omit=optional
+        run: npm ci --ignore-scripts
+
+      - name: Install Electron runtime
+        run: node node_modules/electron/install.js
+
+      - name: Rebuild Electron native modules used by the app
+        run: npx electron-rebuild -f -w better-sqlite3,node-pty,sharp
 
       - name: Ensure a virtual display
         run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
