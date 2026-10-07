@@ -1514,7 +1514,7 @@ if (!gotTheLock) {
             SETTINGS_FILE
         });
         // 工作区索引在后台预热，不阻塞首屏。
-        workspaceHandlers.initialize({ settingsManager: appSettingsManager, logger: console });
+        workspaceHandlers.initialize({ settingsManager: appSettingsManager, logger: console, getMainWindow: () => mainWindow });
         stateSubscriptions.registerIpc(ipcMain, createApplicationSenderGuard({
             pages: ['main.html', 'ProjectForgemodules/projectforge.html'],
             getMainWebContents: () => resolveWindowWebContents(() => mainWindow),

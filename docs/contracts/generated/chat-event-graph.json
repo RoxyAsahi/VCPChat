@@ -27206,7 +27206,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 105,
+          "line": 110,
           "kind": "event-listener"
         },
         {
@@ -27230,7 +27230,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 105,
+          "line": 110,
           "kind": "event-listener",
           "match": "settingsManager.on?.('settings-external-updated'"
         },
@@ -27284,7 +27284,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 104,
+          "line": 109,
           "kind": "event-listener"
         }
       ],
@@ -27297,7 +27297,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 104,
+          "line": 109,
           "kind": "event-listener",
           "match": "settingsManager.on?.('settings-updated'"
         },
@@ -32213,14 +32213,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 149,
+          "line": 156,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 149,
+          "line": 156,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:add'"
         },
@@ -32244,14 +32244,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 204,
+          "line": 214,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 204,
+          "line": 214,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:expand-placeholders'"
         },
@@ -32275,14 +32275,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 213,
+          "line": 223,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 213,
+          "line": 223,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:get-prompt-settings'"
         },
@@ -32306,14 +32306,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 113,
+          "line": 118,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 113,
+          "line": 118,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:list'"
         },
@@ -32337,14 +32337,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 141,
+          "line": 147,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 141,
+          "line": 147,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:rebuild'"
         },
@@ -32368,14 +32368,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 170,
+          "line": 178,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 170,
+          "line": 178,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:remove'"
         },
@@ -32399,14 +32399,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 129,
+          "line": 135,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 129,
+          "line": 135,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:search'"
         },
@@ -32430,14 +32430,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 233,
+          "line": 244,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 233,
+          "line": 244,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:select-directory'"
         },
@@ -32461,14 +32461,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 115,
+          "line": 120,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 115,
+          "line": 120,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:set-active'"
         },
@@ -32492,14 +32492,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 215,
+          "line": 225,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 215,
+          "line": 225,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:set-prompt-settings'"
         },
@@ -32523,14 +32523,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 179,
+          "line": 188,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 179,
+          "line": 188,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:update'"
         },

@@ -8,6 +8,7 @@ const { ipcMain, dialog, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs-extra');
 const fileManager = require('../fileManager');
+const { createApplicationSenderGuard, resolveWindowWebContents } = require('./applicationSender');
 const { WorkspaceIndex, normalizeWorkspaceList, sanitizeAlias } = require('../services/workspaceIndex');
 const {
     normalizePromptSettings,
@@ -36,6 +37,9 @@ let activeWorkspaceId = null;
 let promptSettings = normalizePromptSettings(null);
 let settingsListener = null;
 let externalSettingsListener = null;
+// 增删改工作区只认主窗口：工作区决定 Git、代码查看和终端能碰哪些目录，也会展开进系统提示、
+// 解析文件引用；同样带 chat preload 的语音、助手窗口只读（列表、搜索、展开占位符）。同 git/source/terminal 的守卫
+let isAllowedSender = () => false;
 
 function getWorkspaceIndex() {
     return workspaceIndex;
@@ -90,7 +94,8 @@ async function mutateWorkspaces(mutator) {
     return workspaceIndex.list();
 }
 
-function initialize({ settingsManager, logger = console } = {}) {
+function initialize({ settingsManager, logger = console, getMainWindow = null } = {}) {
+    isAllowedSender = createApplicationSenderGuard({ getMainWebContents: () => resolveWindowWebContents(getMainWindow) });
     settingsManagerRef = settingsManager;
     workspaceIndex?.dispose();
     workspaceIndex = new WorkspaceIndex({ logger });
@@ -112,7 +117,8 @@ function initialize({ settingsManager, logger = console } = {}) {
 
     ipcMain.handle('workspaces:list', () => ({ success: true, ...snapshot() }));
 
-    ipcMain.handle('workspaces:set-active', async (_event, workspaceId = null) => {
+    ipcMain.handle('workspaces:set-active', async (event, workspaceId = null) => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             const target = typeof workspaceId === 'string' && workspaceId ? workspaceId : null;
             if (target && !workspaceIndex.list().some(ws => ws.id === target && ws.enabled)) {
@@ -138,7 +144,8 @@ function initialize({ settingsManager, logger = console } = {}) {
         }
     });
 
-    ipcMain.handle('workspaces:rebuild', async (_event, workspaceId = null) => {
+    ipcMain.handle('workspaces:rebuild', async (event, workspaceId = null) => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             return { success: true, workspaces: await workspaceIndex.rebuild(workspaceId || null) };
         } catch (error) {
@@ -146,7 +153,8 @@ function initialize({ settingsManager, logger = console } = {}) {
         }
     });
 
-    ipcMain.handle('workspaces:add', async (_event, rawPath, alias = '') => {
+    ipcMain.handle('workspaces:add', async (event, rawPath, alias = '') => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             if (typeof rawPath !== 'string' || !rawPath.trim()) {
                 return { success: false, error: '请提供工作区目录路径。' };
@@ -167,7 +175,8 @@ function initialize({ settingsManager, logger = console } = {}) {
         }
     });
 
-    ipcMain.handle('workspaces:remove', async (_event, workspaceId) => {
+    ipcMain.handle('workspaces:remove', async (event, workspaceId) => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             const workspaces = await mutateWorkspaces(list => list.filter(item => item.id !== workspaceId));
             return { success: true, workspaces };
@@ -176,7 +185,8 @@ function initialize({ settingsManager, logger = console } = {}) {
         }
     });
 
-    ipcMain.handle('workspaces:update', async (_event, workspaceId, patch = {}) => {
+    ipcMain.handle('workspaces:update', async (event, workspaceId, patch = {}) => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             let conflict = null;
             const workspaces = await mutateWorkspaces(list => list.map(item => {
@@ -212,7 +222,8 @@ function initialize({ settingsManager, logger = console } = {}) {
 
     ipcMain.handle('workspaces:get-prompt-settings', () => ({ success: true, settings: getPromptSettings() }));
 
-    ipcMain.handle('workspaces:set-prompt-settings', async (_event, patch = {}) => {
+    ipcMain.handle('workspaces:set-prompt-settings', async (event, patch = {}) => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         try {
             if (!settingsManagerRef) throw new Error('SettingsManager 未初始化。');
             const source = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
@@ -231,6 +242,7 @@ function initialize({ settingsManager, logger = console } = {}) {
     });
 
     ipcMain.handle('workspaces:select-directory', async event => {
+        if (!isAllowedSender(event)) return { success: false, error: '当前窗口无权修改工作区。' };
         const owner = BrowserWindow.fromWebContents(event.sender) || undefined;
         const result = await dialog.showOpenDialog(owner, {
             title: '选择工作区目录',
