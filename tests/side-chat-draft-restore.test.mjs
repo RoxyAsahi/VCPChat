@@ -36,7 +36,7 @@ async function fixture(t, legacyInput = {}) {
         async deleteSideChatChild(...args) { deletions.push(args); return call('side-chat:delete-child', ...args); },
         getChatHistory: async (_agent, topic) => JSON.parse(await fs.readFile(path.join(directory, 'agent', 'topics', topic, 'history.json'), 'utf8'))
     };
-    function mountController() {
+    function mountController({ dormancy = null } = {}) {
         let controller;
         const wiring = createSideChatWiring({ doc, win: dom.window, chatAPI,
             chatRepository: { getHistory: (agent, _type, topic) => chatAPI.getChatHistory(agent, topic), saveHistory: async () => ({ success: true }) },
@@ -51,7 +51,7 @@ async function fixture(t, legacyInput = {}) {
             }
         });
         controller = createSidePaneController({ root: doc.getElementById('pane'), tabListElement: doc.getElementById('tabs'),
-            contentContainer: doc.getElementById('content'),
+            contentContainer: doc.getElementById('content'), dormancy,
             tabTypes: [defineChatTabType({ provider: wiring.provider, onClosed: wiring.onTabClosed })] });
         controller.setParent(descriptor.parent);
         const session = { controller, wiring };
@@ -143,4 +143,25 @@ test('automatic empty-child cleanup also removes its empty browser draft without
     await assert.rejects(fs.stat(f.childDir), { code: 'ENOENT' });
     assert.equal(f.drafts.read(f.descriptor).input, null);
     assert.equal(f.deletions.length, 1);
+});
+
+// 辅助对话按 keep 常驻（同 ZCode 对非浏览器面板 forceMount）：隐藏再久，视图、输入框和引用都还在
+test('a side chat hidden behind another tab stays mounted with its draft', async t => {
+    const f = await fixture(t, { composerStorage: 'local' });
+    f.drafts.save(f.descriptor, { draft: 'half typed', references: [{ id: 'ref-1', text: 'first selection' }] });
+    const { controller, wiring } = f.mountController({ dormancy: { hiddenMs: 30 } });
+    controller.registerTabType({ kind: 'note', label: 'Note', provider: { mountTab: () => ({ dispose() {} }) } });
+    await wiring.restoreSessions('agent', 'parent');
+    const tab = controller.getSnapshot().tabs.find(item => item.kind === 'chat');
+    controller.activateTab(tab.id);
+    controller.setVisible(true);
+    await new Promise(r => setTimeout(r, 20));
+    const handle = controller.getTabHandle(tab.id);
+    handle.setDraft('half typed, then more');
+    await controller.openTab({ id: 'note:1', kind: 'note', title: 'Note', closable: true, scopeMode: 'global' });
+    await new Promise(r => setTimeout(r, 120));
+    assert.equal(controller.getTabHandle(tab.id), handle, 'still the same mounted view');
+    assert.deepEqual(controller.getViewResidency().dormant, []);
+    assert.equal(handle.getDraft(), 'half typed, then more');
+    assert.deepEqual(handle.getReferences().map(ref => ref.id), ['ref-1']);
 });

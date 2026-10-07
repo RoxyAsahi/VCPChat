@@ -403,7 +403,7 @@ test('side chat message context menu offers per-role actions and deletes through
         repository: { ...base.repository, async saveHistory() { writes += 1; return { success: true }; } },
         createRenderer(options) {
             const owned = base.createRenderer(options);
-            owned.renderer.removeMessageById = id => removed.push(id);
+            owned.renderer.removeMessageById = (id, save) => removed.push([id, save]);
             return owned;
         },
         uiHelper: {
@@ -442,7 +442,7 @@ test('side chat message context menu offers per-role actions and deletes through
     assert.ok(!assistantActions.includes('edit-again'));
     doc.querySelector('[data-side-chat-action="delete"]').click();
     await waitFor(() => removed.length === 1);
-    assert.deepEqual(removed, ['a1']);
+    assert.deepEqual(removed, [['a1', false]], 'the side action saves first; renderer removal must not start another save');
     assert.equal(writes, 1, 'one save per deletion');
 
     openMenu('.message-item.assistant');
@@ -477,7 +477,7 @@ test('side chat edits a message in place and regenerates an answer with the side
         },
         createRenderer(options) {
             const owned = base.createRenderer(options);
-            owned.renderer.removeMessageById = id => removed.push(id);
+            owned.renderer.removeMessageById = (id, save) => removed.push([id, save]);
             owned.renderer.updateMessageContent = (id, text) => rerendered.push([id, text]);
             return owned;
         },
@@ -527,7 +527,7 @@ test('side chat edits a message in place and regenerates an answer with the side
     menuAction('.message-item.assistant', 'regenerate').click();
     const sent = await waitFor(() => caps.getSentRequest());
     assert.deepEqual(saved.at(-1), ['topic-child-edit', []]);
-    assert.deepEqual(removed, ['u1', 'a1']);
+    assert.deepEqual(removed, [['u1', false], ['a1', false]], 'regenerate saves the trimmed history itself; renderer removal must not save again');
     assert.equal(sent.content, 'first question');
     assert.equal(sent.attachments.length, 1);
     assert.equal(sent.attachments[0].localPath, 'file:///a.txt');

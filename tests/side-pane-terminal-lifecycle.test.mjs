@@ -293,7 +293,7 @@ test('a live terminal view holds its buttons and size observer through the view 
         const handle = await h.provider.openTerminalTab();
         await until(() => handle.getSessionId() === 'view:1');
         const live = terminalTab().resources;
-        assert.ok(live.byType.listener > 0, 'toolbar controls listen through the view scope');
+        assert.equal(live.byType.listener, 3, 'workspace jump, clear and restart listen through the view scope');
         assert.equal(live.byType.observer, 1);
         assert.equal(observers[0].targets.size, 1);
 
