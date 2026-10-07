@@ -1729,6 +1729,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/uiManager.js",
+          "line": 151,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/voice/chatVoiceComposer.js",
           "line": 353,
           "kind": "custom-event-listener"
@@ -1835,6 +1840,12 @@
           "line": 134,
           "kind": "custom-event-listener",
           "match": "windowRef.addEventListener?.('blur'"
+        },
+        {
+          "file": "modules/uiManager.js",
+          "line": 151,
+          "kind": "custom-event-listener",
+          "match": "handle.addEventListener('blur'"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
@@ -4474,17 +4485,17 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 304,
+          "line": 350,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 423,
+          "line": 469,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 453,
+          "line": 499,
           "kind": "custom-event-listener"
         },
         {
@@ -6089,19 +6100,19 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 304,
+          "line": 350,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 423,
+          "line": 469,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 453,
+          "line": 499,
           "kind": "custom-event-listener",
           "match": "topicList?.addEventListener('click'"
         },
@@ -7047,7 +7058,7 @@
       "consumers": [
         {
           "file": "modules/uiManager.js",
-          "line": 417,
+          "line": 463,
           "kind": "custom-event-listener"
         }
       ],
@@ -7060,7 +7071,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 417,
+          "line": 463,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('compact-sidebar-open-topics'"
         }
@@ -12543,7 +12554,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 412,
+          "line": 458,
           "kind": "custom-event-listener"
         }
       ],
@@ -12610,7 +12621,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 412,
+          "line": 458,
           "kind": "custom-event-listener",
           "match": "trigger.addEventListener('focus'"
         }
@@ -12641,14 +12652,14 @@
       "consumers": [
         {
           "file": "modules/uiManager.js",
-          "line": 413,
+          "line": 459,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/uiManager.js",
-          "line": 413,
+          "line": 459,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('focusout'"
         }
@@ -15532,12 +15543,12 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 308,
+          "line": 354,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 465,
+          "line": 511,
           "kind": "custom-event-listener"
         },
         {
@@ -15911,13 +15922,13 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 308,
+          "line": 354,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('keydown'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 465,
+          "line": 511,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('keydown'"
         },
@@ -18767,7 +18778,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 335,
+          "line": 381,
           "kind": "custom-event-listener"
         },
         {
@@ -18892,7 +18903,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 335,
+          "line": 381,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('mousedown'"
         },
@@ -18982,7 +18993,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 410,
+          "line": 456,
           "kind": "custom-event-listener"
         }
       ],
@@ -19025,7 +19036,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 410,
+          "line": 456,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('mouseenter'"
         }
@@ -19097,7 +19108,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 411,
+          "line": 457,
           "kind": "custom-event-listener"
         },
         {
@@ -19181,7 +19192,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 411,
+          "line": 457,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('mouseleave'"
         },
@@ -21684,7 +21695,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 202,
+          "line": 248,
           "kind": "preload-subscription"
         }
       ],
@@ -21703,7 +21714,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 202,
+          "line": 248,
           "kind": "preload-subscription",
           "match": "electronAPI.onThemeUpdated("
         }
@@ -22973,7 +22984,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 459,
+          "line": 505,
           "kind": "custom-event-listener"
         },
         {
@@ -23033,7 +23044,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 459,
+          "line": 505,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('pointerdown'"
         },
@@ -29201,7 +29212,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 472,
+          "line": 518,
           "kind": "custom-event-listener"
         }
       ],
@@ -29220,7 +29231,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 472,
+          "line": 518,
           "kind": "custom-event-listener",
           "match": "leftSidebar.addEventListener('transitionend'"
         }
