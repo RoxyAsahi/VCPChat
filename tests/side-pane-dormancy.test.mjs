@@ -1,11 +1,10 @@
 // 副屏视图休眠：隐藏太久、离开所属对话、同时挂着的视图太多时只释放视图，标签留着，再显示时重新挂载并拿回之前存下的状态
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createSidePaneController } from '../modules/ui-system/side-pane/side-pane-controller.js';
 import { selectDormantViews, DORMANCY_DEFAULTS } from '../modules/ui-system/side-pane/side-pane-dormancy.js';
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 const candidate = (tabId, fields = {}) => ({
@@ -61,7 +60,10 @@ test('policy: when only busy views are over the limit it tries again later', () 
     assert.equal(nextCheckAt, DORMANCY_DEFAULTS.busyRetryMs);
 });
 
+// 休眠检查走全局 setTimeout，策略时间走注入的 now：两者一起前进，不用真睡
 function fixture(dormancy) {
+    let clock = 0;
+    mock.timers.enable({ apis: ['setTimeout'] });
     const dom = new JSDOM(`
         <aside id="vcpSidePane" class="vcp-side-pane">
             <div class="side-pane-tabs"></div>
@@ -71,6 +73,7 @@ function fixture(dormancy) {
     const root = doc.getElementById('vcpSidePane');
     const mounts = [];
     const busy = new Set();
+    const closeAnswers = new Map(); // tabId → 关闭确认的 promise（模拟确认框还开着）
     const provider = {
         mountTab(payload, view, context) {
             const record = { id: payload.id, view, context, restoredState: context.restoredState, disposed: 0, counter: 0 };
@@ -79,6 +82,7 @@ function fixture(dormancy) {
             return {
                 isBusy: () => busy.has(payload.id),
                 captureState: () => ({ counter: record.counter }),
+                requestClose: () => closeAnswers.get(payload.id) || { closed: true },
                 dispose() { record.disposed++; }
             };
         }
@@ -88,15 +92,22 @@ function fixture(dormancy) {
         tabListElement: root.querySelector('.side-pane-tabs'),
         contentContainer: root.querySelector('.side-pane-content-container'),
         providers: { probe: provider },
-        dormancy
+        dormancy: { ...dormancy, now: () => clock }
     });
     controller.registerTabType({ kind: 'probe', label: 'Probe', provider });
     controller.registerTabType({ kind: 'pinned', label: 'Pinned', provider, dormancy: 'keep' });
     const live = id => mounts.filter(m => m.id === id && !m.disposed);
     return {
-        controller, mounts, busy, live,
+        controller, mounts, busy, live, closeAnswers,
         residency: () => controller.getViewResidency(),
-        async cleanup() { await controller.dispose(); dom.window.close(); }
+        async advance(ms) {
+            clock += ms;
+            mock.timers.tick(ms);
+            await settle();
+        },
+        async cleanup() {
+            try { await controller.dispose(); dom.window.close(); } finally { mock.timers.reset(); }
+        }
     };
 }
 
@@ -109,8 +120,9 @@ test('a view hidden too long sleeps; the tab stays and remounts with what it sav
         await h.controller.openTab(tab('probe:b'));
         const [first] = h.mounts;
         first.counter = 7;
-        await sleep(80);
-        await settle();
+        await h.advance(29);
+        assert.equal(first.disposed, 0, 'not yet past the threshold');
+        await h.advance(1);
 
         assert.equal(first.disposed, 1, 'the hidden view was released');
         assert.equal(first.context.scope.disposed, true, 'its view scope went with it');
@@ -140,18 +152,17 @@ test('a view hidden too long sleeps; the tab stays and remounts with what it sav
 test('busy views and keep-type views do not sleep', async () => {
     const h = fixture({ hiddenMs: 20, busyRetryMs: 20 });
     try {
+        // 先标忙再开：20ms 的隐藏计时从第二个 openTab 起就在走，机器一忙后标的会先睡
+        h.busy.add('probe:busy');
         await h.controller.openTab(tab('probe:busy'));
         await h.controller.openTab(tab('probe:keep', { kind: 'pinned' }));
         await h.controller.openTab(tab('probe:front'));
-        h.busy.add('probe:busy');
-        await sleep(60);
-        await settle();
+        await h.advance(20);
         assert.equal(h.live('probe:busy').length, 1);
         assert.equal(h.live('probe:keep').length, 1);
 
         h.busy.delete('probe:busy');
-        await sleep(60);
-        await settle();
+        await h.advance(20);
         assert.equal(h.live('probe:busy').length, 0, 'once idle it sleeps at the next check');
         assert.equal(h.live('probe:keep').length, 1);
     } finally { await h.cleanup(); }
@@ -161,8 +172,11 @@ test('views beyond the live-view limit sleep least recently shown first', async 
     const h = fixture({ maxLiveViews: 2 });
     try {
         await h.controller.openTab(tab('probe:1'));
+        await h.advance(1);
         await h.controller.openTab(tab('probe:2'));
+        await h.advance(1);
         h.controller.activateTab('probe:1');
+        await h.advance(1);
         await h.controller.openTab(tab('probe:3'));
         await settle();
         assert.deepEqual(h.residency().live.sort(), ['probe:1', 'probe:3']);
@@ -222,12 +236,82 @@ test('diagnostics count what each live view still holds, including what its prov
         const live = h.controller.getDiagnostics().tabs.find(t => t.id === 'probe:b');
         assert.deepEqual(live.resources, { scopes: 2, resources: 3, byType: { listener: 2, interval: 1 } });
 
-        await sleep(80);
-        await settle();
+        await h.advance(30);
         const dormant = h.controller.getDiagnostics().tabs.find(t => t.id === 'probe:a');
         assert.equal(dormant.view, 'dormant');
         assert.equal(dormant.resources, null, 'a sleeping view holds nothing');
         assert.doesNotMatch(JSON.stringify(h.controller.getDiagnostics()), /probe-click|probe-key/, 'only counts, no labels or content');
+    } finally {
+        await h.cleanup();
+    }
+});
+
+test('policy: keep views do not take places under the live-view limit', () => {
+    const { release } = selectDormantViews([
+        candidate('chat-1', { dormancy: 'keep' }),
+        candidate('chat-2', { dormancy: 'keep' }),
+        candidate('chat-3', { dormancy: 'keep' }),
+        candidate('browser', { dormancy: 'limit-only', hiddenSince: 0, lastShownAt: 10 }),
+        candidate('plan', { shown: true, hiddenSince: null, lastShownAt: 20 })
+    ], { now: 0, maxLiveViews: 2 });
+    assert.deepEqual(release, []);
+});
+
+test('policy: limit-only views never sleep for being hidden, only for their own page limit', () => {
+    const now = 60 * 60_000;
+    const hiddenLong = selectDormantViews([
+        candidate('browser', { dormancy: 'limit-only', hiddenSince: 0 })
+    ], { now });
+    assert.deepEqual(hiddenLong.release, []);
+
+    const overLimit = selectDormantViews([
+        candidate('browser-old', { dormancy: 'limit-only', lastShownAt: 1 }),
+        candidate('browser-new', { dormancy: 'limit-only', lastShownAt: 2 }),
+        candidate('shown', { shown: true, hiddenSince: null, lastShownAt: 3 })
+    ], { now, maxLivePages: 1 });
+    assert.deepEqual(overLimit.release, [{ tabId: 'browser-old', reason: 'view-limit' }]);
+});
+
+test('policy: opening many code and terminal tabs never pushes a live web page out', () => {
+    const now = 60_000;
+    const views = Array.from({ length: 10 }, (_, i) => candidate(`code-${i}`, { lastShownAt: 10 + i, hiddenSince: now }));
+    const result = selectDormantViews([
+        candidate('browser', { dormancy: 'limit-only', lastShownAt: 1 }),
+        ...views
+    ], { now, maxLiveViews: 8 });
+    assert.equal(result.release.some(entry => entry.tabId === 'browser'), false, 'the oldest view is a page, but it is not evicted');
+    assert.deepEqual(result.release.map(entry => entry.tabId), ['code-0', 'code-1']);
+});
+
+test('collapsing the pane does not put the current tab to sleep', async () => {
+    const h = fixture({ hiddenMs: 30 });
+    try {
+        await h.controller.openTab(tab('probe:a'));
+        h.controller.setVisible(false);
+        await h.advance(60);
+
+        assert.deepEqual(h.residency().live, ['probe:a']);
+        assert.deepEqual(h.residency().dormant, []);
+        h.controller.setVisible(true);
+        await settle();
+        assert.equal(h.mounts.length, 1, 'expanding again shows the same view');
+    } finally { await h.cleanup(); }
+});
+
+test('a tab whose close is waiting on the confirm dialog does not sleep, and closes once confirmed', async () => {
+    const h = fixture({ hiddenMs: 30 });
+    try {
+        await h.controller.openTab(tab('probe:a'));
+        await h.controller.openTab(tab('probe:b'));
+        const answer = Promise.withResolvers();
+        h.closeAnswers.set('probe:a', answer.promise);
+        const closing = h.controller.closeTab('probe:a');
+        await h.advance(80); // 隐藏到期的检查在确认框开着时到了
+        assert.deepEqual(h.residency().dormant, [], 'the tab being closed is not put to sleep');
+        answer.resolve({ closed: true });
+        await closing;
+        assert.equal(h.controller.getSnapshot().tabs.some(t => t.id === 'probe:a'), false);
+        assert.equal(h.mounts[0].disposed, 1);
     } finally {
         await h.cleanup();
     }

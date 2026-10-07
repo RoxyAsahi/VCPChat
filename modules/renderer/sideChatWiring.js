@@ -175,11 +175,7 @@ export function createSideChatWiring({
             return null;
         }
 
-        const handle = await getController().openTab({ kind: 'chat', descriptor });
-        if (options?.reference && handle?.addReference) {
-            handle.addReference(options.reference);
-        }
-        return handle;
+        return getController().openTab({ kind: 'chat', descriptor });
     }
 
     async function openSideChat(options = {}) {
@@ -209,7 +205,9 @@ export function createSideChatWiring({
             const activeTab = state.tabs.find(t => t.id === state.activeTabId && t.kind === 'chat');
             const parent = activeTab?.descriptor?.parent;
             if (parent?.itemId === currentItem.id && parent?.topicId === currentTopicId) {
-                const handle = getController().getTabHandle(activeTab.id);
+                // 面板收着放久了这个侧聊可能已经休眠（视图拆了、标签还在）：重新挂上再加，不能另开一个新的
+                const handle = getController().getTabHandle(activeTab.id)
+                    || await getController().openTab({ kind: 'chat', descriptor: activeTab.descriptor });
                 if (handle?.addReference) {
                     handle.addReference(options.reference);
                     getController().setVisible(true);
@@ -219,9 +217,12 @@ export function createSideChatWiring({
             }
         }
 
-        // 同一父会话下并发的创建请求合并为一次，避免连点产生多个子会话
-        return dedupeSideChatCreation(`${currentItem.id}:${currentTopicId}`,
+        // 同一父会话下并发的创建请求合并为一次，避免连点产生多个子会话。
+        // 引用由每个调用方在创建完成后各自加上：合并进来的第二次「在侧栏提问」不能把自己的引用丢掉（同 ZCode SessionPane）
+        const handle = await dedupeSideChatCreation(`${currentItem.id}:${currentTopicId}`,
             () => createSideChat(options, currentItem, currentTopicId));
+        if (options?.reference && handle?.addReference) handle.addReference(options.reference);
+        return handle;
     }
 
     async function restoreSessions(agentId, parentTopicId) {
@@ -229,23 +230,31 @@ export function createSideChatWiring({
         if (!isSameParent(getController().getSnapshot().parent, agentId, parentTopicId)) return [];
         if (!listRes.ok || !Array.isArray(listRes.items)) return [];
 
-        // openTab 会激活恢复出来的侧聊，恢复完切回用户原来看的标签
-        const activeBefore = getController().getSnapshot().activeTabId;
+        // 收齐了一次性在后台补回：不抢用户正在看的标签，不强行展开，也不改这个话题记下的收起状态
+        const restored = [];
         for (const item of listRes.items) {
             try {
                 if (!isSameParent(getController().getSnapshot().parent, agentId, parentTopicId)) break;
                 if (item.open === false || item.status === 'closed') continue;
                 const childTopicId = item.child?.topicId;
                 if (getController().getSnapshot().tabs.some(t => t.descriptor?.child?.topicId === childTopicId)) continue;
+                if (restored.some(t => t.descriptor.child?.topicId === childTopicId)) continue;
 
                 // 从未发过消息、也没有草稿和引用的空侧聊不再恢复，直接清理
                 const childAgentId = item.child.itemId || agentId;
                 const storedDraft = sideChatOwner.readDraft(item);
                 const input = storedDraft.input || item;
+                // 草稿只存在本机（composerStorage local）时这份就是唯一的一份：读坏了要告诉用户，不能悄悄变成空白
+                if (!storedDraft.ok && item.composerStorage === 'local') {
+                    console.warn('[SideChat] Failed to read side chat draft:', storedDraft.error);
+                    notify(`辅助对话「${item.title || '未命名'}」保存的草稿读不出来，已按空白恢复`, 'warning');
+                }
                 const hasPendingInput = !!input.draft || (Array.isArray(input.references) && input.references.length > 0);
                 if (storedDraft.ok && !hasPendingInput && typeof chatAPI?.getChatHistory === 'function') {
                     const childHistory = await chatAPI.getChatHistory(childAgentId, childTopicId);
-                    if (Array.isArray(childHistory) && childHistory.length === 0) {
+                    // 读历史期间这个子话题可能刚被新建或打开（来回切话题时并发的恢复），那就不是"空的旧侧聊"
+                    const openedMeanwhile = getController().getSnapshot().tabs.some(t => t.descriptor?.child?.topicId === childTopicId);
+                    if (!openedMeanwhile && Array.isArray(childHistory) && childHistory.length === 0) {
                         const removed = await deleteSideChatChild({ electronAPI: chatAPI, agentId: childAgentId, childTopicId });
                         if (removed.ok) sideChatOwner.forgetDraft(item);
                         else console.warn('[SideChat] Failed to clean up empty side chat:', removed.message);
@@ -253,27 +262,30 @@ export function createSideChatWiring({
                     }
                 }
 
-                await getController().openTab({ kind: 'chat', descriptor: { ...createSideChatDescriptor({
+                restored.push({ kind: 'chat', descriptor: { ...createSideChatDescriptor({
                     parent: item.parent,
                     childTopicId,
                     title: item.title,
                     contextMode: item.contextMode,
                     snapshotId: item.snapshotId,
                     parentSnapshot: item.parentSnapshot || [],
-                    model: input.model || item.descriptor?.model || null,
+                    model: input.model || null,
                     open: true,
                     status: 'ready',
                     draft: input.draft || '',
                     references: Array.isArray(input.references) ? input.references : []
-                }), composerStorage: item.composerStorage } });
+                }),
+                // 沿用存档里的 id：标签 id 每次重启都一样，面板才能按对话记忆回到这个辅助对话
+                ...(typeof item.id === 'string' && item.id ? { id: item.id } : {}),
+                // 创建时间也沿用存档：辅助对话按它排序，换成重启时间的话改一次模型存一下档，顺序就乱了
+                ...(Number.isFinite(item.createdAt) ? { createdAt: item.createdAt } : {}),
+                composerStorage: item.composerStorage } });
             } catch (e) {
                 console.warn('[SideChat] Failed to restore side chat tab:', e);
             }
         }
-        const snapshot = getController().getSnapshot();
-        if (activeBefore && activeBefore !== snapshot.activeTabId && isSameParent(snapshot.parent, agentId, parentTopicId)
-            && snapshot.tabs.some(t => t.id === activeBefore)) {
-            getController().activateTab(activeBefore, { focus: false });
+        if (restored.length > 0 && isSameParent(getController().getSnapshot().parent, agentId, parentTopicId)) {
+            await getController().restoreTabs(restored);
         }
         return listRes.items;
     }
@@ -316,6 +328,30 @@ export function createSideChatWiring({
 
 
     const selectionEntry = win.openSideChatWithSelection;
+    // 还没显示过的辅助对话（恢复出来、没挂载）关闭前同样确认：有记录或草稿就问一句，和挂载后的 requestClose 一致
+    async function requestTabClose(descriptor) {
+        if (typeof uiHelper?.showConfirmDialog !== 'function') return { closed: true };
+        const agentId = descriptor?.child?.itemId || descriptor?.parent?.itemId;
+        const childTopicId = descriptor?.child?.topicId;
+        if (!agentId || !childTopicId) return { closed: true };
+        const stored = sideChatOwner.readDraft(descriptor);
+        const input = stored?.input || {};
+        let hasContent = !!input.draft || (Array.isArray(input.references) && input.references.length > 0);
+        if (!hasContent && typeof chatAPI?.getChatHistory === 'function') {
+            try {
+                const history = await chatAPI.getChatHistory(agentId, childTopicId);
+                // 读不出来时按有记录处理：宁可多问一句
+                hasContent = !Array.isArray(history) || history.length > 0;
+            } catch {
+                hasContent = true;
+            }
+        }
+        if (!hasContent) return { closed: true };
+        const confirmed = await uiHelper.showConfirmDialog(
+            `关闭「${descriptor.title || '辅助对话'}」会删除这段辅助对话的全部记录，无法恢复。`,
+            '关闭辅助对话', '关闭并删除', '取消', true);
+        return confirmed ? { closed: true } : { closed: false, reason: 'USER_CANCELED' };
+    }
     async function onTabClosed(descriptor) {
         const agentId = descriptor?.child?.itemId || descriptor?.parent?.itemId;
         const childTopicId = descriptor?.child?.topicId;
@@ -325,7 +361,7 @@ export function createSideChatWiring({
         else console.warn('[SideChat] Failed to delete closed side chat:', result.message);
     }
     return Object.freeze({
-        provider: sideChatOwner, openSideChat, restoreSessions, onTabClosed,
+        provider: sideChatOwner, openSideChat, restoreSessions, onTabClosed, requestTabClose,
         dispose() {
             sideChatOwner.dispose();
             if (win.openSideChatWithSelection === selectionEntry) {

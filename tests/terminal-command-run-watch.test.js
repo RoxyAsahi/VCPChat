@@ -124,3 +124,74 @@ test('registering the IPC loads nothing; watch and unwatch are counted per page'
         terminalHandlers.disposeAll();
     }
 });
+
+test('mirror output after the first chunk is coalesced per frame; exit flushes first and kill drops the rest', async () => {
+    let sink = null;
+    let detached = 0;
+    terminalHandlers.initialize({
+        executorLoader: () => ({
+            getSessionState: () => ({ pid: 1, cols: 80, rows: 24 }),
+            resizeSession() {},
+            ensureMirrorSession: () => ({ pid: 1 }),
+            attachMirror(next) { sink = next; return () => { detached += 1; }; }
+        }),
+        commandRunStoreLoader: () => createFakeRunStore()
+    });
+    const page = new FakeSender();
+    const { data: { id } } = await call('terminal:create', page, {});
+    await wait(0);
+    const dataMessages = () => page.sent.filter(m => m.channel === 'terminal:data').map(m => m.payload.data);
+
+    sink.onData('k');
+    assert.deepEqual(dataMessages(), ['k'], 'the first chunk after quiet (a key echo) goes out at once');
+    for (let i = 0; i < 500; i++) sink.onData('x');
+    assert.equal(dataMessages().length, 1, 'chunks inside the window are not sent one by one');
+    await wait(40);
+    assert.deepEqual(dataMessages(), ['k', 'x'.repeat(500)]);
+    await wait(40);
+
+    sink.onData('a');
+    sink.onData('a'.repeat(70 * 1024));
+    assert.equal(dataMessages().length, 4, 'a large burst goes out without waiting for the window');
+
+    sink.onData('bye');
+    sink.onExit(0);
+    assert.deepEqual(page.sent.slice(-2).map(m => m.channel), ['terminal:data', 'terminal:exit']);
+
+    sink.onData('more');
+    sink.onData('late');
+    await call('terminal:kill', page, id);
+    await wait(40);
+    assert.equal(dataMessages().at(-1), 'more', 'output buffered when the view closed is not sent');
+    assert.equal(detached, 1);
+});
+
+// 共享 PTY 只有一个尺寸：会话已在跑时新开的侧栏视图不改它，PTY 尺寸变了要告诉每个视图
+test('a new side view does not resize a running PTY and hears about later resizes', async () => {
+    let sink = null;
+    let running = true;
+    const resizes = [];
+    terminalHandlers.initialize({
+        executorLoader: () => ({
+            getSessionState: () => ({ running, pid: 1, cols: 120, rows: 30 }),
+            resizeSession(cols, rows) { resizes.push([cols, rows]); },
+            ensureMirrorSession: () => ({ running: true, pid: 1, cols: 120, rows: 30 }),
+            attachMirror(next) { sink = next; return () => {}; }
+        }),
+        commandRunStoreLoader: () => createFakeRunStore()
+    });
+    const page = new FakeSender();
+    const created = await call('terminal:create', page, { cols: 45, rows: 20 });
+    assert.deepEqual(resizes, [], 'the terminal window keeps its 120 columns');
+    assert.deepEqual([created.data.cols, created.data.rows], [120, 30], 'the view learns the size the PTY really has');
+
+    await wait(0);
+    sink.onData('before');
+    sink.onResize(100, 28);
+    assert.deepEqual(page.sent.slice(-2).map(m => m.channel), ['terminal:data', 'terminal:resized'], 'output drawn at the old width goes out first');
+    assert.deepEqual(page.sent.at(-1).payload, { id: created.data.id, cols: 100, rows: 28 });
+
+    running = false;
+    await call('terminal:create', page, { cols: 45, rows: 20 });
+    assert.deepEqual(resizes, [[45, 20]], 'a PTY that is not running yet starts at the size of the view that opens it');
+});

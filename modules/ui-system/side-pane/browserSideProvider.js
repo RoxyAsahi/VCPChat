@@ -11,11 +11,12 @@
 'use strict';
 
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
+import { moveMenuFocus } from './menu-position.js';
 
 export const BROWSER_PARTITION = 'persist:vcp-side-browser';
-const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'file:', 'about:']);
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'about:']); // 同 browserHandlers.js：不开 file: 本地页
 const BLOCKED_ERROR_CODES = new Set([-3]); // ERR_ABORTED: a navigation replaced by another one
-const INVALID_URL_MESSAGE = '仅支持 http、https、file、about 地址';
+const INVALID_URL_MESSAGE = '仅支持 http、https、about 地址';
 // 网页弹窗最多把浏览器标签开到这么多，再多就只提示不开
 export const MAX_POPUP_BROWSER_TABS = 12;
 
@@ -147,6 +148,8 @@ export function createBrowserSideProvider({
             let domReady = false;
             let currentUrl = '';
             let loading = false;
+            // 静音的视频、摄像头预览也算在播：isCurrentlyAudible 只认出声的
+            let mediaPlaying = false;
             let lastFailure = null;
             let pendingUrl = '';
 
@@ -158,7 +161,7 @@ export function createBrowserSideProvider({
             };
             const iconButton = (icon, label) => {
                 const btn = el('button', 'side-browser-btn', { type: 'button', 'aria-label': label, title: label });
-                btn.innerHTML = `<span class="vcp-ui-icon">${icon}</span>`;
+                btn.innerHTML = `<span class="vcp-ui-icon" aria-hidden="true">${icon}</span>`;
                 return btn;
             };
 
@@ -179,7 +182,7 @@ export function createBrowserSideProvider({
             menu.hidden = true;
             const menuItem = (icon, label, action) => {
                 const item = el('button', 'side-browser-menu-item', { type: 'button', role: 'menuitem', 'data-action': action });
-                item.innerHTML = `<span class="vcp-ui-icon">${icon}</span><span></span>`;
+                item.innerHTML = `<span class="vcp-ui-icon" aria-hidden="true">${icon}</span><span></span>`;
                 item.lastElementChild.textContent = label;
                 return item;
             };
@@ -195,7 +198,7 @@ export function createBrowserSideProvider({
 
             const body = el('div', 'side-browser-body');
             const empty = el('div', 'side-browser-empty');
-            empty.innerHTML = '<span class="vcp-ui-icon">public</span><span class="side-browser-empty-text"></span>';
+            empty.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">public</span><span class="side-browser-empty-text"></span>';
             empty.querySelector('.side-browser-empty-text').textContent = '粘贴或输入 URL 以打开网页。';
             const notice = el('div', 'side-browser-notice');
             notice.hidden = true;
@@ -255,7 +258,7 @@ export function createBrowserSideProvider({
                 const changed = Boolean(url) && url !== currentUrl;
                 currentUrl = url || '';
                 // 关掉后从「最近关闭」重新打开时回到最后看的页面
-                if (changed && /^https?:|^file:/i.test(currentUrl)) sidePaneController?.updateTab?.(tab.id, { payload: { url: currentUrl } });
+                if (changed && /^https?:/i.test(currentUrl)) sidePaneController?.updateTab?.(tab.id, { payload: { url: currentUrl } });
                 if (doc.activeElement !== address) address.value = currentUrl === 'about:blank' ? '' : currentUrl;
                 address.title = currentUrl;
             };
@@ -302,7 +305,11 @@ export function createBrowserSideProvider({
                     }
                     syncControls();
                 });
+                on('media-started-playing', () => { mediaPlaying = true; });
+                on('media-paused', () => { mediaPlaying = false; });
                 on('did-navigate', (event) => {
+                    // 换了文档，旧页面的播放不会再发暂停
+                    mediaPlaying = false;
                     setAddress(event.url);
                     syncControls();
                 });
@@ -329,6 +336,7 @@ export function createBrowserSideProvider({
                 });
                 on('render-process-gone', (event) => {
                     loading = false;
+                    mediaPlaying = false;
                     lastFailure = { crashed: true };
                     showNotice({
                         title: '页面已停止响应',
@@ -351,6 +359,7 @@ export function createBrowserSideProvider({
                     webview = null;
                     domReady = false;
                     loading = false;
+                    mediaPlaying = false;
                     old.remove();
                 }
                 hideNotice();
@@ -404,7 +413,35 @@ export function createBrowserSideProvider({
                 webview?.focus?.();
             };
 
-            const closeMenu = () => { menu.hidden = true; };
+            // 键盘打开后焦点进菜单：菜单在 DOM 里排在 webview 后面，焦点留在按钮上时 Tab 会先进网页、窗口失焦、菜单收起，
+            // 菜单项就永远够不着。方向键 / Esc / Tab 的处理同标签右键菜单（Radix Menu 的行为）
+            moreBtn.setAttribute('aria-haspopup', 'menu');
+            moreBtn.setAttribute('aria-expanded', 'false');
+            const closeMenu = ({ restoreFocus = false } = {}) => {
+                menu.hidden = true;
+                moreBtn.setAttribute('aria-expanded', 'false');
+                if (restoreFocus) moreBtn.focus();
+            };
+            const openMenu = () => {
+                syncControls();
+                menu.hidden = false;
+                moreBtn.setAttribute('aria-expanded', 'true');
+                menu.querySelector('[role="menuitem"]:not([disabled])')?.focus();
+            };
+            // 地址栏里打了一半就点走：回到当前页面的网址（setAddress 在聚焦时不改它，没有这一步会一直留着半截文字）。
+            // 切到别的窗口（比如去复制网址）也会触发 blur，那时整个文档都没焦点，打了一半的字要留着
+            own.listen(address, 'blur', () => {
+                if (doc.hasFocus?.() === false) return;
+                address.value = currentUrl === 'about:blank' ? '' : currentUrl;
+            });
+            own.listen(menu, 'keydown', (event) => {
+                if (event.key === 'Escape' || event.key === 'Tab') {
+                    event.preventDefault();
+                    closeMenu({ restoreFocus: true });
+                    return;
+                }
+                moveMenuFocus(event, Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled])')));
+            });
             const onDocumentPointerDown = (event) => {
                 if (!menu.hidden && !menu.contains(event.target) && !moreBtn.contains(event.target)) closeMenu();
             };
@@ -430,13 +467,13 @@ export function createBrowserSideProvider({
                 else reload();
             });
             own.listen(moreBtn, 'click', () => {
-                syncControls();
-                menu.hidden = !menu.hidden;
+                if (menu.hidden) openMenu();
+                else closeMenu();
             });
             own.listen(menu, 'click', async (event) => {
                 const item = event.target.closest('[data-action]');
                 if (!item || item.disabled) return;
-                closeMenu();
+                closeMenu({ restoreFocus: menu.contains(doc.activeElement) });
                 const action = item.getAttribute('data-action');
                 if (action === 'open-external') {
                     const res = await api?.browserOpenExternal?.(currentUrl);
@@ -492,9 +529,9 @@ export function createBrowserSideProvider({
                     if (result?.url) navigate(result.url);
                     return result;
                 },
-                // 还在加载或者在放声音的页面不休眠，休眠了再显示会从当前地址重新打开
+                // 还在加载、在放声音或在放视频的页面不休眠，休眠了再显示会从当前地址重新打开
                 isBusy() {
-                    if (loading) return true;
+                    if (loading || mediaPlaying) return true;
                     try {
                         return domReady && webview?.isCurrentlyAudible?.() === true;
                     } catch (_error) {

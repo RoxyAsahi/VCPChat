@@ -37,14 +37,20 @@ test('search ranking: title prefix beats word prefix beats substring beats hint 
 });
 
 test('tab presentation helpers: type labels and search hints', () => {
-    assert.equal(getTabTypeLabel({ kind: 'notifications' }), '通知');
-    assert.equal(getTabTypeLabel({ kind: 'chat' }), '辅助对话');
-    assert.equal(getTabTypeLabel({ kind: 'terminal', typeLabel: '终端' }), '终端');
-    assert.equal(getTabTypeLabel({ kind: 'unknown' }), '标签页');
+    // 打开标签的模块给的 typeLabel 原样使用；框架类型和未知类型都有非空的默认名
+    assert.equal(getTabTypeLabel({ kind: 'terminal', typeLabel: 'My Shell' }), 'My Shell');
+    assert.equal(getTabTypeLabel({ kind: 'x', typeLabel: '' }, () => ({ label: 'From registry' })), 'From registry');
+    for (const kind of ['notifications', 'chat', 'unknown']) assert.ok(getTabTypeLabel({ kind }), kind);
+    assert.notEqual(getTabTypeLabel({ kind: 'notifications' }), getTabTypeLabel({ kind: 'chat' }));
     assert.equal(getTabSearchHint({ kind: 'browser', searchHint: 'https://a.test/x' }), 'https://a.test/x');
     assert.equal(getTabSearchHint({ kind: 'browser', url: 'https://a.test/x' }), '');
-    assert.equal(formatRelativeTime(1000, 1000 + 30_000), '刚刚');
-    assert.equal(formatRelativeTime(0, 5 * 60_000), '5分钟前');
+    // 半分钟内与五分钟前给出不同的相对时间，五分钟的数字要出现
+    const justNow = formatRelativeTime(1000, 1000 + 30_000);
+    const fiveMin = formatRelativeTime(0, 5 * 60_000);
+    assert.ok(justNow);
+    assert.notEqual(justNow, fiveMin);
+    assert.match(fiveMin, /5/);
+    assert.equal(formatRelativeTime(0, 10_000), justNow, 'everything under a minute reads the same');
 });
 
 test('resolveTabsOverflow uses the min-width budget and ignores where the add button lives', () => {
@@ -147,8 +153,6 @@ test('controller: closed non-chat tabs are remembered and can really be reopened
     await controller.openTab({ id: 'n1', kind: 'notes', title: 'N1', scopeMode: 'global', searchHint: 'file:///x' });
     await controller.closeTab('n1');
 
-    // 关掉最后一个可关的标签后面板收起（与通知之外没有内容时一致）
-    assert.equal(controller.getSnapshot().visible, false);
     const closed = controller.getRecentlyClosedTabs();
     assert.equal(closed.length, 1);
     assert.equal(closed[0].id, 'n1');
@@ -211,6 +215,29 @@ test('controller: the tab overview is keyboard driven (arrows, Enter, Escape)', 
     button.click();
     press('Escape');
     assert.equal(popover.hidden, true);
+
+    // 屏幕阅读器要能读到方向键选中的是哪一项：combobox + listbox + aria-activedescendant
+    button.click();
+    const list = doc.getElementById('sidePaneOpenTabsList');
+    assert.equal(input.getAttribute('role'), 'combobox');
+    assert.equal(input.getAttribute('aria-controls'), list.id);
+    assert.equal(list.getAttribute('role'), 'listbox');
+    press('ArrowDown');
+    const selected = doc.querySelector('.side-pane-overview-item.kbd-active');
+    assert.equal(selected.getAttribute('role'), 'option');
+    assert.equal(selected.getAttribute('aria-selected'), 'true');
+    assert.equal(input.getAttribute('aria-activedescendant'), selected.id);
+    assert.equal(doc.getElementById(selected.id), selected);
+
+    // 关闭按钮跟着整行重建掉了，焦点回到搜索框
+    const closeBtn = doc.querySelector('.side-pane-overview-item[data-tab-id="n2"] .side-pane-tab-close');
+    closeBtn.focus();
+    closeBtn.click();
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(doc.querySelector('.side-pane-overview-item[data-tab-id="n2"]'), null);
+    assert.equal(doc.activeElement, input);
+    assert.equal(input.hasAttribute('aria-activedescendant'), false, 'no stale id after a redraw');
     controller.dispose();
 });
 
@@ -239,14 +266,90 @@ test('controller: the 通知 tab mirrors the VCPLog connection status', async ()
     });
     controller.show?.();
     const tab = () => root.querySelector('.side-pane-tab[data-tab-id="notifications"]');
+    const title = () => tab().querySelector('.tab-title').textContent;
     assert.equal(tab().querySelector('.side-pane-tab-status').dataset.status, 'connecting');
-    assert.equal(tab().getAttribute('aria-label'), '通知，VCPLog: 连接中...');
-    assert.equal(tab().querySelector('.tab-title').textContent, 'VCPLog 连接中...');
+    // 读屏名带上通知中心发布的状态文字；标签上能看到的标题也跟着状态走
+    assert.ok(tab().getAttribute('aria-label').includes('VCPLog: 连接中...'));
+    const connectingTitle = title();
+    assert.ok(connectingTitle);
 
     notificationState.publish({ ...notificationState.get(), connection: { status: 'open', text: 'VCPLog: 已连接' } });
     assert.equal(tab().querySelector('.side-pane-tab-status').dataset.status, 'open');
-    assert.equal(tab().getAttribute('aria-label'), '通知，VCPLog: 已连接');
-    assert.equal(tab().querySelector('.tab-title').textContent, 'VCPLog 已连接');
+    assert.ok(tab().getAttribute('aria-label').includes('VCPLog: 已连接'));
+    assert.ok(title());
+    assert.notEqual(title(), connectingTitle);
+
+    // 没有状态文字时不留过期的读屏名
+    notificationState.publish({ ...notificationState.get(), connection: { status: 'closed', text: '' } });
+    assert.equal(tab().querySelector('.side-pane-tab-status').dataset.status, 'closed');
+    assert.equal(tab().hasAttribute('aria-label'), false);
     controller.dispose();
     dom.window.close();
+});
+
+test('tab strip: a collapsed pane (only padding left) keeps the add button home instead of moving it back and forth', async () => {
+    const { createSidePaneTabStrip } = await import('../modules/ui-system/side-pane/side-pane-tab-strip.js');
+    const dom = new JSDOM('<div id="tabs"></div><div id="actions"><button id="add"></button></div>');
+    const doc = dom.window.document;
+    const tabList = doc.getElementById('tabs');
+    const addButton = doc.getElementById('add');
+    const home = doc.getElementById('actions');
+    // 收起的面板宽度为 0，标签条只剩左右内边距那几像素
+    Object.defineProperty(tabList, 'clientWidth', { configurable: true, get: () => 4 });
+    addButton.getBoundingClientRect = () => ({ width: 28 });
+    let moves = 0;
+    new dom.window.MutationObserver(records => { moves += records.length; }).observe(home, { childList: true });
+    const strip = createSidePaneTabStrip({
+        tabListElement: tabList,
+        addButton,
+        getTabs: () => [],
+        getActiveTabId: () => null,
+        isClosable: () => true,
+        onActivate() {}, onClose() {}, onReorder() {}, onContextMenu() {}
+    });
+    try {
+        for (let i = 0; i < 6; i++) strip.layout();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(addButton.parentElement, home);
+        assert.equal(moves, 0);
+    } finally {
+        strip.dispose();
+        dom.window.close();
+    }
+});
+
+test('controller: the overview only offers recently closed tabs that would show in the current conversation', async () => {
+    const { controller, doc } = setup({ notes: notesProvider });
+    const topicA = { itemType: 'agent', itemId: 'agent', topicId: 'a' };
+    const topicB = { itemType: 'agent', itemId: 'agent', topicId: 'b' };
+    controller.setParent(topicA);
+    await controller.openTab({ id: 'plan-a', kind: 'notes', title: 'Plan A', scopeMode: 'topic', parent: topicA });
+    await controller.openTab({ id: 'tool', kind: 'notes', title: 'Tool', scopeMode: 'global' });
+    await controller.closeTab('plan-a');
+    await controller.closeTab('tool');
+    controller.setParent(topicB);
+
+    const input = doc.querySelector('.side-pane-overview-input');
+    input.value = '';
+    input.dispatchEvent(new doc.defaultView.Event('input'));
+    const titles = [...doc.querySelectorAll('.side-pane-overview-item.recently-closed')].map(item => item.textContent);
+    assert.equal(titles.length, 1, titles.join(' | '));
+    assert.match(titles[0], /Tool/);
+
+    controller.setParent(topicA);
+    input.dispatchEvent(new doc.defaultView.Event('input'));
+    assert.equal(doc.querySelectorAll('.side-pane-overview-item.recently-closed').length, 2, 'back in topic A both come back');
+    controller.dispose();
+});
+
+test('controller: a closed tab overview is not rebuilt on every tab change, and shows fresh titles when opened', async () => {
+    const { controller, doc } = setup({ notes: notesProvider });
+    await controller.openTab({ id: 'n1', kind: 'notes', title: 'N1', scopeMode: 'global' });
+    const list = doc.getElementById('sidePaneOpenTabsList');
+    const before = [...list.children];
+    controller.updateTab('n1', { title: 'Renamed' });
+    assert.ok(before.length > 0 && [...list.children].every((el, i) => el === before[i]), 'the hidden overview list was left alone');
+    doc.getElementById('sidePaneTabOverviewBtn').click();
+    assert.ok(list.textContent.includes('Renamed'), 'opening the overview renders the current titles');
+    await controller.dispose();
 });

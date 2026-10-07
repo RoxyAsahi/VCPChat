@@ -198,6 +198,7 @@
     "modules/ipc/senderLifetime.js",
     "modules/ipc/settingsHandlers.js",
     "modules/ipc/sideChatHandlers.js",
+    "modules/ipc/sidePaneIpcPolicy.js",
     "modules/ipc/sourceHandlers.js",
     "modules/ipc/sovitsHandlers.js",
     "modules/ipc/stateSubscriptions.js",
@@ -310,6 +311,7 @@
     "modules/services/chatDataService/index.js",
     "modules/services/chatDataService/lifecycle.js",
     "modules/services/deepWikiService.js",
+    "modules/services/dotGitPath.js",
     "modules/services/embeddedAppSessionManager.js",
     "modules/services/gitService.js",
     "modules/services/gitWatcher.js",
@@ -485,6 +487,7 @@
     "modules/ui-system/side-pane/tab-types/plan-detail.js",
     "modules/ui-system/side-pane/tab-types/terminal.js",
     "modules/ui-system/side-pane/tab-types/tool-output.js",
+    "modules/ui-system/side-pane/terminalDataTransform.js",
     "modules/ui-system/side-pane/terminalLinks.js",
     "modules/ui-system/side-pane/terminalSideProvider.js",
     "modules/ui-system/side-pane/terminalTheme.js",
@@ -664,7 +667,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 243,
+          "line": 358,
           "kind": "custom-event-listener"
         },
         {
@@ -729,7 +732,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 243,
+          "line": 358,
           "kind": "custom-event-listener",
           "match": "signal?.addEventListener('abort'"
         },
@@ -753,14 +756,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1829,
+          "line": 1833,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1829,
+          "line": 1833,
           "kind": "event-listener",
           "match": "app.on('activate'"
         }
@@ -1234,36 +1237,36 @@
       "consumers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 914,
+          "line": 967,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1000,
+          "line": 1050,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 200,
+          "line": 223,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 914,
+          "line": 967,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('auxclick'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1000,
+          "line": 1050,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('auxclick'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 200,
+          "line": 223,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('auxclick'"
         }
@@ -1275,14 +1278,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 139,
+          "line": 206,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 139,
+          "line": 206,
           "kind": "event-listener",
           "match": "guest.on('before-input-event'"
         }
@@ -1294,14 +1297,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1935,
+          "line": 1939,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1935,
+          "line": 1939,
           "kind": "event-listener",
           "match": "app.on('before-quit'"
         }
@@ -1363,7 +1366,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 134,
+          "line": 173,
           "kind": "custom-event-listener"
         }
       ],
@@ -1430,7 +1433,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 134,
+          "line": 173,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('beforeunload'"
         }
@@ -1675,7 +1678,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1351,
+          "line": 1396,
           "kind": "custom-event-listener"
         },
         {
@@ -1695,7 +1698,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 98,
+          "line": 126,
           "kind": "custom-event-listener"
         },
         {
@@ -1709,13 +1712,18 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/ui-system/side-pane/side-pane-resizer-owner.js",
+          "line": 168,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 95,
+          "line": 96,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 219,
+          "line": 255,
           "kind": "custom-event-listener"
         },
         {
@@ -1726,6 +1734,11 @@
         {
           "file": "modules/ui-system/sidebar-resizer.js",
           "line": 134,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/uiManager.js",
+          "line": 151,
           "kind": "custom-event-listener"
         },
         {
@@ -1772,7 +1785,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1351,
+          "line": 1396,
           "kind": "custom-event-listener",
           "match": "vcpServerUrlInput.addEventListener('blur'"
         },
@@ -1796,7 +1809,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 98,
+          "line": 126,
           "kind": "custom-event-listener",
           "match": "win.addEventListener('blur'"
         },
@@ -1813,14 +1826,20 @@
           "match": "profileName.addEventListener('blur'"
         },
         {
+          "file": "modules/ui-system/side-pane/side-pane-resizer-owner.js",
+          "line": 168,
+          "kind": "custom-event-listener",
+          "match": "handle?.addEventListener?.('blur'"
+        },
+        {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 95,
+          "line": 96,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener('blur'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 219,
+          "line": 255,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener('blur'"
         },
@@ -1835,6 +1854,12 @@
           "line": 134,
           "kind": "custom-event-listener",
           "match": "windowRef.addEventListener?.('blur'"
+        },
+        {
+          "file": "modules/uiManager.js",
+          "line": 151,
+          "kind": "custom-event-listener",
+          "match": "handle.addEventListener('blur'"
         },
         {
           "file": "modules/voice/chatVoiceComposer.js",
@@ -1862,14 +1887,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 165,
+          "line": 232,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 165,
+          "line": 232,
           "kind": "event-listener",
           "match": "ipcMain.handle('browser:clear-data'"
         },
@@ -1893,14 +1918,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 154,
+          "line": 221,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 154,
+          "line": 221,
           "kind": "event-listener",
           "match": "ipcMain.handle('browser:open-external'"
         },
@@ -2313,12 +2338,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 351,
+          "line": 354,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 515,
+          "line": 522,
           "kind": "custom-event-listener"
         },
         {
@@ -2348,7 +2373,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1160,
+          "line": 1205,
           "kind": "custom-event-listener"
         },
         {
@@ -2368,7 +2393,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 567,
+          "line": 592,
           "kind": "custom-event-listener"
         }
       ],
@@ -2477,13 +2502,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 351,
+          "line": 354,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('change'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 515,
+          "line": 522,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('change'"
         },
@@ -2519,7 +2544,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1160,
+          "line": 1205,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('change'"
         },
@@ -2543,7 +2568,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 567,
+          "line": 592,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('change'"
         }
@@ -2555,14 +2580,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 34,
+          "line": 36,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 34,
+          "line": 36,
           "kind": "event-listener",
           "match": "forgeModule.events.on('changed'"
         }
@@ -3115,14 +3140,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1673,
+          "line": 1677,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1673,
+          "line": 1677,
           "kind": "event-listener",
           "match": "ipcMain.handle('chat-data-service-reconcile'"
         }
@@ -3134,14 +3159,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1666,
+          "line": 1670,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1666,
+          "line": 1670,
           "kind": "event-listener",
           "match": "ipcMain.handle('chat-data-service-status'"
         }
@@ -3159,14 +3184,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 224,
+          "line": 225,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 224,
+          "line": 225,
           "kind": "event-listener",
           "match": "ipcMain.handle('claim-pending-flowlock-topic'"
         },
@@ -3529,22 +3554,22 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 925,
+          "line": 978,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3438,
+          "line": 3429,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3497,
+          "line": 3488,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3535,
+          "line": 3526,
           "kind": "custom-event-listener"
         },
         {
@@ -3559,7 +3584,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 836,
+          "line": 830,
           "kind": "custom-event-listener"
         },
         {
@@ -3589,17 +3614,17 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 837,
+          "line": 840,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 997,
+          "line": 1000,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 50,
+          "line": 75,
           "kind": "custom-event-listener"
         },
         {
@@ -3629,12 +3654,12 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 212,
+          "line": 300,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 261,
+          "line": 362,
           "kind": "custom-event-listener"
         },
         {
@@ -3664,7 +3689,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 239,
+          "line": 247,
           "kind": "custom-event-listener"
         },
         {
@@ -3674,12 +3699,12 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 551,
+          "line": 596,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 554,
+          "line": 599,
           "kind": "custom-event-listener"
         },
         {
@@ -3729,27 +3754,27 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 256,
+          "line": 259,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 267,
+          "line": 270,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 294,
+          "line": 297,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 395,
+          "line": 398,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 396,
+          "line": 399,
           "kind": "custom-event-listener"
         },
         {
@@ -3774,77 +3799,77 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1064,
+          "line": 1114,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1079,
+          "line": 1129,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1080,
+          "line": 1130,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1082,
+          "line": 1132,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1092,
+          "line": 1142,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1099,
+          "line": 1149,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1163,
+          "line": 1208,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1238,
+          "line": 1283,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1244,
+          "line": 1289,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1271,
+          "line": 1316,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1300,
+          "line": 1345,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1627,
+          "line": 1676,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1640,
+          "line": 1689,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1814,
+          "line": 1863,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1822,
+          "line": 1871,
           "kind": "custom-event-listener"
         },
         {
@@ -3959,7 +3984,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1276,
+          "line": 1414,
           "kind": "custom-event-listener"
         },
         {
@@ -4034,12 +4059,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 169,
+          "line": 171,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 174,
+          "line": 176,
           "kind": "custom-event-listener"
         },
         {
@@ -4049,17 +4074,17 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 71,
+          "line": 77,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 126,
+          "line": 140,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 135,
+          "line": 149,
           "kind": "custom-event-listener"
         },
         {
@@ -4094,12 +4119,12 @@
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 366,
+          "line": 381,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 403,
+          "line": 418,
           "kind": "custom-event-listener"
         },
         {
@@ -4169,37 +4194,57 @@
         },
         {
           "file": "modules/ui-system/side-pane/code-viewer/diff-view.js",
-          "line": 79,
+          "line": 81,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/code-viewer/editor.js",
+          "line": 89,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/code-viewer/picker.js",
+          "line": 115,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 220,
+          "line": 141,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/git/cards.js",
+          "line": 256,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 90,
+          "line": 108,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 217,
+          "line": 265,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 339,
+          "line": 122,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 363,
+          "line": 354,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 751,
+          "line": 378,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
+          "line": 780,
           "kind": "custom-event-listener"
         },
         {
@@ -4239,82 +4284,87 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 334,
+          "line": 342,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 369,
+          "line": 378,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 406,
+          "line": 421,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 415,
+          "line": 431,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 528,
+          "line": 545,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 582,
+          "line": 608,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 586,
+          "line": 614,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 658,
+          "line": 635,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 685,
+          "line": 692,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 703,
+          "line": 719,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 723,
+          "line": 738,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 751,
+          "line": 759,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 765,
+          "line": 971,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1023,
+          "line": 514,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1029,
+          "line": 1207,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1043,
+          "line": 1213,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 1227,
           "kind": "custom-event-listener"
         },
         {
@@ -4344,42 +4394,42 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 154,
+          "line": 166,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 60,
+          "line": 63,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 120,
+          "line": 153,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 128,
+          "line": 163,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 143,
+          "line": 179,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 200,
+          "line": 236,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 177,
+          "line": 197,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 189,
+          "line": 211,
           "kind": "custom-event-listener"
         },
         {
@@ -4474,17 +4524,17 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 304,
+          "line": 350,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 423,
+          "line": 469,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 453,
+          "line": 499,
           "kind": "custom-event-listener"
         },
         {
@@ -4955,25 +5005,25 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 925,
+          "line": 978,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('click'"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3438,
+          "line": 3429,
           "kind": "custom-event-listener",
           "match": "attachmentElement.addEventListener('click'"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3497,
+          "line": 3488,
           "kind": "custom-event-listener",
           "match": "attachmentElement.addEventListener('click'"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3535,
+          "line": 3526,
           "kind": "custom-event-listener",
           "match": "removeBtn.addEventListener('click'"
         },
@@ -4991,7 +5041,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 836,
+          "line": 830,
           "kind": "custom-event-listener",
           "match": "reasonInput.addEventListener('click'"
         },
@@ -5027,19 +5077,19 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 837,
+          "line": 840,
           "kind": "custom-event-listener",
           "match": "actionBtn.addEventListener('click'"
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 997,
+          "line": 1000,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 50,
+          "line": 75,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('click'"
         },
@@ -5075,13 +5125,13 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 212,
+          "line": 300,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('click'"
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 261,
+          "line": 362,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('click'"
         },
@@ -5117,7 +5167,7 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 239,
+          "line": 247,
           "kind": "custom-event-listener",
           "match": "statusText.addEventListener('click'"
         },
@@ -5129,13 +5179,13 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 551,
+          "line": 596,
           "kind": "custom-event-listener",
           "match": "stopBtn.addEventListener('click'"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 554,
+          "line": 599,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('click'"
         },
@@ -5195,31 +5245,31 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 256,
+          "line": 259,
           "kind": "custom-event-listener",
           "match": "header.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 267,
+          "line": 270,
           "kind": "custom-event-listener",
           "match": "toggle.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 294,
+          "line": 297,
           "kind": "custom-event-listener",
           "match": "styleHeader.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 395,
+          "line": 398,
           "kind": "custom-event-listener",
           "match": "addBtn.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 396,
+          "line": 399,
           "kind": "custom-event-listener",
           "match": "importBtn.addEventListener('click'"
         },
@@ -5249,91 +5299,91 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1064,
+          "line": 1114,
           "kind": "custom-event-listener",
           "match": "refreshModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1079,
+          "line": 1129,
           "kind": "custom-event-listener",
           "match": "cancelRegexRuleBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1080,
+          "line": 1130,
           "kind": "custom-event-listener",
           "match": "closeRegexRuleModalBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1082,
+          "line": 1132,
           "kind": "custom-event-listener",
           "match": "regexRuleModal.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1092,
+          "line": 1142,
           "kind": "custom-event-listener",
           "match": "openTopicSummaryModelSelectBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1099,
+          "line": 1149,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1163,
+          "line": 1208,
           "kind": "custom-event-listener",
           "match": "deleteItemBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1238,
+          "line": 1283,
           "kind": "custom-event-listener",
           "match": "openModelSelectBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1244,
+          "line": 1289,
           "kind": "custom-event-listener",
           "match": "refreshModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1271,
+          "line": 1316,
           "kind": "custom-event-listener",
           "match": "refreshTtsModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1300,
+          "line": 1345,
           "kind": "custom-event-listener",
           "match": "resetAvatarColorsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1627,
+          "line": 1676,
           "kind": "custom-event-listener",
           "match": "starSpan.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1640,
+          "line": 1689,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1814,
+          "line": 1863,
           "kind": "custom-event-listener",
           "match": "editBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1822,
+          "line": 1871,
           "kind": "custom-event-listener",
           "match": "deleteBtn.addEventListener('click'"
         },
@@ -5471,7 +5521,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1276,
+          "line": 1414,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('click'"
         },
@@ -5561,13 +5611,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 169,
+          "line": 171,
           "kind": "custom-event-listener",
           "match": "generate.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 174,
+          "line": 176,
           "kind": "custom-event-listener",
           "match": "checkbox.addEventListener('click'"
         },
@@ -5579,19 +5629,19 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 71,
+          "line": 77,
           "kind": "custom-event-listener",
           "match": "refreshBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 126,
+          "line": 140,
           "kind": "custom-event-listener",
           "match": "line.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/git-graph.js",
-          "line": 135,
+          "line": 149,
           "kind": "custom-event-listener",
           "match": "more.addEventListener('click'"
         },
@@ -5633,13 +5683,13 @@
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 366,
+          "line": 381,
           "kind": "custom-event-listener",
           "match": "label.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 403,
+          "line": 418,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
@@ -5723,43 +5773,67 @@
         },
         {
           "file": "modules/ui-system/side-pane/code-viewer/diff-view.js",
-          "line": 79,
+          "line": 81,
           "kind": "custom-event-listener",
           "match": "more.addEventListener('click'"
         },
         {
+          "file": "modules/ui-system/side-pane/code-viewer/editor.js",
+          "line": 89,
+          "kind": "custom-event-listener",
+          "match": "read.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/code-viewer/picker.js",
+          "line": 115,
+          "kind": "custom-event-listener",
+          "match": "retry.addEventListener('click'"
+        },
+        {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 220,
+          "line": 141,
+          "kind": "custom-event-listener",
+          "match": "retry.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/git/cards.js",
+          "line": 256,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 90,
+          "line": 108,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 217,
+          "line": 265,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 339,
+          "line": 122,
+          "kind": "custom-event-listener",
+          "match": "btn.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
+          "line": 354,
           "kind": "custom-event-listener",
           "match": "more.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 363,
+          "line": 378,
           "kind": "custom-event-listener",
           "match": "head.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 751,
+          "line": 780,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
@@ -5807,97 +5881,103 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 334,
+          "line": 342,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 369,
+          "line": 378,
           "kind": "custom-event-listener",
           "match": "crumbs.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 406,
+          "line": 421,
           "kind": "custom-event-listener",
           "match": "refreshBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 415,
+          "line": 431,
           "kind": "custom-event-listener",
           "match": "forgeBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 528,
+          "line": 545,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 582,
+          "line": 608,
           "kind": "custom-event-listener",
           "match": "toggle.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 586,
+          "line": 614,
           "kind": "custom-event-listener",
           "match": "clear.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 658,
+          "line": 635,
+          "kind": "custom-event-listener",
+          "match": "retry.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 692,
           "kind": "custom-event-listener",
           "match": "headBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 685,
+          "line": 719,
           "kind": "custom-event-listener",
           "match": "pick.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 703,
+          "line": 738,
           "kind": "custom-event-listener",
           "match": "pick.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 723,
+          "line": 759,
           "kind": "custom-event-listener",
           "match": "link.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 751,
-          "kind": "custom-event-listener",
-          "match": "retry.addEventListener('click'"
-        },
-        {
-          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 765,
+          "line": 971,
           "kind": "custom-event-listener",
           "match": "retry.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1023,
+          "line": 514,
+          "kind": "custom-event-listener",
+          "match": "retry.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-controller.js",
+          "line": 1207,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1029,
+          "line": 1213,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1043,
+          "line": 1227,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
@@ -5933,49 +6013,49 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 154,
+          "line": 166,
           "kind": "custom-event-listener",
           "match": "container.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 60,
+          "line": 63,
           "kind": "custom-event-listener",
           "match": "menu.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 120,
+          "line": 153,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 128,
+          "line": 163,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 143,
+          "line": 179,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 200,
+          "line": 236,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 177,
+          "line": 197,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 189,
+          "line": 211,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
@@ -6089,19 +6169,19 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 304,
+          "line": 350,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 423,
+          "line": 469,
           "kind": "custom-event-listener",
           "match": "item.addEventListener('click'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 453,
+          "line": 499,
           "kind": "custom-event-listener",
           "match": "topicList?.addEventListener('click'"
         },
@@ -6188,12 +6268,12 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 573,
+          "line": 578,
           "kind": "event-listener"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 685,
+          "line": 690,
           "kind": "event-listener"
         },
         {
@@ -6233,7 +6313,7 @@
         },
         {
           "file": "main.js",
-          "line": 1910,
+          "line": 1914,
           "kind": "event-listener"
         },
         {
@@ -6323,13 +6403,13 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 573,
+          "line": 578,
           "kind": "event-listener",
           "match": "child.on('close'"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 685,
+          "line": 690,
           "kind": "event-listener",
           "match": "child.on('close'"
         },
@@ -6377,7 +6457,7 @@
         },
         {
           "file": "main.js",
-          "line": 1910,
+          "line": 1914,
           "kind": "event-listener",
           "match": "pythonProcess.on('close'"
         },
@@ -7040,27 +7120,27 @@
       "producers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 969,
+          "line": 1022,
           "kind": "custom-event-create"
         }
       ],
       "consumers": [
         {
           "file": "modules/uiManager.js",
-          "line": 417,
+          "line": 463,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 969,
+          "line": 1022,
           "kind": "custom-event-create",
           "match": "new CustomEvent('compact-sidebar-open-topics'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 417,
+          "line": 463,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('compact-sidebar-open-topics'"
         }
@@ -7072,16 +7152,27 @@
       "consumers": [
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 344,
+          "line": 350,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 573,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 344,
+          "line": 350,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('compositionend'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 573,
+          "kind": "custom-event-listener",
+          "match": "el.addEventListener('compositionend'"
         }
       ]
     },
@@ -7091,16 +7182,27 @@
       "consumers": [
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 343,
+          "line": 349,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 572,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 343,
+          "line": 349,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('compositionstart'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 572,
+          "kind": "custom-event-listener",
+          "match": "el.addEventListener('compositionstart'"
         }
       ]
     },
@@ -7116,14 +7218,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2095,
+          "line": 2099,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2095,
+          "line": 2099,
           "kind": "event-listener",
           "match": "ipcMain.on('connect-vcplog'"
         },
@@ -7210,12 +7312,12 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 953,
+          "line": 1006,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3439,
+          "line": 3430,
           "kind": "custom-event-listener"
         },
         {
@@ -7230,12 +7332,12 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 260,
+          "line": 358,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 558,
+          "line": 603,
           "kind": "custom-event-listener"
         },
         {
@@ -7245,7 +7347,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 975,
+          "line": 1025,
           "kind": "custom-event-listener"
         },
         {
@@ -7260,12 +7362,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 238,
+          "line": 274,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 235,
           "kind": "custom-event-listener"
         },
         {
@@ -7337,13 +7439,13 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 953,
+          "line": 1006,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('contextmenu'"
         },
         {
           "file": "modules/messageRenderer.js",
-          "line": 3439,
+          "line": 3430,
           "kind": "custom-event-listener",
           "match": "attachmentElement.addEventListener('contextmenu'"
         },
@@ -7361,13 +7463,13 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 260,
+          "line": 358,
           "kind": "custom-event-listener",
           "match": "root?.addEventListener('contextmenu'"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 558,
+          "line": 603,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('contextmenu'"
         },
@@ -7379,7 +7481,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 975,
+          "line": 1025,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('contextmenu'"
         },
@@ -7397,13 +7499,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 238,
+          "line": 274,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('contextmenu'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 235,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('contextmenu'"
         },
@@ -7427,14 +7529,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 212,
+          "line": 220,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 212,
+          "line": 220,
           "kind": "event-listener",
           "match": "ipcMain.handle('continue-jev-group-chat'"
         },
@@ -7562,14 +7664,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 387,
+          "line": 392,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 387,
+          "line": 392,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-agent'"
         },
@@ -7593,14 +7695,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 75,
+          "line": 81,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 75,
+          "line": 81,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-agent-group'"
         },
@@ -7655,14 +7757,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 681,
+          "line": 682,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 681,
+          "line": 682,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-new-topic-for-agent'"
         },
@@ -7686,14 +7788,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 116,
+          "line": 122,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 116,
+          "line": 122,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-new-topic-for-group'"
         },
@@ -7878,12 +7980,12 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 560,
+          "line": 565,
           "kind": "event-listener"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 675,
+          "line": 680,
           "kind": "event-listener"
         },
         {
@@ -7948,12 +8050,12 @@
         },
         {
           "file": "main.js",
-          "line": 1902,
+          "line": 1906,
           "kind": "event-listener"
         },
         {
           "file": "main.js",
-          "line": 1906,
+          "line": 1910,
           "kind": "event-listener"
         },
         {
@@ -8151,13 +8253,13 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 560,
+          "line": 565,
           "kind": "event-listener",
           "match": "child.stderr.on('data'"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 675,
+          "line": 680,
           "kind": "event-listener",
           "match": "child.stderr.on('data'"
         },
@@ -8235,13 +8337,13 @@
         },
         {
           "file": "main.js",
-          "line": 1902,
+          "line": 1906,
           "kind": "event-listener",
           "match": "pythonProcess.stdout.on('data'"
         },
         {
           "file": "main.js",
-          "line": 1906,
+          "line": 1910,
           "kind": "event-listener",
           "match": "pythonProcess.stderr.on('data'"
         },
@@ -8356,14 +8458,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 443,
+          "line": 448,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 443,
+          "line": 448,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-agent'"
         },
@@ -8387,14 +8489,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 91,
+          "line": 97,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 91,
+          "line": 97,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-agent-group'"
         },
@@ -8449,14 +8551,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 120,
+          "line": 126,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 120,
+          "line": 126,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-group-topic'"
         },
@@ -8511,14 +8613,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 724,
+          "line": 725,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 724,
+          "line": 725,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-topic'"
         },
@@ -9965,14 +10067,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 119,
+          "line": 187,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 119,
+          "line": 187,
           "kind": "event-listener",
           "match": "host.on('did-attach-webview'"
         }
@@ -10351,14 +10453,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2106,
+          "line": 2110,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2106,
+          "line": 2110,
           "kind": "event-listener",
           "match": "ipcMain.on('disconnect-vcplog'"
         },
@@ -11006,14 +11108,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1758,
+          "line": 1762,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1758,
+          "line": 1762,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:activate'"
         },
@@ -11037,14 +11139,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1778,
+          "line": 1782,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1778,
+          "line": 1782,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:cancel'"
         },
@@ -11068,14 +11170,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1766,
+          "line": 1770,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1766,
+          "line": 1770,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:close'"
         },
@@ -11099,14 +11201,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1795,
+          "line": 1799,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1795,
+          "line": 1799,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:close-all'"
         },
@@ -11130,14 +11232,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1747,
+          "line": 1751,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1747,
+          "line": 1751,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:create'"
         },
@@ -11161,14 +11263,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1771,
+          "line": 1775,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1771,
+          "line": 1775,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:detach'"
         },
@@ -11192,14 +11294,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1754,
+          "line": 1758,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1754,
+          "line": 1758,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:list'"
         },
@@ -11223,14 +11325,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1801,
+          "line": 1805,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1801,
+          "line": 1805,
           "kind": "event-listener",
           "match": "ipcMain.on('embedded-vchat-app:request-close'"
         },
@@ -11254,14 +11356,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1762,
+          "line": 1766,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1762,
+          "line": 1766,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:set-bounds'"
         },
@@ -11455,14 +11557,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 225,
+          "line": 233,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 225,
+          "line": 233,
           "kind": "event-listener",
           "match": "ipcMain.handle('enqueue-jev-group-agent'"
         },
@@ -11555,12 +11657,12 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 564,
+          "line": 569,
           "kind": "event-listener"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 679,
+          "line": 684,
           "kind": "event-listener"
         },
         {
@@ -11655,7 +11757,7 @@
         },
         {
           "file": "main.js",
-          "line": 1917,
+          "line": 1921,
           "kind": "event-listener"
         },
         {
@@ -11725,7 +11827,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 62,
+          "line": 67,
           "kind": "event-listener"
         },
         {
@@ -11847,13 +11949,13 @@
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 564,
+          "line": 569,
           "kind": "event-listener",
           "match": "child.on('error'"
         },
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 679,
+          "line": 684,
           "kind": "event-listener",
           "match": "child.on('error'"
         },
@@ -11967,7 +12069,7 @@
         },
         {
           "file": "main.js",
-          "line": 1917,
+          "line": 1921,
           "kind": "event-listener",
           "match": "pythonProcess.on('error'"
         },
@@ -12051,7 +12153,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 62,
+          "line": 67,
           "kind": "event-listener",
           "match": "watcher.on?.('error'"
         },
@@ -12099,14 +12201,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1891,
+          "line": 1895,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1891,
+          "line": 1895,
           "kind": "event-listener",
           "match": "ipcMain.handle('execute-python-code'"
         },
@@ -12336,14 +12438,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2129,
+          "line": 2133,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2129,
+          "line": 2133,
           "kind": "event-listener",
           "match": "ipcMain.handle('export-topic-as-markdown'"
         },
@@ -12508,7 +12610,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 1209,
+          "line": 1195,
           "kind": "custom-event-listener"
         },
         {
@@ -12543,7 +12645,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 412,
+          "line": 458,
           "kind": "custom-event-listener"
         }
       ],
@@ -12568,7 +12670,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 1209,
+          "line": 1195,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('focus'"
         },
@@ -12610,7 +12712,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 412,
+          "line": 458,
           "kind": "custom-event-listener",
           "match": "trigger.addEventListener('focus'"
         }
@@ -12621,15 +12723,37 @@
       "producers": [],
       "consumers": [
         {
+          "file": "modules/itemListManager.js",
+          "line": 140,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 360,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 152,
+          "line": 225,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
+          "file": "modules/itemListManager.js",
+          "line": 140,
+          "kind": "custom-event-listener",
+          "match": "itemListUl.addEventListener('focusin'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 360,
+          "kind": "custom-event-listener",
+          "match": "root?.addEventListener('focusin'"
+        },
+        {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 152,
+          "line": 225,
           "kind": "custom-event-listener",
           "match": "screen.addEventListener('focusin'"
         }
@@ -12641,14 +12765,14 @@
       "consumers": [
         {
           "file": "modules/uiManager.js",
-          "line": 413,
+          "line": 459,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/uiManager.js",
-          "line": 413,
+          "line": 459,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('focusout'"
         }
@@ -12697,14 +12821,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 243,
+          "line": 248,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 243,
+          "line": 248,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-config'"
         },
@@ -12728,14 +12852,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 83,
+          "line": 89,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 83,
+          "line": 89,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-group-config'"
         },
@@ -12759,14 +12883,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 79,
+          "line": 85,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 79,
+          "line": 85,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-groups'"
         },
@@ -12790,14 +12914,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 642,
+          "line": 643,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 642,
+          "line": 643,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-topics'"
         },
@@ -12814,7 +12938,7 @@
       "producers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 103,
+          "line": 108,
           "kind": "event-send"
         },
         {
@@ -12826,20 +12950,20 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 118,
+          "line": 123,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 103,
+          "line": 108,
           "kind": "event-send",
           "match": "ipcMain.invoke('get-agents'"
         },
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 118,
+          "line": 123,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents'"
         },
@@ -12863,14 +12987,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 99,
+          "line": 104,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 99,
+          "line": 104,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents-metadata'"
         },
@@ -12894,14 +13018,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 476,
+          "line": 481,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 476,
+          "line": 481,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-all-items'"
         },
@@ -13049,14 +13173,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 612,
+          "line": 613,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 612,
+          "line": 613,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-chat-history'"
         },
@@ -13299,14 +13423,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 132,
+          "line": 140,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 132,
+          "line": 140,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-group-chat-history'"
         },
@@ -13330,14 +13454,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 112,
+          "line": 118,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 112,
+          "line": 118,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-group-topics'"
         },
@@ -13392,14 +13516,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 239,
+          "line": 247,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 239,
+          "line": 247,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-jev-group-chat-state'"
         },
@@ -13516,14 +13640,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1007,
+          "line": 1009,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1007,
+          "line": 1009,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-original-message-content'"
         },
@@ -13552,7 +13676,7 @@
         },
         {
           "file": "main.js",
-          "line": 1866,
+          "line": 1870,
           "kind": "event-listener"
         }
       ],
@@ -13565,7 +13689,7 @@
         },
         {
           "file": "main.js",
-          "line": 1866,
+          "line": 1870,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-platform'"
         },
@@ -13713,14 +13837,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1629,
+          "line": 1633,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1629,
+          "line": 1633,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-unread-topic-counts'"
         },
@@ -13775,14 +13899,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 191,
+          "line": 190,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 191,
+          "line": 190,
           "kind": "event-listener",
           "match": "handle('git:change-summary'"
         },
@@ -13825,14 +13949,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 154,
+          "line": 153,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 154,
+          "line": 153,
           "kind": "event-listener",
           "match": "handle('git:commit'"
         },
@@ -13856,14 +13980,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 186,
+          "line": 185,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 186,
+          "line": 185,
           "kind": "event-listener",
           "match": "handle('git:commit-graph'"
         },
@@ -13887,14 +14011,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 180,
+          "line": 179,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 180,
+          "line": 179,
           "kind": "event-listener",
           "match": "handle('git:create-branch'"
         },
@@ -13918,14 +14042,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 135,
+          "line": 134,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 135,
+          "line": 134,
           "kind": "event-listener",
           "match": "handle('git:diff'"
         },
@@ -13949,14 +14073,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 148,
+          "line": 147,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 148,
+          "line": 147,
           "kind": "event-listener",
           "match": "handle('git:discard'"
         },
@@ -13980,14 +14104,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 173,
+          "line": 172,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 173,
+          "line": 172,
           "kind": "event-listener",
           "match": "handle('git:list-branches'"
         },
@@ -14011,14 +14135,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 128,
+          "line": 127,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 128,
+          "line": 127,
           "kind": "event-listener",
           "match": "handle('git:list-workspaces'"
         },
@@ -14042,14 +14166,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 158,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 158,
           "kind": "event-listener",
           "match": "handle('git:push'"
         },
@@ -14104,14 +14228,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 144,
+          "line": 143,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 144,
+          "line": 143,
           "kind": "event-listener",
           "match": "handle('git:stage'"
         },
@@ -14135,14 +14259,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 133,
+          "line": 132,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 133,
+          "line": 132,
           "kind": "event-listener",
           "match": "handle('git:status'"
         },
@@ -14166,14 +14290,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 175,
+          "line": 174,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 175,
+          "line": 174,
           "kind": "event-listener",
           "match": "handle('git:switch-branch'"
         },
@@ -14197,14 +14321,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 146,
+          "line": 145,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 146,
+          "line": 145,
           "kind": "event-listener",
           "match": "handle('git:unstage'"
         },
@@ -14273,7 +14397,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 678,
+          "line": 679,
           "kind": "custom-event-listener"
         }
       ],
@@ -14340,7 +14464,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 678,
+          "line": 679,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('global-settings-updated'"
         }
@@ -14358,14 +14482,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 907,
+          "line": 909,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 907,
+          "line": 909,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-file-drop'"
         },
@@ -14389,14 +14513,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 779,
+          "line": 781,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 779,
+          "line": 781,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-file-paste'"
         },
@@ -14420,14 +14544,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 891,
+          "line": 893,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 891,
+          "line": 893,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-text-paste-as-file'"
         },
@@ -14494,7 +14618,7 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1650,
+          "line": 1654,
           "kind": "event-send"
         }
       ],
@@ -14508,7 +14632,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1650,
+          "line": 1654,
           "kind": "event-send",
           "match": "sender.send('history-file-updated'"
         },
@@ -14649,7 +14773,7 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1961,
+          "line": 2012,
           "kind": "custom-event-create"
         }
       ],
@@ -14726,42 +14850,42 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 346,
+          "line": 352,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 350,
+          "line": 353,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1063,
+          "line": 1113,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1159,
+          "line": 1204,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1241,
+          "line": 1286,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1306,
+          "line": 1351,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1310,
+          "line": 1355,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1338,
+          "line": 1383,
           "kind": "custom-event-listener"
         },
         {
@@ -14776,12 +14900,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 248,
+          "line": 250,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 168,
+          "line": 170,
           "kind": "custom-event-listener"
         },
         {
@@ -14801,12 +14925,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 542,
+          "line": 571,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 154,
+          "line": 190,
           "kind": "custom-event-listener"
         }
       ],
@@ -14897,55 +15021,55 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 346,
+          "line": 352,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 350,
+          "line": 353,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1063,
+          "line": 1113,
           "kind": "custom-event-listener",
           "match": "modelSearchInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1159,
+          "line": 1204,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1241,
+          "line": 1286,
           "kind": "custom-event-listener",
           "match": "modelSearchInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1306,
+          "line": 1351,
           "kind": "custom-event-listener",
           "match": "picker.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1310,
+          "line": 1355,
           "kind": "custom-event-listener",
           "match": "textInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1338,
+          "line": 1383,
           "kind": "custom-event-listener",
           "match": "agentCardCssInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1961,
+          "line": 2012,
           "kind": "custom-event-create",
           "match": "new CustomEvent('input'"
         },
@@ -14963,13 +15087,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 248,
+          "line": 250,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 168,
+          "line": 170,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
@@ -14993,13 +15117,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
-          "line": 542,
+          "line": 571,
           "kind": "custom-event-listener",
           "match": "el.addEventListener('input'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 154,
+          "line": 190,
           "kind": "custom-event-listener",
           "match": "searchInput.addEventListener('input'"
         }
@@ -15011,14 +15135,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 122,
+          "line": 189,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 122,
+          "line": 189,
           "kind": "event-listener",
           "match": "guest.on('input-event'"
         }
@@ -15036,14 +15160,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 243,
+          "line": 251,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 243,
+          "line": 251,
           "kind": "event-listener",
           "match": "ipcMain.handle('interrupt-group-chat-queue'"
         },
@@ -15067,14 +15191,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2164,
+          "line": 2168,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2164,
+          "line": 2168,
           "kind": "event-listener",
           "match": "ipcMain.handle('interrupt-group-request'"
         },
@@ -15098,14 +15222,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1521,
+          "line": 1523,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1521,
+          "line": 1523,
           "kind": "event-listener",
           "match": "ipcMain.handle('interrupt-vcp-request'"
         },
@@ -15129,14 +15253,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 177,
+          "line": 185,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 177,
+          "line": 185,
           "kind": "event-listener",
           "match": "ipcMain.handle('inviteAgentToSpeak'"
         },
@@ -15296,8 +15420,13 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/itemListManager.js",
+          "line": 148,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/notificationRenderer.js",
-          "line": 837,
+          "line": 831,
           "kind": "custom-event-listener"
         },
         {
@@ -15312,7 +15441,17 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 262,
+          "line": 291,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 359,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 363,
           "kind": "custom-event-listener"
         },
         {
@@ -15327,12 +15466,17 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 255,
+          "line": 263,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 53,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 352,
+          "line": 358,
           "kind": "custom-event-listener"
         },
         {
@@ -15347,12 +15491,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 260,
+          "line": 263,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 296,
+          "line": 299,
           "kind": "custom-event-listener"
         },
         {
@@ -15377,7 +15521,12 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1077,
+          "line": 632,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/topicListManager.js",
+          "line": 1213,
           "kind": "custom-event-listener"
         },
         {
@@ -15402,12 +15551,17 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 175,
+          "line": 177,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 183,
+          "line": 185,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/conversation-status-panel/floating.js",
+          "line": 112,
           "kind": "custom-event-listener"
         },
         {
@@ -15452,12 +15606,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 97,
+          "line": 125,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 364,
+          "line": 379,
           "kind": "custom-event-listener"
         },
         {
@@ -15487,7 +15641,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-resizer-owner.js",
-          "line": 143,
+          "line": 167,
           "kind": "custom-event-listener"
         },
         {
@@ -15497,32 +15651,32 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 122,
+          "line": 124,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 76,
+          "line": 77,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 94,
+          "line": 95,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 180,
+          "line": 216,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 218,
+          "line": 254,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 285,
+          "line": 377,
           "kind": "custom-event-listener"
         },
         {
@@ -15532,12 +15686,12 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 308,
+          "line": 354,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 465,
+          "line": 511,
           "kind": "custom-event-listener"
         },
         {
@@ -15628,8 +15782,14 @@
           "match": "menu.addEventListener('keydown'"
         },
         {
+          "file": "modules/itemListManager.js",
+          "line": 148,
+          "kind": "custom-event-listener",
+          "match": "itemListUl.addEventListener('keydown'"
+        },
+        {
           "file": "modules/notificationRenderer.js",
-          "line": 837,
+          "line": 831,
           "kind": "custom-event-listener",
           "match": "reasonInput.addEventListener('keydown'"
         },
@@ -15647,7 +15807,19 @@
         },
         {
           "file": "modules/renderer/side-chat/message-actions.js",
-          "line": 262,
+          "line": 291,
+          "kind": "custom-event-listener",
+          "match": "menu.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 359,
+          "kind": "custom-event-listener",
+          "match": "root?.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/renderer/side-chat/message-actions.js",
+          "line": 363,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
@@ -15665,13 +15837,19 @@
         },
         {
           "file": "modules/renderer/side-chat/persistence.js",
-          "line": 255,
+          "line": 263,
           "kind": "custom-event-listener",
           "match": "statusText.addEventListener('keydown'"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 53,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('keydown'"
+        },
+        {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 352,
+          "line": 358,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('keydown'"
         },
@@ -15689,13 +15867,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 260,
+          "line": 263,
           "kind": "custom-event-listener",
           "match": "header.addEventListener('keydown'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 296,
+          "line": 299,
           "kind": "custom-event-listener",
           "match": "styleHeader.addEventListener('keydown'"
         },
@@ -15725,7 +15903,13 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1077,
+          "line": 632,
+          "kind": "custom-event-listener",
+          "match": "menu.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/topicListManager.js",
+          "line": 1213,
           "kind": "custom-event-listener",
           "match": "inputField.addEventListener('keydown'"
         },
@@ -15755,15 +15939,21 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 175,
+          "line": 177,
           "kind": "custom-event-listener",
           "match": "actionsBox.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 183,
+          "line": 185,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/ui-system/conversation-status-panel/floating.js",
+          "line": 112,
+          "kind": "custom-event-listener",
+          "match": "overlay.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/sections.js",
@@ -15815,13 +16005,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 97,
+          "line": 125,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 364,
+          "line": 379,
           "kind": "custom-event-listener",
           "match": "head.addEventListener('keydown'"
         },
@@ -15857,7 +16047,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-resizer-owner.js",
-          "line": 143,
+          "line": 167,
           "kind": "custom-event-listener",
           "match": "handle?.addEventListener?.('keydown'"
         },
@@ -15869,37 +16059,37 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 122,
+          "line": 124,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 76,
+          "line": 77,
           "kind": "custom-event-listener",
           "match": "menu.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 94,
+          "line": 95,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 180,
+          "line": 216,
           "kind": "custom-event-listener",
           "match": "searchInput.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 218,
+          "line": 254,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 285,
+          "line": 377,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('keydown'"
         },
@@ -15911,13 +16101,13 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 308,
+          "line": 354,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('keydown'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 465,
+          "line": 511,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('keydown'"
         },
@@ -15984,14 +16174,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1782,
+          "line": 1786,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1782,
+          "line": 1786,
           "kind": "event-listener",
           "match": "ipcMain.handle('lifecycle:get-main-snapshot'"
         },
@@ -16098,14 +16288,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 363,
+          "line": 364,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 363,
+          "line": 364,
           "kind": "event-listener",
           "match": "ipcMain.handle('list-pending-flowlock-topics'"
         },
@@ -18098,7 +18288,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 926,
+          "line": 929,
           "kind": "custom-event-listener"
         },
         {
@@ -18145,7 +18335,7 @@
         },
         {
           "file": "modules/renderer/contentProcessor.js",
-          "line": 926,
+          "line": 929,
           "kind": "custom-event-listener",
           "match": "ownerWindow.addEventListener('message'"
         },
@@ -18194,14 +18384,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1820,
+          "line": 1824,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1820,
+          "line": 1824,
           "kind": "event-listener",
           "match": "ipcMain.on('minimize-to-tray'"
         },
@@ -18326,7 +18516,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1055,
+          "line": 1105,
           "kind": "custom-event-listener"
         },
         {
@@ -18356,7 +18546,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1055,
+          "line": 1105,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('modal-ready'"
         },
@@ -18737,12 +18927,12 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 49,
+          "line": 74,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1016,
+          "line": 1066,
           "kind": "custom-event-listener"
         },
         {
@@ -18757,17 +18947,17 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/floating.js",
-          "line": 103,
+          "line": 111,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 197,
+          "line": 220,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 335,
+          "line": 381,
           "kind": "custom-event-listener"
         },
         {
@@ -18856,13 +19046,13 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 49,
+          "line": 74,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('mousedown'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1016,
+          "line": 1066,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('mousedown'"
         },
@@ -18880,19 +19070,19 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/floating.js",
-          "line": 103,
+          "line": 111,
           "kind": "custom-event-listener",
           "match": "overlay.addEventListener('mousedown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 197,
+          "line": 220,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mousedown'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 335,
+          "line": 381,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('mousedown'"
         },
@@ -18952,7 +19142,7 @@
       "consumers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 692,
+          "line": 741,
           "kind": "custom-event-listener"
         },
         {
@@ -18977,19 +19167,19 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 208,
+          "line": 231,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 410,
+          "line": 456,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 692,
+          "line": 741,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('mouseenter'"
         },
@@ -19019,13 +19209,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 208,
+          "line": 231,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseenter'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 410,
+          "line": 456,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('mouseenter'"
         }
@@ -19052,7 +19242,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 698,
+          "line": 747,
           "kind": "custom-event-listener"
         },
         {
@@ -19092,12 +19282,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 209,
+          "line": 232,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 411,
+          "line": 457,
           "kind": "custom-event-listener"
         },
         {
@@ -19127,7 +19317,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 698,
+          "line": 747,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('mouseleave'"
         },
@@ -19175,13 +19365,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 209,
+          "line": 232,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseleave'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 411,
+          "line": 457,
           "kind": "custom-event-listener",
           "match": "navigation.addEventListener('mouseleave'"
         },
@@ -21234,14 +21424,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/browserSideProvider.js",
-          "line": 120,
+          "line": 121,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/browserSideProvider.js",
-          "line": 120,
+          "line": 121,
           "kind": "preload-subscription",
           "match": "api.onBrowserOpenTab("
         }
@@ -21253,14 +21443,14 @@
       "consumers": [
         {
           "file": "modules/renderer/sidePaneWiring.js",
-          "line": 80,
+          "line": 79,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sidePaneWiring.js",
-          "line": 80,
+          "line": 79,
           "kind": "preload-subscription",
           "match": "chatAPI?.onBrowserSidePaneShortcut("
         }
@@ -21272,14 +21462,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 378,
+          "line": 396,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 378,
+          "line": 396,
           "kind": "preload-subscription",
           "match": "electronAPI.onCanvasContentUpdate("
         }
@@ -21291,14 +21481,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 379,
+          "line": 397,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 379,
+          "line": 397,
           "kind": "preload-subscription",
           "match": "electronAPI.onCanvasWindowClosed("
         }
@@ -21462,7 +21652,7 @@
       "consumers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1247,
+          "line": 1292,
           "kind": "preload-subscription"
         },
         {
@@ -21474,7 +21664,7 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1247,
+          "line": 1292,
           "kind": "preload-subscription",
           "match": "electronAPI.onModelsUpdated("
         },
@@ -21492,14 +21682,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 872,
+          "line": 937,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 872,
+          "line": 937,
           "kind": "preload-subscription",
           "match": "api?.onModelTrajectoryChanged("
         }
@@ -21511,14 +21701,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 190,
+          "line": 191,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 190,
+          "line": 191,
           "kind": "preload-subscription",
           "match": "chatAPI.onPlayTtsAudio("
         }
@@ -21579,14 +21769,14 @@
       "consumers": [
         {
           "file": "renderer.js",
-          "line": 191,
+          "line": 192,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 191,
+          "line": 192,
           "kind": "preload-subscription",
           "match": "chatAPI.onStopTtsAudio("
         }
@@ -21598,14 +21788,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 157,
+          "line": 236,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 157,
+          "line": 236,
           "kind": "preload-subscription",
           "match": "api.onTerminalClear("
         }
@@ -21617,14 +21807,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/sources/terminal-command-runs.js",
-          "line": 34,
+          "line": 37,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/sources/terminal-command-runs.js",
-          "line": 34,
+          "line": 37,
           "kind": "preload-subscription",
           "match": "api.onTerminalCommandRunChanged("
         }
@@ -21636,14 +21826,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 154,
+          "line": 230,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 154,
+          "line": 230,
           "kind": "preload-subscription",
           "match": "api.onTerminalData("
         }
@@ -21655,16 +21845,35 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 160,
+          "line": 250,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 160,
+          "line": 250,
           "kind": "preload-subscription",
           "match": "api.onTerminalExit("
+        }
+      ]
+    },
+    {
+      "name": "onTerminalResized(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/ui-system/side-pane/terminalSideProvider.js",
+          "line": 245,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ui-system/side-pane/terminalSideProvider.js",
+          "line": 245,
+          "kind": "preload-subscription",
+          "match": "api.onTerminalResized("
         }
       ]
     },
@@ -21684,7 +21893,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 202,
+          "line": 248,
           "kind": "preload-subscription"
         }
       ],
@@ -21703,7 +21912,7 @@
         },
         {
           "file": "modules/uiManager.js",
-          "line": 202,
+          "line": 248,
           "kind": "preload-subscription",
           "match": "electronAPI.onThemeUpdated("
         }
@@ -22517,12 +22726,12 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1263,
+          "line": 1308,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 133,
+          "line": 172,
           "kind": "custom-event-listener"
         }
       ],
@@ -22535,13 +22744,13 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1263,
+          "line": 1308,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('pagehide'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 133,
+          "line": 172,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('pagehide'"
         }
@@ -22908,7 +23117,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 153,
+          "line": 157,
           "kind": "custom-event-listener"
         }
       ],
@@ -22921,9 +23130,9 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 153,
+          "line": 157,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointercancel'"
+          "match": "doc.addEventListener('pointercancel'"
         }
       ]
     },
@@ -22943,7 +23152,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 96,
+          "line": 124,
           "kind": "custom-event-listener"
         },
         {
@@ -22953,27 +23162,27 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 150,
+          "line": 165,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 93,
+          "line": 94,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 217,
+          "line": 253,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 233,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 459,
+          "line": 505,
           "kind": "custom-event-listener"
         },
         {
@@ -22997,7 +23206,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 96,
+          "line": 124,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
@@ -23009,31 +23218,31 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 150,
+          "line": 165,
           "kind": "custom-event-listener",
           "match": "container.addEventListener('pointerdown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 93,
+          "line": 94,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-overview.js",
-          "line": 217,
+          "line": 253,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 233,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('pointerdown'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 459,
+          "line": 505,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('pointerdown'"
         },
@@ -23111,16 +23320,16 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 151,
+          "line": 155,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 151,
+          "line": 155,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointermove'"
+          "match": "doc.addEventListener('pointermove'"
         }
       ]
     },
@@ -23135,7 +23344,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 152,
+          "line": 156,
           "kind": "custom-event-listener"
         }
       ],
@@ -23148,9 +23357,9 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 152,
+          "line": 156,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointerup'"
+          "match": "doc.addEventListener('pointerup'"
         }
       ]
     },
@@ -23159,7 +23368,7 @@
       "producers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 886,
+          "line": 922,
           "kind": "event-send"
         }
       ],
@@ -23173,7 +23382,7 @@
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 886,
+          "line": 922,
           "kind": "event-send",
           "match": "guiWindow.webContents.send('powershell-clear'"
         },
@@ -23209,7 +23418,7 @@
       "producers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 734,
+          "line": 739,
           "kind": "event-send"
         }
       ],
@@ -23223,7 +23432,7 @@
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 734,
+          "line": 739,
           "kind": "event-send",
           "match": "guiWindow.webContents.send('powershell-data'"
         },
@@ -23260,14 +23469,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 237,
+          "line": 242,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 237,
+          "line": 242,
           "kind": "event-listener",
           "match": "ipcMain.on('powershell-input'"
         }
@@ -23279,14 +23488,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 230,
+          "line": 235,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 230,
+          "line": 235,
           "kind": "event-listener",
           "match": "ipcMain.on('powershell-resize'"
         }
@@ -23304,14 +23513,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 317,
+          "line": 322,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 317,
+          "line": 322,
           "kind": "event-listener",
           "match": "ipcMain.on('powershell-window:close'"
         },
@@ -23335,14 +23544,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 299,
+          "line": 304,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 299,
+          "line": 304,
           "kind": "event-listener",
           "match": "ipcMain.on('powershell-window:minimize'"
         },
@@ -23366,14 +23575,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 305,
+          "line": 310,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 305,
+          "line": 310,
           "kind": "event-listener",
           "match": "ipcMain.on('powershell-window:toggle-maximize'"
         },
@@ -23416,14 +23625,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 104,
+          "line": 107,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 104,
+          "line": 107,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:delete-project'"
         },
@@ -23447,14 +23656,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 89,
+          "line": 92,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 89,
+          "line": 92,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:get-batch'"
         },
@@ -23478,14 +23687,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 90,
+          "line": 93,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 90,
+          "line": 93,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:get-node'"
         },
@@ -23509,14 +23718,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 87,
+          "line": 90,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 87,
+          "line": 90,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:get-project'"
         },
@@ -23540,14 +23749,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 86,
+          "line": 89,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 86,
+          "line": 89,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:list-projects'"
         },
@@ -23571,14 +23780,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 91,
+          "line": 94,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 91,
+          "line": 94,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:revert-file'"
         },
@@ -23602,14 +23811,14 @@
       "consumers": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 88,
+          "line": 91,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/projectForgeHandlers.js",
-          "line": 88,
+          "line": 91,
           "kind": "event-listener",
           "match": "ipcMain.handle('project-forge:search-history'"
         },
@@ -23690,7 +23899,7 @@
       "producers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 1475,
+          "line": 1521,
           "kind": "event-send"
         }
       ],
@@ -23704,7 +23913,7 @@
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 1475,
+          "line": 1521,
           "kind": "event-send",
           "match": "guiWindow.webContents.send('query-visible-text'"
         },
@@ -24540,14 +24749,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 253,
+          "line": 261,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 253,
+          "line": 261,
           "kind": "event-listener",
           "match": "ipcMain.handle('redo-group-chat-message'"
         },
@@ -24602,14 +24811,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 529,
+          "line": 530,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 529,
+          "line": 530,
           "kind": "event-listener",
           "match": "ipcMain.handle('regenerate-agent-topic-title'"
         },
@@ -24652,14 +24861,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 128,
+          "line": 136,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 128,
+          "line": 136,
           "kind": "event-listener",
           "match": "ipcMain.handle('regenerate-group-topic-title'"
         },
@@ -24893,6 +25102,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 73,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/services/embeddedAppSessionManager.js",
           "line": 390,
           "kind": "event-listener"
@@ -24914,7 +25128,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1063,
+          "line": 1247,
           "kind": "custom-event-listener"
         },
         {
@@ -24983,6 +25197,12 @@
           "match": "window.addEventListener('resize'"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 73,
+          "kind": "custom-event-listener",
+          "match": "win.addEventListener('resize'"
+        },
+        {
           "file": "modules/services/embeddedAppSessionManager.js",
           "line": 390,
           "kind": "event-listener",
@@ -25008,7 +25228,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1063,
+          "line": 1247,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
@@ -25112,14 +25332,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 330,
+          "line": 331,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 330,
+          "line": 331,
           "kind": "event-listener",
           "match": "ipcMain.handle('restore-flowlock-claim'"
         },
@@ -25212,14 +25432,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 248,
+          "line": 253,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 248,
+          "line": 253,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-config'"
         },
@@ -25243,14 +25463,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 95,
+          "line": 101,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 95,
+          "line": 101,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-group-avatar'"
         },
@@ -25274,14 +25494,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 87,
+          "line": 93,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 87,
+          "line": 93,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-group-config'"
         },
@@ -25305,14 +25525,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 229,
+          "line": 234,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 229,
+          "line": 234,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-order'"
         },
@@ -25336,14 +25556,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 502,
+          "line": 503,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 502,
+          "line": 503,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-topic-title'"
         },
@@ -25367,14 +25587,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 302,
+          "line": 307,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 302,
+          "line": 307,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-avatar'"
         },
@@ -25460,14 +25680,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 629,
+          "line": 630,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 629,
+          "line": 630,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-chat-history'"
         },
@@ -25491,14 +25711,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 216,
+          "line": 221,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 216,
+          "line": 221,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-combined-item-order'"
         },
@@ -25615,14 +25835,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 136,
+          "line": 144,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 136,
+          "line": 144,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-group-chat-history'"
         },
@@ -25646,14 +25866,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 427,
+          "line": 428,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 427,
+          "line": 428,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-group-topic-order'"
         },
@@ -25677,14 +25897,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 124,
+          "line": 132,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 124,
+          "line": 132,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-group-topic-title'"
         },
@@ -25801,14 +26021,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 987,
+          "line": 989,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 987,
+          "line": 989,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-pasted-image-to-file'"
         },
@@ -25894,14 +26114,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 394,
+          "line": 395,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 394,
+          "line": 395,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-topic-order'"
         },
@@ -25956,14 +26176,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 457,
+          "line": 462,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 457,
+          "line": 462,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-user-avatar'"
         },
@@ -26376,23 +26596,28 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 72,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/renderer/messenger-presentation.js",
           "line": 235,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 31,
+          "line": 51,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 2014,
+          "line": 2065,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 535,
+          "line": 567,
           "kind": "custom-event-listener"
         },
         {
@@ -26406,8 +26631,13 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 230,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 254,
+          "line": 334,
           "kind": "custom-event-listener"
         },
         {
@@ -26434,6 +26664,12 @@
           "match": "container.addEventListener('scroll'"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 72,
+          "kind": "custom-event-listener",
+          "match": "doc.addEventListener('scroll'"
+        },
+        {
           "file": "modules/renderer/messenger-presentation.js",
           "line": 235,
           "kind": "custom-event-listener",
@@ -26441,19 +26677,19 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 31,
+          "line": 51,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('scroll'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 2014,
+          "line": 2065,
           "kind": "custom-event-listener",
           "match": "settingsTab.addEventListener('scroll'"
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 535,
+          "line": 567,
           "kind": "custom-event-listener",
           "match": "scrollContainer.addEventListener('scroll'"
         },
@@ -26470,8 +26706,14 @@
           "match": "panel.addEventListener('scroll'"
         },
         {
+          "file": "modules/ui-system/side-pane/planDetailSideProvider.js",
+          "line": 230,
+          "kind": "custom-event-listener",
+          "match": "body.addEventListener('scroll'"
+        },
+        {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 254,
+          "line": 334,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('scroll'"
         },
@@ -26538,14 +26780,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 457,
+          "line": 458,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 457,
+          "line": 458,
           "kind": "event-listener",
           "match": "ipcMain.handle('search-topics-by-content'"
         },
@@ -26669,14 +26911,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 817,
+          "line": 819,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 817,
+          "line": 819,
           "kind": "event-listener",
           "match": "ipcMain.handle('select-files-to-send'"
         },
@@ -26725,14 +26967,14 @@
       "consumers": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 48,
+          "line": 71,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 48,
+          "line": 71,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('selectionchange'"
         }
@@ -26750,14 +26992,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 155,
+          "line": 163,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 155,
+          "line": 163,
           "kind": "event-listener",
           "match": "ipcMain.handle('send-group-chat-message'"
         },
@@ -26781,14 +27023,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1039,
+          "line": 1041,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1039,
+          "line": 1041,
           "kind": "event-listener",
           "match": "ipcMain.handle('send-to-vcp'"
         },
@@ -26812,14 +27054,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2118,
+          "line": 2122,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2118,
+          "line": 2122,
           "kind": "event-listener",
           "match": "ipcMain.on('send-vcplog-message'"
         },
@@ -26905,14 +27147,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1724,
+          "line": 1728,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1724,
+          "line": 1728,
           "kind": "event-listener",
           "match": "ipcMain.handle('set-topic-unread'"
         },
@@ -27007,7 +27249,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 105,
+          "line": 108,
           "kind": "event-listener"
         },
         {
@@ -27031,7 +27273,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 105,
+          "line": 108,
           "kind": "event-listener",
           "match": "settingsManager.on?.('settings-external-updated'"
         },
@@ -27085,7 +27327,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 104,
+          "line": 107,
           "kind": "event-listener"
         }
       ],
@@ -27098,7 +27340,7 @@
         },
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 104,
+          "line": 107,
           "kind": "event-listener",
           "match": "settingsManager.on?.('settings-updated'"
         },
@@ -27553,20 +27795,8 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 74,
-          "kind": "event-listener"
-        }
-      ],
+      "consumers": [],
       "evidence": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 74,
-          "kind": "event-listener",
-          "match": "handle('source:check'"
-        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 44,
@@ -27584,20 +27814,8 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 56,
-          "kind": "event-listener"
-        }
-      ],
+      "consumers": [],
       "evidence": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 56,
-          "kind": "event-listener",
-          "match": "handle('source:list-files'"
-        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 41,
@@ -27615,20 +27833,8 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 58,
-          "kind": "event-listener"
-        }
-      ],
+      "consumers": [],
       "evidence": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 58,
-          "kind": "event-listener",
-          "match": "handle('source:read-file'"
-        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 42,
@@ -27646,20 +27852,8 @@
           "kind": "preload-channel-definition"
         }
       ],
-      "consumers": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 63,
-          "kind": "event-listener"
-        }
-      ],
+      "consumers": [],
       "evidence": [
-        {
-          "file": "modules/ipc/sourceHandlers.js",
-          "line": 63,
-          "kind": "event-listener",
-          "match": "handle('source:write-file'"
-        },
         {
           "file": "preloads/api/projectForge.js",
           "line": 43,
@@ -27792,14 +27986,14 @@
       "consumers": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 199,
+          "line": 207,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 199,
+          "line": 207,
           "kind": "event-listener",
           "match": "ipcMain.handle('start-jev-group-chat'"
         },
@@ -28004,17 +28198,17 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 550,
+          "line": 595,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1078,
+          "line": 1128,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1132,
+          "line": 1182,
           "kind": "custom-event-listener"
         },
         {
@@ -28024,12 +28218,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 249,
+          "line": 251,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 182,
+          "line": 184,
           "kind": "custom-event-listener"
         },
         {
@@ -28064,19 +28258,19 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 550,
+          "line": 595,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1078,
+          "line": 1128,
           "kind": "custom-event-listener",
           "match": "regexRuleForm.addEventListener('submit'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1132,
+          "line": 1182,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('submit'"
         },
@@ -28088,13 +28282,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 249,
+          "line": 251,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 182,
+          "line": 184,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
@@ -28278,14 +28472,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 271,
+          "line": 276,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 271,
+          "line": 276,
           "kind": "event-listener",
           "match": "ipcMain.on('terminal-paste-complete'"
         },
@@ -28302,7 +28496,7 @@
       "producers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 1496,
+          "line": 1542,
           "kind": "event-send"
         }
       ],
@@ -28316,7 +28510,7 @@
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 1496,
+          "line": 1542,
           "kind": "event-send",
           "match": "guiWindow.webContents.send('terminal-paste-request'"
         },
@@ -28340,14 +28534,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 297,
+          "line": 357,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 297,
+          "line": 357,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:cd'"
         },
@@ -28364,7 +28558,7 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 183,
+          "line": 227,
           "kind": "event-send"
         }
       ],
@@ -28378,7 +28572,7 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 183,
+          "line": 227,
           "kind": "event-send",
           "match": "emit('terminal:clear'"
         },
@@ -28402,14 +28596,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 269,
+          "line": 329,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 269,
+          "line": 329,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:command-run'"
         },
@@ -28452,14 +28646,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 260,
+          "line": 320,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 260,
+          "line": 320,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:command-runs'"
         },
@@ -28483,14 +28677,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 208,
+          "line": 268,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 208,
+          "line": 268,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:create'"
         },
@@ -28507,7 +28701,22 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 182,
+          "line": 201,
+          "kind": "event-send"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 209,
+          "kind": "event-send"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 215,
+          "kind": "event-send"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 223,
           "kind": "event-send"
         }
       ],
@@ -28521,7 +28730,25 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 182,
+          "line": 201,
+          "kind": "event-send",
+          "match": "emit('terminal:data'"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 209,
+          "kind": "event-send",
+          "match": "emit('terminal:data'"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 215,
+          "kind": "event-send",
+          "match": "emit('terminal:data'"
+        },
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 223,
           "kind": "event-send",
           "match": "emit('terminal:data'"
         },
@@ -28538,7 +28765,7 @@
       "producers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 184,
+          "line": 228,
           "kind": "event-send"
         }
       ],
@@ -28552,7 +28779,7 @@
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 184,
+          "line": 228,
           "kind": "event-send",
           "match": "emit('terminal:exit'"
         },
@@ -28576,14 +28803,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 242,
+          "line": 302,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 242,
+          "line": 302,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:kill'"
         },
@@ -28607,14 +28834,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 230,
+          "line": 290,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 230,
+          "line": 290,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:resize'"
         },
@@ -28623,6 +28850,37 @@
           "line": 15,
           "kind": "preload-channel-definition",
           "match": "invoke('terminal:resize'"
+        }
+      ]
+    },
+    {
+      "name": "terminal:resized",
+      "producers": [
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 230,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "preloads/api/terminal.js",
+          "line": 27,
+          "kind": "preload-channel-definition"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/terminalHandlers.js",
+          "line": 230,
+          "kind": "event-send",
+          "match": "emit('terminal:resized'"
+        },
+        {
+          "file": "preloads/api/terminal.js",
+          "line": 27,
+          "kind": "preload-channel-definition",
+          "match": "on('terminal:resized'"
         }
       ]
     },
@@ -28638,14 +28896,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 248,
+          "line": 308,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 248,
+          "line": 308,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:restart'"
         },
@@ -28669,14 +28927,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 291,
+          "line": 351,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 291,
+          "line": 351,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:unwatch-command-runs'"
         },
@@ -28700,14 +28958,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 280,
+          "line": 340,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 280,
+          "line": 340,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:watch-command-runs'"
         },
@@ -28731,14 +28989,14 @@
       "consumers": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 217,
+          "line": 277,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/terminalHandlers.js",
-          "line": 217,
+          "line": 277,
           "kind": "event-listener",
           "match": "ipcMain.handle('terminal:write'"
         },
@@ -28941,14 +29199,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 389,
+          "line": 404,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 389,
+          "line": 404,
           "kind": "custom-event-listener",
           "match": "details.addEventListener('toggle'"
         }
@@ -29090,14 +29348,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1680,
+          "line": 1684,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1680,
+          "line": 1684,
           "kind": "event-listener",
           "match": "ipcMain.handle('toggle-topic-lock'"
         },
@@ -29167,9 +29425,33 @@
       ]
     },
     {
+      "name": "touchmove",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 55,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 55,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('touchmove'"
+        }
+      ]
+    },
+    {
       "name": "touchstart",
       "producers": [],
       "consumers": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 54,
+          "kind": "custom-event-listener"
+        },
         {
           "file": "modules/ui-helpers.js",
           "line": 344,
@@ -29177,6 +29459,12 @@
         }
       ],
       "evidence": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 54,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('touchstart'"
+        },
         {
           "file": "modules/ui-helpers.js",
           "line": 344,
@@ -29190,22 +29478,33 @@
       "producers": [],
       "consumers": [
         {
+          "file": "modules/notificationRenderer.js",
+          "line": 967,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-helpers.js",
           "line": 724,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-visibility.js",
-          "line": 104,
+          "line": 122,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 472,
+          "line": 518,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
+        {
+          "file": "modules/notificationRenderer.js",
+          "line": 967,
+          "kind": "custom-event-listener",
+          "match": "toastElement.addEventListener('transitionend'"
+        },
         {
           "file": "modules/ui-helpers.js",
           "line": 724,
@@ -29214,13 +29513,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-visibility.js",
-          "line": 104,
+          "line": 122,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('transitionend'"
         },
         {
           "file": "modules/uiManager.js",
-          "line": 472,
+          "line": 518,
           "kind": "custom-event-listener",
           "match": "leftSidebar.addEventListener('transitionend'"
         }
@@ -29651,7 +29950,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 275,
+          "line": 276,
           "kind": "custom-event-create"
         }
       ],
@@ -29671,7 +29970,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 275,
+          "line": 276,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-appearance-studio-configure'"
         }
@@ -29682,7 +29981,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 265,
+          "line": 266,
           "kind": "custom-event-create"
         }
       ],
@@ -29702,7 +30001,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 265,
+          "line": 266,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-appearance-studio-dispose'"
         }
@@ -29732,7 +30031,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 591,
+          "line": 592,
           "kind": "custom-event-create"
         }
       ],
@@ -29740,7 +30039,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 591,
+          "line": 592,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-chat-stream-terminal'"
         }
@@ -29981,17 +30280,17 @@
         },
         {
           "file": "main.js",
-          "line": 2051,
+          "line": 2055,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2066,
+          "line": 2070,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2069,
+          "line": 2073,
           "kind": "event-send"
         }
       ],
@@ -30011,19 +30310,19 @@
         },
         {
           "file": "main.js",
-          "line": 2051,
+          "line": 2055,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
         {
           "file": "main.js",
-          "line": 2066,
+          "line": 2070,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
         {
           "file": "main.js",
-          "line": 2069,
+          "line": 2073,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
@@ -30040,32 +30339,32 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 2028,
+          "line": 2032,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2041,
+          "line": 2045,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2049,
+          "line": 2053,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2075,
+          "line": 2079,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2088,
+          "line": 2092,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2114,
+          "line": 2118,
           "kind": "event-send"
         }
       ],
@@ -30079,37 +30378,37 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 2028,
+          "line": 2032,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2041,
+          "line": 2045,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2049,
+          "line": 2053,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2075,
+          "line": 2079,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2088,
+          "line": 2092,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2114,
+          "line": 2118,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
@@ -30126,7 +30425,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 860,
+          "line": 866,
           "kind": "custom-event-create"
         }
       ],
@@ -30146,7 +30445,7 @@
         },
         {
           "file": "renderer.js",
-          "line": 860,
+          "line": 866,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-main-chat-commands-configure'"
         }
@@ -30157,7 +30456,7 @@
       "producers": [
         {
           "file": "renderer.js",
-          "line": 1072,
+          "line": 1084,
           "kind": "custom-event-create"
         }
       ],
@@ -30165,7 +30464,7 @@
       "evidence": [
         {
           "file": "renderer.js",
-          "line": 1072,
+          "line": 1084,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-renderer-ready'"
         }
@@ -30176,7 +30475,7 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 172,
+          "line": 193,
           "kind": "custom-event-create"
         }
       ],
@@ -30184,7 +30483,7 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 172,
+          "line": 193,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-delete-result'"
         }
@@ -30229,7 +30528,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 166,
+          "line": 187,
           "kind": "custom-event-create"
         },
         {
@@ -30291,7 +30590,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 166,
+          "line": 187,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-save-result'"
         },
@@ -30344,12 +30643,12 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 461,
+          "line": 505,
           "kind": "custom-event-create"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1344,
+          "line": 1389,
           "kind": "custom-event-create"
         }
       ],
@@ -30363,13 +30662,13 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 461,
+          "line": 505,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-surface-updated'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1344,
+          "line": 1389,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-surface-updated'"
         },
@@ -30424,22 +30723,22 @@
       "producers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1055,
+          "line": 1057,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 70,
+          "line": 76,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 163,
+          "line": 171,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 258,
+          "line": 266,
           "kind": "event-send"
         }
       ],
@@ -30453,25 +30752,25 @@
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1055,
+          "line": 1057,
           "kind": "event-send",
           "match": "event.sender.send(streamChannel"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 70,
+          "line": 76,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-stream-event'"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 163,
+          "line": 171,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-stream-event'"
         },
         {
           "file": "modules/ipc/groupChatHandlers.js",
-          "line": 258,
+          "line": 266,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-stream-event'"
         },
@@ -30671,14 +30970,14 @@
       "consumers": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 247,
+          "line": 252,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "VCPDistributedServer/Plugin/PowerShellExecutor/PowerShellExecutor.js",
-          "line": 247,
+          "line": 252,
           "kind": "event-listener",
           "match": "ipcMain.on('visible-text-response'"
         }
@@ -31178,14 +31477,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1630,
+          "line": 1634,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1630,
+          "line": 1634,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:begin'"
         },
@@ -31209,14 +31508,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1637,
+          "line": 1641,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1637,
+          "line": 1641,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:start'"
         },
@@ -31240,14 +31539,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1657,
+          "line": 1661,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1657,
+          "line": 1661,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:stop'"
         },
@@ -31591,6 +31890,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 52,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-helpers.js",
           "line": 332,
           "kind": "custom-event-listener"
@@ -31615,6 +31919,12 @@
           "match": "zoomTarget.addEventListener('wheel'"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 52,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('wheel'"
+        },
+        {
           "file": "modules/ui-helpers.js",
           "line": 332,
           "kind": "custom-event-listener",
@@ -31634,16 +31944,27 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 102,
+          "line": 151,
+          "kind": "event-listener"
+        },
+        {
+          "file": "modules/ipc/browserHandlers.js",
+          "line": 205,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 102,
+          "line": 151,
           "kind": "event-listener",
           "match": "host.on('will-attach-webview'"
+        },
+        {
+          "file": "modules/ipc/browserHandlers.js",
+          "line": 205,
+          "kind": "event-listener",
+          "match": "guest.on('will-attach-webview'"
         }
       ]
     },
@@ -31653,14 +31974,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 88,
+          "line": 134,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 88,
+          "line": 134,
           "kind": "event-listener",
           "match": "ses.on('will-download'"
         }
@@ -31677,7 +31998,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 137,
+          "line": 202,
           "kind": "event-listener"
         },
         {
@@ -31695,7 +32016,7 @@
         },
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 137,
+          "line": 202,
           "kind": "event-listener",
           "match": "guest.on('will-navigate'"
         },
@@ -31713,7 +32034,7 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1956,
+          "line": 1960,
           "kind": "event-listener"
         },
         {
@@ -31725,7 +32046,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1956,
+          "line": 1960,
           "kind": "event-listener",
           "match": "app.on('will-quit'"
         },
@@ -31743,14 +32064,14 @@
       "consumers": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 138,
+          "line": 203,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/browserHandlers.js",
-          "line": 138,
+          "line": 203,
           "kind": "event-listener",
           "match": "guest.on('will-redirect'"
         }
@@ -31762,14 +32083,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1929,
+          "line": 1933,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1929,
+          "line": 1933,
           "kind": "event-listener",
           "match": "app.on('window-all-closed'"
         }
@@ -31962,14 +32283,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 149,
+          "line": 152,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 149,
+          "line": 152,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:add'"
         },
@@ -31993,14 +32314,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 204,
+          "line": 207,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 204,
+          "line": 207,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:expand-placeholders'"
         },
@@ -32024,14 +32345,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 213,
+          "line": 216,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 213,
+          "line": 216,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:get-prompt-settings'"
         },
@@ -32055,14 +32376,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 113,
+          "line": 116,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 113,
+          "line": 116,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:list'"
         },
@@ -32086,14 +32407,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 141,
+          "line": 144,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 141,
+          "line": 144,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:rebuild'"
         },
@@ -32117,14 +32438,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 170,
+          "line": 173,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 170,
+          "line": 173,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:remove'"
         },
@@ -32148,14 +32469,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 129,
+          "line": 132,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 129,
+          "line": 132,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:search'"
         },
@@ -32179,14 +32500,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 233,
+          "line": 236,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 233,
+          "line": 236,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:select-directory'"
         },
@@ -32210,14 +32531,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 115,
+          "line": 118,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 115,
+          "line": 118,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:set-active'"
         },
@@ -32241,14 +32562,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 215,
+          "line": 218,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 215,
+          "line": 218,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:set-prompt-settings'"
         },
@@ -32272,14 +32593,14 @@
       "consumers": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 179,
+          "line": 182,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/workspaceHandlers.js",
-          "line": 179,
+          "line": 182,
           "kind": "event-listener",
           "match": "ipcMain.handle('workspaces:update'"
         },
@@ -32422,7 +32743,7 @@
     },
     {
       "file": "modules/ipc/domainActivator.js",
-      "line": 131,
+      "line": 142,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
@@ -32430,7 +32751,7 @@
     },
     {
       "file": "modules/ipc/gitHandlers.js",
-      "line": 97,
+      "line": 96,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
@@ -32445,8 +32766,16 @@
       "contractId": "source.dynamic.modules.ipc.musichandlers"
     },
     {
+      "file": "modules/ipc/sidePaneIpcPolicy.js",
+      "line": 53,
+      "reason": "dynamic event listener name: channel",
+      "kind": "event-listener",
+      "match": "ipcMain.handle(channel",
+      "contractId": "source.dynamic.modules.ipc.sidepaneipcpolicy"
+    },
+    {
       "file": "modules/ipc/sourceHandlers.js",
-      "line": 36,
+      "line": 34,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
@@ -32462,7 +32791,7 @@
     },
     {
       "file": "modules/ipc/terminalHandlers.js",
-      "line": 64,
+      "line": 68,
       "reason": "dynamic event name: channel",
       "kind": "event-send",
       "match": "sender.send(channel",
@@ -32542,7 +32871,7 @@
     },
     {
       "file": "modules/messageRenderer.js",
-      "line": 3328,
+      "line": 3319,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target.addEventListener(type",
@@ -32557,16 +32886,8 @@
       "contractId": "source.dynamic.modules.notificationcenter"
     },
     {
-      "file": "modules/notificationRenderer.js",
-      "line": 19,
-      "reason": "dynamic listener name: type",
-      "kind": "custom-event-listener",
-      "match": "target?.addEventListener?.(type",
-      "contractId": "source.dynamic.modules.notificationrenderer"
-    },
-    {
       "file": "modules/renderer/domListenerOwner.js",
-      "line": 9,
+      "line": 15,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target.addEventListener(type",
@@ -32598,7 +32919,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 711,
+      "line": 757,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target.addEventListener(type",
@@ -32606,7 +32927,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2221,
+      "line": 2272,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "element.addEventListener(eventName",
@@ -32614,7 +32935,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2250,
+      "line": 2301,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "systemPromptContainer.addEventListener(eventName",
@@ -32622,7 +32943,7 @@
     },
     {
       "file": "modules/topicListManager.js",
-      "line": 34,
+      "line": 40,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target?.addEventListener?.(type",
@@ -32630,7 +32951,7 @@
     },
     {
       "file": "modules/topicListManager.js",
-      "line": 39,
+      "line": 45,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target?.addEventListener?.(type",
@@ -32806,7 +33127,7 @@
     },
     {
       "file": "modules/ui-system/side-pane/browserSideProvider.js",
-      "line": 279,
+      "line": 282,
       "reason": "dynamic listener name: name",
       "kind": "custom-event-listener",
       "match": "guest.addEventListener(name",

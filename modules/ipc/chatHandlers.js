@@ -10,7 +10,7 @@ const {
     rememberAttachmentDirectory
 } = require('../services/attachmentDialogState');
 const topicTitleManager = require('../../Groupmodules/topicTitleManager');
-const { beginTrajectoryCall, sessionKeyFromContext, sourceFromContext, withStreamUsage } = require('../modelTrajectory');
+const { beginTrajectoryCall, clearTrajectoryOf, sessionKeyFromContext, sourceFromContext, withStreamUsage } = require('../modelTrajectory');
 const { HistoryMutationQueue } = require('../services/historyMutationQueue');
 const workspaceHandlers = require('./workspaceHandlers');
 const { removeSideChatChildrenOfParent } = require('./sideChatHandlers');
@@ -165,6 +165,7 @@ function omitUnsetOptionalModelParams(modelConfig = {}) {
 let ipcHandlersRegistered = false;
 const flowlockClaimLocks = new Map();
 const vcpStreamTasks = new SenderTaskRegistry({ label: 'vcp-stream-tasks' });
+const INTERRUPT_TIMEOUT_MS = 5000;
 
 function getVcpStreamTaskSnapshot() {
     return vcpStreamTasks.snapshot();
@@ -635,7 +636,7 @@ function initialize(mainWindow, context) {
             return { success: true };
         } catch (error) {
             console.error(`保存Agent ${agentId} 话题 ${topicId} 聊天历史失败:`, error);
-            return { error: error.message };
+            return { success: false, error: error.message }; // 同群组：调用方都按 success === false 判失败
         }
     });
 
@@ -762,6 +763,7 @@ function initialize(mainWindow, context) {
 
                 const topicDataDir = path.join(USER_DATA_DIR, agentId, 'topics', topicIdToDelete);
                 if (await fs.pathExists(topicDataDir)) await fs.remove(topicDataDir);
+                await clearTrajectoryOf({ agentId, topicId: topicIdToDelete });
                 await removeSideChatChildrenOfParent({ USER_DATA_DIR, agentId, parentTopicId: topicIdToDelete })
                     .catch(err => console.warn('[delete-topic] Failed to remove side chats:', err));
 
@@ -1547,7 +1549,9 @@ function initialize(mainWindow, context) {
                 },
                 body: JSON.stringify({
                     requestId: messageId // Corrected to requestId to match user's edit
-                })
+                }),
+                // 服务卡住时中止请求本身也会挂住，停止按钮跟着卡几分钟；超时就走下面的本地收尾
+                signal: AbortSignal.timeout(INTERRUPT_TIMEOUT_MS)
             });
 
             const result = await response.json();

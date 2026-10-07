@@ -32,8 +32,12 @@ export function createGitCards({
     let disposed = false;
     const expanded = new Set();
     const diffCache = new Map();
+    // 缓存作废时展开着的 diff 先留着上一份：重新取的这段时间照旧显示，不缩成一行「加载中…」再撑开（对照 ZCode GitPane 重取时保留旧 diff）
+    const previousDiff = new Map();
     let countQueue = [];
     let countWorkers = 0;
+    // 缓存作废一次加一；作废前发出的请求回来时不再写缓存（对照 ZCode GitPane diffGenerationRef）
+    let generation = 0;
 
     async function fetchDiff(item) {
         const key = keyOf(item);
@@ -41,6 +45,7 @@ export function createGitCards({
         if (cached && cached.state !== 'loading') return cached;
         if (cached?.promise) return cached.promise;
         const requestedWorkspace = store.currentWorkspaceId;
+        const requestedGeneration = generation;
         const promise = (async () => {
             let result;
             try {
@@ -62,19 +67,30 @@ export function createGitCards({
                     };
                 }
             } catch (err) {
-                result = { state: 'unavailable', message: err.message || '暂时无法预览这个 Diff。' };
+                // 读失败不进缓存：重新展开或点重试会再取，不会一直停在这条错误上
+                result = { state: 'error', message: err.message || '暂时无法预览这个 Diff。' };
             }
-            if (requestedWorkspace === store.currentWorkspaceId && !disposed && !store.isDisposed) diffCache.set(key, result);
+            if (requestedWorkspace === store.currentWorkspaceId && requestedGeneration === generation && !disposed && !store.isDisposed) {
+                if (result.state === 'error') diffCache.delete(key);
+                else diffCache.set(key, result);
+                previousDiff.delete(key);
+            }
             return result;
         })();
         diffCache.set(key, { state: 'loading', promise });
         return promise;
     }
 
+    // 已跟踪文件的行数随状态一起来（git diff --numstat）；未跟踪文件和二进制文件才靠拉 diff 算
+    const hasStatusCounts = item => Number.isFinite(item.added) && Number.isFinite(item.removed);
+
     function paintCounts(item, card) {
-        const cached = diffCache.get(keyOf(item));
         const countsEl = card.querySelector('.side-git-counts');
-        if (!countsEl || cached?.state !== 'ready') return;
+        if (!countsEl) return;
+        const cached = hasStatusCounts(item)
+            ? { state: 'ready', added: item.added, removed: item.removed, approximate: false }
+            : diffCache.get(keyOf(item));
+        if (cached?.state !== 'ready') return;
         countsEl.innerHTML = '';
         const add = doc.createElement('span');
         add.className = 'text-diff-added';
@@ -104,11 +120,28 @@ export function createGitCards({
         }
     }
 
-    function renderDiffBody(item, container) {
-        const cached = diffCache.get(keyOf(item));
+    function renderDiffBody(item, container, { result = null, onRetry = null } = {}) {
+        const current = result || diffCache.get(keyOf(item));
+        const cached = (!current || current.state === 'loading') ? (previousDiff.get(keyOf(item)) || current) : current;
         container.innerHTML = '';
         if (!cached || cached.state === 'loading') {
             container.innerHTML = '<div class="side-git-diff-loading">加载中…</div>';
+            return;
+        }
+        if (cached.state === 'error') {
+            const msg = doc.createElement('div');
+            msg.className = 'side-git-diff-message side-git-diff-error';
+            msg.setAttribute('role', 'alert');
+            msg.textContent = `读取差异失败：${cached.message}`;
+            if (onRetry) {
+                const retry = doc.createElement('button');
+                retry.type = 'button';
+                retry.className = 'side-git-empty-add side-git-diff-retry';
+                retry.textContent = '重试';
+                retry.addEventListener('click', onRetry);
+                msg.append(' ', retry);
+            }
+            container.appendChild(msg);
             return;
         }
         if (cached.state !== 'ready') {
@@ -198,6 +231,7 @@ export function createGitCards({
         counts.className = 'side-git-counts';
         const chevron = doc.createElement('span');
         chevron.className = 'vcp-ui-icon side-git-chevron';
+        chevron.setAttribute('aria-hidden', 'true');
         chevron.textContent = 'expand_more';
         meta.append(counts, chevron);
         row.append(label, meta);
@@ -209,10 +243,12 @@ export function createGitCards({
         card.appendChild(diffBox);
 
         const open = () => {
+            const openedGeneration = generation;
             renderDiffBody(item, diffBox);
-            fetchDiff(item).then(() => {
-                if (disposed || store.isDisposed || !expanded.has(key)) return;
-                renderDiffBody(item, diffBox);
+            fetchDiff(item).then((result) => {
+                // 缓存作废后的旧结果不画：列表重绘时会用新卡片重新取
+                if (disposed || store.isDisposed || !expanded.has(key) || openedGeneration !== generation) return;
+                renderDiffBody(item, diffBox, { result: result?.state === 'error' ? result : null, onRetry: open });
                 paintCounts(item, card);
             });
         };
@@ -243,14 +279,25 @@ export function createGitCards({
     }
 
     function prefetch(items) {
-        countQueue = items.slice(0, COUNT_PREFETCH_LIMIT).filter(item => !diffCache.has(keyOf(item)));
+        countQueue = items.filter(item => !hasStatusCounts(item)).slice(0, COUNT_PREFETCH_LIMIT).filter(item => !diffCache.has(keyOf(item)));
         pumpCountQueue();
     }
     function clearExpanded() { expanded.clear(); }
-    function clearDiff() { expanded.clear(); diffCache.clear(); }
+    function clearDiff() { expanded.clear(); invalidate(); }
+    function invalidate() {
+        generation += 1;
+        previousDiff.clear();
+        expanded.forEach((key) => {
+            const cached = diffCache.get(key);
+            if (cached?.state === 'ready') previousDiff.set(key, cached);
+        });
+        diffCache.clear();
+        countQueue = [];
+    }
     function reset() { clearDiff(); countQueue = []; }
     function expand(item) { expanded.clear(); expanded.add(keyOf(item)); }
     function hasExpanded() { return expanded.size > 0; }
+    function isExpanded(item) { return expanded.has(keyOf(item)); }
 
-    return Object.freeze({ buildCard, cardFor, prefetch, reset, clearDiff, clearExpanded, expand, hasExpanded, dispose() { disposed = true; countQueue = []; expanded.clear(); diffCache.clear(); } });
+    return Object.freeze({ buildCard, cardFor, prefetch, reset, clearDiff, invalidate, clearExpanded, expand, hasExpanded, isExpanded, dispose() { disposed = true; countQueue = []; expanded.clear(); diffCache.clear(); previousDiff.clear(); } });
 }

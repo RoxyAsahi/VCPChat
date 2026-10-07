@@ -6,6 +6,13 @@ import {
 } from './chat/singleChatRequestOrchestrator.js';
 import { publishConversationSelection } from './ui-system/sources/conversation-current.js';
 
+// 上游接受中止后等它自己收尾的上限；过了仍没有终态就在本地停止，保留已收到的部分
+const INTERRUPT_SETTLE_MS = 3000;
+const settlesWithin = (promise, ms) => new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), ms);
+    promise.then(() => { clearTimeout(timer); resolve(true); }, () => { clearTimeout(timer); resolve(true); });
+});
+
 export const chatManager = (() => {
     // --- Private Variables ---
     let electronAPI;
@@ -75,6 +82,7 @@ export const chatManager = (() => {
     const forwardTimers = new Set();
     const outgoingPersistenceQueues = new Map();
     const selectionListeners = new Set();
+    const selectionIntentListeners = new Set();
 
     function notifySelectionCommitted() {
         const item = currentSelectedItemRef?.get?.();
@@ -83,6 +91,16 @@ export const chatManager = (() => {
         selectionListeners.forEach(listener => {
             try { listener({ item, topicId }); }
             catch (e) { console.error('[ChatManager] selection listener failed:', e); }
+        });
+    }
+    // 选中话题的那一刻就通知（历史还在分批渲染）。侧栏要立刻跟上：
+    // 等 notifySelectionCommitted 的话，几百条消息的话题要好几秒，期间还停在上一个话题的辅助对话上
+    function notifySelectionIntent() {
+        const item = currentSelectedItemRef?.get?.();
+        const topicId = currentTopicIdRef?.get?.();
+        selectionIntentListeners.forEach(listener => {
+            try { listener({ item, topicId }); }
+            catch (e) { console.error('[ChatManager] selection intent listener failed:', e); }
         });
     }
     const pendingSendContexts = new Set();
@@ -676,6 +694,7 @@ export const chatManager = (() => {
                 if (!isSelectionCurrent()) return;
                 currentTopicIdRef.set(topicToLoadId);
                 if (messageRenderer) messageRenderer.setCurrentTopicId(topicToLoadId);
+                notifySelectionIntent();
                 await loadOwnedHistory(topicToLoadId);
             } else if (topics && topics.error) {
                 if (!isSelectionCurrent()) return;
@@ -697,6 +716,7 @@ export const chatManager = (() => {
                         if (defaultTopicResult.success) {
                             currentTopicIdRef.set(defaultTopicResult.topicId);
                             if (messageRenderer) messageRenderer.setCurrentTopicId(defaultTopicResult.topicId);
+                            notifySelectionIntent();
                             await loadOwnedHistory(defaultTopicResult.topicId);
                         } else {
                             if (messageRenderer) messageRenderer.renderMessage({ role: 'system', notice: 'error', content: `创建默认话题失败: ${defaultTopicResult.error}`, timestamp: Date.now() });
@@ -711,6 +731,7 @@ export const chatManager = (() => {
                     if (defaultTopicResult.success) {
                         currentTopicIdRef.set(defaultTopicResult.topicId);
                         if (messageRenderer) messageRenderer.setCurrentTopicId(defaultTopicResult.topicId);
+                        notifySelectionIntent();
                         await loadOwnedHistory(defaultTopicResult.topicId);
                     } else {
                         if (messageRenderer) messageRenderer.renderMessage({ role: 'system', notice: 'error', content: `创建默认群聊话题失败: ${defaultTopicResult.error}`, timestamp: Date.now() });
@@ -816,6 +837,7 @@ export const chatManager = (() => {
                 // Navigation intent ends the old media lease before any IPC await.
                 messageRenderer.clearChat();
             }
+            notifySelectionIntent();
             // Persist the selection intent before watcher/history work. A
             // renderer reload or crash during that work must restore the
             // topic the user actually selected, not the previous durable one.
@@ -1558,6 +1580,7 @@ export const chatManager = (() => {
         let thinkingMessageItem = null;
         let releaseStreamConsumerRoute = null;
         let settleOwnedStreamOperation = null;
+        let ownedStreamSettled = false;
         const ownedStreamTerminal = request?.awaitTerminal
             ? new Promise(resolve => { settleOwnedStreamOperation = resolve; })
             : null;
@@ -1743,7 +1766,10 @@ export const chatManager = (() => {
                             append: (messageId, chunk, streamContext) => request.domRenderer.appendStreaming(messageId, chunk, streamContext),
                             projectTerminal: (messageId, finishReason, streamContext, payload) => request.domRenderer.projectStreamTerminal(messageId, finishReason, streamContext, payload),
                         } : {}),
-                        settle: result => settleOwnedStreamOperation?.(result),
+                        settle: result => {
+                            ownedStreamSettled = true;
+                            settleOwnedStreamOperation?.(result);
+                        },
                         release: () => {
                             releaseStreamConsumerRoute?.();
                             releaseStreamConsumerRoute = null;
@@ -1761,9 +1787,13 @@ export const chatManager = (() => {
                             let interrupted = null;
                             try { interrupted = await interruptCapability?.interrupt?.(thinkingMessage.id); }
                             catch (error) { console.warn('[ChatManager] Surface interrupt request failed; cancelling locally:', error); }
-                            if (interrupted?.success === true) return true;
+                            // 上游接受了中止却一直不发终态时，不能让侧聊一直忙着：等一会儿仍没收尾就在本地停
+                            if (interrupted?.success === true && (!ownedStreamTerminal || await settlesWithin(ownedStreamTerminal, INTERRUPT_SETTLE_MS))) return true;
+                            // 中止请求可能要等好几秒，期间回答已经自己收尾（路由随之释放）；
+                            // 这时它是一条完整或已停止的回答，不能再当占位删掉
+                            if (ownedStreamSettled) return true;
                             const res = await releaseStreamConsumerRoute?.cancel?.(reason || 'surface-operation-cancelled');
-                            if (res?.kind) return true;
+                            if (res?.kind || ownedStreamSettled) return true;
                             settleOwnedStreamOperation?.({ event: { type: 'cancelled', reason: reason || 'surface-operation-cancelled' } });
                             await removeThinkingFromSource();
                             return res !== false;
@@ -1789,10 +1819,13 @@ export const chatManager = (() => {
                     messageId: thinkingMessage.id,
                     done: ownedStreamTerminal,
                     async cancel(reason) {
-                        try { await interruptCapability?.interrupt?.(thinkingMessage.id); }
-                        catch (error) { console.warn('[ChatManager] Non-streaming interrupt failed; cancelling locally:', error); }
+                        // 非流式请求在主进程里没有本地中止，上游卡住时中止请求本身也会卡住：
+                        // 先在本地收尾、放开输入框，再尽力通知上游，不等它
                         await removeThinkingFromSource();
                         settleOwnedStreamOperation?.({ event: { type: 'cancelled', reason: reason || 'surface-operation-cancelled' } });
+                        Promise.resolve()
+                            .then(() => interruptCapability?.interrupt?.(thinkingMessage.id))
+                            .catch(error => console.warn('[ChatManager] Non-streaming interrupt failed; cancelled locally:', error));
                         return true;
                     },
                 }));
@@ -1800,10 +1833,20 @@ export const chatManager = (() => {
 
             const context = orchestrated.context;
             if (request?.signal?.aborted) return await cancelPreparedSend();
-            const vcpResponse = await singleChatRequestOrchestrator.sendPrepared(
+            const sending = singleChatRequestOrchestrator.sendPrepared(
                 orchestrated,
                 globalSettings
             );
+            // 非流式回答停止后就不再等：服务卡住时主进程的请求可能几分钟都不返回，输入框不能一直锁着；
+            // 迟到的回答直接丢掉，不再写进已经停止的这一轮
+            const settledFirst = !useStreaming && ownedStreamTerminal
+                ? await Promise.race([sending.then(() => false, () => false), ownedStreamTerminal.then(() => true)])
+                : false;
+            if (settledFirst) {
+                sending.catch(() => {});
+                return Object.freeze({ messageId: thinkingMessage.id, terminal: await ownedStreamTerminal });
+            }
+            const vcpResponse = await sending;
 
             // 主动停止可使尚未收到首字的 IPC 请求以错误返回；已有取消操作负责
             // 收尾，不把这次本地 Abort 再渲染成服务端失败。
@@ -1853,13 +1896,16 @@ export const chatManager = (() => {
 
                     // Fetch the correct history from the file, update it, and save it back.
                     const historyForSave = await getHistory(responseContext.agentId, responseContext.itemType || 'agent', responseContext.topicId);
+                    let persistenceError = null;
                     if (historyForSave && !historyForSave.error) {
                         // Remove any lingering 'thinking' message and add the new one
                         const finalHistory = historyForSave.filter(msg => msg.id !== thinkingMessage.id);
                         finalHistory.push(assistantMessage);
                         
                         // Save the final, complete history to the correct file
-                        await saveHistory(responseContext.agentId, responseContext.itemType || 'agent', responseContext.topicId, finalHistory);
+                        const finalSave = await saveHistory(responseContext.agentId, responseContext.itemType || 'agent', responseContext.topicId, finalHistory);
+                        // 和流式一样：没存下来就按保存失败收尾，侧栏辅助对话据此亮「保存失败」并拦住关闭，而不是当作已完成
+                        if (finalSave?.success === false || finalSave?.error) persistenceError = finalSave.error || '保存聊天记录失败';
 
                         if (isForActiveChat) {
                             // If it's the active chat, also update the UI and in-memory state
@@ -1871,9 +1917,12 @@ export const chatManager = (() => {
                             console.log(`[ChatManager] Saved non-streaming response for background chat: Agent ${responseContext.agentId}, Topic ${responseContext.topicId}`);
                         }
                     } else {
-                         console.error(`[ChatManager] Failed to get history for background save:`, historyForSave.error);
+                         console.error(`[ChatManager] Failed to get history for background save:`, historyForSave?.error);
+                         persistenceError = historyForSave?.error || '读取聊天记录失败';
                     }
-                    settleOwnedStreamOperation?.({ event: { type: 'completed' } });
+                    settleOwnedStreamOperation?.({ event: persistenceError
+                        ? { type: 'failed', outcome: { persistence: { error: persistenceError } } }
+                        : { type: 'completed' } });
                 } else {
                     await removeThinkingFromSource();
                     settleOwnedStreamOperation?.({ event: { type: 'failed', outcome: { transport: { error: 'Unknown response format' } } } });
@@ -2325,6 +2374,7 @@ export const chatManager = (() => {
         for (const timer of forwardTimers) clearTimeout(timer);
         forwardTimers.clear();
         selectionListeners.clear();
+        selectionIntentListeners.clear();
         await Promise.allSettled([
             lastOpenSaveQueue,
             ...outgoingPersistenceQueues.values(),
@@ -2359,6 +2409,14 @@ export const chatManager = (() => {
             if (typeof callback === 'function') {
                 selectionListeners.add(callback);
                 return () => selectionListeners.delete(callback);
+            }
+            return () => {};
+        },
+        /** 选中话题时立刻回调（不等历史渲染完）；回调参数同 onSelectionChange */
+        onSelectionIntent(callback) {
+            if (typeof callback === 'function') {
+                selectionIntentListeners.add(callback);
+                return () => selectionIntentListeners.delete(callback);
             }
             return () => {};
         },

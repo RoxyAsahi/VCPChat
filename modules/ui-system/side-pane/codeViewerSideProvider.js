@@ -16,6 +16,7 @@ import { readFileForViewer } from './code-viewer/file-read.js';
 import { createCodeViewerDiffView } from './code-viewer/diff-view.js';
 import { computeLineDiff } from '../line-diff.js';
 import { detectLanguage } from './code-viewer/helpers.js';
+import { toWorkspaceRelative } from '../git-file-diff.js';
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
 export { detectLanguage } from './code-viewer/helpers.js';
 export { escapeHtml } from '../text-escape.js';
@@ -58,19 +59,21 @@ export function createCodeViewerSideProvider({
          * @param {{ scope?: object }} [context] 控制器给的挂载上下文；scope 是这次挂载的 view scope
          * @returns {Promise<Object>} Tab lifecycle handle
          */
-        async mountTab(tab, viewElement, { scope: viewScope = null } = {}) {
+        async mountTab(tab, viewElement, { scope: viewScope = null, restoredState = null } = {}) {
             viewElement.innerHTML = '';
             // 这次挂载的监听和定时器都归 own：控制器释放 view 或调用 dispose 时一起拆掉
             const own = createSidePaneRootScope(viewScope, 'code-viewer');
             const disposed = () => !own.active;
-            let isWrapped = false;
+            // 休眠后重新挂载：换行、视图模式、工作区外读取的确认和滚动位置都照原样回来
+            let isWrapped = restoredState?.isWrapped === true;
 
             const payload = tab.payload || {};
-            let currentMode = payload.mode === 'diff' ? 'diff' : 'view';
+            const openedMode = payload.mode === 'diff' ? 'diff' : 'view';
+            let currentMode = restoredState?.mode === 'diff' || restoredState?.mode === 'view' ? restoredState.mode : openedMode;
             let currentCode = payload.code || '';
             const filePath = payload.filePath || '';
             const oldCode = payload.oldCode || '';
-            const newCode = payload.newCode ?? (currentMode === 'diff' ? currentCode : null);
+            const newCode = payload.newCode ?? (openedMode === 'diff' ? currentCode : null);
             const langMeta = detectLanguage(filePath || tab.title || payload.language, payload.language || 'plaintext');
             let currentLang = langMeta.lang;
             let currentTag = langMeta.tag;
@@ -92,6 +95,7 @@ export function createCodeViewerSideProvider({
 
             const fileIcon = doc.createElement('span');
             fileIcon.className = 'vcp-ui-icon side-code-file-icon';
+            fileIcon.setAttribute('aria-hidden', 'true');
             fileIcon.textContent = currentMode === 'diff' ? 'difference' : 'code';
 
             const titleLabel = doc.createElement('span');
@@ -102,6 +106,7 @@ export function createCodeViewerSideProvider({
             const langTag = doc.createElement('span');
             langTag.className = 'side-code-lang-tag';
             langTag.textContent = currentMode === 'diff' ? 'DIFF' : currentTag;
+            langTag.dataset.lang = currentMode === 'diff' ? 'diff' : currentLang;
 
             infoWrapper.append(fileIcon, titleLabel, langTag);
 
@@ -117,8 +122,8 @@ export function createCodeViewerSideProvider({
                 modeToggleBtn.title = currentMode === 'diff' ? '切换为纯代码视图' : '切换为差异对比视图';
                 modeToggleBtn.setAttribute('aria-label', '切换视图');
                 modeToggleBtn.innerHTML = currentMode === 'diff'
-                    ? '<span class="vcp-ui-icon">code</span>'
-                    : '<span class="vcp-ui-icon">difference</span>';
+                    ? '<span class="vcp-ui-icon" aria-hidden="true">code</span>'
+                    : '<span class="vcp-ui-icon" aria-hidden="true">difference</span>';
                 actionsWrapper.appendChild(modeToggleBtn);
             }
 
@@ -129,7 +134,8 @@ export function createCodeViewerSideProvider({
             wrapBtn.setAttribute('data-action', 'toggle-wrap');
             wrapBtn.title = '切换自动换行';
             wrapBtn.setAttribute('aria-label', '自动换行');
-            wrapBtn.innerHTML = '<span class="vcp-ui-icon">wrap_text</span>';
+            wrapBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">wrap_text</span>';
+            wrapBtn.classList.toggle('active', isWrapped);
 
             // Copy Code Button
             const copyBtn = doc.createElement('button');
@@ -138,7 +144,7 @@ export function createCodeViewerSideProvider({
             copyBtn.setAttribute('data-action', 'copy-code');
             copyBtn.title = '复制代码内容';
             copyBtn.setAttribute('aria-label', '复制代码');
-            copyBtn.innerHTML = '<span class="vcp-ui-icon">content_copy</span>';
+            copyBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">content_copy</span>';
 
             // Insert to Chat Button
             const insertBtn = doc.createElement('button');
@@ -147,7 +153,7 @@ export function createCodeViewerSideProvider({
             insertBtn.setAttribute('data-action', 'insert-chat');
             insertBtn.title = '插入到主聊天输入框';
             insertBtn.setAttribute('aria-label', '插入聊天');
-            insertBtn.innerHTML = '<span class="vcp-ui-icon">format_quote</span>';
+            insertBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">format_quote</span>';
 
             // External Open Button
             let externalBtn = null;
@@ -156,9 +162,9 @@ export function createCodeViewerSideProvider({
                 externalBtn.type = 'button';
                 externalBtn.className = 'side-code-action-btn';
                 externalBtn.setAttribute('data-action', 'open-external');
-                externalBtn.title = '在外部编辑器中打开';
-                externalBtn.setAttribute('aria-label', '外部打开');
-                externalBtn.innerHTML = '<span class="vcp-ui-icon">open_in_new</span>';
+                externalBtn.title = '在文件管理器中显示';
+                externalBtn.setAttribute('aria-label', '在文件管理器中显示');
+                externalBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">folder_open</span>';
             }
 
             // Reload Button（文件可能已在外部被修改或删除）
@@ -170,7 +176,7 @@ export function createCodeViewerSideProvider({
                 reloadBtn.setAttribute('data-action', 'reload-file');
                 reloadBtn.title = '重新读取文件';
                 reloadBtn.setAttribute('aria-label', '重新读取');
-                reloadBtn.innerHTML = '<span class="vcp-ui-icon">refresh</span>';
+                reloadBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">refresh</span>';
                 actionsWrapper.appendChild(reloadBtn);
             }
 
@@ -192,7 +198,8 @@ export function createCodeViewerSideProvider({
                 pickerToggleBtn.className = 'side-code-action-btn';
                 pickerToggleBtn.title = '选择文件';
                 pickerToggleBtn.setAttribute('aria-label', '选择文件');
-                pickerToggleBtn.innerHTML = '<span class="vcp-ui-icon">folder_open</span>';
+                pickerToggleBtn.setAttribute('data-action', 'toggle-picker');
+                pickerToggleBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">folder_open</span>';
                 actionsWrapper.prepend(pickerToggleBtn);
                 container.append(toolbar, picker, body);
             } else {
@@ -235,10 +242,11 @@ export function createCodeViewerSideProvider({
                 store,
                 body,
                 doc,
-                readFile: isFileBacked ? () => readFileForViewer(api, filePath) : null,
+                readFile: isFileBacked ? (options) => readFileForViewer(api, filePath, options) : null,
                 renderDiffView: (...args) => renderDiffView(...args)
             });
             const { setBodyMessage, renderCodeView, refreshView, reload } = editorOwner;
+            if (restoredState?.outsideWorkspaceAllowed === true) editorOwner.allowOutsideWorkspace();
 
             const diffViewOwner = createCodeViewerDiffView({
                 store,
@@ -292,10 +300,11 @@ export function createCodeViewerSideProvider({
                     currentMode = currentMode === 'diff' ? 'view' : 'diff';
                     fileIcon.textContent = currentMode === 'diff' ? 'difference' : 'code';
                     langTag.textContent = currentMode === 'diff' ? 'DIFF' : currentTag;
+                    langTag.dataset.lang = currentMode === 'diff' ? 'diff' : currentLang;
                     modeToggleBtn.title = currentMode === 'diff' ? '切换为纯代码视图' : '切换为差异对比视图';
                     modeToggleBtn.innerHTML = currentMode === 'diff'
-                        ? '<span class="vcp-ui-icon">code</span>'
-                        : '<span class="vcp-ui-icon">difference</span>';
+                        ? '<span class="vcp-ui-icon" aria-hidden="true">code</span>'
+                        : '<span class="vcp-ui-icon" aria-hidden="true">difference</span>';
                     refreshView();
                 });
             }
@@ -303,13 +312,21 @@ export function createCodeViewerSideProvider({
             if (reloadBtn) own.listen(reloadBtn, 'click', () => reload());
 
             if (externalBtn && filePath) {
-                own.listen(externalBtn, 'click', () => {
-                    if (api?.openPythonAttachmentInTextEditor) {
-                        api.openPythonAttachmentInTextEditor(filePath);
-                    } else if (api?.sendOpenExternalLink) {
-                        api.sendOpenExternalLink(filePath);
-                    } else {
-                        uiHelper?.showToastNotification?.(`文件路径: ${filePath}`, 'info');
+                // 只在文件管理器里定位，不按文件关联打开：路径可能来自模型的工具调用，.bat / .lnk 按关联打开就是执行。
+                // 已登记工作区里的文件走 gitRevealPath（主进程校验在工作区内）；别处的文件只提示路径。
+                own.listen(externalBtn, 'click', async () => {
+                    const toast = (message, type) => uiHelper?.showToastNotification?.(message, type);
+                    try {
+                        const listed = typeof api?.gitRevealPath === 'function' ? await api.gitListWorkspaces?.() : null;
+                        const match = listed?.success ? toWorkspaceRelative(filePath, listed.data?.workspaces) : null;
+                        if (!match) {
+                            toast(`文件路径：${filePath}`, 'info');
+                            return;
+                        }
+                        const res = await api.gitRevealPath(match.workspace.id, match.relPath, 'workspace');
+                        if (!res?.success) throw new Error(res?.error || '无法在文件管理器中显示');
+                    } catch (error) {
+                        toast(error?.message || String(error), 'error');
                     }
                 });
             }
@@ -318,12 +335,19 @@ export function createCodeViewerSideProvider({
                 await setupPicker();
             } else {
                 await refreshView();
+                if (Number.isFinite(restoredState?.scrollTop)) body.scrollTop = restoredState.scrollTop;
+                if (Number.isFinite(restoredState?.scrollLeft)) body.scrollLeft = restoredState.scrollLeft;
             }
             // 挂载途中被取消：控制器会丢掉这个视图，这里只清掉自己画的内容
             if (disposed()) {
                 viewElement.innerHTML = '';
                 return null;
             }
+            // 休眠只发生在隐藏时，那时 display:none 的 body 读出来的滚动都是 0：位置在可见时就记下
+            let lastScroll = { top: Number(restoredState?.scrollTop) || 0, left: Number(restoredState?.scrollLeft) || 0 };
+            own.listen(body, 'scroll', () => {
+                if (body.clientHeight > 0) lastScroll = { top: body.scrollTop, left: body.scrollLeft };
+            }, { passive: true });
 
             return {
                 focus() {
@@ -334,6 +358,15 @@ export function createCodeViewerSideProvider({
                 },
                 getMode() {
                     return currentMode;
+                },
+                captureState() {
+                    return {
+                        isWrapped,
+                        mode: currentMode,
+                        outsideWorkspaceAllowed: editorOwner.outsideWorkspaceAllowed,
+                        scrollTop: body.clientHeight > 0 ? body.scrollTop : lastScroll.top,
+                        scrollLeft: body.clientHeight > 0 ? body.scrollLeft : lastScroll.left
+                    };
                 },
                 /** 文件标签重新读盘；片段和差异是快照，不受影响 */
                 reload() {

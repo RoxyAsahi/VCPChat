@@ -11,6 +11,7 @@
 
 import { getHttpLinksForTerminalBufferLine } from './terminalLinks.js';
 import { buildTerminalTheme } from './terminalTheme.js';
+import { normalizePowerShellReadlineRedraw } from './terminalDataTransform.js';
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
 
 const GO_OPTION_VALUE = '';
@@ -18,6 +19,8 @@ const SINGLETON_TAB_ID = 'terminal:main';
 const XTERM_SCRIPT = 'vendor/xterm/xterm.js';
 const XTERM_FIT_SCRIPT = 'vendor/xterm/xterm-addon-fit.js';
 const XTERM_STYLE = 'vendor/xterm/xterm.css';
+// 连接建立前最多替用户攒这么多输入（敲键盘够用，大段粘贴不攒）
+const PENDING_INPUT_LIMIT = 4096;
 
 function loadScript(doc, src) {
     return new Promise((resolve, reject) => {
@@ -72,8 +75,13 @@ export function createTerminalSideProvider({
     api = (typeof window !== 'undefined' ? window.electronAPI : null),
     sidePaneController = null,
     xtermLoader = loadXterm,
-    onOpenUrl = null // 点击终端里的 http(s) 链接：交给自带浏览器标签打开
+    onOpenUrl = null, // 点击终端里的 http(s) 链接：交给自带浏览器标签打开
+    uiHelper = null
 } = {}) {
+    // 用应用自己的确认框（和其他标签一致）；原生 confirm 会弹系统模态框卡住整个窗口，只在没有应用确认框时退回
+    const confirmAction = async (message, title, confirmText) => (typeof uiHelper?.showConfirmDialog === 'function'
+        ? uiHelper.showConfirmDialog(message, title, confirmText, '取消', true)
+        : doc.defaultView.confirm(message));
     const kind = 'terminal';
     // 标签打开期间的终端会话：xterm、对共享终端的连接、输出订阅都在这里，视图休眠不动它们，关标签才释放
     const sessions = new WeakMap(); // occurrence -> session
@@ -101,19 +109,60 @@ export function createTerminalSideProvider({
 
         const initialTheme = buildTerminalTheme(doc, screen);
         const term = new xterm.Terminal({
-            cursorBlink: true,
+            // 光标不闪：xterm 的闪烁动画让侧栏里一个空闲终端每秒重算样式约 55 次（约 2.5% 单核）。
+            // ZCode TerminalSession.tsx 也用 xterm 默认的不闪烁光标。
+            cursorBlink: false,
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
             fontSize: 13,
             scrollback: 5000,
             allowProposedApi: false,
-            theme: initialTheme
+            theme: initialTheme,
+            // OSC 8 超链接：不走 xterm 默认的 confirm + window.open（会在主窗口外开一个默认 session 的窗口），
+            // 和普通链接一样只开 http(s)，交给侧栏浏览器（对照 ZCode TerminalSession.tsx linkHandler）
+            linkHandler: {
+                allowNonHttpProtocols: false,
+                activate(event, text) {
+                    event?.preventDefault?.();
+                    if (!onOpenUrl || !/^https?:\/\//i.test(String(text || ''))) return;
+                    onOpenUrl(text);
+                }
+            }
         });
         session.term = term;
+        // 有选区时 Ctrl/Cmd+C 复制选区，不给共享 PTY 发 ^C（会打断 AI 正在跑的命令）；
+        // 副屏自己的快捷键（Ctrl/Cmd+Alt+B、Ctrl+PageUp/PageDown）不写进 shell（对照 ZCode attachCustomKeyEventHandler）
+        term.attachCustomKeyEventHandler?.((event) => {
+            if (event.type !== 'keydown') return true;
+            const mod = event.ctrlKey || event.metaKey;
+            if (!mod) return true;
+            const key = String(event.key || '').toLowerCase();
+            if (key === 'c' && !event.altKey && !event.shiftKey && term.hasSelection?.()) {
+                const text = term.getSelection();
+                const clipboard = doc.defaultView?.navigator?.clipboard;
+                clipboard?.writeText?.(text)?.catch?.(error => console.warn('[SideTerminal] Copy failed:', error));
+                return false;
+            }
+            if (event.altKey && key === 'b') return false;
+            if (event.ctrlKey && (event.key === 'PageUp' || event.key === 'PageDown')) return false;
+            return true;
+        });
         // 外框底色由 CSS 给出，xterm 从外框读取同一颜色，明暗主题切换时跟着换调色板。
+        // 只有画面挂在侧栏里时 CSS 才算得出来（新建的节点和暂存区都读到回退色），所以挂上之后再算；
+        // 收着的时候只记一笔，下次挂上时重算。颜色没变就不赋值：每次赋值 xterm 都整屏重绘
+        // （拖动分隔条时 body 的 class 也会变）
+        let appliedTheme = JSON.stringify(initialTheme);
+        let themeStale = false;
         const applyTheme = () => {
+            if (!term?.options) return;
+            if (!screen.isConnected || screen.closest?.('[data-side-terminal-stash]')) { themeStale = true; return; }
+            themeStale = false;
             const theme = buildTerminalTheme(doc, screen);
-            if (term?.options) term.options.theme = theme;
+            const serialized = JSON.stringify(theme);
+            if (serialized === appliedTheme) return;
+            appliedTheme = serialized;
+            term.options.theme = theme;
         };
+        session.applyTheme = applyTheme;
         const ThemeObserver = doc.defaultView?.MutationObserver;
         const themeObserver = ThemeObserver && doc.body ? new ThemeObserver(applyTheme) : null;
         themeObserver?.observe(doc.body, { attributes: true, attributeFilter: ['class', 'data-vcp-theme'] });
@@ -130,6 +179,11 @@ export function createTerminalSideProvider({
 
         session.fit = () => {
             if (session.disposed || !session.fitAddon || !screen.offsetWidth || !screen.offsetHeight) return;
+            // 不持有尺寸的视图跟着 PTY 的真实尺寸画，不按自己的容器排（同 DSH 非可写视图）
+            if (session.ptySize && !hasFocus()) {
+                followPtySize();
+                return;
+            }
             try {
                 session.fitAddon.fit();
             } catch (_error) {
@@ -137,25 +191,61 @@ export function createTerminalSideProvider({
             }
         };
 
+        // 连接建立之前敲的字先攒着，连上后按顺序补发（打开标签就开始敲，不该丢字）；连不上就丢掉
+        let pendingInput = '';
         term.onData((data) => {
             if (session.sessionId) api.terminalWrite?.(session.sessionId, data);
+            else if (session.connectionOperation && pendingInput.length + data.length <= PENDING_INPUT_LIMIT) pendingInput += data;
         });
+        session.flushPendingInput = () => {
+            const data = pendingInput;
+            pendingInput = '';
+            if (data && session.sessionId) api.terminalWrite?.(session.sessionId, data);
+        };
+        session.dropPendingInput = () => { pendingInput = ''; };
         // The PTY has a single size shared by every view of it (this tab and the terminal window), so a view
         // only pushes its size while it has focus, and claims it again whenever it gets focus.
-        const hasFocus = () => screen.contains(doc.activeElement);
+        // session.ptySize is the PTY's real size, from create and from resize notices; a view that does not
+        // hold the size draws at that size instead of its own fit.
+        function hasFocus() { return screen.contains(doc.activeElement); }
+        function followPtySize() {
+            const size = session.ptySize;
+            if (size && (term.cols !== size.cols || term.rows !== size.rows)) term.resize?.(size.cols, size.rows);
+        }
         session.claimSize = () => {
-            if (session.sessionId && !session.disposed) api.terminalResize?.(session.sessionId, term.cols, term.rows);
+            if (!session.sessionId || session.disposed) return;
+            const size = session.ptySize;
+            if (size && size.cols === term.cols && size.rows === term.rows) return;
+            session.ptySize = { cols: term.cols, rows: term.rows };
+            api.terminalResize?.(session.sessionId, term.cols, term.rows);
         };
         term.onResize(() => {
             if (hasFocus()) session.claimSize();
         });
-        screen.addEventListener('focusin', session.claimSize);
+        screen.addEventListener('focusin', () => {
+            session.fit();
+            session.claimSize();
+        });
 
         const unsubscribeData = api.onTerminalData?.((payload) => {
-            if (payload?.id === session.sessionId && typeof payload.data === 'string') term.write(payload.data);
+            if (payload?.id === session.sessionId && typeof payload.data === 'string') {
+                term.write(normalizePowerShellReadlineRedraw(payload.data, session.powershell));
+            }
         });
+        // 主进程只在起了新 PTY 时清屏（AI 跑命令或托盘终端重启了共享会话）：这时已经活过来了，别再显示已退出
         const unsubscribeClear = api.onTerminalClear?.((payload) => {
-            if (payload?.id === session.sessionId) term.reset();
+            if (payload?.id !== session.sessionId) return;
+            term.reset();
+            if (session.exited) {
+                session.exited = false;
+                setStatus('已连接终端', 'connected');
+            }
+        });
+        // 别的视图（终端窗口、另一个侧栏标签）改了 PTY 尺寸：没焦点就跟过去
+        const unsubscribeResized = api.onTerminalResized?.((payload) => {
+            if (payload?.id !== session.sessionId || !Number.isInteger(payload.cols) || !Number.isInteger(payload.rows)) return;
+            session.ptySize = { cols: payload.cols, rows: payload.rows };
+            if (!hasFocus()) followPtySize();
         });
         const unsubscribeExit = api.onTerminalExit?.((payload) => {
             if (payload?.id !== session.sessionId) return;
@@ -171,6 +261,7 @@ export function createTerminalSideProvider({
             session.connectionOperation = Promise.resolve().then(() => {
                 if (!session.disposed) return action();
             }).catch(error => {
+                session.dropPendingInput();
                 if (session.disposed) return;
                 const message = error?.message || String(error);
                 setStatus(message, 'error');
@@ -191,21 +282,44 @@ export function createTerminalSideProvider({
                 return;
             }
             if (!res?.success) {
+                session.dropPendingInput();
                 setStatus(res?.error || '终端启动失败', 'error');
                 term.write(`\x1b[31m${res?.error || '终端启动失败'}\x1b[0m\r\n`);
                 return;
             }
             session.sessionId = res.data.id;
+            session.flushPendingInput();
             session.exited = false;
+            if (res.data.windowsPty && typeof res.data.windowsPty === 'object') term.options.windowsPty = res.data.windowsPty;
+            // 共享终端在 Windows 上起的是 pwsh / powershell，其余平台是 bash
+            session.powershell = Boolean(res.data.windowsPty);
             setStatus('已连接终端', 'connected',
                 `已连接终端 · 与终端窗口 / AI 命令共用同一个会话${res.data.pid ? ` · PID ${res.data.pid}` : ''}`);
-            if (screen.offsetWidth) session.claimSize(); // opened on screen: take over the size
+            if (Number.isInteger(res.data.cols) && Number.isInteger(res.data.rows)) session.ptySize = { cols: res.data.cols, rows: res.data.rows };
+            // 只有拿着焦点的视图改 PTY 尺寸；后台挂上的视图跟着 PTY 画（用户点进来时 focusin 再接管）
+            if (hasFocus()) session.claimSize();
+            else followPtySize();
         });
 
         session.restart = () => {
             if (session.disposed) return Promise.resolve();
             if (session.connectionOperation) return session.connectionOperation;
-            if (session.sessionId && !doc.defaultView.confirm('重新启动共享终端？AI 工具、终端窗口和所有侧栏视图的当前命令都会中止。')) return;
+            // 确认框开着时再点重启：等同一个确认，不叠第二个框
+            if (session.restartConfirm) return session.restartConfirm;
+            // shell 已经退出时没有可中止的命令，直接重启，不再问
+            if (session.sessionId && !session.exited) {
+                session.restartConfirm = confirmAction('重新启动共享终端？AI 工具、终端窗口和所有侧栏视图的当前命令都会中止。', '重启终端', '重启')
+                    .then(confirmed => {
+                        session.restartConfirm = null;
+                        // 确认框开着时标签关了，或者别处已经开始重连
+                        if (!confirmed || session.disposed) return undefined;
+                        return session.connectionOperation || restartNow();
+                    }, error => { session.restartConfirm = null; console.error('[TerminalSideProvider] Restart confirm failed:', error); });
+                return session.restartConfirm;
+            }
+            return restartNow();
+        };
+        const restartNow = () => {
             if (!session.sessionId) return session.attach();
             return runConnection(async () => {
                 setStatus('重启中...');
@@ -229,6 +343,7 @@ export function createTerminalSideProvider({
             themeObserver?.disconnect();
             unsubscribeData?.();
             unsubscribeClear?.();
+            unsubscribeResized?.();
             unsubscribeExit?.();
             // Only closes this view; the terminal session belongs to VCPChat's terminal.
             if (session.sessionId) api.terminalKill?.(session.sessionId);
@@ -290,16 +405,18 @@ export function createTerminalSideProvider({
             const restartBtn = doc.createElement('button');
             restartBtn.type = 'button';
             restartBtn.className = 'side-terminal-btn';
+            restartBtn.dataset.action = 'restart';
             restartBtn.title = '重新启动终端（终端窗口和 AI 共用同一个会话，会一并重置）';
             restartBtn.setAttribute('aria-label', '重新启动终端');
-            restartBtn.innerHTML = '<span class="vcp-ui-icon">refresh</span>';
+            restartBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">refresh</span>';
 
             const clearBtn = doc.createElement('button');
             clearBtn.type = 'button';
             clearBtn.className = 'side-terminal-btn';
+            clearBtn.dataset.action = 'clear';
             clearBtn.title = '清屏';
             clearBtn.setAttribute('aria-label', '清屏');
-            clearBtn.innerHTML = '<span class="vcp-ui-icon">delete_sweep</span>';
+            clearBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">delete_sweep</span>';
 
             // 和浏览器 / Git 顶栏同一套胶囊：工作区下拉一个胶囊，清屏 + 重启合成一个胶囊
             const wsPill = doc.createElement('span');
@@ -364,8 +481,8 @@ export function createTerminalSideProvider({
                 try {
                     xterm = await xtermLoader(doc);
                 } catch (err) {
-                    renderStatus({ text: `终端组件加载失败: ${err?.message || err}`, state: 'error' });
-                    return { focus() {}, dispose() { viewElement.innerHTML = ''; } };
+                    // 交给侧栏的出错页：带重试按钮，重试会重新加载 xterm，不用关掉标签再开
+                    throw new Error(`终端组件加载失败：${err?.message || err}`, { cause: err });
                 }
                 if (occurrence?.signal?.aborted) return null;
                 session = createSession(xterm, occurrence?.signal || null);
@@ -373,6 +490,7 @@ export function createTerminalSideProvider({
             }
             const { term, screen } = session;
             placeScreen(screen, container);
+            session.applyTheme();
 
             let viewReleased = false;
             // 这一次挂载的按钮监听、尺寸观察和防抖定时器都挂在视图 scope 下，休眠或关标签时一起拆；
@@ -419,8 +537,10 @@ export function createTerminalSideProvider({
                 term.focus();
             });
             own.listen(restartBtn, 'click', () => {
-                session.restart();
+                // 先把焦点交给终端再重启：要确认时确认框接过焦点、关掉后还回终端。
+                // 反过来的话终端会从确认框手里抢回焦点，按 Esc 关框时 Esc 也进了 shell，吃掉下一个字符
                 term.focus();
+                session.restart();
             });
             own.listen(clearBtn, 'click', () => {
                 term.clear();

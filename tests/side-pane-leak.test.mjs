@@ -8,6 +8,8 @@ import { createTerminalSideProvider } from '../modules/ui-system/side-pane/termi
 import { createPlanDetailSideProvider } from '../modules/ui-system/side-pane/planDetailSideProvider.js';
 import { createModelTrajectorySideProvider } from '../modules/ui-system/side-pane/modelTrajectorySideProvider.js';
 import { createToolOutputSideProvider } from '../modules/ui-system/side-pane/toolOutputSideProvider.js';
+import { createBrowserSideProvider } from '../modules/ui-system/side-pane/browserSideProvider.js';
+import { createCodeViewerSideProvider } from '../modules/ui-system/side-pane/codeViewerSideProvider.js';
 import { getProjectForgeChangesSource } from '../modules/ui-system/sources/projectforge-changes.js';
 import { getCommandRunsSource } from '../modules/ui-system/sources/terminal-command-runs.js';
 
@@ -16,6 +18,69 @@ const settle = async () => {
     for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
     await new Promise(resolve => setTimeout(resolve, 0));
 };
+// 侧栏开合动画会排一帧：jsdom 的 rAF 靠一个 16ms 的 setInterval 驱动，有帧排队时它就在，
+// 机器一忙 intervals 就时有时无。量之前等排着的帧跑完；一直有新帧（停不下来的动画循环）就不等了，
+// 由 animationFrames 报出来
+const drainFrames = async h => {
+    for (let i = 0; i < 20 && h.pendingFrames() > 0; i++) await new Promise(resolve => setTimeout(resolve, 20));
+};
+
+/**
+ * 不经过 own.* 的资源也要数到：document / window 上的活监听、没清掉的 setInterval、还排着的 requestAnimationFrame、
+ * 没 disconnect 的 MutationObserver。
+ * 只数这些长寿目标：挂在已移除视图节点上的监听随节点一起丢弃，不算泄漏。
+ */
+function instrument(win) {
+    const live = new Set();
+    const keyOf = (target, type, listener, options) => {
+        const capture = typeof options === 'boolean' ? options : Boolean(options?.capture);
+        return `${target === win ? 'window' : 'document'}|${type}|${capture}|${listenerIds.get(listener) ?? listenerIds.set(listener, listenerIds.size).get(listener)}`;
+    };
+    const listenerIds = new Map();
+    const proto = win.EventTarget.prototype;
+    const add = proto.addEventListener;
+    const remove = proto.removeEventListener;
+    const watched = target => target === win || target === win.document;
+    proto.addEventListener = function (type, listener, options) {
+        if (listener && watched(this)) {
+            const key = keyOf(this, type, listener, options);
+            live.add(key);
+            options?.signal?.addEventListener?.('abort', () => live.delete(key), { once: true });
+        }
+        return add.call(this, type, listener, options);
+    };
+    proto.removeEventListener = function (type, listener, options) {
+        if (listener && watched(this)) live.delete(keyOf(this, type, listener, options));
+        return remove.call(this, type, listener, options);
+    };
+
+    const intervals = new Set();
+    for (const host of new Set([globalThis, win])) {
+        const setI = host.setInterval, clearI = host.clearInterval;
+        host.setInterval = (...args) => { const id = setI.apply(host, args); intervals.add(id); return id; };
+        host.clearInterval = id => { intervals.delete(id); return clearI.call(host, id); };
+    }
+
+    const frames = new Set();
+    const raf = win.requestAnimationFrame, caf = win.cancelAnimationFrame;
+    win.requestAnimationFrame = callback => {
+        const id = raf.call(win, time => { frames.delete(id); callback(time); });
+        frames.add(id);
+        return id;
+    };
+    win.cancelAnimationFrame = id => { frames.delete(id); return caf.call(win, id); };
+
+    const observers = new Set();
+    const NativeObserver = win.MutationObserver;
+    win.MutationObserver = class extends NativeObserver {
+        observe(...args) { observers.add(this); return super.observe(...args); }
+        disconnect() { observers.delete(this); return super.disconnect(); }
+    };
+
+    const counts = () => ({ globalListeners: live.size, intervals: intervals.size, animationFrames: frames.size, mutationObservers: observers.size });
+    counts.pendingFrames = () => frames.size;
+    return counts;
+}
 
 const PROJECT = {
     project: { id: 'p1', name: '工程', status: 'active', updated_at: '2026-09-30T01:00:00.000Z', root: 'C:\\w' },
@@ -29,6 +94,7 @@ function fixture() {
             <div class="side-pane-tabs"></div>
             <div class="side-pane-content-container"></div>
         </aside></body>`, { pretendToBeVisual: true });
+    const unmanaged = instrument(dom.window);
     const doc = dom.window.document;
     const root = doc.getElementById('vcpSidePane');
     const listeners = new Map();
@@ -81,14 +147,19 @@ function fixture() {
         'plan-detail': createPlanDetailSideProvider({ document: doc, api, sidePaneController: controller, uiHelper: {} }),
         'model-trajectory': createModelTrajectorySideProvider({ document: doc, api, sidePaneController: controller, uiHelper: {},
             getConversation: () => ({ item: { id: 'agent1', name: 'A' }, topicId: 't1' }) }),
-        'tool-output': createToolOutputSideProvider({ document: doc, api, sidePaneController: controller, uiHelper: {} })
+        'tool-output': createToolOutputSideProvider({ document: doc, api, sidePaneController: controller, uiHelper: {} }),
+        browser: createBrowserSideProvider({ document: doc, api: null, sidePaneController: controller, notify: () => {} }),
+        'code-viewer': createCodeViewerSideProvider({ document: doc, api: null, uiHelper: null, sidePaneController: controller })
     };
     Object.entries(providers).forEach(([kind, provider]) => controller.registerProvider(kind, provider));
     const opens = {
         terminal: () => providers.terminal.openTerminalTab(),
         'plan-detail': () => providers['plan-detail'].openPlanDetailTab({ projectId: 'p1', projectName: '工程' }),
         'model-trajectory': () => providers['model-trajectory'].openModelTrajectoryTab(),
-        'tool-output': () => providers['tool-output'].openToolOutputTab()
+        'tool-output': () => providers['tool-output'].openToolOutputTab(),
+        browser: () => controller.openTab({ id: 'browser:leak', kind: 'browser', title: '浏览器', closable: true, scopeMode: 'global',
+            payload: { url: 'https://example.com/' } }),
+        'code-viewer': () => providers['code-viewer'].openViewer({ filePath: 'C:\\w\\a.js', code: 'const a = 1;\n' })
     };
 
     const { diagnostics } = globalThis.VCPLifecycle;
@@ -100,9 +171,10 @@ function fixture() {
         sourcesRunning: globalThis.VCPSharedSources.diagnostics().filter(s => s.running || s.polling).length,
         ipcListeners: [...listeners.values()].reduce((sum, n) => sum + n, 0),
         nodes: doc.body.querySelectorAll('*').length,
+        ...unmanaged(),
         views: controller.getViewResidency()
     });
-    return { dom, controller, opens, calls, measure,
+    return { dom, controller, opens, calls, measure, pendingFrames: unmanaged.pendingFrames,
         async cleanup() { await controller.dispose(); dom.window.close(); } };
 }
 
@@ -119,6 +191,7 @@ test(`opening and closing every tab type ${CYCLES} times returns to where it sta
             for (const id of openTabIds(h.controller)) await h.controller.closeTab(id);
             await settle();
         }
+        await drainFrames(h);
         const baseline = h.measure();
 
         for (let i = 0; i < CYCLES; i++) {
@@ -129,6 +202,7 @@ test(`opening and closing every tab type ${CYCLES} times returns to where it sta
                 await settle();
             }
         }
+        await drainFrames(h);
         assert.deepEqual(h.measure(), baseline);
         assert.equal(h.calls.kills, h.calls.creates, 'every shell that was started was ended');
         assert.equal(h.calls.watches, h.calls.unwatches, 'every trajectory watch was released');
@@ -141,8 +215,10 @@ test(`views put to sleep and woken ${CYCLES} times leave nothing behind`, async 
         for (const open of Object.values(h.opens)) await open();
         await settle();
         const ids = openTabIds(h.controller);
+        assert.equal(ids.length, Object.keys(h.opens).length, 'every tab type opened');
         // 只能有一个视图挂着：切到哪个标签，别的都休眠
         for (const id of ids) { h.controller.activateTab(id); await settle(); }
+        await drainFrames(h);
         const baseline = h.measure();
         assert.equal(baseline.views.live.length, 1);
         assert.equal(baseline.views.dormant.length, ids.length - 1);
@@ -151,6 +227,7 @@ test(`views put to sleep and woken ${CYCLES} times leave nothing behind`, async 
         for (let i = 0; i < CYCLES; i++) {
             for (const id of ids) { h.controller.activateTab(id); await settle(); }
         }
+        await drainFrames(h);
         const after = h.measure();
         assert.deepEqual({ ...after, views: null }, { ...baseline, views: null });
         assert.equal(after.views.live.length, 1);
@@ -203,7 +280,7 @@ function probeFixture() {
         residency: controller.getViewResidency()
     });
     return {
-        controller, mounts, measure,
+        controller, mounts, measure, root,
         hold() {
             let open;
             gate = { promise: new Promise(resolve => { open = resolve; }) };
@@ -255,7 +332,8 @@ test('a view whose mount throws releases what it had set up, and the tab can mou
             await settle();
             const failed = h.mounts.at(-1);
             assert.equal(failed.released, 1, 'what the provider put on the view scope is released');
-            assert.equal(h.measure().views, 0, 'no empty view shell is left');
+            assert.equal(h.measure().views, 1, 'only the error page is left, not an empty shell');
+            assert.ok(h.root.querySelector(`.side-pane-view[data-tab-id="${id}"] [role="alert"]`), 'the failed tab says it failed');
 
             // 标签还在：再显示一次就重新挂上
             h.controller.activateTab(id);

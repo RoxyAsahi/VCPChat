@@ -33,6 +33,9 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
     if (!ipcMain || typeof ipcMain.handle !== 'function') throw new TypeError('[DomainActivator] ipcMain is required.');
     const domains = new Map();
     const owners = new Map(); // channel → domain
+    // 退出时 disposeAll({ final: true }) 之后置位：will-quit 时窗口只是隐藏，渲染端的轮询和订阅还会调进来，
+    // 不拦住的话会把刚释放的领域重新 initialize（起 watcher、子进程），而之后再也没人 dispose
+    let shutDown = false;
 
     function unavailable(domain, error) {
         return { success: false, error: `${domain.name} 功能加载失败：${error?.message || String(error)}` };
@@ -41,6 +44,7 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
     function activate(name) {
         const domain = domains.get(name);
         if (!domain) throw new Error(`[DomainActivator] 未登记的领域：${name}`);
+        if (shutDown) throw new Error(`${name} 正在退出，不再激活`);
         if (domain.state === 'active') return domain.module;
         if (domain.state === 'loading') throw new Error(`${name} 正在初始化，不能在初始化过程中调用自己的通道`);
         domain.state = 'loading';
@@ -66,6 +70,11 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
     }
 
     function dispatch(domain, channel, event, args) {
+        if (shutDown) return { success: false, error: 'shutting-down' };
+        // 调用方窗口不对就到此为止：既不进 handler，也不为它加载、初始化领域（见 sidePaneIpcPolicy.js）
+        if (domain.allowSender && !domain.allowSender(event, channel)) {
+            return { success: false, error: '当前窗口无权调用这个接口。' };
+        }
         if (domain.state !== 'active') {
             try {
                 activate(domain.name);
@@ -87,8 +96,9 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
      * @param {(mod: any, ctx: { ipcMain: object }) => void} spec.init 用 ctx.ipcMain 注册 handler
      * @param {(mod: any) => void} [spec.dispose]
      * @param {boolean} [spec.eager=false]
+     * @param {(event: any, channel: string) => boolean} [spec.allowSender] 调用方窗口检查，不通过的调用直接拒绝
      */
-    function register(name, { channels, load, init, dispose = null, eager = false } = {}) {
+    function register(name, { channels, load, init, dispose = null, eager = false, allowSender = null } = {}) {
         if (domains.has(name)) throw new Error(`[DomainActivator] 领域重复登记：${name}`);
         if (!Array.isArray(channels) || !channels.length) throw new TypeError(`[DomainActivator] ${name}: channels 不能为空`);
         if (typeof load !== 'function' || typeof init !== 'function') throw new TypeError(`[DomainActivator] ${name}: 需要 load 和 init`);
@@ -102,6 +112,7 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
             load,
             init,
             dispose,
+            allowSender: typeof allowSender === 'function' ? allowSender : null,
             state: 'declared',
             error: null,
             module: null,
@@ -151,8 +162,12 @@ function createDomainActivator({ ipcMain, logger = console } = {}) {
         }));
     }
 
-    /** 释放已激活领域的资源，退回 declared；通道仍然登记着，之后再被调用会重新初始化 */
-    function disposeAll() {
+    /**
+     * 释放已激活领域的资源，退回 declared；通道仍然登记着，之后再被调用会重新初始化。
+     * final：应用退出，之后的调用一律返回 shutting-down，不再激活任何领域
+     */
+    function disposeAll({ final = false } = {}) {
+        if (final) shutDown = true;
         for (const domain of domains.values()) {
             if (domain.state !== 'active') continue;
             try {

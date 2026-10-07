@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,7 @@ import { createSidePaneController } from '../modules/ui-system/side-pane/side-pa
 import { defineChatTabType } from '../modules/ui-system/side-pane/tab-types/chat.js';
 import { createSideChatDescriptor } from '../modules/chat/sideChatSessionService.js';
 import { createSideChatDraftStore, sideChatDraftKey } from '../modules/renderer/side-chat/draft-store.js';
+import { waitFor } from './helpers/wait-for.mjs';
 
 async function fixture(t, legacyInput = {}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-side-draft-restore-'));
@@ -24,7 +25,7 @@ async function fixture(t, legacyInput = {}) {
     const childDir = path.join(directory, 'agent', 'topics', child.topicId);
     const dom = new JSDOM('<aside id="pane"><div id="tabs"></div><div id="content"></div></aside>', { url: 'https://side-chat.test' });
     const doc = dom.window.document, drafts = createSideChatDraftStore({ getStorage: () => dom.window.localStorage });
-    const deletions = [], sessions = [], metadataWrites = [];
+    const deletions = [], sessions = [], metadataWrites = [], toasts = [];
     const chatAPI = {
         listSideChatMetadata: (...args) => call('side-chat:list-metadata', ...args),
         saveSideChatMetadata: (...args) => {
@@ -35,11 +36,12 @@ async function fixture(t, legacyInput = {}) {
         async deleteSideChatChild(...args) { deletions.push(args); return call('side-chat:delete-child', ...args); },
         getChatHistory: async (_agent, topic) => JSON.parse(await fs.readFile(path.join(directory, 'agent', 'topics', topic, 'history.json'), 'utf8'))
     };
-    function mountController() {
+    function mountController({ dormancy = null } = {}) {
         let controller;
         const wiring = createSideChatWiring({ doc, win: dom.window, chatAPI,
             chatRepository: { getHistory: (agent, _type, topic) => chatAPI.getChatHistory(agent, topic), saveHistory: async () => ({ success: true }) },
-            chatManager: { sendMessage() { throw new Error('No generation during restoration'); } }, uiHelper: {},
+            chatManager: { sendMessage() { throw new Error('No generation during restoration'); } },
+            uiHelper: { showToastNotification: (message, type) => toasts.push({ message, type }) },
             selectedItemRef: { get: () => ({ id: 'agent', type: 'agent', config: { model: 'default-model' } }) },
             topicIdRef: { get: () => 'parent' }, historyRef: { get: () => [] }, getController: () => controller,
             createRenderer({ conversation }) {
@@ -50,7 +52,7 @@ async function fixture(t, legacyInput = {}) {
             }
         });
         controller = createSidePaneController({ root: doc.getElementById('pane'), tabListElement: doc.getElementById('tabs'),
-            contentContainer: doc.getElementById('content'),
+            contentContainer: doc.getElementById('content'), dormancy,
             tabTypes: [defineChatTabType({ provider: wiring.provider, onClosed: wiring.onTabClosed })] });
         controller.setParent(descriptor.parent);
         const session = { controller, wiring };
@@ -64,7 +66,7 @@ async function fixture(t, legacyInput = {}) {
         assert.ok(directory.startsWith(os.tmpdir() + path.sep));
         await fs.rm(directory, { recursive: true, force: true });
     });
-    return { dom, doc, drafts, descriptor, childDir, deletions, mountController,
+    return { dom, doc, drafts, descriptor, childDir, deletions, toasts, mountController,
         settleMetadata: () => Promise.all(metadataWrites),
         metadata: async () => JSON.parse(await fs.readFile(path.join(childDir, 'sidechat-metadata.json'), 'utf8')) };
 }
@@ -84,6 +86,30 @@ test('empty-history side chats restore browser drafts, references and models thr
     await controller.closeTab(tab.id);
     assert.equal(f.drafts.read(f.descriptor).input, null);
     await assert.rejects(fs.stat(f.childDir), { code: 'ENOENT' });
+});
+
+test('a restored side chat keeps its saved id, so the pane can return to it after every restart', async t => {
+    const f = await fixture(t, { composerStorage: 'local' });
+    f.drafts.save(f.descriptor, { draft: 'keep me', model: null, references: [] });
+    for (let restart = 0; restart < 2; restart++) {
+        const { controller, wiring } = f.mountController();
+        await wiring.restoreSessions('agent', 'parent');
+        const tab = controller.getSnapshot().tabs.find(item => item.kind === 'chat');
+        assert.equal(tab.id, f.descriptor.id);
+    }
+});
+
+test('a restored side chat keeps its saved creation time, so saving it after a restart does not reorder the list', async t => {
+    const f = await fixture(t, { composerStorage: 'local', createdAt: 1_000 });
+    f.drafts.save(f.descriptor, { draft: 'keep me', model: null, references: [] });
+    const { controller, wiring } = f.mountController();
+    await wiring.restoreSessions('agent', 'parent');
+    const tab = controller.getSnapshot().tabs.find(item => item.kind === 'chat');
+    assert.equal(tab.descriptor.createdAt, 1_000);
+    controller.getTabHandle(tab.id).setDraft('edited');
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur'));
+    await f.settleMetadata();
+    assert.equal((await f.metadata()).createdAt, 1_000);
 });
 
 test('legacy file input survives descriptor normalization and migrates only after the browser save; clearing it never revives old input', async t => {
@@ -120,6 +146,10 @@ test('unreadable browser drafts cannot authorize automatic deletion of an empty-
     assert.equal(f.deletions.length, 0);
     assert.ok(controller.getSnapshot().tabs.some(item => item.kind === 'chat'));
     assert.ok((await fs.stat(f.childDir)).isDirectory());
+    // 草稿只存本机，读坏了就是丢了：要告诉用户，而不是悄悄换成空白
+    assert.equal(f.toasts.length, 1);
+    assert.equal(f.toasts[0].type, 'warning');
+    assert.match(f.toasts[0].message, /草稿读不出来/);
 });
 
 test('automatic empty-child cleanup also removes its empty browser draft without reviving legacy file input', async t => {
@@ -131,4 +161,25 @@ test('automatic empty-child cleanup also removes its empty browser draft without
     await assert.rejects(fs.stat(f.childDir), { code: 'ENOENT' });
     assert.equal(f.drafts.read(f.descriptor).input, null);
     assert.equal(f.deletions.length, 1);
+});
+
+// 辅助对话按 keep 常驻（同 ZCode 对非浏览器面板 forceMount）：隐藏再久，视图、输入框和引用都还在
+test('a side chat hidden behind another tab stays mounted with its draft', async t => {
+    const f = await fixture(t, { composerStorage: 'local' });
+    f.drafts.save(f.descriptor, { draft: 'half typed', references: [{ id: 'ref-1', text: 'first selection' }] });
+    const { controller, wiring } = f.mountController({ dormancy: { hiddenMs: 30 } });
+    controller.registerTabType({ kind: 'note', label: 'Note', provider: { mountTab: () => ({ dispose() {} }) } });
+    await wiring.restoreSessions('agent', 'parent');
+    const tab = controller.getSnapshot().tabs.find(item => item.kind === 'chat');
+    controller.activateTab(tab.id);
+    controller.setVisible(true);
+    await new Promise(r => setTimeout(r, 20));
+    const handle = controller.getTabHandle(tab.id);
+    handle.setDraft('half typed, then more');
+    await controller.openTab({ id: 'note:1', kind: 'note', title: 'Note', closable: true, scopeMode: 'global' });
+    await new Promise(r => setTimeout(r, 120));
+    assert.equal(controller.getTabHandle(tab.id), handle, 'still the same mounted view');
+    assert.deepEqual(controller.getViewResidency().dormant, []);
+    assert.equal(handle.getDraft(), 'half typed, then more');
+    assert.deepEqual(handle.getReferences().map(ref => ref.id), ['ref-1']);
 });

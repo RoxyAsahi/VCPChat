@@ -31,6 +31,7 @@ export { filterAiTouched, latestAiBatch, buildHunkRows } from './diff-model.js';
 
 // 工作区选择和 V工程 Git 页（ProjectForgemodules/projectforge-git.js）共用，见 sources/git-workspace.js。
 const STORAGE_KEY_SOURCE = 'vcp-side-pane-git-source';
+const GIT_LIST_BATCH = 120;
 const AI_SOURCE = 'ai-last';
 const SELECTION_ORIGIN = 'git-view';
 
@@ -76,6 +77,8 @@ export function mountGitView(host, {
     let aiLoadSeq = 0;
     let currentStatus = null;
     let loadError = null;
+    // 工作区列表读回来之前不能说「还没有工作区」：那是加载中
+    let workspacesLoaded = false;
     let loading = false;
     // 监听、推送订阅、右键菜单都归 own；宿主释放 scope 或调用 dispose 时一起拆掉
     const own = createSidePaneRootScope(scope, 'git-view');
@@ -122,7 +125,7 @@ export function mountGitView(host, {
     const refreshBtn = doc.createElement('button');
     refreshBtn.type = 'button';
     refreshBtn.className = 'side-git-refresh-btn';
-    refreshBtn.innerHTML = '<span class="vcp-ui-icon">refresh</span><span>刷新</span>';
+    refreshBtn.innerHTML = '<span class="vcp-ui-icon" aria-hidden="true">refresh</span><span>刷新</span>';
 
     // 下拉做成胶囊（和浏览器工具栏一套）：select 本身去掉原生外观，箭头由外层补上
     const pill = (select, extra) => {
@@ -141,10 +144,14 @@ export function mountGitView(host, {
     body.className = 'side-git-body';
     const list = doc.createElement('div');
     list.className = 'side-git-list';
+    // 列表尾部的哨兵：进入可视区附近时挂下一批卡片（见 render）
+    const listMore = doc.createElement('div');
+    listMore.className = 'side-git-list-more';
+    listMore.setAttribute('aria-hidden', 'true');
     const empty = doc.createElement('div');
     empty.className = 'side-git-empty';
     empty.hidden = true;
-    body.append(list, empty);
+    body.append(list, listMore, empty);
 
     root.append(header, body);
     host.appendChild(root);
@@ -156,6 +163,8 @@ export function mountGitView(host, {
 
     const store = Object.freeze({
         get currentWorkspaceId() { return currentWorkspaceId; },
+        // 状态条目的路径相对仓库根；工作区可能只是仓库的一个子目录
+        get currentToplevel() { return currentStatus?.toplevel || null; },
         get isDisposed() { return disposed(); }
     });
 
@@ -182,6 +191,41 @@ export function mountGitView(host, {
     });
     const { cardFor, buildCard } = cardsOwner;
 
+    // ── 长列表分批挂载 ───────────────────────────────────────
+    // ZCode `GitPane` 用 @tanstack/react-virtual 只挂可视行，注释里记着数百个未跟踪文件同步挂载时
+    // click 出现 600ms+ 长任务。这里沿用话题列表的分批做法：先挂一批，哨兵接近可视区再挂下一批；
+    // 卡片本身用 content-visibility 跳过屏外的布局和绘制（样式表 side-pane-git-extras.css）。
+    // 1000 个改动时打开 Git 页从约 0.75s 降到 0.24s；3000 个时从 1.9s（最长任务 0.74s）降到 0.41s。
+    let listItems = [];
+    let listMounted = 0;
+    let renderedSource = null;
+    const moreObserver = typeof win.IntersectionObserver === 'function'
+        ? new win.IntersectionObserver((entries) => {
+            if (entries.some(entry => entry.isIntersecting)) mountMoreCards(listMounted + GIT_LIST_BATCH);
+        }, { rootMargin: '600px 0px' })
+        : null;
+    if (moreObserver) own.observe(moreObserver, listMore, undefined, 'git-list-more');
+
+    function mountMoreCards(upTo) {
+        if (disposed()) return;
+        const end = moreObserver ? Math.min(listItems.length, upTo) : listItems.length;
+        if (end <= listMounted) return;
+        const fragment = doc.createDocumentFragment();
+        for (; listMounted < end; listMounted++) fragment.appendChild(buildCard(listItems[listMounted]));
+        list.appendChild(fragment);
+        // 哨兵仍在可视区附近时不会再报相交；重新观察一次，让它按当前位置再判一次
+        if (moreObserver && listMounted < listItems.length) {
+            moreObserver.unobserve(listMore);
+            moreObserver.observe(listMore);
+        }
+    }
+
+    /** 让这一项的卡片已经挂上（定位、恢复焦点前调用） */
+    function mountThrough(item) {
+        const index = listItems.findIndex(entry => keyOf(entry) === keyOf(item));
+        if (index >= listMounted) mountMoreCards(index + 1);
+    }
+
     function visibleItems() {
         if (!currentStatus?.isRepo) return [];
         const staged = (currentStatus.staged || []).map(i => ({ ...i, staged: true }));
@@ -194,12 +238,16 @@ export function mountGitView(host, {
         return unstaged;
     }
 
-    function showEmpty({ icon = 'description', title, description, action = null }) {
+    function showEmpty({ reason, icon = 'description', title, description, action = null }) {
         list.innerHTML = '';
+        listItems = [];
+        listMounted = 0;
         empty.hidden = false;
+        empty.dataset.emptyReason = reason;
         empty.innerHTML = '';
         const iconEl = doc.createElement('span');
         iconEl.className = 'vcp-ui-icon side-git-empty-icon';
+        iconEl.setAttribute('aria-hidden', 'true');
         iconEl.textContent = icon;
         const titleEl = doc.createElement('p');
         titleEl.className = 'side-git-empty-title';
@@ -222,10 +270,10 @@ export function mountGitView(host, {
     function emptyCopy() {
         if (currentSource === AI_SOURCE) {
             return aiBatch
-                ? { title: '上一轮的改动已经没有未提交内容', description: '这一批涉及的文件都已提交或还原。' }
-                : { title: '当前工作区还没有上一轮文件改动', description: '这个工作区没有 V工程 工程，或工程里还没有施工批次。' };
+                ? { reason: 'ai-committed', title: '上一轮的改动已经没有未提交内容', description: '这一批涉及的文件都已提交或还原。' }
+                : { reason: 'ai-none', title: '当前工作区还没有上一轮文件改动', description: '这个工作区没有 V工程 工程，或工程里还没有施工批次。' };
         }
-        return { title: '当前来源下没有可展示的改动', description: '可以切换其它来源，或等当前工作区产生新的 Git 改动后再查看。' };
+        return { reason: 'no-changes', title: '当前来源下没有可展示的改动', description: '可以切换其它来源，或等当前工作区产生新的 Git 改动后再查看。' };
     }
 
     // ── 复制 / 定位 ─────────────────────────────────────────
@@ -239,8 +287,19 @@ export function mountGitView(host, {
         if (disposed()) return;
         refreshBtn.disabled = loading;
         refreshBtn.classList.toggle('spinning', loading);
+        // 先错误、再加载中、最后才是空（对照 ZCode GitPane）：读失败不能显示成「还没有工作区」叫用户去添加
+        if (loadError) {
+            showEmpty({ reason: 'load-error', icon: 'error', title: '无法加载 Git 改动', description: `Git 返回错误：${loadError}`,
+                action: { label: '重试', run: retryLoad } });
+            return;
+        }
+        if (!workspacesLoaded) {
+            showEmpty({ reason: 'loading', title: '加载中', description: '正在读取当前工作区的 Git 状态和文件改动。' });
+            return;
+        }
         if (!workspaces.length) {
             showEmpty({
+                reason: 'no-workspace',
                 icon: 'folder_x',
                 title: '还没有工作区',
                 description: '添加一个 Git 项目目录后，就能在这里查看它的改动。',
@@ -248,16 +307,12 @@ export function mountGitView(host, {
             });
             return;
         }
-        if (loadError) {
-            showEmpty({ icon: 'error', title: '无法加载 Git 改动', description: `Git 返回错误：${loadError}` });
-            return;
-        }
         if (!currentStatus) {
-            showEmpty({ title: '加载中', description: '正在读取当前工作区的 Git 状态和文件改动。' });
+            showEmpty({ reason: 'loading', title: '加载中', description: '正在读取当前工作区的 Git 状态和文件改动。' });
             return;
         }
         if (currentStatus.isRepo === false) {
-            showEmpty({ icon: 'folder_x', title: '当前工作区不在 Git 仓库中', description: '请切换到包含 .git 的工作区目录，或先在该目录执行 git init。' });
+            showEmpty({ reason: 'not-repo', icon: 'folder_x', title: '当前工作区不在 Git 仓库中', description: '请切换到包含 .git 的工作区目录，或先在该目录执行 git init。' });
             return;
         }
         const items = visibleItems();
@@ -266,9 +321,32 @@ export function mountGitView(host, {
             return;
         }
         empty.hidden = true;
+        delete empty.dataset.emptyReason;
+        // 推送触发的重绘会换掉整张列表：记下焦点所在的行，重建后还给同一个文件（React 按 key 复用节点时焦点本来就不丢，
+        // ZCode/DSH 的列表都是这样）；那个文件没了就给同一位置的行
+        const focusedCard = list.contains(doc.activeElement) ? doc.activeElement.closest('.side-git-card') : null;
+        const focusKey = focusedCard?.dataset.key ?? null;
+        const focusIndex = focusedCard ? Array.prototype.indexOf.call(list.children, focusedCard) : -1;
+        // 同一个列表的重绘（agent 改文件时每次推送都会来）至少挂回原来那么多张，并留在原来的滚动位置：
+        // 只挂第一批的话列表变矮，滚动位置被夹回第一百多行
+        const sameList = renderedSource === currentSource && listItems.length > 0;
+        const previouslyMounted = sameList ? listMounted : 0;
+        const previousScrollTop = sameList ? body.scrollTop : null;
         list.innerHTML = '';
-        items.forEach(item => list.appendChild(buildCard(item)));
+        listItems = items;
+        listMounted = 0;
+        renderedSource = currentSource;
+        // 展开着的文件和有焦点的文件所在批次一起挂上
+        const expandedIndex = items.findIndex(item => cardsOwner.isExpanded(item));
+        const focusItemIndex = focusKey !== null ? items.findIndex(item => keyOf(item) === focusKey) : -1;
+        mountMoreCards(Math.max(GIT_LIST_BATCH, previouslyMounted, expandedIndex + 1, focusItemIndex + 1, focusIndex + 1));
+        if (previousScrollTop !== null) body.scrollTop = previousScrollTop;
         cardsOwner.prefetch(items);
+        if (focusKey !== null) {
+            const cards = Array.from(list.querySelectorAll('.side-git-card'));
+            const target = cards.find(card => card.dataset.key === focusKey) || cards[Math.min(focusIndex, cards.length - 1)];
+            target?.querySelector('.side-git-row')?.focus?.({ preventScroll: true });
+        }
     }
 
     // ── 数据 ────────────────────────────────────────────────
@@ -296,34 +374,45 @@ export function mountGitView(host, {
         aiBatchLoaded = true;
     }
 
+    // 每次读都编号，只认最新那次：推送和窗口 focus 同时触发、大仓库 status 上秒级时，
+    // 先发的请求可能后到，把已经删掉的文件又画回来（同 ZCode useGitRepository 的 requestVersionRef）
+    let statusSeq = 0;
     async function refreshStatus({ quiet = false } = {}) {
         // 已经拆掉就不再跟：否则迟到的刷新会把刚退掉的推送重新订上
         if (disposed()) return;
         // 每次读都对准当前工作区的变更推送（换了工作区就换订阅）
         changes.follow(currentWorkspaceId);
         if (!api?.gitStatus || !currentWorkspaceId || disposed()) return;
+        const seq = ++statusSeq;
+        const superseded = () => disposed() || seq !== statusSeq;
         stale = false;
         if (!quiet) { loading = true; render(); }
         let skipRender = false;
         try {
             const requestedId = currentWorkspaceId;
             const res = await api.gitStatus(requestedId);
-            if (disposed() || requestedId !== currentWorkspaceId) return;
+            if (superseded() || requestedId !== currentWorkspaceId) return;
             if (!res?.success) throw new Error(res?.error || '获取 Git 状态失败');
             loadError = null;
             currentStatus = res.data;
             if (currentSource === AI_SOURCE && !aiBatchLoaded) await loadAiBatch();
-            if (disposed() || requestedId !== currentWorkspaceId) return;
+            if (superseded() || requestedId !== currentWorkspaceId) return;
             // 推送触发的静默刷新：状态没变就不重绘（避免闪烁、丢 hover），有展开的 diff 时照常重绘。
+            // 状态里带着每个文件的增删行数，内容变了 key 也会变；变了就让缓存的 diff 作废（展开的那个保持展开，重新取）
             const statusKey = JSON.stringify(res.data);
             if (quiet && statusKey === lastStatusKey && !cardsOwner.hasExpanded()) { skipRender = true; return; }
-            if (statusKey !== lastStatusKey) { cardsOwner.clearDiff(); }
+            if (statusKey !== lastStatusKey) { cardsOwner.invalidate(); }
             lastStatusKey = statusKey;
         } catch (err) {
-            if (quiet) return;
+            if (quiet || superseded()) return;
             loadError = err.message;
         } finally {
-            if (!disposed()) { loading = false; if (!skipRender || !quiet) render(); }
+            // 旋转图标只由最新的请求停下；被它盖过的旧请求什么都不动
+            if (!superseded()) {
+                const wasLoading = loading;
+                loading = false;
+                if (!skipRender || !quiet || wasLoading) render();
+            }
         }
     }
 
@@ -343,12 +432,21 @@ export function mountGitView(host, {
         }
     }
 
+    function retryLoad() {
+        loadError = null;
+        if (workspacesLoaded && currentWorkspaceId) void refreshStatus({ quiet: false });
+        else { render(); void loadWorkspaces(); }
+    }
+
     async function loadWorkspaces({ preferPath = null } = {}) {
-        if (!api?.gitListWorkspaces) return;
+        if (!api?.gitListWorkspaces) { workspacesLoaded = true; render(); return; }
         try {
             const res = await api.gitListWorkspaces();
+            if (disposed()) return;
             if (!res?.success) throw new Error(res?.error || '加载工作区失败');
             workspaces = Array.isArray(res.data?.workspaces) ? res.data.workspaces : [];
+            workspacesLoaded = true;
+            loadError = null;
             const activeId = res.data?.activeWorkspaceId || null;
             wsSelect.innerHTML = '';
             workspaces.forEach(ws => {
@@ -415,6 +513,7 @@ export function mountGitView(host, {
         storage?.setItem(STORAGE_KEY_SOURCE, currentSource);
         cardsOwner.expand(found);
         render();
+        mountThrough(found);
         cardFor(found)?.scrollIntoView?.({ block: 'nearest' });
     }
 

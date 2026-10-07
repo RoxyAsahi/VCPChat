@@ -116,6 +116,8 @@ export async function mountSideChatSurface(container, {
     let isDisposed = false;
     let isHistoryLoaded = false;
     let isDeletingMessage = false;
+    // 重新回复先存截短的历史再发送：这段 await 期间还没有 activeSendController，另起的发送会和它撞车
+    let isRegenerating = false;
     let isComposing = false;
     let activeOperation = null;
     let activeSendController = null;
@@ -247,7 +249,12 @@ export async function mountSideChatSurface(container, {
         modelPickerBtn,
         modelPopover,
         persistMetadata: () => persistenceOwner.saveComposerInput(),
-        onModelChange: model => { selectedItem.model = model; if (selectedItem.config) selectedItem.config.model = model; },
+        onModelChange: model => {
+            selectedItem.model = model;
+            if (selectedItem.config) selectedItem.config.model = model;
+            // 发送时提示过「请先选择模型」，选好之后别让这条错误还挂着
+            if (statusText?.textContent === '请先选择模型') updateStatus('就绪');
+        },
         updateComposerState: (...args) => updateComposerState(...args)
     });
     const { updateModel } = modelPickerOwner;
@@ -271,7 +278,6 @@ export async function mountSideChatSurface(container, {
         const unavailableDispose = () => release('side-chat-unavailable');
         return {
             descriptor,
-            setVisible() {},
             focus() {},
             async requestClose() { return { closed: true }; },
             dispose: unavailableDispose,
@@ -350,6 +356,12 @@ export async function mountSideChatSurface(container, {
     });
 
     textarea.addEventListener('keydown', (e) => {
+        // 生成中按 Esc 停止，同 ZCode 的 Esc → stop；只认输入框里的 Esc，不和侧栏里菜单、搜索的 Esc 抢
+        if (e.key === 'Escape' && !isComposing && !e.defaultPrevented && activeSendController) {
+            e.preventDefault();
+            onStop();
+            return;
+        }
         if (e.key === 'Enter' && !e.shiftKey && !isComposing && e.keyCode !== 229) {
             e.preventDefault();
             form.requestSubmit();
@@ -358,7 +370,8 @@ export async function mountSideChatSurface(container, {
 
     const onSubmit = async (event) => {
         event?.preventDefault?.();
-        if (isDisposed || !isHistoryLoaded || isDeletingMessage) return;
+        // 还在生成时不再起第二次发送：它失败后的清理会清掉正在进行的那次，停止按钮随之消失
+        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController || form.hasAttribute('aria-busy')) return;
         if (!currentModel) {
             updateStatus('请先选择模型', 'error');
             return;
@@ -395,7 +408,8 @@ export async function mountSideChatSurface(container, {
 
         // 用户消息被撤回（未发出/发送失败）时才把草稿和引用放回输入框
         await runSend(payload, submittedAttachments, () => {
-            if (!textarea.value && submittedText) textarea.value = submittedText;
+            // 生成期间输入框可用，撤回时用户可能已经写了下一句：放回的提问接在前面，两段都不丢
+            if (submittedText) textarea.value = textarea.value ? `${submittedText}\n${textarea.value}` : submittedText;
             for (const ref of submittedReferences) {
                 if (!references.some(r => r.id === ref.id)) references.unshift(ref);
             }
@@ -410,8 +424,8 @@ export async function mountSideChatSurface(container, {
         const sendController = new (doc.defaultView?.AbortController || AbortController)();
         activeSendController = sendController;
         messageEditor.close();
+        // 输入框不禁用，和主聊一样：焦点留在原处，生成期间可以先写下一句（回车被上面的忙碌判断挡住），Esc 停止
         form.setAttribute('aria-busy', 'true');
-        textarea.disabled = true;
         attachmentsOwner.setDisabled(true);
         sendBtn.hidden = true;
         stopBtn.hidden = false;
@@ -420,10 +434,13 @@ export async function mountSideChatSurface(container, {
         scrollingOwner.resume();
         pinToBottomIfSticky();
 
-        // 已经进入历史的一轮（例如中途停止）不再回填，避免重复发送
+        // 已经进入历史的一轮（例如中途停止）不再回填，避免重复发送。只看这次新增的用户消息：
+        // 以前发过同样的文字（比如「继续」）不代表这一轮还在，否则这次的草稿、附件和引用会一起丢掉
+        const userMessagesBefore = new Set((enhancedConversation?.historyRef?.get?.() || [])
+            .filter(msg => msg?.role === 'user').map(msg => msg.id ?? msg));
         const restoreDraftIfRetracted = () => {
             const history = enhancedConversation?.historyRef?.get?.() || [];
-            if (history.some(msg => msg?.role === 'user' && msg.content === payload)) return;
+            if (history.some(msg => msg?.role === 'user' && !userMessagesBefore.has(msg.id ?? msg))) return;
             restoreDraft();
         };
 
@@ -431,7 +448,7 @@ export async function mountSideChatSurface(container, {
             if (needsSnapshotRefresh()) await refreshSnapshot();
             if (sendController.signal.aborted) {
                 restoreDraftIfRetracted();
-                updateStatus('已取消');
+                updateStatus('已取消', 'normal', 'cancelled');
                 return;
             }
             const result = await surface.sendMessage({
@@ -446,7 +463,7 @@ export async function mountSideChatSurface(container, {
             const terminalType = result?.terminal?.event?.type;
             if (terminalType === 'cancelled' || terminalType === 'discarded') {
                 restoreDraftIfRetracted();
-                updateStatus('已取消');
+                updateStatus('已取消', 'normal', 'cancelled');
             } else if (terminalType === 'failed') {
                 const transportErr = result.terminal.event.outcome?.transport?.error;
                 const persistenceErr = result.terminal.event.outcome?.persistence?.error;
@@ -479,7 +496,6 @@ export async function mountSideChatSurface(container, {
             if (activeSendController === sendController) activeSendController = null;
             if (!isDisposed) {
                 form.removeAttribute('aria-busy');
-                textarea.disabled = false;
                 sendBtn.hidden = false;
                 stopBtn.hidden = true;
                 updateComposerState();
@@ -491,7 +507,16 @@ export async function mountSideChatSurface(container, {
 
     // 重新回复：截掉这条回答对应的提问及其后的所有消息，再用侧栏自己的模型和上下文把提问重新发出
     async function regenerate(assistantId) {
-        if (isDisposed || !isHistoryLoaded || isDeletingMessage || form.hasAttribute('aria-busy')) return;
+        if (isDisposed || !isHistoryLoaded || isDeletingMessage || isRegenerating || activeSendController || form.hasAttribute('aria-busy')) return;
+        isRegenerating = true;
+        try {
+            await regenerateNow(assistantId);
+        } finally {
+            isRegenerating = false;
+        }
+    }
+
+    async function regenerateNow(assistantId) {
         if (!currentModel) {
             updateStatus('请先选择模型', 'error');
             return;
@@ -513,6 +538,13 @@ export async function mountSideChatSurface(container, {
             _fileManagerData: att._fileManagerData || {}
         }));
         const kept = history.slice(0, questionIndex);
+        // 截断落盘期间就算这一轮在忙：否则这时按回车会另起一轮，两轮抢同一个停止按钮和内存里的历史
+        form.setAttribute('aria-busy', 'true');
+        const releaseBusy = () => {
+            if (isDisposed) return;
+            form.removeAttribute('aria-busy');
+            updateComposerState();
+        };
         let saved;
         try {
             saved = await repository.saveHistory(descriptor.child.itemId, 'agent', descriptor.child.topicId, kept);
@@ -520,6 +552,7 @@ export async function mountSideChatSurface(container, {
             saved = { error: error?.message || String(error) };
         }
         if (saved && (saved.success === false || saved.error)) {
+            releaseBusy();
             updateStatus(`重新回复失败：${saved.error || '保存历史出错'}`, 'error');
             return;
         }
@@ -535,13 +568,25 @@ export async function mountSideChatSurface(container, {
         });
     }
 
+    // 消息里的交互按钮：和主聊一样只发这段文本，不覆盖、也不带上输入框里还没发出去的草稿、引用和附件
     submitInteractiveContent = (text) => {
         if (isDisposed) return;
+        const notify = (message) => chatCapabilities?.uiHelper?.showToastNotification?.(message, 'warning');
+        if (activeSendController || isRegenerating || isDeletingMessage || !isHistoryLoaded) {
+            notify('辅助对话正在处理上一条消息，请稍后再点。');
+            return;
+        }
+        if (textarea.value.trim() || references.length > 0 || attachmentsOwner.count > 0) {
+            notify('输入框里还有没发出的内容，请先发送或清空后再点。');
+            return;
+        }
         textarea.value = String(text || '');
         form.requestSubmit();
     };
 
     const onStop = async () => {
+        // 点停止后按钮会藏起来，焦点不能丢在 body 上
+        if (doc.activeElement === stopBtn) textarea.focus();
         activeSendController?.abort('side-chat-user-cancel');
         updateStatus('正在停止...');
         await surface.cancelMessage();
@@ -570,10 +615,11 @@ export async function mountSideChatSurface(container, {
             return currentDescriptor;
         },
         surface,
-        setVisible(visible) {
-            if (visible && !isDisposed && isHistoryLoaded) {
-                textarea.focus();
-            }
+        // 发送、重新回复、删除、未保存、带附件或正在编辑时为 true（侧聊按 keep 不休眠，这里只报告忙碌）
+        isBusy() {
+            return !isDisposed && (Boolean(activeSendController) || isRegenerating || isDeletingMessage
+                || hasUnsavedChanges || attachmentsOwner.count > 0 || messageEditor.isEditing()
+                || form.hasAttribute('aria-busy'));
         },
         focus() {
             if (!isDisposed && isHistoryLoaded) {
@@ -639,6 +685,17 @@ export async function mountSideChatSurface(container, {
             if (hasUnsavedChanges) {
                 chatCapabilities?.uiHelper?.showToastNotification?.('无法关闭标签页：存在未保存的历史记录。请点击保存徽标重试，或右键点击徽标放弃更改。', 'warning');
                 return { closed: false, reason: 'UNSAVED_CHANGES' };
+            }
+            // 关闭会删掉子话题；有记录或没发出去的输入时先确认，免得误点（含「关闭其他 / 全部」）把对话永久删掉。
+            // 和没挂载时的 requestTabClose 一样：草稿和引用也算
+            const uiHelper = chatCapabilities?.uiHelper;
+            const history = liveConversation?.historyRef?.get?.() || [];
+            const hasInput = Boolean(textarea.value.trim()) || references.length > 0 || attachmentsOwner.count > 0;
+            if (typeof uiHelper?.showConfirmDialog === 'function' && (history.length > 0 || hasInput)) {
+                const confirmed = await uiHelper.showConfirmDialog(
+                    `关闭「${descriptor.title || '辅助对话'}」会删除这段辅助对话的全部记录，无法恢复。`,
+                    '关闭辅助对话', '关闭并删除', '取消', true);
+                if (!confirmed) return { closed: false, reason: 'USER_CANCELED' };
             }
             // Cancel active operation and wait for settlement
             if (activeSendController) {

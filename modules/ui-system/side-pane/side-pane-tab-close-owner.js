@@ -1,6 +1,6 @@
 /** Single and batch closes retain their original page lifetimes through authorization and cleanup. */
 export function createSidePaneTabCloseOwner({
-    isDisposed, getTab, getEntry, getOnClosed, cancelPendingMount, retireTab
+    isDisposed, getTab, getEntry, getOnClosed, cancelPendingMount, retireTab, getRequestClose = () => null
 }) {
     const closing = new Map();
     const disposals = new WeakMap();
@@ -33,7 +33,7 @@ export function createSidePaneTabCloseOwner({
     function closeTab(tabId, options = {}, expectedLifetime = null, onFocusMoved = null) {
         if (isDisposed() || !tabId) return Promise.resolve();
         const tab = getTab(tabId);
-        const entry = getEntry(tabId);
+        let entry = getEntry(tabId);
         const previous = closing.get(tabId);
         const lifetime = getLifetime(tabId);
         if (expectedLifetime && lifetime !== expectedLifetime) {
@@ -49,10 +49,23 @@ export function createSidePaneTabCloseOwner({
         closing.set(tabId, operation);
         const onClosed = getOnClosed(tab);
         const run = async () => {
-            if (entry) {
+            // discard：标签的归属已经不在了（父话题被删），不再询问、不再回调 onClosed
+            if (entry && !options.discard) {
                 const result = await entry.handle?.requestClose?.();
                 if (result?.closed === false) return;
-                if (isDisposed() || getEntry(tabId) !== entry) return;
+                if (isDisposed()) return;
+                // 确认期间视图换了（休眠释放、又挂上）：用户已经同意关闭，按现在的样子关；标签本身换了由下面的 lifetime 检查拦住
+                if (getEntry(tabId) !== entry) entry = getEntry(tabId) || null;
+            } else if (!entry && !options.discard) {
+                // 没挂载过的标签（恢复后还没显示的辅助对话）没有 handle 可问，由类型自己确认：
+                // 否则在「关闭其他 / 全部」里它们会不经确认就被删掉
+                const requestClose = getRequestClose(tab);
+                if (requestClose) {
+                    const result = await requestClose(tab);
+                    if (result?.closed === false) return;
+                    // 确认期间它被挂上了（批量关闭时兜底激活到它）：用户已经同意关闭，连同刚挂上的视图一起关
+                    entry = getEntry(tabId) || null;
+                }
             }
             if (isDisposed()) return;
             const current = getTab(tabId);
@@ -64,7 +77,7 @@ export function createSidePaneTabCloseOwner({
             });
             const cleanup = (async () => {
                 await disposeEntry(tabId, entry);
-                try { await onClosed?.(current); }
+                try { if (!options.discard) await onClosed?.(current); }
                 catch (error) { console.error(`[SidePaneController] onClosed failed for tab "${tabId}":`, error); }
             })();
             retiring.add(cleanup);
@@ -91,5 +104,5 @@ export function createSidePaneTabCloseOwner({
         await Promise.allSettled([...retiring]);
     }
 
-    return { closeTab, closeTabs, getLifetime, forgetLifetime: tabId => lifetimes.delete(tabId), disposeEntry, dispose };
+    return { closeTab, closeTabs, getLifetime, isClosing: tabId => closing.has(tabId), forgetLifetime: tabId => lifetimes.delete(tabId), disposeEntry, dispose };
 }

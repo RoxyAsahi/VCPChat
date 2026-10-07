@@ -1,14 +1,14 @@
 /* Side pane tab context menu: close this tab, the others, or all of them. */
 'use strict';
 
-import { placeMenuAt } from './menu-position.js';
+import { moveMenuFocus, placeMenuAt } from './menu-position.js';
 
 /**
  * menu 里的按钮用 data-action 区分：close-tab / close-others / close-all。
  *   getClosableTabs()   当前对话里可关的标签，用来决定哪些项可点
  *   onAction(action, tabId)
  *   onShow()            菜单打开前调用，用来收起别的浮层
- *   focusTab(tabId)     Esc 关闭后把焦点还给标签
+ *   focusTab(tabId)     Esc/Tab 关闭或执行后把焦点还给标签；标签已关时由调用方退回当前标签
  */
 export function createSidePaneTabMenu({ menu, getClosableTabs, onAction, onShow = () => {}, focusTab = () => {} }) {
     const doc = menu.ownerDocument;
@@ -56,22 +56,23 @@ export function createSidePaneTabMenu({ menu, getClosableTabs, onAction, onShow 
         const tabId = targetTabId;
         hide();
         await onAction(action, tabId);
+        // 被点的菜单项已经藏起来了，焦点会掉到 body：还给标签（标签被关了就给当前标签）
+        const active = doc.activeElement;
+        if (!active || active === doc.body || !active.isConnected || menu.contains(active)) focusTab(tabId);
     };
     menu.addEventListener('click', onClick);
     cleanups.push(() => menu.removeEventListener('click', onClick));
 
-    // 菜单内上下键移动焦点
+    // 菜单内上下键移动焦点；Tab 和 Radix Menu 一样直接收起，焦点回到标签
     const onMenuKeydown = (e) => {
-        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
-        const items = Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled])'));
-        if (!items.length) return;
-        e.preventDefault();
-        const current = items.indexOf(doc.activeElement);
-        let next = 0;
-        if (e.key === 'End') next = items.length - 1;
-        else if (e.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
-        else if (e.key === 'ArrowUp') next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
-        items[next].focus();
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const returnTo = targetTabId;
+            hide();
+            focusTab(returnTo);
+            return;
+        }
+        moveMenuFocus(e, Array.from(menu.querySelectorAll('[role="menuitem"]:not([disabled])')));
     };
     menu.addEventListener('keydown', onMenuKeydown);
     cleanups.push(() => menu.removeEventListener('keydown', onMenuKeydown));

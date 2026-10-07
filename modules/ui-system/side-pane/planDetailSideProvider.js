@@ -34,8 +34,8 @@ const TAB_PREFIX = 'plan-detail:';
 const TOPIC_TAB = 'topic';
 const NO_PROJECT_TAB = 'none';
 const FOLLOW_SKIPPED = Symbol('follow-skipped');
-const REFRESH_DEBOUNCE_MS = 200;
-const FILTER_DEBOUNCE_MS = 300;
+export const REFRESH_DEBOUNCE_MS = 200;
+export const FILTER_DEBOUNCE_MS = 300;
 
 const STATUS_LABEL = Object.freeze({ completed: '已完成', inProgress: '进行中', pending: '待处理' });
 const STATUS_ICON = Object.freeze({ completed: 'check_circle', inProgress: 'arrow_forward', pending: 'radio_button_unchecked' });
@@ -221,8 +221,13 @@ export function createPlanDetailSideProvider({
             const scope = h('div', 'zc-scope vcp-ui-scope side-plan-scope');
             const chrome = h('div', 'side-plan-chrome');
             const body = h('div', 'side-plan-body');
+            // 标签激活时焦点落在这里（不进 Tab 顺序），键盘用户接着就能在计划里滚动、往下 Tab
+            body.tabIndex = -1;
             scope.append(chrome, body);
             viewElement.appendChild(scope);
+            // 休眠只发生在隐藏时，那时 display:none 的 body 读出来滚动是 0：可见时就记下位置（body 随视图丢弃，监听不用登记）
+            let lastScrollTop = Number(restoredState?.scrollTop) || 0;
+            body.addEventListener('scroll', () => { if (body.clientHeight > 0) lastScrollTop = body.scrollTop; }, { passive: true });
 
             // 这次挂载里长期存在的订阅、定时器、子视图都归 own，控制器释放 view 或调用 dispose 时一起拆掉。
             // 区块、卡片、按钮每次渲染都重建，它们自己的监听跟着元素一起丢弃，不挂到 own 上
@@ -248,6 +253,8 @@ export function createPlanDetailSideProvider({
             let filterRows = null;
             let filterError = '';
             let filterSeq = 0;
+            // 输入法组字期间整页重绘会替换输入框、打断组字：组字期间不画，组字结束按一次输入处理
+            let composingFilter = false;
             let cancelFilter = null;
             let nodeView = null;
             const navigation = createPlanPageNavigation({ h, button, id: tab.id, onChange: selectPage });
@@ -328,6 +335,7 @@ export function createPlanDetailSideProvider({
             const sectionTitle = (key, label, meta) => {
                 const btn = h('button', 'side-plan-section-title');
                 btn.type = 'button';
+                btn.dataset.focusKey = `section:${key}`;
                 btn.setAttribute('aria-expanded', String(!collapsed[key]));
                 btn.append(icon(collapsed[key] ? 'chevron_right' : 'expand_more'), h('span', 'side-plan-section-label', label));
                 if (meta) btn.appendChild(h('span', 'side-plan-section-meta', meta));
@@ -364,6 +372,7 @@ export function createPlanDetailSideProvider({
                 // 一行胶囊：面包屑（范围 › 工作区 › 工程名）、状态和更新时间、刷新/打开。
                 // 面包屑本身就是工程切换按钮，任何工程都能从这里换过去
                 const crumbs = button('side-plan-crumbs', null, '切换工程');
+                crumbs.dataset.focusKey = 'crumbs';
                 crumbs.setAttribute('aria-haspopup', 'listbox');
                 crumbs.setAttribute('aria-expanded', String(picker.isOpen()));
                 crumbs.addEventListener('click', () => {
@@ -381,7 +390,9 @@ export function createPlanDetailSideProvider({
                     head.appendChild(titleRow);
                     return head;
                 }
-                addCrumb(h('span', 'side-plan-crumb side-plan-context', activity ? '本话题' : '工程全览'));
+                const context = h('span', 'side-plan-crumb side-plan-context', activity ? '本话题' : '工程全览');
+                context.dataset.scope = activity ? 'topic' : 'project';
+                addCrumb(context);
                 if (project.workspace_alias) addCrumb(h('span', 'side-plan-crumb', project.workspace_alias));
                 addCrumb(h('span', 'side-plan-title', project.name || '未命名工程'));
                 crumbs.appendChild(icon('expand_more', 'side-plan-crumb-caret'));
@@ -392,7 +403,11 @@ export function createPlanDetailSideProvider({
                 const updated = when(project.updated_at);
                 if (statusText || updated) {
                     const statusPill = h('div', `side-plan-status status-${status || 'unknown'}`);
-                    if (statusText) statusPill.appendChild(h('span', `side-plan-chip status-${status || 'unknown'}`, statusText));
+                    if (statusText) {
+                        const chip = h('span', `side-plan-chip status-${status || 'unknown'}`, statusText);
+                        chip.dataset.status = status || 'unknown';
+                        statusPill.appendChild(chip);
+                    }
                     if (updated) {
                         statusPill.appendChild(h('span', 'side-plan-updated', updated));
                         // 窄侧栏里时间段会藏起来，悬停状态胶囊仍能看到
@@ -411,6 +426,7 @@ export function createPlanDetailSideProvider({
                     divider.setAttribute('aria-hidden', 'true');
                     actions.appendChild(divider);
                     const forgeBtn = button('side-plan-icon-btn side-plan-forge', null, '完整记录与回退（V工程 页）');
+                    forgeBtn.dataset.action = 'open-forge';
                     forgeBtn.appendChild(icon('open_in_new'));
                     forgeBtn.addEventListener('click', () => onOpenProjectForge(project.id));
                     actions.appendChild(forgeBtn);
@@ -469,6 +485,7 @@ export function createPlanDetailSideProvider({
                 };
                 if (activity) {
                     const s = activity.stats;
+                    Object.assign(stats.dataset, { batches: s.batchCount, nodes: s.nodeCount, files: s.fileCount });
                     stats.append(
                         h('span', '', `${s.batchCount} 批`),
                         h('span', '', `${s.nodeCount} 次改动`),
@@ -539,15 +556,23 @@ export function createPlanDetailSideProvider({
                     el.setAttribute('aria-label', placeholder);
                     el.dataset.filter = key;
                     el.value = key === 'file' ? (filters.exactFile || filters.file) : filters[key];
-                    el.addEventListener('input', () => {
+                    const onFilterInput = (event) => {
                         if (key === 'file') { filters.file = el.value.trim(); filters.exactFile = ''; } else filters[key] = el.value.trim();
                         // Invalidate on intent, before the debounce allows an old read to settle.
                         ++filterSeq;
                         filterRows = null;
                         filterError = '';
                         cancelFilter?.();
+                        cancelFilter = null;
+                        if (event?.isComposing || composingFilter) return;
                         cancelFilter = disposed() ? null : own.timeout(() => { cancelFilter = null; runSearch(); }, FILTER_DEBOUNCE_MS, 'filter-debounce');
                         render();
+                    };
+                    el.addEventListener('input', onFilterInput);
+                    el.addEventListener('compositionstart', () => { composingFilter = true; });
+                    el.addEventListener('compositionend', () => {
+                        composingFilter = false;
+                        onFilterInput(null);
                     });
                     return el;
                 };
@@ -577,12 +602,15 @@ export function createPlanDetailSideProvider({
                 const open = filtersOpen || advancedCount > 0;
                 const toggle = button(`side-plan-filter-toggle${advancedCount ? ' is-active' : ''}`, null, '筛选');
                 toggle.setAttribute('aria-expanded', String(open));
+                toggle.dataset.focusKey = 'filter-toggle';
                 toggle.appendChild(icon('filter_list'));
                 if (advancedCount) toggle.appendChild(h('span', 'side-plan-filter-count', String(advancedCount)));
                 toggle.addEventListener('click', () => { filtersOpen = !open; render(); });
                 row.append(search, toggle);
                 if (hasFilters(filters)) {
                     const clear = button('side-plan-filter-clear', '清除', '清除筛选');
+                    // 清除后按钮消失，焦点回到搜索框
+                    clear.dataset.focusKey = 'filter-clear';
                     clear.addEventListener('click', () => { filters = { ...EMPTY_FILTERS }; filtersOpen = false; runSearch(); });
                     row.appendChild(clear);
                 }
@@ -602,10 +630,15 @@ export function createPlanDetailSideProvider({
             function renderFilterResults() {
                 const box = h('div', 'side-plan-filter-results');
                 if (filterError) {
-                    box.appendChild(h('div', 'side-plan-warning', `筛选失败：${filterError}`));
+                    const warning = h('div', 'side-plan-warning', `筛选失败：${filterError}`);
+                    const retry = button('zc-btn zc-btn-ghost side-plan-retry', '重试');
+                    retry.addEventListener('click', () => { void runSearch(); });
+                    warning.appendChild(retry);
+                    box.appendChild(warning);
                     return box;
                 }
                 if (!filterRows) {
+                    box.setAttribute('aria-busy', 'true');
                     box.appendChild(h('div', 'side-plan-node-message', '正在筛选…'));
                     return box;
                 }
@@ -636,6 +669,7 @@ export function createPlanDetailSideProvider({
                         row.dataset.batchId = String(batch.id);
                         const headBtn = button('side-plan-batch-head');
                         headBtn.setAttribute('aria-expanded', String(open));
+                        headBtn.dataset.focusKey = `batch:${batch.id}`;
                         const mark = h('span', 'side-plan-batch-mark');
                         mark.appendChild(icon(KIND_ICON[batch.kind] || 'commit'));
                         const text = h('div', 'side-plan-batch-text');
@@ -700,6 +734,7 @@ export function createPlanDetailSideProvider({
                     const label = c.maid || '外部修改';
                     const pick = button(`side-plan-contributor-btn${c.maid && filters.maid === c.maid ? ' is-active' : ''}`, null, c.maid ? `只看 @${c.maid} 的改动` : '外部修改');
                     pick.append(icon('person'), h('span', 'side-plan-contributor-name', label), h('span', 'side-plan-contributor-batches', `${c.batches} 批`), diffStat(c.added, c.removed));
+                    pick.dataset.focusKey = `maid:${c.maid || ''}`;
                     if (c.maid) pick.addEventListener('click', () => applyFilter({ maid: c.maid }));
                     else pick.disabled = true;
                     row.appendChild(pick);
@@ -717,6 +752,7 @@ export function createPlanDetailSideProvider({
             function renderOtherHint() {
                 if (!activity || !other.count) return null;
                 const hint = h('div', 'side-plan-other-hint');
+                hint.dataset.count = String(other.count);
                 hint.appendChild(h('span', '', `这个工程还有 ${other.count}${other.more ? '+' : ''} 批来自其他话题的施工`));
                 if (onOpenProjectForge) {
                     const link = button('side-plan-link', '在 V工程 页查看');
@@ -728,12 +764,15 @@ export function createPlanDetailSideProvider({
 
             function render() {
                 if (disposed() || nodeView) return;
-                // 输入框随整页重绘，记下焦点和光标位置
+                // 整页重绘会换掉所有节点：记下焦点所在的输入框（连同光标）、页签或带 data-focus-key 的按钮，画完找回来。
+                // ZCode / DSH 用 React，节点按 key 复用，焦点自然保留；这里手工做同一件事
                 const active = doc.activeElement;
                 const focusKey = active && body.contains(active) ? active.dataset?.filter : null;
                 const pageFocus = active && chrome.contains(active) ? active.dataset?.planPage : null;
+                const elementFocus = active && (body.contains(active) || chrome.contains(active)) ? active.dataset?.focusKey : null;
                 const caret = focusKey && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
                 const scrollTop = body.scrollTop;
+                if (composingFilter) return;
                 body.innerHTML = '';
                 chrome.innerHTML = '';
                 chrome.hidden = false;
@@ -746,24 +785,19 @@ export function createPlanDetailSideProvider({
                     // 没有工程：计划页给出原因，Git 页照常可用
                     const box = h('div', 'side-plan-empty side-plan-error');
                     box.appendChild(h('div', '', loading ? '正在读取 V工程 计划…' : (errorText || '没有找到这个工程，可能已被删除')));
-                    if (!loading) {
-                        const retry = button('zc-btn zc-btn-ghost', '重试');
-                        retry.addEventListener('click', () => load());
-                        box.appendChild(retry);
-                    }
+                    if (!loading) box.appendChild(retryButton());
                     const pages = navigation.render([{ key: 'plan', label: '计划', content: [box] }, gitPage]);
                     chrome.append(renderHeader(), pages.tabs);
                     body.appendChild(pages.panels);
                     body.scrollTop = scrollTop;
                     if (pageFocus) chrome.querySelector(`[data-plan-page="${navigation.selected}"]`)?.focus();
+                    restoreElementFocus(elementFocus);
                     return;
                 }
                 if (staleError) {
                     const banner = h('div', 'side-plan-warning side-plan-stale');
                     banner.setAttribute('role', 'alert');
-                    const retry = button('zc-btn zc-btn-ghost', '重试');
-                    retry.addEventListener('click', () => load());
-                    banner.append(h('span', '', `刷新失败，显示的是上一次的内容：${staleError}`), retry);
+                    banner.append(h('span', '', `刷新失败，显示的是上一次的内容：${staleError}`), retryButton());
                     body.appendChild(banner);
                 }
                 if (pendingFocus) navigation.select(navigation.pageForFocus(pendingFocus), scrollTop);
@@ -783,7 +817,17 @@ export function createPlanDetailSideProvider({
                     if (caret && again?.setSelectionRange) { try { again.setSelectionRange(caret[0], caret[1]); } catch (_e) { /* select 没有光标 */ } }
                 }
                 if (pageFocus) chrome.querySelector(`[data-plan-page="${navigation.selected}"]`)?.focus();
+                restoreElementFocus(elementFocus);
                 applyFocus();
+            }
+
+            function restoreElementFocus(key) {
+                // 只在焦点因重绘掉出侧栏时补救；用户已经把焦点移到别处就不抢
+                const current = doc.activeElement;
+                if (!key || (current && current !== doc.body && current.isConnected)) return;
+                const same = [...viewElement.querySelectorAll('[data-focus-key]')].find(el => el.dataset.focusKey === key && !el.disabled);
+                const fallback = key === 'filter-clear' ? body.querySelector('[data-filter="keyword"]') : null;
+                (same || fallback)?.focus?.();
             }
 
             /** 从状态面板点进来时定位到某条计划或某个区块。 */
@@ -791,6 +835,9 @@ export function createPlanDetailSideProvider({
                 if (!pendingFocus || !model) return;
                 const { todoId, section: sectionKey } = pendingFocus;
                 pendingFocus = null;
+                // 定位只做一次：从存档里也抹掉，否则重启或休眠后重新挂载会再跳回这条，盖掉用户后来停的页面
+                const current = sidePaneController?.getSnapshot?.()?.tabs?.find?.(t => t.id === tab.id);
+                if (current?.payload?.focus) sidePaneController?.updateTab?.(tab.id, { payload: { ...current.payload, focus: null } });
                 const todoSelector = todoId !== undefined && todoId !== null ? `.side-plan-todo[data-todo-id="${String(todoId).replace(/"/g, '')}"]` : '';
                 if (!(todoSelector && body.querySelector(todoSelector)) && sectionKey && collapsed[sectionKey]) {
                     collapsed[sectionKey] = false;
@@ -840,7 +887,8 @@ export function createPlanDetailSideProvider({
                 body.querySelector('[data-plan-section="timeline"]')?.scrollIntoView?.({ block: 'start' });
             }
 
-            async function runSearch() {
+            /** @param {{ background?: boolean }} [options] 后台刷新时结果原地换掉，不先清空成「正在筛选…」再撑开 */
+            async function runSearch({ background = false } = {}) {
                 cancelFilter?.();
                 cancelFilter = null;
                 const seq = ++filterSeq;
@@ -850,9 +898,11 @@ export function createPlanDetailSideProvider({
                     render();
                     return;
                 }
-                filterRows = null;
-                filterError = '';
-                render();
+                if (!background || filterError) {
+                    filterRows = null;
+                    filterError = '';
+                    render();
+                }
                 const pid = model.project.id;
                 try {
                     const rows = await call(api.projectForgeSearchHistory(searchParams(pid, filters)));
@@ -914,6 +964,17 @@ export function createPlanDetailSideProvider({
             // ---------------------------------------------------------------- 数据
 
             let lastScope = { projectIds: [], batchIds: new Set(), key: '' };
+
+            // 点了重试马上有反应：按钮变成「正在重试…」并禁用，读完由 render() 换掉；再失败也看得出确实重试过
+            function retryButton() {
+                const retry = button('zc-btn zc-btn-ghost side-plan-retry', '重试');
+                retry.addEventListener('click', () => {
+                    retry.disabled = true;
+                    retry.textContent = '正在重试…';
+                    void load();
+                });
+                return retry;
+            }
 
             async function load() {
                 const seq = ++refreshSeq;
@@ -979,7 +1040,7 @@ export function createPlanDetailSideProvider({
                 }
                 loading = false;
                 followProjectWorkspace();
-                if (hasFilters(filters) && model) runSearch();
+                if (hasFilters(filters) && model) runSearch({ background: true });
                 else render();
             }
 
@@ -1003,7 +1064,11 @@ export function createPlanDetailSideProvider({
             }), 'topic-history');
 
             const handle = {
-                focus() { scheduleLoad(); },
+                focus() {
+                    body.focus?.({ preventScroll: true });
+                    // 每次切回来都重读一次：工程变更事件之外的改动（比如别的窗口）也能跟上
+                    scheduleLoad();
+                },
                 suspend() {
                     // 还没到点的重读留到重新显示时再做
                     if (!cancelLoad) return;
@@ -1026,7 +1091,7 @@ export function createPlanDetailSideProvider({
                 },
                 /** 休眠前记下当前页和滚动位置，重新挂载时回到原处 */
                 captureState() {
-                    return { page: navigation.selected, scrollTop: body.scrollTop };
+                    return { page: navigation.selected, scrollTop: body.clientHeight > 0 ? body.scrollTop : lastScrollTop };
                 },
                 dispose() {
                     // DOM 同步清掉：scope 的释放是异步的，不能等它，免得把紧接着重新挂载的内容一起清掉

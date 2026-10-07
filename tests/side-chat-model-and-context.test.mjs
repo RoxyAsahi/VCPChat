@@ -1,6 +1,5 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 import { mountSideChatSurface } from '../modules/renderer/sideChatSurfaceOwner.js';
@@ -87,7 +86,8 @@ test('without any configured model the side chat does not invent one and refuses
     assert.equal(doc.querySelector('.side-chat-send-btn').disabled, true);
     await submit(doc, 'hello');
     assert.equal(caps.sent.length, 0);
-    assert.match(doc.querySelector('.side-chat-status-text').textContent, /选择模型/);
+    assert.equal(doc.querySelector('.side-chat-send-btn').disabled, true);
+    assert.equal(doc.querySelector('.side-chat-status-text').dataset.statusType, 'error');
     await handle.dispose();
 });
 
@@ -134,36 +134,58 @@ test('references-only mode never sends parent history and never refreshes the sn
     await handle.dispose();
 });
 
-test('a side conversation send does not touch the main topic unread state or item list', () => {
-    const source = fs.readFileSync(new URL('../modules/chatManager.js', import.meta.url), 'utf8');
-    assert.match(source, /const isSideConversation = !!request\?\.conversation;\s+if \(!isSideConversation\) try \{\s+const readResult = await electronAPI\.setTopicUnread\(/);
-    assert.match(source, /if \(isSideConversation\) \{[^}]*\} else if \(itemListManager && typeof itemListManager\.refreshUnreadCounts/);
-});
+// 侧聊发送不碰主话题未读：行为测试在 chat-manager-selection-race.test.js；没配置模型时拒绝发送见上面的测试
 
-test('no hard-coded fallback model remains in the side chat stack', () => {
-    for (const file of ['../modules/renderer/sideChatSurfaceOwner.js', '../modules/chat/sideChatSessionService.js']) {
-        assert.ok(!/gpt-4o/.test(fs.readFileSync(new URL(file, import.meta.url), 'utf8')), `${file} must not hard-code gpt-4o`);
+test('new side chats are named by the lowest free ordinal under the same parent', async () => {
+    const { createSideChatWiring } = await import('../modules/renderer/sideChatWiring.js');
+    const dom = new JSDOM('<!doctype html><body></body>');
+    const parent = { itemType: 'agent', itemId: 'agent', topicId: 'parent' };
+    const tab = (title, topicId = 'parent') => ({ id: title, kind: 'chat', title, descriptor: { parent: { ...parent, topicId } } });
+    const opened = [];
+    const controller = {
+        getSnapshot: () => ({ parent, activeTabId: null,
+            tabs: [tab('辅助对话 1'), tab('辅助对话 3'), tab('辅助对话 2', 'other-topic')] }),
+        async openTab(raw) { opened.push(raw.descriptor.title); return null; },
+        setVisible() {}
+    };
+    let children = 0;
+    const chatAPI = {
+        createSideChatChild: async () => ({ success: true, topicId: `child-${++children}` }),
+        saveSideChatMetadata: async metadata => ({ success: true, metadata })
+    };
+    const wiring = createSideChatWiring({
+        doc: dom.window.document, win: dom.window, chatAPI, chatRepository: null, chatManager: null, uiHelper: null,
+        createRenderer: () => null,
+        selectedItemRef: { get: () => ({ id: 'agent', type: 'agent', name: 'Agent', config: { model: 'm' } }) },
+        topicIdRef: { get: () => 'parent' }, historyRef: { get: () => [] }, getController: () => controller
+    });
+    try {
+        await dom.window.openSideChatWithSelection({ selectedText: '一段引用' });
+        assert.equal(opened.length, 1);
+        assert.equal(Number(opened[0].match(/\d+$/)?.[0]), 2, 'the menu entry opens a side chat with the first free number of this topic');
+    } finally {
+        wiring.dispose?.();
+        dom.window.close();
     }
 });
 
-test('new side chats are named by the lowest free ordinal under the same parent', () => {
-    const source = fs.readFileSync(new URL('../modules/renderer/sideChatWiring.js', import.meta.url), 'utf8');
-    assert.ok(source.includes(String.raw`/^辅助对话 (\d+)$/`));
-    assert.ok(source.includes('`辅助对话 ${ordinal}`'));
-});
-
-test('composer autosaves go to browser storage; metadata only migrates once', async () => {
+test('composer autosaves go to browser storage; metadata only migrates once', async t => {
     const saved = [];
     const caps = capabilities({ saveSideChatMetadata: async (meta) => { saved.push(meta); return { success: true }; } });
     const { dom, doc, handle } = await mount(descriptor({ model: 'm' }), caps);
     const textarea = doc.querySelector('textarea');
     const drafts = createSideChatDraftStore({ getStorage: () => dom.window.localStorage });
 
+    mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => mock.timers.reset());
     textarea.value = '草稿';
     textarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     handle.addReference({ id: 'r1', text: '引用原文', sourceMessageId: 'msg-1' });
+    mock.timers.tick(399);
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(saved.length, 0, 'typing is debounced');
-    await new Promise(resolve => setTimeout(resolve, 450));
+    mock.timers.tick(1);
+    for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(saved.length, 1);
     assert.equal(saved[0].draft, undefined);
     assert.equal(saved[0].references, undefined);
@@ -171,13 +193,13 @@ test('composer autosaves go to browser storage; metadata only migrates once', as
     assert.equal(drafts.read(handle.descriptor).input.draft, '草稿');
     assert.deepEqual(drafts.read(handle.descriptor).input.references, [{ id: 'r1', text: '引用原文', sourceMessageId: 'msg-1' }]);
 
-    // 页面卸载前未到时间的改动立即写入
-    handle.removeReference('r1');
-    textarea.value = '';
-    dom.window.dispatchEvent(new dom.window.Event('pagehide'));
+    // 迁移后继续输入只写浏览器存储（pagehide 立即写入见 side-chat-draft-save.test.mjs）
+    textarea.value = '再改一次';
+    textarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    mock.timers.tick(400);
+    for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(saved.length, 1);
-    assert.equal(drafts.read(handle.descriptor).input.draft, '');
-    assert.deepEqual(drafts.read(handle.descriptor).input.references, []);
+    assert.equal(drafts.read(handle.descriptor).input.draft, '再改一次');
     await handle.dispose();
 });
 
@@ -194,14 +216,17 @@ test('an empty model cache waits for the real refresh result instead of a fixed 
     // 再次打开模型菜单时共用同一次刷新
     const second = listSideChatModels(api);
     await tick();
-    assert.deepEqual(calls, ['cache', 'cache', 'refresh']);
+    const count = name => calls.filter(call => call === name).length;
+    assert.equal(count('refresh'), 1, 'concurrent opens share one refresh');
+    const cacheReads = count('cache');
     assert.equal(settled, false, 'still waiting for the refresh');
     finishRefresh({ success: true, models: [{ id: 'a' }, 'b'] });
     const result = await pending;
     assert.deepEqual(result.ids, ['a', 'b']);
     assert.deepEqual([...result.favorites], ['b']);
     assert.deepEqual((await second).ids, ['a', 'b']);
-    assert.deepEqual(calls, ['cache', 'cache', 'refresh'], 'the refresh result is used directly, no second cache read');
+    assert.equal(count('refresh'), 1);
+    assert.equal(count('cache'), cacheReads, 'the refresh result is used directly, no second cache read');
 
     // 缓存里已经有模型时不触发刷新
     const warm = await listSideChatModels({ getCachedModels: async () => ['x'], refreshModels: () => assert.fail('no refresh') });
@@ -221,4 +246,42 @@ test('a failed or hung model refresh falls back to the cache instead of failing 
         refreshModels: () => new Promise(() => {})
     }, { timeoutMs: 20 });
     assert.deepEqual(hung.ids, []);
+});
+
+test('a second ask made while the first side chat is still being created keeps its own reference', async () => {
+    const { createSideChatWiring } = await import('../modules/renderer/sideChatWiring.js');
+    const dom = new JSDOM('<!doctype html><body></body>');
+    const parent = { itemType: 'agent', itemId: 'agent', topicId: 'parent' };
+    const added = [];
+    const handle = { addReference: reference => added.push(reference.text), focus() {} };
+    let releaseChild;
+    let created = 0;
+    const controller = {
+        getSnapshot: () => ({ parent, activeTabId: null, tabs: [] }),
+        async openTab() { return handle; },
+        getTabHandle: () => null,
+        setVisible() {}
+    };
+    const chatAPI = {
+        createSideChatChild: () => { created += 1; return new Promise(resolve => { releaseChild = () => resolve({ success: true, topicId: 'child-1' }); }); },
+        saveSideChatMetadata: async metadata => ({ success: true, metadata })
+    };
+    const wiring = createSideChatWiring({
+        doc: dom.window.document, win: dom.window, chatAPI, chatRepository: null, chatManager: null, uiHelper: null,
+        createRenderer: () => null,
+        selectedItemRef: { get: () => ({ id: 'agent', type: 'agent', name: 'Agent', config: { model: 'm' } }) },
+        topicIdRef: { get: () => 'parent' }, historyRef: { get: () => [] }, getController: () => controller
+    });
+    try {
+        const first = dom.window.openSideChatWithSelection({ selectedText: '引用 A' });
+        const second = dom.window.openSideChatWithSelection({ selectedText: '引用 B' });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        releaseChild();
+        await Promise.all([first, second]);
+        assert.equal(created, 1, 'the two asks share one side chat');
+        assert.deepEqual(added.sort(), ['引用 A', '引用 B']);
+    } finally {
+        wiring.dispose?.();
+        dom.window.close();
+    }
 });

@@ -13,22 +13,27 @@ export function createSideChatComposerState({
     textarea,
     toolButtons = []
 }) {
-    function updateStatus(text, type = 'normal') {
+    // code：给调用方/测试的机器可读状态（如 'cancelled'），与文案无关
+    function updateStatus(text, type = 'normal', code = null) {
         if (store.isDisposed) return;
         // Like the main composer, progress is shown by the send/stop button; only failures get text.
         const shown = type === 'error' ? text : '';
         statusText.textContent = shown;
         statusText.title = shown;
         statusText.className = 'side-chat-status-text' + (type === 'error' ? ' side-chat-status-error' : '');
-        onStatusChange?.({ text, type });
+        statusText.dataset.statusType = type;
+        if (code) statusText.dataset.statusCode = code;
+        else delete statusText.dataset.statusCode;
+        onStatusChange?.({ text, type, code });
     }
 
-    function updateEmptyState() {
+    // 历史还没读回来（或读失败）时不显示「辅助对话」引导：那时不是空对话，消息随后才出来
+    function updateEmptyState({ historyPending = false } = {}) {
         if (!root) return;
         const emptyState = root.querySelector('.side-chat-empty-state');
         if (!emptyState) return;
         const messageItems = root.querySelectorAll('.message-item');
-        emptyState.hidden = messageItems.length > 0;
+        emptyState.hidden = historyPending || messageItems.length > 0;
     }
 
     function updateComposerState() {

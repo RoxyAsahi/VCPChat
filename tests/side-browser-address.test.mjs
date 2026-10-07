@@ -184,3 +184,109 @@ for (const readyBeforeFailure of [false, true]) {
         } finally { await h.cleanup(); }
     });
 }
+
+test('the more menu is keyboard reachable: focus moves in, arrows move, Escape and Tab return to the button', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { createBrowserSideProvider } = await import('../modules/ui-system/side-pane/browserSideProvider.js');
+    const dom = new JSDOM('<div id="view"></div>');
+    const doc = dom.window.document;
+    const provider = createBrowserSideProvider({ document: doc, api: null, sidePaneController: { updateTab() {} }, notify: () => {} });
+    const handle = await provider.mountTab({ id: 'browser:1', kind: 'browser', payload: {} }, doc.getElementById('view'));
+    try {
+        handle.navigate('https://example.com/');
+        const more = doc.querySelector('[aria-label="更多浏览器操作"]');
+        const menu = doc.querySelector('.side-browser-menu');
+        const key = k => doc.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+        assert.equal(more.getAttribute('aria-haspopup'), 'menu');
+        assert.equal(more.getAttribute('aria-expanded'), 'false');
+
+        more.focus();
+        more.click();
+        assert.equal(menu.hidden, false);
+        assert.equal(more.getAttribute('aria-expanded'), 'true');
+        assert.equal(doc.activeElement.getAttribute('data-action'), 'open-external', 'focus moves into the menu');
+        key('ArrowDown');
+        assert.equal(doc.activeElement.getAttribute('data-action'), 'clear-data', 'disabled devtools item is skipped');
+        key('ArrowDown');
+        assert.equal(doc.activeElement.getAttribute('data-action'), 'open-external');
+        key('Escape');
+        assert.equal(menu.hidden, true);
+        assert.equal(doc.activeElement, more);
+
+        more.click();
+        key('Tab');
+        assert.equal(menu.hidden, true);
+        assert.equal(doc.activeElement, more);
+        assert.equal(more.getAttribute('aria-expanded'), 'false');
+    } finally {
+        handle.dispose();
+        dom.window.close();
+    }
+});
+
+test('a page playing media stays busy even when muted, until it pauses or navigates away', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { createBrowserSideProvider } = await import('../modules/ui-system/side-pane/browserSideProvider.js');
+    const dom = new JSDOM('<div id="view"></div>');
+    const provider = createBrowserSideProvider({
+        document: dom.window.document,
+        api: null,
+        sidePaneController: { updateTab() {} },
+        notify: () => {}
+    });
+    const view = dom.window.document.getElementById('view');
+    const handle = await provider.mountTab({ id: 'browser:1', kind: 'browser', payload: { url: 'https://example.com/' } }, view);
+    const guest = view.querySelector('webview');
+    assert.ok(guest);
+    guest.isCurrentlyAudible = () => false;
+    const fire = (name, extra = {}) => guest.dispatchEvent(Object.assign(new dom.window.Event(name), extra));
+
+    assert.equal(handle.isBusy(), false);
+    fire('media-started-playing');
+    assert.equal(handle.isBusy(), true);
+    fire('media-paused');
+    assert.equal(handle.isBusy(), false);
+    fire('media-started-playing');
+    fire('did-navigate', { url: 'https://example.com/next' });
+    assert.equal(handle.isBusy(), false);
+
+    handle.dispose();
+    dom.window.close();
+});
+
+test('half-typed text in the address bar goes back to the page address when focus leaves', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { createBrowserSideProvider } = await import('../modules/ui-system/side-pane/browserSideProvider.js');
+    const dom = new JSDOM('<div id="view"></div>');
+    const provider = createBrowserSideProvider({ document: dom.window.document, api: null, sidePaneController: { updateTab() {} }, notify: () => {} });
+    const view = dom.window.document.getElementById('view');
+    const handle = await provider.mountTab({ id: 'browser:1', kind: 'browser', payload: {} }, view);
+    handle.navigate('https://example.com/');
+    const address = view.querySelector('input');
+    address.focus();
+    address.value = 'foo';
+    dom.window.document.hasFocus = () => true; // 焦点在窗口里换了地方（jsdom 在 blur 时报 false，Chromium 报 true）
+    address.blur();
+    assert.equal(address.value, 'https://example.com/');
+    handle.dispose();
+    dom.window.close();
+});
+
+test('switching to another window keeps the half-typed address', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { createBrowserSideProvider } = await import('../modules/ui-system/side-pane/browserSideProvider.js');
+    const dom = new JSDOM('<div id="view"></div>');
+    const doc = dom.window.document;
+    const provider = createBrowserSideProvider({ document: doc, api: null, sidePaneController: { updateTab() {} }, notify: () => {} });
+    const view = doc.getElementById('view');
+    const handle = await provider.mountTab({ id: 'browser:1', kind: 'browser', payload: {} }, view);
+    handle.navigate('https://example.com/');
+    const address = view.querySelector('input');
+    address.focus();
+    address.value = 'https://exa';
+    doc.hasFocus = () => false; // 整个窗口失焦（Alt-Tab）
+    address.blur();
+    assert.equal(address.value, 'https://exa');
+    handle.dispose();
+    dom.window.close();
+});

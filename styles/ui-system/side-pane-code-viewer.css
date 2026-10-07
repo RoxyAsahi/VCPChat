@@ -163,8 +163,14 @@ html body[data-vcp-theme="light"] .side-code-body:where(.vcp-ui-scope, .vcp-ui-s
 
 html .side-code-editor-shell:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: flex;
+    /* 不能被外层的纵向 flex 压扁：压扁后代码栏（overflow-x: auto）会自己纵向滚动，
+       行号栏留在原地，滚到第 1000 行时左边还显示 1、2、3。整块交给 .side-code-body 滚动 */
+    flex-shrink: 0;
     min-height: 100%;
     min-width: 100%;
+    /* 横向也由 .side-code-body 滚动：外壳按最长一行撑宽，横向滚动条贴在视口底部，
+       不会落在几千行代码的最下面 */
+    width: max-content;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: calc(var(--vcp-ui-font-size) - 2px);
     line-height: 1.5;
@@ -181,11 +187,28 @@ html .side-code-gutter:where(.vcp-ui-scope, .vcp-ui-scope *) {
     font-size: calc(var(--vcp-ui-font-size) - 3px);
     line-height: 1.5;
     box-sizing: border-box;
+    /* 横向滚动时行号停在左边，同 CodeMirror 的 .cm-gutters */
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--vcp-ui-bg-primary);
 }
 
 html body[data-vcp-theme="light"] .side-code-gutter:where(.vcp-ui-scope, .vcp-ui-scope *) {
     border-right-color: var(--zcode-header-divider, var(--vcp-ui-port-color-rgba-0-0-0-0-06));
     color: var(--secondary-text, var(--vcp-ui-port-color-rgba-0-0-0-0-35));
+}
+
+/* 行号栏和代码的分块（见 editor.js 的 CODE_CHUNK_LINES = 200）：滚出视口时浏览器跳过它的样式和布局，
+   占位高度 = 200 行 × 18px 行高。最后一块行数不定，照常排版。 */
+html .side-code-chunk:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: block;
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 3600px;
+}
+
+html .side-code-chunk:last-child:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    content-visibility: visible;
 }
 
 html .side-code-line-number:where(.vcp-ui-scope, .vcp-ui-scope *) {
@@ -196,9 +219,7 @@ html .side-code-line-number:where(.vcp-ui-scope, .vcp-ui-scope *) {
 html .side-code-pre:where(.vcp-ui-scope, .vcp-ui-scope *) {
     margin: 0;
     padding: 8px 12px;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
+    flex: 1 0 auto;
     white-space: pre;
     color: var(--primary-text, var(--vcp-ui-port-color-f1f5f9));
     line-height: 18px;
@@ -208,7 +229,19 @@ html body[data-vcp-theme="light"] .side-code-pre:where(.vcp-ui-scope, .vcp-ui-sc
     color: var(--primary-text, var(--vcp-ui-port-color-0f172a));
 }
 
+html .side-code-editor-shell.is-wrapped:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    width: auto;
+}
+
+/* 行号栏一行一个号，自动换行后一行代码占好几行高度，后面的行号全部错位。
+   代码按 200 行一块排版，做不到逐行对齐，换行时先不显示行号 */
+html .side-code-editor-shell.is-wrapped .side-code-gutter:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    display: none;
+}
+
 html .side-code-editor-shell.is-wrapped .side-code-pre:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    flex: 1;
+    min-width: 0;
     white-space: pre-wrap;
     word-break: break-all;
 }
@@ -416,4 +449,7 @@ html .side-code-empty:where(.vcp-ui-scope, .vcp-ui-scope *) {
     text-align: center;
 }
 
-
+/* 文件列表读失败时的「重试」：和备注文字同一行，链接样式 */
+html .side-code-picker-retry:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    border: 0; padding: 0; background: none; color: var(--vcp-ui-accent, currentColor); font: inherit; text-decoration: underline; cursor: pointer;
+}

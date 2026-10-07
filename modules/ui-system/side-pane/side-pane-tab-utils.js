@@ -58,7 +58,7 @@ export function filterAndRankSearchItems(items, queryParts) {
 // 标签展示
 // ---------------------------------------------------------------------------
 
-// 只有框架自带的两类标签在这里给默认值；其他标签由打开它的模块在 openTab 时带上 typeLabel / icon / searchHint。
+// 没登记类型时的兜底名称和图标（状态模块不认识登记表，只能用这里的）。登记过的类型以 getTabType 返回的声明为准。
 const TYPE_LABELS = Object.freeze({
     notifications: '通知',
     chat: '辅助对话'
@@ -144,4 +144,14 @@ export function moveIdBefore(ids, activeId, overId) {
     next.splice(from, 1);
     next.splice(to, 0, activeId);
     return next;
+}
+
+// 按 data-tab-id 找元素，不把 id 拼进选择器：文件标签的 id 带 Windows 路径（反斜杠会被当成转义）或引号
+export function findByTabId(container, selector, tabId) {
+    if (!container || tabId == null) return null;
+    const id = String(tabId);
+    for (const element of container.querySelectorAll(selector)) {
+        if (element.getAttribute('data-tab-id') === id) return element;
+    }
+    return null;
 }

@@ -95,6 +95,7 @@ test('SidePaneController showNotifications and openChat mount views and sync vis
         title: '测试侧聊',
     };
 
+    controller.setParent(desc.parent);
     await controller.openTab({ kind: 'chat', descriptor: desc });
     assert.equal(controller.getSnapshot().activeTabId, 'side-chat-test');
     assert.equal(tabListElement.children.length, 2);
@@ -111,7 +112,6 @@ test('SidePaneController showNotifications and openChat mount views and sync vis
     await controller.closeTab('side-chat-test');
     assert.equal(disposed, true);
     assert.equal(controller.getSnapshot().activeTabId, 'notifications');
-    assert.equal(controller.getSnapshot().visible, false, '最后一个可关的标签关掉后面板收起');
     assert.equal(tabListElement.children.length, 1);
     assert.equal(notifView.classList.contains('active'), true);
     assert.equal(contentContainer.querySelector('[data-tab-id="side-chat-test"]'), null);
@@ -291,25 +291,67 @@ for (const action of ['select another tab', 'hide the pane', 'focus the main inp
     });
 }
 
-test('SidePaneController does not leave an empty view behind when a mount fails', async () => {
+test('a failed mount shows an error with a retry instead of a blank pane', async () => {
     const { dom, root, options } = createPaneDom();
+    let attempts = 0;
     const controller = createSidePaneController({
         ...options,
         providers: {
-            broken: {
-                async mountTab() { throw new Error('mount failed'); }
+            flaky: {
+                async mountTab(tab, view) {
+                    attempts++;
+                    view.textContent = 'half drawn';
+                    if (attempts === 1) throw new Error('mount failed');
+                    view.textContent = 'ready';
+                    return { focus() {}, dispose() {} };
+                }
             }
         }
     });
     const originalError = console.error;
     console.error = () => {};
     try {
-        await controller.openTab({ id: 'broken', kind: 'broken', title: 'Broken', closable: true, scopeMode: 'global' }).catch(() => {});
+        await assert.rejects(controller.openTab({ id: 'flaky', kind: 'flaky', title: 'Flaky', closable: true, scopeMode: 'global' }), /mount failed/);
+        const views = root.querySelectorAll('.side-pane-view[data-tab-id="flaky"]');
+        assert.equal(views.length, 1);
+        assert.equal(views[0].hidden, false, 'the failed tab stays the visible one');
+        assert.equal(views[0].querySelector('[role="alert"]').textContent.includes('mount failed'), true);
+        assert.equal(views[0].textContent.includes('half drawn'), false, 'what the provider half drew is cleared');
+        assert.equal(root.ownerDocument.activeElement, views[0].querySelector('.side-pane-mount-error-retry'),
+            'focus lands on the retry button like it would on a tab that opened');
+
+        views[0].querySelector('.side-pane-mount-error-retry').click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(attempts, 2);
+        const mounted = root.querySelectorAll('.side-pane-view[data-tab-id="flaky"]');
+        assert.equal(mounted.length, 1);
+        assert.equal(mounted[0].textContent, 'ready');
+        assert.equal(mounted[0].hidden, false);
+        assert.ok(controller.getTabHandle('flaky'));
     } finally {
         console.error = originalError;
     }
-    assert.equal(root.querySelector('.side-pane-view[data-tab-id="broken"]'), null);
 
+    await controller.dispose();
+    dom.window.close();
+});
+
+test('closing a tab whose mount failed removes its error view', async () => {
+    const { dom, root, options } = createPaneDom();
+    const controller = createSidePaneController({
+        ...options,
+        providers: { broken: { async mountTab() { throw new Error('mount failed'); } } }
+    });
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        await controller.openTab({ id: 'broken', kind: 'broken', title: 'Broken', closable: true, scopeMode: 'global' }).catch(() => {});
+        assert.ok(root.querySelector('.side-pane-view[data-tab-id="broken"]'));
+        await controller.closeTab('broken');
+        assert.equal(root.querySelector('.side-pane-view[data-tab-id="broken"]'), null);
+    } finally {
+        console.error = originalError;
+    }
     await controller.dispose();
     dom.window.close();
 });

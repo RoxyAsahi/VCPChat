@@ -17,6 +17,7 @@
 'use strict';
 
 import { createSidePaneRootScope, pollWhileVisible } from './side-pane-occurrence.js';
+import { moveMenuFocus } from './menu-position.js';
 import {
     ROLE_LABELS, formatClockTime, formatDateTime, formatDuration, finishReasonLabel, effectiveFinishReason, sourceLabel,
     buildTimeline, summarizeRecords, buildSearchIndex, findTextMatches,
@@ -41,8 +42,6 @@ const EXPANSION_LABELS = Object.freeze({
     system: ROLE_LABELS.system, user: ROLE_LABELS.user, reasoning: '思考过程', assistant: ROLE_LABELS.assistant, 'tool-call': '工具调用', 'tool-result': ROLE_LABELS.tool
 });
 
-export const modelTrajectoryTabId = () => TAB_ID;
-
 /** 与主进程 sessionKeyFromContext 一致：群聊用群 id，否则用智能体 id，再接话题 id。 */
 export function trajectoryKeyFor(conversation) {
     const itemId = conversation?.item?.id;
@@ -61,33 +60,38 @@ export function createModelTrajectorySideProvider({
     const kind = 'model-trajectory';
     const win = doc.defaultView || window;
     const toast = (message, type = 'info') => uiHelper?.showToastNotification?.(message, type);
-    /** @type {Set<{focusCall: (requestId: string) => void}>} */
+    /** @type {Set<{show: (requestId: string | null) => void}>} */
     const instances = new Set();
     let requestedRequestId = null;
+    // 从辅助对话打开时看的是它的子话题（同 ZCode 打开时显式带上会话）；主聊天切换会话或从主聊天再打开时回到跟随主聊天
+    let pinnedConversation = null;
 
     return {
         kind,
 
-        /** 打开（或聚焦）调用轨迹标签；带 requestId（消息 id）时滚动到对应的那次调用。 */
-        async openModelTrajectoryTab({ requestId = null } = {}) {
+        /**
+         * 打开（或聚焦）调用轨迹标签；带 requestId（消息 id）时滚动到对应的那次调用。
+         * conversation（{ item: { id, name }, topicId }）指定要看的会话，不传就跟随主聊天当前会话。
+         */
+        async openModelTrajectoryTab({ requestId = null, conversation = null } = {}) {
             if (!sidePaneController) return null;
             requestedRequestId = requestId;
+            pinnedConversation = trajectoryKeyFor(conversation) ? conversation : null;
             const handle = await sidePaneController.openTab({
                 id: TAB_ID,
                 kind,
                 title: '调用轨迹',
                 icon: 'monitoring',
                 closable: true,
-                scopeMode: 'global',
-                searchHint: '模型调用 请求 响应 token 轨迹'
+                scopeMode: 'global'
             });
             sidePaneController.setVisible?.(true);
-            if (requestId) for (const instance of instances) instance.focusCall(requestId);
+            for (const instance of instances) instance.show(requestId);
             handle?.focus?.();
             return handle;
         },
 
-        async mountTab(tab, viewElement, { scope: viewScope = null, occurrence = null } = {}) {
+        async mountTab(tab, viewElement, { scope: viewScope = null, restoredState = null, occurrence = null } = {}) {
             if (!viewElement) return null;
             viewElement.innerHTML = '';
             viewElement.classList.add('side-traj-view');
@@ -107,13 +111,16 @@ export function createModelTrajectorySideProvider({
                 node.setAttribute('aria-hidden', 'true');
                 return node;
             };
-            const iconButton = (name, label, onClick, className = '') => {
+            // 常驻按钮的监听归 own；卡片里的按钮每次重建卡片都会换新，监听跟着元素一起丢弃（inline），
+            // 不然每次刷新都往 own 上多记一条，连同闭包里整段消息文本一直留到视图释放
+            const iconButton = (name, label, onClick, className = '', { inline = false } = {}) => {
                 const btn = h('button', `side-traj-icon-btn ${className}`.trim());
                 btn.type = 'button';
                 btn.title = label;
                 btn.setAttribute('aria-label', label);
                 btn.appendChild(icon(name));
-                if (onClick) own.listen(btn, 'click', onClick);
+                if (onClick && inline) btn.addEventListener('click', onClick);
+                else if (onClick) own.listen(btn, 'click', onClick);
                 return btn;
             };
 
@@ -122,8 +129,10 @@ export function createModelTrajectorySideProvider({
             let conversationLabel = '';
             let data = { records: [], truncated: false, total: 0 };
             let items = [];
-            let loading = false;
+            // 挂载时还没确定话题，先算加载中：否则订阅推送的那一下会闪出「请先选择智能体和话题」
+            let loading = true;
             let loadError = '';
+            let loadErrorCode = '';
             let loadSeq = 0;
             let cancelReload = null;
             let cancelSearch = null;
@@ -175,11 +184,17 @@ export function createModelTrajectorySideProvider({
             const searchNext = iconButton('arrow_downward', '下一个匹配项', () => moveSearch(1));
             const searchClose = iconButton('close', '关闭搜索', () => closeSearch());
             searchBar.append(icon('search', 'side-traj-search-glyph'), searchInput, searchCount, searchPrev, searchNext, searchClose);
+            // data-action：与文案无关的稳定钩子
+            Object.entries({ search: searchBtn, 'expansion-menu': menuBtn, 'toggle-all': toggleAllBtn, 'open-directory': folderBtn, clear: clearBtn, refresh: refreshBtn, 'search-prev': searchPrev, 'search-next': searchNext, 'search-close': searchClose })
+                .forEach(([action, btn]) => { btn.dataset.action = action; });
             header.append(titleRow, summaryLine, searchBar);
 
             const menu = h('div', 'side-traj-menu');
             menu.hidden = true;
             menu.setAttribute('role', 'menu');
+            menu.setAttribute('aria-label', '自定义展开');
+            menuBtn.setAttribute('aria-haspopup', 'menu');
+            menuBtn.setAttribute('aria-expanded', 'false');
 
             const scroller = h('div', 'side-traj-scroll');
             const state = h('div', 'side-traj-state');
@@ -270,7 +285,7 @@ export function createModelTrajectorySideProvider({
                     } catch (_error) {
                         toast('复制失败', 'error');
                     }
-                }, 'side-traj-row-copy');
+                }, 'side-traj-row-copy', { inline: true });
                 copyBtn.disabled = !copyText;
                 head.append(chevron, label, body, meta, copyBtn);
 
@@ -505,9 +520,10 @@ export function createModelTrajectorySideProvider({
                 const records = data.records;
                 const has = records.length > 0;
                 for (const btn of [searchBtn, menuBtn, toggleAllBtn, clearBtn]) btn.hidden = !has;
-                if (!has) { menu.hidden = true; closeSearch(); }
+                if (!has) { closeMenu(); closeSearch(); }
                 summaryLine.hidden = !has;
                 summaryLine.textContent = '';
+                summaryLine.dataset.callCount = String(records.length);
                 if (has) {
                     const summary = summarizeRecords(records);
                     summaryLine.appendChild(h('span', '', `${records.length} 次调用`));
@@ -530,27 +546,37 @@ export function createModelTrajectorySideProvider({
                 const records = data.records;
                 state.hidden = true;
                 state.className = 'side-traj-state';
+                // data-state：error / service-missing / no-conversation / loading / empty
+                let stateKey = '';
                 if (loadError) {
+                    stateKey = loadErrorCode || 'error';
                     state.hidden = false;
                     state.classList.add('error');
                     state.textContent = '';
                     state.append(h('p', '', '读取调用轨迹失败'), h('p', 'side-traj-state-detail', loadError));
-                } else if (!sessionKey) {
-                    state.hidden = false;
-                    state.textContent = '请先在主聊天里选择一个智能体和话题。';
                 } else if (loading && records.length === 0) {
+                    stateKey = 'loading';
                     state.hidden = false;
                     state.textContent = '正在加载调用轨迹…';
+                } else if (!sessionKey) {
+                    stateKey = 'no-conversation';
+                    state.hidden = false;
+                    state.textContent = '请先在主聊天里选择一个智能体和话题。';
                 } else if (records.length === 0) {
+                    stateKey = 'empty';
                     state.hidden = false;
                     state.textContent = '这个话题还没有模型调用记录。发一条消息后，每次发给模型的请求和它的回答都会记在这里。';
                 }
+                if (stateKey) state.dataset.state = stateKey;
+                else delete state.dataset.state;
                 truncatedNotice.hidden = !data.truncated;
             }
 
             function renderTimeline() {
                 const wasAtBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_THRESHOLD_PX;
                 const previousTop = scroller.scrollTop;
+                // 第一次画出内容时贴到底；之后只看读者原来在不在底部，停在顶部读第一条调用的人不会被拉走
+                const firstContent = timeline.childElementCount === 0;
                 const nextCache = new Map();
                 const fragment = doc.createDocumentFragment();
                 buildObserver?.disconnect();
@@ -576,7 +602,7 @@ export function createModelTrajectorySideProvider({
                 });
                 updateAllRows();
                 if (!doc.hidden) {
-                    stickToBottom = wasAtBottom || previousTop === 0;
+                    stickToBottom = wasAtBottom || firstContent;
                     if (stickToBottom) scroller.scrollTop = scroller.scrollHeight;
                     else scroller.scrollTop = previousTop;
                 }
@@ -740,6 +766,8 @@ export function createModelTrajectorySideProvider({
                 updateAllRows();
             }
             function renderMenu() {
+                // 切换开关会重建菜单项：键盘用户的焦点留在同一项上，不掉到 body
+                const focusedKind = menu.contains(doc.activeElement) ? doc.activeElement.dataset?.trajectoryExpansionKind : null;
                 menu.innerHTML = '';
                 for (const name of EXPANSION_KINDS) {
                     const item = h('button', 'side-traj-menu-item');
@@ -748,18 +776,40 @@ export function createModelTrajectorySideProvider({
                     item.setAttribute('aria-checked', String(commands[name].expanded));
                     item.dataset.trajectoryExpansionKind = name;
                     item.append(h('span', '', EXPANSION_LABELS[name]), h('span', `side-traj-switch${commands[name].expanded ? ' on' : ''}`));
+                    item.tabIndex = -1;
                     item.addEventListener('click', event => { event.stopPropagation(); toggleKind(name); });
                     menu.appendChild(item);
                 }
+                if (focusedKind) menu.querySelector(`[data-trajectory-expansion-kind="${focusedKind}"]`)?.focus();
+            }
+            function closeMenu({ restoreFocus = false } = {}) {
+                if (menu.hidden) return;
+                const hadFocus = menu.contains(doc.activeElement);
+                menu.hidden = true;
+                menuBtn.setAttribute('aria-expanded', 'false');
+                if (restoreFocus || hadFocus) menuBtn.focus();
             }
             function toggleMenu() {
-                menu.hidden = !menu.hidden;
-                if (!menu.hidden) renderMenu();
+                if (!menu.hidden) { closeMenu(); return; }
+                menu.hidden = false;
+                menuBtn.setAttribute('aria-expanded', 'true');
+                renderMenu();
+                // 和 Radix DropdownMenu 一样：打开即把焦点放进菜单，方向键在开关间移动，Esc 或 Tab 收起回到按钮
+                menu.querySelector('[role="menuitemcheckbox"]')?.focus();
             }
             const onDocumentClick = event => {
-                if (!menu.hidden && !menu.contains(event.target) && !menuBtn.contains(event.target)) menu.hidden = true;
+                if (!menu.hidden && !menu.contains(event.target) && !menuBtn.contains(event.target)) closeMenu();
             };
             own.listen(doc, 'click', onDocumentClick);
+            own.listen(menu, 'keydown', event => {
+                if (event.key === 'Escape' || event.key === 'Tab') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    closeMenu({ restoreFocus: true });
+                    return;
+                }
+                moveMenuFocus(event, [...menu.querySelectorAll('[role="menuitemcheckbox"]')]);
+            });
 
             // ---------------------------------------------------------------- 定位到某次调用（来自消息的「查看调用轨迹」）
             function focusCall(requestId) {
@@ -777,7 +827,7 @@ export function createModelTrajectorySideProvider({
 
             // ---------------------------------------------------------------- 数据
             const currentKey = () => {
-                const conversation = getConversation?.() || null;
+                const conversation = pinnedConversation || getConversation?.() || null;
                 conversationLabel = conversation?.item?.name || '';
                 return trajectoryKeyFor(conversation);
             };
@@ -804,15 +854,17 @@ export function createModelTrajectorySideProvider({
                     // 主进程没有这组接口（只刷新了页面、主进程还是旧的）时 invoke 会直接抛错，
                     // 不能让它冒出 mountTab，否则整页被移除、只剩空白
                     const missing = /No handler registered/i.test(String(error?.message || error));
-                    res = { success: false, error: missing ? '调用轨迹服务未启动，请完全退出并重新打开 VCPChat' : (error?.message || '读取调用轨迹失败') };
+                    res = { success: false, error: missing ? '调用轨迹服务未启动，请完全退出并重新打开 VCPChat' : (error?.message || '读取调用轨迹失败'), code: missing ? 'service-missing' : '' };
                 }
                 if (disposed() || seq !== loadSeq) return;
                 loading = false;
                 if (res?.success) {
                     data = res.data;
                     loadError = '';
+                    loadErrorCode = '';
                 } else {
                     loadError = res?.error || '读取调用轨迹失败';
+                    loadErrorCode = res?.code || '';
                 }
                 items = buildTimeline(data.records);
                 renderAll();
@@ -830,9 +882,15 @@ export function createModelTrajectorySideProvider({
 
             async function clearAll() {
                 if (!sessionKey) return;
-                const confirmed = typeof win.confirm === 'function' ? win.confirm('清空这个话题的全部调用轨迹？此操作不可撤销。') : true;
-                if (!confirmed) return;
-                const res = await api?.modelTrajectoryClear?.(sessionKey);
+                // 记下点按钮时的话题：确认框开着时切了会话，也只清这一个
+                const key = sessionKey;
+                const message = '清空这个话题的全部调用轨迹？此操作不可撤销。';
+                // 用应用自己的确认框；原生 window.confirm 会弹系统模态框卡住整个窗口，只在没有应用确认框时退回
+                const confirmed = typeof uiHelper?.showConfirmDialog === 'function'
+                    ? await uiHelper.showConfirmDialog(message, '清空调用轨迹', '清空', '取消', true)
+                    : (typeof win.confirm === 'function' ? win.confirm(message) : true);
+                if (!confirmed || disposed()) return;
+                const res = await api?.modelTrajectoryClear?.(key);
                 if (res?.success) toast('已清空调用轨迹', 'success');
                 else toast(res?.error || '清空失败', 'error');
             }
@@ -850,7 +908,14 @@ export function createModelTrajectorySideProvider({
                 if (change.sessionKey === sessionKey || change.sessionKey === currentKey()) reloadWhenShown(scheduleReload);
             };
 
-            const instance = { focusCall: requestId => { focusRequestId = requestId; if (!loading) renderAll(); } };
+            const instance = {
+                show: requestId => {
+                    if (requestId) focusRequestId = requestId;
+                    // 换了要看的会话（比如从辅助对话打开）先读那个会话，读完再定位
+                    if (currentKey() !== sessionKey) void load();
+                    else if (!loading) renderAll();
+                }
+            };
             instances.add(instance);
             own.own(() => instances.delete(instance), 'focus-request-target');
             own.own(() => {
@@ -876,6 +941,7 @@ export function createModelTrajectorySideProvider({
             // 切换智能体 / 话题（包括删掉当前助手）都由主聊天通知，接上了就不用轮询
             own.subscribe(() => {
                 const off = onConversationChange?.(() => {
+                    pinnedConversation = null;
                     if (!disposed() && currentKey() !== sessionKey) reloadWhenShown(() => void load());
                 });
                 followsConversation = typeof off === 'function';
@@ -888,9 +954,25 @@ export function createModelTrajectorySideProvider({
                 else own.interval(() => { if (!doc.hidden) void followTick(); }, FOLLOW_POLL_MS, 'trajectory-follow');
             }
             await load();
+            // 休眠前的阅读位置：还是同一个会话才接回展开 / 收起和滚动位置，否则藏了 5 分钟回来就被收回默认并拉到底
+            if (restoredState && !disposed() && restoredState.sessionKey === sessionKey && sessionKey) {
+                if (Array.isArray(restoredState.overrides)) overrides = new Map(restoredState.overrides);
+                if (restoredState.commands) commands = restoredState.commands;
+                if (Number.isFinite(restoredState.version)) version = restoredState.version;
+                renderHeader();
+                renderMenu();
+                updateAllRows();
+                if (restoredState.stickToBottom === false && Number.isFinite(restoredState.scrollTop)) {
+                    stickToBottom = false;
+                    scroller.scrollTop = restoredState.scrollTop;
+                }
+            }
 
             return {
                 focus() { searchOpen ? searchInput.focus() : scroller.focus?.({ preventScroll: true }); },
+                captureState() {
+                    return { sessionKey, overrides: [...overrides], commands, version, stickToBottom, scrollTop: scroller.scrollTop };
+                },
                 suspend() {
                     // 还没到点的重读留到重新显示时再做
                     if (!cancelReload) return;

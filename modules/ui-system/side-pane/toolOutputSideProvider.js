@@ -13,6 +13,8 @@ import { formatRelativeTime } from './side-pane-tab-utils.js';
 import { getCommandRunsSource } from '../sources/terminal-command-runs.js';
 import { createSidePaneRootScope } from './side-pane-occurrence.js';
 
+// 运行中的命令持续出输出时，重读输出的最短间隔
+const RUNNING_RELOAD_MS = 1000;
 const TAB_ID = 'tool-output:main';
 const FOLLOW_THRESHOLD_PX = 24;
 const TICK_MS = 1000;
@@ -24,8 +26,6 @@ const STATUS_LABEL = Object.freeze({
     timed_out: '已超时',
     spawn_error: '启动失败'
 });
-
-export const toolOutputTabId = () => TAB_ID;
 
 export function commandRunStatusLabel(status) {
     return STATUS_LABEL[status] || status || '';
@@ -52,7 +52,8 @@ export function createToolOutputSideProvider({
     sidePaneController = null,
     uiHelper = null,
     // 和状态面板共用的命令运行记录源
-    commandRunsSource = getCommandRunsSource(api)
+    commandRunsSource = getCommandRunsSource(api),
+    runningReloadMs = RUNNING_RELOAD_MS
 } = {}) {
     const kind = 'tool-output';
     const win = doc.defaultView || window;
@@ -74,11 +75,12 @@ export function createToolOutputSideProvider({
                 title: '命令输出',
                 icon: 'description',
                 closable: true,
-                scopeMode: 'global',
-                searchHint: '后台输出 命令 终端'
+                scopeMode: 'global'
             });
             sidePaneController.setVisible?.(true);
             if (runId) for (const instance of instances) instance.select(runId);
+            // 已经挂着的实例直接定位了；不清掉的话，标签休眠后重新挂载会被这条旧命令"粘住"、不再跟随新命令
+            if (instances.size) requestedRunId = null;
             handle?.focus?.();
             return handle;
         },
@@ -117,6 +119,7 @@ export function createToolOutputSideProvider({
             const picker = h('select', 'side-tool-output-picker');
             picker.setAttribute('aria-label', '选择命令');
             const copyBtn = iconButton('content_copy', '复制输出', () => copyOutput());
+            copyBtn.dataset.action = 'copy';
             const refreshBtn = iconButton('refresh', '刷新', () => { void loadSelected(); });
             const actions = h('div', 'side-tool-output-actions');
             actions.append(copyBtn, refreshBtn);
@@ -142,7 +145,10 @@ export function createToolOutputSideProvider({
             const errorText = h('span', 'side-tool-output-error-text');
             const retryBtn = h('button', 'side-tool-output-error-retry', '重试');
             retryBtn.type = 'button';
-            own.listen(retryBtn, 'click', () => { void loadSelected(); });
+            own.listen(retryBtn, 'click', () => {
+                if (listError) { listError = ''; renderOutput(); commandRunsSource?.invalidate?.(); }
+                else void loadSelected();
+            });
             errorBar.append(errorText, retryBtn);
             const notice = h('div', 'side-tool-output-notice');
             notice.hidden = true;
@@ -157,6 +163,8 @@ export function createToolOutputSideProvider({
             let manual = Boolean(requestedRunId);
             let detail = null;
             let loadError = '';
+            // 命令列表本身读失败（不是某条输出读失败）：不能显示成「还没有命令记录」
+            let listError = '';
             let follow = true;
             let previousTop = 0;
             let loadSeq = 0;
@@ -216,6 +224,7 @@ export function createToolOutputSideProvider({
                 if (!summary) return;
                 const running = summary.status === 'running';
                 const chip = h('span', `side-tool-output-chip status-${summary.status}`);
+                chip.dataset.status = summary.status;
                 chip.append(icon(running ? 'progress_activity' : summary.status === 'completed' ? 'check_circle' : 'cancel', running ? 'spin' : ''), h('span', '', commandRunStatusLabel(summary.status)));
                 const meta = h('span', 'side-tool-output-meta', `${formatRunDuration(summary)} · ${formatRelativeTime(summary.startedAt)}`);
                 statusBar.append(chip, meta);
@@ -225,14 +234,16 @@ export function createToolOutputSideProvider({
 
             const renderOutput = () => {
                 const hasRuns = runs.length > 0;
-                empty.hidden = hasRuns;
-                empty.textContent = hasRuns ? '' : '还没有命令记录。让管家用 PowerShellExecutor 跑一条命令，输出会显示在这里。';
+                // 先错误、再加载中、最后才是空：列表还没回来或者读失败时都不是「没有命令」
+                empty.hidden = hasRuns || Boolean(listError);
+                empty.textContent = hasRuns ? '' : (seeded ? '还没有命令记录。让管家用 PowerShellExecutor 跑一条命令，输出会显示在这里。' : '加载中…');
                 outputWrap.hidden = !hasRuns;
                 notice.hidden = !detail?.truncated;
                 if (detail?.truncated) notice.textContent = '输出过长，只显示最后一部分。完整内容请在终端里查看。';
                 copyBtn.disabled = !detail?.output;
-                errorBar.hidden = !loadError;
-                errorText.textContent = loadError;
+                const shownError = hasRuns ? loadError : listError;
+                errorBar.hidden = !shownError;
+                errorText.textContent = shownError;
                 if (!detail) { output.textContent = hasRuns ? (loadError ? '' : '加载中…') : ''; return; }
                 if (!follow) return; // 用户在翻看上面的内容：冻结输出，回到底部时再补上
                 output.textContent = detail.output || (detail.status === 'running' ? '（暂无输出）' : '（没有输出）');
@@ -253,16 +264,31 @@ export function createToolOutputSideProvider({
                 if (!running && stopTicker) { stopTicker(); stopTicker = null; }
             };
 
+            // 同一时间只有一个读取在路上；读的时候又有新输出，读完再补一次（对照 ZCode useBackgroundBashOutput 的 inFlight）
+            let loadInFlight = false;
+            let loadAgain = false;
             const loadSelected = async () => {
                 if (!selectedId) { detail = null; renderAll(); return; }
+                if (loadInFlight) { loadAgain = true; return; }
+                loadInFlight = true;
+                loadAgain = false;
                 const seq = ++loadSeq;
-                const res = await api?.terminalGetCommandRun?.(selectedId);
+                let res;
+                try {
+                    res = await api?.terminalGetCommandRun?.(selectedId);
+                } catch (error) {
+                    // IPC 直接抛错也要落到错误条上，不能停在「加载中…」
+                    res = { success: false, error: error?.message || String(error) };
+                } finally {
+                    loadInFlight = false;
+                }
+                if (loadAgain && !disposed()) { loadAgain = false; void loadSelected(); }
                 if (disposed() || seq !== loadSeq) return;
                 if (res?.success) {
                     detail = res.data;
                     loadError = '';
                 } else {
-                    detail = null;
+                    // 读失败不清掉已经显示的输出（命令还在跑时每秒都在读，偶尔一次失败不该把整屏输出换成错误）
                     loadError = res?.error || '读取命令输出失败';
                 }
                 renderAll();
@@ -302,14 +328,15 @@ export function createToolOutputSideProvider({
             }
 
             // 数据源每次变化都给整份列表；变了的那条是新对象，其余保持原样，据此判断要不要重新读输出
-            const onRuns = ({ status, data }) => {
+            const onRuns = ({ status, data, error }) => {
                 if (disposed()) return;
                 if (seeded && suspended) {
-                    hiddenUpdate = { status, data };
+                    hiddenUpdate = { status, data, error };
                     return;
                 }
                 const previous = runs;
                 runs = Array.isArray(data) ? data : [];
+                listError = status === 'error' ? (error || '读取命令记录失败') : '';
                 if (!seeded) {
                     if (status === 'ready' || status === 'error') seeding = seed();
                     else renderPicker();
@@ -326,8 +353,11 @@ export function createToolOutputSideProvider({
                 renderPicker();
                 const before = previous.find(run => run.id === selectedId);
                 if (selectedSummary() !== before) {
+                    // 命令还在刷屏时最多一秒读一次：每次读都要主进程把整段输出清洗一遍
+                    const streaming = before && selectedSummary()?.status === 'running' && before.status === 'running';
+                    if (streaming && cancelReload) return;
                     cancelReload?.();
-                    cancelReload = own.timeout(() => { cancelReload = null; void loadSelected(); }, 60, 'reload-output');
+                    cancelReload = own.timeout(() => { cancelReload = null; void loadSelected(); }, streaming ? runningReloadMs : 60, 'reload-output');
                 } else {
                     renderStatus();
                 }

@@ -106,8 +106,83 @@ export function createSideChatMessageActions({
         return sel.toString().trim();
     }
 
-    function closeMenu() {
+    // 打开菜单的那条消息：Esc、Tab 或执行菜单项后焦点回到这里
+    let returnFocusTo = null;
+    // 这个辅助对话自己打开的菜单：几个辅助对话同时挂着时共用同一个 #chatContextMenu，每个都在 document 上听 Esc
+    let openedMenu = null;
+
+    function closeMenu({ restoreFocus = false } = {}) {
         doc.getElementById(MENU_ID)?.remove();
+        const target = returnFocusTo;
+        returnFocusTo = null;
+        if (restoreFocus && target?.isConnected) target.focus?.({ preventScroll: true });
+    }
+
+    // 消息列表和话题列表一样只占一个 Tab 停靠点（Radix 的 roving tabindex）：
+    // 上下键、Home、End 在消息间移动，Shift+F10 或菜单键打开这条消息的菜单。
+    function messageItems() {
+        return root ? [...root.querySelectorAll('.message-item')] : [];
+    }
+
+    function setMessageTabStop(target) {
+        for (const item of messageItems()) item.tabIndex = item === target ? 0 : -1;
+    }
+
+    function ensureMessageTabStop() {
+        const items = messageItems();
+        if (!items.length) return;
+        items.forEach(item => {
+            if (!item.hasAttribute('tabindex')) item.tabIndex = -1;
+            if (!item.hasAttribute('aria-keyshortcuts')) item.setAttribute('aria-keyshortcuts', 'Shift+F10');
+        });
+        if (!items.some(item => item.tabIndex === 0)) items[items.length - 1].tabIndex = 0;
+    }
+
+    function onMessageFocusIn(event) {
+        if (event.target?.classList?.contains('message-item') && root.contains(event.target)) setMessageTabStop(event.target);
+    }
+
+    function onMessageKeydown(event) {
+        const current = event.target;
+        if (!current?.classList?.contains('message-item') || event.altKey || event.ctrlKey || event.metaKey) return;
+        const items = messageItems();
+        const index = items.indexOf(current);
+        if (index < 0) return;
+        let next = null;
+        if (event.key === 'ArrowDown') next = items[Math.min(items.length - 1, index + 1)];
+        else if (event.key === 'ArrowUp') next = items[Math.max(0, index - 1)];
+        else if (event.key === 'Home') next = items[0];
+        else if (event.key === 'End') next = items[items.length - 1];
+        else return;
+        event.preventDefault();
+        setMessageTabStop(next);
+        next.focus();
+        next.scrollIntoView?.({ block: 'nearest' });
+    }
+
+    function onMenuKeydown(event) {
+        const menu = event.currentTarget;
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            closeMenu({ restoreFocus: true });
+            return;
+        }
+        if (event.key === 'Enter' || event.key === ' ') {
+            if (event.target?.getAttribute?.('role') !== 'menuitem') return;
+            event.preventDefault();
+            event.target.click();
+            return;
+        }
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        const items = [...menu.querySelectorAll('[role="menuitem"]')];
+        if (!items.length) return;
+        event.preventDefault();
+        const current = items.indexOf(doc.activeElement);
+        let next = 0;
+        if (event.key === 'End') next = items.length - 1;
+        else if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
+        else if (event.key === 'ArrowUp') next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
+        items[next].focus();
     }
 
     function onOutsidePointer(event) {
@@ -116,7 +191,12 @@ export function createSideChatMessageActions({
     }
 
     function onKeydown(event) {
-        if (event.key === 'Escape') closeMenu();
+        if (event.key !== 'Escape') return;
+        // 只关自己开的菜单：先跑到的别的辅助对话不能把菜单关掉、再让开菜单的那个丢了焦点去处
+        const menu = doc.getElementById(MENU_ID);
+        if (!menu || menu !== openedMenu) return;
+        openedMenu = null;
+        closeMenu({ restoreFocus: true });
     }
 
     function buildMenu(messageItem, message) {
@@ -167,7 +247,11 @@ export function createSideChatMessageActions({
 
         const commands = win?.VCPContributions?.commands;
         if (isAssistant && message.id && commands?.get('sidepane.open-trajectory')) {
-            add('trajectory', 'fa-route', '查看调用轨迹', () => commands.execute('sidepane.open-trajectory', { requestId: message.id }));
+            // 这条回复记在子话题下，轨迹要看子话题，不是主聊天当前的话题
+            const conversation = descriptor?.child?.itemId && descriptor.child.topicId
+                ? { item: { id: descriptor.child.itemId, name: descriptor.title || '辅助对话' }, topicId: descriptor.child.topicId }
+                : null;
+            add('trajectory', 'fa-route', '查看调用轨迹', () => commands.execute('sidepane.open-trajectory', { requestId: message.id, conversation }));
         }
 
         if (message.id && typeof removeMessage === 'function' && typeof saveHistory === 'function' && !unfinished && !busy) {
@@ -203,15 +287,19 @@ export function createSideChatMessageActions({
         menu.className = 'context-menu';
         menu.dataset.sideChatMenu = 'true';
         menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', '消息操作');
+        menu.addEventListener('keydown', onMenuKeydown);
         for (const item of items) {
             const el = doc.createElement('div');
             el.className = item.className ? `context-menu-item ${item.className}` : 'context-menu-item';
             el.dataset.sideChatAction = item.action;
             el.setAttribute('role', 'menuitem');
-            el.innerHTML = `<i class="fas ${item.icon}"></i> ${item.label}`;
+            el.tabIndex = -1;
+            el.innerHTML = `<i class="fas ${item.icon}" aria-hidden="true"></i> `;
+            el.append(item.label);
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
-                closeMenu();
+                closeMenu({ restoreFocus: true });
                 void item.run();
             });
             menu.appendChild(el);
@@ -254,10 +342,23 @@ export function createSideChatMessageActions({
         event.preventDefault();
         event.stopPropagation();
         closeMenu();
-        placeMenu(buildMenu(messageItem, message), event);
+        // 键盘（Shift+F10 / 菜单键）打开时没有指针坐标，贴着这条消息出菜单
+        let anchor = event;
+        if (!event.clientX && !event.clientY && typeof messageItem.getBoundingClientRect === 'function') {
+            const rect = messageItem.getBoundingClientRect();
+            anchor = { clientX: rect.left + 16, clientY: rect.top + 16 };
+        }
+        const menu = buildMenu(messageItem, message);
+        placeMenu(menu, anchor);
+        returnFocusTo = messageItem.tabIndex >= 0 || messageItem.hasAttribute('tabindex') ? messageItem : null;
+        openedMenu = menu;
+        menu.querySelector('[role="menuitem"]')?.focus?.({ preventScroll: true });
     }
 
     root?.addEventListener('contextmenu', onContextMenu);
+    root?.addEventListener('keydown', onMessageKeydown);
+    root?.addEventListener('focusin', onMessageFocusIn);
+    ensureMessageTabStop();
     doc.addEventListener('click', onOutsidePointer, true);
     doc.addEventListener('keydown', onKeydown, true);
 
@@ -266,6 +367,7 @@ export function createSideChatMessageActions({
     if (MutationObserverClass && root) {
         messageObserver = new MutationObserverClass(() => {
             if (store.isDisposed) return;
+            ensureMessageTabStop();
             updateEmptyState();
             pinToBottomIfSticky();
         });
@@ -277,10 +379,12 @@ export function createSideChatMessageActions({
         dispose() {
             messageObserver?.disconnect?.();
             root?.removeEventListener('contextmenu', onContextMenu);
+            root?.removeEventListener('keydown', onMessageKeydown);
+            root?.removeEventListener('focusin', onMessageFocusIn);
             doc.removeEventListener('click', onOutsidePointer, true);
             doc.removeEventListener('keydown', onKeydown, true);
-            const menu = doc.getElementById(MENU_ID);
-            if (menu?.dataset.sideChatMenu === 'true') menu.remove();
+            if (openedMenu?.isConnected) openedMenu.remove();
+            openedMenu = null;
         }
     });
 }

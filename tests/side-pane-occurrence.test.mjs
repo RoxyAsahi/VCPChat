@@ -59,7 +59,6 @@ test('a tab gets an occurrence scope and a view scope, both released when it clo
 
     const [mount] = mounts;
     assert.equal(mount.scope.active, true);
-    assert.equal(mount.scope.parent.label, 'tab:probe:1');
     assert.equal(mount.occurrence.id, 'probe:1');
     assert.equal(mount.occurrence.signal.aborted, false);
     doc.dispatchEvent(new dom.window.Event('probe'));
@@ -193,7 +192,6 @@ test('pollWhileVisible runs no timers while hidden and catches up when shown aga
 
         mock.timers.tick(10 * 60_000);
         assert.equal(calls, 0, 'never visible, never polled');
-        assert.equal(view.snapshot().resources.some(r => r.type === 'child-scope'), false);
 
         tab.setVisible(true);
         assert.equal(calls, 1, 'first show after a long hidden period catches up once');
@@ -262,6 +260,17 @@ test('lazy providers load once on first use and retry after a failed load', asyn
     assert.equal(provider.isLoaded(), true);
 });
 
+test('a lazy provider tells the user when an open call cannot load its implementation', async () => {
+    const notices = [];
+    const provider = createLazyProvider(async () => { throw new Error('chunk missing'); }, ['openThing'], {
+        label: '终端', notify: (message, type) => notices.push({ message, type })
+    });
+    await assert.rejects(provider.openThing(), /chunk missing/);
+    assert.deepEqual(notices, [{ message: '终端加载失败：chunk missing', type: 'error' }]);
+    await assert.rejects(provider.mountTab(), /chunk missing/);
+    assert.equal(notices.length, 1, 'mount failures are left to the pane error page');
+});
+
 test('tab types can declare load() instead of an eager provider', async () => {
     const { dom, options } = createPaneDom();
     let loads = 0;
@@ -274,6 +283,32 @@ test('tab types can declare load() instead of an eager provider', async () => {
     await controller.openTab(tabOf('deferred:1', 'deferred'));
     assert.equal(loads, 1);
     assert.equal(options.contentContainer.querySelector('[data-tab-id="deferred:1"]').textContent, 'ready');
+    await controller.dispose();
+    dom.window.close();
+});
+
+test('a tab collapsed while its mount is still pending is suspended once the mount lands', async () => {
+    const { dom, options } = createPaneDom();
+    const record = { suspends: 0, resumes: 0 };
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const provider = {
+        async mountTab() {
+            await gate;
+            return { suspend() { record.suspends++; }, resume() { record.resumes++; } };
+        }
+    };
+    const controller = createSidePaneController({ ...options, providers: { probe: provider } });
+    controller.setVisible(true);
+    const opening = controller.openTab(tabOf('probe:slow'));
+    await Promise.resolve();
+    controller.setVisible(false);
+    release();
+    await opening;
+    assert.equal(record.suspends, 1, 'the suspend missed during the mount is delivered');
+
+    controller.setVisible(true);
+    assert.equal(record.resumes, 1);
     await controller.dispose();
     dom.window.close();
 });

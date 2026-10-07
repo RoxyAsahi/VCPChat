@@ -8,6 +8,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { ipcMain: defaultIpcMain } = require('electron');
 const { createApplicationSenderGuard, resolveWindowWebContents } = require('./applicationSender');
@@ -39,6 +40,9 @@ const MIN_ROWS = 1;
 const MAX_COLS = 500;
 const MAX_ROWS = 200;
 const RUN_NOTIFY_INTERVAL_MS = 120;
+// 刷屏时按帧合并成一次 IPC：每秒上千个小块各发一次，渲染端主线程会被消息排满。静默后的第一块不等（按键回显不加 16ms）
+const DATA_FLUSH_MS = 16;
+const DATA_FLUSH_CHARS = 64 * 1024;
 
 let workspaceServiceRef = null;
 let loadExecutor = () => require(EXECUTOR_PATH);
@@ -150,9 +154,14 @@ function resolveWorkspacePath(workspaceId) {
     return ws.path;
 }
 
-// 终端窗口用的是 PowerShell（Windows）/ bash（其它平台）
-function buildChangeDirectoryCommand(dir) {
-    if (process.platform === 'win32') return `Set-Location -LiteralPath '${dir.replace(/'/g, "''")}'\r`;
+// 终端窗口用的是 PowerShell（Windows）/ bash（其它平台）。
+// 带回车直接执行：AI 命令写进共享 PTY 前不清输入行，只打字不回车的话，留在输入行的跳转会和下一条 AI 命令拼成一行，
+// 结束标记出不来，AI 那边要等到超时（Linux 实测 `cd '…'echo …` → too many arguments）。
+// PowerShell 把 ‘ ’ ‚ ‛（U+2018–U+201B）也当单引号，只转义 ASCII ' 的话，带弯引号的目录名会提前结束字符串。
+// 换行会直接提交半条命令，这种路径不往终端里写
+function buildChangeDirectoryCommand(dir, platform = process.platform) {
+    if (/[\r\n]/.test(dir)) throw new Error('工作区路径包含换行，无法在终端里切换。');
+    if (platform === 'win32') return `Set-Location -LiteralPath '${dir.replace(/['\u2018-\u201B]/g, '$&$&')}'\r`;
     return `cd '${dir.replace(/'/g, "'\\''")}'\r`;
 }
 
@@ -162,9 +171,10 @@ function createView(event, options = {}) {
     }
     const opts = options && typeof options === 'object' ? options : {};
     const executor = loadExecutor();
-    // 先定尺寸再启动：PowerShell 的首屏按 PTY 当时的宽度排版，事后再改会留下错位的提示符
-    if (opts.cols !== undefined || opts.rows !== undefined) {
-        const current = executor.getSessionState();
+    // 先定尺寸再启动：PowerShell 的首屏按 PTY 当时的宽度排版，事后再改会留下错位的提示符。
+    // 会话已经在跑（终端窗口或另一个视图正用着）就不改：只有拿着焦点的视图才定尺寸
+    const current = executor.getSessionState();
+    if (!current.running && (opts.cols !== undefined || opts.rows !== undefined)) {
         executor.resizeSession(
             clampInt(opts.cols, MIN_COLS, MAX_COLS, current.cols),
             clampInt(opts.rows, MIN_ROWS, MAX_ROWS, current.rows),
@@ -178,11 +188,51 @@ function createView(event, options = {}) {
     const pending = [];
     let released = false;
     const emit = (channel, payload) => (released ? safeSend(sender, channel, payload) : pending.push([channel, payload]));
-    const detach = executor.attachMirror({
-        onData: (data) => emit('terminal:data', { id, data }),
-        onClear: () => emit('terminal:clear', { id }),
-        onExit: (exitCode) => emit('terminal:exit', { id, exitCode: exitCode ?? null }),
+    let dataBuffer = '';
+    let dataTimer = null;
+    const dropData = () => {
+        if (dataTimer) clearTimeout(dataTimer);
+        dataTimer = null;
+        dataBuffer = '';
+    };
+    const flushData = () => {
+        const data = dataBuffer;
+        dropData();
+        if (data) emit('terminal:data', { id, data });
+    };
+    // 静默之后的第一块（按键回显）立刻发；之后一个窗口内到的块攒成一次，窗口结束时有积压就发出并再开一个窗口
+    const endWindow = () => {
+        dataTimer = null;
+        if (!dataBuffer) return;
+        const data = dataBuffer;
+        dataBuffer = '';
+        emit('terminal:data', { id, data });
+        dataTimer = setTimeout(endWindow, DATA_FLUSH_MS);
+    };
+    const detachMirror = executor.attachMirror({
+        onData: (data) => {
+            if (!dataTimer) {
+                emit('terminal:data', { id, data });
+                dataTimer = setTimeout(endWindow, DATA_FLUSH_MS);
+                return;
+            }
+            dataBuffer += data;
+            if (dataBuffer.length >= DATA_FLUSH_CHARS) {
+                const burst = dataBuffer;
+                dataBuffer = '';
+                emit('terminal:data', { id, data: burst });
+            }
+        },
+        // 清屏之前攒着的输出反正要被清掉；退出前先把剩下的发完，顺序不乱
+        onClear: () => { dropData(); emit('terminal:clear', { id }); },
+        onExit: (exitCode) => { flushData(); emit('terminal:exit', { id, exitCode: exitCode ?? null }); },
+        // PTY 尺寸变了（哪个视图改的都算）：不持有尺寸的视图据此跟着画；之前的输出按旧宽度排的，先发完
+        onResize: (cols, rows) => { flushData(); emit('terminal:resized', { id, cols, rows }); },
     });
+    const detach = () => {
+        dropData();
+        detachMirror();
+    };
     setImmediate(() => {
         released = true;
         for (const [channel, payload] of pending.splice(0)) safeSend(sender, channel, payload);
@@ -190,7 +240,17 @@ function createView(event, options = {}) {
     views.set(id, { id, sender, detach });
     trackSender(sender);
 
-    return { id, pid: state.pid, shared: true };
+    return { id, pid: state.pid, cols: state.cols, rows: state.rows, shared: true, windowsPty: windowsPtyInfo() };
+}
+
+/**
+ * Windows 上 PTY 后端自己会按新宽度重排可见区，xterm 得知道这点，不然 resize 时两边各排一次，
+ * 行会重复、提示符错位（对照 ZCode TerminalSession 的 windowsPty）。node-pty 在 build 18309 起用 ConPTY。
+ */
+function windowsPtyInfo() {
+    if (process.platform !== 'win32') return null;
+    const buildNumber = Number(os.release().split('.')[2]) || undefined;
+    return { backend: buildNumber && buildNumber < 18309 ? 'winpty' : 'conpty', ...(buildNumber ? { buildNumber } : {}) };
 }
 
 function initialize({ workspaceService = null, executorLoader = null, commandRunStoreLoader = null, mainWindow = null, getMainWindow: getWindow = null, ipcMain: injectedIpcMain = null } = {}) {
@@ -316,4 +376,4 @@ function disposeAll() {
     for (const sender of [...runWatchers.keys()]) stopRunWatcher(sender);
 }
 
-module.exports = { CHANNELS, initialize, disposeAll };
+module.exports = { CHANNELS, initialize, disposeAll, buildChangeDirectoryCommand };

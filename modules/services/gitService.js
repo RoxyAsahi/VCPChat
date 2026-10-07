@@ -10,6 +10,7 @@
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { isDotGitSegment } = require('./dotGitPath');
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 const MAX_ENTRIES = 5000;
@@ -59,11 +60,28 @@ function comparePath(a, b) {
     return a.path < b.path ? -1 : 1;
 }
 
-function runGit(cwd, args, { timeout = DEFAULT_TIMEOUT, input = null } = {}) {
+// 从 git hook 或某个仓库的 shell 里启动时会带着这些变量，所有命令都会跑到那个仓库上（同 ZCode git/config.ts）
+const REPO_LOCAL_ENV = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_COMMON_DIR', 'GIT_PREFIX', 'GIT_NAMESPACE', 'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM'];
+
+function gitEnv(englishMessages) {
+    const env = { ...process.env };
+    for (const name of REPO_LOCAL_ENV) delete env[name];
+    env.GIT_TERMINAL_PROMPT = '0'; // 没有终端可交互，缺凭据时直接失败而不是挂起
+    env.GIT_OPTIONAL_LOCKS = '0'; // status 刷新不抢 index.lock
+    // 要按报错文字判断结果的命令用英文输出：中文、日文等本地化的 Git 报错认不出来
+    if (englishMessages) Object.assign(env, { LC_ALL: 'C', LANG: 'C', LANGUAGE: 'C' });
+    return env;
+}
+
+/** englishMessages：报错要拿来匹配（不是仓库、切分支被本地改动挡住）时传 true，其余保留用户语言的报错给人看 */
+function runGit(cwd, args, { timeout = DEFAULT_TIMEOUT, input = null, englishMessages = false } = {}) {
     return new Promise((resolve, reject) => {
         const child = execFile('git', [
             '-c', 'core.quotepath=false',
             '-c', 'color.ui=false',
+            // 仓库自带的 .git/config 可以把 core.fsmonitor 设成任意命令，只读的 status 也会执行它（同 DeepSeek Harness scripts/change-scope.ts）
+            '-c', 'core.fsmonitor=false',
             '--literal-pathspecs', // 路径按字面匹配，禁用 glob / 魔法前缀
             ...args,
         ], {
@@ -72,11 +90,7 @@ function runGit(cwd, args, { timeout = DEFAULT_TIMEOUT, input = null } = {}) {
             maxBuffer: MAX_BUFFER,
             windowsHide: true,
             encoding: 'buffer',
-            env: {
-                ...process.env,
-                GIT_TERMINAL_PROMPT: '0', // 没有终端可交互，缺凭据时直接失败而不是挂起
-                GIT_OPTIONAL_LOCKS: '0', // status 刷新不抢 index.lock
-            },
+            env: gitEnv(englishMessages),
         }, (error, stdout, stderr) => {
             if (error) {
                 const detail = Buffer.isBuffer(stderr) ? stderr.toString('utf8').trim() : '';
@@ -206,7 +220,7 @@ async function openRepository(workspaceRoot) {
     const root = realpathSafe(path.resolve(workspaceRoot));
     let top;
     try {
-        const { stdout } = await runGit(root, ['rev-parse', '--show-toplevel']);
+        const { stdout } = await runGit(root, ['rev-parse', '--show-toplevel'], { englishMessages: true });
         top = stdout.toString('utf8').trim();
     } catch (error) {
         if (/not a git repository|不是\s*git\s*仓库/i.test(error.message)) return null;
@@ -226,7 +240,7 @@ async function getWatchTargets(workspaceRoot) {
     const root = realpathSafe(path.resolve(workspaceRoot));
     let stdout;
     try {
-        ({ stdout } = await runGit(root, ['rev-parse', '--absolute-git-dir', '--git-common-dir']));
+        ({ stdout } = await runGit(root, ['rev-parse', '--absolute-git-dir', '--git-common-dir'], { englishMessages: true }));
     } catch (error) {
         if (/not a git repository|不是\s*git\s*仓库/i.test(error.message)) return null;
         throw error;
@@ -263,7 +277,7 @@ function resolveRepoPath(repo, relPath, { scope = 'workspace' } = {}) {
         throw new Error(`路径不在工作区内: ${relPath}`);
     }
     const rel = toPosix(path.relative(repo.toplevel, abs));
-    if (rel.split('/').some(segment => segment.toLowerCase() === '.git')) {
+    if (rel.split('/').some(isDotGitSegment)) {
         throw new Error(`不允许操作 .git 目录: ${relPath}`);
     }
     return rel;
@@ -341,13 +355,57 @@ async function listRemotes(repo) {
 
 // ============================ 状态 ============================
 
-async function readStatus(repo) {
+/** 解析 `git diff --numstat -z --no-renames`：路径 → { added, removed }；二进制文件两项都是 null */
+function parseNumstat(buffer) {
+    const counts = new Map();
+    const text = Buffer.isBuffer(buffer) ? buffer.toString('utf8') : String(buffer || '');
+    for (const record of text.split('\0')) {
+        const match = /^(-|\d+)\t(-|\d+)\t(.+)$/s.exec(record);
+        if (!match) continue;
+        counts.set(match[3], {
+            added: match[1] === '-' ? null : Number(match[1]),
+            removed: match[2] === '-' ? null : Number(match[2]),
+        });
+    }
+    return counts;
+}
+
+/**
+ * 每个已跟踪文件的增删行数，和状态同一次读出（对照 ZCode gitCliRepo 的 diff --numstat）。
+ * 状态码不变、内容又被改了时，行数跟着变，渲染端据此知道哪些 diff 过期，也不用逐个拉 diff 来算行数。
+ */
+async function readDiffCounts(repo) {
+    const scope = repo.prefix ? ['--', repo.prefix] : [];
+    const base = ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff'];
+    const [unstaged, staged] = await Promise.all([
+        runGit(repo.toplevel, [...base, ...scope]).then(r => parseNumstat(r.stdout), () => new Map()),
+        runGit(repo.toplevel, [...base, '--cached', ...scope]).then(r => parseNumstat(r.stdout), () => new Map()),
+    ]);
+    return { unstaged, staged };
+}
+
+function withCounts(list, counts) {
+    return list.map(item => {
+        const count = item.untracked ? null : counts.get(item.path);
+        return count ? { ...item, added: count.added, removed: count.removed } : item;
+    });
+}
+
+// counts 只给要画逐文件行数的调用（Git 页的读取和写操作后的刷新）：两次全工作区 diff --numstat 比 status 本身慢几倍，
+// 推送、切分支前的预检和状态面板的摘要用不到
+async function readStatus(repo, { counts: withDiffCounts = false } = {}) {
     const args = ['status', '--porcelain=v2', '-z', '--branch', '--untracked-files=all'];
     if (repo.prefix) args.push('--', repo.prefix);
-    const [{ stdout }, remotes] = await Promise.all([runGit(repo.toplevel, args), listRemotes(repo)]);
+    const noCounts = { staged: new Map(), unstaged: new Map() };
+    const [{ stdout }, remotes, counts] = await Promise.all([runGit(repo.toplevel, args), listRemotes(repo), withDiffCounts ? readDiffCounts(repo) : noCounts]);
     const { branch, entries } = parsePorcelainV2(stdout);
     const truncated = entries.length > MAX_ENTRIES;
-    const groups = groupEntries(truncated ? entries.slice(0, MAX_ENTRIES) : entries);
+    const grouped = groupEntries(truncated ? entries.slice(0, MAX_ENTRIES) : entries);
+    const groups = {
+        staged: withCounts(grouped.staged, counts.staged),
+        changes: withCounts(grouped.changes, counts.unstaged),
+        conflicts: grouped.conflicts,
+    };
     return {
         isRepo: true,
         root: repo.root,
@@ -369,10 +427,30 @@ async function readStatus(repo) {
     };
 }
 
+/**
+ * 「在文件管理器中打开」的目标：状态条目的路径相对仓库根，工作区可能只是仓库的子目录，
+ * 所以按仓库根解析（对照 ZCode gitService.ts toAbsolutePath），再校验仍在工作区内。
+ */
+async function resolveRevealTarget(workspaceRoot, relPath, { base = 'repo' } = {}) {
+    const repo = await openRepository(workspaceRoot);
+    if (repo) {
+        // 相对工作区的路径（代码查看器给的）先拼上工作区在仓库里的前缀
+        const repoRel = base === 'workspace' && repo.prefix && typeof relPath === 'string'
+            ? `${repo.prefix}/${IS_WIN ? relPath.replace(/\\/g, '/') : relPath}`
+            : relPath;
+        return absoluteInRepo(repo, resolveRepoPath(repo, repoRel));
+    }
+    const root = path.resolve(workspaceRoot);
+    const target = path.resolve(root, typeof relPath === 'string' ? relPath : '');
+    // 前缀比较在 Windows 上区分大小写，盘符根目录还会多拼一个分隔符；统一走 path.relative
+    if (!isInside(root, target)) throw new Error('路径不在工作区内。');
+    return target;
+}
+
 async function getStatus(workspaceRoot) {
     const repo = await openRepository(workspaceRoot);
     if (!repo) return { isRepo: false, root: path.resolve(workspaceRoot) };
-    return readStatus(repo);
+    return readStatus(repo, { counts: true });
 }
 
 /** 串行执行写操作，完成后附带最新状态返回，前端一次往返即可刷新。 */
@@ -380,7 +458,7 @@ async function mutate(workspaceRoot, fn) {
     const repo = await requireRepository(workspaceRoot);
     return withRepoLock(repo, async () => {
         const extra = await fn(repo);
-        const status = await readStatus(repo);
+        const status = await readStatus(repo, { counts: true });
         return { ...(extra || {}), status };
     });
 }
@@ -486,7 +564,7 @@ async function push(workspaceRoot, { setUpstream = false } = {}) {
         }
         const result = await runGit(repo.toplevel, args, { timeout: PUSH_TIMEOUT });
         const output = `${result.stderr.toString('utf8')}${result.stdout.toString('utf8')}`.trim();
-        return { output, remote, status: await readStatus(repo) };
+        return { output, remote, status: await readStatus(repo, { counts: true }) };
     });
 }
 
@@ -630,11 +708,11 @@ async function switchLike(workspaceRoot, action, name, buildArgs) {
         if (status.conflicts?.length) return fail(BRANCH_ISSUES.conflicts);
         if (await hasOperationInProgress(repo)) return fail(BRANCH_ISSUES.operation);
         try {
-            await runGit(repo.toplevel, buildArgs(branchName), { timeout: COMMIT_TIMEOUT });
+            await runGit(repo.toplevel, buildArgs(branchName), { timeout: COMMIT_TIMEOUT, englishMessages: true });
         } catch (error) {
             return fail({ code: 'git-error', message: error.message });
         }
-        return { ok: true, action, branchName, changed: true, status: await readStatus(repo) };
+        return { ok: true, action, branchName, changed: true, status: await readStatus(repo, { counts: true }) };
     });
 }
 
@@ -727,6 +805,7 @@ async function getChangeSummary(workspaceRoot) {
 module.exports = {
     getStatus,
     getWatchTargets,
+    resolveRevealTarget,
 
     getDiff,
     stage,
@@ -741,6 +820,7 @@ module.exports = {
     getChangeSummary,
     // 供测试使用
     parsePorcelainV2,
+    parseNumstat,
     groupEntries,
     resolveRepoPath,
     chunkPaths,

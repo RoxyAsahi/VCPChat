@@ -2,7 +2,7 @@
 'use strict';
 
 import { createTabSortable } from './side-pane-tab-dnd.js';
-import { getTabIconName, resolveTabsOverflow } from './side-pane-tab-utils.js';
+import { findByTabId, getTabIconName, resolveTabsOverflow } from './side-pane-tab-utils.js';
 
 // 标签标题悬停提示、面板切换动画、可拖拽排序的标签
 const TAB_TOOLTIP_DELAY_MS = 1500;
@@ -12,7 +12,8 @@ const TAB_TOOLTIP_DELAY_MS = 1500;
  *   getTabs() / getActiveTabId()   当前要显示的标签
  *   isClosable(tab)                是否画关闭按钮
  *   statusTabId / getStatus()      带状态圆点的标签（通知）和它的 { status, text }
- *   onActivate / onClose / onReorder / onContextMenu / onRendered
+ *   onActivate(tabId, { focus }) / onClose / onReorder / onContextMenu / onRendered
+ *     键盘切换时传 { focus: false }：焦点留在标签上，不挪进面板
  */
 export function createSidePaneTabStrip({
     tabListElement,
@@ -36,8 +37,12 @@ export function createSidePaneTabStrip({
     let tooltipEl = null;
     let tooltipTimer = null;
     let dragging = false;
+    let renderPending = false;
     let layoutRaf = 0;
     let lastRenderedActiveTabId = null;
+    let scrollActivePending = false;
+    let tooltipAnchor = null;
+    const itemEntries = new Map();
 
     // 新增按钮不溢出时住在标签条末尾，溢出时回到右侧操作区原来的位置
     const addButtonHome = addButton?.parentElement || null;
@@ -52,11 +57,13 @@ export function createSidePaneTabStrip({
             tooltipEl.remove();
             tooltipEl = null;
         }
+        tooltipAnchor = null;
     }
 
     function scheduleTooltip(anchor, text) {
         hideTooltip();
         if (!anchor || !text) return;
+        tooltipAnchor = anchor;
         tooltipTimer = win.setTimeout(() => {
             tooltipTimer = null;
             if (dragging || !anchor.isConnected) return;
@@ -85,15 +92,17 @@ export function createSidePaneTabStrip({
         let overflowing = true;
         if (addButton && addButtonHome) {
             const addInside = addButton.parentElement === tabListElement;
-            const measured = addButton.getBoundingClientRect?.().width || 0;
+            const addButtonWidth = addButton.getBoundingClientRect?.().width || 28;
+            const viewportWidth = tabListElement.clientWidth || 0;
             const overflow = resolveTabsOverflow({
                 addButtonInside: addInside,
-                addButtonWidth: measured || 28,
+                addButtonWidth,
                 tabCount: items.length,
-                viewportWidth: tabListElement.clientWidth || 0
+                viewportWidth
             });
-            // 视口宽度未知（隐藏或无布局）时保持在右侧操作区，避免来回搬动
-            overflowing = tabListElement.clientWidth ? overflow : true;
+            // 视口放不下一个新增按钮（面板收起时只剩内边距那几像素，或没有布局）就当宽度未知，按钮留在右侧操作区。
+            // 否则收起状态下两种摆法互相判成对方，按钮每帧搬来搬去，每次搬动都让整页样式重算。
+            overflowing = viewportWidth > addButtonWidth ? overflow : true;
             if (!overflowing && !addInside) {
                 tabListElement.appendChild(addButton);
             } else if (overflowing && addInside) {
@@ -111,7 +120,12 @@ export function createSidePaneTabStrip({
         const raf = win.requestAnimationFrame || ((cb) => win.setTimeout(cb, 16));
         layoutRaf = raf(() => {
             layoutRaf = 0;
-            if (!disposed) layout();
+            if (disposed) return;
+            layout();
+            if (scrollActivePending) {
+                scrollActivePending = false;
+                scrollActiveIntoView();
+            }
         });
     }
 
@@ -133,7 +147,7 @@ export function createSidePaneTabStrip({
     function syncStatus() {
         const current = statusTabId ? getStatus() : null;
         if (!current) return;
-        const btn = tabListElement.querySelector(`.side-pane-tab[data-tab-id="${statusTabId}"]`);
+        const btn = findByTabId(tabListElement, '.side-pane-tab[data-tab-id]', statusTabId);
         const dot = btn?.querySelector('.side-pane-tab-status');
         if (!dot) return;
         const { status = 'unknown', text = '' } = current;
@@ -142,6 +156,11 @@ export function createSidePaneTabStrip({
         if (title) title.textContent = text ? text.replace(/:\s*/, ' ') : '通知';
         if (text) btn.setAttribute('aria-label', `通知，${text}`);
         else btn.removeAttribute('aria-label');
+    }
+
+    // 结构签名：这些变了才重建这一项；标题、激活态等原地更新（同 ZCode 按 key 复用标签节点）
+    function itemSignature(tab) {
+        return `${isClosable(tab) ? 1 : 0}|${getTabIconName(tab, getTabType)}|${tab.id === statusTabId ? 1 : 0}`;
     }
 
     function createTabItem(tab, isActive) {
@@ -156,6 +175,7 @@ export function createSidePaneTabStrip({
         btn.setAttribute('aria-selected', String(isActive));
         btn.setAttribute('tabindex', isActive ? '0' : '-1');
         btn.setAttribute('data-tab-id', tab.id);
+        btn.setAttribute('aria-keyshortcuts', isClosable(tab) ? 'Delete Shift+F10' : 'Shift+F10');
 
         const iconSpan = doc.createElement('span');
         iconSpan.className = 'tab-icon vcp-ui-icon';
@@ -176,6 +196,8 @@ export function createSidePaneTabStrip({
         }
         btn.addEventListener('click', () => onActivate(tab.id));
         tabItem.appendChild(btn);
+        // 复用时标题会变：监听里读 entry.tab，不读创建时的 tab
+        const entry = { tab, el: tabItem, btn, titleSpan, closeBtn: null, sig: itemSignature(tab) };
 
         // 关闭按钮和标签按钮并列
         const closable = isClosable(tab);
@@ -185,12 +207,13 @@ export function createSidePaneTabStrip({
             closeBtn.className = 'side-pane-tab-close';
             closeBtn.setAttribute('aria-label', `关闭 ${tab.title}`);
             closeBtn.setAttribute('tabindex', '-1');
-            closeBtn.innerHTML = '<span class="vcp-ui-icon vcp-side-pane-icon-caption">close</span>';
+            closeBtn.innerHTML = '<span class="vcp-ui-icon vcp-side-pane-icon-caption" aria-hidden="true">close</span>';
             closeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 onClose(tab.id);
             });
             tabItem.appendChild(closeBtn);
+            entry.closeBtn = closeBtn;
         }
 
         // 中键关闭（mousedown 拦截浏览器自动滚动，auxclick 关闭且不激活）
@@ -205,7 +228,7 @@ export function createSidePaneTabStrip({
         });
 
         // 标题悬停提示：1.5s 后出现，离开/按下/拖拽即消失
-        tabItem.addEventListener('mouseenter', () => scheduleTooltip(tabItem, tooltipText(tab)));
+        tabItem.addEventListener('mouseenter', () => scheduleTooltip(tabItem, tooltipText(entry.tab)));
         tabItem.addEventListener('mouseleave', hideTooltip);
         tabItem.addEventListener('pointerdown', hideTooltip);
 
@@ -213,31 +236,87 @@ export function createSidePaneTabStrip({
             e.preventDefault();
             e.stopPropagation();
             hideTooltip();
-            onContextMenu(tab.id, e.clientX, e.clientY);
+            // 键盘（Shift+F10 / 菜单键）打开时没有指针坐标，贴着标签下沿出菜单
+            let { clientX: x, clientY: y } = e;
+            if (!x && !y) {
+                const rect = tabItem.getBoundingClientRect();
+                x = rect.left + 8;
+                y = rect.bottom + 4;
+            }
+            onContextMenu(tab.id, x, y);
         });
-        return tabItem;
+        return entry;
     }
 
+    function updateTabItem(entry, tab, isActive) {
+        entry.tab = tab;
+        entry.el.classList.toggle('active', isActive);
+        entry.btn.classList.toggle('active', isActive);
+        entry.btn.setAttribute('aria-selected', String(isActive));
+        entry.btn.setAttribute('tabindex', isActive ? '0' : '-1');
+        // 通知标签的标题由 syncStatus 写
+        if (tab.id !== statusTabId && entry.titleSpan.textContent !== tab.title) entry.titleSpan.textContent = tab.title;
+        entry.closeBtn?.setAttribute('aria-label', `关闭 ${tab.title}`);
+    }
+
+    function nextItem(el) {
+        let node = el?.nextElementSibling || null;
+        while (node && !node.classList?.contains('side-pane-tab-item')) node = node.nextElementSibling;
+        return node;
+    }
+
+    // 按 tabId 复用标签节点，只增删、调顺序、改激活态和标题。原来每次（浏览器每次导航改标题、每次切换）都删光重建，
+    // 打断悬停提示，并在同一帧里同步量一次几何；量几何现在推到下一帧（scheduleLayout）。
     function render() {
-        hideTooltip();
-        // 只清标签项：新增按钮在不溢出时会住在标签条里
-        tabListElement.querySelectorAll('.side-pane-tab-item').forEach((el) => el.remove());
+        // 拖拽期间不动标签节点（换掉或挪动被拖的节点会让拖拽会话挂在旧节点上），松手后补一次
+        if (dragging) {
+            renderPending = true;
+            return;
+        }
+        renderPending = false;
         tabListElement.setAttribute('role', 'tablist');
         tabListElement.setAttribute('aria-label', '工作区侧栏标签页');
 
         const activeTabId = getActiveTabId();
         const insertAnchor = addButton?.parentElement === tabListElement ? addButton : null;
-        getTabs().forEach(tab => {
-            tabListElement.insertBefore(createTabItem(tab, tab.id === activeTabId), insertAnchor);
+        const tabs = getTabs();
+        const keep = new Set(tabs.map(tab => tab.id));
+        for (const [id, entry] of itemEntries) {
+            const stale = !keep.has(id) || entry.sig !== itemSignature(tabs.find(tab => tab.id === id));
+            if (!stale) continue;
+            if (tooltipAnchor === entry.el) hideTooltip();
+            entry.el.remove();
+            itemEntries.delete(id);
+        }
+        // 不归本标签条管理的残留项（比如外部插进来的）一并清掉
+        tabListElement.querySelectorAll('.side-pane-tab-item').forEach((el) => {
+            if (![...itemEntries.values()].some(entry => entry.el === el)) el.remove();
         });
+
+        let cursor = tabListElement.querySelector('.side-pane-tab-item');
+        for (const tab of tabs) {
+            const isActive = tab.id === activeTabId;
+            let entry = itemEntries.get(tab.id);
+            if (entry) updateTabItem(entry, tab, isActive);
+            else {
+                entry = createTabItem(tab, isActive);
+                itemEntries.set(tab.id, entry);
+            }
+            if (entry.el === cursor) cursor = nextItem(cursor);
+            else tabListElement.insertBefore(entry.el, cursor || insertAnchor);
+        }
+        // 激活的是新标签页或藏起来的通知时没有标签带 tabindex=0，给第一个，标签条仍能用 Tab 键进来
+        if (!tabListElement.querySelector('[role="tab"][tabindex="0"]')) {
+            tabListElement.querySelector('[role="tab"]')?.setAttribute('tabindex', '0');
+        }
         syncStatus();
         onRendered();
-        layout();
         // 新开或切换到的标签在溢出区时滚进可见范围；激活项不变时不打扰用户手动滚动
         if (activeTabId !== lastRenderedActiveTabId) {
             lastRenderedActiveTabId = activeTabId;
-            scrollActiveIntoView();
+            scrollActivePending = true;
         }
+        scheduleLayout();
     }
 
     const sortable = createTabSortable({
@@ -247,6 +326,7 @@ export function createSidePaneTabStrip({
         onDragStateChange: (isDragging) => {
             dragging = isDragging;
             if (isDragging) hideTooltip();
+            else if (renderPending) render();
         }
     });
     cleanups.push(() => sortable?.dispose());
@@ -259,16 +339,26 @@ export function createSidePaneTabStrip({
         cleanups.push(() => resizeObserver.disconnect());
     }
 
-    // 方向键 / Home / End 在标签之间移动并激活
+    // 方向键 / Home / End 在标签之间移动并激活（同 ZCode 用的 Radix Tabs：焦点跟着走、自动激活）；Delete 关掉聚焦的标签
     const onKeydown = (e) => {
         const tabButtons = Array.from(tabListElement.querySelectorAll('[role="tab"]'));
         if (tabButtons.length === 0) return;
+        if (e.key === 'Delete' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+            const focusedId = e.target?.closest?.('[role="tab"]')?.getAttribute('data-tab-id');
+            const focusedTab = focusedId ? getTabs().find(tab => tab.id === focusedId) : null;
+            if (focusedTab && isClosable(focusedTab)) {
+                e.preventDefault();
+                onClose(focusedId);
+            }
+            return;
+        }
         const currentIndex = tabButtons.findIndex(b => b.getAttribute('data-tab-id') === getActiveTabId());
         let targetIndex = currentIndex;
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
             targetIndex = (currentIndex + 1) % tabButtons.length;
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-            targetIndex = (currentIndex - 1 + tabButtons.length) % tabButtons.length;
+            // 当前是新标签页（不在标签条上）时，往左落到最后一个
+            targetIndex = currentIndex < 0 ? tabButtons.length - 1 : (currentIndex - 1 + tabButtons.length) % tabButtons.length;
         } else if (e.key === 'Home') {
             targetIndex = 0;
         } else if (e.key === 'End') {
@@ -278,8 +368,10 @@ export function createSidePaneTabStrip({
         }
         e.preventDefault();
         if (targetIndex !== currentIndex && targetIndex >= 0 && targetIndex < tabButtons.length) {
-            onActivate(tabButtons[targetIndex].getAttribute('data-tab-id'));
-            tabButtons[targetIndex].focus();
+            // 焦点跟着移到新标签上（WAI-ARIA Tabs）；激活后按 id 重新取按钮，不依赖激活前拿到的节点
+            const targetId = tabButtons[targetIndex].getAttribute('data-tab-id');
+            onActivate(targetId, { focus: false });
+            findByTabId(tabListElement, '[role="tab"][data-tab-id]', targetId)?.focus?.();
         }
     };
     tabListElement.addEventListener('keydown', onKeydown);
@@ -294,7 +386,7 @@ export function createSidePaneTabStrip({
         syncStatus,
         hideTooltip,
         focusTab(tabId) {
-            tabListElement.querySelector(`[role="tab"][data-tab-id="${tabId}"]`)?.focus?.();
+            findByTabId(tabListElement, '[role="tab"][data-tab-id]', tabId)?.focus?.();
         },
         dispose() {
             disposed = true;

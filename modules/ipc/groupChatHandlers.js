@@ -5,6 +5,7 @@ const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
 const groupChat = require('../../Groupmodules/groupchat');
 const { HistoryMutationQueue } = require('../services/historyMutationQueue');
+const { clearTrajectoryOf } = require('../modelTrajectory');
 
 /**
  * Initializes group chat related IPC handlers.
@@ -24,7 +25,12 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
         const avatarPath = path.join(agentDir, `avatar${ext}`);
         if (await fs.pathExists(avatarPath)) {
             const url = pathToFileURL(avatarPath).toString();
-            return cacheBust ? `${url}?t=${Date.now()}` : url;
+            // Version by modification time: the URL changes when the avatar
+            // does, so lists can reuse the cached image instead of
+            // re-downloading every avatar on every refresh.
+            const stat = await fs.stat(avatarPath).catch(() => null);
+            const version = stat ? Math.round(stat.mtimeMs) : (cacheBust ? Date.now() : null);
+            return version === null ? url : `${url}?v=${version}`;
         }
     }
     return null;
@@ -118,7 +124,9 @@ function initialize(mainWindow, context) {
     });
 
     ipcMain.handle('delete-group-topic', async (event, groupId, topicId) => {
-        return await groupChat.deleteGroupTopic(groupId, topicId);
+        const result = await groupChat.deleteGroupTopic(groupId, topicId);
+        if (result?.success) await clearTrajectoryOf({ groupId, topicId });
+        return result;
     });
 
     ipcMain.handle('save-group-topic-title', async (event, groupId, topicId, newTitle) => {

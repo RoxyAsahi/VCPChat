@@ -14,6 +14,7 @@ guestSession.setPermissionRequestHandler = (fn) => { guestSession.requestHandler
 guestSession.setPermissionCheckHandler = (fn) => { guestSession.checkHandler = fn; };
 guestSession.clearStorageData = async () => { guestSession.cleared += 1; };
 guestSession.clearCache = async () => { guestSession.cleared += 1; };
+guestSession.webRequest = { onBeforeRequest: (fn) => { guestSession.beforeRequest = fn; } };
 
 const originalLoad = Module._load;
 Module._load = function loadWithElectronMock(request, parent, isMain) {
@@ -38,19 +39,19 @@ const mainPage = require('./helpers/trusted-main-sender.cjs').createTrustedMainS
 const foreignPage = { senderFrame: { url: 'https://evil.example/' } };
 
 test('guest URL allowlist keeps custom protocols out', () => {
-    for (const ok of ['http://localhost:3000/', 'https://example.com', 'file:///tmp/a.html', 'about:blank']) {
+    for (const ok of ['http://localhost:3000/', 'https://example.com', 'about:blank']) {
         assert.equal(browserHandlers.isAllowedGuestUrl(ok), true, ok);
     }
-    for (const bad of ['data:text/html,hi', 'javascript:alert(1)', 'vcp://x', 'chrome://gpu', 'ftp://host/a', '', null, 'not a url']) {
+    for (const bad of ['file:///tmp/a.html', 'file:///C:/Users/me/.ssh/id_rsa', 'data:text/html,hi', 'javascript:alert(1)', 'vcp://x', 'chrome://gpu', 'ftp://host/a', '', null, 'not a url']) {
         assert.equal(browserHandlers.isAllowedGuestUrl(bad), false, String(bad));
     }
 });
 
-test('popups only open web pages, and file pages only from a file page', () => {
+test('popups only open web pages', () => {
     const allowed = browserHandlers.isAllowedPopupUrl;
     assert.equal(allowed('https://a.example/', 'https://b.example/'), true);
-    assert.equal(allowed('http://localhost:3000/', 'file:///tmp/a.html'), true);
-    assert.equal(allowed('file:///tmp/b.html', 'file:///tmp/a.html'), true);
+    assert.equal(allowed('http://localhost:3000/'), true);
+    assert.equal(allowed('file:///tmp/b.html', 'file:///tmp/a.html'), false);
     assert.equal(allowed('file:///C:/Windows/win.ini', 'https://evil.example/'), false);
     assert.equal(allowed('about:blank', 'https://a.example/'), false);
     assert.equal(allowed('data:text/html,<h1>login</h1>', 'https://a.example/'), false);
@@ -70,19 +71,32 @@ test('attachToWindow locks the partition and strips privileged web preferences',
     host.emit('will-attach-webview', event, {}, { partition: browserHandlers.BROWSER_PARTITION, src: 'vcp://x' });
     assert.equal(prevented, 2);
 
-    const prefs = { preload: 'x.js', preloadURL: 'file:///x.js', nodeIntegration: true, sandbox: false };
-    host.emit('will-attach-webview', event, prefs, { partition: browserHandlers.BROWSER_PARTITION, src: 'https://a.example' });
+    const prefs = { preload: 'x.js', preloadURL: 'file:///x.js', nodeIntegration: true, sandbox: false, experimentalFeatures: true, disablePopups: false,
+        partition: browserHandlers.BROWSER_PARTITION, zoomFactor: 1.25 };
+    const params = { partition: browserHandlers.BROWSER_PARTITION, src: 'https://a.example', disablewebsecurity: '', plugins: '', blinkfeatures: 'X' };
+    host.emit('will-attach-webview', event, prefs, params);
     assert.equal(prevented, 2);
+    assert.equal('experimentalFeatures' in prefs, false, 'unknown preferences from the page are dropped');
+    assert.equal(prefs.disablePopups, false, 'allowpopups still reaches the window-open handler');
+    assert.equal(prefs.partition, browserHandlers.BROWSER_PARTITION, 'the guest stays in the locked-down side browser session');
+    assert.equal(prefs.zoomFactor, 1.25);
+    assert.equal(prefs.webviewTag, false);
+    assert.equal(prefs.plugins, false);
+    assert.deepEqual(Object.keys(params).sort(), ['partition', 'src']);
     assert.equal('preload' in prefs, false);
     assert.equal('preloadURL' in prefs, false);
     assert.equal(prefs.nodeIntegration, false);
     assert.equal(prefs.sandbox, true);
+    assert.equal(prefs.disableDialogs, true, 'pages cannot raise native dialogs titled as the app');
     assert.equal(prefs.contextIsolation, true);
 
     const guest = new EventEmitter();
     guest.setWindowOpenHandler = (fn) => { guest.openHandler = fn; };
     guest.getURL = () => 'https://a.example/';
     host.emit('did-attach-webview', {}, guest);
+    const nested = { prevented: false, preventDefault() { this.prevented = true; } };
+    guest.emit('will-attach-webview', nested);
+    assert.equal(nested.prevented, true, 'a page cannot nest its own webview');
     // 没有用户输入的弹窗不开标签，鼠标移动也不算
     assert.deepEqual(guest.openHandler({ url: 'https://a.example/x' }), { action: 'deny' });
     guest.emit('input-event', {}, { type: 'mouseMove' });
@@ -184,4 +198,71 @@ test('side pane shortcut matcher ignores AltGr, repeats and extra modifiers', ()
     assert.equal(match({ ...toggle, shift: true }, { mac: false }), null);
     assert.deepEqual(match({ type: 'keyDown', control: true, key: 'PageUp' }, { mac: false }), { action: 'cycle', delta: -1 });
     assert.equal(match({ type: 'keyDown', control: true, shift: true, key: 'PageUp' }, { mac: false }), null);
+});
+
+test('guest requests for local files are canceled, web and inline resources pass', () => {
+    browserHandlers.initialize();
+    const decide = (url) => {
+        let result = null;
+        guestSession.beforeRequest({ url }, (value) => { result = value; });
+        return result.cancel;
+    };
+    for (const url of ['file:///etc/passwd', 'file:///C:/Users/me/AppData/Roaming/VCPChat/settings.json', 'vcp://x', 'chrome://gpu']) {
+        assert.equal(decide(url), true, url);
+    }
+    for (const url of ['https://a.example/app.js', 'http://localhost:3000/', 'wss://a.example/ws', 'data:image/png;base64,AA==', 'blob:https://a.example/1', 'about:blank']) {
+        assert.equal(decide(url), false, url);
+    }
+});
+
+test('downloads only reach the system browser right after a real input on that page', () => {
+    browserHandlers.initialize();
+    const host = new EventEmitter();
+    host.isDestroyed = () => false;
+    host.send = () => {};
+    browserHandlers.attachToWindow({ webContents: host });
+    const guest = new EventEmitter();
+    guest.setWindowOpenHandler = () => {};
+    host.emit('did-attach-webview', {}, guest);
+    const download = (url) => {
+        let prevented = false;
+        guestSession.emit('will-download', { preventDefault: () => { prevented = true; } }, { getURL: () => url }, guest);
+        assert.equal(prevented, true);
+    };
+    opened.length = 0;
+    download('https://evil.example/a.exe');
+    assert.deepEqual(opened, [], 'a download the page started by itself is dropped');
+    guest.emit('input-event', {}, { type: 'mouseDown' });
+    download('https://ok.example/file.zip');
+    download('https://evil.example/b.exe');
+    assert.deepEqual(opened, ['https://ok.example/file.zip'], 'one click hands over one download');
+});
+
+test('a download link opened in a new tab is handed over once, on the click that opened the tab', () => {
+    browserHandlers.initialize();
+    const host = new EventEmitter();
+    host.isDestroyed = () => false;
+    host.sent = [];
+    host.send = (channel, payload) => host.sent.push([channel, payload]);
+    browserHandlers.attachToWindow({ webContents: host });
+    const page = new EventEmitter();
+    page.setWindowOpenHandler = (fn) => { page.openHandler = fn; };
+    host.emit('did-attach-webview', {}, page);
+    const popup = new EventEmitter();
+    popup.setWindowOpenHandler = () => {};
+    host.emit('did-attach-webview', {}, popup);
+    const download = (guest, url, chain = [url]) => {
+        guestSession.emit('will-download', { preventDefault() {} }, { getURL: () => url, getURLChain: () => chain }, guest);
+    };
+    opened.length = 0;
+
+    page.emit('input-event', {}, { type: 'mouseDown' });
+    assert.deepEqual(page.openHandler({ url: 'https://files.example/get?id=1' }), { action: 'deny' });
+    assert.deepEqual(host.sent.at(-1), ['browser:open-tab', { url: 'https://files.example/get?id=1' }]);
+    // 新标签加载这个地址，服务器跳转到真正的文件
+    download(popup, 'https://cdn.example/report.pdf', ['https://files.example/get?id=1', 'https://cdn.example/report.pdf']);
+    download(popup, 'https://cdn.example/report.pdf', ['https://files.example/get?id=1', 'https://cdn.example/report.pdf']);
+    assert.deepEqual(opened, ['https://cdn.example/report.pdf'], 'one click, one download');
+    download(popup, 'https://evil.example/x.exe');
+    assert.deepEqual(opened, ['https://cdn.example/report.pdf']);
 });
