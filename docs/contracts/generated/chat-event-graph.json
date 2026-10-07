@@ -4106,12 +4106,12 @@
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 366,
+          "line": 380,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 403,
+          "line": 417,
           "kind": "custom-event-listener"
         },
         {
@@ -5660,13 +5660,13 @@
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 366,
+          "line": 380,
           "kind": "custom-event-listener",
           "match": "label.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 403,
+          "line": 417,
           "kind": "custom-event-listener",
           "match": "button.addEventListener('click'"
         },
@@ -29052,14 +29052,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 389,
+          "line": 403,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/message-file-changes.js",
-          "line": 389,
+          "line": 403,
           "kind": "custom-event-listener",
           "match": "details.addEventListener('toggle'"
         }
