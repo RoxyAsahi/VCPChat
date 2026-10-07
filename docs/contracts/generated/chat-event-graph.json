@@ -32478,6 +32478,14 @@
       "contractId": "source.dynamic.modules.ipc.musichandlers"
     },
     {
+      "file": "modules/ipc/sourceHandlers.js",
+      "line": 32,
+      "reason": "dynamic event listener name: channel",
+      "kind": "event-listener",
+      "match": "ipcMain.handle(channel",
+      "contractId": "source.dynamic.modules.ipc.sourcehandlers"
+    },
+    {
       "file": "modules/ipc/stateSubscriptions.js",
       "line": 132,
       "reason": "dynamic event name: channel",
@@ -33078,11 +33086,5 @@
       "contractId": "source.dynamic.preloads.loom"
     }
   ],
-  "undiscovered": [
-    {
-      "file": "modules/ipc/sourceHandlers.js",
-      "line": 32,
-      "reason": "dynamic event listener name: channel"
-    }
-  ]
+  "undiscovered": []
 }
