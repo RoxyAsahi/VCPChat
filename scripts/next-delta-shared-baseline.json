@@ -4,28 +4,28 @@
     "reason": "Integrated chat behavior: selection subscriptions for topic side panes; clear old media before navigation; per-conversation side chat context/unread policy; explicit cancellation and non-streaming terminal settlement; one error notice per failed request. Reviewed auxiliary-side-chat reproduction: Stop during delayed history save or request preparation previously still sent generation; renderer-local AbortSignal checks now prevent that send. When upstream interrupt fails, await the existing local stream terminal before placeholder cleanup so accepted partial content is saved instead of deleted. Actual native side owner, internal renderer, manager, preload/IPC/disk and local HTTP before/after evidence; side preparation and partial-cancel regressions. Existing Surface routing and history authority remain in place. Main/group sending without the optional signal keeps its preparation path. Stop while awaiting the first HTTP headers: a locally aborted stream IPC return now awaits the already-owned cancellation terminal instead of showing a service-error notice; the regression keeps the submitted question and leaves the busy state."
   },
   "modules/messageRenderer.js": {
-    "sha256": "7ebdd1b28c5af25ec0c1907e17037f873ed3d80eb9ae87d369dcc291b6c116ac",
-    "reason": "Integrated renderer behavior: nested tool result data isolation; lazy tool payload DOM; safe approval diagnostics; upstream tool-result hide/restore toggle, still persisted through historyMutationAuthority; upstream scanned-PDF page labels on attachments; owned media cleanup; cross-agent avatar projection; message-local pretext estimates. This records the integrated source boundary, not a guarantee of all data-write scenarios. Tool presentation: the renderer owns presenter teardown, reads appearance from its owner realm, captures disclosure before HTML replacement, and applies presentation after a valid render without changing protocol or persistence."
+    "sha256": "f24426207cf95eb4fa3f42e2ee357ed906d0a56ac6b235dd9d996fc39966b6e5",
+    "reason": "Integrated renderer behavior: nested tool result data isolation; lazy tool payload DOM; safe approval diagnostics; upstream tool-result hide/restore toggle, still persisted through historyMutationAuthority; upstream scanned-PDF page labels on attachments; owned media cleanup; cross-agent avatar projection; message-local pretext estimates drained from one per-window idle queue so they never starve batched history insertion. This records the integrated source boundary, not a guarantee of all data-write scenarios. Tool presentation: the renderer owns presenter teardown, reads appearance from its owner realm, captures disclosure before HTML replacement, and applies presentation after a valid render without changing protocol or persistence."
   },
   "modules/renderer/streamManager.js": {
     "sha256": "f4cb0dfc44a7e870725fad479a718d010ec10238fadedd7808ce9bd958385b13",
     "reason": "Integrated projection behavior: media cleanup before subtree replacement; nested tool-result ranges shield protocol markers; incremental smooth-stream burst handling preserves text order; durable persistence remains outside this projection."
   },
   "modules/topicListManager.js": {
-    "sha256": "a06e63547574acb218ae131b1539ccc5fc6ac798d0cd0e2e0a0adb34677c8c16",
-    "reason": "Integrated topic behavior: configuration/unread loads validate the selected item; sort/title/menu operations capture their original topic target; completed deletion changes the active view only for the same item and topic. Repository, readiness and render listener ownership remain unchanged."
+    "sha256": "50b2475f546cde9b601fb37dcc77562513f57b27823287a64061e85858653b74",
+    "reason": "Integrated topic behavior: configuration/unread loads validate the selected item; sort/title/menu operations capture their original topic target; completed deletion changes the active view only for the same item and topic. Repository, readiness and render listener ownership remain unchanged. Topic search waits 200ms after typing before reloading (Enter is immediate); a rejected config IPC shows an error row instead of a permanent spinner; names and IPC errors render as text."
   },
   "modules/itemListManager.js": {
-    "sha256": "6fb3f38f57edda8c4a9632d04fba6e1239c85e11064fc5214b58700e035850ae",
-    "reason": "Integrated catalog behavior: operation-counted speaking indicators survive list refreshes; catalog publication validates the final settings read; unread publication is ordered across navigation and catalog refreshes. Persona WIP is excluded."
+    "sha256": "ae5eca22dd19312f56d5c9d60b6a221c3a5be8cf2d34c1049407b45100cc5393",
+    "reason": "Integrated catalog behavior: operation-counted speaking indicators survive list refreshes; catalog publication validates the final settings read; unread publication is ordered across navigation and catalog refreshes. Persona WIP is excluded. Load error rows are HTML-escaped."
   },
   "Groupmodules/grouprenderer.js": {
-    "sha256": "31f0d3defe8ba31ef1f9b6c41f9655b23fa02991671483b6ab658a3e3f8450eb",
-    "reason": "Integrated group behavior: JEV mode/context-window fields and invitations; explicit group queue interrupt; optimistic user message IDs survive file sync; settings read/save snapshots preserve the original group and mode data; chat header delegates to its presentation owner."
+    "sha256": "a88a5e4972d9b3739a8da8f300876f066dd2841bcfa8f41f6ffac664cc36cac8",
+    "reason": "Integrated group behavior: JEV mode/context-window fields and invitations; explicit group queue interrupt; optimistic user message IDs survive file sync; settings read/save snapshots preserve the original group and mode data; chat header delegates to its presentation owner. Group form tracks unsaved edits (including speaker reorder) and shows the same 未保存更改 indicator as Agent settings; a successful save clears it, loading a group resets it."
   },
   "modules/settingsManager.js": {
-    "sha256": "ab7f07e0a7ef558b3c5ac8a04ff7d715912414d6cd8f0799f38160ac7e46c550",
-    "reason": "Integrated manual-save policy: Agent/prompt edits remain drafts until Save; context changes and collapse no longer implicitly persist; submit captures draft and display identity; regex import merges into the draft; Lucide renders action icons. Replaces the obsolete autosave rationale. Settings display uses a local selection snapshot; a delayed config read cannot overwrite a newer settings view (frozen-selection and A-to-B display regression tests)."
+    "sha256": "1d1a99372dba5059837c4a00d48ed8eb3e983f01323cb664750828e1254585f4",
+    "reason": "Integrated manual-save policy: Agent/prompt edits remain drafts until Save; context changes and collapse no longer implicitly persist; submit captures draft and display identity; regex import merges into the draft; Lucide renders action icons. Replaces the obsolete autosave rationale. Settings display uses a local selection snapshot; a delayed config read cannot overwrite a newer settings view (frozen-selection and A-to-B display regression tests). Regex rule add/edit/delete and MiMo director prompt add/remove mark the draft unsaved like ordinary field edits."
   },
   "modules/filterManager.js": {
     "sha256": "2390116ff961f18cdf2d3defd02d5559de9381f891be7e5eb33ef99f98337225",
