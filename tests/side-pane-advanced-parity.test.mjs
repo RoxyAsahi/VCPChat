@@ -402,11 +402,13 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     const notifications = launcher.querySelector('[data-launcher-section="notifications"]');
     const segment = tabs.querySelector('[data-launcher-tab="notifications"]');
     const notificationState = createNotificationState();
+    let notificationsShown = 0;
     const ctrl = createController(dom, {
         controller: {
             openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }],
             notificationsPanel: doc.getElementById('notificationsSidebar'),
-            notificationState: notificationState.channel
+            notificationState: notificationState.channel,
+            onNotificationsShown: () => { notificationsShown += 1; }
         }
     });
     const stripTabIds = () => [...doc.querySelectorAll('.side-pane-tabs .side-pane-tab')].map(btn => btn.getAttribute('data-tab-id'));
@@ -422,6 +424,8 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     assert.equal(tools.hidden, true);
     assert.equal(doc.getElementById('notificationsSidebar').classList.contains('active'), true);
     assert.equal(launcher.dataset.launcherSegment, 'notifications');
+    // 通知页露出来时收走悬浮通知（宿主接的是 notificationRenderer.dismissFloatingToasts）
+    assert.equal(notificationsShown, 1);
 
     // 连接状态挂在通知分类上
     notificationState.setConnection('open', 'VCPLog: 已连接');
@@ -434,9 +438,11 @@ test('Parity: notifications live in the new tab page instead of the tab strip', 
     assert.equal(tools.hidden, false);
     assert.equal(notifications.hidden, true);
     assert.equal(doc.getElementById('notificationsSidebar').classList.contains('active'), false);
+    assert.equal(notificationsShown, 1);
     segment.click();
     assert.equal(ctrl.getSnapshot().activeTabId, SidePaneState.NOTIFICATIONS_TAB_ID);
     assert.equal(notifications.hidden, false);
+    assert.equal(notificationsShown, 2);
 
     // 「+」打开的是工具页；打开的标签在标签条上，概览里也没有通知
     doc.getElementById('addSidePaneChatBtn').click();
