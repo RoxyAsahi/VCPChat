@@ -99,3 +99,31 @@ test('rebuilding the list keeps the active assistant search applied', async () =
         dom.window.close();
     }
 });
+
+test('a rejected catalog IPC shows an error instead of a permanent spinner', async () => {
+    const dom = new JSDOM('<!doctype html><html><body><ul id="agentList"></ul></body></html>', {
+        url: 'https://vcpchat.local/main.html', runScripts: 'outside-only'
+    });
+    const { window } = dom;
+    window.eval(source);
+    window.itemListManager.init({
+        elements: { itemListUl: window.document.getElementById('agentList') },
+        electronAPI: {
+            getAgents: async () => { throw new Error('agents dir unreadable'); },
+            getAgentGroups: async () => [],
+            loadSettings: async () => ({ combinedItemOrder: [], vcpServerUrl: '' }),
+            getUnreadTopicCounts: async () => ({ success: true, counts: {} }),
+        },
+        refs: { currentSelectedItemRef: { get: () => null, set() {} } },
+        mainRendererFunctions: { selectItem() {} },
+        uiHelper: { showToastNotification() {} },
+    });
+    try {
+        await window.itemListManager.loadItems();
+        const list = window.document.getElementById('agentList');
+        assert.equal(list.querySelector('.loading-spinner-small'), null);
+        assert.match(list.textContent, /agents dir unreadable/);
+    } finally {
+        dom.window.close();
+    }
+});
