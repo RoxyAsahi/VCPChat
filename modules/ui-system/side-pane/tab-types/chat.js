@@ -73,15 +73,19 @@ export function sideChatTab(rawDescriptor, tabs = []) {
  * provider：mountTab(descriptor, view, ctx)，返回辅助对话 handle；ctx 原样转交控制器给的挂载上下文（含 view scope）。
  * openSideChat：新标签页入口；不传时不出现在新标签页里。
  * onClosed(descriptor)：标签关掉后调用，用来删掉子话题。
+ * canOpen()：当前能不能新开辅助对话（群聊里不能）；返回 false 时新标签页里不列这个入口。
  */
-export function defineChatTabType({ provider, openSideChat = null, onClosed = null }) {
+export function defineChatTabType({ provider, openSideChat = null, onClosed = null, canOpen = null }) {
     return Object.freeze({
         kind: 'chat', label: '辅助对话', icon: 'chat_bubble', searchHint: '辅助对话',
         persist: false,
         // 输入框里可能有还没发出去的内容，隐藏再久也不休眠
         dormancy: 'keep',
         entry: typeof openSideChat === 'function'
-            ? { id: 'selection-side-conversation', order: 0, open: () => openSideChat({ forceNew: true }) }
+            ? {
+                id: 'selection-side-conversation', order: 0, open: () => openSideChat({ forceNew: true }),
+                ...(typeof canOpen === 'function' ? { isAvailable: canOpen } : {})
+            }
             : null,
         // openTab({ kind: 'chat', descriptor }) 走这里
         toTab: (payload, tabs) => sideChatTab(payload.descriptor, tabs),
