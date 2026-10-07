@@ -485,6 +485,7 @@
     "modules/ui-system/side-pane/tab-types/plan-detail.js",
     "modules/ui-system/side-pane/tab-types/terminal.js",
     "modules/ui-system/side-pane/tab-types/tool-output.js",
+    "modules/ui-system/side-pane/terminalDataTransform.js",
     "modules/ui-system/side-pane/terminalLinks.js",
     "modules/ui-system/side-pane/terminalSideProvider.js",
     "modules/ui-system/side-pane/terminalTheme.js",
@@ -664,7 +665,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 271,
+          "line": 288,
           "kind": "custom-event-listener"
         },
         {
@@ -729,7 +730,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 271,
+          "line": 288,
           "kind": "custom-event-listener",
           "match": "signal?.addEventListener('abort'"
         },
@@ -3685,12 +3686,12 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 562,
+          "line": 565,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 565,
+          "line": 568,
           "kind": "custom-event-listener"
         },
         {
@@ -5155,13 +5156,13 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 562,
+          "line": 565,
           "kind": "custom-event-listener",
           "match": "stopBtn.addEventListener('click'"
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 565,
+          "line": 568,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('click'"
         },
@@ -7301,7 +7302,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 569,
+          "line": 572,
           "kind": "custom-event-listener"
         },
         {
@@ -7433,7 +7434,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 569,
+          "line": 572,
           "kind": "custom-event-listener",
           "match": "persistenceBadge.addEventListener('contextmenu'"
         },
@@ -12688,14 +12689,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 179,
+          "line": 192,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 179,
+          "line": 192,
           "kind": "custom-event-listener",
           "match": "screen.addEventListener('focusin'"
         }
@@ -21664,14 +21665,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 184,
+          "line": 199,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 184,
+          "line": 199,
           "kind": "preload-subscription",
           "match": "api.onTerminalClear("
         }
@@ -21702,14 +21703,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 181,
+          "line": 194,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 181,
+          "line": 194,
           "kind": "preload-subscription",
           "match": "api.onTerminalData("
         }
@@ -21721,14 +21722,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 187,
+          "line": 202,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
-          "line": 187,
+          "line": 202,
           "kind": "preload-subscription",
           "match": "api.onTerminalExit("
         }
@@ -28070,7 +28071,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 561,
+          "line": 564,
           "kind": "custom-event-listener"
         },
         {
@@ -28130,7 +28131,7 @@
         },
         {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
-          "line": 561,
+          "line": 564,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
