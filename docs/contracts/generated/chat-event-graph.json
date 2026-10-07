@@ -15426,7 +15426,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 72,
+          "line": 120,
           "kind": "custom-event-listener"
         },
         {
@@ -15786,7 +15786,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 72,
+          "line": 120,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('keydown'"
         },
@@ -26531,7 +26531,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 70,
+          "line": 118,
           "kind": "custom-event-listener"
         },
         {
@@ -26596,7 +26596,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 70,
+          "line": 118,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('scroll'"
         },
@@ -29327,14 +29327,14 @@
       "consumers": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 74,
+          "line": 122,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 74,
+          "line": 122,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('touchmove'"
         }
@@ -29346,7 +29346,7 @@
       "consumers": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 73,
+          "line": 121,
           "kind": "custom-event-listener"
         },
         {
@@ -29358,7 +29358,7 @@
       "evidence": [
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 73,
+          "line": 121,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('touchstart'"
         },
@@ -31777,7 +31777,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 71,
+          "line": 119,
           "kind": "custom-event-listener"
         },
         {
@@ -31806,7 +31806,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 71,
+          "line": 119,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('wheel'"
         },
