@@ -1049,6 +1049,10 @@ window.itemListManager = (() => {
         if (currentSelectedItem && currentSelectedItem.id) {
             highlightActiveItem(currentSelectedItem.id, currentSelectedItem.type);
         }
+        // A rebuild (unread refresh, save, reorder) must not drop an active
+        // search: re-apply the term still in the search box.
+        const activeSearch = document.getElementById('agentSearchInput')?.value;
+        if (activeSearch && activeSearch.trim()) window.uiHelperFunctions?.filterAgentList?.(activeSearch);
         ensureItemTabStop();
 
         if (typeof Sortable !== 'undefined') {

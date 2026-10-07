@@ -56,3 +56,46 @@ test('the Agent and group list is one keyboard tab stop with arrow navigation an
         dom.window.close();
     }
 });
+
+test('rebuilding the list keeps the active assistant search applied', async () => {
+    const dom = new JSDOM('<!doctype html><html><body><input id="agentSearchInput"><ul id="agentList"></ul></body></html>', {
+        url: 'https://vcpchat.local/main.html', runScripts: 'outside-only'
+    });
+    const { window } = dom;
+    window.eval(source);
+    // The real filter lives in ui-helpers; this one hides by name the same way.
+    window.uiHelperFunctions = {
+        filterAgentList(term) {
+            const needle = String(term).trim().toLowerCase();
+            window.document.querySelectorAll('#agentList li').forEach(li => {
+                const name = (li.querySelector('.agent-name')?.textContent || '').toLowerCase();
+                li.style.display = !needle || name.includes(needle) ? '' : 'none';
+            });
+        }
+    };
+    window.itemListManager.init({
+        elements: { itemListUl: window.document.getElementById('agentList') },
+        electronAPI: {
+            getAgents: async () => [{ id: 'ada', name: 'Ada' }, { id: 'nova', name: 'Nova' }],
+            getAgentGroups: async () => [],
+            loadSettings: async () => ({ combinedItemOrder: [], vcpServerUrl: '' }),
+            getUnreadTopicCounts: async () => ({ success: true, counts: {} }),
+        },
+        refs: { currentSelectedItemRef: { get: () => null, set() {} } },
+        mainRendererFunctions: { selectItem() {} },
+        uiHelper: { showToastNotification() {} },
+    });
+    try {
+        await window.itemListManager.loadItems();
+        const input = window.document.getElementById('agentSearchInput');
+        input.value = 'nov';
+        window.uiHelperFunctions.filterAgentList(input.value);
+        await window.itemListManager.loadItems();
+        const visible = [...window.document.querySelectorAll('#agentList li[data-item-id]')]
+            .filter(li => li.style.display !== 'none')
+            .map(li => li.dataset.itemId);
+        assert.deepEqual(visible, ['nova']);
+    } finally {
+        dom.window.close();
+    }
+});
