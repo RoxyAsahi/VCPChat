@@ -1246,7 +1246,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 222,
+          "line": 223,
           "kind": "custom-event-listener"
         }
       ],
@@ -1265,7 +1265,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 222,
+          "line": 223,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('auxclick'"
         }
@@ -4393,7 +4393,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 154,
+          "line": 166,
           "kind": "custom-event-listener"
         },
         {
@@ -4423,12 +4423,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 196,
+          "line": 197,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 211,
           "kind": "custom-event-listener"
         },
         {
@@ -6012,7 +6012,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 154,
+          "line": 166,
           "kind": "custom-event-listener",
           "match": "container.addEventListener('click'"
         },
@@ -6048,13 +6048,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 196,
+          "line": 197,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 211,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
@@ -7366,7 +7366,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 234,
+          "line": 235,
           "kind": "custom-event-listener"
         },
         {
@@ -7504,7 +7504,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 234,
+          "line": 235,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('contextmenu'"
         },
@@ -15650,7 +15650,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 122,
+          "line": 124,
           "kind": "custom-event-listener"
         },
         {
@@ -15675,7 +15675,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 369,
+          "line": 377,
           "kind": "custom-event-listener"
         },
         {
@@ -16058,7 +16058,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 122,
+          "line": 124,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
@@ -16088,7 +16088,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 369,
+          "line": 377,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('keydown'"
         },
@@ -18951,7 +18951,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 219,
+          "line": 220,
           "kind": "custom-event-listener"
         },
         {
@@ -19075,7 +19075,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 219,
+          "line": 220,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mousedown'"
         },
@@ -19166,7 +19166,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 230,
+          "line": 231,
           "kind": "custom-event-listener"
         },
         {
@@ -19208,7 +19208,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 230,
+          "line": 231,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseenter'"
         },
@@ -19281,7 +19281,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 231,
+          "line": 232,
           "kind": "custom-event-listener"
         },
         {
@@ -19364,7 +19364,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 231,
+          "line": 232,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseleave'"
         },
@@ -23116,7 +23116,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 153,
+          "line": 157,
           "kind": "custom-event-listener"
         }
       ],
@@ -23129,9 +23129,9 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 153,
+          "line": 157,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointercancel'"
+          "match": "doc.addEventListener('pointercancel'"
         }
       ]
     },
@@ -23161,7 +23161,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 150,
+          "line": 165,
           "kind": "custom-event-listener"
         },
         {
@@ -23176,7 +23176,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 232,
+          "line": 233,
           "kind": "custom-event-listener"
         },
         {
@@ -23217,7 +23217,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 150,
+          "line": 165,
           "kind": "custom-event-listener",
           "match": "container.addEventListener('pointerdown'"
         },
@@ -23235,7 +23235,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 232,
+          "line": 233,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('pointerdown'"
         },
@@ -23319,16 +23319,16 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 151,
+          "line": 155,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 151,
+          "line": 155,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointermove'"
+          "match": "doc.addEventListener('pointermove'"
         }
       ]
     },
@@ -23343,7 +23343,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 152,
+          "line": 156,
           "kind": "custom-event-listener"
         }
       ],
@@ -23356,9 +23356,9 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-dnd.js",
-          "line": 152,
+          "line": 156,
           "kind": "custom-event-listener",
-          "match": "container.addEventListener('pointerup'"
+          "match": "doc.addEventListener('pointerup'"
         }
       ]
     },
@@ -26636,7 +26636,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 326,
+          "line": 334,
           "kind": "custom-event-listener"
         },
         {
@@ -26712,7 +26712,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 326,
+          "line": 334,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('scroll'"
         },
