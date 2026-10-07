@@ -563,3 +563,34 @@ test('a trajectory tab woken from dormancy keeps the rows the reader collapsed a
     assert.equal(head(other, 'user').getAttribute('aria-expanded'), 'true');
     await switched.dispose();
 });
+
+test('opening the trajectory measures every open row in one frame: all heights are read before any row is restyled', async () => {
+    const env = makeEnv();
+    const win = env.dom.window;
+    const frames = [];
+    win.requestAnimationFrame = callback => { frames.push(callback); return frames.length; };
+    win.cancelAnimationFrame = () => {};
+    // 记录读高度和改 class 的先后：读写交替意味着每行都强制一次布局
+    const log = [];
+    Object.defineProperty(win.HTMLElement.prototype, 'scrollHeight', {
+        configurable: true,
+        get() { if (this.classList.contains('side-traj-content')) log.push('read'); return 400; }
+    });
+    Object.defineProperty(win.HTMLElement.prototype, 'clientHeight', { configurable: true, get() { return 100; } });
+    const toggle = win.DOMTokenList.prototype.toggle;
+    win.DOMTokenList.prototype.toggle = function (token, force) {
+        if (token === 'overflowing') log.push('write');
+        return toggle.call(this, token, force);
+    };
+    const handle = await env.provider.mountTab({ id: 'model-trajectory:main' }, env.view);
+    const openRows = env.view.querySelectorAll('.side-traj-row.open').length;
+    assert.ok(openRows > 2, 'several rows start open');
+    log.length = 0;
+    while (frames.length) frames.shift()(0);
+    assert.deepEqual(log, [...Array(openRows).fill('read'), ...Array(openRows).fill('write')]);
+    for (const row of env.view.querySelectorAll('.side-traj-row.open')) {
+        assert.ok(row.querySelector('.side-traj-expanded-shell').classList.contains('overflowing'));
+        assert.equal(row.querySelector('.side-traj-more').hidden, false);
+    }
+    await handle.dispose();
+});

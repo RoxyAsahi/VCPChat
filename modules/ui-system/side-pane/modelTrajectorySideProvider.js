@@ -237,6 +237,28 @@ export function createModelTrajectorySideProvider({
 
             const updateAllRows = () => { for (const row of rowRegistry.values()) row.update(); };
 
+            // 行高测量所有行共用一帧：先把每行的高度都读完，再统一改 class。
+            // 逐行“读一次写一次”的话每行都强制一次布局，一百多行的轨迹打开要卡好几秒
+            const pendingMeasures = new Set();
+            let measureFrame = 0;
+            const flushMeasures = () => {
+                measureFrame = 0;
+                const jobs = [...pendingMeasures];
+                pendingMeasures.clear();
+                const results = jobs.map(job => job.read());
+                jobs.forEach((job, index) => job.write(results[index]));
+            };
+            const scheduleMeasure = (job) => {
+                if (typeof win.requestAnimationFrame !== 'function') return;
+                pendingMeasures.add(job);
+                if (!measureFrame) measureFrame = win.requestAnimationFrame(flushMeasures);
+            };
+            own.own(() => {
+                if (measureFrame && typeof win.cancelAnimationFrame === 'function') win.cancelAnimationFrame(measureFrame);
+                measureFrame = 0;
+                pendingMeasures.clear();
+            }, 'row-measure-frame');
+
             // ---------------------------------------------------------------- 行
             function createRow({ expansionKey, message, role, visualRole: forcedRole, roleLabel, record, alt }) {
                 const visualRole = visualRoleOf(message, forcedRole);
@@ -301,7 +323,6 @@ export function createModelTrajectorySideProvider({
 
                 let built = false;
                 let showAll = false;
-                let measureFrame = 0;
 
                 const build = () => {
                     built = true;
@@ -339,17 +360,17 @@ export function createModelTrajectorySideProvider({
                     if (!content.childNodes.length) content.appendChild(h('span', 'side-traj-empty-part', '—'));
                 };
 
-                const measure = () => {
-                    measureFrame = 0;
-                    if (!row.classList.contains('open') || showAll) return;
-                    const overflowing = content.scrollHeight > content.clientHeight + 2;
-                    shell.classList.toggle('overflowing', overflowing);
-                    more.hidden = !overflowing || row.classList.contains('revealed');
-                    more.textContent = '展开';
-                };
-                const scheduleMeasure = () => {
-                    if (measureFrame || typeof win.requestAnimationFrame !== 'function') return;
-                    measureFrame = win.requestAnimationFrame(measure);
+                // read 只读布局，write 只改 DOM：同一帧里先跑完所有行的 read 再跑 write
+                const measureJob = {
+                    read: () => (row.classList.contains('open') && !showAll
+                        ? content.scrollHeight > content.clientHeight + 2
+                        : null),
+                    write: (overflowing) => {
+                        if (overflowing === null) return;
+                        shell.classList.toggle('overflowing', overflowing);
+                        more.hidden = !overflowing || row.classList.contains('revealed');
+                        more.textContent = '展开';
+                    },
                 };
                 more.addEventListener('click', () => {
                     showAll = !showAll;
@@ -365,7 +386,7 @@ export function createModelTrajectorySideProvider({
                     row.classList.toggle('revealed', revealed);
                     head.setAttribute('aria-expanded', String(open));
                     if (!open) { showAll = false; shell.classList.remove('show-all', 'overflowing'); more.hidden = true; }
-                    else scheduleMeasure();
+                    else scheduleMeasure(measureJob);
                     shell.classList.toggle('show-all', showAll || revealed);
                 };
                 const toggle = () => {
