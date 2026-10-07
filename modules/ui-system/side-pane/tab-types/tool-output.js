@@ -4,7 +4,7 @@ export function defineToolOutputTabType({ document: doc, window: win, chatAPI, s
     const provider = createLazyProvider(async () => {
         const { createToolOutputSideProvider } = await import('../toolOutputSideProvider.js');
         return createToolOutputSideProvider({ document: doc, api: chatAPI || win.electronAPI, sidePaneController, uiHelper });
-    }, ['openToolOutputTab']);
+    }, ['openToolOutputTab'], { label: '命令输出', notify: (message, type) => uiHelper?.showToastNotification?.(message, type) });
     return Object.freeze({
         kind: 'tool-output', label: '命令输出', icon: 'description', searchHint: '命令输出',
         // 命令记录只在内存里，重启后没有可看的

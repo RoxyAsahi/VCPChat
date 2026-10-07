@@ -12,13 +12,13 @@ async function until(predicate) {
     }
 }
 
-function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null } = {}) {
+function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null, failXtermLoads = 0 } = {}) {
     const dom = new JSDOM('<input id="mainInput"><aside><div class="side-pane-tabs"></div><div class="side-pane-content-container"></div></aside>');
     const doc = dom.window.document, root = doc.querySelector('aside');
     const controller = createSidePaneController({ root, tabListElement: root.querySelector('.side-pane-tabs'),
         contentContainer: root.querySelector('.side-pane-content-container'), dormancy });
     const terminals = [], killed = [], creates = [], restarts = [], listeners = new Map();
-    let unsubscriptions = 0, confirmations = 0;
+    let unsubscriptions = 0, confirmations = 0, xtermLoads = 0;
     dom.window.confirm = () => { confirmations++; return true; };
     class Terminal {
         constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.disposals = 0; terminals.push(this); }
@@ -44,16 +44,32 @@ function fixture({ create = async () => ({ success: true, data: { id: 'view:1', 
         onTerminalData: subscribe('data'), onTerminalClear: subscribe('clear'), onTerminalExit: subscribe('exit')
     };
     const provider = createTerminalSideProvider({ document: doc, api, sidePaneController: controller,
-        xtermLoader: async () => ({ Terminal, FitAddon: null }), onOpenUrl });
+        xtermLoader: async () => {
+            xtermLoads++;
+            if (xtermLoads <= failXtermLoads) throw new Error('无法加载 xterm.js');
+            return { Terminal, FitAddon: null };
+        }, onOpenUrl });
     controller.registerProvider('terminal', provider);
     return { dom, controller, provider, doc, terminals, killed, creates, restarts, listeners,
-        get unsubscriptions() { return unsubscriptions; }, get confirmations() { return confirmations; },
+        get unsubscriptions() { return unsubscriptions; }, get xtermLoads() { return xtermLoads; }, get confirmations() { return confirmations; },
         status: () => root.querySelector('.side-terminal-status'),
         retry: () => root.querySelector('[aria-label="重新启动终端"]'),
         screen: () => doc.querySelector('.side-terminal-screen'),
         stash: () => doc.querySelector('[data-side-terminal-stash]'),
         async cleanup() { await controller.dispose(); dom.window.close(); } };
 }
+
+test('a failed xterm load shows the pane retry page and retrying loads it again', async () => {
+    const h = fixture({ failXtermLoads: 1 });
+    await assert.rejects(h.provider.openTerminalTab(), /终端组件加载失败/);
+    const retry = h.doc.querySelector('.side-pane-mount-error-retry');
+    assert.ok(retry, 'the tab stays open on the retry page instead of a dead status line');
+    assert.equal(h.creates.length, 0);
+    retry.click();
+    await until(() => h.creates.length === 1 && !h.doc.querySelector('.side-pane-mount-error-retry'));
+    assert.equal(h.xtermLoads, 2);
+    await h.cleanup();
+});
 
 test('rejected terminal creation leaves a retryable mounted view and releases its resources', async () => {
     let calls = 0;
