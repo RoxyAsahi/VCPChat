@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,6 +11,7 @@ import { createSidePaneController } from '../modules/ui-system/side-pane/side-pa
 import { defineChatTabType } from '../modules/ui-system/side-pane/tab-types/chat.js';
 import { createSideChatDescriptor } from '../modules/chat/sideChatSessionService.js';
 import { createSideChatDraftStore, sideChatDraftKey } from '../modules/renderer/side-chat/draft-store.js';
+import { waitFor } from './helpers/wait-for.mjs';
 
 async function fixture(t, legacyInput = {}) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-side-draft-restore-'));
