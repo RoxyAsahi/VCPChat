@@ -4184,6 +4184,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/ui-system/side-pane/code-viewer/editor.js",
+          "line": 54,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/git/cards.js",
           "line": 220,
           "kind": "custom-event-listener"
@@ -5742,6 +5747,12 @@
           "line": 79,
           "kind": "custom-event-listener",
           "match": "more.addEventListener('click'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/code-viewer/editor.js",
+          "line": 54,
+          "kind": "custom-event-listener",
+          "match": "read.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
