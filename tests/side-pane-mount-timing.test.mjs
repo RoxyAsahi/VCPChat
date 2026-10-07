@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createSidePaneController } from '../modules/ui-system/side-pane/side-pane-controller.js';
 import { defineChatTabType } from '../modules/ui-system/side-pane/tab-types/chat.js';
 
-// 切到话题后才读回来的辅助对话在后台补回：不抢激活、不强行展开、不改这个话题记下的收起状态
+// 什么时候挂载：后台补回的标签不抢激活也不挂；打开时面板先展开；批量关闭不挂马上要关的标签
 const parentOf = topicId => ({ itemType: 'agent', itemId: 'agent', topicId });
 const sideChat = (id, topicId) => ({ kind: 'chat', descriptor: {
     id, title: id, parent: parentOf(topicId), child: { itemType: 'agent', itemId: 'agent', topicId: `child-${id}` }
@@ -84,4 +84,61 @@ test('side chats restored while the user is on another tab of the topic stay in 
     assert.equal(snapshot.visible, true);
     assert.ok(snapshot.tabs.some(tab => tab.id === 'older'));
     assert.deepEqual(mounted, []);
+});
+
+test('opening a tab expands the pane and shows its view while the provider is still mounting', async t => {
+    const dom = new JSDOM('<main class="main-content"></main><aside id="pane"><div id="tabs"></div><div id="content"><section class="side-pane-view" id="sidePaneViewNotifications"></section></div></aside>');
+    const doc = dom.window.document;
+    let finishMount;
+    const ctrl = createSidePaneController({
+        root: doc.getElementById('pane'),
+        tabListElement: doc.getElementById('tabs'),
+        contentContainer: doc.getElementById('content'),
+        tabTypes: [defineChatTabType({
+            provider: { mountTab: () => new Promise(resolve => { finishMount = () => resolve({ dispose: async () => {}, focus() {} }); }) }
+        })]
+    });
+    t.after(() => { ctrl.dispose?.(); dom.window.close(); });
+    ctrl.setParent(parentOf('a'));
+    assert.equal(ctrl.getSnapshot().visible, false);
+
+    const opening = ctrl.openTab(sideChat('slow', 'a'));
+    const view = doc.querySelector('#content [data-tab-id="slow"]');
+    assert.ok(view);
+    assert.equal(view.hidden, false);
+    assert.equal(doc.getElementById('sidePaneViewNotifications').hidden, true);
+    assert.equal(doc.getElementById('pane').getAttribute('aria-hidden'), 'false');
+
+    finishMount();
+    await opening;
+    assert.equal(view.hidden, false);
+});
+
+test('close all does not mount the not-yet-shown tabs it is about to close', async t => {
+    const { ctrl, mounted, dispose } = createController();
+    t.after(dispose);
+    ctrl.setParent(parentOf('a'));
+    await ctrl.openTab(sideChat('current', 'a'));
+    await ctrl.restoreTabs([sideChat('one', 'a'), sideChat('two', 'a'), sideChat('three', 'a')]);
+    mounted.length = 0;
+
+    await ctrl.closeAllTabs();
+
+    assert.deepEqual(mounted, []);
+    assert.deepEqual(ctrl.getSnapshot().tabs.map(tab => tab.id), ['notifications']);
+});
+
+test('close others mounts only the tab that stays', async t => {
+    const { ctrl, mounted, dispose } = createController();
+    t.after(dispose);
+    ctrl.setParent(parentOf('a'));
+    await ctrl.openTab(sideChat('current', 'a'));
+    await ctrl.restoreTabs([sideChat('one', 'a'), sideChat('two', 'a'), sideChat('keep', 'a')]);
+    mounted.length = 0;
+
+    await ctrl.closeOtherTabs('keep');
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.deepEqual(mounted, ['keep']);
+    assert.equal(ctrl.getSnapshot().activeTabId, 'keep');
 });

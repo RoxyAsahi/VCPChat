@@ -540,8 +540,20 @@ export function createSidePaneController({
     }
 
     // 恢复出来的标签不在启动时挂载，第一次显示时才挂；焦点留在原处
+    // 批量关闭期间兜底激活的标签多半紧接着也要关，等整批关完再挂当时停着的那个
+    let batchClosing = 0;
+    async function closeBatch(tabs, options, onFocusMoved) {
+        batchClosing++;
+        try {
+            await tabCloseOwner.closeTabs(tabs, options, onFocusMoved);
+        } finally {
+            batchClosing--;
+            mountActiveIfNeeded();
+        }
+    }
+
     function mountActiveIfNeeded() {
-        if (isDisposed || !state.visible) return;
+        if (isDisposed || !state.visible || batchClosing > 0) return;
         const tabId = state.activeTabId;
         if (!tabId || mountedTabMap.has(tabId) || pendingTabMounts.has(tabId)) return;
         const tab = state.tabs.find(t => t.id === tabId);
@@ -762,7 +774,7 @@ export function createSidePaneController({
             const revision = ++navigationRevision;
             const keptLifetime = tabCloseOwner.getLifetime(tabId);
             let expectedFocus = doc.activeElement;
-            await tabCloseOwner.closeTabs(closing, { collapseWhenEmpty: false }, (before, after) => {
+            await closeBatch(closing, { collapseWhenEmpty: false }, (before, after) => {
                 // Follow our synchronous close handoffs, not an unrelated focus change.
                 if (before === expectedFocus) expectedFocus = after;
             });
@@ -775,7 +787,7 @@ export function createSidePaneController({
         async closeAllTabs() {
             if (isDisposed) return;
             navigationRevision++;
-            await tabCloseOwner.closeTabs(SidePaneState.getClosableVisibleTabs(state));
+            await closeBatch(SidePaneState.getClosableVisibleTabs(state));
         },
 
         /**
@@ -800,12 +812,16 @@ export function createSidePaneController({
             rememberOpened(SidePaneState.getTabParent(openedTab), targetTabId);
             renderTabList();
 
-            const entry = await ensureTabMounted(targetTabId, {
+            const mounting = ensureTabMounted(targetTabId, {
                 provider: providers[rawTab.kind],
                 payload: rawTab,
                 onClosed: definition?.onClosed,
                 ariaLabel: resolved.title || '副屏视图'
             });
+            // 标签条已经切过去了，面板和内容区同一刻跟上，不等挂载完（慢的挂载期间不会是新标签配旧内容、或标签亮着面板却收着）
+            syncViewPanels();
+            syncDomVisibility();
+            const entry = await mounting;
             return finishOpen(targetTabId, entry, origin);
         },
 
