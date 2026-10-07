@@ -40,7 +40,7 @@ const MIN_ROWS = 1;
 const MAX_COLS = 500;
 const MAX_ROWS = 200;
 const RUN_NOTIFY_INTERVAL_MS = 120;
-// 输出按帧合并成一次 IPC：刷屏时每秒上千个小块各发一次，渲染端主线程会被消息排满
+// 刷屏时按帧合并成一次 IPC：每秒上千个小块各发一次，渲染端主线程会被消息排满。静默后的第一块不等（按键回显不加 16ms）
 const DATA_FLUSH_MS = 16;
 const DATA_FLUSH_CHARS = 64 * 1024;
 
@@ -155,14 +155,14 @@ function resolveWorkspacePath(workspaceId) {
 }
 
 // 终端窗口用的是 PowerShell（Windows）/ bash（其它平台）。
-// 只把命令打到输入行、不替用户按回车：前台可能是 vim、python、ssh 或密码提示（busy 只认 AI 跑的命令），
-// 回车会把这串字当成那个程序的输入；提示符后有半截命令时也会拼成别的命令。用户看一眼再回车。
+// 带回车直接执行：AI 命令写进共享 PTY 前不清输入行，只打字不回车的话，留在输入行的跳转会和下一条 AI 命令拼成一行，
+// 结束标记出不来，AI 那边要等到超时（Linux 实测 `cd '…'echo …` → too many arguments）。
 // PowerShell 把 ‘ ’ ‚ ‛（U+2018–U+201B）也当单引号，只转义 ASCII ' 的话，带弯引号的目录名会提前结束字符串。
 // 换行会直接提交半条命令，这种路径不往终端里写
 function buildChangeDirectoryCommand(dir, platform = process.platform) {
     if (/[\r\n]/.test(dir)) throw new Error('工作区路径包含换行，无法在终端里切换。');
-    if (platform === 'win32') return `Set-Location -LiteralPath '${dir.replace(/['\u2018-\u201B]/g, '$&$&')}'`;
-    return `cd '${dir.replace(/'/g, "'\\''")}'`;
+    if (platform === 'win32') return `Set-Location -LiteralPath '${dir.replace(/['\u2018-\u201B]/g, '$&$&')}'\r`;
+    return `cd '${dir.replace(/'/g, "'\\''")}'\r`;
 }
 
 function createView(event, options = {}) {
@@ -199,11 +199,28 @@ function createView(event, options = {}) {
         dropData();
         if (data) emit('terminal:data', { id, data });
     };
+    // 静默之后的第一块（按键回显）立刻发；之后一个窗口内到的块攒成一次，窗口结束时有积压就发出并再开一个窗口
+    const endWindow = () => {
+        dataTimer = null;
+        if (!dataBuffer) return;
+        const data = dataBuffer;
+        dataBuffer = '';
+        emit('terminal:data', { id, data });
+        dataTimer = setTimeout(endWindow, DATA_FLUSH_MS);
+    };
     const detachMirror = executor.attachMirror({
         onData: (data) => {
+            if (!dataTimer) {
+                emit('terminal:data', { id, data });
+                dataTimer = setTimeout(endWindow, DATA_FLUSH_MS);
+                return;
+            }
             dataBuffer += data;
-            if (dataBuffer.length >= DATA_FLUSH_CHARS) flushData();
-            else if (!dataTimer) dataTimer = setTimeout(flushData, DATA_FLUSH_MS);
+            if (dataBuffer.length >= DATA_FLUSH_CHARS) {
+                const burst = dataBuffer;
+                dataBuffer = '';
+                emit('terminal:data', { id, data: burst });
+            }
         },
         // 清屏之前攒着的输出反正要被清掉；退出前先把剩下的发完，顺序不乱
         onClear: () => { dropData(); emit('terminal:clear', { id }); },
