@@ -12,7 +12,7 @@ async function until(predicate) {
     }
 }
 
-function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy } = {}) {
+function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null } = {}) {
     const dom = new JSDOM('<input id="mainInput"><aside><div class="side-pane-tabs"></div><div class="side-pane-content-container"></div></aside>');
     const doc = dom.window.document, root = doc.querySelector('aside');
     const controller = createSidePaneController({ root, tabListElement: root.querySelector('.side-pane-tabs'),
@@ -24,6 +24,9 @@ function fixture({ create = async () => ({ success: true, data: { id: 'view:1', 
         constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.disposals = 0; terminals.push(this); }
         open(screen) { this.input = doc.createElement('textarea'); screen.append(this.input); }
         onData() {} onResize() {} loadAddon() {}
+        attachCustomKeyEventHandler(handler) { this.keyHandler = handler; }
+        hasSelection() { return Boolean(this.selection); }
+        getSelection() { return this.selection || ''; }
         focus() { this.input.focus(); }
         write(data) { this.output.push(data); }
         clear() {} reset() {}
@@ -41,9 +44,9 @@ function fixture({ create = async () => ({ success: true, data: { id: 'view:1', 
         onTerminalData: subscribe('data'), onTerminalClear: subscribe('clear'), onTerminalExit: subscribe('exit')
     };
     const provider = createTerminalSideProvider({ document: doc, api, sidePaneController: controller,
-        xtermLoader: async () => ({ Terminal, FitAddon: null }) });
+        xtermLoader: async () => ({ Terminal, FitAddon: null }), onOpenUrl });
     controller.registerProvider('terminal', provider);
-    return { controller, provider, doc, terminals, killed, creates, restarts, listeners,
+    return { dom, controller, provider, doc, terminals, killed, creates, restarts, listeners,
         get unsubscriptions() { return unsubscriptions; }, get confirmations() { return confirmations; },
         status: () => root.querySelector('.side-terminal-status'),
         retry: () => root.querySelector('[aria-label="重新启动终端"]'),
@@ -161,7 +164,8 @@ test('a sleeping terminal keeps its shell: the screen waits in the stash and com
     try {
         const handle = await h.provider.openTerminalTab();
         await until(() => handle.getSessionId() === 'view:1');
-        h.controller.setVisible(false);
+        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
+        h.controller.showNotifications();
         await new Promise(resolve => setTimeout(resolve, 60));
         await until(() => h.controller.getViewResidency().dormant.length === 1);
 
@@ -171,7 +175,7 @@ test('a sleeping terminal keeps its shell: the screen waits in the stash and com
         assert.equal(h.unsubscriptions, 0, 'output keeps flowing into the parked terminal');
         h.listeners.get('data')?.({ id: 'view:1', data: 'while asleep' });
 
-        h.controller.setVisible(true);
+        h.controller.activateTab('terminal:main');
         await until(() => h.controller.getViewResidency().live.includes('terminal:main'));
         const view = h.controller.getTabHandle('terminal:main');
         assert.equal(view.getSessionId(), 'view:1');
@@ -193,7 +197,8 @@ test('closing a terminal tab while it sleeps ends the parked session', async () 
     try {
         await h.provider.openTerminalTab();
         await until(() => h.status().dataset.state === 'connected');
-        h.controller.setVisible(false);
+        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
+        h.controller.showNotifications();
         await new Promise(resolve => setTimeout(resolve, 60));
         await until(() => h.stash()?.contains(h.screen()) === true);
         await h.controller.closeTab('terminal:main');
@@ -222,11 +227,48 @@ test('a live terminal view holds its buttons and size observer through the view 
         assert.equal(live.byType.observer, 1);
         assert.equal(observers[0].targets.size, 1);
 
-        h.controller.setVisible(false);
+        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
+        h.controller.showNotifications();
         await new Promise(resolve => setTimeout(resolve, 60));
         await until(() => terminalTab().view === 'dormant');
         assert.equal(terminalTab().resources, null);
         assert.equal(observers[0].targets.size, 0, 'the parked screen is no longer observed');
         assert.deepEqual(h.killed, [], 'the shell itself keeps running');
+    } finally { await h.cleanup(); }
+});
+
+test('OSC 8 hyperlinks open http(s) in the side browser and nothing else', async () => {
+    const opened = [];
+    const h = fixture({ onOpenUrl: url => opened.push(url) });
+    try {
+        await h.provider.openTerminalTab();
+        const { linkHandler } = h.terminals[0].options;
+        assert.equal(linkHandler.allowNonHttpProtocols, false);
+        const event = { prevented: false, preventDefault() { this.prevented = true; } };
+        linkHandler.activate(event, 'https://example.com/a');
+        linkHandler.activate(event, 'file:///etc/passwd');
+        linkHandler.activate(event, 'javascript:alert(1)');
+        assert.deepEqual(opened, ['https://example.com/a']);
+        assert.equal(event.prevented, true, 'xterm\'s confirm + window.open default never runs');
+    } finally { await h.cleanup(); }
+});
+
+test('Ctrl+C with a selection copies instead of interrupting the shared shell; pane shortcuts stay out of the shell', async () => {
+    const h = fixture();
+    const copied = [];
+    Object.defineProperty(h.dom.window.navigator, 'clipboard', { configurable: true,
+        value: { writeText: async text => { copied.push(text); } } });
+    try {
+        await h.provider.openTerminalTab();
+        const term = h.terminals[0];
+        const key = (fields) => term.keyHandler({ type: 'keydown', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...fields });
+
+        assert.equal(key({ key: 'c', ctrlKey: true }), true, 'without a selection Ctrl+C still reaches the shell');
+        term.selection = 'npm test';
+        assert.equal(key({ key: 'c', ctrlKey: true }), false);
+        assert.deepEqual(copied, ['npm test']);
+        assert.equal(key({ key: 'b', ctrlKey: true, altKey: true }), false);
+        assert.equal(key({ key: 'PageDown', ctrlKey: true }), false);
+        assert.equal(key({ key: 'a' }), true);
     } finally { await h.cleanup(); }
 });

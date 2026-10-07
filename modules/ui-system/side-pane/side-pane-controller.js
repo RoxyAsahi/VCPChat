@@ -340,9 +340,10 @@ export function createSidePaneController({
     }
 
     // ---- 休眠 ----
-    // 计时看的是"在面板里是不是当前标签"，不看窗口有没有最小化：用户回来时看到的还是它，不该被换掉
+    // 计时看的是"在当前对话里是不是当前标签"，不看窗口有没有最小化，也不看面板是否收起：
+    // 用户重新展开时看到的还是它，不该被换掉（对照 ZCode shouldMountSidePaneContent、DSH TabLayout 收起时保留选中标签）
     function isTabPresented(tabId, { visibleTabIds, activeViewId } = getActiveView()) {
-        return !isDisposed && state.visible && tabId === activeViewId && visibleTabIds.has(tabId);
+        return !isDisposed && tabId === activeViewId && visibleTabIds.has(tabId);
     }
 
     function noteViewPresence(active = getActiveView()) {
