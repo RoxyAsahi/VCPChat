@@ -19,6 +19,8 @@ const SINGLETON_TAB_ID = 'terminal:main';
 const XTERM_SCRIPT = 'vendor/xterm/xterm.js';
 const XTERM_FIT_SCRIPT = 'vendor/xterm/xterm-addon-fit.js';
 const XTERM_STYLE = 'vendor/xterm/xterm.css';
+// 连接建立前最多替用户攒这么多输入（敲键盘够用，大段粘贴不攒）
+const PENDING_INPUT_LIMIT = 4096;
 
 function loadScript(doc, src) {
     return new Promise((resolve, reject) => {
@@ -177,6 +179,11 @@ export function createTerminalSideProvider({
 
         session.fit = () => {
             if (session.disposed || !session.fitAddon || !screen.offsetWidth || !screen.offsetHeight) return;
+            // 不持有尺寸的视图跟着 PTY 的真实尺寸画，不按自己的容器排（同 DSH 非可写视图）
+            if (session.ptySize && !hasFocus()) {
+                followPtySize();
+                return;
+            }
             try {
                 session.fitAddon.fit();
             } catch (_error) {
@@ -184,19 +191,41 @@ export function createTerminalSideProvider({
             }
         };
 
+        // 连接建立之前敲的字先攒着，连上后按顺序补发（打开标签就开始敲，不该丢字）；连不上就丢掉
+        let pendingInput = '';
         term.onData((data) => {
             if (session.sessionId) api.terminalWrite?.(session.sessionId, data);
+            else if (session.connectionOperation && pendingInput.length + data.length <= PENDING_INPUT_LIMIT) pendingInput += data;
         });
+        session.flushPendingInput = () => {
+            const data = pendingInput;
+            pendingInput = '';
+            if (data && session.sessionId) api.terminalWrite?.(session.sessionId, data);
+        };
+        session.dropPendingInput = () => { pendingInput = ''; };
         // The PTY has a single size shared by every view of it (this tab and the terminal window), so a view
         // only pushes its size while it has focus, and claims it again whenever it gets focus.
-        const hasFocus = () => screen.contains(doc.activeElement);
+        // session.ptySize is the PTY's real size, from create and from resize notices; a view that does not
+        // hold the size draws at that size instead of its own fit.
+        function hasFocus() { return screen.contains(doc.activeElement); }
+        function followPtySize() {
+            const size = session.ptySize;
+            if (size && (term.cols !== size.cols || term.rows !== size.rows)) term.resize?.(size.cols, size.rows);
+        }
         session.claimSize = () => {
-            if (session.sessionId && !session.disposed) api.terminalResize?.(session.sessionId, term.cols, term.rows);
+            if (!session.sessionId || session.disposed) return;
+            const size = session.ptySize;
+            if (size && size.cols === term.cols && size.rows === term.rows) return;
+            session.ptySize = { cols: term.cols, rows: term.rows };
+            api.terminalResize?.(session.sessionId, term.cols, term.rows);
         };
         term.onResize(() => {
             if (hasFocus()) session.claimSize();
         });
-        screen.addEventListener('focusin', session.claimSize);
+        screen.addEventListener('focusin', () => {
+            session.fit();
+            session.claimSize();
+        });
 
         const unsubscribeData = api.onTerminalData?.((payload) => {
             if (payload?.id === session.sessionId && typeof payload.data === 'string') {
@@ -212,6 +241,12 @@ export function createTerminalSideProvider({
                 setStatus('已连接终端', 'connected');
             }
         });
+        // 别的视图（终端窗口、另一个侧栏标签）改了 PTY 尺寸：没焦点就跟过去
+        const unsubscribeResized = api.onTerminalResized?.((payload) => {
+            if (payload?.id !== session.sessionId || !Number.isInteger(payload.cols) || !Number.isInteger(payload.rows)) return;
+            session.ptySize = { cols: payload.cols, rows: payload.rows };
+            if (!hasFocus()) followPtySize();
+        });
         const unsubscribeExit = api.onTerminalExit?.((payload) => {
             if (payload?.id !== session.sessionId) return;
             session.exited = true;
@@ -226,6 +261,7 @@ export function createTerminalSideProvider({
             session.connectionOperation = Promise.resolve().then(() => {
                 if (!session.disposed) return action();
             }).catch(error => {
+                session.dropPendingInput();
                 if (session.disposed) return;
                 const message = error?.message || String(error);
                 setStatus(message, 'error');
@@ -246,18 +282,23 @@ export function createTerminalSideProvider({
                 return;
             }
             if (!res?.success) {
+                session.dropPendingInput();
                 setStatus(res?.error || '终端启动失败', 'error');
                 term.write(`\x1b[31m${res?.error || '终端启动失败'}\x1b[0m\r\n`);
                 return;
             }
             session.sessionId = res.data.id;
+            session.flushPendingInput();
             session.exited = false;
             if (res.data.windowsPty && typeof res.data.windowsPty === 'object') term.options.windowsPty = res.data.windowsPty;
             // 共享终端在 Windows 上起的是 pwsh / powershell，其余平台是 bash
             session.powershell = Boolean(res.data.windowsPty);
             setStatus('已连接终端', 'connected',
                 `已连接终端 · 与终端窗口 / AI 命令共用同一个会话${res.data.pid ? ` · PID ${res.data.pid}` : ''}`);
-            if (screen.offsetWidth) session.claimSize(); // opened on screen: take over the size
+            if (Number.isInteger(res.data.cols) && Number.isInteger(res.data.rows)) session.ptySize = { cols: res.data.cols, rows: res.data.rows };
+            // 只有拿着焦点的视图改 PTY 尺寸；后台挂上的视图跟着 PTY 画（用户点进来时 focusin 再接管）
+            if (hasFocus()) session.claimSize();
+            else followPtySize();
         });
 
         session.restart = () => {
@@ -302,6 +343,7 @@ export function createTerminalSideProvider({
             themeObserver?.disconnect();
             unsubscribeData?.();
             unsubscribeClear?.();
+            unsubscribeResized?.();
             unsubscribeExit?.();
             // Only closes this view; the terminal session belongs to VCPChat's terminal.
             if (session.sessionId) api.terminalKill?.(session.sessionId);
