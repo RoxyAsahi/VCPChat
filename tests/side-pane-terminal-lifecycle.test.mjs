@@ -155,6 +155,26 @@ test('restart asks with the app confirm dialog when there is one, and a second c
     } finally { answer.resolve(false); await g.cleanup(); }
 });
 
+test('the restart confirm dialog keeps focus while it is open, so Esc closes it without reaching the shell', async () => {
+    const answer = Promise.withResolvers();
+    let dialogButton = null;
+    const g = fixture({ uiHelper: { showConfirmDialog: () => {
+        // stand-in for the app dialog: it focuses its own button
+        dialogButton = g.doc.createElement('button');
+        g.doc.body.append(dialogButton);
+        dialogButton.focus();
+        return answer.promise;
+    } } });
+    try {
+        await g.provider.openTerminalTab();
+        await until(() => g.status().dataset.state === 'connected');
+        g.retry().click();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(g.doc.activeElement, dialogButton, 'the terminal must not take focus back from the open dialog');
+        answer.resolve(false);
+    } finally { answer.resolve(false); await g.cleanup(); }
+});
+
 test('restarting a shell that already exited does not ask about aborting commands', async () => {
     const h = fixture();
     try {

@@ -495,8 +495,10 @@ export function createTerminalSideProvider({
                 term.focus();
             });
             own.listen(restartBtn, 'click', () => {
-                session.restart();
+                // 先把焦点交给终端再重启：要确认时确认框接过焦点、关掉后还回终端。
+                // 反过来的话终端会从确认框手里抢回焦点，按 Esc 关框时 Esc 也进了 shell，吃掉下一个字符
                 term.focus();
+                session.restart();
             });
             own.listen(clearBtn, 'click', () => {
                 term.clear();
