@@ -142,3 +142,21 @@ test('while the pane resizer is dragged the terminal refits only once the drag p
     mock.timers.tick(30);
     assert.equal(h.fits, before + 2, 'outside a drag a window resize still refits quickly');
 });
+
+// 超过 1MB 的粘贴主进程整段拒收：不发，状态栏说一声，过一会儿回到「已连接」
+test('a paste too large for the terminal is not sent and the status says so for a moment', async t => {
+    const h = fixture(t);
+    await h.provider.openTerminalTab();
+    mock.timers.enable({ apis: ['setTimeout'] });
+    t.after(() => mock.timers.reset());
+    const status = h.doc.querySelector('.side-terminal-status');
+    assert.equal(status.dataset.state, 'connected');
+    h.term().type('x'.repeat(1024 * 1024 + 1));
+    assert.deepEqual(h.writes, [], 'nothing reaches the shell');
+    assert.equal(status.dataset.state, 'error');
+    assert.notEqual(status.textContent, '');
+    h.term().type('ls\r');
+    assert.deepEqual(h.writes, [['view:1', 'ls\r']], 'normal typing still goes through');
+    mock.timers.tick(4000);
+    assert.equal(status.dataset.state, 'connected');
+});
