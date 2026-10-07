@@ -2324,12 +2324,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 351,
+          "line": 354,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 519,
+          "line": 522,
           "kind": "custom-event-listener"
         },
         {
@@ -2488,13 +2488,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 351,
+          "line": 354,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('change'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 519,
+          "line": 522,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('change'"
         },
@@ -3740,27 +3740,27 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 256,
+          "line": 259,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 267,
+          "line": 270,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 294,
+          "line": 297,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 395,
+          "line": 398,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 396,
+          "line": 399,
           "kind": "custom-event-listener"
         },
         {
@@ -5206,31 +5206,31 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 256,
+          "line": 259,
           "kind": "custom-event-listener",
           "match": "header.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 267,
+          "line": 270,
           "kind": "custom-event-listener",
           "match": "toggle.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 294,
+          "line": 297,
           "kind": "custom-event-listener",
           "match": "styleHeader.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 395,
+          "line": 398,
           "kind": "custom-event-listener",
           "match": "addBtn.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 396,
+          "line": 399,
           "kind": "custom-event-listener",
           "match": "importBtn.addEventListener('click'"
         },
@@ -14753,7 +14753,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 350,
+          "line": 353,
           "kind": "custom-event-listener"
         },
         {
@@ -14925,7 +14925,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 350,
+          "line": 353,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('input'"
         },
@@ -15374,12 +15374,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 260,
+          "line": 263,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 296,
+          "line": 299,
           "kind": "custom-event-listener"
         },
         {
@@ -15727,13 +15727,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 260,
+          "line": 263,
           "kind": "custom-event-listener",
           "match": "header.addEventListener('keydown'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 296,
+          "line": 299,
           "kind": "custom-event-listener",
           "match": "styleHeader.addEventListener('keydown'"
         },
