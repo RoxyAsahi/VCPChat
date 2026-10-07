@@ -3611,7 +3611,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 57,
+          "line": 68,
           "kind": "custom-event-listener"
         },
         {
@@ -5066,7 +5066,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 57,
+          "line": 68,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('click'"
         },
@@ -18826,7 +18826,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 56,
+          "line": 67,
           "kind": "custom-event-listener"
         },
         {
@@ -18945,7 +18945,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 56,
+          "line": 67,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('mousedown'"
         },
@@ -24983,7 +24983,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 55,
+          "line": 66,
           "kind": "custom-event-listener"
         },
         {
@@ -25078,7 +25078,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 55,
+          "line": 66,
           "kind": "custom-event-listener",
           "match": "win.addEventListener('resize'"
         },
@@ -26477,7 +26477,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 54,
+          "line": 65,
           "kind": "custom-event-listener"
         },
         {
@@ -26540,7 +26540,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 54,
+          "line": 65,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('scroll'"
         },
@@ -26836,14 +26836,14 @@
       "consumers": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 53,
+          "line": 64,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 53,
+          "line": 64,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('selectionchange'"
         }
