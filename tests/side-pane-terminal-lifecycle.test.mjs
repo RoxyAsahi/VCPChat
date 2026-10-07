@@ -237,6 +237,21 @@ test('a live terminal view holds its buttons and size observer through the view 
     } finally { await h.cleanup(); }
 });
 
+test('a shared shell restarted elsewhere brings the exited tab back to connected', async () => {
+    const h = fixture();
+    try {
+        await h.provider.openTerminalTab();
+        await until(() => h.status().dataset.state === 'connected');
+        h.listeners.get('exit')({ id: 'view:1', exitCode: 0 });
+        assert.equal(h.status().dataset.state, 'exited');
+        // AI 跑命令或托盘终端重启：主进程起了新 PTY，只推一次清屏
+        h.listeners.get('clear')({ id: 'view:1' });
+        assert.equal(h.status().dataset.state, 'connected');
+        h.listeners.get('clear')({ id: 'view:other' });
+        assert.equal(h.status().dataset.state, 'connected');
+    } finally { await h.cleanup(); }
+});
+
 test('OSC 8 hyperlinks open http(s) in the side browser and nothing else', async () => {
     const opened = [];
     const h = fixture({ onOpenUrl: url => opened.push(url) });
