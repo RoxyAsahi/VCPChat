@@ -23,6 +23,7 @@ Module._load = function loadWithElectronMock(request, parent, isMain) {
     return originalLoad.call(this, request, parent, isMain);
 };
 const workspaceHandlers = require('../modules/ipc/workspaceHandlers');
+const { createSidePaneSenderGuard, guardIpcMain } = require('../modules/ipc/sidePaneIpcPolicy');
 Module._load = originalLoad;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-ws-sender-'));
@@ -31,7 +32,9 @@ const voice = createTrustedMainSender('Voicechatmodules/voicechat.html');
 let settings = { workspaces: [] };
 test.before(() => workspaceHandlers.initialize({
     logger: { warn() {}, log() {}, error() {} },
-    getMainWindow: () => main.mainWindow,
+    // 和 main.js 一样经策略表包装
+    ipcMain: guardIpcMain({ handle: (channel, fn) => handlers.set(channel, fn), removeHandler: channel => handlers.delete(channel) },
+        createSidePaneSenderGuard('workspaces', () => main.mainWindow)),
     settingsManager: {
         readSettings: async () => settings,
         updateSettings: async update => { settings = update(settings); return { settings }; },
