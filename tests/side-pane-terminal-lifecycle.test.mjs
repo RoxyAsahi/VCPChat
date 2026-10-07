@@ -12,7 +12,7 @@ async function until(predicate) {
     }
 }
 
-function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null, failXtermLoads = 0 } = {}) {
+function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null, failXtermLoads = 0, uiHelper = null } = {}) {
     const dom = new JSDOM('<input id="mainInput"><aside><div class="side-pane-tabs"></div><div class="side-pane-content-container"></div></aside>');
     const doc = dom.window.document, root = doc.querySelector('aside');
     const controller = createSidePaneController({ root, tabListElement: root.querySelector('.side-pane-tabs'),
@@ -48,7 +48,7 @@ function fixture({ create = async () => ({ success: true, data: { id: 'view:1', 
             xtermLoads++;
             if (xtermLoads <= failXtermLoads) throw new Error('无法加载 xterm.js');
             return { Terminal, FitAddon: null };
-        }, onOpenUrl });
+        }, onOpenUrl, uiHelper });
     controller.registerProvider('terminal', provider);
     return { dom, controller, provider, doc, terminals, killed, creates, restarts, listeners,
         get unsubscriptions() { return unsubscriptions; }, get xtermLoads() { return xtermLoads; }, get confirmations() { return confirmations; },
@@ -127,6 +127,22 @@ test('repeated restart shares one destructive request and recovers from a reject
         await until(() => h.status().dataset.state === 'connected');
         assert.deepEqual(h.restarts, ['view:1', 'view:1']);
     } finally { pending.resolve({ success: true }); await h.cleanup(); }
+});
+
+test('restart asks with the app confirm dialog when there is one, and a second click waits on the same dialog', async () => {
+    const answer = Promise.withResolvers();
+    const asked = [];
+    const g = fixture({ uiHelper: { showConfirmDialog: (message, title) => { asked.push(title); return answer.promise; } } });
+    try {
+        await g.provider.openTerminalTab();
+        await until(() => g.status().dataset.state === 'connected');
+        g.retry().click(); g.retry().click();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.deepEqual(asked, ['重启终端'], 'one app dialog, no native confirm');
+        assert.equal(g.confirmations, 0);
+        answer.resolve(true);
+        await until(() => g.restarts.length === 1);
+    } finally { answer.resolve(false); await g.cleanup(); }
 });
 
 test('restarting a shell that already exited does not ask about aborting commands', async () => {

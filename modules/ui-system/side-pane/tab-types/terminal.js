@@ -3,7 +3,7 @@ import { createLazyProvider } from './lazy-provider.js';
 export function defineTerminalTabType({ document: doc, window: win, chatAPI, sidePaneController, uiHelper, onOpenUrl }) {
     const provider = createLazyProvider(async () => {
         const { createTerminalSideProvider } = await import('../terminalSideProvider.js');
-        return createTerminalSideProvider({ document: doc, api: chatAPI || win.electronAPI, sidePaneController, onOpenUrl });
+        return createTerminalSideProvider({ document: doc, api: chatAPI || win.electronAPI, sidePaneController, onOpenUrl, uiHelper });
     }, ['openTerminalTab'], { label: '终端', notify: (message, type) => uiHelper?.showToastNotification?.(message, type) });
     return Object.freeze({
         kind: 'terminal', label: '终端', icon: 'terminal', searchHint: '终端',
