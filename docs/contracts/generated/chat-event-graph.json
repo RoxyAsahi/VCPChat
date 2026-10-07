@@ -1364,7 +1364,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 134,
+          "line": 173,
           "kind": "custom-event-listener"
         }
       ],
@@ -1431,7 +1431,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 134,
+          "line": 173,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('beforeunload'"
         }
@@ -22611,7 +22611,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 133,
+          "line": 172,
           "kind": "custom-event-listener"
         }
       ],
@@ -22630,7 +22630,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-persistence.js",
-          "line": 133,
+          "line": 172,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('pagehide'"
         }
@@ -32574,7 +32574,7 @@
     },
     {
       "file": "modules/ipc/domainActivator.js",
-      "line": 131,
+      "line": 136,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
