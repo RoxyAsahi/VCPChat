@@ -1245,7 +1245,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 204,
+          "line": 222,
           "kind": "custom-event-listener"
         }
       ],
@@ -1264,7 +1264,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 204,
+          "line": 222,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('auxclick'"
         }
@@ -3182,14 +3182,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 224,
+          "line": 225,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 224,
+          "line": 225,
           "kind": "event-listener",
           "match": "ipcMain.handle('claim-pending-flowlock-topic'"
         },
@@ -4337,22 +4337,22 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 502,
+          "line": 507,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1200,
+          "line": 1205,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1206,
+          "line": 1211,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1220,
+          "line": 1225,
           "kind": "custom-event-listener"
         },
         {
@@ -4412,12 +4412,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 181,
+          "line": 196,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 193,
+          "line": 210,
           "kind": "custom-event-listener"
         },
         {
@@ -5935,25 +5935,25 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 502,
+          "line": 507,
           "kind": "custom-event-listener",
           "match": "retry.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1200,
+          "line": 1205,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1206,
+          "line": 1211,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1220,
+          "line": 1225,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
@@ -6025,13 +6025,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 181,
+          "line": 196,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 193,
+          "line": 210,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
@@ -7343,7 +7343,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 216,
+          "line": 234,
           "kind": "custom-event-listener"
         },
         {
@@ -7481,7 +7481,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 216,
+          "line": 234,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('contextmenu'"
         },
@@ -7733,14 +7733,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 681,
+          "line": 682,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 681,
+          "line": 682,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-new-topic-for-agent'"
         },
@@ -8589,14 +8589,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 724,
+          "line": 725,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 724,
+          "line": 725,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-topic'"
         },
@@ -12586,7 +12586,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 1209,
+          "line": 1222,
           "kind": "custom-event-listener"
         },
         {
@@ -12646,7 +12646,7 @@
         },
         {
           "file": "modules/notificationRenderer.js",
-          "line": 1209,
+          "line": 1222,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('focus'"
         },
@@ -12890,14 +12890,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 642,
+          "line": 643,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 642,
+          "line": 643,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-topics'"
         },
@@ -13149,14 +13149,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 612,
+          "line": 613,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 612,
+          "line": 613,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-chat-history'"
         },
@@ -13616,14 +13616,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1008,
+          "line": 1009,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1008,
+          "line": 1009,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-original-message-content'"
         },
@@ -13813,14 +13813,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1630,
+          "line": 1633,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1630,
+          "line": 1633,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-unread-topic-counts'"
         },
@@ -14458,14 +14458,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 908,
+          "line": 909,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 908,
+          "line": 909,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-file-drop'"
         },
@@ -14489,14 +14489,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 780,
+          "line": 781,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 780,
+          "line": 781,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-file-paste'"
         },
@@ -14520,14 +14520,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 892,
+          "line": 893,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 892,
+          "line": 893,
           "kind": "event-listener",
           "match": "ipcMain.handle('handle-text-paste-as-file'"
         },
@@ -15198,14 +15198,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1522,
+          "line": 1523,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1522,
+          "line": 1523,
           "kind": "event-listener",
           "match": "ipcMain.handle('interrupt-vcp-request'"
         },
@@ -15652,7 +15652,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 312,
+          "line": 369,
           "kind": "custom-event-listener"
         },
         {
@@ -16065,7 +16065,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 312,
+          "line": 369,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('keydown'"
         },
@@ -16264,14 +16264,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 363,
+          "line": 364,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 363,
+          "line": 364,
           "kind": "event-listener",
           "match": "ipcMain.handle('list-pending-flowlock-topics'"
         },
@@ -18928,7 +18928,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 201,
+          "line": 219,
           "kind": "custom-event-listener"
         },
         {
@@ -19052,7 +19052,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 201,
+          "line": 219,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mousedown'"
         },
@@ -19143,7 +19143,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 230,
           "kind": "custom-event-listener"
         },
         {
@@ -19185,7 +19185,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 230,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseenter'"
         },
@@ -19258,7 +19258,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 213,
+          "line": 231,
           "kind": "custom-event-listener"
         },
         {
@@ -19341,7 +19341,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 213,
+          "line": 231,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseleave'"
         },
@@ -21419,14 +21419,14 @@
       "consumers": [
         {
           "file": "modules/renderer/sidePaneWiring.js",
-          "line": 78,
+          "line": 79,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sidePaneWiring.js",
-          "line": 78,
+          "line": 79,
           "kind": "preload-subscription",
           "match": "chatAPI?.onBrowserSidePaneShortcut("
         }
@@ -21658,14 +21658,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 926,
+          "line": 932,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/modelTrajectorySideProvider.js",
-          "line": 926,
+          "line": 932,
           "kind": "preload-subscription",
           "match": "api?.onModelTrajectoryChanged("
         }
@@ -23134,7 +23134,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 214,
+          "line": 232,
           "kind": "custom-event-listener"
         },
         {
@@ -23193,7 +23193,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 214,
+          "line": 232,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('pointerdown'"
         },
@@ -24768,14 +24768,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 529,
+          "line": 530,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 529,
+          "line": 530,
           "kind": "event-listener",
           "match": "ipcMain.handle('regenerate-agent-topic-title'"
         },
@@ -25085,7 +25085,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1240,
+          "line": 1245,
           "kind": "custom-event-listener"
         },
         {
@@ -25185,7 +25185,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1240,
+          "line": 1245,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
@@ -25289,14 +25289,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 330,
+          "line": 331,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 330,
+          "line": 331,
           "kind": "event-listener",
           "match": "ipcMain.handle('restore-flowlock-claim'"
         },
@@ -25513,14 +25513,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 502,
+          "line": 503,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 502,
+          "line": 503,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-topic-title'"
         },
@@ -25637,14 +25637,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 629,
+          "line": 630,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 629,
+          "line": 630,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-chat-history'"
         },
@@ -25823,14 +25823,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 427,
+          "line": 428,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 427,
+          "line": 428,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-group-topic-order'"
         },
@@ -25978,14 +25978,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 988,
+          "line": 989,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 988,
+          "line": 989,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-pasted-image-to-file'"
         },
@@ -26071,14 +26071,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 394,
+          "line": 395,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 394,
+          "line": 395,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-topic-order'"
         },
@@ -26594,7 +26594,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 269,
+          "line": 326,
           "kind": "custom-event-listener"
         },
         {
@@ -26670,7 +26670,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 269,
+          "line": 326,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('scroll'"
         },
@@ -26737,14 +26737,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 457,
+          "line": 458,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 457,
+          "line": 458,
           "kind": "event-listener",
           "match": "ipcMain.handle('search-topics-by-content'"
         },
@@ -26868,14 +26868,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 818,
+          "line": 819,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 818,
+          "line": 819,
           "kind": "event-listener",
           "match": "ipcMain.handle('select-files-to-send'"
         },
@@ -26980,14 +26980,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1040,
+          "line": 1041,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1040,
+          "line": 1041,
           "kind": "event-listener",
           "match": "ipcMain.handle('send-to-vcp'"
         },
@@ -27104,14 +27104,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1725,
+          "line": 1728,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1725,
+          "line": 1728,
           "kind": "event-listener",
           "match": "ipcMain.handle('set-topic-unread'"
         },
@@ -29289,14 +29289,14 @@
       "consumers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1681,
+          "line": 1684,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1681,
+          "line": 1684,
           "kind": "event-listener",
           "match": "ipcMain.handle('toggle-topic-lock'"
         },
@@ -30653,7 +30653,7 @@
       "producers": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1056,
+          "line": 1057,
           "kind": "event-send"
         },
         {
@@ -30682,7 +30682,7 @@
       "evidence": [
         {
           "file": "modules/ipc/chatHandlers.js",
-          "line": 1056,
+          "line": 1057,
           "kind": "event-send",
           "match": "event.sender.send(streamChannel"
         },
