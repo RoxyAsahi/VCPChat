@@ -124,3 +124,11 @@ test('registering the IPC loads nothing; watch and unwatch are counted per page'
         terminalHandlers.disposeAll();
     }
 });
+
+test('jump-to-workspace quotes curly apostrophes for PowerShell and refuses paths with line breaks', () => {
+    const { buildChangeDirectoryCommand } = terminalHandlers;
+    assert.equal(buildChangeDirectoryCommand('C:\\Bob’s repo', 'win32'), "Set-Location -LiteralPath 'C:\\Bob’’s repo'");
+    assert.equal(buildChangeDirectoryCommand("C:\\it's", 'win32'), "Set-Location -LiteralPath 'C:\\it''s'");
+    assert.equal(buildChangeDirectoryCommand("/home/it's", 'linux'), "cd '/home/it'\\''s'");
+    assert.throws(() => buildChangeDirectoryCommand('C:\\a\nRemove-Item x', 'win32'), /换行/);
+});

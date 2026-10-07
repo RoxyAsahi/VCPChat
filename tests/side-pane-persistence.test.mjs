@@ -148,3 +148,71 @@ test('nothing is written before restoreLayout runs, so an early render cannot wi
     pane.dom.window.close();
     assert.deepEqual(JSON.parse(storage.data.get('vcp.sidePane.layout.v1')).tabs.map(t => t.id), ['notes']);
 });
+
+test('restoring after the host picked the conversation mounts nothing from another topic and does not animate', async () => {
+    const storage = createStorage();
+    const topicA = { itemType: 'agent', itemId: 'agent-1', topicId: 'topic-a' };
+    const topicB = { itemType: 'agent', itemId: 'agent-1', topicId: 'topic-b' };
+
+    const first = createPane(storage, []);
+    first.controller.restoreLayout();
+    first.controller.setParent(topicA);
+    await first.controller.openTab({ id: 'notes:a', kind: 'notes', title: '笔记', closable: true, scopeMode: 'topic', parent: topicA });
+    first.controller.setParent(topicB);
+    first.controller.setVisible(false);
+    first.controller.setParent(topicA);
+    await first.controller.dispose();
+    first.dom.window.close();
+
+    const mounts = [];
+    const second = createPane(storage, mounts);
+    // 宿主先同步当前对话（话题 B），再恢复存档
+    second.controller.setParent(topicB);
+    assert.equal(second.controller.restoreLayout(), true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const root = second.dom.window.document.getElementById('vcpSidePane');
+    assert.deepEqual(mounts, [], 'the topic A tab is not mounted while topic B is shown');
+    assert.equal(root.classList.contains('is-animating'), false);
+    assert.equal(second.controller.getSnapshot().visible, false, 'topic B was left collapsed');
+
+    second.controller.setParent(topicA);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(mounts.map(m => m.id), ['notes:a']);
+    await second.controller.dispose();
+    second.dom.window.close();
+});
+
+test('a layout over the total budget drops the oldest large tabs but keeps the active one', async () => {
+    const { MAX_PERSISTED_LAYOUT_CHARS } = await import('../modules/ui-system/side-pane/side-pane-persistence.js');
+    const big = i => ({ id: `diff:${i}`, kind: 'notes', title: `d${i}`, payload: { oldCode: 'x'.repeat(60 * 1024), n: i } });
+    const tabs = Array.from({ length: 20 }, (_, i) => big(i));
+    const data = serializeLayout({ tabs, activeTabId: 'diff:0' }, canPersist);
+    assert.ok(JSON.stringify(data).length <= MAX_PERSISTED_LAYOUT_CHARS + 1024);
+    assert.equal(data.activeTabId, 'diff:0', 'the active tab survives even though it is the oldest');
+    assert.ok(data.tabs.some(tab => tab.id === 'diff:19'), 'the newest tabs are kept');
+    assert.equal(data.tabs.some(tab => tab.id === 'diff:1'), false, 'older tabs are dropped first');
+});
+
+test('a quota error still saves the tab list and conversation memory without the large tabs', async () => {
+    const { createSidePaneLayoutStore } = await import('../modules/ui-system/side-pane/side-pane-persistence.js');
+    const data = new Map();
+    const storage = {
+        getItem: key => data.get(key) ?? null,
+        setItem(key, value) {
+            if (value.length > 8 * 1024) throw new Error('QuotaExceededError');
+            data.set(key, value);
+        }
+    };
+    const layout = serializeLayout({
+        tabs: [{ id: 'small', kind: 'notes', title: 's' }, { id: 'large', kind: 'notes', title: 'l', payload: { code: 'x'.repeat(20 * 1024) } }],
+        activeTabId: 'large',
+        collapsedByParent: new Map([['agent:a', true]])
+    }, canPersist);
+    const store = createSidePaneLayoutStore({ storage, getLayout: () => layout });
+    store.flush();
+    const saved = parseLayout(store.load(), canPersist);
+    assert.deepEqual(saved.tabs.map(tab => tab.id), ['small']);
+    assert.equal(saved.activeTabId, null);
+    assert.equal(saved.collapsedByParent.get('agent:a'), true);
+    store.dispose();
+});
