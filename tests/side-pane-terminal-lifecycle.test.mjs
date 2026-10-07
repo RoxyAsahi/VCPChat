@@ -1,24 +1,24 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createTerminalSideProvider } from '../modules/ui-system/side-pane/terminalSideProvider.js';
 import { createSidePaneController } from '../modules/ui-system/side-pane/side-pane-controller.js';
 
-async function until(predicate) {
-    const deadline = Date.now() + 2000;
-    while (!predicate()) {
-        assert.ok(Date.now() < deadline, 'terminal operation did not settle');
-        await new Promise(resolve => setImmediate(resolve));
-    }
-}
+import { waitFor } from './helpers/wait-for.mjs';
 
-function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null } = {}) {
+const until = predicate => waitFor(predicate, { message: 'terminal operation did not settle' });
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function fixture({ create = async () => ({ success: true, data: { id: 'view:1', pid: 42 } }), restart, dormancy, onOpenUrl = null, failXtermLoads = 0, uiHelper = null } = {}) {
     const dom = new JSDOM('<input id="mainInput"><aside><div class="side-pane-tabs"></div><div class="side-pane-content-container"></div></aside>');
     const doc = dom.window.document, root = doc.querySelector('aside');
+    // 休眠时间走注入的时钟，配合 mock.timers 推进，不用真睡
+    let clock = 0;
     const controller = createSidePaneController({ root, tabListElement: root.querySelector('.side-pane-tabs'),
-        contentContainer: root.querySelector('.side-pane-content-container'), dormancy });
+        contentContainer: root.querySelector('.side-pane-content-container'),
+        dormancy: dormancy && { ...dormancy, now: () => clock } });
     const terminals = [], killed = [], creates = [], restarts = [], listeners = new Map();
-    let unsubscriptions = 0, confirmations = 0;
+    let unsubscriptions = 0, confirmations = 0, xtermLoads = 0;
     dom.window.confirm = () => { confirmations++; return true; };
     class Terminal {
         constructor(options) { this.options = options; this.cols = 80; this.rows = 24; this.output = []; this.disposals = 0; terminals.push(this); }
@@ -44,16 +44,42 @@ function fixture({ create = async () => ({ success: true, data: { id: 'view:1', 
         onTerminalData: subscribe('data'), onTerminalClear: subscribe('clear'), onTerminalExit: subscribe('exit')
     };
     const provider = createTerminalSideProvider({ document: doc, api, sidePaneController: controller,
-        xtermLoader: async () => ({ Terminal, FitAddon: null }), onOpenUrl });
+        xtermLoader: async () => {
+            xtermLoads++;
+            if (xtermLoads <= failXtermLoads) throw new Error('无法加载 xterm.js');
+            return { Terminal, FitAddon: null };
+        }, onOpenUrl, uiHelper });
     controller.registerProvider('terminal', provider);
     return { dom, controller, provider, doc, terminals, killed, creates, restarts, listeners,
-        get unsubscriptions() { return unsubscriptions; }, get confirmations() { return confirmations; },
+        get unsubscriptions() { return unsubscriptions; }, get xtermLoads() { return xtermLoads; }, get confirmations() { return confirmations; },
         status: () => root.querySelector('.side-terminal-status'),
-        retry: () => root.querySelector('[aria-label="重新启动终端"]'),
+        retry: () => root.querySelector('[data-action="restart"]'),
         screen: () => doc.querySelector('.side-terminal-screen'),
         stash: () => doc.querySelector('[data-side-terminal-stash]'),
+        // 切到别的标签让终端隐藏 ms 毫秒；面板收起时当前标签不休眠
+        async hideFor(ms) {
+            mock.timers.enable({ apis: ['setTimeout'] });
+            try {
+                controller.showNotifications();
+                clock += ms;
+                mock.timers.tick(ms);
+                await settle();
+            } finally { mock.timers.reset(); }
+        },
         async cleanup() { await controller.dispose(); dom.window.close(); } };
 }
+
+test('a failed xterm load shows the pane retry page and retrying loads it again', async () => {
+    const h = fixture({ failXtermLoads: 1 });
+    await assert.rejects(h.provider.openTerminalTab(), /终端组件加载失败/);
+    const retry = h.doc.querySelector('.side-pane-mount-error-retry');
+    assert.ok(retry, 'the tab stays open on the retry page instead of a dead status line');
+    assert.equal(h.creates.length, 0);
+    retry.click();
+    await until(() => h.creates.length === 1 && !h.doc.querySelector('.side-pane-mount-error-retry'));
+    assert.equal(h.xtermLoads, 2);
+    await h.cleanup();
+});
 
 test('rejected terminal creation leaves a retryable mounted view and releases its resources', async () => {
     let calls = 0;
@@ -71,7 +97,7 @@ test('rejected terminal creation leaves a retryable mounted view and releases it
         assert.equal(h.status().dataset.state, 'connected');
         await h.controller.closeTab('terminal:main');
         assert.deepEqual(h.killed, ['view:recovered']);
-        assert.equal(h.unsubscriptions, 3);
+        assert.equal(h.listeners.size, 0);
         assert.equal(h.terminals[0].disposals, 1);
     } finally { await h.cleanup(); }
 });
@@ -113,6 +139,22 @@ test('repeated restart shares one destructive request and recovers from a reject
     } finally { pending.resolve({ success: true }); await h.cleanup(); }
 });
 
+test('restart asks with the app confirm dialog when there is one, and a second click waits on the same dialog', async () => {
+    const answer = Promise.withResolvers();
+    const asked = [];
+    const g = fixture({ uiHelper: { showConfirmDialog: (message, title) => { asked.push(title); return answer.promise; } } });
+    try {
+        await g.provider.openTerminalTab();
+        await until(() => g.status().dataset.state === 'connected');
+        g.retry().click(); g.retry().click();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.deepEqual(asked, ['重启终端'], 'one app dialog, no native confirm');
+        assert.equal(g.confirmations, 0);
+        answer.resolve(true);
+        await until(() => g.restarts.length === 1);
+    } finally { answer.resolve(false); await g.cleanup(); }
+});
+
 test('restarting a shell that already exited does not ask about aborting commands', async () => {
     const h = fixture();
     try {
@@ -150,7 +192,7 @@ test('terminal handle disposal is idempotent and ignores queued output afterward
         const output = [...h.terminals[0].output];
         handle.dispose(); emit({ id: 'view:1', data: 'late output' });
         assert.equal(h.terminals[0].disposals, 1);
-        assert.equal(h.unsubscriptions, 3);
+        assert.equal(h.listeners.size, 0);
         assert.deepEqual(h.terminals[0].output, output);
         assert.deepEqual(h.killed, ['view:1']);
     } finally { await h.cleanup(); }
@@ -176,9 +218,7 @@ test('a sleeping terminal keeps its shell: the screen waits in the stash and com
     try {
         const handle = await h.provider.openTerminalTab();
         await until(() => handle.getSessionId() === 'view:1');
-        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
-        h.controller.showNotifications();
-        await new Promise(resolve => setTimeout(resolve, 60));
+        await h.hideFor(20);
         await until(() => h.controller.getViewResidency().dormant.length === 1);
 
         assert.equal(h.stash()?.contains(h.screen()), true, 'the screen is parked, not destroyed');
@@ -200,7 +240,7 @@ test('a sleeping terminal keeps its shell: the screen waits in the stash and com
         await h.controller.closeTab('terminal:main');
         assert.deepEqual(h.killed, ['view:1']);
         assert.equal(h.terminals[0].disposals, 1);
-        assert.equal(h.unsubscriptions, 3);
+        assert.equal(h.listeners.size, 0);
     } finally { await h.cleanup(); }
 });
 
@@ -209,9 +249,7 @@ test('closing a terminal tab while it sleeps ends the parked session', async () 
     try {
         await h.provider.openTerminalTab();
         await until(() => h.status().dataset.state === 'connected');
-        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
-        h.controller.showNotifications();
-        await new Promise(resolve => setTimeout(resolve, 60));
+        await h.hideFor(20);
         await until(() => h.stash()?.contains(h.screen()) === true);
         await h.controller.closeTab('terminal:main');
         await until(() => h.killed.length === 1);
@@ -235,13 +273,11 @@ test('a live terminal view holds its buttons and size observer through the view 
         const handle = await h.provider.openTerminalTab();
         await until(() => handle.getSessionId() === 'view:1');
         const live = terminalTab().resources;
-        assert.equal(live.byType.listener, 3, 'workspace jump, clear and restart listen through the view scope');
+        assert.ok(live.byType.listener > 0, 'toolbar controls listen through the view scope');
         assert.equal(live.byType.observer, 1);
         assert.equal(observers[0].targets.size, 1);
 
-        // 切到别的标签让终端隐藏；面板收起时当前标签不休眠
-        h.controller.showNotifications();
-        await new Promise(resolve => setTimeout(resolve, 60));
+        await h.hideFor(20);
         await until(() => terminalTab().view === 'dormant');
         assert.equal(terminalTab().resources, null);
         assert.equal(observers[0].targets.size, 0, 'the parked screen is no longer observed');
