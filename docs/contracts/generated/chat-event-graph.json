@@ -1234,7 +1234,7 @@
       "consumers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 914,
+          "line": 965,
           "kind": "custom-event-listener"
         },
         {
@@ -1251,7 +1251,7 @@
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 914,
+          "line": 965,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('auxclick'"
         },
@@ -3540,7 +3540,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 925,
+          "line": 976,
           "kind": "custom-event-listener"
         },
         {
@@ -4966,7 +4966,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 925,
+          "line": 976,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('click'"
         },
@@ -7051,7 +7051,7 @@
       "producers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 969,
+          "line": 1020,
           "kind": "custom-event-create"
         }
       ],
@@ -7065,7 +7065,7 @@
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 969,
+          "line": 1020,
           "kind": "custom-event-create",
           "match": "new CustomEvent('compact-sidebar-open-topics'"
         },
@@ -7221,7 +7221,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 953,
+          "line": 1004,
           "kind": "custom-event-listener"
         },
         {
@@ -7348,7 +7348,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 953,
+          "line": 1004,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('contextmenu'"
         },
@@ -12632,12 +12632,23 @@
       "producers": [],
       "consumers": [
         {
+          "file": "modules/itemListManager.js",
+          "line": 140,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
           "line": 152,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
+        {
+          "file": "modules/itemListManager.js",
+          "line": 140,
+          "kind": "custom-event-listener",
+          "match": "itemListUl.addEventListener('focusin'"
+        },
         {
           "file": "modules/ui-system/side-pane/terminalSideProvider.js",
           "line": 152,
@@ -15307,6 +15318,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/itemListManager.js",
+          "line": 148,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/notificationRenderer.js",
           "line": 837,
           "kind": "custom-event-listener"
@@ -15642,6 +15658,12 @@
           "line": 642,
           "kind": "custom-event-listener",
           "match": "menu.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/itemListManager.js",
+          "line": 148,
+          "kind": "custom-event-listener",
+          "match": "itemListUl.addEventListener('keydown'"
         },
         {
           "file": "modules/notificationRenderer.js",
@@ -18974,7 +18996,7 @@
       "consumers": [
         {
           "file": "modules/itemListManager.js",
-          "line": 692,
+          "line": 741,
           "kind": "custom-event-listener"
         },
         {
@@ -19011,7 +19033,7 @@
       "evidence": [
         {
           "file": "modules/itemListManager.js",
-          "line": 692,
+          "line": 741,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('mouseenter'"
         },
@@ -19074,7 +19096,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 698,
+          "line": 747,
           "kind": "custom-event-listener"
         },
         {
@@ -19149,7 +19171,7 @@
         },
         {
           "file": "modules/itemListManager.js",
-          "line": 698,
+          "line": 747,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('mouseleave'"
         },
