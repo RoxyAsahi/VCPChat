@@ -3970,7 +3970,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1318,
+          "line": 1411,
           "kind": "custom-event-listener"
         },
         {
@@ -5482,7 +5482,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1318,
+          "line": 1411,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('click'"
         },
@@ -15388,7 +15388,12 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1119,
+          "line": 632,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/topicListManager.js",
+          "line": 1211,
           "kind": "custom-event-listener"
         },
         {
@@ -15736,7 +15741,13 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1119,
+          "line": 632,
+          "kind": "custom-event-listener",
+          "match": "menu.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/topicListManager.js",
+          "line": 1211,
           "kind": "custom-event-listener",
           "match": "inputField.addEventListener('keydown'"
         },
@@ -26403,7 +26414,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 562,
+          "line": 567,
           "kind": "custom-event-listener"
         },
         {
@@ -26464,7 +26475,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 562,
+          "line": 567,
           "kind": "custom-event-listener",
           "match": "scrollContainer.addEventListener('scroll'"
         },
