@@ -43,12 +43,17 @@ jobs:
           node-version: 22
           cache: npm
 
-      # 终端测试在 Node 里直接加载 node-pty，用 Node ABI 的原生模块即可，不需要 Electron 运行时
+      # 跳过安装脚本：better-sqlite3 等原生模块在 Windows runner 上会回退到 node-gyp 编译并失败，
+      # 而这里的测试只需要 node-pty。node-pty 自带 N-API 预编译包，单独把它拷到 build/Release
       - name: Install dependencies
         env:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-        run: npm ci --omit=optional
+        run: npm ci --omit=optional --ignore-scripts
+
+      - name: Install node-pty prebuilt binaries
+        working-directory: node_modules/node-pty
+        run: node scripts/prebuild.js
 
       # 真实 PowerShell / ConPTY：Linux runner 上没有，只能在这里跑
       - name: Run terminal PTY tests
