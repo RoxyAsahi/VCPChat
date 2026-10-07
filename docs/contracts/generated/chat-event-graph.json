@@ -1239,7 +1239,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1000,
+          "line": 1011,
           "kind": "custom-event-listener"
         },
         {
@@ -1257,7 +1257,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1000,
+          "line": 1011,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('auxclick'"
         },
@@ -1675,7 +1675,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1351,
+          "line": 1357,
           "kind": "custom-event-listener"
         },
         {
@@ -1772,7 +1772,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1351,
+          "line": 1357,
           "kind": "custom-event-listener",
           "match": "vcpServerUrlInput.addEventListener('blur'"
         },
@@ -2318,7 +2318,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 515,
+          "line": 519,
           "kind": "custom-event-listener"
         },
         {
@@ -2348,7 +2348,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1160,
+          "line": 1166,
           "kind": "custom-event-listener"
         },
         {
@@ -2483,7 +2483,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 515,
+          "line": 519,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('change'"
         },
@@ -2519,7 +2519,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1160,
+          "line": 1166,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('change'"
         },
@@ -3774,42 +3774,37 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1064,
+          "line": 1075,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1079,
+          "line": 1090,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1080,
+          "line": 1091,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1082,
+          "line": 1093,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1092,
+          "line": 1103,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1099,
+          "line": 1110,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1163,
-          "kind": "custom-event-listener"
-        },
-        {
-          "file": "modules/settingsManager.js",
-          "line": 1238,
+          "line": 1169,
           "kind": "custom-event-listener"
         },
         {
@@ -3819,32 +3814,37 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1271,
+          "line": 1250,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1300,
+          "line": 1277,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1627,
+          "line": 1306,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1640,
+          "line": 1637,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1814,
+          "line": 1650,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1822,
+          "line": 1824,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/settingsManager.js",
+          "line": 1832,
           "kind": "custom-event-listener"
         },
         {
@@ -3959,7 +3959,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1276,
+          "line": 1318,
           "kind": "custom-event-listener"
         },
         {
@@ -5249,91 +5249,91 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1064,
+          "line": 1075,
           "kind": "custom-event-listener",
           "match": "refreshModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1079,
+          "line": 1090,
           "kind": "custom-event-listener",
           "match": "cancelRegexRuleBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1080,
+          "line": 1091,
           "kind": "custom-event-listener",
           "match": "closeRegexRuleModalBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1082,
+          "line": 1093,
           "kind": "custom-event-listener",
           "match": "regexRuleModal.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1092,
+          "line": 1103,
           "kind": "custom-event-listener",
           "match": "openTopicSummaryModelSelectBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1099,
+          "line": 1110,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1163,
+          "line": 1169,
           "kind": "custom-event-listener",
           "match": "deleteItemBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1238,
+          "line": 1244,
           "kind": "custom-event-listener",
           "match": "openModelSelectBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1244,
+          "line": 1250,
           "kind": "custom-event-listener",
           "match": "refreshModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1271,
+          "line": 1277,
           "kind": "custom-event-listener",
           "match": "refreshTtsModelsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1300,
+          "line": 1306,
           "kind": "custom-event-listener",
           "match": "resetAvatarColorsBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1627,
+          "line": 1637,
           "kind": "custom-event-listener",
           "match": "starSpan.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1640,
+          "line": 1650,
           "kind": "custom-event-listener",
           "match": "li.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1814,
+          "line": 1824,
           "kind": "custom-event-listener",
           "match": "editBtn.addEventListener('click'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1822,
+          "line": 1832,
           "kind": "custom-event-listener",
           "match": "deleteBtn.addEventListener('click'"
         },
@@ -5471,7 +5471,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1276,
+          "line": 1318,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('click'"
         },
@@ -7245,7 +7245,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 975,
+          "line": 986,
           "kind": "custom-event-listener"
         },
         {
@@ -7379,7 +7379,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 975,
+          "line": 986,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('contextmenu'"
         },
@@ -14649,7 +14649,7 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1961,
+          "line": 1973,
           "kind": "custom-event-create"
         }
       ],
@@ -14736,32 +14736,32 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1063,
+          "line": 1074,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1159,
+          "line": 1165,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1241,
+          "line": 1247,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1306,
+          "line": 1312,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1310,
+          "line": 1316,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1338,
+          "line": 1344,
           "kind": "custom-event-listener"
         },
         {
@@ -14909,43 +14909,43 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1063,
+          "line": 1074,
           "kind": "custom-event-listener",
           "match": "modelSearchInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1159,
+          "line": 1165,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1241,
+          "line": 1247,
           "kind": "custom-event-listener",
           "match": "modelSearchInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1306,
+          "line": 1312,
           "kind": "custom-event-listener",
           "match": "picker.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1310,
+          "line": 1316,
           "kind": "custom-event-listener",
           "match": "textInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1338,
+          "line": 1344,
           "kind": "custom-event-listener",
           "match": "agentCardCssInput.addEventListener('input'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1961,
+          "line": 1973,
           "kind": "custom-event-create",
           "match": "new CustomEvent('input'"
         },
@@ -15377,7 +15377,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1077,
+          "line": 1119,
           "kind": "custom-event-listener"
         },
         {
@@ -15725,7 +15725,7 @@
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 1077,
+          "line": 1119,
           "kind": "custom-event-listener",
           "match": "inputField.addEventListener('keydown'"
         },
@@ -18326,7 +18326,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1055,
+          "line": 1066,
           "kind": "custom-event-listener"
         },
         {
@@ -18356,7 +18356,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1055,
+          "line": 1066,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('modal-ready'"
         },
@@ -18742,7 +18742,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1016,
+          "line": 1027,
           "kind": "custom-event-listener"
         },
         {
@@ -18862,7 +18862,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1016,
+          "line": 1027,
           "kind": "custom-event-listener",
           "match": "settingsContainer.addEventListener('mousedown'"
         },
@@ -21462,7 +21462,7 @@
       "consumers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1247,
+          "line": 1253,
           "kind": "preload-subscription"
         },
         {
@@ -21474,7 +21474,7 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 1247,
+          "line": 1253,
           "kind": "preload-subscription",
           "match": "electronAPI.onModelsUpdated("
         },
@@ -22517,7 +22517,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1263,
+          "line": 1269,
           "kind": "custom-event-listener"
         },
         {
@@ -22535,7 +22535,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1263,
+          "line": 1269,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('pagehide'"
         },
@@ -26387,12 +26387,12 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 2014,
+          "line": 2026,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 535,
+          "line": 562,
           "kind": "custom-event-listener"
         },
         {
@@ -26447,13 +26447,13 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 2014,
+          "line": 2026,
           "kind": "custom-event-listener",
           "match": "settingsTab.addEventListener('scroll'"
         },
         {
           "file": "modules/topicListManager.js",
-          "line": 535,
+          "line": 562,
           "kind": "custom-event-listener",
           "match": "scrollContainer.addEventListener('scroll'"
         },
@@ -28009,12 +28009,12 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1078,
+          "line": 1089,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1132,
+          "line": 1143,
           "kind": "custom-event-listener"
         },
         {
@@ -28070,13 +28070,13 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1078,
+          "line": 1089,
           "kind": "custom-event-listener",
           "match": "regexRuleForm.addEventListener('submit'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1132,
+          "line": 1143,
           "kind": "custom-event-listener",
           "match": "agentSettingsForm.addEventListener('submit'"
         },
@@ -30176,7 +30176,7 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 172,
+          "line": 183,
           "kind": "custom-event-create"
         }
       ],
@@ -30184,7 +30184,7 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 172,
+          "line": 183,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-delete-result'"
         }
@@ -30229,7 +30229,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 166,
+          "line": 177,
           "kind": "custom-event-create"
         },
         {
@@ -30291,7 +30291,7 @@
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 166,
+          "line": 177,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-save-result'"
         },
@@ -30344,12 +30344,12 @@
       "producers": [
         {
           "file": "modules/settingsManager.js",
-          "line": 461,
+          "line": 472,
           "kind": "custom-event-create"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1344,
+          "line": 1350,
           "kind": "custom-event-create"
         }
       ],
@@ -30363,13 +30363,13 @@
       "evidence": [
         {
           "file": "modules/settingsManager.js",
-          "line": 461,
+          "line": 472,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-surface-updated'"
         },
         {
           "file": "modules/settingsManager.js",
-          "line": 1344,
+          "line": 1350,
           "kind": "custom-event-create",
           "match": "new CustomEvent('vcp-settings-surface-updated'"
         },
@@ -32598,7 +32598,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 711,
+      "line": 722,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target.addEventListener(type",
@@ -32606,7 +32606,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2221,
+      "line": 2233,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "element.addEventListener(eventName",
@@ -32614,7 +32614,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2250,
+      "line": 2262,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "systemPromptContainer.addEventListener(eventName",
@@ -32622,7 +32622,7 @@
     },
     {
       "file": "modules/topicListManager.js",
-      "line": 34,
+      "line": 40,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target?.addEventListener?.(type",
@@ -32630,7 +32630,7 @@
     },
     {
       "file": "modules/topicListManager.js",
-      "line": 39,
+      "line": 45,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target?.addEventListener?.(type",
