@@ -1715,7 +1715,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 95,
+          "line": 105,
           "kind": "custom-event-listener"
         },
         {
@@ -1825,7 +1825,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 95,
+          "line": 105,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener('blur'"
         },
@@ -4370,7 +4370,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 60,
+          "line": 63,
           "kind": "custom-event-listener"
         },
         {
@@ -5972,7 +5972,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 60,
+          "line": 63,
           "kind": "custom-event-listener",
           "match": "menu.addEventListener('click'"
         },
@@ -15557,12 +15557,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 76,
+          "line": 86,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 94,
+          "line": 104,
           "kind": "custom-event-listener"
         },
         {
@@ -15930,13 +15930,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 76,
+          "line": 86,
           "kind": "custom-event-listener",
           "match": "menu.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 94,
+          "line": 104,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
@@ -23013,7 +23013,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 93,
+          "line": 103,
           "kind": "custom-event-listener"
         },
         {
@@ -23070,7 +23070,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-menu.js",
-          "line": 93,
+          "line": 103,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
@@ -27611,14 +27611,14 @@
       "consumers": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 74,
+          "line": 70,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 74,
+          "line": 70,
           "kind": "event-listener",
           "match": "handle('source:check'"
         },
@@ -27642,14 +27642,14 @@
       "consumers": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 56,
+          "line": 52,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 56,
+          "line": 52,
           "kind": "event-listener",
           "match": "handle('source:list-files'"
         },
@@ -27673,14 +27673,14 @@
       "consumers": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 58,
+          "line": 54,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 58,
+          "line": 54,
           "kind": "event-listener",
           "match": "handle('source:read-file'"
         },
@@ -27704,14 +27704,14 @@
       "consumers": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 63,
+          "line": 59,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/sourceHandlers.js",
-          "line": 63,
+          "line": 59,
           "kind": "event-listener",
           "match": "handle('source:write-file'"
         },
@@ -32501,7 +32501,7 @@
     },
     {
       "file": "modules/ipc/sourceHandlers.js",
-      "line": 36,
+      "line": 32,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",

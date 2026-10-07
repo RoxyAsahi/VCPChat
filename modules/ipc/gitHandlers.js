@@ -204,6 +204,7 @@ module.exports = {
     CHANNELS,
     STATUS_TOPIC,
     initialize,
+    isAllowedSender,
     isAllowedSenderUrl,
     watchSnapshot,
     dispose,
