@@ -909,10 +909,9 @@ export function createSidePaneController({
                 : [];
             const untouchedFallback = state.parent && ownTabsBefore.length === 0 && !state.visible
                 && isNotificationsTab(state.activeTabId);
-            // 启动时布局先恢复、辅助对话后补回：这时面板落在全局工具上，不是通知兜底，
+            // 启动时布局先恢复、辅助对话后补回：这时面板落在全局工具或随布局恢复的本话题标签（比如计划）上，
             // 但只要补回的是这个对话上次停的标签、期间没人动过面板，也照样回到它
-            const untouchedSinceParent = state.parent && ownTabsBefore.length === 0
-                && navigationRevision === parentResolvedRevision;
+            const untouchedSinceParent = state.parent && navigationRevision === parentResolvedRevision;
             const added = [];
             for (const rawTab of rawTabs) {
                 if (!rawTab) continue;
