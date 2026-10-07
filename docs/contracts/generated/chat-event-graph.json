@@ -1244,7 +1244,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 202,
+          "line": 204,
           "kind": "custom-event-listener"
         }
       ],
@@ -1263,7 +1263,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 202,
+          "line": 204,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('auxclick'"
         }
@@ -1695,7 +1695,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 132,
+          "line": 133,
           "kind": "custom-event-listener"
         },
         {
@@ -1801,7 +1801,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 132,
+          "line": 133,
           "kind": "custom-event-listener",
           "match": "win.addEventListener('blur'"
         },
@@ -4185,22 +4185,22 @@
         },
         {
           "file": "modules/ui-system/side-pane/code-viewer/editor.js",
-          "line": 54,
+          "line": 87,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 220,
+          "line": 229,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 114,
+          "line": 115,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 217,
+          "line": 219,
           "kind": "custom-event-listener"
         },
         {
@@ -4395,12 +4395,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 179,
+          "line": 181,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 191,
+          "line": 193,
           "kind": "custom-event-listener"
         },
         {
@@ -5750,25 +5750,25 @@
         },
         {
           "file": "modules/ui-system/side-pane/code-viewer/editor.js",
-          "line": 54,
+          "line": 87,
           "kind": "custom-event-listener",
           "match": "read.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 220,
+          "line": 229,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 114,
+          "line": 115,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/git/git-view.js",
-          "line": 217,
+          "line": 219,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
@@ -6002,13 +6002,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 179,
+          "line": 181,
           "kind": "custom-event-listener",
           "match": "btn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 191,
+          "line": 193,
           "kind": "custom-event-listener",
           "match": "closeBtn.addEventListener('click'"
         },
@@ -7315,12 +7315,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 238,
+          "line": 247,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 214,
+          "line": 216,
           "kind": "custom-event-listener"
         },
         {
@@ -7452,13 +7452,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/cards.js",
-          "line": 238,
+          "line": 247,
           "kind": "custom-event-listener",
           "match": "row.addEventListener('contextmenu'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 214,
+          "line": 216,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('contextmenu'"
         },
@@ -11780,7 +11780,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 62,
+          "line": 67,
           "kind": "event-listener"
         },
         {
@@ -12106,7 +12106,7 @@
         },
         {
           "file": "modules/services/gitWatcher.js",
-          "line": 62,
+          "line": 67,
           "kind": "event-listener",
           "match": "watcher.on?.('error'"
         },
@@ -13830,14 +13830,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 191,
+          "line": 188,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 191,
+          "line": 188,
           "kind": "event-listener",
           "match": "handle('git:change-summary'"
         },
@@ -13880,14 +13880,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 154,
+          "line": 153,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 154,
+          "line": 153,
           "kind": "event-listener",
           "match": "handle('git:commit'"
         },
@@ -13911,14 +13911,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 186,
+          "line": 183,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 186,
+          "line": 183,
           "kind": "event-listener",
           "match": "handle('git:commit-graph'"
         },
@@ -13942,14 +13942,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 180,
+          "line": 177,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 180,
+          "line": 177,
           "kind": "event-listener",
           "match": "handle('git:create-branch'"
         },
@@ -13973,14 +13973,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 135,
+          "line": 134,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 135,
+          "line": 134,
           "kind": "event-listener",
           "match": "handle('git:diff'"
         },
@@ -14004,14 +14004,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 148,
+          "line": 147,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 148,
+          "line": 147,
           "kind": "event-listener",
           "match": "handle('git:discard'"
         },
@@ -14035,14 +14035,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 173,
+          "line": 170,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 173,
+          "line": 170,
           "kind": "event-listener",
           "match": "handle('git:list-branches'"
         },
@@ -14066,14 +14066,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 128,
+          "line": 127,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 128,
+          "line": 127,
           "kind": "event-listener",
           "match": "handle('git:list-workspaces'"
         },
@@ -14097,14 +14097,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 158,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 159,
+          "line": 158,
           "kind": "event-listener",
           "match": "handle('git:push'"
         },
@@ -14128,14 +14128,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 165,
+          "line": 164,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 165,
+          "line": 164,
           "kind": "event-listener",
           "match": "handle('git:reveal-path'"
         },
@@ -14159,14 +14159,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 144,
+          "line": 143,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 144,
+          "line": 143,
           "kind": "event-listener",
           "match": "handle('git:stage'"
         },
@@ -14190,14 +14190,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 133,
+          "line": 132,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 133,
+          "line": 132,
           "kind": "event-listener",
           "match": "handle('git:status'"
         },
@@ -14221,14 +14221,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 175,
+          "line": 172,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 175,
+          "line": 172,
           "kind": "event-listener",
           "match": "handle('git:switch-branch'"
         },
@@ -14252,14 +14252,14 @@
       "consumers": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 146,
+          "line": 145,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/gitHandlers.js",
-          "line": 146,
+          "line": 145,
           "kind": "event-listener",
           "match": "handle('git:unstage'"
         },
@@ -15507,7 +15507,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 131,
+          "line": 132,
           "kind": "custom-event-listener"
         },
         {
@@ -15577,7 +15577,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 303,
+          "line": 305,
           "kind": "custom-event-listener"
         },
         {
@@ -15870,7 +15870,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 131,
+          "line": 132,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('keydown'"
         },
@@ -15954,7 +15954,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 303,
+          "line": 305,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('keydown'"
         },
@@ -18817,7 +18817,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 199,
+          "line": 201,
           "kind": "custom-event-listener"
         },
         {
@@ -18941,7 +18941,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 199,
+          "line": 201,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mousedown'"
         },
@@ -19032,7 +19032,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 212,
           "kind": "custom-event-listener"
         },
         {
@@ -19074,7 +19074,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 210,
+          "line": 212,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseenter'"
         },
@@ -19147,7 +19147,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 211,
+          "line": 213,
           "kind": "custom-event-listener"
         },
         {
@@ -19230,7 +19230,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 211,
+          "line": 213,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('mouseleave'"
         },
@@ -22998,7 +22998,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 130,
+          "line": 131,
           "kind": "custom-event-listener"
         },
         {
@@ -23023,7 +23023,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 214,
           "kind": "custom-event-listener"
         },
         {
@@ -23052,7 +23052,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/git/context-menu.js",
-          "line": 130,
+          "line": 131,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('pointerdown'"
         },
@@ -23082,7 +23082,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 212,
+          "line": 214,
           "kind": "custom-event-listener",
           "match": "tabItem.addEventListener('pointerdown'"
         },
@@ -26462,7 +26462,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 260,
+          "line": 262,
           "kind": "custom-event-listener"
         },
         {
@@ -26526,7 +26526,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-tab-strip.js",
-          "line": 260,
+          "line": 262,
           "kind": "custom-event-listener",
           "match": "tabListElement.addEventListener('scroll'"
         },
@@ -32485,7 +32485,7 @@
     },
     {
       "file": "modules/ipc/gitHandlers.js",
-      "line": 97,
+      "line": 96,
       "reason": "dynamic event listener name: channel",
       "kind": "event-listener",
       "match": "ipcMain.handle(channel",
