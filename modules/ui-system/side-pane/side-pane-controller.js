@@ -262,7 +262,8 @@ export function createSidePaneController({
             getTabs: getStripTabs,
             getTabType,
             getActiveTabId: () => state.activeTabId,
-            getRecentlyClosed: () => recentlyClosedTabs,
+            // 只列当前对话能看到的：别的话题的标签重开后登记在那个话题下，这里看起来像点了没反应
+            getRecentlyClosed: () => recentlyClosedTabs.filter(entry => SidePaneState.isTabVisibleForParent(entry.tab, state.parent)),
             isClosable: isClosableTab,
             onActivate: (tabId) => {
                 controller.activateTab(tabId);
@@ -672,7 +673,7 @@ export function createSidePaneController({
             const tabOccurrence = entry?.occurrence || occurrences.get(tab.id);
             if (entry) occurrences.delete(tab.id);
             else void releaseOccurrence(tabOccurrence, 'tab-closed');
-            rememberClosed(tab);
+            if (!options.discard) rememberClosed(tab);
             const wasVisible = state.visible;
             state = SidePaneState.closeTab(state, tab.id, options);
             tabCloseOwner.forgetLifetime(tab.id);
@@ -840,6 +841,20 @@ export function createSidePaneController({
             if (isDisposed) return;
             navigationRevision++;
             await closeBatch(SidePaneState.getClosableVisibleTabs(state));
+        },
+
+        /**
+         * 话题删掉后，属于它的标签（辅助对话、话题级代码查看等）直接丢弃：不询问、不进最近关闭、不调 onClosed
+         * （子话题目录已随父话题一起删了）。不丢的话辅助对话是 keep，会一直挂着渲染器和监听直到重启。
+         * 对齐 ZCode useAppPanels.ts 订阅父任务生命周期统一关掉框选副屏标签。
+         */
+        async discardTabsOfDeletedTopics({ itemId, topicIds } = {}) {
+            if (isDisposed || !itemId || !topicIds?.length) return;
+            const deleted = new Set(topicIds);
+            const orphaned = state.tabs.filter(tab => tab.parent?.itemId === itemId && deleted.has(tab.parent?.topicId));
+            if (!orphaned.length) return;
+            navigationRevision++;
+            await closeBatch(orphaned, { discard: true });
         },
 
         /**
@@ -1059,7 +1074,8 @@ export function createSidePaneController({
             }
             renderTabList();
             syncViewPanels();
-            syncDomVisibility();
+            // 启动时直接落到存档的开合状态，不播动画
+            syncDomVisibility({ animate: false });
             return true;
         },
 
