@@ -11,14 +11,19 @@ function fixture() {
     const dom = new JSDOM('<section id="view"></section>', { pretendToBeVisual: true });
     const doc = dom.window.document;
     const listeners = new Set();
-    const state = { after: 'a\n', added: 1, diffs: 0, toplevel: '/repo' };
+    const state = { after: 'a\n', added: 1, diffs: 0, toplevel: '/repo', diffGate: null, diffFails: 0 };
     const api = {
         async gitListWorkspaces() { return { success: true, data: { workspaces: [{ id: 'w', path: '/repo/pkg' }] } }; },
         async gitStatus() {
             return { success: true, data: { isRepo: true, toplevel: state.toplevel, prefix: 'pkg', staged: [], conflicts: [],
                 changes: [{ path: 'pkg/x.js', status: 'M', added: state.added, removed: 0 }] } };
         },
-        async gitDiff() { state.diffs += 1; return { success: true, data: { before: { text: '' }, after: { text: state.after } } }; },
+        async gitDiff() {
+            state.diffs += 1;
+            if (state.diffGate) await state.diffGate;
+            if (state.diffFails > 0) { state.diffFails -= 1; return { success: false, error: 'git busy' }; }
+            return { success: true, data: { before: { text: '' }, after: { text: state.after } } };
+        },
         onGitChanged(cb) { listeners.add(cb); return () => listeners.delete(cb); },
         async subscribeMainState() { return {}; },
         async unsubscribeMainState() { return {}; }
@@ -72,5 +77,42 @@ test('copying the absolute path of a file in a subdirectory workspace uses the r
         item.click();
         await wait(10);
         assert.deepEqual(copied, ['/repo/pkg/x.js']);
+    } finally { f.cleanup(); }
+});
+
+test('while an edited file\'s diff is refetched the open diff keeps showing the previous one instead of collapsing', async () => {
+    const f = fixture();
+    try {
+        await f.view.ready;
+        f.view.element.querySelector('.side-git-row').click();
+        await wait(20);
+        const gate = Promise.withResolvers();
+        f.state.diffGate = gate.promise;
+        f.state.after = 'a\nb\n';
+        f.state.added = 2;
+        f.push();
+        await wait(30);
+        assert.equal(f.view.element.querySelector('.side-git-diff-loading'), null, 'no one-line "加载中…" while refetching');
+        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 1, 'the previous diff stays up');
+        f.state.diffGate = null;
+        gate.resolve();
+        await wait(30);
+        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 2);
+    } finally { f.cleanup(); }
+});
+
+test('a diff that failed to load is not cached and can be retried in place', async () => {
+    const f = fixture();
+    try {
+        await f.view.ready;
+        f.state.diffFails = 1;
+        f.view.element.querySelector('.side-git-row').click();
+        await wait(20);
+        const retry = f.view.element.querySelector('.side-git-diff-retry');
+        assert.ok(retry, 'the failure offers a retry');
+        assert.match(f.view.element.querySelector('.side-git-diff-error').textContent, /git busy/);
+        retry.click();
+        await wait(20);
+        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 1);
     } finally { f.cleanup(); }
 });
