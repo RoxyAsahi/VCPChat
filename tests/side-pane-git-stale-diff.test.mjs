@@ -78,22 +78,24 @@ test('copying the absolute path of a file in a subdirectory workspace uses the r
 
 test('while an edited file\'s diff is refetched the open diff keeps showing the previous one instead of collapsing', async () => {
     const f = fixture();
+    const adds = () => f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length;
     try {
         await f.view.ready;
+        await waitFor(() => f.view.element.querySelector('.side-git-row'), { message: 'row never rendered' });
         f.view.element.querySelector('.side-git-row').click();
-        await wait(20);
+        await waitFor(() => adds() === 1, { message: 'expanded diff never rendered' });
         const gate = Promise.withResolvers();
         f.state.diffGate = gate.promise;
+        const diffsBefore = f.state.diffs;
         f.state.after = 'a\nb\n';
         f.state.added = 2;
         f.push();
-        await wait(30);
-        assert.equal(f.view.element.querySelector('.side-git-diff-loading'), null, 'no one-line "加载中…" while refetching');
-        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 1, 'the previous diff stays up');
+        await waitFor(() => f.state.diffs > diffsBefore, { message: 'push never refetched the open diff' });
+        assert.equal(f.view.element.querySelector('.side-git-diff-loading'), null, 'no one-line loading row while refetching');
+        assert.equal(adds(), 1, 'the previous diff stays up');
         f.state.diffGate = null;
         gate.resolve();
-        await wait(30);
-        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 2);
+        await waitFor(() => adds() === 2, { message: 'the new diff never replaced the old one' });
     } finally { f.cleanup(); }
 });
 
@@ -101,14 +103,12 @@ test('a diff that failed to load is not cached and can be retried in place', asy
     const f = fixture();
     try {
         await f.view.ready;
+        await waitFor(() => f.view.element.querySelector('.side-git-row'), { message: 'row never rendered' });
         f.state.diffFails = 1;
         f.view.element.querySelector('.side-git-row').click();
-        await wait(20);
-        const retry = f.view.element.querySelector('.side-git-diff-retry');
-        assert.ok(retry, 'the failure offers a retry');
-        assert.match(f.view.element.querySelector('.side-git-diff-error').textContent, /git busy/);
-        retry.click();
-        await wait(20);
-        assert.equal(f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length, 1);
+        await waitFor(() => f.view.element.querySelector('.side-git-diff-retry'), { message: 'the failure offers no retry' });
+        assert.ok(f.view.element.querySelector('.side-git-diff-error[role="alert"]'));
+        f.view.element.querySelector('.side-git-diff-retry').click();
+        await waitFor(() => f.view.element.querySelectorAll('.side-git-diff-table .diff-line.add').length === 1, { message: 'retry never loaded the diff' });
     } finally { f.cleanup(); }
 });

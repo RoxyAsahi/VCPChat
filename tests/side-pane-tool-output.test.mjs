@@ -308,8 +308,7 @@ test('a failed command list shows an error with a retry, not "no commands yet"',
 
     state.listError = '';
     view.querySelector('.side-tool-output-error-retry').click();
-    await wait(200);
-    assert.equal(bar.hidden, true);
+    await waitFor(() => bar.hidden && /^running tests…/.test(view.querySelector('.side-tool-output-text').textContent), { message: 'retry never loaded the command list' });
     assert.match(view.querySelector('.side-tool-output-text').textContent, /^running tests…/);
     await handle.dispose();
 });
@@ -321,8 +320,7 @@ test('a failed reload while a command runs keeps the output on screen', async ()
     assert.match(shown, /^running tests…/);
     delete state.details.r2;
     fire({ ...RUNS[0], updatedAt: Date.now() });
-    await wait(120);
-    assert.equal(view.querySelector('.side-tool-output-error').hidden, false);
+    await waitFor(() => !view.querySelector('.side-tool-output-error').hidden, { message: 'the failed reload never surfaced' });
     assert.equal(view.querySelector('.side-tool-output-text').textContent, shown, 'the last output stays');
     await handle.dispose();
 });
