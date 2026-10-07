@@ -416,3 +416,39 @@ test('a path outside every workspace is only read after the user asks for it', a
         dom.window.close();
     }
 });
+
+test('code is rendered in chunks whose text and line numbers stay continuous', async () => {
+    const { CODE_CHUNK_LINES } = await import('../modules/ui-system/side-pane/code-viewer/editor.js');
+    const dom = new JSDOM('<section id="view"></section>');
+    const doc = dom.window.document;
+    const lineCount = CODE_CHUNK_LINES * 2 + 50;
+    const code = Array.from({ length: lineCount }, (_, i) => `line ${i + 1}`).join('\n');
+    const provider = createCodeViewerSideProvider({ document: doc, uiHelper: null, api: null });
+    const view = doc.getElementById('view');
+    const handle = await provider.mountTab({ title: 'chunks.txt', payload: { code, language: 'plaintext' } }, view);
+    try {
+        const codeChunks = view.querySelectorAll('.side-code-pre .side-code-chunk');
+        const gutterChunks = view.querySelectorAll('.side-code-gutter .side-code-chunk');
+        assert.equal(codeChunks.length, 3);
+        assert.deepEqual([...gutterChunks].map(chunk => chunk.children.length), [CODE_CHUNK_LINES, CODE_CHUNK_LINES, 50]);
+        assert.equal(view.querySelector('.side-code-pre').textContent, code);
+        assert.equal(view.querySelectorAll('.side-code-line-number').length, lineCount);
+        assert.equal([...view.querySelectorAll('.side-code-line-number')].at(-1).textContent, String(lineCount));
+    } finally {
+        handle.dispose();
+        dom.window.close();
+    }
+});
+
+test('highlighted html is split per line with spans that cross lines closed and reopened', async () => {
+    const { splitHighlightedLines } = await import('../modules/ui-system/side-pane/code-viewer/editor.js');
+    const html = '<span class="hljs-comment">/* a\nb */</span> x\n<span class="hljs-string">`c\n<span class="hljs-subst">${d}\ne</span>`</span>';
+    assert.deepEqual(splitHighlightedLines(html), [
+        '<span class="hljs-comment">/* a</span>',
+        '<span class="hljs-comment">b */</span> x',
+        '<span class="hljs-string">`c</span>',
+        '<span class="hljs-string"><span class="hljs-subst">${d}</span></span>',
+        '<span class="hljs-string"><span class="hljs-subst">e</span>`</span>'
+    ]);
+    assert.deepEqual(splitHighlightedLines(''), ['']);
+});

@@ -384,3 +384,69 @@ test('git IPC accepts only exact application pages, including embedded query par
     assert.equal(isAllowedSenderUrl(mainPage),true);
     for(const url of ['file:///C:/attacker/main.html','file:///H:/VCP/VCPMain/VCPChat/ProjectForgemodules/projectforge.html','https://evil.example/main.html','']) assert.equal(isAllowedSenderUrl(url),false,url);
 });
+
+test('status carries per-file line counts that follow a second edit of an already modified file', { skip: SKIP_GIT }, async t => {
+    const root = createRepo(t);
+    write(root, 'src/app.js', 'const a = 1;\nconst b = 2;\n');
+    let status = await gitService.getStatus(root);
+    const first = status.changes.find(item => item.path === 'src/app.js');
+    assert.deepEqual([first.status, first.added, first.removed], ['M', 1, 0]);
+
+    write(root, 'src/app.js', 'const a = 1;\nconst b = 2;\nconst c = 3;\nconst d = 4;\n');
+    status = await gitService.getStatus(root);
+    const second = status.changes.find(item => item.path === 'src/app.js');
+    assert.deepEqual([second.status, second.added, second.removed], ['M', 3, 0]);
+
+    git(root, ['add', 'src/app.js']);
+    status = await gitService.getStatus(root);
+    const staged = status.staged.find(item => item.path === 'src/app.js');
+    assert.deepEqual([staged.added, staged.removed], [3, 0]);
+});
+
+test('reveal targets resolve against the repository root when the workspace is a subdirectory', { skip: SKIP_GIT }, async t => {
+    const root = createRepo(t);
+    const workspace = path.join(root, 'pkg');
+    write(root, 'pkg/sub/keep.txt', 'changed\n');
+    const status = await gitService.getStatus(workspace);
+    const item = status.changes.find(entry => entry.path.endsWith('keep.txt'));
+    assert.equal(item.path, 'pkg/sub/keep.txt');
+
+    const target = await gitService.resolveRevealTarget(workspace, item.path);
+    assert.equal(fs.realpathSync(target), fs.realpathSync(path.join(root, 'pkg', 'sub', 'keep.txt')));
+    await assert.rejects(gitService.resolveRevealTarget(workspace, 'README.md'), /不在工作区内/);
+});
+
+test('a GIT_DIR inherited from the launching shell does not redirect commands to another repository', { skip: SKIP_GIT }, async t => {
+    const root = createRepo(t);
+    const other = createRepo(t);
+    write(other, 'only-in-other.txt', 'x\n');
+    write(root, 'src/app.js', 'const a = 2;\n');
+    const saved = { GIT_DIR: process.env.GIT_DIR, GIT_WORK_TREE: process.env.GIT_WORK_TREE, LC_ALL: process.env.LC_ALL, LANGUAGE: process.env.LANGUAGE };
+    Object.assign(process.env, { GIT_DIR: path.join(other, '.git'), GIT_WORK_TREE: other, LC_ALL: 'zh_CN.UTF-8', LANGUAGE: 'zh_CN' });
+    t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+
+    const status = await gitService.getStatus(root);
+    assert.equal(status.isRepo, true);
+    assert.deepEqual(status.changes.map(item => item.path), ['src/app.js'], 'the workspace\'s own change, nothing from the other repository');
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-nogit-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    assert.equal((await gitService.getStatus(dir)).isRepo, false);
+});
+
+test('a switch blocked by local changes reports the files in a form the commit-and-switch flow recognises', { skip: SKIP_GIT }, async t => {
+    const root = createRepo(t);
+    git(root, ['switch', '-q', '-c', 'other']);
+    write(root, 'README.md', '# other\n');
+    git(root, ['commit', '-q', '-am', 'other change']);
+    git(root, ['switch', '-q', 'main']);
+    write(root, 'README.md', '# local edit\n');
+    const saved = { LC_ALL: process.env.LC_ALL, LANGUAGE: process.env.LANGUAGE };
+    Object.assign(process.env, { LC_ALL: 'zh_CN.UTF-8', LANGUAGE: 'zh_CN' });
+    t.after(() => { for (const [key, value] of Object.entries(saved)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
+
+    const blocked = await gitService.switchBranch(root, 'other');
+    assert.equal(blocked.ok, false);
+    const { parseSwitchBlockedFiles } = await import('../modules/ui-system/conversation-status-panel/helpers.js');
+    assert.deepEqual(parseSwitchBlockedFiles(blocked.issues[0].message), { files: ['README.md'], untracked: false });
+});
