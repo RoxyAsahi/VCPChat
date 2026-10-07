@@ -3611,7 +3611,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 50,
+          "line": 57,
           "kind": "custom-event-listener"
         },
         {
@@ -4046,12 +4046,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 169,
+          "line": 171,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 174,
+          "line": 176,
           "kind": "custom-event-listener"
         },
         {
@@ -5066,7 +5066,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 50,
+          "line": 57,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('click'"
         },
@@ -5588,13 +5588,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 169,
+          "line": 171,
           "kind": "custom-event-listener",
           "match": "generate.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 174,
+          "line": 176,
           "kind": "custom-event-listener",
           "match": "checkbox.addEventListener('click'"
         },
@@ -14843,12 +14843,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 248,
+          "line": 250,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 168,
+          "line": 170,
           "kind": "custom-event-listener"
         },
         {
@@ -15030,13 +15030,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 248,
+          "line": 250,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 168,
+          "line": 170,
           "kind": "custom-event-listener",
           "match": "textarea.addEventListener('input'"
         },
@@ -15398,6 +15398,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 53,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
           "line": 352,
           "kind": "custom-event-listener"
@@ -15469,12 +15474,17 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 175,
+          "line": 177,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 183,
+          "line": 185,
+          "kind": "custom-event-listener"
+        },
+        {
+          "file": "modules/ui-system/conversation-status-panel/floating.js",
+          "line": 112,
           "kind": "custom-event-listener"
         },
         {
@@ -15737,6 +15747,12 @@
           "match": "statusText.addEventListener('keydown'"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 53,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('keydown'"
+        },
+        {
           "file": "modules/renderer/sideChatSurfaceOwner.js",
           "line": 352,
           "kind": "custom-event-listener",
@@ -15822,15 +15838,21 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 175,
+          "line": 177,
           "kind": "custom-event-listener",
           "match": "actionsBox.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 183,
+          "line": 185,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('keydown'"
+        },
+        {
+          "file": "modules/ui-system/conversation-status-panel/floating.js",
+          "line": 112,
+          "kind": "custom-event-listener",
+          "match": "overlay.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/sections.js",
@@ -18804,7 +18826,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 49,
+          "line": 56,
           "kind": "custom-event-listener"
         },
         {
@@ -18824,7 +18846,7 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/floating.js",
-          "line": 103,
+          "line": 111,
           "kind": "custom-event-listener"
         },
         {
@@ -18923,7 +18945,7 @@
         },
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 49,
+          "line": 56,
           "kind": "custom-event-listener",
           "match": "floatingBtn.addEventListener('mousedown'"
         },
@@ -18947,7 +18969,7 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/floating.js",
-          "line": 103,
+          "line": 111,
           "kind": "custom-event-listener",
           "match": "overlay.addEventListener('mousedown'"
         },
@@ -24960,6 +24982,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 55,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/services/embeddedAppSessionManager.js",
           "line": 390,
           "kind": "event-listener"
@@ -25048,6 +25075,12 @@
           "line": 349,
           "kind": "custom-event-listener",
           "match": "window.addEventListener('resize'"
+        },
+        {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 55,
+          "kind": "custom-event-listener",
+          "match": "win.addEventListener('resize'"
         },
         {
           "file": "modules/services/embeddedAppSessionManager.js",
@@ -26443,13 +26476,18 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 54,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/renderer/messenger-presentation.js",
           "line": 235,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 31,
+          "line": 51,
           "kind": "custom-event-listener"
         },
         {
@@ -26501,6 +26539,12 @@
           "match": "container.addEventListener('scroll'"
         },
         {
+          "file": "modules/renderer/floatingSelectionButton.js",
+          "line": 54,
+          "kind": "custom-event-listener",
+          "match": "doc.addEventListener('scroll'"
+        },
+        {
           "file": "modules/renderer/messenger-presentation.js",
           "line": 235,
           "kind": "custom-event-listener",
@@ -26508,7 +26552,7 @@
         },
         {
           "file": "modules/renderer/side-chat/scrolling.js",
-          "line": 31,
+          "line": 51,
           "kind": "custom-event-listener",
           "match": "root.addEventListener('scroll'"
         },
@@ -26792,14 +26836,14 @@
       "consumers": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 48,
+          "line": 53,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/floatingSelectionButton.js",
-          "line": 48,
+          "line": 53,
           "kind": "custom-event-listener",
           "match": "doc.addEventListener('selectionchange'"
         }
@@ -28091,12 +28135,12 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 249,
+          "line": 251,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 182,
+          "line": 184,
           "kind": "custom-event-listener"
         },
         {
@@ -28155,13 +28199,13 @@
         },
         {
           "file": "modules/ui-system/conversation-status-panel/branch-dialogs.js",
-          "line": 249,
+          "line": 251,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
         {
           "file": "modules/ui-system/conversation-status-panel/commit-dialog.js",
-          "line": 182,
+          "line": 184,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('submit'"
         },
@@ -29234,9 +29278,33 @@
       ]
     },
     {
+      "name": "touchmove",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 55,
+          "kind": "custom-event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 55,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('touchmove'"
+        }
+      ]
+    },
+    {
       "name": "touchstart",
       "producers": [],
       "consumers": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 54,
+          "kind": "custom-event-listener"
+        },
         {
           "file": "modules/ui-helpers.js",
           "line": 344,
@@ -29244,6 +29312,12 @@
         }
       ],
       "evidence": [
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 54,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('touchstart'"
+        },
         {
           "file": "modules/ui-helpers.js",
           "line": 344,
@@ -31658,6 +31732,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 52,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/ui-helpers.js",
           "line": 332,
           "kind": "custom-event-listener"
@@ -31680,6 +31759,12 @@
           "line": 489,
           "kind": "custom-event-listener",
           "match": "zoomTarget.addEventListener('wheel'"
+        },
+        {
+          "file": "modules/renderer/side-chat/scrolling.js",
+          "line": 52,
+          "kind": "custom-event-listener",
+          "match": "root.addEventListener('wheel'"
         },
         {
           "file": "modules/ui-helpers.js",

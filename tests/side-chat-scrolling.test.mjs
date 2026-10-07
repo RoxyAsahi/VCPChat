@@ -59,3 +59,44 @@ test('content growth does not pull a reader who scrolled up back down', async ()
     assert.equal(root.scrollTop, 100);
     scrolling.dispose();
 });
+
+test('a wheel tick up during streaming detaches before the next growth pins back down', () => {
+    const { win, root, ro, scrolling, grow } = setup();
+    root.scrollTop = 500;
+    root.dispatchEvent(new win.Event('scroll'));
+    root.dispatchEvent(new win.WheelEvent('wheel', { deltaY: -40 }));
+    grow(30); // 新 token 先于滚轮的 scroll 事件到达
+    ro.fire(root.firstElementChild);
+    assert.equal(root.scrollTop, 500);
+    assert.equal(scrolling.isSticky(), false);
+    scrolling.dispose();
+});
+
+test('a small scroll up within the bottom threshold still detaches; scrolling back down re-attaches', () => {
+    const { win, root, scrolling } = setup();
+    root.scrollTop = 500;
+    root.dispatchEvent(new win.Event('scroll'));
+    root.scrollTop = 470;
+    root.dispatchEvent(new win.Event('scroll'));
+    assert.equal(scrolling.isSticky(), false);
+    root.scrollTop = 490;
+    root.dispatchEvent(new win.Event('scroll'));
+    assert.equal(scrolling.isSticky(), true);
+    scrolling.dispose();
+});
+
+test('keyboard and touch scroll-up intents detach, but arrow keys inside the composer do not', () => {
+    const { win, root, scrolling } = setup();
+    const input = win.document.createElement('textarea');
+    root.appendChild(input);
+    input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+    assert.equal(scrolling.isSticky(), true);
+    root.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }));
+    assert.equal(scrolling.isSticky(), false);
+    scrolling.resume();
+    const touch = (type, y) => { const e = new win.Event(type); e.touches = [{ clientY: y }]; root.dispatchEvent(e); };
+    touch('touchstart', 100);
+    touch('touchmove', 140);
+    assert.equal(scrolling.isSticky(), false);
+    scrolling.dispose();
+});
