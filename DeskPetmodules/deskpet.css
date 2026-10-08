@@ -49,10 +49,10 @@ html, body {
 #avatar {
   position: absolute;
   left: 50%;
-  bottom: 24px;
-  width: 168px;
-  height: 168px;
-  margin-left: -84px;
+  bottom: calc(24px * var(--pet-scale, 1));
+  width: calc(168px * var(--pet-scale, 1));
+  height: calc(168px * var(--pet-scale, 1));
+  margin-left: calc(-84px * var(--pet-scale, 1));
   animation: deskpet-bob 3.6s ease-in-out infinite;
 }
 
@@ -69,7 +69,7 @@ html, body {
   position: absolute;
   right: 4px;
   bottom: 4px;
-  font-size: 34px;
+  font-size: calc(34px * var(--pet-scale, 1));
   line-height: 1;
 }
 
@@ -313,6 +313,18 @@ body.is-cramped #uiStack:has(#composer) #bubble::after {
 
 #emotionBadge.is-fading {
   opacity: 0;
+}
+
+/* 免打扰时头顶旁边一个小月亮，知道它为什么不出声 */
+#dndBadge {
+  position: absolute;
+  left: calc(50% + 24px);
+  top: calc(var(--pet-head, 150px) - 4px);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.75;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
 @keyframes deskpet-breathe {

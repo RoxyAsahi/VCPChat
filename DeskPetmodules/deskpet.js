@@ -51,6 +51,12 @@ const $ = (id) => document.getElementById(id);
 let backend = null;
 let frame = { state: null, emotion: 'neutral', intensity: 0, source: 'idle' };
 let lastActivity = Date.now();
+// 主进程给的设置：大小、免打扰。别的模块（声音、待机反应）读 window.deskPetPrefs 或听 'deskpet:prefs' 事件。
+let prefs = { scale: 1, doNotDisturb: false };
+// 免打扰时只有「在回桌宠上说的话」的回复还显示气泡：发出后这么久内开始的回复，
+// 以及紧接着这种回复（工具调用后的续写）开始的回复
+const OWN_REPLY_WINDOW_MS = 30000;
+const OWN_FOLLOW_UP_MS = 5000;
 
 // ---- 气泡：状态、回复文字、提示 ----------------------------------------------
 
@@ -59,6 +65,7 @@ const bubble = {
     replyId: null,      // 正在流式的回复
     region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
+    own: false,         // 这条回复是不是在回桌宠上说的话
     proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
     hovered: false,
     hideTimer: 0,
@@ -80,14 +87,16 @@ function renderBubble() {
     const text = $('bubbleText');
     let content = '';
     let mode = '';
-    const reply = bubble.reply.trim() ? toBubbleText(bubble.reply) : '';
+    // 免打扰：主窗口里聊天的回复不在桌宠头上冒出来，只有在桌宠上说的话才回气泡
+    const muted = isQuiet() && !bubble.own;
+    const reply = !muted && bubble.reply.trim() ? toBubbleText(bubble.reply) : '';
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
     } else if (reply) {
         content = reply;
         mode = 'is-reply';
-    } else if (frame.state && STATE_LABEL[frame.state] && !(frame.state === 'tool' && toolCard?.visible)) {
+    } else if (!muted && frame.state && STATE_LABEL[frame.state] && !(frame.state === 'tool' && toolCard?.visible)) {
         content = STATE_LABEL[frame.state];
         mode = 'is-state';
     }
@@ -150,7 +159,10 @@ function speakProactive(payload) {
         return;
     }
     const kind = payload.kind === 'alarm' ? 'alarm' : 'topic';
+    // 免打扰：自己开新话题这种不说；闹钟是用户自己定的，照常叫
+    if (kind !== 'alarm' && isQuiet()) return;
     bubble.proactive = { kind, title: payload.title || '', topicId: payload.topicId || '' };
+    bubble.own = kind === 'alarm';
     bubble.reply = payload.text || payload.title;
     lastActivity = Date.now();
     proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
@@ -173,6 +185,7 @@ function notice(text, { error = false, ms = 6000 } = {}) {
 
 let badgeTimer = 0;
 function flashEmotionBadge(emotion, source) {
+    if (isQuiet()) return;
     const el = $('emotionBadge');
     el.textContent = `${EMOTION_EMOJI[emotion] || ''} ${EMOTION_LABEL[emotion] || emotion}${source === 'rule' ? '（推测）' : ''}`;
     el.hidden = false;
@@ -183,7 +196,7 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false, queued: null };
+const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0 };
 
 function openComposer() {
     composer.open = true;
@@ -206,11 +219,16 @@ function shorten(text, max = 16) {
 async function sendText(text) {
     composer.sending = true;
     $('composerSend').disabled = true;
+    // 先记下发出时间：回复流的开头可能比发送结果先到
+    const previousSentAt = composer.lastSentAt;
+    composer.lastSentAt = Date.now();
     try {
         const result = await api.send(text);
         if (result?.success) return true;
+        composer.lastSentAt = previousSentAt;
         notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
     } catch (error) {
+        composer.lastSentAt = previousSentAt;
         notice(`没发出去：${error.message}`, { error: true });
     } finally {
         composer.sending = false;
@@ -277,7 +295,11 @@ function bindComposer() {
         bubble.hovered = false;
         if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
     });
-    api.onOpenInput(openComposer);
+    // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）
+    api.onOpenInput(({ toggle } = {}) => {
+        if (toggle && composer.open && !input.value.trim()) closeComposer();
+        else openComposer();
+    });
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
         if (composer.open && !input.value.trim()) closeComposer();
@@ -313,6 +335,7 @@ function bindPointer({ onTap, onDoubleTap }) {
     let lastTap = 0;
     let tapTimer = 0;
     window.addEventListener('pointerdown', (e) => {
+        api.touched?.();
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
         // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
         if (down?.dragging) api.dragEnd();
@@ -351,6 +374,13 @@ function bindPointer({ onTap, onDoubleTap }) {
     };
     window.addEventListener('pointercancel', abort);
     window.addEventListener('blur', abort);
+    // Ctrl（macOS 上 Cmd）+ 滚轮调大小；气泡上的滚轮留给翻看回复
+    window.addEventListener('wheel', (e) => {
+        if (!(e.ctrlKey || e.metaKey) || e.target?.closest?.('.pet-ui')) return;
+        e.preventDefault();
+        const px = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+        api.wheelResize?.(px);
+    }, { passive: false });
     window.addEventListener('contextmenu', (e) => {
         if (e.target?.closest?.('#composer')) return; // 输入框里保留系统的复制粘贴菜单
         e.preventDefault();
@@ -939,6 +969,8 @@ function bindStream(director) {
     $('toolCard').addEventListener('click', () => api.openMainWindow());
     const startReply = (messageId) => {
         clearTimeout(bubble.hideTimer);
+        bubble.own = Date.now() - composer.lastSentAt < OWN_REPLY_WINDOW_MS
+            || (composer.ownReplyEndedAt > 0 && Date.now() - composer.ownReplyEndedAt < OWN_FOLLOW_UP_MS);
         bubble.replyId = messageId;
         bubble.reply = '';
         bubble.region = null;
@@ -973,6 +1005,7 @@ function bindStream(director) {
             scanner = null;
             bubble.replyId = null;
             bubble.region = null;
+            composer.ownReplyEndedAt = bubble.own ? Date.now() : 0;
             scheduleReplyHide(replyHoldMs());
             toolCard.end();
             if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));
@@ -983,11 +1016,32 @@ function bindStream(director) {
     });
 }
 
+// ---- 设置：大小、免打扰 -------------------------------------------------------------
+
+function isQuiet() {
+    return prefs.doNotDisturb === true;
+}
+
+function applyPrefs(next) {
+    if (!next || typeof next !== 'object') return;
+    const previous = prefs;
+    prefs = { ...prefs, ...next };
+    window.deskPetPrefs = Object.freeze({ ...prefs });
+    document.documentElement.style.setProperty('--pet-scale', String(prefs.scale || 1));
+    document.body.classList.toggle('is-dnd', isQuiet());
+    $('dndBadge').hidden = !isQuiet();
+    if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;
+    renderBubble();
+    window.dispatchEvent(new CustomEvent('deskpet:prefs', { detail: window.deskPetPrefs }));
+}
+
 // ---- 启动 --------------------------------------------------------------------
 
 async function start() {
     const assets = await api.getAssets();
     if (!assets) return;
+    applyPrefs(await api.getPrefs?.().catch(() => null));
+    api.onPrefs?.(applyPrefs);
     document.title = `${assets.name} · 桌宠`;
     $('composerInput').placeholder = `和 ${assets.name} 说点什么…（Enter 发送，Esc 收起）`;
 
