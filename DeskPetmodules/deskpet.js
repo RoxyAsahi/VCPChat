@@ -1297,6 +1297,8 @@ async function start() {
     let flashTimer = 0;
     // 互动反应时临时换个表情（不改导演的心情，演完换回来）
     const flashEmotion = (emotion, ms) => {
+        // 立绘没画这个情绪就不换，免得退回默认立绘闪一下
+        if (backend.canShow && !backend.canShow(emotion)) return;
         clearTimeout(flashTimer);
         backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
         flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true }), ms);
