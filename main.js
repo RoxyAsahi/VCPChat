@@ -542,7 +542,9 @@ function startDistributedServerAfterRenderer() {
                 pluginAgentOperationService,
                 chartService,
                 // 工作区只读门面：direct 插件据此动态获取写入白名单
-                workspaceService: workspaceHandlers.workspaceService
+                workspaceService: workspaceHandlers.workspaceService,
+                // 桌宠：闹钟到点、AI 主动开的新话题，在开着的桌宠上说出来
+                onToolResult: deskPetHandlers.onDistributedToolResult
             });
             distributedServer = server;
             await server.initialize();

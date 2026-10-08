@@ -202,7 +202,7 @@ export function createPetLife({
             const moved = !cursor || Math.hypot(x - cursor.x, y - cursor.y) >= 2;
             if (!moved) return null;
             const prev = cursor;
-            cursor = { x, y, at };
+            cursor = { x, y, at, inside };
             if (!inside) {
                 if (phase === 'awake') updateGaze();
                 return null;
@@ -216,7 +216,8 @@ export function createPetLife({
                 }
                 if (onHead) return null;
                 // 光标在窗口里晃够一段距离才醒，路过一下不算
-                if (prev) wakeTravel.push({ d: Math.hypot(x - prev.x, y - prev.y), at });
+                // 只算窗口里连着的移动：刚从窗外进来、隔了很久才再动的那一跳不算
+                if (prev?.inside && at - prev.at <= 250) wakeTravel.push({ d: Math.hypot(x - prev.x, y - prev.y), at });
                 wakeTravel = wakeTravel.filter((w) => at - w.at <= t.wakeTravelWindowMs);
                 const travel = wakeTravel.reduce((sum, w) => sum + w.d, 0);
                 if (travel < t.wakeTravelPx) return null;
@@ -256,6 +257,11 @@ export function createPetLife({
             const name = onHead ? 'headTap' : 'poke';
             act(name);
             return name;
+        },
+
+        // 有事要说（主动发言、闹钟）：睡着就惊醒
+        wake({ startle = false } = {}) {
+            return interact({ startle, gentle: !startle });
         },
 
         dragEnd() {

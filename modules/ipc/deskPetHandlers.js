@@ -6,6 +6,7 @@
 // 资源全部来自用户数据目录，VCPChat 不分发任何 Live2D 文件：
 //   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
 //   AppData/Agents/<id>/deskpet/**/*.model3.json Live2D 模型（找到的第一个）
+//   AppData/Agents/<id>/deskpet/**/*.puppet.json 网格立绘（一张图切块做的可动角色，不需要 Core）
 //   AppData/Agents/<id>/portrait.<情绪>.<ext>    差分立绘，没有 Live2D 模型时使用
 //   AppData/Agents/<id>/portrait.<ext>           默认立绘；再没有就用头像
 
@@ -42,6 +43,9 @@ let initialized = false;
 const pets = new Map(); // agentId -> { win, ignoringMouse, interactive, hitPoll, drag, lastShape }
 const pendingSends = new Map(); // requestId -> resolve
 let emotionPrompt = null; // modules/emotion/emotionPrompt.js（ESM，初始化时异步载入）
+let lastTalkedAgentId = null; // 最近一次发出请求的 agent，闹钟认不出是谁设的时交给它的桌宠
+const alarms = new Map(); // id -> { timer, dueAt, text, maid }
+const announcedTopics = new Set(); // 已经在桌宠上说过的话题（同一请求重放时结果会重复回来）
 
 function registerSchemes() {
     protocol.registerSchemesAsPrivileged([
@@ -102,14 +106,14 @@ function registerProtocol() {
     });
 }
 
-async function findModel3(dir, depth = 0) {
+async function findBySuffix(dir, suffix, depth = 0) {
     if (depth > 3 || !(await fs.pathExists(dir))) return null;
     const entries = await fs.readdir(dir, { withFileTypes: true });
-    const direct = entries.find((e) => e.isFile() && e.name.toLowerCase().endsWith('.model3.json'));
+    const direct = entries.find((e) => e.isFile() && e.name.toLowerCase().endsWith(suffix));
     if (direct) return path.join(dir, direct.name);
     for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        const found = await findModel3(path.join(dir, entry.name), depth + 1);
+        const found = await findBySuffix(path.join(dir, entry.name), suffix, depth + 1);
         if (found) return found;
     }
     return null;
@@ -153,12 +157,14 @@ async function resolveAssets(agentId) {
         const fallback = portraits.neutral || portraits.calm || Object.values(portraits)[0];
         if (fallback) portraits.default = fallback;
     }
-    const model = await findModel3(path.join(agentRoot, 'deskpet'));
+    const model = await findBySuffix(path.join(agentRoot, 'deskpet'), '.model3.json');
+    const puppet = await findBySuffix(path.join(agentRoot, 'deskpet'), '.puppet.json');
     const hasCore = await fs.pathExists(coreFilePath());
     return {
         agentId,
         name,
         live2d: model ? { modelUrl: agentUrl(agentId, model) } : null,
+        puppet: puppet ? { rigUrl: agentUrl(agentId, puppet) } : null,
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
         corePath: coreFilePath(),
         portraits: portraits.default ? portraits : null,
@@ -263,8 +269,14 @@ function startHitPoll(pet) {
         const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
         if (!inside) {
             setIgnoreMouse(pet, true);
+            // 光标在窗外时只用来让角色看过去；同一位置不重复发。
+            if (pet.lastGaze !== `${p.x},${p.y}`) {
+                pet.lastGaze = `${p.x},${p.y}`;
+                pet.win.webContents.send('deskpet:cursor', { x: p.x - b.x, y: p.y - b.y, outside: true });
+            }
             return;
         }
+        pet.lastGaze = null;
         pet.win.webContents.send('deskpet:cursor', { x: p.x - b.x, y: p.y - b.y });
     }, HIT_POLL_MS);
 }
@@ -424,6 +436,7 @@ function forward(agentId, event) {
 }
 
 function onRequestStart(messageId, context) {
+    if (context?.agentId) lastTalkedAgentId = context.agentId;
     forward(context?.agentId, { type: 'start', messageId: String(messageId) });
 }
 
@@ -503,6 +516,89 @@ function openMainWindow() {
     mainWindow.focus();
 }
 
+// ---- 主动搭话：AI 主动开的新话题、闹钟到点 ---------------------------------------
+// 这两样原本只在主窗口话题列表里冒个未读、或者弹一个独立的闹钟小窗；桌宠开着时让角色自己说出来。
+
+const ALARM_MAX_DELAY_MS = 7 * 24 * 3600 * 1000;
+const MAX_ALARMS = 50;
+
+function proactive(agentId, payload) {
+    const pet = pets.get(agentId);
+    if (!pet || pet.win.isDestroyed()) return false;
+    // 闹钟要叫得醒人：藏起来的桌宠也出来；新话题不打扰藏起来的桌宠。
+    if (payload.kind === 'alarm') showPet(pet);
+    else if (!pet.win.isVisible()) return false;
+    pet.win.webContents.send('deskpet:proactive', payload);
+    return true;
+}
+
+async function agentIdByName(name) {
+    if (!name) return null;
+    const wanted = String(name).trim().toLowerCase();
+    const agents = await listAgents().catch(() => []);
+    const open = agents.filter((agent) => pets.has(agent.id));
+    return open.find((agent) => agent.name.toLowerCase() === wanted || agent.id.toLowerCase() === wanted)?.id || null;
+}
+
+// 闹钟交给谁：设闹钟时说了是谁（maid）就找那个 agent 的桌宠；否则最近在聊的那个；再不行任意一个开着的。
+async function alarmTarget(maid) {
+    const named = await agentIdByName(maid);
+    if (named) return named;
+    if (lastTalkedAgentId && pets.has(lastTalkedAgentId)) return lastTalkedAgentId;
+    return visibleAgents()[0] || [...pets.keys()][0] || null;
+}
+
+function parsePluginOutput(result) {
+    if (result && typeof result === 'object') return result;
+    const text = String(result || '');
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { return null; }
+}
+
+function scheduleAlarm({ dueAt, text, maid }) {
+    const delay = dueAt - Date.now();
+    if (!Number.isFinite(delay) || delay < 0 || delay > ALARM_MAX_DELAY_MS || alarms.size >= MAX_ALARMS) return null;
+    const id = crypto.randomUUID();
+    const timer = setTimeout(async () => {
+        alarms.delete(id);
+        const agentId = await alarmTarget(maid);
+        if (agentId) proactive(agentId, { kind: 'alarm', text: text || '时间到了！', at: dueAt });
+    }, delay);
+    timer.unref?.();
+    alarms.set(id, { timer, dueAt, text, maid });
+    return id;
+}
+
+/** 分布式服务器每执行完一个工具调用就告诉这里一声（只看结果，不改结果）。 */
+function onDistributedToolResult(toolName, toolArgs = {}, result) {
+    if (!initialized) return;
+    if (toolName === 'TopicSponsor' && ['CreateTopic', 'CreateFlowlockTopic'].includes(toolArgs?.command)) {
+        const info = parsePluginOutput(result);
+        if (!info?.agent_id || !info.topic_id || announcedTopics.has(info.topic_id)) return;
+        announcedTopics.add(info.topic_id);
+        if (announcedTopics.size > 200) announcedTopics.delete(announcedTopics.values().next().value);
+        proactive(info.agent_id, {
+            kind: 'topic',
+            title: String(info.topic_name || ''),
+            text: String(info.initial_message || ''),
+            topicId: String(info.topic_id),
+        });
+    } else if (toolName === 'VCPAlarm') {
+        const info = parsePluginOutput(result);
+        if (info?.status !== 'success' || !Number.isFinite(info.due_at)) return;
+        scheduleAlarm({ dueAt: info.due_at, text: String(info.reminder_text || toolArgs?.reminder_text || '').trim(), maid: toolArgs?.maid });
+    }
+}
+
+// 点桌宠说的新话题：打开主窗口并切到那个话题（由主窗口按正常流程选中）。
+function openTopic(agentId, topicId) {
+    openMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed() || !isAgentId(agentId) || typeof topicId !== 'string' || !topicId) return;
+    mainWindow.webContents.send('deskpet:open-topic', { agentId, topicId });
+}
+
 // ---- IPC ----------------------------------------------------------------
 
 function registerIpc() {
@@ -543,6 +639,10 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    ipcMain.on('deskpet:open-topic', (event, topicId) => {
+        const pet = petFromEvent(event);
+        if (pet) openTopic(pet.agentId, topicId);
+    });
     ipcMain.on('deskpet:hit', (event, hit) => {
         const pet = petFromEvent(event);
         if (pet) setIgnoreMouse(pet, !hit);
@@ -648,6 +748,8 @@ function initialize(options) {
 
 function closeAll() {
     for (const agentId of [...pets.keys()]) closePet(agentId);
+    for (const { timer } of alarms.values()) clearTimeout(timer);
+    alarms.clear();
 }
 
 // chatHandlers 在主聊天的发送和流式路径上调用这些钩子；桌宠出任何错都不能打断主聊天。
@@ -671,6 +773,7 @@ module.exports = {
     onRequestStart: isolated('onRequestStart', onRequestStart),
     onStreamPayload: isolated('onStreamPayload', onStreamPayload),
     onFullResponse: isolated('onFullResponse', onFullResponse),
+    onDistributedToolResult: isolated('onDistributedToolResult', onDistributedToolResult),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _resolveServedFile: (url, testPaths) => {

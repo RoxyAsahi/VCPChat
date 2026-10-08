@@ -74,7 +74,7 @@ test('hidden pets freeze: no moves and no sleep progress', () => {
 });
 
 test('waking up: a tap or a reply startles, wandering cursor wakes slowly, stroking the head does not wake', () => {
-    const { life, log } = rig();
+    const { life, log, advance } = rig();
     life.force('asleep');
     assert.equal(life.tap({ onHead: false }), 'startle');
     assert.equal(life.phase, 'awake');
@@ -95,7 +95,8 @@ test('waking up: a tap or a reply startles, wandering cursor wakes slowly, strok
     assert.equal(life.phase, 'asleep');
     assert.equal(result, 'sleepPat');
 
-    // 光标在别处晃够距离才醒，而且是慢慢醒
+    // 光标在别处晃够距离才醒，而且是慢慢醒；停了一会儿才再动的那一跳不算
+    advance(1000);
     assert.equal(life.cursor({ x: 10, y: 300 }), null);
     assert.equal(life.cursor({ x: 30, y: 300 }), null);
     assert.equal(life.cursor({ x: 80, y: 300 }), 'woke');
