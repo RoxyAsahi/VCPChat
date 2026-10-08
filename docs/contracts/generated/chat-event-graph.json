@@ -13320,14 +13320,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 615,
+          "line": 617,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 615,
+          "line": 617,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-all-items'"
         },
@@ -21726,14 +21726,14 @@
       "consumers": [
         {
           "file": "modules/renderer/sidePaneLauncherWiring.js",
-          "line": 114,
+          "line": 115,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sidePaneLauncherWiring.js",
-          "line": 114,
+          "line": 115,
           "kind": "preload-subscription",
           "match": "moodApi.onAgentMoodChanged("
         }
@@ -26638,14 +26638,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 596,
+          "line": 598,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 596,
+          "line": 598,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-user-avatar'"
         },
@@ -30481,14 +30481,14 @@
       "consumers": [
         {
           "file": "modules/renderer/sidePaneLauncherWiring.js",
-          "line": 142,
+          "line": 143,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/renderer/sidePaneLauncherWiring.js",
-          "line": 142,
+          "line": 143,
           "kind": "custom-event-listener",
           "match": "win.addEventListener?.('vcp-agent-portrait-changed'"
         },
