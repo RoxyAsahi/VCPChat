@@ -87,13 +87,34 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         onFrame: frame => controller.setLauncherPortraitFrame?.(frame),
     });
     let emotionAgentId = null;
+    // 回复的情绪过去以后回到这个助手的长期心情（主进程按聊天记着，桌宠用的是同一份）
+    const moodApi = chatAPI || win.electronAPI;
+    let moodAt = 0;
+    const applyMood = (mood) => {
+        if (disposed || !mood?.agentId || mood.agentId !== emotionAgentId) return;
+        // 先发的查询晚到时不能盖掉已经推过来的新心情
+        if (Number(mood.updatedAt) < moodAt) return;
+        moodAt = Number(mood.updatedAt) || 0;
+        emotionDirector.setBaseline(mood);
+    };
     const syncEmotionAgent = () => {
         const item = selectedItemRef.get();
         const id = item?.type === 'agent' ? item.id : null;
         if (id === emotionAgentId) return;
         emotionAgentId = id;
+        moodAt = 0;
         emotionDirector.reset();
+        if (id && typeof moodApi?.getAgentMood === 'function') {
+            Promise.resolve(moodApi.getAgentMood(id)).then(applyMood).catch((error) => {
+                console.warn('[SidePane] Failed to read agent mood:', error);
+            });
+        }
     };
+    if (typeof moodApi?.onAgentMoodChanged === 'function') {
+        const unbindMood = moodApi.onAgentMoodChanged(applyMood);
+        if (typeof unbindMood === 'function') subscriptions.add({ dispose: unbindMood });
+        else if (unbindMood?.dispose) subscriptions.add(unbindMood);
+    }
     const emotionFeed = createAgentEmotionFeed({
         chatAPI: chatAPI || win.electronAPI,
         director: emotionDirector,

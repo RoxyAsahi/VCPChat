@@ -4,6 +4,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { clearTrajectoriesOfOwner } = require('../modelTrajectory');
+const { getAgentMoodStore } = require('../agentMood');
 const { resolvePortraitDisplayPath } = require('../services/agentPortraitImages');
 
 let AGENT_DIR_CACHE; // Cache the agent directory path
@@ -336,6 +337,16 @@ function initialize(context) {
     ipcMain.handle('get-agent-portraits', async (event, agentId) => {
         const agentDir = resolveAgentDir(agentId);
         return agentDir ? findPortraitUrls(agentDir) : null;
+    });
+
+    // 助手的长期心情（modules/agentMood.js）：侧栏立绘和桌宠在回复的情绪过去以后回到它；读不到时为 null
+    ipcMain.handle('get-agent-mood', async (event, agentId) => {
+        try {
+            return (await getAgentMoodStore()?.get(agentId)) ?? null;
+        } catch (error) {
+            console.warn(`读取 Agent ${agentId} 心情失败:`, error.message);
+            return null;
+        }
     });
 
     // 设置页上传立绘：variant 为 default 写 portrait.<ext>，其他键写 portrait.<key>.<ext>；
