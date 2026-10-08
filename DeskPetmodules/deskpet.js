@@ -8,19 +8,28 @@
 import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector.js';
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
+import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
 
 const api = window.deskPetAPI;
-const FPS_ACTIVE = 30;
-const FPS_IDLE = 15;
+// 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
+const FPS = { active: 30, idle: 15 };
+const FPS_SOFTWARE = { active: 20, idle: 8 };
 const IDLE_AFTER_MS = 30000;
 const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
-const REPLY_HOLD_MS = 12000;   // 回复结束后气泡停留多久
+// 回复结束后气泡停留多久：按字数给时间读完，鼠标停在气泡上时不收
+const REPLY_HOLD_MIN_MS = 8000;
+const REPLY_HOLD_MAX_MS = 30000;
+const REPLY_HOLD_PER_CHAR_MS = 60;
+const REPLY_HOLD_AFTER_HOVER_MS = 4000;
 const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容在主窗口
 const CONTEXT_LOST_RELOAD_MS = 250;
 const CONTEXT_LOSS_WINDOW_MS = 120000;
 const CONTEXT_LOSS_LIMIT = 3;
 const CONTEXT_LOSS_KEY = 'deskpet:webgl-losses';
+const DOUBLE_TAP_MS = 300;     // 这么短内的第二下算双击；单击的反应等这段时间过了再做
+const TOP_RESERVE = 150;       // 窗口上方留给气泡和输入框的高度（与样式一致）
+const COMPOSER_ROOM = 280;     // 头顶到窗口顶至少这么高，输入框才和气泡一起排在头顶上
 
 const EMOTION_LABEL = {
     neutral: '平静', calm: '放松', happy: '开心', excited: '兴奋', shy: '害羞', affectionate: '温柔',
@@ -44,23 +53,35 @@ let lastActivity = Date.now();
 // ---- 气泡：状态、回复文字、提示 ----------------------------------------------
 
 const bubble = {
-    reply: '',          // 当前回复里可见的文字
+    reply: '',          // 当前回复里可见的文字（还带着 Markdown 记号，显示前再整理）
     replyId: null,      // 正在流式的回复
+    region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
+    hovered: false,
     hideTimer: 0,
     noticeTimer: 0,
+    renderQueued: false,
 };
 
+// 状态写在回复下方的小字里：思考只在真的读到思维链时提示（刚开口那一下导演还停在「思考」上）
+function replyStateLabel() {
+    if (!frame.state) return '';
+    if (frame.state === 'thinking') return bubble.replyId && bubble.region === 'thought' ? STATE_LABEL.thinking : '';
+    return STATE_LABEL[frame.state] || '';
+}
+
 function renderBubble() {
+    bubble.renderQueued = false;
     const el = $('bubble');
     const text = $('bubbleText');
     let content = '';
     let mode = '';
+    const reply = bubble.reply.trim() ? toBubbleText(bubble.reply) : '';
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
-    } else if (bubble.reply.trim()) {
-        content = bubble.reply.trim().replace(/\n{2,}/g, '\n');
+    } else if (reply) {
+        content = reply;
         mode = 'is-reply';
     } else if (frame.state && STATE_LABEL[frame.state]) {
         content = STATE_LABEL[frame.state];
@@ -68,9 +89,39 @@ function renderBubble() {
     }
     el.hidden = !content;
     el.className = `pet-ui ${mode}`;
-    text.textContent = content.length > BUBBLE_MAX_CHARS ? `…${content.slice(-BUBBLE_MAX_CHARS)}` : content;
-    $('bubbleState').textContent = mode === 'is-reply' && frame.state ? STATE_LABEL[frame.state] || '' : '';
-    text.scrollTop = text.scrollHeight;
+    el.classList.toggle('is-streaming', mode === 'is-reply' && Boolean(bubble.replyId));
+    const shown = content.length > BUBBLE_MAX_CHARS ? `…${content.slice(-BUBBLE_MAX_CHARS)}` : content;
+    if (text.textContent !== shown) {
+        text.textContent = shown;
+        // 只有用户没往上翻时才跟到底部
+        if (!bubble.hovered) text.scrollTop = text.scrollHeight;
+    }
+    // 排队等发的话写在小字里，不盖住正在说的回复
+    const queued = composer.queued ? `说完就发：「${shorten(composer.queued)}」` : '';
+    $('bubbleState').textContent = mode === 'is-reply' || mode === 'is-state'
+        ? [mode === 'is-reply' ? replyStateLabel() : '', queued].filter(Boolean).join(' · ')
+        : '';
+}
+
+// 流式片段很密，攒到下一帧一起画
+function queueRenderBubble() {
+    if (bubble.renderQueued) return;
+    bubble.renderQueued = true;
+    requestAnimationFrame(renderBubble);
+}
+
+function replyHoldMs() {
+    const length = toBubbleText(bubble.reply).length;
+    return Math.min(REPLY_HOLD_MAX_MS, Math.max(REPLY_HOLD_MIN_MS, length * REPLY_HOLD_PER_CHAR_MS));
+}
+
+function scheduleReplyHide(ms) {
+    clearTimeout(bubble.hideTimer);
+    bubble.hideTimer = setTimeout(() => {
+        if (bubble.replyId || bubble.hovered) return;
+        bubble.reply = '';
+        renderBubble();
+    }, ms);
 }
 
 function notice(text, { error = false, ms = 6000 } = {}) {
@@ -92,7 +143,7 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false };
+const composer = { open: false, sending: false, queued: null };
 
 function openComposer() {
     composer.open = true;
@@ -107,26 +158,55 @@ function closeComposer() {
     api.setInteractive(false);
 }
 
-async function submitComposer() {
-    const input = $('composerInput');
-    const text = input.value.trim();
-    if (!text || composer.sending) return;
+function shorten(text, max = 16) {
+    const flat = text.replace(/\s+/g, ' ');
+    return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+async function sendText(text) {
     composer.sending = true;
     $('composerSend').disabled = true;
     try {
         const result = await api.send(text);
-        if (result?.success) {
-            input.value = '';
-            closeComposer();
-        } else {
-            notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
-        }
+        if (result?.success) return true;
+        notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
     } catch (error) {
         notice(`没发出去：${error.message}`, { error: true });
     } finally {
         composer.sending = false;
         $('composerSend').disabled = false;
     }
+    return false;
+}
+
+async function submitComposer() {
+    const input = $('composerInput');
+    const text = input.value.trim();
+    if (!text || composer.sending) return;
+    // TA 还在说话：先记下来，这条说完再发，不打断也不报错
+    if (bubble.replyId) {
+        // 连着说了几句就攒在一起，说完一次发出去
+        composer.queued = composer.queued ? `${composer.queued}\n${text}` : text;
+        input.value = '';
+        closeComposer();
+        renderBubble();
+        return;
+    }
+    if (await sendText(text)) {
+        input.value = '';
+        closeComposer();
+    }
+}
+
+// 回复结束后把排队的那句发出去；发不出去就放回输入框
+async function flushQueued() {
+    const text = composer.queued;
+    if (!text || bubble.replyId || composer.sending) return;
+    composer.queued = null;
+    renderBubble();
+    if (await sendText(text)) return;
+    $('composerInput').value = text;
+    openComposer();
 }
 
 function bindComposer() {
@@ -142,8 +222,17 @@ function bindComposer() {
     });
     $('composerSend').addEventListener('click', submitComposer);
     $('composerClose').addEventListener('click', closeComposer);
-    // 点气泡打开主窗口看完整回复。
-    $('bubble').addEventListener('click', () => api.openMainWindow());
+    // 点气泡打开主窗口看完整回复；鼠标停在气泡上时先不收起，方便读完或往上翻。
+    const bubbleEl = $('bubble');
+    bubbleEl.addEventListener('click', () => api.openMainWindow());
+    bubbleEl.addEventListener('mouseenter', () => {
+        bubble.hovered = true;
+        clearTimeout(bubble.hideTimer);
+    });
+    bubbleEl.addEventListener('mouseleave', () => {
+        bubble.hovered = false;
+        if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
+    });
     api.onOpenInput(openComposer);
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
@@ -178,6 +267,7 @@ function uiBounds() {
 function bindPointer({ onTap, onDoubleTap }) {
     let down = null;
     let lastTap = 0;
+    let tapTimer = 0;
     window.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
         // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
@@ -198,12 +288,15 @@ function bindPointer({ onTap, onDoubleTap }) {
         if (!down) return;
         if (down.dragging) {
             api.dragEnd();
-        } else if (Date.now() - lastTap < 350) {
+        } else if (Date.now() - lastTap < DOUBLE_TAP_MS) {
+            // 双击只打开输入框，不先做一遍单击的开心动作
+            clearTimeout(tapTimer);
             lastTap = 0;
             onDoubleTap();
         } else {
             lastTap = Date.now();
-            onTap();
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(onTap, DOUBLE_TAP_MS);
         }
         down = null;
     });
@@ -298,11 +391,15 @@ async function fetchJson(url) {
     }
 }
 
-function hasWebGL() {
+// 有没有 WebGL，以及是不是软件渲染（没有显卡或显卡被禁用时 Chromium 用 SwiftShader）
+function probeWebGL() {
     const probe = document.createElement('canvas');
     const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    gl?.getExtension('WEBGL_lose_context')?.loseContext();
-    return Boolean(gl);
+    if (!gl) return null;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return { renderer, software: /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer) };
 }
 
 function recentContextLosses() {
@@ -328,7 +425,9 @@ function userFacing(message) {
 
 async function createLive2DBackend(assets) {
     // 渲染引擎只认 WebGL；显卡被禁用时 Pixi 会退到 Canvas，模型画不出来。
-    if (!hasWebGL()) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），Live2D 画不出来，先用立绘代替。');
+    const webgl = probeWebGL();
+    if (!webgl) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），Live2D 画不出来，先用立绘代替。');
+    const fps = webgl.software ? FPS_SOFTWARE : FPS;
     await loadScript(assets.coreUrl);
     // 文件损坏或放错了文件时脚本照样「加载成功」，只是没有定义 Core。
     const coreVersion = window.Live2DCubismCore?.Version?.csmGetVersion?.() || 0;
@@ -355,15 +454,16 @@ async function createLive2DBackend(assets) {
         resizeTo: window,
         preference: 'webgl',
         backgroundAlpha: 0,
-        antialias: true,
+        // 软件渲染时多重采样很贵，人物边缘的锯齿在桌面上也不明显
+        antialias: !webgl.software,
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
         preserveDrawingBuffer: false,
         powerPreference: 'low-power',
     });
-    app.ticker.maxFPS = FPS_ACTIVE;
+    app.ticker.maxFPS = fps.active;
     try {
-        return await mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion });
+        return await mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion, webgl, fps });
     } catch (error) {
         // 模型坏了：把已经建好的 WebGL 上下文和渲染循环一起收掉，不然它会一直空转。
         // 销毁会主动释放上下文，这不是意外丢失，不能触发重载。
@@ -374,7 +474,7 @@ async function createLive2DBackend(assets) {
     }
 }
 
-async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion }) {
+async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion, webgl, fps }) {
     const model = await Live2DModel.from(assets.live2d.modelUrl, {
         ticker: app.ticker,
         autoHitTest: false,
@@ -384,7 +484,6 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion 
     });
     app.stage.addChild(model);
     // 角色画在下方，上面留给气泡和输入框。
-    const TOP_RESERVE = 150;
     const layout = () => {
         const scale = Math.min(window.innerWidth / model.internalModel.width, (window.innerHeight - TOP_RESERVE) / model.internalModel.height) * 0.98;
         model.scale.set(scale);
@@ -487,8 +586,13 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion 
                 if (group) model.motion(group);
             }
         },
-        setFps(fps) { app.ticker.maxFPS = fps; },
-        info: { coreVersion, expressions: expressionNames, motionGroups },
+        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        // 窗口藏起来时整个停掉（窗口关了后台节流，不停的话隐藏着也在一直画）
+        setPaused(paused) {
+            if (paused) app.ticker.stop();
+            else if (!app.ticker.started) app.ticker.start();
+        },
+        info: { coreVersion, expressions: expressionNames, motionGroups, renderer: webgl.renderer, software: webgl.software },
     };
 }
 
@@ -567,7 +671,8 @@ function createImageBackend(assets) {
             bounds() { return activeImg ? drawnRect(activeImg) : null; },
             tap: pop,
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
-            setFps() {},
+            setActive() {},
+            setPaused() {},
         };
     }
 
@@ -589,7 +694,8 @@ function createImageBackend(assets) {
             $('avatar').style.setProperty('--deskpet-ring', EMOTION_RING[f.emotion] || EMOTION_RING.neutral);
             $('avatarBadge').textContent = f.state === 'thinking' || f.state === 'tool' ? '💭' : (EMOTION_EMOJI[f.emotion] || '');
         },
-        setFps() {},
+        setActive() {},
+        setPaused() {},
     };
 }
 
@@ -600,7 +706,7 @@ function applyFrame(next) {
     const emotionChanged = next.emotion !== frame.emotion;
     frame = next;
     lastActivity = Date.now();
-    backend?.setFps(FPS_ACTIVE);
+    backend?.setActive(true);
     backend?.apply(frame, { changed });
     if (emotionChanged && (next.source === 'tag' || next.source === 'rule')) flashEmotionBadge(next.emotion, next.source);
     renderBubble();
@@ -612,6 +718,7 @@ function bindStream(director) {
         clearTimeout(bubble.hideTimer);
         bubble.replyId = messageId;
         bubble.reply = '';
+        bubble.region = null;
         scanner = createEmotionTagScanner();
     };
     api.onStream((event) => {
@@ -623,11 +730,14 @@ function bindStream(director) {
         } else if (event.type === 'data') {
             if (bubble.replyId !== event.messageId) startReply(event.messageId);
             director.append(event.messageId, event.text);
-            // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块用 […] 代替。
+            // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块写成 [代码]。
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
-                else if (item.type === 'enter' && item.region === 'code') bubble.reply += ' […] ';
+                else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
             }
+            bubble.region = scanner.region;
+            queueRenderBubble();
+            return;
         } else if (event.type === 'end' || event.type === 'error') {
             if (event.type === 'end') director.end(event.messageId);
             else director.fail(event.messageId);
@@ -636,12 +746,10 @@ function bindStream(director) {
             }
             scanner = null;
             bubble.replyId = null;
-            clearTimeout(bubble.hideTimer);
-            bubble.hideTimer = setTimeout(() => {
-                if (bubble.replyId) return;
-                bubble.reply = '';
-                renderBubble();
-            }, REPLY_HOLD_MS);
+            bubble.region = null;
+            scheduleReplyHide(replyHoldMs());
+            // 排队的话等气泡画完这一帧再发，免得和刚结束的回复挤在一起
+            if (composer.queued) setTimeout(flushQueued, 400);
         }
         renderBubble();
     });
@@ -686,13 +794,36 @@ async function start() {
         },
         onDoubleTap: openComposer,
     });
-    // Linux 用输入区代替整窗穿透（见主进程注释），定期把角色和界面的包围盒报上去。
+    // 窗口隐藏时停掉渲染和呼吸动画，显示回来再继续。
+    let paused = false;
+    api.onVisibility?.((visible) => {
+        paused = !visible;
+        document.body.classList.toggle('is-paused', paused);
+        backend.setPaused(paused);
+        if (!paused) lastActivity = Date.now();
+    });
+    // 定期看一眼角色占在哪里：气泡和输入框贴在头顶上方（小头像、矮立绘不会离得老远）；
+    // Linux 用输入区代替整窗穿透（见主进程注释），把角色和界面的包围盒报上去。
+    let headY = TOP_RESERVE;
+    // 头顶上方放不下气泡加输入框时，输入框改到窗口底部（压在腿上，不挡脸，也不把气泡挤成一行）
+    const placeComposer = () => document.body.classList.toggle('is-cramped', headY < COMPOSER_ROOM);
+    placeComposer();
     setInterval(() => {
+        if (paused) return;
         const b = backend.bounds();
+        if (b) {
+            // 动作会让头顶上下晃，差得不多就不挪，免得气泡跟着抖
+            const y = Math.round(Math.max(TOP_RESERVE, Math.min(window.innerHeight - 40, b.y)));
+            if (Math.abs(y - headY) > 16) {
+                headY = y;
+                document.documentElement.style.setProperty('--pet-head', `${y}px`);
+                placeComposer();
+            }
+        }
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
-        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setFps(FPS_IDLE);
+        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(false);
     }, 250);
 
     applyFrame(director.frame);
