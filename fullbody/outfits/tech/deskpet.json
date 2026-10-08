@@ -1,0 +1,8 @@
+{
+ "motions": {
+  "happy": "Nod",
+  "excited": "Nod",
+  "curious": "Nod",
+  "angry": "Shake"
+ }
+}

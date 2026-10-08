@@ -1,0 +1,170 @@
+[
+ {
+  "step": "01_tech",
+  "before": "chibi",
+  "canvas": [
+   420,
+   1010
+  ],
+  "win": {
+   "x": 970,
+   "y": 133,
+   "width": 280,
+   "height": 673
+  },
+  "content": {
+   "x": 970,
+   "y": 133,
+   "width": 280,
+   "height": 673
+  },
+  "feet_gap_css": 0.67,
+  "top_gap_css": 161.3,
+  "left_css": 56.0,
+  "right_css": 11.3,
+  "figure_css": [
+   213,
+   511
+  ],
+  "eyes0_mouth1_diff_px": 30676,
+  "gaze_left_diff_px": 84501,
+  "console": [],
+  "state": {
+   "x": 970,
+   "y": 133,
+   "figures": {
+    "maid": 2.07,
+    "chibi": 1.25,
+    "tech": 2.46
+   },
+   "scale": 1,
+   "outfit": "tech"
+  }
+ },
+ {
+  "step": "02_maid",
+  "before": "tech",
+  "canvas": [
+   420,
+   950
+  ],
+  "win": {
+   "x": 970,
+   "y": 173,
+   "width": 280,
+   "height": 633
+  },
+  "content": {
+   "x": 970,
+   "y": 173,
+   "width": 280,
+   "height": 633
+  },
+  "feet_gap_css": 0.67,
+  "top_gap_css": 157.3,
+  "left_css": 20.7,
+  "right_css": 30.7,
+  "figure_css": [
+   229,
+   475
+  ],
+  "eyes0_mouth1_diff_px": 31080,
+  "gaze_left_diff_px": 67386,
+  "console": [],
+  "state": {
+   "x": 970,
+   "y": 173,
+   "figures": {
+    "maid": 2.07,
+    "chibi": 1.25,
+    "tech": 2.46
+   },
+   "scale": 1,
+   "outfit": "maid"
+  }
+ },
+ {
+  "step": "03_chibi",
+  "before": "maid",
+  "canvas": [
+   594,
+   872
+  ],
+  "win": {
+   "x": 912,
+   "y": 225,
+   "width": 396,
+   "height": 581
+  },
+  "content": {
+   "x": 912,
+   "y": 225,
+   "width": 396,
+   "height": 581
+  },
+  "feet_gap_css": 0.67,
+  "top_gap_css": 156.0,
+  "left_css": 33.3,
+  "right_css": 20.0,
+  "figure_css": [
+   343,
+   425
+  ],
+  "eyes0_mouth1_diff_px": 87540,
+  "gaze_left_diff_px": 149276,
+  "console": [],
+  "state": {
+   "x": 912,
+   "y": 225,
+   "figures": {
+    "maid": 2.07,
+    "tech": 2.46,
+    "chibi": 1.24
+   },
+   "scale": 1,
+   "outfit": "chibi"
+  }
+ },
+ {
+  "step": "04_tech",
+  "before": "chibi",
+  "canvas": [
+   420,
+   1004
+  ],
+  "win": {
+   "x": 970,
+   "y": 137,
+   "width": 280,
+   "height": 669
+  },
+  "content": {
+   "x": 970,
+   "y": 137,
+   "width": 280,
+   "height": 669
+  },
+  "feet_gap_css": 0.67,
+  "top_gap_css": 160.7,
+  "left_css": 59.3,
+  "right_css": 11.3,
+  "figure_css": [
+   209,
+   508
+  ],
+  "eyes0_mouth1_diff_px": 32251,
+  "gaze_left_diff_px": 82755,
+  "console": [],
+  "state": {
+   "x": 970,
+   "y": 137,
+   "figures": {
+    "maid": 2.07,
+    "chibi": 1.24,
+    "tech": 2.4
+   },
+   "scale": 1,
+   "outfit": "tech"
+  }
+ }
+]

@@ -1,0 +1,50 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "nova_tech.moc3",
+		"Textures": [
+			"nova_tech.2048/texture_00.png"
+		],
+		"Physics": "nova_tech.physics3.json",
+		"DisplayInfo": "nova_tech.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{
+					"File": "nova_tech.idle.motion3.json"
+				}
+			],
+			"Blink": [
+				{
+					"File": "nova_tech.blink.motion3.json"
+				}
+			],
+			"Nod": [
+				{
+					"File": "nova_tech.nod.motion3.json"
+				}
+			],
+			"Shake": [
+				{
+					"File": "nova_tech.shake.motion3.json"
+				}
+			]
+		}
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthOpenY"
+			]
+		}
+	]
+}

@@ -1,0 +1,26 @@
+{
+ "canvas_px": [
+  543,
+  873
+ ],
+ "dpr": 1.5,
+ "feet_gap_device_px": 3,
+ "feet_gap_css_px": 2.0,
+ "char_bbox_device": [
+  132,
+  243,
+  386,
+  869
+ ],
+ "mouth_drawables": [
+  "ArtMeshMouthClose",
+  "ArtMeshMouthOpen",
+  "ArtMeshMouthOpen_lip_0",
+  "ArtMeshMouthOpen_lip_1"
+ ],
+ "mouth_center_device": [
+  272,
+  326
+ ],
+ "mouth_diff_px": 514
+}

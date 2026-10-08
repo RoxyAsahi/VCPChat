@@ -1,0 +1,65 @@
+{
+ "ready": {
+  "backend": "live2d",
+  "info": {
+   "coreVersion": 83951616,
+   "expressions": [],
+   "motionGroups": [
+    "Idle",
+    "Blink",
+    "Nod",
+    "Shake"
+   ]
+  }
+ },
+ "logs": [
+  "[CSM][I]Live2D Cubism Core version: 05.01.0000 (83951616)\n",
+  "[CSM][I]CubismFramework.startUp() is complete.\n",
+  "[CSM][I]CubismFramework.initialize() is complete.\n",
+  "Live2D Cubism SDK Core Version 5.1.0",
+  "[DeskPet] ready {\"backend\":\"live2d\",\"info\":{\"coreVersion\":83951616,\"expressions\":[],\"motionGroups\":[\"Idle\",\"Blink\",\"Nod\",\"Shake\"]}}"
+ ],
+ "setup": {
+  "mouth": {
+   "x0": 179.100629873368,
+   "y0": 226.53358552383042,
+   "x1": 188.71016954787234,
+   "y1": 232.08039287279382,
+   "ids": [
+    "ArtMeshMouthClose",
+    "ArtMeshMouthOpen",
+    "ArtMeshMouthOpen_lip_0",
+    "ArtMeshMouthOpen_lip_1"
+   ]
+  },
+  "inner": [
+   362,
+   582
+  ],
+  "dpr": 1.5,
+  "canvas": [
+   543,
+   873
+  ],
+  "modelSize": [
+   766,
+   1551
+  ],
+  "scale": 0.2729593810444874,
+  "bounds": {
+   "x": 80.75873511604,
+   "y": 166.91259692548095,
+   "w": 200.48871301470228,
+   "h": 412.7693141903315
+  },
+  "motions": [
+   "Idle",
+   "Blink",
+   "Nod",
+   "Shake"
+  ],
+  "params": 25
+ },
+ "motion_Nod": true,
+ "motion_Shake": true
+}

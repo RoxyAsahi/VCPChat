@@ -1,0 +1,50 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "nova_chibi.moc3",
+		"Textures": [
+			"nova_chibi.2048/texture_00.png"
+		],
+		"Physics": "nova_chibi.physics3.json",
+		"DisplayInfo": "nova_chibi.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{
+					"File": "nova_chibi.idle.motion3.json"
+				}
+			],
+			"Blink": [
+				{
+					"File": "nova_chibi.blink.motion3.json"
+				}
+			],
+			"Nod": [
+				{
+					"File": "nova_chibi.nod.motion3.json"
+				}
+			],
+			"Shake": [
+				{
+					"File": "nova_chibi.shake.motion3.json"
+				}
+			]
+		}
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": [
+				"ParamMouthOpenY"
+			]
+		}
+	]
+}

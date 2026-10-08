@@ -1,0 +1,651 @@
+{
+ "steps": [
+  {
+   "outfitId": "tech",
+   "outfitBefore": "chibi",
+   "menu": {
+    "menu": {
+     "enabled": true,
+     "items": [
+      {
+       "label": "科技服（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "女仆（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "Q 版（Live2D）",
+       "checked": true
+      },
+      {
+       "label": "Mao（Live2D）",
+       "checked": false
+      }
+     ]
+    },
+    "outfits": [
+     {
+      "id": "tech",
+      "name": "科技服",
+      "kind": "live2d",
+      "label": "科技服（Live2D）"
+     },
+     {
+      "id": "maid",
+      "name": "女仆",
+      "kind": "live2d",
+      "label": "女仆（Live2D）"
+     },
+     {
+      "id": "chibi",
+      "name": "Q 版",
+      "kind": "live2d",
+      "label": "Q 版（Live2D）"
+     },
+     {
+      "id": "Mao",
+      "name": "Mao",
+      "kind": "live2d",
+      "label": "Mao（Live2D）"
+     }
+    ],
+    "clicked": true,
+    "label": "科技服（Live2D）"
+   },
+   "ready": {
+    "backend": "live2d",
+    "info": {
+     "coreVersion": 83951616,
+     "expressions": [],
+     "motionGroups": [
+      "Idle",
+      "Blink",
+      "Nod",
+      "Shake"
+     ],
+     "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+     "software": false
+    }
+   },
+   "winBefore": {
+    "bounds": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 581
+    },
+    "content": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 580
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "win": {
+    "bounds": {
+     "x": 970,
+     "y": 133,
+     "width": 280,
+     "height": 673
+    },
+    "content": {
+     "x": 970,
+     "y": 133,
+     "width": 280,
+     "height": 673
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "model": {
+    "modelUrl": "vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/tech/nova_tech.model3.json",
+    "inner": [
+     280,
+     673
+    ],
+    "dpr": 1.5,
+    "canvas": [
+     420,
+     1010
+    ],
+    "bounds": {
+     "x": 45.01966163693737,
+     "y": 163.28086050457514,
+     "w": 210.7687654359039,
+     "h": 509.6375195655428
+    }
+   },
+   "state": {
+    "x": 970,
+    "y": 133,
+    "figures": {
+     "maid": 2.07,
+     "chibi": 1.25,
+     "tech": 2.46
+    },
+    "scale": 1,
+    "outfit": "tech"
+   },
+   "console": [
+    "log: [CSM][I]Live2D Cubism Core version: 05.01.0000 (83951616)\n",
+    "log: [CSM][I]CubismFramework.startUp() is complete.\n",
+    "log: [CSM][I]CubismFramework.initialize() is complete.\n",
+    "log: Live2D Cubism SDK Core Version 5.1.0",
+    "log: [DeskPet] ready {\"backend\":\"live2d\",\"info\":{\"coreVersion\":83951616,\"expressions\":[],\"motionGroups\":[\"Idle\",\"Blink\",\"Nod\",\"Shake\"],\"renderer\":\"ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"software\":false}}"
+   ]
+  },
+  {
+   "outfitId": "maid",
+   "outfitBefore": "tech",
+   "menu": {
+    "menu": {
+     "enabled": true,
+     "items": [
+      {
+       "label": "科技服（Live2D）",
+       "checked": true
+      },
+      {
+       "label": "女仆（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "Q 版（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "Mao（Live2D）",
+       "checked": false
+      }
+     ]
+    },
+    "outfits": [
+     {
+      "id": "tech",
+      "name": "科技服",
+      "kind": "live2d",
+      "label": "科技服（Live2D）"
+     },
+     {
+      "id": "maid",
+      "name": "女仆",
+      "kind": "live2d",
+      "label": "女仆（Live2D）"
+     },
+     {
+      "id": "chibi",
+      "name": "Q 版",
+      "kind": "live2d",
+      "label": "Q 版（Live2D）"
+     },
+     {
+      "id": "Mao",
+      "name": "Mao",
+      "kind": "live2d",
+      "label": "Mao（Live2D）"
+     }
+    ],
+    "clicked": true,
+    "label": "女仆（Live2D）"
+   },
+   "ready": {
+    "backend": "live2d",
+    "info": {
+     "coreVersion": 83951616,
+     "expressions": [],
+     "motionGroups": [
+      "Idle",
+      "Blink",
+      "Nod",
+      "Shake"
+     ],
+     "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+     "software": false
+    }
+   },
+   "winBefore": {
+    "bounds": {
+     "x": 970,
+     "y": 133,
+     "width": 280,
+     "height": 673
+    },
+    "content": {
+     "x": 970,
+     "y": 133,
+     "width": 280,
+     "height": 673
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "win": {
+    "bounds": {
+     "x": 970,
+     "y": 173,
+     "width": 280,
+     "height": 633
+    },
+    "content": {
+     "x": 970,
+     "y": 173,
+     "width": 280,
+     "height": 633
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "model": {
+    "modelUrl": "vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/maid/nova_maid.model3.json",
+    "inner": [
+     280,
+     633
+    ],
+    "dpr": 1.5,
+    "canvas": [
+     420,
+     950
+    ],
+    "bounds": {
+     "x": 19.882844447226933,
+     "y": 160.5901979650255,
+     "w": 229.3286460488569,
+     "h": 472.14542170681864
+    }
+   },
+   "state": {
+    "x": 970,
+    "y": 173,
+    "figures": {
+     "maid": 2.07,
+     "chibi": 1.25,
+     "tech": 2.46
+    },
+    "scale": 1,
+    "outfit": "maid"
+   },
+   "console": [
+    "log: [CSM][I]Live2D Cubism Core version: 05.01.0000 (83951616)\n",
+    "log: [CSM][I]CubismFramework.startUp() is complete.\n",
+    "log: [CSM][I]CubismFramework.initialize() is complete.\n",
+    "log: Live2D Cubism SDK Core Version 5.1.0",
+    "log: [DeskPet] ready {\"backend\":\"live2d\",\"info\":{\"coreVersion\":83951616,\"expressions\":[],\"motionGroups\":[\"Idle\",\"Blink\",\"Nod\",\"Shake\"],\"renderer\":\"ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"software\":false}}"
+   ]
+  },
+  {
+   "outfitId": "chibi",
+   "outfitBefore": "maid",
+   "menu": {
+    "menu": {
+     "enabled": true,
+     "items": [
+      {
+       "label": "科技服（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "女仆（Live2D）",
+       "checked": true
+      },
+      {
+       "label": "Q 版（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "Mao（Live2D）",
+       "checked": false
+      }
+     ]
+    },
+    "outfits": [
+     {
+      "id": "tech",
+      "name": "科技服",
+      "kind": "live2d",
+      "label": "科技服（Live2D）"
+     },
+     {
+      "id": "maid",
+      "name": "女仆",
+      "kind": "live2d",
+      "label": "女仆（Live2D）"
+     },
+     {
+      "id": "chibi",
+      "name": "Q 版",
+      "kind": "live2d",
+      "label": "Q 版（Live2D）"
+     },
+     {
+      "id": "Mao",
+      "name": "Mao",
+      "kind": "live2d",
+      "label": "Mao（Live2D）"
+     }
+    ],
+    "clicked": true,
+    "label": "Q 版（Live2D）"
+   },
+   "ready": {
+    "backend": "live2d",
+    "info": {
+     "coreVersion": 83951616,
+     "expressions": [],
+     "motionGroups": [
+      "Idle",
+      "Blink",
+      "Nod",
+      "Shake"
+     ],
+     "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+     "software": false
+    }
+   },
+   "winBefore": {
+    "bounds": {
+     "x": 970,
+     "y": 173,
+     "width": 280,
+     "height": 633
+    },
+    "content": {
+     "x": 970,
+     "y": 173,
+     "width": 280,
+     "height": 633
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "win": {
+    "bounds": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 581
+    },
+    "content": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 581
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "model": {
+    "modelUrl": "vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/chibi/nova_chibi.model3.json",
+    "inner": [
+     396,
+     581
+    ],
+    "dpr": 1.5,
+    "canvas": [
+     594,
+     872
+    ],
+    "bounds": {
+     "x": 24.4032338218037,
+     "y": 158.08956775379335,
+     "w": 343.02177917708656,
+     "h": 423.106759115245
+    }
+   },
+   "state": {
+    "x": 912,
+    "y": 225,
+    "figures": {
+     "maid": 2.07,
+     "tech": 2.46,
+     "chibi": 1.24
+    },
+    "scale": 1,
+    "outfit": "chibi"
+   },
+   "console": [
+    "log: [CSM][I]Live2D Cubism Core version: 05.01.0000 (83951616)\n",
+    "log: [CSM][I]CubismFramework.startUp() is complete.\n",
+    "log: [CSM][I]CubismFramework.initialize() is complete.\n",
+    "log: Live2D Cubism SDK Core Version 5.1.0",
+    "log: [DeskPet] ready {\"backend\":\"live2d\",\"info\":{\"coreVersion\":83951616,\"expressions\":[],\"motionGroups\":[\"Idle\",\"Blink\",\"Nod\",\"Shake\"],\"renderer\":\"ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"software\":false}}"
+   ]
+  },
+  {
+   "outfitId": "tech",
+   "outfitBefore": "chibi",
+   "menu": {
+    "menu": {
+     "enabled": true,
+     "items": [
+      {
+       "label": "科技服（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "女仆（Live2D）",
+       "checked": false
+      },
+      {
+       "label": "Q 版（Live2D）",
+       "checked": true
+      },
+      {
+       "label": "Mao（Live2D）",
+       "checked": false
+      }
+     ]
+    },
+    "outfits": [
+     {
+      "id": "tech",
+      "name": "科技服",
+      "kind": "live2d",
+      "label": "科技服（Live2D）"
+     },
+     {
+      "id": "maid",
+      "name": "女仆",
+      "kind": "live2d",
+      "label": "女仆（Live2D）"
+     },
+     {
+      "id": "chibi",
+      "name": "Q 版",
+      "kind": "live2d",
+      "label": "Q 版（Live2D）"
+     },
+     {
+      "id": "Mao",
+      "name": "Mao",
+      "kind": "live2d",
+      "label": "Mao（Live2D）"
+     }
+    ],
+    "clicked": true,
+    "label": "科技服（Live2D）"
+   },
+   "ready": {
+    "backend": "live2d",
+    "info": {
+     "coreVersion": 83951616,
+     "expressions": [],
+     "motionGroups": [
+      "Idle",
+      "Blink",
+      "Nod",
+      "Shake"
+     ],
+     "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+     "software": false
+    }
+   },
+   "winBefore": {
+    "bounds": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 581
+    },
+    "content": {
+     "x": 912,
+     "y": 225,
+     "width": 396,
+     "height": 581
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "win": {
+    "bounds": {
+     "x": 970,
+     "y": 137,
+     "width": 280,
+     "height": 669
+    },
+    "content": {
+     "x": 970,
+     "y": 137,
+     "width": 280,
+     "height": 669
+    },
+    "workArea": {
+     "x": 0,
+     "y": 0,
+     "width": 2294,
+     "height": 912
+    },
+    "scaleFactor": 1.5
+   },
+   "model": {
+    "modelUrl": "vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/tech/nova_tech.model3.json",
+    "inner": [
+     280,
+     669
+    ],
+    "dpr": 1.5,
+    "canvas": [
+     420,
+     1004
+    ],
+    "bounds": {
+     "x": 47.91684938986414,
+     "y": 162.650375392113,
+     "w": 209.36805425508533,
+     "h": 506.250608936998
+    }
+   },
+   "state": {
+    "x": 970,
+    "y": 137,
+    "figures": {
+     "maid": 2.07,
+     "chibi": 1.24,
+     "tech": 2.4
+    },
+    "scale": 1,
+    "outfit": "tech"
+   },
+   "console": [
+    "log: [CSM][I]Live2D Cubism Core version: 05.01.0000 (83951616)\n",
+    "log: [CSM][I]CubismFramework.startUp() is complete.\n",
+    "log: [CSM][I]CubismFramework.initialize() is complete.\n",
+    "log: Live2D Cubism SDK Core Version 5.1.0",
+    "log: [DeskPet] ready {\"backend\":\"live2d\",\"info\":{\"coreVersion\":83951616,\"expressions\":[],\"motionGroups\":[\"Idle\",\"Blink\",\"Nod\",\"Shake\"],\"renderer\":\"ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"software\":false}}"
+   ]
+  }
+ ],
+ "initial": {
+  "ready": {
+   "backend": "live2d",
+   "info": {
+    "coreVersion": 83951616,
+    "expressions": [],
+    "motionGroups": [
+     "Idle",
+     "Blink",
+     "Nod",
+     "Shake"
+    ],
+    "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "software": false
+   }
+  },
+  "outfit": {
+   "id": "chibi",
+   "name": "Q 版",
+   "kind": "live2d",
+   "label": "Q 版（Live2D）"
+  },
+  "win": {
+   "bounds": {
+    "x": 912,
+    "y": 225,
+    "width": 396,
+    "height": 581
+   },
+   "content": {
+    "x": 912,
+    "y": 225,
+    "width": 396,
+    "height": 580
+   },
+   "workArea": {
+    "x": 0,
+    "y": 0,
+    "width": 2294,
+    "height": 912
+   },
+   "scaleFactor": 1.5
+  },
+  "state": {
+   "x": 912,
+   "y": 225,
+   "figures": {
+    "tech": 2.45,
+    "maid": 2.07,
+    "chibi": 1.25
+   },
+   "scale": 1,
+   "outfit": "chibi"
+  }
+ }
+}

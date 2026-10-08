@@ -1,0 +1,932 @@
+{
+ "tech": {
+  "psd": "work\\tech\\nova_tech.psd",
+  "canvas": [
+   635,
+   1512
+  ],
+  "crop_from_source": [
+   197,
+   -17,
+   832,
+   1495
+  ],
+  "margins_px": {
+   "side": 12,
+   "top": 30,
+   "bottom": 7
+  },
+  "layers_bottom_to_top": [
+   {
+    "source": "01_back_hair",
+    "layer": "back hair",
+    "bbox": [
+     175,
+     30,
+     451,
+     698
+    ]
+   },
+   {
+    "source": "02_back_hair-r",
+    "layer": "back hair-r",
+    "bbox": [
+     12,
+     217,
+     234,
+     716
+    ]
+   },
+   {
+    "source": "03_back_hair-l",
+    "layer": "back hair-l",
+    "bbox": [
+     408,
+     217,
+     623,
+     714
+    ]
+   },
+   {
+    "source": "04_handwear-r",
+    "layer": "handwear-r",
+    "bbox": [
+     43,
+     290,
+     252,
+     740
+    ]
+   },
+   {
+    "source": "05_hand-r",
+    "layer": "hand-r",
+    "bbox": [
+     53,
+     724,
+     111,
+     829
+    ]
+   },
+   {
+    "source": "06_handwear-l",
+    "layer": "handwear-l",
+    "bbox": [
+     388,
+     288,
+     589,
+     740
+    ]
+   },
+   {
+    "source": "07_hand-l",
+    "layer": "hand-l",
+    "bbox": [
+     517,
+     724,
+     578,
+     832
+    ]
+   },
+   {
+    "source": "08_footwear-r",
+    "layer": "footwear-r",
+    "bbox": [
+     210,
+     1309,
+     299,
+     1505
+    ]
+   },
+   {
+    "source": "09_footwear-l",
+    "layer": "footwear-l",
+    "bbox": [
+     374,
+     1312,
+     463,
+     1505
+    ]
+   },
+   {
+    "source": "10_legwear-r",
+    "layer": "legwear-r",
+    "bbox": [
+     149,
+     602,
+     318,
+     1337
+    ]
+   },
+   {
+    "source": "11_legwear-l",
+    "layer": "legwear-l",
+    "bbox": [
+     325,
+     609,
+     489,
+     1337
+    ]
+   },
+   {
+    "source": "12_topwear",
+    "layer": "topwear",
+    "bbox": [
+     145,
+     243,
+     495,
+     818
+    ]
+   },
+   {
+    "source": "13_neck",
+    "layer": "neck",
+    "bbox": [
+     290,
+     174,
+     354,
+     284
+    ]
+   },
+   {
+    "source": "14_ears-r",
+    "layer": "ears-r",
+    "bbox": [
+     236,
+     169,
+     270,
+     214
+    ]
+   },
+   {
+    "source": "15_ears-l",
+    "layer": "ears-l",
+    "bbox": [
+     365,
+     158,
+     399,
+     206
+    ]
+   },
+   {
+    "source": "16_face",
+    "layer": "face",
+    "bbox": [
+     238,
+     81,
+     386,
+     246
+    ]
+   },
+   {
+    "source": "17_mouth",
+    "layer": "mouth open",
+    "bbox": [
+     305,
+     210,
+     327,
+     227
+    ]
+   },
+   {
+    "source": "mouth-close-variant",
+    "layer": "mouth close",
+    "bbox": [
+     303,
+     210,
+     329,
+     225
+    ]
+   },
+   {
+    "source": "18_earwear-r",
+    "layer": "earwear-r",
+    "bbox": [
+     253,
+     211,
+     269,
+     235
+    ]
+   },
+   {
+    "source": "19_earwear-l",
+    "layer": "earwear-l",
+    "bbox": [
+     374,
+     201,
+     393,
+     226
+    ]
+   },
+   {
+    "source": "20_eyebrow-r",
+    "layer": "eyebrow-r",
+    "bbox": [
+     262,
+     147,
+     292,
+     153
+    ]
+   },
+   {
+    "source": "21_eyebrow-l",
+    "layer": "eyebrow-l",
+    "bbox": [
+     326,
+     140,
+     366,
+     148
+    ]
+   },
+   {
+    "source": "22_nose",
+    "layer": "nose",
+    "bbox": [
+     309,
+     189,
+     319,
+     199
+    ]
+   },
+   {
+    "source": "23_eyewhite-r",
+    "layer": "eyewhite-r",
+    "bbox": [
+     262,
+     167,
+     294,
+     187
+    ]
+   },
+   {
+    "source": "24_eyewhite-l",
+    "layer": "eyewhite-l",
+    "bbox": [
+     336,
+     162,
+     366,
+     181
+    ]
+   },
+   {
+    "source": "25_eyelash-r",
+    "layer": "eyelash-r",
+    "bbox": [
+     252,
+     161,
+     295,
+     187
+    ]
+   },
+   {
+    "source": "26_eyelash-l",
+    "layer": "eyelash-l",
+    "bbox": [
+     328,
+     154,
+     375,
+     173
+    ]
+   },
+   {
+    "source": "27_irides-r",
+    "layer": "irides-r",
+    "bbox": [
+     271,
+     169,
+     291,
+     187
+    ]
+   },
+   {
+    "source": "28_irides-l",
+    "layer": "irides-l",
+    "bbox": [
+     338,
+     161,
+     357,
+     179
+    ]
+   },
+   {
+    "source": "29_front_hair",
+    "layer": "front hair",
+    "bbox": [
+     174,
+     37,
+     426,
+     349
+    ]
+   },
+   {
+    "source": "30_headwear",
+    "layer": "headwear",
+    "bbox": [
+     373,
+     101,
+     421,
+     151
+    ]
+   }
+  ]
+ },
+ "maid": {
+  "psd": "work\\maid\\nova_maid.psd",
+  "canvas": [
+   766,
+   1551
+  ],
+  "crop_from_source": [
+   130,
+   -20,
+   896,
+   1531
+  ],
+  "margins_px": {
+   "side": 15,
+   "top": 30,
+   "bottom": 8
+  },
+  "layers_bottom_to_top": [
+   {
+    "source": "01_back_hair",
+    "layer": "back hair",
+    "bbox": [
+     226,
+     39,
+     528,
+     593
+    ]
+   },
+   {
+    "source": "02_back_hair-r",
+    "layer": "back hair-r",
+    "bbox": [
+     91,
+     189,
+     311,
+     582
+    ]
+   },
+   {
+    "source": "03_back_hair-l",
+    "layer": "back hair-l",
+    "bbox": [
+     475,
+     189,
+     695,
+     589
+    ]
+   },
+   {
+    "source": "04_footwear-r",
+    "layer": "footwear-r",
+    "bbox": [
+     276,
+     1387,
+     374,
+     1543
+    ]
+   },
+   {
+    "source": "05_footwear-l",
+    "layer": "footwear-l",
+    "bbox": [
+     451,
+     1382,
+     547,
+     1539
+    ]
+   },
+   {
+    "source": "06_legwear-r",
+    "layer": "legwear-r",
+    "bbox": [
+     247,
+     708,
+     387,
+     1408
+    ]
+   },
+   {
+    "source": "07_legwear-l",
+    "layer": "legwear-l",
+    "bbox": [
+     408,
+     715,
+     539,
+     1411
+    ]
+   },
+   {
+    "source": "08_bottomwear",
+    "layer": "skirt",
+    "bbox": [
+     54,
+     587,
+     718,
+     1007
+    ]
+   },
+   {
+    "source": "09_handwear-r",
+    "layer": "handwear-r",
+    "bbox": [
+     86,
+     341,
+     327,
+     767
+    ]
+   },
+   {
+    "source": "10_hand-r",
+    "layer": "hand-r",
+    "bbox": [
+     15,
+     726,
+     137,
+     825
+    ]
+   },
+   {
+    "source": "11_handwear-l",
+    "layer": "handwear-l",
+    "bbox": [
+     465,
+     345,
+     682,
+     763
+    ]
+   },
+   {
+    "source": "12_hand-l",
+    "layer": "hand-l",
+    "bbox": [
+     631,
+     723,
+     751,
+     824
+    ]
+   },
+   {
+    "source": "13_apron",
+    "layer": "skirt apron",
+    "bbox": [
+     244,
+     557,
+     552,
+     855
+    ]
+   },
+   {
+    "source": "14_topwear",
+    "layer": "topwear",
+    "bbox": [
+     268,
+     290,
+     525,
+     557
+    ]
+   },
+   {
+    "source": "15_neck",
+    "layer": "neck",
+    "bbox": [
+     369,
+     236,
+     426,
+     319
+    ]
+   },
+   {
+    "source": "16_ears-r",
+    "layer": "ears-r",
+    "bbox": [
+     296,
+     215,
+     336,
+     263
+    ]
+   },
+   {
+    "source": "17_ears-l",
+    "layer": "ears-l",
+    "bbox": [
+     448,
+     189,
+     476,
+     240
+    ]
+   },
+   {
+    "source": "18_face",
+    "layer": "face",
+    "bbox": [
+     291,
+     103,
+     457,
+     292
+    ]
+   },
+   {
+    "source": "19_mouth",
+    "layer": "mouth open",
+    "bbox": [
+     370,
+     252,
+     408,
+     282
+    ]
+   },
+   {
+    "source": "mouth-close-variant",
+    "layer": "mouth close",
+    "bbox": [
+     372,
+     251,
+     402,
+     269
+    ]
+   },
+   {
+    "source": "20_eyebrow-r",
+    "layer": "eyebrow-r",
+    "bbox": [
+     318,
+     183,
+     352,
+     194
+    ]
+   },
+   {
+    "source": "21_eyebrow-l",
+    "layer": "eyebrow-l",
+    "bbox": [
+     390,
+     169,
+     429,
+     179
+    ]
+   },
+   {
+    "source": "22_nose",
+    "layer": "nose",
+    "bbox": [
+     378,
+     230,
+     388,
+     245
+    ]
+   },
+   {
+    "source": "23_earwear-r",
+    "layer": "earwear-r",
+    "bbox": [
+     318,
+     270,
+     338,
+     290
+    ]
+   },
+   {
+    "source": "24_earwear-l",
+    "layer": "earwear-l",
+    "bbox": [
+     449,
+     245,
+     469,
+     266
+    ]
+   },
+   {
+    "source": "25_eyelash-r",
+    "layer": "eyelash-r",
+    "bbox": [
+     310,
+     203,
+     356,
+     234
+    ]
+   },
+   {
+    "source": "26_eyelash-l",
+    "layer": "eyelash-l",
+    "bbox": [
+     400,
+     188,
+     448,
+     220
+    ]
+   },
+   {
+    "source": "27_eyewhite-r",
+    "layer": "eyewhite-r",
+    "bbox": [
+     322,
+     213,
+     358,
+     234
+    ]
+   },
+   {
+    "source": "28_eyewhite-l",
+    "layer": "eyewhite-l",
+    "bbox": [
+     403,
+     195,
+     438,
+     220
+    ]
+   },
+   {
+    "source": "29_irides-r",
+    "layer": "irides-r",
+    "bbox": [
+     332,
+     211,
+     354,
+     234
+    ]
+   },
+   {
+    "source": "30_irides-l",
+    "layer": "irides-l",
+    "bbox": [
+     408,
+     194,
+     430,
+     218
+    ]
+   },
+   {
+    "source": "31_headwear",
+    "layer": "headwear",
+    "bbox": [
+     197,
+     30,
+     539,
+     253
+    ]
+   },
+   {
+    "source": "32_front_hair",
+    "layer": "front hair",
+    "bbox": [
+     263,
+     62,
+     474,
+     326
+    ]
+   }
+  ]
+ },
+ "chibi": {
+  "psd": "work\\chibi\\nova_chibi.psd",
+  "canvas": [
+   982,
+   1193
+  ],
+  "crop_from_source": [
+   146,
+   24,
+   1128,
+   1217
+  ],
+  "margins_px": {
+   "side": 19,
+   "top": 23,
+   "bottom": 6
+  },
+  "layers_bottom_to_top": [
+   {
+    "source": "01_back_hair",
+    "layer": "back hair",
+    "bbox": [
+     134,
+     72,
+     834,
+     1016
+    ]
+   },
+   {
+    "source": "02_back_hair-r",
+    "layer": "back hair-r",
+    "bbox": [
+     19,
+     290,
+     306,
+     1014
+    ]
+   },
+   {
+    "source": "03_back_hair-l",
+    "layer": "back hair-l",
+    "bbox": [
+     682,
+     290,
+     963,
+     1011
+    ]
+   },
+   {
+    "source": "04_legwear-r",
+    "layer": "legwear-r",
+    "bbox": [
+     367,
+     815,
+     478,
+     1107
+    ]
+   },
+   {
+    "source": "05_footwear-r",
+    "layer": "footwear-r",
+    "bbox": [
+     368,
+     1107,
+     479,
+     1187
+    ]
+   },
+   {
+    "source": "06_legwear-l",
+    "layer": "legwear-l",
+    "bbox": [
+     478,
+     815,
+     590,
+     1107
+    ]
+   },
+   {
+    "source": "07_footwear-l",
+    "layer": "footwear-l",
+    "bbox": [
+     478,
+     1107,
+     589,
+     1187
+    ]
+   },
+   {
+    "source": "08_handwear-r",
+    "layer": "handwear-r",
+    "bbox": [
+     248,
+     682,
+     424,
+     894
+    ]
+   },
+   {
+    "source": "09_hand-r",
+    "layer": "hand-r",
+    "bbox": [
+     227,
+     847,
+     308,
+     914
+    ]
+   },
+   {
+    "source": "10_handwear-l",
+    "layer": "handwear-l",
+    "bbox": [
+     534,
+     681,
+     711,
+     898
+    ]
+   },
+   {
+    "source": "11_hand-l",
+    "layer": "hand-l",
+    "bbox": [
+     651,
+     850,
+     729,
+     913
+    ]
+   },
+   {
+    "source": "12_bottomwear",
+    "layer": "skirt",
+    "bbox": [
+     250,
+     766,
+     708,
+     1027
+    ]
+   },
+   {
+    "source": "13_topwear",
+    "layer": "topwear",
+    "bbox": [
+     322,
+     625,
+     638,
+     766
+    ]
+   },
+   {
+    "source": "14_face",
+    "layer": "face",
+    "bbox": [
+     225,
+     292,
+     727,
+     646
+    ]
+   },
+   {
+    "source": "15_headwear",
+    "layer": "headwear",
+    "bbox": [
+     136,
+     244,
+     827,
+     364
+    ]
+   },
+   {
+    "source": "16_eye-r",
+    "layer": "eyewhite-r",
+    "bbox": [
+     335,
+     396,
+     414,
+     545
+    ]
+   },
+   {
+    "source": "16_eye-r+rim",
+    "layer": "eyelash-r",
+    "bbox": [
+     339,
+     395,
+     412,
+     428
+    ]
+   },
+   {
+    "source": "17_eye-l",
+    "layer": "eyewhite-l",
+    "bbox": [
+     542,
+     397,
+     621,
+     545
+    ]
+   },
+   {
+    "source": "17_eye-l+rim",
+    "layer": "eyelash-l",
+    "bbox": [
+     545,
+     395,
+     617,
+     428
+    ]
+   },
+   {
+    "source": "18_front_hair",
+    "layer": "front hair",
+    "bbox": [
+     154,
+     128,
+     793,
+     695
+    ]
+   },
+   {
+    "source": "19_headwear_bonnet",
+    "layer": "headwear bonnet",
+    "bbox": [
+     128,
+     23,
+     839,
+     334
+    ]
+   },
+   {
+    "source": "20_mouth",
+    "layer": "mouth open",
+    "bbox": [
+     441,
+     551,
+     518,
+     611
+    ]
+   },
+   {
+    "source": "mouth-close-variant",
+    "layer": "mouth close",
+    "bbox": [
+     433,
+     561,
+     526,
+     592
+    ]
+   }
+  ]
+ }
+}
