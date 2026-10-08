@@ -174,7 +174,8 @@ function notice(text, { error = false, ms = 6000 } = {}) {
 let badgeTimer = 0;
 function flashEmotionBadge(emotion, source) {
     const el = $('emotionBadge');
-    el.textContent = `${EMOTION_EMOJI[emotion] || ''} ${EMOTION_LABEL[emotion] || emotion}${source === 'rule' ? '（推测）' : ''}`;
+    const suffix = source === 'rule' ? '（推测）' : source === 'mood' ? '（心情）' : '';
+    el.textContent = `${EMOTION_EMOJI[emotion] || ''} ${EMOTION_LABEL[emotion] || emotion}${suffix}`;
     el.hidden = false;
     el.classList.remove('is-fading');
     clearTimeout(badgeTimer);
@@ -929,7 +930,7 @@ function applyFrame(next) {
     lastActivity = Date.now();
     backend?.setActive(true);
     backend?.apply(frame, { changed });
-    if (emotionChanged && (next.source === 'tag' || next.source === 'rule')) flashEmotionBadge(next.emotion, next.source);
+    if (emotionChanged && (next.source === 'tag' || next.source === 'rule' || next.source === 'mood')) flashEmotionBadge(next.emotion, next.source);
     renderBubble();
 }
 
@@ -983,6 +984,23 @@ function bindStream(director) {
     });
 }
 
+// ---- 持续心情 ----------------------------------------------------------------
+// 助手的持续心情（主进程记着，和侧栏立绘同一份）是待机时的表情：回复的情绪过去以后回到它。
+// 心情一变，角色就换成新的待机表情，头顶的小牌子提示一下（「😊 开心（心情）」）；右键菜单第一行也写着现在的心情。
+
+function bindMood(director, agentId) {
+    let moodAt = 0;
+    const apply = (mood) => {
+        if (!mood || mood.agentId !== agentId) return;
+        // 先发的查询晚到时不能盖掉已经推过来的新心情
+        if (Number(mood.updatedAt) < moodAt) return;
+        moodAt = Number(mood.updatedAt) || 0;
+        director.setBaseline(mood);
+    };
+    api.onMood?.(apply);
+    Promise.resolve(api.getMood?.()).then(apply).catch((error) => console.warn('[DeskPet] 读取心情失败：', error));
+}
+
 // ---- 启动 --------------------------------------------------------------------
 
 async function start() {
@@ -1020,6 +1038,7 @@ async function start() {
 
     const director = createEmotionDirector({ onFrame: applyFrame });
     bindStream(director);
+    bindMood(director, assets.agentId);
     proactiveDirector = director;
     api.onProactive?.(speakProactive);
     bindComposer();
