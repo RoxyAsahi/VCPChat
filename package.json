@@ -49,7 +49,7 @@
     "guard:theme-provenance": "node scripts/check-theme-provenance.mjs",
     "test:chat-kernel": "node --test tests/chat-*.test.mjs tests/content-*.test.mjs tests/stream-*.test.mjs tests/main-chat-*.test.mjs tests/topic-selection-readiness.test.mjs tests/owned-preload-subscription.test.mjs tests/non-streaming-event-consumer.test.mjs tests/stream-transient-history.test.mjs tests/lifecycle-scope.test.js tests/lifecycle-inspector.test.js tests/chat-manager-selection-race.test.js tests/history-watcher-lease-manager.test.js tests/message-edit-watcher-failure.test.js tests/stream-manager-terminal-cleanup.test.js tests/ui-helper-chat-scroll-follow.test.js",
     "build:chat-event-graph": "node scripts/build-chat-event-graph.mjs",
-    "test:deskpet": "node --test tests/deskpet-assets.test.mjs tests/deskpet-stream.test.mjs tests/deskpet-bubble-text.test.mjs tests/deskpet-lifecycle.test.mjs tests/deskpet-send-bridge.test.mjs tests/deskpet-life.test.mjs tests/deskpet-tool-activity.test.mjs tests/deskpet-proactive.test.mjs tests/deskpet-controls.test.mjs",
+    "test:deskpet": "node --test tests/deskpet-assets.test.mjs tests/deskpet-stream.test.mjs tests/deskpet-bubble-text.test.mjs tests/deskpet-lifecycle.test.mjs tests/deskpet-send-bridge.test.mjs tests/deskpet-life.test.mjs tests/deskpet-tool-activity.test.mjs tests/deskpet-proactive.test.mjs tests/deskpet-controls.test.mjs tests/deskpet-speech-text.test.mjs tests/deskpet-voice.test.mjs tests/deskpet-voice-ipc.test.mjs",
     "check:chat-contracts": "node scripts/check-chat-contracts.mjs",
     "test:chat-contract-invariants": "node scripts/run-chat-contract-invariants.mjs && node scripts/test-chat-contract-invalid.mjs",
     "check:artifact-plane": "node scripts/check-artifact-plane.mjs",

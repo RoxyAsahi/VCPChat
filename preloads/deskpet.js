@@ -32,6 +32,21 @@ function onVisibility(callback) {
     return () => ipcRenderer.removeListener('deskpet:visibility', listener);
 }
 
+// 朗读：主进程的 TTS 把音频块直接发到这个窗口（和主窗口同样的渠道名）。
+function onPlayTtsAudio(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('play-tts-audio', listener);
+    return () => ipcRenderer.removeListener('play-tts-audio', listener);
+}
+
+function onStopTtsAudio(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('stop-tts-audio', listener);
+    return () => ipcRenderer.removeListener('stop-tts-audio', listener);
+}
+
 // 大小、免打扰这些设置变了（主进程推过来）
 function onPrefs(callback) {
     if (typeof callback !== 'function') return () => {};
@@ -76,6 +91,11 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     onCursor,
     onOpenInput,
     onVisibility,
+    onPlayTtsAudio,
+    onStopTtsAudio,
+    voiceBegin: messageId => ipcRenderer.invoke('deskpet:voice-begin', String(messageId || '')),
+    voiceSay: payload => ipcRenderer.send('deskpet:voice-say', payload),
+    voiceEnd: payload => ipcRenderer.send('deskpet:voice-end', payload),
     onProactive,
     onTopicMissing,
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),

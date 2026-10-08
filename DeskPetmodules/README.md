@@ -10,6 +10,7 @@
 - **心情：** 小动作跟着长期心情走：开心时动得勤、爱哼歌；难过、生气时少动、不哼歌；累了更早犯困（心情很淡时不影响）。
 - **免打扰：** 桌宠设置里开了免打扰时，不自己做小动作、不打哈欠、不冒小符号，只安静地呼吸眨眼、到点打盹；被碰到时照常反应。
 - **省电：** 空闲 30 秒后降帧，睡着再降一档（10 帧，软件渲染 5 帧）；小动作按当前帧率演，被碰到才回到高帧率；隐藏桌宠时完全停止渲染，闲时计时也停；没有显卡、用软件渲染时帧率再降一档并关掉抗锯齿。
+- **出声：** 助手在 Agent 设置里选了音色（和主窗口「朗读」用同一套：音色、语速、正则、导演提示词），桌宠就把回复念出来。回复边流边按句交给 TTS，第一句写完就开口；嘴跟着声音的大小开合（Live2D 和网格立绘动 `ParamMouthOpenY`，差分立绘换 `portrait.talk.png` 张嘴帧，没有就随声音轻轻起伏，头像跟着放大缩小）。气泡只显示到正在念的那一句，表情也跟着这一句的情绪标记换。正在念时单击角色就停下，整段字一下显示完。右键「朗读回复」可以只让这个助手的桌宠闭嘴（记在 `AppData\deskpet\voice.json`）。同一时间只有一个声音：桌宠开口时主窗口的朗读停下，主窗口开始朗读时桌宠停下；桌宠正在念的那条，主窗口的自动朗读插件不再念一遍。免打扰时主窗口里聊天的回复不念，在桌宠上说的话和闹钟照常念。没选音色的助手还是假口型、不出声。
 - **正在做什么：** 回复里调工具时，气泡下面有一条小卡片，比如「🔍 正在搜索 · 明天上海天气」，做完打勾、失败标红。
 - **主动搭话：** AI 用「AI 主动创建话题」插件开了新话题时，开着的桌宠会把第一句话说出来，点气泡直接切到那个话题；用 VCP 闹钟插件设的闹钟到点时，桌宠（藏起来的也会出来）说出提醒事项。闹钟原本的弹窗照旧。
 - **右键菜单：** 和 TA 说话、切换助手（原位置换成另一个 Agent）、打开主窗口、大小、免打扰、桌宠设置、隐藏桌宠、关闭桌宠。
@@ -69,6 +70,7 @@ Nova 的这一套由 `scripts/deskpet/build-nova-puppet.py` 从 `assets/nova_but
 AppData\Agents\<AgentId>\portrait.png           默认立绘
 AppData\Agents\<AgentId>\portrait.happy.png     各情绪的差分（12 个情绪键）
 AppData\Agents\<AgentId>\portrait.thinking.png  状态差分：thinking / tool / error
+AppData\Agents\<AgentId>\portrait.talk.png      张嘴帧（可选）：朗读时按声音大小和当前立绘来回切
 ```
 
 缺哪张就退回最相近的情绪，最后退回默认立绘。透明背景的 PNG 或 WebP 效果最好，点击只命中不透明的像素。
@@ -101,13 +103,13 @@ AppData\Agents\<AgentId>\portrait.thinking.png  状态差分：thinking / tool /
 
 模型没写标记时，会按回复文字用规则推测一个情绪，桌宠角标上会注明「推测」。桌宠关着时，请求不会多加任何东西。
 
-还没做：TTS 口型同步（现在回复流出时是假口型）。
-
 ## 文件
 
 - `modules/ipc/deskPetHandlers.js`：主进程部分，负责窗口、`vcp-deskpet://` 资源协议、提示词注入、把回复流转给桌宠、桌宠发言转给主窗口、右键菜单。
 - `modules/deskpet/`：`petPrefs.js` 是尺寸计算和设置校验（纯函数），`petControls.js` 管设置文件、全局快捷键和设置窗口（`DeskPetmodules/settings.*`，preload 是 `preloads/deskpetSettings.js`）。
 - 给桌宠加会出声、会主动动的功能时，先看免打扰：页面里读 `window.deskPetPrefs.doNotDisturb`，或者监听 `window` 上的 `deskpet:prefs` 事件（`detail` 是 `{ scale, doNotDisturb }`）。
+- `modules/ipc/deskPetVoice.js`：桌宠出声的主进程部分：按助手的 TTS 设置把句子交给 `SovitsTTS`，音频回到桌宠窗口；「朗读回复」开关；桌宠在念的回复不让主窗口再念。`sovitsHandlers.js` 保证同一时间只有一个窗口在出声。
+- `DeskPetmodules/voice.js`、`speechText.js`：桌宠里播放 TTS 音频、用 AnalyserNode 量音量驱动嘴型，按句切回复、跟踪念到哪一句（气泡和表情跟着走）。
 - `modules/emotion/`：情绪标签、规则兜底、情绪导演和差分挑图（与侧栏立绘共用）。
 - `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、网格立绘（`puppet.js`）、差分立绘、头像；气泡和输入框（`bubbleText.js` 把回复整理成气泡里的纯文字）。
 - `DeskPetmodules/petLife.js`：闲时的时机（小动作、视线游走、犯困、睡着、醒来、连点、摸头）；`lifeMotion.js`：把阶段和动作变成参数曲线、拖动摆动和跳起高度。
