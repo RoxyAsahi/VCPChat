@@ -155,3 +155,14 @@ test('the light preview shows the light image when there is one, otherwise the d
     assert.equal(image.getAttribute('src'), 'file:///default');
     t.dom.window.close();
 });
+
+test('the collapsed summary follows the portraits read from disk without marking the form unsaved', async () => {
+    const t = setup({ portraits: { default: 'file:///portrait.png', happy: 'file:///happy.png' } });
+    let formChanges = 0;
+    t.form.addEventListener('change', () => formChanges++);
+    const before = t.changes();
+    await t.owner.load('Coco', {});
+    assert.equal(t.owner.summary(), '已设置');
+    assert.ok(t.changes() > before, '读完立绘后要通知设置页刷新摘要');
+    assert.equal(formChanges, 0, '读盘不算改动');
+});
