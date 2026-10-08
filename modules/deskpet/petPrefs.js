@@ -149,14 +149,6 @@ function isReserved(accelerator) {
     return RESERVED_ACCELERATORS.includes(accelerator);
 }
 
-/** 显示用：Windows/Linux 写 Ctrl，macOS 写 Cmd。 */
-function formatAccelerator(accelerator, platform = process.platform) {
-    if (!accelerator) return '';
-    return accelerator
-        .replace('CommandOrControl', platform === 'darwin' ? 'Cmd' : 'Ctrl')
-        .replace('Super', platform === 'darwin' ? 'Cmd' : 'Win');
-}
-
 // ---- 设置文件 -------------------------------------------------------------------
 
 function isAgentIdLike(value) {
@@ -200,6 +192,5 @@ module.exports = {
     resizeAnchored,
     normalizeAccelerator,
     isReserved,
-    formatAccelerator,
     normalizeSettings,
 };

@@ -709,15 +709,13 @@ function trayMenuItems() {
     const live = [...pets.values()].filter((pet) => !pet.win.isDestroyed());
     const anyVisible = live.some((pet) => pet.win.isVisible());
     const hasCandidate = live.length > 0 || settings.openAgents.length > 0 || Boolean(settings.lastAgent);
-    const label = (id) => {
-        const acc = petPrefs.formatAccelerator(settings.shortcuts[id]);
-        return acc ? `\t${acc}` : '';
-    };
+    // 只显示快捷键，不在菜单里再注册一次（全局快捷键已经注册过了）
+    const shortcut = (id) => (settings.shortcuts[id] ? { accelerator: settings.shortcuts[id], registerAccelerator: false } : {});
     return [{
         label: '桌宠',
         submenu: [
-            { label: `${anyVisible ? '隐藏桌宠' : '显示桌宠'}${label('toggle')}`, enabled: hasCandidate, click: () => toggleAllPets().catch(() => {}) },
-            { label: `和桌宠说话${label('talk')}`, enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
+            { label: anyVisible ? '隐藏桌宠' : '显示桌宠', ...shortcut('toggle'), enabled: hasCandidate, click: () => toggleAllPets().catch(() => {}) },
+            { label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
             { label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
             { label: '桌宠设置…', click: () => controls.openSettingsWindow() },
