@@ -18,6 +18,7 @@ const { pathToFileURL } = require('url');
 const crypto = require('crypto');
 const petPrefs = require('../deskpet/petPrefs');
 const { createPetControls } = require('../deskpet/petControls');
+const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
 // 窗口大小随每个桌宠自己的缩放走（modules/deskpet/petPrefs.js）；1 倍是 360×580，上方留出气泡和输入框的位置。
@@ -827,6 +828,28 @@ function openTopic(agentId, topicId) {
     mainWindow.webContents.send('deskpet:open-topic', { agentId, topicId });
 }
 
+// ---- 持续心情 ----------------------------------------------------------------
+
+const MOOD_LABEL = {
+    neutral: '🙂 平静', calm: '😌 放松', happy: '😊 开心', excited: '🤩 兴奋', shy: '😳 害羞', affectionate: '🥰 温柔',
+    curious: '🤔 好奇', surprised: '😮 惊讶', concerned: '😟 担心', sad: '😢 难过', tired: '😪 疲惫', angry: '😠 生气',
+};
+
+async function readMood(agentId) {
+    try {
+        return (await getAgentMoodStore()?.get(agentId)) ?? null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function moodMenuLabel(mood) {
+    const label = MOOD_LABEL[mood?.emotion] || MOOD_LABEL.neutral;
+    if (!mood || mood.emotion === 'neutral') return `现在的心情：${label}`;
+    const degree = mood.intensity >= 0.6 ? '很' : mood.intensity >= 0.35 ? '' : '有点';
+    return `现在的心情：${label.replace(' ', ` ${degree}`)}`;
+}
+
 // ---- IPC ----------------------------------------------------------------
 
 function registerIpc() {
@@ -868,6 +891,11 @@ function registerIpc() {
     ipcMain.on('deskpet:touched', (event) => {
         const pet = petFromEvent(event);
         if (pet) lastTouched = pet.agentId;
+    });
+    // 这个助手的持续心情（modules/agentMood.js，和侧栏立绘同一份）：待机时显示它，之后跟着 agent-mood-changed 更新
+    ipcMain.handle('deskpet:get-mood', async (event) => {
+        const pet = petFromEvent(event);
+        return pet ? readMood(pet.agentId) : null;
     });
     ipcMain.handle('deskpet:send', async (event, text) => {
         const pet = petFromEvent(event);
@@ -946,10 +974,12 @@ function registerIpc() {
     ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
-        const agents = await listAgents().catch(() => []);
+        const [agents, mood] = await Promise.all([listAgents().catch(() => []), readMood(pet.agentId)]);
         // 读助手列表期间桌宠可能已经被关掉了。
         if (pet.win.isDestroyed()) return;
         Menu.buildFromTemplate([
+            { label: moodMenuLabel(mood), enabled: false },
+            { type: 'separator' },
             { label: '和 TA 说话', click: () => !pet.win.isDestroyed() && pet.win.webContents.send('deskpet:open-input') },
             {
                 label: '切换助手',
