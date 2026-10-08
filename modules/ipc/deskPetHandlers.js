@@ -33,8 +33,8 @@ const PORTRAIT_KEYS = ['neutral', 'calm', 'happy', 'excited', 'shy', 'affectiona
 const SEND_TIMEOUT_MS = 10000;
 const DRAG_MAX_MS = 60000;
 const DISPLAY_SETTLE_MS = 400;
-// 窗口创建时的可聚焦设置（见 openPet）；输入框关上或页面重载后回到它。
-const PET_FOCUSABLE = process.platform !== 'linux';
+// 窗口平时是否可聚焦（见 openPet）；输入框关上或页面重载后回到它。
+const PET_FOCUSABLE = process.platform !== 'win32';
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
@@ -297,8 +297,9 @@ async function openPet(agentId, { bounds = null } = {}) {
         fullscreenable: false,
         skipTaskbar: true,
         alwaysOnTop: true,
-        // Windows：点宠物不抢走正在输入的程序的焦点。Linux 窗口管理器对不可聚焦
-        // 窗口的处理不一（有的直接丢输入），保持可聚焦。
+        // Windows：点宠物不抢走正在输入的程序的焦点，只在输入框打开时临时变成可聚焦。
+        // macOS 不可聚焦的窗口收不到点击，Linux 窗口管理器对不可聚焦窗口的处理不一
+        // （有的直接丢输入），这两处保持可聚焦。
         focusable: PET_FOCUSABLE,
         show: false,
         title: 'VCPChat 桌宠',
@@ -536,6 +537,9 @@ function registerIpc() {
             if (!USE_SHAPE) setIgnoreMouse(pet, false);
             pet.win.setFocusable(true);
             pet.win.focus();
+        } else if (!PET_FOCUSABLE) {
+            // 输入框收起：回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
+            pet.win.setFocusable(false);
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());

@@ -29,7 +29,7 @@ function fakeElectron() {
         hide() { this.visible = false; }
         close() { this.destroyed = true; this.emit('closed'); }
         setAlwaysOnTop() {} moveTop() {} setVisibleOnAllWorkspaces() {} setIgnoreMouseEvents() {}
-        setFocusable() {} focus() {} loadURL() {} getPosition() { return [0, 0]; } setPosition() {}
+        setFocusable(value) { this.focusable = value; } focus() {} loadURL() {} getPosition() { return [0, 0]; } setPosition() {}
     }
     const electron = {
         BrowserWindow,
@@ -140,5 +140,26 @@ test('hiding a pet keeps it alive and the header toggle brings it back', async (
     const closed = await toggle({}, 'Nova');
     assert.equal(pet.isDestroyed(), true);
     assert.deepEqual(closed.openAgents, []);
+    handlers.closeAll();
+});
+
+test('on Windows the pet only takes focus while its input box is open', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' });
+    let loaded;
+    try {
+        loaded = await loadHandlers();
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+    }
+    const { handlers, fake } = loaded;
+    await fake.handlers.get('deskpet:toggle')({}, 'Nova');
+    const pet = fake.windows.at(-1);
+    assert.equal(pet.options.focusable, false);
+    const fromPet = { sender: pet.webContents };
+    fake.listeners.get('deskpet:set-interactive')(fromPet, true);
+    assert.equal(pet.focusable, true);
+    fake.listeners.get('deskpet:set-interactive')(fromPet, false);
+    assert.equal(pet.focusable, false);
     handlers.closeAll();
 });
