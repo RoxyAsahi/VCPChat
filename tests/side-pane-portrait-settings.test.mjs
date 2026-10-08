@@ -1,0 +1,157 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+
+import { renderAgentSettingsSurface } from '../modules/settings/schema/sidebar-surfaces.js';
+import { createAgentPortraitSettings } from '../modules/ui-system/agent-portrait-settings.js';
+import { normalizePortraitDisplay, PORTRAIT_DISPLAY_DEFAULTS } from '../modules/ui-system/side-pane/portrait-display.js';
+
+const tick = () => new Promise(resolve => setImmediate(resolve));
+
+function setup({ portraits = null } = {}) {
+    const dom = new JSDOM('<!doctype html><html><body data-vcp-theme="dark"><div id="host"></div></body></html>');
+    const win = dom.window;
+    let urlSeq = 0;
+    const revoked = [];
+    win.URL.createObjectURL = () => `blob:portrait-${++urlSeq}`;
+    win.URL.revokeObjectURL = url => revoked.push(url);
+    const form = renderAgentSettingsSurface(win.document.getElementById('host'), win.document);
+    const host = form.querySelector('#agentPortraitSettings');
+    const calls = [];
+    const disk = { ...(portraits || {}) };
+    const api = {
+        async getAgentPortraits() { return disk.default ? { ...disk } : null; },
+        async saveAgentPortrait(id, variant, data) {
+            calls.push(['save', id, variant, data.type, data.buffer.byteLength]);
+            disk[variant] = `file:///${variant}`;
+            return { success: true, portraits: { ...disk } };
+        },
+        async removeAgentPortrait(id, variant) {
+            calls.push(['remove', id, variant]);
+            delete disk[variant];
+            return { success: true, portraits: disk.default ? { ...disk } : null };
+        }
+    };
+    const toasts = [];
+    let changes = 0;
+    const owner = createAgentPortraitSettings({ host, api, win, onChange: () => changes++, notify: (m, t) => toasts.push([t, m]) });
+    const slot = variant => host.querySelector(`[data-portrait-variant="${variant}"]`);
+    const pick = (variant, file) => {
+        const input = slot(variant).querySelector('input[type="file"]');
+        Object.defineProperty(input, 'files', { value: [file], configurable: true });
+        input.dispatchEvent(new win.Event('change', { bubbles: true }));
+    };
+    const file = (type = 'image/png', size = 4) => new File([new Uint8Array(size)], 'p.png', { type });
+    return { dom, win, form, host, owner, api, calls, disk, toasts, slot, pick, file, revoked, changes: () => changes };
+}
+
+test('portrait display values are clamped and default when missing', () => {
+    assert.deepEqual(normalizePortraitDisplay(null), { ...PORTRAIT_DISPLAY_DEFAULTS });
+    assert.deepEqual(normalizePortraitDisplay({ focusX: -5, focusY: 140, height: 9999 }), { focusX: 0, focusY: 100, height: 360 });
+    assert.deepEqual(normalizePortraitDisplay({ focusX: '40.6', focusY: 'x', height: 100 }), { focusX: 41, focusY: 22, height: 180 });
+});
+
+test('an agent without a portrait stages one, marks the form changed and writes it on commit', async () => {
+    const t = setup();
+    let formChanges = 0;
+    t.form.addEventListener('change', () => formChanges++);
+    await t.owner.load('Coco', {});
+    assert.equal(t.slot('default').dataset.state, 'empty');
+    assert.equal(t.slot('light').querySelector('[data-portrait-action="pick"]').disabled, true, '没有默认立绘时不能先传浅色版');
+    assert.equal(t.owner.summary(), '未设置，首页显示头像');
+
+    t.pick('default', t.file());
+    assert.equal(t.slot('default').dataset.state, 'staged');
+    assert.equal(t.slot('light').querySelector('[data-portrait-action="pick"]').disabled, false);
+    assert.equal(formChanges, 1, '暂存的图片要让表单变成未保存');
+    assert.equal(t.calls.length, 0, '保存前不写盘');
+    assert.match(t.owner.summary(), /有未保存的图片/);
+
+    const result = await t.owner.commit('Coco');
+    assert.equal(result.success, true);
+    assert.deepEqual(t.calls, [['save', 'Coco', 'default', 'image/png', 4]]);
+    assert.equal(t.slot('default').dataset.state, 'set');
+    assert.equal(t.owner.hasPendingFiles('Coco'), false);
+    assert.deepEqual(t.revoked, ['blob:portrait-1']);
+    t.dom.window.close();
+});
+
+test('wrong file types and oversized files are rejected before staging', async () => {
+    const t = setup();
+    await t.owner.load('Coco', {});
+    t.pick('default', t.file('image/svg+xml'));
+    t.pick('default', t.file('image/png', 20 * 1024 * 1024 + 1));
+    assert.equal(t.owner.hasPendingFiles(), false);
+    assert.equal(t.toasts.length, 2);
+    t.dom.window.close();
+});
+
+test('removing the default portrait also removes the light one, and undo restores both', async () => {
+    const t = setup({ portraits: { default: 'file:///default', light: 'file:///light' } });
+    await t.owner.load('Nova', {});
+    assert.equal(t.owner.summary(), '已设置 · 含浅色版');
+    const remove = t.slot('default').querySelector('[data-portrait-action="remove"]');
+
+    remove.click();
+    assert.equal(t.slot('default').dataset.state, 'removing');
+    assert.equal(t.slot('light').dataset.state, 'removing');
+    assert.equal(remove.textContent, '撤销');
+
+    remove.click();
+    assert.equal(t.slot('default').dataset.state, 'set');
+    assert.equal(t.slot('light').dataset.state, 'set');
+    assert.equal(t.owner.hasPendingFiles(), false);
+
+    remove.click();
+    await t.owner.commit('Nova');
+    assert.deepEqual(t.calls.map(call => call.slice(0, 3)), [['remove', 'Nova', 'default'], ['remove', 'Nova', 'light']]);
+    assert.equal(t.slot('default').dataset.state, 'empty');
+    t.dom.window.close();
+});
+
+test('staged images are kept per agent across switching', async () => {
+    const t = setup();
+    await t.owner.load('A', {});
+    t.pick('default', t.file());
+    await t.owner.load('B', {});
+    assert.equal(t.owner.hasPendingFiles(), false);
+    assert.equal(t.slot('default').dataset.state, 'empty');
+    await t.owner.load('A', {});
+    assert.equal(t.owner.hasPendingFiles(), true);
+    assert.equal(t.slot('default').dataset.state, 'staged');
+    t.dom.window.close();
+});
+
+test('focus moves with the arrow keys and height and reset feed the saved display', async () => {
+    const t = setup({ portraits: { default: 'file:///default' } });
+    await t.owner.load('Nova', { portraitDisplay: { focusX: 50, focusY: 20, height: 260 } });
+    const preview = t.host.querySelector('#agentPortraitPreview');
+    const key = k => preview.dispatchEvent(new t.win.KeyboardEvent('keydown', { key: k, bubbles: true }));
+    key('ArrowRight'); key('ArrowDown');
+    assert.deepEqual(t.owner.getDisplay(), { focusX: 52, focusY: 22, height: 260 });
+    assert.equal(preview.style.getPropertyValue('--side-pane-portrait-position'), '52% 22%');
+
+    const height = t.host.querySelector('#agentPortraitHeight');
+    height.value = '320';
+    height.dispatchEvent(new t.win.Event('input', { bubbles: true }));
+    assert.equal(t.owner.getDisplay().height, 320);
+    assert.equal(t.host.querySelector('#agentPortraitHeightValue').textContent, '320px');
+
+    t.host.querySelector('#agentPortraitResetBtn').click();
+    assert.deepEqual(t.owner.getDisplay(), { ...PORTRAIT_DISPLAY_DEFAULTS });
+    assert.equal(t.host.querySelector('#agentPortraitResetBtn').disabled, true);
+    t.dom.window.close();
+});
+
+test('the light preview shows the light image when there is one, otherwise the default', async () => {
+    const t = setup({ portraits: { default: 'file:///default' } });
+    await t.owner.load('Nova', {});
+    const image = t.host.querySelector('.agent-portrait-preview-image');
+    t.host.querySelector('[data-portrait-preview-theme="light"]').click();
+    assert.equal(image.getAttribute('src'), 'file:///default');
+    t.pick('light', t.file());
+    assert.equal(image.getAttribute('src'), 'blob:portrait-1');
+    t.host.querySelector('[data-portrait-preview-theme="default"]').click();
+    assert.equal(image.getAttribute('src'), 'file:///default');
+    t.dom.window.close();
+});
