@@ -1,7 +1,7 @@
 /* Side pane new tab page: assistant profile or portrait, tool / app / notification sections and the open-tab entry registry. */
 'use strict';
 import { createSidePaneEntries } from './side-pane-entries.js';
-import { applyPortraitDisplay } from './portrait-display.js';
+import { createLauncherPortrait } from './side-pane-launcher-portrait.js';
 
 /**
  * 新标签页（引导页）：上面个人资料，下面工具 / 应用 / 通知分段。工具入口由各模块通过 registerEntry 自己登记，
@@ -34,9 +34,7 @@ export function createSidePaneLauncher({
     const profileAvatar = find(profile, '.side-pane-launcher-avatar');
     const profileImage = find(profileAvatar, 'img');
     const profileName = find(profile, '.side-pane-launcher-name');
-    const portrait = find(view, '.side-pane-launcher-portrait');
-    const portraitImage = find(portrait, '[data-portrait-theme="default"]');
-    const portraitLightImage = find(portrait, '[data-portrait-theme="light"]');
+    const portraitOwner = createLauncherPortrait({ view });
     const segmentTabs = find(view, '.side-pane-launcher-tabs');
     const appsSection = find(view, '[data-launcher-section="apps"]');
     const appGrid = find(appsSection, '.side-pane-launcher-app-grid');
@@ -102,74 +100,10 @@ export function createSidePaneLauncher({
     }
 
     // 有立绘时顶部换成一张向下渐隐的立绘，圆头像和名字都不显示；没有立绘就是原来的头像。
-    // portraits 是 { default, light?, ... }：浅色主题有 light 就用 light，其余键留给以后的差分立绘；
-    // display 是助手配置里的焦点和高度（见 portrait-display.js），跟着换上的那张图一起生效。
-    // 新图先在后台解码好再整张换上，解码完之前保持原样（圆头像或上一张立绘），不会闪出空白或破图标；
-    // 解不出来的图记下来不再用：坏了的 light 退回默认那张，默认那张坏了用 light，都坏了退回圆头像
-    const portraitSlots = { default: portraitImage, light: portraitLightImage };
-    const failedPortraits = new Set();
-    let portraitShown = { src: '', lightSrc: '' };
-    let portraitRequest = 0;
-
-    function decodePortrait(slot, src) {
-        if (!slot || !src) return Promise.resolve(null);
-        if (slot.getAttribute('src') === src && slot.complete && slot.naturalWidth) return Promise.resolve(slot);
-        const next = slot.cloneNode(false);
-        next.hidden = false;
-        next.decoding = 'async';
-        next.setAttribute('src', src);
-        return next.decode().then(() => next, () => {
-            failedPortraits.add(src);
-            return null;
-        });
-    }
-
-    function showPortrait(src, lightSrc, images, display) {
-        portraitShown = { src, lightSrc };
-        for (const theme of Object.keys(portraitSlots)) {
-            const current = portraitSlots[theme];
-            const image = images[theme];
-            if (image && image !== current) {
-                current?.replaceWith(image);
-                portraitSlots[theme] = image;
-            } else if (!image && current) {
-                current.hidden = true;
-                current.removeAttribute('src');
-            }
-        }
-        if (view) {
-            if (src) {
-                view.dataset.launcherPortrait = lightSrc ? 'themed' : 'single';
-                applyPortraitDisplay(view, display);
-            } else {
-                delete view.dataset.launcherPortrait;
-                applyPortraitDisplay(view, null);
-            }
-        }
-        if (portrait) portrait.hidden = !src;
-    }
-
+    // 立绘、浅色版和差分怎么挑、先解码再换、坏图怎么退在 side-pane-launcher-portrait.js；
+    // display 是助手配置里的焦点和高度（见 portrait-display.js），跟着换上的那张图一起生效
     function renderPortrait(portraits, display) {
-        const usable = key => {
-            const value = portraits?.[key];
-            return typeof value === 'string' && value && !failedPortraits.has(value) ? value : '';
-        };
-        const src = portraits?.default ? (usable('default') || usable('light')) : '';
-        const lightSrc = usable('default') ? usable('light') : '';
-        const request = ++portraitRequest;
-        if (src === portraitShown.src && lightSrc === portraitShown.lightSrc) {
-            if (src && view) applyPortraitDisplay(view, display);
-            return;
-        }
-        if (!src || !portrait) {
-            showPortrait('', '', {}, null);
-            return;
-        }
-        Promise.all([decodePortrait(portraitSlots.default, src), decodePortrait(portraitSlots.light, lightSrc)]).then(([image, lightImage]) => {
-            if (disposed || request !== portraitRequest) return;
-            if (!image || (lightSrc && !lightImage)) renderPortrait(portraits, display);
-            else showPortrait(src, lightSrc, { default: image, light: lightImage }, display);
-        });
+        portraitOwner.render(portraits, display);
     }
 
     if (profileAvatar) {
@@ -491,6 +425,11 @@ export function createSidePaneLauncher({
             renderProfile();
         },
 
+        /** 情绪源给出的画面（{ state, emotion, ... }），有差分立绘时换成对应的那张 */
+        setPortraitFrame(frame) {
+            portraitOwner.setFrame(frame);
+        },
+
         setAppsProvider(provider) {
             appsProvider = typeof provider === 'function' ? provider : null;
             if (!appsProvider) segment = 'tools';
@@ -511,6 +450,7 @@ export function createSidePaneLauncher({
         dispose() {
             disposed = true;
             entriesOwner.dispose();
+            portraitOwner.dispose();
             cleanups.forEach(cleanup => cleanup());
             cleanups.length = 0;
         }
