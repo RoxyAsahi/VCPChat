@@ -175,3 +175,18 @@ test('the portrait follows the emotion with theme, nearest-emotion and default f
     assert.equal(resolvePortrait(portraits, { state: 'tool', emotion: 'sad' }).url, 'p.sad.png');
     assert.equal(resolvePortrait(null, { emotion: 'happy' }), null);
 });
+
+test('the agent settings form offers one upload row per emotion and state variant', async () => {
+    const { JSDOM } = await import('jsdom');
+    const { renderAgentSettingsSurface } = await import('../modules/settings/schema/sidebar-surfaces.js');
+    const { EMOTIONS, STATES } = await import('../modules/emotion/emotionVocabulary.js');
+    const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>');
+    const form = renderAgentSettingsSurface(dom.window.document.getElementById('host'), dom.window.document);
+    const variants = form.querySelector('[data-portrait-variants-slot]');
+    assert.equal(variants.hidden, false);
+    const keys = [...variants.querySelectorAll('[data-portrait-variant]')].map(row => row.getAttribute('data-portrait-variant'));
+    assert.deepEqual(keys, [...EMOTIONS, ...STATES]);
+    const ids = [...form.querySelectorAll('[data-portrait-variant] input[type="file"]')].map(input => input.id);
+    assert.equal(new Set(ids).size, ids.length, 'file inputs keep unique ids');
+    dom.window.close();
+});
