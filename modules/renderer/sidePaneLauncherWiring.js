@@ -41,11 +41,11 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         return result;
     };
     // 立绘按助手现取：主进程只看 Agent 目录里有没有 portrait 图。切到别的助手先回到圆头像，
-    // 同一个助手重新选中时保留当前立绘、后台再查一次（新放进去的立绘下次选中就能看到）
+    // 同一个助手重新选中或设置里改了立绘时保留当前立绘、后台再查一次；后发的查询为准
     let portraitState = { id: null, portraits: null, loading: null };
     const loadPortraits = (item, { refresh = false } = {}) => {
         const id = item?.type === 'agent' ? item.id : null;
-        if (portraitState.id === id && (!refresh || portraitState.loading)) return;
+        if (portraitState.id === id && !refresh) return;
         if (portraitState.id !== id) portraitState = { id, portraits: null, loading: null };
         const api = chatAPI || win.electronAPI;
         if (!id || typeof api?.getAgentPortraits !== 'function') return;
@@ -69,6 +69,7 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
             name: item.name || '',
             avatarUrl: item.avatarUrl || '',
             portraits: portraitState.id === item.id ? portraitState.portraits : null,
+            portraitDisplay: item.config?.portraitDisplay ?? item.portraitDisplay ?? null,
             onEditAvatar: item.type === 'agent' ? () => {
                 win.uiManager?.switchToTab?.('settings');
                 doc.getElementById('agentAvatarInput')?.click();
@@ -106,6 +107,15 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         controller.setLauncherProfileProvider(getLauncherProfile);
     });
     if (unbindLauncherProfile) subscriptions.add({ dispose: unbindLauncherProfile });
+    // 助手设置里改了立绘（文件或焦点、高度）：当前助手就重新取一次再重画
+    const onPortraitChanged = (event) => {
+        const item = selectedItemRef.get();
+        if (!item?.id || event?.detail?.agentId !== item.id) return;
+        loadPortraits(item, { refresh: true });
+        controller.setLauncherProfileProvider(getLauncherProfile);
+    };
+    win.addEventListener?.('vcp-agent-portrait-changed', onPortraitChanged);
+    subscriptions.add({ dispose: () => win.removeEventListener?.('vcp-agent-portrait-changed', onPortraitChanged) });
 
     // 新标签页的「应用」页：和顶部「+」启动台是同一批应用、同一套图标和打开方式。
     // 应用页和「推荐」各自一套动态图标，重画一处不会把另一处的画布停掉

@@ -155,12 +155,11 @@ html body[data-vcp-theme="light"] .side-pane-launcher-name:not([readonly]):not(:
  * 立绘是背景层，跟着页面一起滚；头像区域变成一段留白，分类切换落在立绘已经淡出的位置，
  * 工具列表从立绘下面开始，文字不压在人物上。 */
 html .side-pane-launcher-portrait:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    --side-pane-portrait-height: 248px;
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: var(--side-pane-portrait-height);
+    height: var(--side-pane-portrait-height, 248px);
     overflow: hidden;
     pointer-events: none;
     -webkit-mask-image: linear-gradient(to bottom, black 0%, black 38%, color-mix(in srgb, black 55%, transparent) 62%, color-mix(in srgb, black 16%, transparent) 80%, transparent 94%);
@@ -192,7 +191,7 @@ html .side-pane-launcher-portrait-image:where(.vcp-ui-scope, .vcp-ui-scope *) {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center 22%;
+    object-position: var(--side-pane-portrait-position, 50% 22%);
     user-select: none;
 }
 
@@ -208,10 +207,11 @@ html #sidePaneViewLauncher[data-launcher-segment="notifications"] .side-pane-lau
     transform: translateY(-12px);
 }
 
-/* 立绘模式下头像区域只留高度：分类切换的上沿落在立绘约 80% 处 */
+/* 立绘模式下头像区域只留高度：分类切换的上沿落在立绘底部往上 76px，正好是淡出的那一段；
+ * 立绘高度在助手设置里可调，留白跟着变 */
 html #sidePaneViewLauncher[data-launcher-portrait] .side-pane-launcher-profile:where(.vcp-ui-scope, .vcp-ui-scope *) {
-    height: 172px;
-    max-height: 172px;
+    height: calc(var(--side-pane-portrait-height, 248px) - 76px);
+    max-height: calc(var(--side-pane-portrait-height, 248px) - 76px);
     padding: 0;
     box-sizing: border-box;
 }
