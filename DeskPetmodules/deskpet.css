@@ -2,6 +2,8 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* 触屏拖动角色交给页面处理，不让浏览器当成滚动手势取消掉指针 */
+  touch-action: none;
   background: transparent;
   user-select: none;
   font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;

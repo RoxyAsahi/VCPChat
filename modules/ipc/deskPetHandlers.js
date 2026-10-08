@@ -31,6 +31,10 @@ const IMAGE_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'avif'];
 const PORTRAIT_KEYS = ['neutral', 'calm', 'happy', 'excited', 'shy', 'affectionate', 'curious',
     'surprised', 'concerned', 'sad', 'tired', 'angry', 'thinking', 'tool', 'error'];
 const SEND_TIMEOUT_MS = 10000;
+const DRAG_MAX_MS = 60000;
+const DISPLAY_SETTLE_MS = 400;
+// 窗口创建时的可聚焦设置（见 openPet）；输入框关上或页面重载后回到它。
+const PET_FOCUSABLE = process.platform !== 'linux';
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
@@ -178,17 +182,50 @@ async function savePetPosition(agentId, position) {
     await fs.outputJson(petStatePath(), state, { spaces: 2 });
 }
 
-function initialBounds(saved) {
+function defaultPosition(index) {
     const area = screen.getPrimaryDisplay().workArea;
-    const fallback = {
-        x: area.x + area.width - PET_SIZE.width - 24 - pets.size * 40,
+    return {
+        x: area.x + area.width - PET_SIZE.width - 24 - index * 40,
         y: area.y + area.height - PET_SIZE.height,
     };
+}
+
+function isOnScreen(x, y) {
+    return screen.getAllDisplays().some(({ workArea: a }) =>
+        x + PET_SIZE.width > a.x && x < a.x + a.width && y + 40 > a.y && y < a.y + a.height);
+}
+
+function initialBounds(saved) {
+    const fallback = defaultPosition(pets.size);
     if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return { ...PET_SIZE, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
-    const onScreen = screen.getAllDisplays().some(({ workArea: a }) =>
-        saved.x + PET_SIZE.width > a.x && saved.x < a.x + a.width && saved.y + 40 > a.y && saved.y < a.y + a.height);
-    return { ...PET_SIZE, ...(onScreen ? { x: saved.x, y: saved.y } : fallback) };
+    return { ...PET_SIZE, ...(isOnScreen(saved.x, saved.y) ? { x: saved.x, y: saved.y } : fallback) };
+}
+
+// 拔掉外接屏、改分辨率或缩放之后：不在任何屏上的桌宠挪回主屏，被系统改掉的窗口尺寸改回来。
+function fitPetsToDisplays() {
+    let index = 0;
+    for (const pet of pets.values()) {
+        if (pet.win.isDestroyed() || pet.drag) continue;
+        const b = pet.win.getBounds();
+        const onScreen = isOnScreen(b.x, b.y);
+        const next = onScreen ? { x: b.x, y: b.y } : defaultPosition(index);
+        if (!onScreen || b.width !== PET_SIZE.width || b.height !== PET_SIZE.height) {
+            pet.win.setBounds({ ...next, ...PET_SIZE });
+            if (!onScreen) savePetPosition(pet.agentId, [next.x, next.y]).catch(() => {});
+        }
+        index += 1;
+    }
+}
+
+let displayTimer = null;
+function onDisplaysChanged() {
+    // 改缩放、远程桌面重连时这些事件会连发，等它们停下来再处理。
+    clearTimeout(displayTimer);
+    displayTimer = setTimeout(() => {
+        displayTimer = null;
+        try { fitPetsToDisplays(); } catch (error) { console.warn('[DeskPet] display change:', error.message); }
+    }, DISPLAY_SETTLE_MS);
 }
 
 function visibleAgents() {
@@ -232,13 +269,19 @@ function startHitPoll(pet) {
     }, HIT_POLL_MS);
 }
 
+// agent 目录名：单独一段，不能是 . 或 ..（否则会指到 Agents 目录本身或它的上级）。
+function isAgentId(agentId) {
+    return typeof agentId === 'string' && agentId.length > 0 && agentId !== '.' && agentId !== '..'
+        && agentId === path.basename(agentId) && !/[\\/]/.test(agentId);
+}
+
 async function openPet(agentId, { bounds = null } = {}) {
     if (pets.has(agentId)) {
         showPet(pets.get(agentId));
         notifyMain(agentId);
         return { success: true, open: true };
     }
-    if (agentId !== path.basename(agentId) || !(await fs.pathExists(path.join(paths.agentDir, agentId)))) {
+    if (!isAgentId(agentId) || !(await fs.pathExists(path.join(paths.agentDir, agentId)))) {
         return { success: false, error: 'agent-not-found' };
     }
     const saved = (await readPetState())[agentId];
@@ -256,7 +299,7 @@ async function openPet(agentId, { bounds = null } = {}) {
         alwaysOnTop: true,
         // Windows：点宠物不抢走正在输入的程序的焦点。Linux 窗口管理器对不可聚焦
         // 窗口的处理不一（有的直接丢输入），保持可聚焦。
-        focusable: process.platform !== 'linux',
+        focusable: PET_FOCUSABLE,
         show: false,
         title: 'VCPChat 桌宠',
         webPreferences: {
@@ -278,9 +321,13 @@ async function openPet(agentId, { bounds = null } = {}) {
         showPet(pet);
         notifyMain(agentId);
     });
+    // 第一次载入时状态本来就是初始值；之后的重载（崩溃恢复、刷新）要把主进程这边也清零。
+    win.webContents.on('did-start-loading', () => resetInputState(pet));
     win.webContents.on('render-process-gone', (_e, details) => {
         console.warn('[DeskPet] renderer gone:', details.reason);
-        if (details.reason === 'clean-exit' || win.isDestroyed()) return;
+        if (win.isDestroyed()) return;
+        resetInputState(pet);
+        if (details.reason === 'clean-exit') return;
         // 最多自动重载 3 次，避免模型本身有问题时无限崩溃重启。
         pet.crashes = (pet.crashes || 0) + 1;
         if (pet.crashes <= 3) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
@@ -292,7 +339,7 @@ async function openPet(agentId, { bounds = null } = {}) {
     win.on('show', () => sendVisibility(true));
     win.on('closed', () => {
         clearInterval(pet.hitPoll);
-        if (pet.drag) clearInterval(pet.drag.timer);
+        stopDrag(pet);
         pets.delete(agentId);
         notifyMain(agentId);
     });
@@ -300,6 +347,33 @@ async function openPet(agentId, { bounds = null } = {}) {
     if (!USE_SHAPE) startHitPoll(pet);
     notifyMain(agentId);
     return { success: true, open: true };
+}
+
+// 混合 DPI 多屏之间 setPosition 可能顺带改尺寸，统一用 setBounds 固定宽高。
+function moveWithCursor(pet, drag) {
+    const c = screen.getCursorScreenPoint();
+    pet.win.setBounds({ x: c.x - drag.dx, y: c.y - drag.dy, ...PET_SIZE });
+}
+
+function stopDrag(pet, { save = false } = {}) {
+    if (!pet.drag) return;
+    clearInterval(pet.drag.timer);
+    pet.drag = null;
+    if (save && !pet.win.isDestroyed()) savePetPosition(pet.agentId, pet.win.getPosition()).catch(() => {});
+}
+
+// 页面重新载入（崩溃自动重载、刷新）时，页面那边的命中、输入框、拖动状态都清零了，
+// 主进程这边也要回到初始状态：否则上一次的「可点击」会让一块看不见的窗口挡住桌面。
+function resetInputState(pet) {
+    stopDrag(pet, { save: true });
+    pet.interactive = false;
+    pet.lastShape = '';
+    if (pet.win.isDestroyed()) return;
+    pet.win.setFocusable(PET_FOCUSABLE);
+    if (!USE_SHAPE) {
+        pet.ignoringMouse = null;
+        setIgnoreMouse(pet, true);
+    }
 }
 
 function closePet(agentId) {
@@ -413,7 +487,9 @@ async function switchPet(fromId, toId) {
         pets.get(toId).win.setPosition(x, y);
         showPet(pets.get(toId));
     } else {
-        await openPet(toId, { bounds: { x, y } });
+        const opened = await openPet(toId, { bounds: { x, y } });
+        // 换不过去（助手刚被删掉）就留着原来的桌宠，不要两边都没了。
+        if (!opened?.success) return;
     }
     closePet(fromId);
     savePetPosition(toId, [x, y]).catch(() => {});
@@ -484,31 +560,40 @@ function registerIpc() {
     // 也没法和按像素穿透同时用。origin 是按下那一刻的屏幕坐标。
     ipcMain.on('deskpet:drag-start', (event, origin) => {
         const pet = petFromEvent(event);
-        if (!pet) return;
-        const p = origin && Number.isFinite(origin.x) ? origin : screen.getCursorScreenPoint();
+        if (!pet || pet.win.isDestroyed()) return;
+        // 上一次拖动的 pointerup 丢了（触屏 pointercancel、拖动中弹出菜单）时还会再来一次 drag-start；
+        // 先收掉旧的定时器，否则它会一直跟着光标，drag-end 之后还会每帧抛异常。
+        stopDrag(pet);
+        const p = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y) ? origin : screen.getCursorScreenPoint();
         const [wx, wy] = pet.win.getPosition();
-        pet.drag = { dx: p.x - wx, dy: p.y - wy, timer: null };
-        pet.drag.timer = setInterval(() => {
-            if (pet.win.isDestroyed()) return;
-            const c = screen.getCursorScreenPoint();
-            pet.win.setBounds({ x: c.x - pet.drag.dx, y: c.y - pet.drag.dy, ...PET_SIZE });
+        const drag = { dx: p.x - wx, dy: p.y - wy, timer: null, startedAt: Date.now() };
+        drag.timer = setInterval(() => {
+            if (pet.win.isDestroyed() || pet.drag !== drag) {
+                clearInterval(drag.timer);
+                return;
+            }
+            // 兜底：页面再也没发 drag-end（渲染进程卡死），不让窗口永远粘在光标上。
+            if (Date.now() - drag.startedAt > DRAG_MAX_MS) {
+                stopDrag(pet, { save: true });
+                return;
+            }
+            moveWithCursor(pet, drag);
         }, DRAG_TICK_MS);
+        pet.drag = drag;
     });
     ipcMain.on('deskpet:drag-end', (event) => {
         const pet = petFromEvent(event);
-        if (!pet?.drag) return;
-        clearInterval(pet.drag.timer);
-        const c = screen.getCursorScreenPoint();
-        // 混合 DPI 多屏之间 setPosition 可能顺带改尺寸，统一用 setBounds 固定宽高。
-        pet.win.setBounds({ x: c.x - pet.drag.dx, y: c.y - pet.drag.dy, ...PET_SIZE });
-        pet.drag = null;
-        savePetPosition(pet.agentId, pet.win.getPosition()).catch(() => {});
+        if (!pet?.drag || pet.win.isDestroyed()) return;
+        moveWithCursor(pet, pet.drag);
+        stopDrag(pet, { save: true });
     });
 
     ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
         const agents = await listAgents().catch(() => []);
+        // 读助手列表期间桌宠可能已经被关掉了。
+        if (pet.win.isDestroyed()) return;
         Menu.buildFromTemplate([
             { label: '和 TA 说话', click: () => !pet.win.isDestroyed() && pet.win.webContents.send('deskpet:open-input') },
             {
@@ -547,6 +632,9 @@ function initialize(options) {
     };
     registerProtocol();
     registerIpc();
+    screen.on('display-removed', onDisplaysChanged);
+    screen.on('display-added', onDisplaysChanged);
+    screen.on('display-metrics-changed', onDisplaysChanged);
     import(pathToFileURL(path.join(paths.projectRoot, 'modules', 'emotion', 'emotionPrompt.js')).href)
         .then((mod) => { emotionPrompt = mod; })
         .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
@@ -558,15 +646,27 @@ function closeAll() {
     for (const agentId of [...pets.keys()]) closePet(agentId);
 }
 
+// chatHandlers 在主聊天的发送和流式路径上调用这些钩子；桌宠出任何错都不能打断主聊天。
+function isolated(name, fn, fallback) {
+    return (...args) => {
+        try {
+            return fn(...args);
+        } catch (error) {
+            console.warn(`[DeskPet] ${name} failed:`, error?.message || error);
+            return typeof fallback === 'function' ? fallback(...args) : fallback;
+        }
+    };
+}
+
 module.exports = {
     registerSchemes,
     initialize,
     closeAll,
-    getSystemPromptAppend,
-    appendProtocolToMessages,
-    onRequestStart,
-    onStreamPayload,
-    onFullResponse,
+    getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
+    appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),
+    onRequestStart: isolated('onRequestStart', onRequestStart),
+    onStreamPayload: isolated('onStreamPayload', onStreamPayload),
+    onFullResponse: isolated('onFullResponse', onFullResponse),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _resolveServedFile: (url, testPaths) => {

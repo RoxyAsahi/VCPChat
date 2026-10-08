@@ -44,6 +44,7 @@ function fakeElectron() {
             getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1600, height: 1000 } }),
             getAllDisplays: () => [{ workArea: { x: 0, y: 0, width: 1600, height: 1000 } }],
             getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+            on() {},
         },
     };
     return { electron, handlers, listeners, windows };
