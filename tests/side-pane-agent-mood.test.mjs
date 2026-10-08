@@ -17,6 +17,7 @@ const require = createRequire(import.meta.url);
 const { createAgentMoodStore, teeCall } = require('../modules/agentMood.js');
 
 const HOUR = 60 * 60 * 1000;
+const norm = vad => Math.hypot(vad.valence, vad.arousal, vad.dominance);
 // 固定在某天中午，跨不跨天由测试自己决定
 const NOON = new Date(2026, 9, 8, 12, 0, 0).getTime();
 
@@ -106,9 +107,23 @@ test('the mood eases back over hours and mostly resets on a new day', () => {
     let night = createMood(NOON + 11 * HOUR);
     for (let i = 0; i < 5; i += 1) night = applyMoodEvent(night, happy(NOON + 11 * HOUR));
     assert.equal(moodEmotion(night).emotion, 'happy');
-    assert.equal(moodSnapshot(night, NOON + 13 * HOUR).emotion, 'neutral');
-    // 时间倒退（改了系统时间）不炸也不变
-    assert.equal(decayMood(night, NOON), night);
+    assert.equal(moodSnapshot(night, NOON + 20 * HOUR).emotion, 'neutral');
+    // 时间倒退（改了系统时间）心情不变，但从现在重新计时
+    const rewound = decayMood(night, NOON);
+    assert.deepEqual(rewound.vad, night.vad);
+    assert.equal(rewound.updatedAt, NOON);
+    assert.ok(norm(decayMood(rewound, NOON + 4 * HOUR).vad) < norm(night.vad) * 0.6, 'and keeps easing after the clock went back');
+});
+
+test('chatting on past midnight is not a new day; a night of sleep is', () => {
+    let mood = createMood(NOON + 11.5 * HOUR);
+    for (let i = 0; i < 5; i += 1) mood = applyMoodEvent(mood, happy(NOON + 11.5 * HOUR));
+    const start = norm(mood.vad);
+    const halfHour = Math.pow(0.5, 0.5 * HOUR / MOOD_DEFAULTS.halfLifeMs);
+    assert.ok(Math.abs(norm(decayMood(mood, NOON + 12 * HOUR).vad) - start * halfHour) < 1e-9, 'half an hour across midnight is only the half-life');
+    const hours = 9;
+    const slept = norm(decayMood(mood, NOON + (11.5 + hours) * HOUR).vad);
+    assert.ok(Math.abs(slept - start * Math.pow(0.5, hours * HOUR / MOOD_DEFAULTS.halfLifeMs) * MOOD_DEFAULTS.newDayKeep) < 1e-9);
 });
 
 test('what the user says reaches the mood the way a companion would feel it', () => {
@@ -126,6 +141,25 @@ test('what the user says reaches the mood the way a companion would feel it', ()
     assert.equal(moodEmotion(mood).emotion, 'concerned');
     mood = applyMoodEvent(mood, userMessageMoodEvent('我没事了', NOON));
     assert.ok(moodEmotion(mood).intensity < 0.3);
+});
+
+test('only the user\'s own words count: not attachments, code, quotes, long pastes or remarks about programs', () => {
+    const log = 'ERROR 气死了 failed，难过，sad sad sad 😭😭';
+    assert.equal(userMessageMoodEvent(`帮我看看这个日志\n\n[附加文件: C:/logs/app.log]\n${log}\n[/附加文件结束: app.log]`), null);
+    assert.equal(userMessageMoodEvent('```js\nconsole.log("太好了哈哈哈！！")\n```\n这段为什么不输出'), null);
+    assert.equal(userMessageMoodEvent('报错是 `难过.js not found`'), null);
+    assert.equal(userMessageMoodEvent('> 他说：我好难过，气死了\n这句话怎么翻译'), null);
+    assert.equal(userMessageMoodEvent(`请总结这篇文章：${'今天天气很好，大家都很开心。'.repeat(60)}`), null);
+    // 引用之外自己说的话照样算
+    assert.equal(userMessageMoodEvent('> 考试成绩出来了\n呜呜我好难过')?.emotion, 'concerned');
+    assert.equal(userMessageMoodEvent('我不开心')?.emotion, 'concerned');
+    // 「好多了」「恢复了」说的是程序时不算心情好转
+    assert.equal(userMessageMoodEvent('新版本好多了，加载快了很多'), null);
+    assert.equal(userMessageMoodEvent('服务恢复了'), null);
+    assert.equal(userMessageMoodEvent('我觉得这个方案好多了'), null);
+    assert.equal(userMessageMoodEvent('嗯，好多了！')?.settle, 0.6);
+    assert.equal(userMessageMoodEvent('现在感觉稍微好一点了')?.settle, 0.35);
+    assert.equal(userMessageMoodEvent('I feel better now')?.settle, 0.6);
 });
 
 test('a reply counts by its last tag, skips code, thoughts and tool calls, and falls back to rules', () => {
@@ -270,6 +304,84 @@ test('regenerating, aborted or failed replies, group turns and bad ids do not mo
     await settle();
     assert.equal(sent.at(-1).payload.last.emotion, 'happy');
     await fs.rm(root, { recursive: true, force: true });
+});
+
+test('regenerating a reply replaces what the old reply did instead of pushing twice; continuing adds on', async () => {
+    const { sent, store, settle } = await createStoreFixture();
+    const context = { agentId: 'Nova' };
+    const messages = [{ role: 'system', content: 's' }, { role: 'user', content: '讲个故事吧' }];
+    const reply = (id, text, history = messages) => {
+        const call = store.observe({ context, messages: history, messageId: id });
+        call.chunk(chunk(text));
+        call.finish();
+    };
+    reply('r1', '<!--emo:sad 1-->这是一个悲伤的故事');
+    await settle();
+    const once = (await store.get('Nova')).vad;
+    reply('r2', '<!--emo:sad 1-->这是一个悲伤的故事');
+    reply('r3', '<!--emo:sad 1-->这是一个悲伤的故事');
+    await settle();
+    assert.deepEqual((await store.get('Nova')).vad, once, 'three tries at the same message leave the mood of one');
+    // 重新生成成没有情绪的回复：旧回复的影响也撤掉
+    reply('r4', '从前有座山。');
+    await settle();
+    assert.deepEqual((await store.get('Nova')).vad, { valence: 0, arousal: 0, dominance: 0 });
+    assert.equal(sent.at(-1).payload.emotion, 'neutral');
+    // 续写：最后一条是助手的，同一句用户话不重复算，但续出来的回复照常算
+    reply('r5', '<!--emo:happy 1-->后来大家都很开心', [...messages, { role: 'assistant', content: '从前有座山。' }]);
+    await settle();
+    assert.equal(sent.at(-1).payload.last.emotion, 'happy');
+    assert.ok((await store.get('Nova')).vad.valence > 0);
+});
+
+test('writes for one assistant never overlap, leave no temp files, and seq orders the broadcasts', async () => {
+    const { root, clock, sent, store, settle } = await createStoreFixture();
+    const writes = [];
+    for (let i = 0; i < 20; i += 1) {
+        writes.push(store.record('Nova', { emotion: i % 2 ? 'happy' : 'sad', intensity: 0.8, source: 'tag' }));
+        clock.advance(0);
+    }
+    await Promise.all(writes);
+    await store.flush();
+    const files = await fs.readdir(path.join(root, 'Nova'));
+    assert.deepEqual(files, ['mood.json']);
+    const saved = JSON.parse(await fs.readFile(path.join(root, 'Nova', 'mood.json'), 'utf8'));
+    assert.deepEqual(saved.vad, (await store.get('Nova')).vad);
+    const seqs = sent.map(item => item.payload.seq);
+    assert.deepEqual(seqs, [...seqs].sort((a, b) => a - b));
+    assert.equal(new Set(seqs).size, seqs.length);
+    assert.ok((await store.get('Nova')).seq >= seqs.at(-1));
+    await settle();
+    await fs.rm(root, { recursive: true, force: true });
+});
+
+test('a broken or empty mood file starts calm and is replaced by the next write', async () => {
+    const { root, clock, store, settle } = await createStoreFixture();
+    await fs.writeFile(path.join(root, 'Nova', 'mood.json'), '{"version":1,"vad":{"valence":0.5');
+    assert.equal((await store.get('Nova')).emotion, 'neutral');
+    await store.record('Nova', { emotion: 'happy', intensity: 0.9, source: 'tag' });
+    clock.advance(0);
+    await store.flush();
+    await settle();
+    const saved = JSON.parse(await fs.readFile(path.join(root, 'Nova', 'mood.json'), 'utf8'));
+    assert.ok(saved.vad.valence > 0);
+    await fs.rm(root, { recursive: true, force: true });
+});
+
+test('forgetting an assistant before deleting it drops pending writes and later events', async () => {
+    const { root, clock, sent, store, settle } = await createStoreFixture({ writeDelayMs: 1000 });
+    await store.record('Nova', { emotion: 'happy', intensity: 0.9, source: 'tag' });
+    const call = store.observe({ context: { agentId: 'Nova' }, messages: [{ role: 'user', content: '你好' }], messageId: 'late' });
+    await store.forget('Nova');
+    await fs.rm(path.join(root, 'Nova'), { recursive: true, force: true });
+    const count = sent.length;
+    call.chunk(chunk('<!--emo:sad-->'));
+    call.finish();
+    clock.advance(5000);
+    await settle();
+    await assert.rejects(fs.stat(path.join(root, 'Nova')));
+    assert.equal(sent.length, count, 'a reply that ends after the delete is not recorded');
+    store.dispose();
 });
 
 test('a deleted assistant is not brought back by a late mood write', async () => {

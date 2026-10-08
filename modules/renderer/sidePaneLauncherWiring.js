@@ -89,12 +89,13 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
     let emotionAgentId = null;
     // 回复的情绪过去以后回到这个助手的长期心情（主进程按聊天记着，桌宠用的是同一份）
     const moodApi = chatAPI || win.electronAPI;
-    let moodAt = 0;
+    let moodSeq = 0;
     const applyMood = (mood) => {
         if (disposed || !mood?.agentId || mood.agentId !== emotionAgentId) return;
-        // 先发的查询晚到时不能盖掉已经推过来的新心情
-        if (Number(mood.updatedAt) < moodAt) return;
-        moodAt = Number(mood.updatedAt) || 0;
+        // 先发的查询晚到时不能盖掉已经推过来的新心情；按主进程的广播序号比（系统时间可能被往回调）
+        const seq = Number(mood.seq) || 0;
+        if (seq < moodSeq) return;
+        moodSeq = seq;
         emotionDirector.setBaseline(mood);
     };
     const syncEmotionAgent = () => {
@@ -102,7 +103,7 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         const id = item?.type === 'agent' ? item.id : null;
         if (id === emotionAgentId) return;
         emotionAgentId = id;
-        moodAt = 0;
+        moodSeq = 0;
         emotionDirector.reset();
         if (id && typeof moodApi?.getAgentMood === 'function') {
             Promise.resolve(moodApi.getAgentMood(id)).then(applyMood).catch((error) => {

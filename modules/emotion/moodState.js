@@ -14,7 +14,7 @@ export const MOOD_VERSION = 1;
 export const MOOD_DEFAULTS = Object.freeze({
     // 偏离平静的部分每过这么久减半
     halfLifeMs: 4 * 60 * 60 * 1000,
-    // 跨过一天（本地日期变了）时再额外只留下这一部分：第二天醒来基本回到平静
+    // 睡过一夜（跨过本地早上 5 点、且中间至少隔了两小时）再额外只留下这一部分：第二天醒来基本回到平静
     newDayKeep: 0.35,
     // 低于这个强度就当作平静，立绘不跟着换
     showThreshold: 0.22,
@@ -34,8 +34,14 @@ const norm = vad => Math.hypot(vad.valence, vad.arousal, vad.dominance);
 const mix = (from, to, amount) => Object.fromEntries(AXES.map(axis => [axis, from[axis] + (to[axis] - from[axis]) * amount]));
 const scale = (vad, factor) => Object.fromEntries(AXES.map(axis => [axis, vad[axis] * factor]));
 
+// 一天从本地早上 5 点算起：半夜接着聊不算第二天
+const DAY_STARTS_AT_HOUR = 5;
+// 中间至少隔这么久才算睡过一觉；一直聊着跨过 5 点不额外回落
+const NIGHT_GAP_MS = 2 * 60 * 60 * 1000;
+
 function localDay(time) {
     const date = new Date(time);
+    date.setHours(date.getHours() - DAY_STARTS_AT_HOUR);
     return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
 }
 
@@ -55,12 +61,14 @@ export function normalizeMood(value, at = Date.now()) {
     return { version: MOOD_VERSION, vad, updatedAt, last };
 }
 
-/** 把心情推进到 at：按半衰期回落，跨天再额外回落一截 */
+/** 把心情推进到 at：按半衰期回落，睡过一夜再额外回落一截 */
 export function decayMood(mood, at = Date.now(), { halfLifeMs = MOOD_DEFAULTS.halfLifeMs, newDayKeep = MOOD_DEFAULTS.newDayKeep } = {}) {
     const elapsed = at - mood.updatedAt;
-    if (!(elapsed > 0)) return mood;
+    if (elapsed === 0 || !Number.isFinite(elapsed)) return mood;
+    // 系统时间被往回调了：心情不动，但从现在重新计时，否则要等时钟追回原来的时间才会再回落
+    if (elapsed < 0) return { ...mood, updatedAt: at };
     let keep = halfLifeMs > 0 ? Math.pow(0.5, elapsed / halfLifeMs) : 0;
-    if (localDay(at) !== localDay(mood.updatedAt)) keep *= newDayKeep;
+    if (elapsed >= NIGHT_GAP_MS && localDay(at) !== localDay(mood.updatedAt)) keep *= newDayKeep;
     const vad = norm(mood.vad) * keep < 0.01 ? { ...ORIGIN } : scale(mood.vad, keep);
     return { ...mood, vad, updatedAt: at };
 }
@@ -134,17 +142,46 @@ const EMPATHY = Object.freeze({
 // 「还没好」「还是难过」：保持现状，不再往哪边推
 const STILL_UPSET = /(?:还|仍然|依然|并|並)?(?:没|沒有|没有|未)(?:有)?(?:好|恢复|恢復|释怀|釋懷|缓解|緩解)|并没有好|並沒有好|not\s+(?:okay|better|fine)|still\s+(?:sad|upset|angry|tired)|まだ(?:だめ|辛い|悲しい|怒って)/i;
 // 「没事了」「好多了」：心情回到平静
-const RESOLVED = /(?:我)?(?:已经|已經)?(?:没事了|沒事了|好多了|恢复了|恢復了|释怀了|釋懷了)|谢谢你安慰我|謝謝你安慰我|被你安慰好了|心情恢复了|心情恢復了|i(?:'m| am)\s+(?:okay|fine|better)\s+now|i\s+feel\s+better\s+now|もう大丈夫|元気になった/i;
+const RESOLVED = /(?:已经|已經)?(?:没事了|沒事了|好多了|恢复了|恢復了|释怀了|釋懷了)|谢谢你安慰我|謝謝你安慰我|被你安慰好了|i(?:'m| am)\s+(?:okay|fine|better)\s+now|i\s+feel\s+better\s+now|もう大丈夫|元気になった/i;
 // 「好一点了」：回落一半
 const EASED = /(?:稍微|有点|有點|一点|一點)(?:好|舒服|轻松|輕鬆)(?:一点|一點)?|好一点了|好一點了|缓解了一些|緩解了一些|a\s+(?:little|bit)\s+better|少し(?:楽|良く)なった/i;
+// 「好多了」「恢复了」也常说的是程序、服务：只有紧挨着说到自己，或者整句就是这一声时才当成心情
+const ABOUT_SELF = /我|心情|感觉|感覺|心里|心裡|\bi(?:'m| am| feel)?\b|気持ち|私/i;
+const FILLER = /[\s\p{P}\p{S}]|嗯|啊|呀|啦|吧|呢|哦|噢|唔|了|谢谢|謝謝|你|已经|已經|现在|現在|真的|其实|其實|总算|總算|终于|終於/gu;
+// 用户贴来的长段文字多是材料，不是心情
+const MAX_FEELING_LENGTH = 600;
+
+function aboutSelf(text, pattern) {
+    const match = pattern.exec(text);
+    if (!match) return false;
+    if (/安慰|i(?:'m| am)\s|i\s+feel|もう大丈夫|元気/i.test(match[0])) return true;
+    const rest = (text.slice(0, match.index) + text.slice(match.index + match[0].length)).replace(FILLER, '');
+    return !rest || ABOUT_SELF.test(text.slice(Math.max(0, match.index - 4), match.index));
+}
+
+/**
+ * 用户消息里真正是这个人说的话：附加文件的内容、代码块、行内代码、引用（> 开头的行）和链接都不算。
+ * 附加文件是追加在消息末尾的（singleChatRequestOrchestrator），从第一个标记处截断
+ */
+export function ownWords(input) {
+    let text = String(input ?? '');
+    const attachment = text.indexOf('[附加文件:');
+    if (attachment >= 0) text = text.slice(0, attachment);
+    return text
+        .replace(/(^|\n)[ \t]*(```|~~~)[^\n]*\n[\s\S]*?(?:\n[ \t]*\2[^\n]*(?=\n|$)|$)/g, '$1')
+        .replace(/`[^`\n]*`/g, ' ')
+        .replace(/^[ \t]*>.*$/gm, '')
+        .replace(/https?:\/\/\S+/g, ' ')
+        .trim();
+}
 
 /** 用户说的一句话对助手心情的影响；没有明显情绪时返回 null */
 export function userMessageMoodEvent(input, at = Date.now()) {
-    const text = String(input ?? '').trim().slice(-1600);
-    if (!text) return null;
+    const text = ownWords(input);
+    if (!text || text.length > MAX_FEELING_LENGTH) return null;
     if (STILL_UPSET.test(text)) return null;
-    if (RESOLVED.test(text)) return { settle: 0.6, source: 'user', at };
-    if (EASED.test(text)) return { settle: 0.35, source: 'user', at };
+    if (aboutSelf(text, RESOLVED)) return { settle: 0.6, source: 'user', at };
+    if (aboutSelf(text, EASED)) return { settle: 0.35, source: 'user', at };
     const result = classifyReplyText(text);
     const emotion = result && EMPATHY[result.emotion];
     return emotion ? { emotion, intensity: result.intensity, source: 'user', at } : null;

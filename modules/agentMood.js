@@ -20,6 +20,15 @@ function textOfContent(content) {
     return '';
 }
 
+// 最后一条不是 system 的消息是用户的：这是对一句用户话的回复（新发或重新生成），而不是续写
+function endsWithUser(messages) {
+    if (!Array.isArray(messages)) return false;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i]?.role !== 'system') return messages[i]?.role === 'user';
+    }
+    return false;
+}
+
 function lastUserText(messages) {
     if (!Array.isArray(messages)) return '';
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -49,9 +58,11 @@ function createAgentMoodStore({
     setTimer = (callback, delay) => setTimeout(callback, delay),
     clearTimer = handle => clearTimeout(handle),
 }) {
-    const states = new Map(); // agentId -> { mood, loading, shown, writeTimer, seenReplies, lastUserText }
+    const states = new Map(); // agentId -> { mood, loading, shown, writeTimer, writing, events, lastReply, seenReplies, lastUserText }
     let recheckTimer = null;
     let disposed = false;
+    // 每次广播递增：渲染端用它判断先后（系统时间可能被往回调，updatedAt 不可靠）
+    let seq = 0;
 
     const resolveDir = (agentId) => {
         const id = typeof agentId === 'string' ? agentId : '';
@@ -62,7 +73,17 @@ function createAgentMoodStore({
     function entryOf(agentId) {
         let entry = states.get(agentId);
         if (!entry) {
-            entry = { mood: null, loading: null, shown: null, writeTimer: null, seenReplies: new Set(), lastUserText: '' };
+            entry = {
+                mood: null,
+                loading: null,
+                shown: null,
+                writeTimer: null,
+                writing: Promise.resolve(),
+                events: 0,
+                lastReply: null,
+                seenReplies: new Set(),
+                lastUserText: '',
+            };
             states.set(agentId, entry);
         }
         return entry;
@@ -89,22 +110,31 @@ function createAgentMoodStore({
         if (entry.writeTimer) return;
         entry.writeTimer = setTimer(() => {
             entry.writeTimer = null;
-            write(agentId, entry).catch(() => {});
+            write(agentId, entry);
         }, writeDelayMs);
     }
 
-    async function write(agentId, entry) {
+    // 同一个助手的写入排队进行：上一次还没换上去时下一次不会去动同一个临时文件
+    function write(agentId, entry) {
+        entry.writing = entry.writing.then(() => writeNow(agentId, entry)).catch(() => {});
+        return entry.writing;
+    }
+
+    async function writeNow(agentId, entry) {
         const dir = resolveDir(agentId);
         // 助手删掉了就不再写，免得把目录又建出来
-        if (!dir || !entry.mood || !(await fs.pathExists(dir))) return;
+        if (!dir || !entry.mood || entry.forgotten || !(await fs.pathExists(dir))) return;
         const file = path.join(dir, MOOD_FILE);
-        const temp = `${file}.${process.pid}.tmp`;
-        await fs.writeJson(temp, entry.mood, { spaces: 2 });
-        await fs.move(temp, file, { overwrite: true });
+        // 临时文件名固定：中途崩溃留下的那一个下次会被覆盖，不会越积越多
+        const temp = `${file}.tmp`;
+        await fs.writeFile(temp, JSON.stringify(entry.mood, null, 2));
+        // 直接改名覆盖：中途不会出现 mood.json 不存在的时刻（Windows 上被占用时 graceful-fs 会重试）
+        await fs.rename(temp, file);
     }
 
     function publish(agentId, entry) {
-        const snapshot = { agentId, ...mood.moodSnapshot(entry.mood, now()) };
+        seq += 1;
+        const snapshot = { agentId, seq, ...mood.moodSnapshot(entry.mood, now()) };
         entry.shown = snapshot.emotion;
         try {
             broadcast(snapshot);
@@ -116,7 +146,35 @@ function createAgentMoodStore({
     async function record(agentId, event) {
         if (disposed || !event || !resolveDir(agentId)) return null;
         const entry = await load(agentId);
+        if (entry.forgotten) return null;
         entry.mood = mood.applyMoodEvent(entry.mood, { at: now(), ...event });
+        entry.events += 1;
+        scheduleWrite(agentId, entry);
+        return publish(agentId, entry);
+    }
+
+    /**
+     * 一条回复结束。重新生成时，被换掉的那条回复留下的影响先撤回（中间没有别的事件时），
+     * 否则同一句话重新生成几次，心情就被同一个方向推几次
+     */
+    async function recordReply(agentId, event, { userText, regenerate }) {
+        if (disposed || !resolveDir(agentId)) return null;
+        const entry = await load(agentId);
+        if (entry.forgotten) return null;
+        const previous = entry.lastReply;
+        let changed = false;
+        if (regenerate && previous && previous.userText === userText && previous.events === entry.events && previous.before !== entry.mood) {
+            entry.mood = previous.before;
+            changed = true;
+        }
+        const before = entry.mood;
+        if (event) {
+            entry.mood = mood.applyMoodEvent(entry.mood, { at: now(), ...event });
+            entry.events += 1;
+            changed = true;
+        }
+        entry.lastReply = userText ? { userText, before, events: entry.events } : null;
+        if (!changed) return null;
         scheduleWrite(agentId, entry);
         return publish(agentId, entry);
     }
@@ -142,7 +200,7 @@ function createAgentMoodStore({
         async get(agentId) {
             if (!resolveDir(agentId)) return null;
             const entry = await load(agentId);
-            return { agentId, ...mood.moodSnapshot(entry.mood, now()) };
+            return { agentId, seq, ...mood.moodSnapshot(entry.mood, now()) };
         },
         /** 一次聊天请求：begin 时看用户这句话，chunk 攒回复正文，finish 时看整条回复 */
         observe({ context, messages, messageId } = {}) {
@@ -150,7 +208,8 @@ function createAgentMoodStore({
             if (disposed || !agentId || context?.isGroupMessage || !resolveDir(agentId)) return NOOP_CALL;
             const entry = entryOf(agentId);
             const userText = lastUserText(messages).trim();
-            // 重新生成会把同一句话再发一次，不重复算
+            // 重新生成会把同一句话再发一次，不重复算；续写（最后一条是助手的）也会带上同一句话
+            const regenerate = Boolean(userText) && userText === entry.lastUserText && endsWithUser(messages);
             if (userText && userText !== entry.lastUserText) {
                 entry.lastUserText = userText;
                 const event = mood.userMessageMoodEvent(userText, now());
@@ -169,7 +228,8 @@ function createAgentMoodStore({
                     if (done) return;
                     done = true;
                     try {
-                        if (error || aborted) return;
+                        // 回复期间助手被删了：不再记
+                        if (error || aborted || entry.forgotten) return;
                         const id = messageId ? String(messageId) : '';
                         if (id) {
                             if (entry.seenReplies.has(id)) return;
@@ -178,22 +238,34 @@ function createAgentMoodStore({
                         }
                         const full = response ? responseText(response) : text;
                         const event = mood.replyMoodEvent(full, now());
-                        if (event) record(agentId, event).catch(() => {});
+                        recordReply(agentId, event, { userText: endsWithUser(messages) ? userText : '', regenerate }).catch(() => {});
                     } catch (_error) { /* 记录失败不影响聊天 */ }
                 },
             };
         },
         record,
-        /** 退出前把还没写的心情写掉 */
+        /** 退出前把还没写的心情写掉，正在写的也等它写完 */
         async flush() {
             const pending = [];
             for (const [agentId, entry] of states) {
-                if (!entry.writeTimer) continue;
-                clearTimer(entry.writeTimer);
-                entry.writeTimer = null;
-                pending.push(write(agentId, entry).catch(() => {}));
+                if (entry.writeTimer) {
+                    clearTimer(entry.writeTimer);
+                    entry.writeTimer = null;
+                    write(agentId, entry);
+                }
+                pending.push(entry.writing);
             }
             await Promise.all(pending);
+        },
+        /** 助手要删了：不再写它的心情，等正在写的写完，再从内存里丢掉（删除目录之前调用） */
+        async forget(agentId) {
+            const entry = states.get(agentId);
+            if (!entry) return;
+            entry.forgotten = true;
+            if (entry.writeTimer) clearTimer(entry.writeTimer);
+            entry.writeTimer = null;
+            states.delete(agentId);
+            await entry.writing;
         },
         dispose() {
             disposed = true;
