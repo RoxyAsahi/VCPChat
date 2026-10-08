@@ -25,12 +25,20 @@ function onOpenInput(callback) {
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
 
+function onVisibility(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, visible) => callback(!!visible);
+    ipcRenderer.on('deskpet:visibility', listener);
+    return () => ipcRenderer.removeListener('deskpet:visibility', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
     onStream,
     onCursor,
     onOpenInput,
+    onVisibility,
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),
     setInteractive: on => ipcRenderer.send('deskpet:set-interactive', !!on),
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
