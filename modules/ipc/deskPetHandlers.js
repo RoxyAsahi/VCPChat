@@ -792,9 +792,20 @@ function parsePluginOutput(result) {
     try { return JSON.parse(text.slice(start, end + 1)); } catch { return null; }
 }
 
+// 角色写在第一句话里的情绪标签（<!--emo:…-->）和心流锁这类 [[…::…]] 控制标记不念出来
+function spokenText(value) {
+    return String(value || '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[\[[A-Za-z]+::[^\]\n]*\]\]/g, '').trim();
+}
+
+// 同一个闹钟的结果回来两次（请求重放）时只记一个：提醒相同、到点时间差不到一分钟
+const ALARM_SAME_MS = 60 * 1000;
+
 function scheduleAlarm({ dueAt, text, maid }) {
     const delay = dueAt - Date.now();
     if (!Number.isFinite(delay) || delay < 0 || delay > ALARM_MAX_DELAY_MS || alarms.size >= MAX_ALARMS) return null;
+    for (const alarm of alarms.values()) {
+        if (alarm.text === text && alarm.maid === maid && Math.abs(alarm.dueAt - dueAt) < ALARM_SAME_MS) return null;
+    }
     const id = crypto.randomUUID();
     const timer = setTimeout(async () => {
         alarms.delete(id);
@@ -817,21 +828,30 @@ function onDistributedToolResult(toolName, toolArgs = {}, result) {
         proactive(info.agent_id, {
             kind: 'topic',
             title: String(info.topic_name || ''),
-            text: String(info.initial_message || ''),
+            text: spokenText(info.initial_message),
             topicId: String(info.topic_id),
         });
     } else if (toolName === 'VCPAlarm') {
         const info = parsePluginOutput(result);
         if (info?.status !== 'success' || !Number.isFinite(info.due_at)) return;
-        scheduleAlarm({ dueAt: info.due_at, text: String(info.reminder_text || toolArgs?.reminder_text || '').trim(), maid: toolArgs?.maid });
+        scheduleAlarm({ dueAt: info.due_at, text: spokenText(info.reminder_text || toolArgs?.reminder_text), maid: toolArgs?.maid });
     }
 }
 
 // 点桌宠说的新话题：打开主窗口并切到那个话题（由主窗口按正常流程选中）。
-function openTopic(agentId, topicId) {
+// 话题可能在气泡还挂着时被删掉了：主窗口选中一个不存在的话题后，接着说的话会存进一份话题列表里看不到的历史，
+// 所以先确认它还在这个助手的配置里。
+async function openTopic(agentId, topicId) {
     openMainWindow();
-    if (!mainWindow || mainWindow.isDestroyed() || !isAgentId(agentId) || typeof topicId !== 'string' || !topicId) return;
+    if (!mainWindow || mainWindow.isDestroyed() || !isAgentId(agentId) || typeof topicId !== 'string' || !topicId) return false;
+    let topics = [];
+    try {
+        topics = (await fs.readJson(path.join(paths.agentDir, agentId, 'config.json')))?.topics;
+    } catch { /* 读不到配置就当话题不在了 */ }
+    if (!Array.isArray(topics) || !topics.some((topic) => String(topic?.id) === topicId)) return false;
+    if (mainWindow.isDestroyed()) return false;
     mainWindow.webContents.send('deskpet:open-topic', { agentId, topicId });
+    return true;
 }
 
 // ---- 持续心情 ----------------------------------------------------------------
@@ -926,7 +946,10 @@ function registerIpc() {
     ipcMain.on('deskpet:open-main', () => openMainWindow());
     ipcMain.on('deskpet:open-topic', (event, topicId) => {
         const pet = petFromEvent(event);
-        if (pet) openTopic(pet.agentId, topicId);
+        if (!pet) return;
+        openTopic(pet.agentId, topicId).then((opened) => {
+            if (!opened && !pet.win.isDestroyed()) pet.win.webContents.send('deskpet:topic-missing');
+        }).catch((error) => console.warn('[DeskPet] open topic failed:', error.message));
     });
     ipcMain.on('deskpet:hit', (event, hit) => {
         const pet = petFromEvent(event);

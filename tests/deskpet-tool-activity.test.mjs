@@ -58,3 +58,17 @@ test('ordinary text, however long, creates no activities', () => {
     assert.equal(tracker.activities.length, 0);
     assert.equal(tracker.latest, null);
 });
+
+test('a long write request is read from its head and does not slow down as it streams', () => {
+    const tracker = createToolActivityTracker();
+    const content = 'const x = 1; // 一些代码\n'.repeat(8000);
+    const reply = `我写一下。${REQUEST({ tool_name: 'FileOperator', command: 'WriteFile', filePath: 'src/a.js', content })}\n写好了。`;
+    const started = performance.now();
+    feed(tracker, reply, 8);
+    // 二十万字逐段解析：按开头读参数，不会每来一段都把整段请求重新扫一遍
+    assert.ok(performance.now() - started < 1500, `took ${Math.round(performance.now() - started)} ms`);
+    assert.equal(tracker.activities.length, 1);
+    assert.deepEqual(describeActivity(tracker.latest), { icon: '✏️', text: '正在修改 · src/a.js', status: 'running', kind: 'edit' });
+    feed(tracker, RESULT('FileOperator', 'success'), 9);
+    assert.equal(tracker.latest.status, 'success');
+});

@@ -59,3 +59,7 @@ test('markdown, code and image placeholders are not read aloud', () => {
     const cut = chunker.finish('看这段：\n[代码]\n就这样。');
     assert.deepEqual(cut.map((s) => s.text), ['看这段：', '', '就这样。'], '空句子留着位置，调用方跳过');
 });
+
+test('emotion tags and control markers are never read aloud', () => {
+    assert.equal(toSpeechText('<!--emo:happy 0.8-->[[Flowlock::Start]]我们开个新话题吧！'), '我们开个新话题吧！');
+});

@@ -4,7 +4,8 @@ import { createToolActivityTracker, describeActivity } from './toolActivity.js';
 
 const HOLD_AFTER_END_MS = 6000;
 
-export function createToolCard({ el, onChange = () => {} }) {
+// isMuted：免打扰时主窗口里那边的回复不在桌宠上露面，卡片也一样收着
+export function createToolCard({ el, onChange = () => {}, isMuted = () => false }) {
     const icon = el.querySelector('.tool-card-icon');
     const text = el.querySelector('.tool-card-text');
     const count = el.querySelector('.tool-card-count');
@@ -14,7 +15,7 @@ export function createToolCard({ el, onChange = () => {} }) {
     const render = () => {
         const latest = tracker?.latest;
         const wasHidden = el.hidden;
-        el.hidden = !latest;
+        el.hidden = !latest || isMuted();
         if (latest) {
             const view = describeActivity(latest);
             el.dataset.status = view.status;
@@ -46,6 +47,8 @@ export function createToolCard({ el, onChange = () => {} }) {
                 render();
             }, HOLD_AFTER_END_MS);
         },
+        /** 免打扰开关、回复归属变了时重画 */
+        refresh: render,
         get visible() { return !el.hidden; },
     };
 }

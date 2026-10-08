@@ -12,7 +12,8 @@ const SOFT_BREAK = '，,、：: ';
 
 /** 从一段 Markdown 原文得到念出来的文字：去掉 [代码]、[图片] 占位、列表圆点和只剩标点的碎片。 */
 export function toSpeechText(markdown) {
-    const plain = toBubbleText(markdown)
+    // 情绪标记、HTML 注释和 [[Flowlock::Start]] 这类控制标记不念（与主进程给主动搭话首句的清理同一规则）
+    const plain = toBubbleText(String(markdown || '').replace(/<!--[\s\S]*?-->/g, '').replace(/\[\[[A-Za-z]+::[^\]\n]*\]\]/g, ''))
         .replace(/\[(?:代码|图片)\]/g, ' ')
         .replace(/^[ \t]*•[ \t]*/gm, '')
         .replace(/\s+/g, ' ')
