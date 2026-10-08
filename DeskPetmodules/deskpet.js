@@ -17,6 +17,10 @@ const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
 const REPLY_HOLD_MS = 12000;   // 回复结束后气泡停留多久
 const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容在主窗口
+const CONTEXT_LOST_RELOAD_MS = 250;
+const CONTEXT_LOSS_WINDOW_MS = 120000;
+const CONTEXT_LOSS_LIMIT = 3;
+const CONTEXT_LOSS_KEY = 'deskpet:webgl-losses';
 
 const EMOTION_LABEL = {
     neutral: '平静', calm: '放松', happy: '开心', excited: '兴奋', shy: '害羞', affectionate: '温柔',
@@ -176,7 +180,11 @@ function bindPointer({ onTap, onDoubleTap }) {
     let lastTap = 0;
     window.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
+        // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
+        if (down?.dragging) api.dragEnd();
         down = { x: e.screenX, y: e.screenY, dragging: false };
+        // 捕获指针：窗口跟着光标移动时 pointerup 也一定回到这里。
+        try { e.target?.setPointerCapture?.(e.pointerId); } catch { /* 指针已经没了 */ }
     });
     window.addEventListener('pointermove', (e) => {
         lastActivity = Date.now();
@@ -199,9 +207,17 @@ function bindPointer({ onTap, onDoubleTap }) {
         }
         down = null;
     });
+    // 触屏手势被系统接管（pointercancel）、拖到一半切走窗口时收不到 pointerup，拖动必须在这里结束。
+    const abort = () => {
+        if (down?.dragging) api.dragEnd();
+        down = null;
+    };
+    window.addEventListener('pointercancel', abort);
+    window.addEventListener('blur', abort);
     window.addEventListener('contextmenu', (e) => {
         if (e.target?.closest?.('#composer')) return; // 输入框里保留系统的复制粘贴菜单
         e.preventDefault();
+        abort(); // 菜单会拿走指针，拖到一半右键也要先停下
         api.openContextMenu();
     });
 }
@@ -289,6 +305,21 @@ function hasWebGL() {
     return Boolean(gl);
 }
 
+function recentContextLosses() {
+    try {
+        const list = JSON.parse(sessionStorage.getItem(CONTEXT_LOSS_KEY) || '[]');
+        return Array.isArray(list) ? list.filter((t) => Date.now() - t < CONTEXT_LOSS_WINDOW_MS) : [];
+    } catch {
+        return [];
+    }
+}
+
+function recordContextLoss() {
+    try {
+        sessionStorage.setItem(CONTEXT_LOSS_KEY, JSON.stringify([...recentContextLosses(), Date.now()]));
+    } catch { /* 存不了就只是不计数 */ }
+}
+
 function userFacing(message) {
     const err = new Error(message);
     err.userFacing = true;
@@ -299,7 +330,9 @@ async function createLive2DBackend(assets) {
     // 渲染引擎只认 WebGL；显卡被禁用时 Pixi 会退到 Canvas，模型画不出来。
     if (!hasWebGL()) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），Live2D 画不出来，先用立绘代替。');
     await loadScript(assets.coreUrl);
+    // 文件损坏或放错了文件时脚本照样「加载成功」，只是没有定义 Core。
     const coreVersion = window.Live2DCubismCore?.Version?.csmGetVersion?.() || 0;
+    if (!coreVersion) throw userFacing(`${assets.corePath} 不是可用的 Cubism Core（文件损坏或放错了文件），请换一份 5.x 的 live2dcubismcore.min.js。先用立绘代替。`);
     if (coreVersion >= CORE_V6) throw userFacing('Cubism Core 是 6.x，当前渲染引擎只支持 5.x。请换一份 5.x 的 live2dcubismcore.min.js。');
     await loadScript('vcp-deskpet://pet/vendor/live2d/untitled-pixi-live2d-engine.cubism.min.js');
     const { Live2DModel, Live2DPlugin } = PIXI.live2d;
@@ -307,6 +340,15 @@ async function createLive2DBackend(assets) {
 
     const canvas = $('live2dCanvas');
     canvas.hidden = false;
+    // 显卡驱动重置、GPU 进程崩溃、睡眠唤醒都可能让 WebGL 上下文丢失；丢了以后模型不会自己画回来，
+    // 角色既看不见也点不到（命中靠读像素）。整页重载重建渲染；短时间内反复丢就改用立绘。
+    const onContextLost = (event) => {
+        event.preventDefault();
+        recordContextLoss();
+        notice('显卡渲染中断，正在重新载入桌宠…', { ms: 4000 });
+        setTimeout(() => window.location.reload(), CONTEXT_LOST_RELOAD_MS);
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost, { once: true });
     const app = new PIXI.Application();
     await app.init({
         canvas,
@@ -320,7 +362,19 @@ async function createLive2DBackend(assets) {
         powerPreference: 'low-power',
     });
     app.ticker.maxFPS = FPS_ACTIVE;
+    try {
+        return await mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion });
+    } catch (error) {
+        // 模型坏了：把已经建好的 WebGL 上下文和渲染循环一起收掉，不然它会一直空转。
+        // 销毁会主动释放上下文，这不是意外丢失，不能触发重载。
+        canvas.removeEventListener('webglcontextlost', onContextLost);
+        app.destroy({ removeView: false }, { children: true });
+        canvas.hidden = true;
+        throw error;
+    }
+}
 
+async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion }) {
     const model = await Live2DModel.from(assets.live2d.modelUrl, {
         ticker: app.ticker,
         autoHitTest: false,
@@ -601,7 +655,9 @@ async function start() {
     document.title = `${assets.name} · 桌宠`;
     $('composerInput').placeholder = `和 ${assets.name} 说点什么…（Enter 发送，Esc 收起）`;
 
-    if (assets.live2d && assets.coreUrl) {
+    if (assets.live2d && assets.coreUrl && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
+        notice('显卡渲染反复中断，这次先用立绘代替 Live2D。重新打开桌宠会再试。', { error: true, ms: 10000 });
+    } else if (assets.live2d && assets.coreUrl) {
         try {
             backend = await createLive2DBackend(assets);
         } catch (error) {
