@@ -1,0 +1,38 @@
+Title: Grat's Live2D Model Base: V2
+URL: https://gratgrot10berg.itch.io/model-live2d-base-v-2
+Author: Grot10
+License: Creative Commons Attribution v4.0 International
+File downloaded: Empress Of Light_Model_V2.zip
+Date downloaded: 2026-10-08
+
+--- Item info table ---
+Status: Released
+Category: Other
+Author: Grot10
+Made with: Aseprite , GIMP
+Tags: Aseprite , live2d , Pixel Art , Sprites
+Asset license: Creative Commons Attribution v4.0 International
+Average session: About a half-hour
+Languages: English
+
+--- Item page description (usage terms) ---
+Pixelart Live2D Practice Files V2!
+ Learn from what i did! 
+ Requirements 
+ Aseprite 
+ A .PSD able program like GIMP 
+ Live2D Cubism (has free trail)
+ VtubeStudio (or other Virtual Youtuber animator)
+ Resources (Good place to start if stuck!)
+ My Tutorials on Newgrounds 
+ My Tutorials on Steam Guides 
+ What you're alowed to do with the models! 
+ Please do not use the Live2D model/s as Your personal model, but any use used in learning even on stream is alowed!
+ Background 
+ The Second try at making a model! this time i went for smaller, and it works pretty well! smol and cute
+ The file includes
+ Aseprite save with Base
+ 2 PSD file/s 
+ A Live2D Cmo3 file for looking at Params 
+ A ready to use Live2D model for VtubeStudio 
+ Happy pixeling! ! ヾ(•ω•`)o

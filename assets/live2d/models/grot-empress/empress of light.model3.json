@@ -1,0 +1,57 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "Empress Of Light.moc3",
+		"Textures": [
+			"Empress Of Light.2048/texture_00.png"
+		],
+		"DisplayInfo": "Empress Of Light.cdi3.json",
+		"Expressions": [
+			{
+				"Name": "CrownToggle",
+				"File": "CrownToggle.exp3.json"
+			},
+			{
+				"Name": "WingsToggle",
+				"File": "WingsToggle.exp3.json"
+			},
+			{
+				"Name": "Blush",
+				"File": "Blush.exp3.json"
+			},
+			{
+				"Name": "BlushChibi",
+				"File": "BlushChibi.exp3.json"
+			},
+			{
+				"Name": "HeartEyes",
+				"File": "HeartEyes.exp3.json"
+			},
+			{
+				"Name": "DressToggle",
+				"File": "DressToggle.exp3.json"
+			},
+			{
+				"Name": "ShortsToggle",
+				"File": "ShortsToggle.exp3.json"
+			},
+			{
+				"Name": "GlovesToggle",
+				"File": "GlovesToggle.exp3.json"
+			}
+		]
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	],
+	"HitAreas": []
+}

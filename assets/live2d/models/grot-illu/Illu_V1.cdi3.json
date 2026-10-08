@@ -1,0 +1,108 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "",
+			"Name": "Angle X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "",
+			"Name": "Angle Y"
+		},
+		{
+			"Id": "ParamAngleZ",
+			"GroupId": "",
+			"Name": "Head Tilt"
+		},
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "",
+			"Name": "Eyes Open"
+		},
+		{
+			"Id": "ParamEyeBallX",
+			"GroupId": "",
+			"Name": "Eyeball X"
+		},
+		{
+			"Id": "ParamEyeBallY",
+			"GroupId": "",
+			"Name": "Eyeball Y"
+		},
+		{
+			"Id": "ParamBrowLY",
+			"GroupId": "",
+			"Name": "BrowL Y"
+		},
+		{
+			"Id": "ParamBrowRY",
+			"GroupId": "",
+			"Name": "BrowR Y"
+		},
+		{
+			"Id": "ParamBrowLX",
+			"GroupId": "",
+			"Name": "BrowL X"
+		},
+		{
+			"Id": "ParamBrowRX",
+			"GroupId": "",
+			"Name": "BrowR X"
+		},
+		{
+			"Id": "ParamMouthOpenY",
+			"GroupId": "",
+			"Name": "Mouth Open"
+		},
+		{
+			"Id": "ParamBodyAngleX",
+			"GroupId": "",
+			"Name": "Opper Body"
+		}
+	],
+	"ParameterGroups": [],
+	"Parts": [
+		{
+			"Id": "Part",
+			"Name": "Head+Neck"
+		},
+		{
+			"Id": "Main_Body",
+			"Name": "Main_Body"
+		},
+		{
+			"Id": "FaceStuff",
+			"Name": "FaceStuff"
+		},
+		{
+			"Id": "Right_Arm",
+			"Name": "Right_Arm"
+		},
+		{
+			"Id": "Left_Arm_Parts",
+			"Name": "Left_Arm_Parts"
+		},
+		{
+			"Id": "Left_Thigh_Parts",
+			"Name": "Left_Thigh_Parts"
+		},
+		{
+			"Id": "Right_Thigh_Parts",
+			"Name": "Right_Thigh_Parts"
+		},
+		{
+			"Id": "Eyes",
+			"Name": "Eyes"
+		},
+		{
+			"Id": "Mouths",
+			"Name": "Mouths"
+		},
+		{
+			"Id": "Pupils",
+			"Name": "Pupils"
+		}
+	]
+}

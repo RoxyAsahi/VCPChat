@@ -1,0 +1,25 @@
+Title: Live2D Little Cat Model
+URL: https://ezrii.itch.io/live2d-little-cat-model
+Author: Ezri
+License: Creative Commons Attribution_NoDerivatives v4.0 International
+File downloaded: LittleCat_Model.zip
+Date downloaded: 2026-10-08
+
+--- Item info table ---
+Status: Released
+Category: Other
+Rating: Rated 5.0 out of 5 stars (6 total ratings )
+Author: Ezri
+Tags: 2D , Cats , live2d , model , vtuber
+Asset license: Creative Commons Attribution_NoDerivatives v4.0 International
+
+--- Item page description (usage terms) ---
+This small friend is a Live2D model I originally made for practice. The completed model is setup to be used with VTube Studio, but should work with any Live2D compatible program. 
+It includes two extra texture variations, a black cat version and a calico cat version, as well as a small guide to help you make your own edited textures!
+If you would like to use the assets for rigging practice, you can also purchase the separated PSD to make that easier.
+ *I have added the .cmo3 file as well, if you would like to look at or try editing the original rigging in the Live2D Cubism Editor!
+ Guidelines
+ You may edit the model and/or its textures.
+ You can use the model in both personal and commercial projects.
+ You cannot resell the model or its assets, even if you edit them.
+ Attribution is required, so credit me and provide a link to this page!

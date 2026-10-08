@@ -1,0 +1,21 @@
+Title: Garnet Live2d - A Free Model
+URL: https://salmon-snake.itch.io/garnet-live2d-a-free-model
+Author: Salmon Snake Games
+License: Creative Commons Zero v1.0 Universal
+File downloaded: GarnetGal.cmo3
+Date downloaded: 2026-10-08
+
+--- Item info table ---
+Status: Released
+Category: Assets
+Rating: Rated 5.0 out of 5 stars (1 total ratings )
+Author: Salmon Snake Games
+Tags: 2D , Anime , Asset Pack , live2d , model , vtuber
+Asset license: Creative Commons Zero v1.0 Universal
+Content: No generative AI was used
+
+--- Item page description (usage terms) ---
+Garnet is my first try in trying to draw and rig a Live2D model. My aim was to find out if this technology was something we could use for our game graphics in the future, so I drew this character and rigged her for practice. 
+ I don't think I have any further use for this particular model, so do what you will with her! Utilize her in your own projects, start vtubing or learn rigging from my mistakes :) 
+ The model is compatible with the free version of Live2D Cubism. 
+ You can download both the cubism model and the photoshop file, if you want to try your hand at rigging it yourself.

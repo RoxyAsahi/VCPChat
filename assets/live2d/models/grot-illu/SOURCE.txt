@@ -1,0 +1,37 @@
+Title: Grat's Live2D Model Base: V1
+URL: https://gratgrot10berg.itch.io/model-live2d-base-v-1
+Author: Grot10
+License: Creative Commons Attribution v4.0 International
+File downloaded: Illu__V1_VtubeModel.zip
+Date downloaded: 2026-10-08
+
+--- Item info table ---
+Status: Released
+Category: Assets
+Rating: Rated 5.0 out of 5 stars (2 total ratings )
+Author: Grot10
+Made with: Aseprite
+Tags: Aseprite , live2d , Pixel Art , Sprites
+Asset license: Creative Commons Attribution v4.0 International
+Average session: About a half-hour
+Languages: English
+Content: No generative AI was used
+
+--- Item page description (usage terms) ---
+Pixelart Live2D Practice Files V1!
+ Learn and make your own pixelart live2D model! 
+ Requirements 
+ you need to have Aseprite and a program that can use PSD like Gimp and Live2D Cubism , aswell as a program to use the Model in. Like VtubeStudio .
+ Help 
+ I have some Tutorials on my Newgrounds & Steam that can help you if you're stuck or lost!
+ Rights 
+ Please do not use the Live2D model as Your personal model, but any use used in learning even on stream is alowed!
+ Background 
+ This was my first model, i didnt know much about how to make models at the time. but that hasen't stopped people from wanting to comission them.
+ theres even one still in use (as of writing 27-05-2022) by @PipOrchard . 
+ The file includes
+ Aseprite save with Base
+ PSD file
+ Live2D Cmo3 file for looking at Params
+ A ready to use Live2D model for VtubeStudio 
+ Happy pixeling! ! ヾ(•ω•`)o

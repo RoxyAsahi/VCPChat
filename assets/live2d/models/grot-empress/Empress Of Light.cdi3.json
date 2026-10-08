@@ -1,0 +1,170 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "",
+			"Name": "Angle X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "",
+			"Name": "Angle Y"
+		},
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "",
+			"Name": "EyeL Open"
+		},
+		{
+			"Id": "ParamEyeROpen",
+			"GroupId": "",
+			"Name": "EyeR Open"
+		},
+		{
+			"Id": "ParamEyeBallX",
+			"GroupId": "",
+			"Name": "Eyeball X"
+		},
+		{
+			"Id": "mouth_open",
+			"GroupId": "",
+			"Name": "Mouth Open"
+		},
+		{
+			"Id": "CrownToggle",
+			"GroupId": "ParamGroup",
+			"Name": "Crown"
+		},
+		{
+			"Id": "BlushToggle",
+			"GroupId": "ParamGroup",
+			"Name": "Blush"
+		},
+		{
+			"Id": "HeartEyeToggle",
+			"GroupId": "ParamGroup",
+			"Name": "HeartEyes"
+		},
+		{
+			"Id": "BlushChibiToggle",
+			"GroupId": "ParamGroup",
+			"Name": "BlushChibi"
+		},
+		{
+			"Id": "Gloves",
+			"GroupId": "ParamGroup",
+			"Name": "GloveToggle"
+		},
+		{
+			"Id": "Param",
+			"GroupId": "ParamGroup",
+			"Name": "Wings Toggle"
+		},
+		{
+			"Id": "WingsBreathe",
+			"GroupId": "ParamGroup",
+			"Name": "Wings Animation"
+		},
+		{
+			"Id": "DressToggle",
+			"GroupId": "ParamGroup",
+			"Name": "Dress"
+		},
+		{
+			"Id": "ShortToggle",
+			"GroupId": "ParamGroup",
+			"Name": "Short"
+		},
+		{
+			"Id": "ParamBreath",
+			"GroupId": "",
+			"Name": "Breath"
+		},
+		{
+			"Id": "Arm_L",
+			"GroupId": "",
+			"Name": "Arm L"
+		},
+		{
+			"Id": "Arm_R",
+			"GroupId": "",
+			"Name": "Arm R"
+		},
+		{
+			"Id": "Thigh_L",
+			"GroupId": "",
+			"Name": "Thigh L"
+		},
+		{
+			"Id": "ThighLow_L",
+			"GroupId": "",
+			"Name": "ThighLow L"
+		},
+		{
+			"Id": "Thigh_R",
+			"GroupId": "",
+			"Name": "Thigh R"
+		},
+		{
+			"Id": "ThighLow_R",
+			"GroupId": "",
+			"Name": "ThighLow R"
+		}
+	],
+	"ParameterGroups": [
+		{
+			"Id": "ParamGroup",
+			"GroupId": "",
+			"Name": "Custom"
+		}
+	],
+	"Parts": [
+		{
+			"Id": "Head",
+			"Name": "Head"
+		},
+		{
+			"Id": "Body",
+			"Name": "Body"
+		},
+		{
+			"Id": "Part",
+			"Name": "On Head Items"
+		},
+		{
+			"Id": "Eyes",
+			"Name": "Eyes"
+		},
+		{
+			"Id": "Custom",
+			"Name": "Custom"
+		},
+		{
+			"Id": "Mouths",
+			"Name": "Mouths"
+		},
+		{
+			"Id": "Arms",
+			"Name": "Arms"
+		},
+		{
+			"Id": "UnderBody",
+			"Name": "UnderBody"
+		},
+		{
+			"Id": "DisapearWhenClose",
+			"Name": "DisapearWhenClose"
+		},
+		{
+			"Id": "Pupils",
+			"Name": "Pupils"
+		}
+	],
+	"CombinedParameters": [
+		[
+			"ParamAngleX",
+			"ParamAngleY"
+		]
+	]
+}
