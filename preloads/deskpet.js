@@ -20,7 +20,7 @@ function onCursor(callback) {
 
 function onOpenInput(callback) {
     if (typeof callback !== 'function') return () => {};
-    const listener = () => callback();
+    const listener = (_event, options) => callback({ toggle: options?.toggle === true });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
@@ -32,8 +32,20 @@ function onVisibility(callback) {
     return () => ipcRenderer.removeListener('deskpet:visibility', listener);
 }
 
+// 大小、免打扰这些设置变了（主进程推过来）
+function onPrefs(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, prefs) => callback(prefs);
+    ipcRenderer.on('deskpet:prefs', listener);
+    return () => ipcRenderer.removeListener('deskpet:prefs', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
+    getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
+    onPrefs,
+    wheelResize: deltaY => ipcRenderer.send('deskpet:wheel-resize', Number(deltaY) || 0),
+    touched: () => ipcRenderer.send('deskpet:touched'),
     send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
     onStream,
     onCursor,
