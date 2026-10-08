@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),
     setInteractive: on => ipcRenderer.send('deskpet:set-interactive', !!on),
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
+    reportFigure: report => ipcRenderer.send('deskpet:figure', { outfit: String(report?.outfit || ''), aspect: Number(report?.aspect) }),
     dragStart: origin => ipcRenderer.send('deskpet:drag-start', origin),
     dragEnd: () => ipcRenderer.send('deskpet:drag-end'),
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),

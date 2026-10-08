@@ -5,9 +5,9 @@
 //
 // 资源全部来自用户数据目录，VCPChat 不分发任何 Live2D 文件：
 //   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
-//   AppData/Agents/<id>/deskpet/**/*.model3.json Live2D 模型（找到的第一个）
-//   AppData/Agents/<id>/deskpet/**/*.puppet.json 网格立绘（一张图切块做的可动角色，不需要 Core）
-//   AppData/Agents/<id>/portrait.<情绪>.<ext>    差分立绘，没有 Live2D 模型时使用
+//   AppData/Agents/<id>/deskpet/<套装>/           一套形象（换装）：Live2D、网格立绘或差分立绘，见 modules/deskpet/outfits.js
+//   AppData/Agents/<id>/deskpet/*.model3.json    直接放在 deskpet/ 下的算「默认」那套（以前的单模型布局照旧能用）
+//   AppData/Agents/<id>/portrait.<情绪>.<ext>    差分立绘：「立绘」那套，也是 Live2D 用不了时的后备
 //   AppData/Agents/<id>/portrait.<ext>           默认立绘；再没有就用头像
 
 const electron = require('electron');
@@ -18,11 +18,13 @@ const { pathToFileURL } = require('url');
 const crypto = require('crypto');
 const voice = require('./deskPetVoice');
 const petPrefs = require('../deskpet/petPrefs');
+const outfitStore = require('../deskpet/outfits');
 const { createPetControls } = require('../deskpet/petControls');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
-// 窗口大小随每个桌宠自己的缩放走（modules/deskpet/petPrefs.js）；1 倍是 360×580，上方留出气泡和输入框的位置。
+// 窗口大小随每个桌宠自己的缩放和形象的长宽比走（modules/deskpet/petPrefs.js）；不知道比例时 1 倍是 360×580，
+// 上方留出气泡和输入框的位置。
 // Windows：'pop-up-menu' 压住任务栏，又不像 'screen-saver' 那样和全屏程序抢；
 // macOS 需要 'screen-saver' 才能浮在全屏空间之上。
 const TOPMOST_LEVEL = process.platform === 'darwin' ? 'screen-saver' : 'pop-up-menu';
@@ -31,11 +33,7 @@ const DRAG_TICK_MS = 16;
 // X11 上整窗穿透后 Chromium 收不到指针，getCursorScreenPoint() 会停在旧坐标，
 // 光标轮询就再也发现不了宠物；Linux 改为把窗口输入区裁到内容包围盒。
 const USE_SHAPE = process.platform === 'linux';
-const IMAGE_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'avif'];
-// 与 modules/emotion/emotionVocabulary.js 一致：12 个情绪键加 3 个状态键；
-// talk 是桌宠专用的张嘴帧（朗读时按音量和当前立绘切换）。
-const PORTRAIT_KEYS = ['neutral', 'calm', 'happy', 'excited', 'shy', 'affectionate', 'curious',
-    'surprised', 'concerned', 'sad', 'tired', 'angry', 'thinking', 'tool', 'error', 'talk'];
+const IMAGE_EXTENSIONS = outfitStore.IMAGE_EXTENSIONS;
 const SEND_TIMEOUT_MS = 10000;
 const DRAG_MAX_MS = 60000;
 const DISPLAY_SETTLE_MS = 400;
@@ -49,7 +47,7 @@ const PET_FOCUSABLE = process.platform !== 'win32';
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
 let initialized = false;
-const pets = new Map(); // agentId -> { win, scale, ignoringMouse, interactive, hitPoll, drag, lastShape }
+const pets = new Map(); // agentId -> { win, scale, outfit, aspect, ignoringMouse, interactive, hitPoll, drag, lastShape }
 const pendingSends = new Map(); // requestId -> resolve
 let emotionPrompt = null; // modules/emotion/emotionPrompt.js（ESM，初始化时异步载入）
 let controls = null; // modules/deskpet/petControls.js：全局设置、快捷键、设置窗口
@@ -119,25 +117,26 @@ function registerProtocol() {
     });
 }
 
-async function findBySuffix(dir, suffix, depth = 0) {
-    if (depth > 3 || !(await fs.pathExists(dir))) return null;
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const direct = entries.find((e) => e.isFile() && e.name.toLowerCase().endsWith(suffix));
-    if (direct) return path.join(dir, direct.name);
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const found = await findBySuffix(path.join(dir, entry.name), suffix, depth + 1);
-        if (found) return found;
-    }
-    return null;
-}
-
 function agentUrl(agentId, file) {
     const rel = path.relative(path.join(paths.agentDir, agentId), file).split(path.sep).map(encodeURIComponent).join('/');
     return `${SCHEME}://pet/agent/${encodeURIComponent(agentId)}/${rel}`;
 }
 
-async function resolveAssets(agentId) {
+function portraitUrls(agentId, portraits) {
+    if (!portraits) return null;
+    return Object.fromEntries(Object.entries(portraits).map(([key, file]) => [key, agentUrl(agentId, file)]));
+}
+
+async function listAgentOutfits(agentId) {
+    return outfitStore.listOutfits(path.join(paths.agentDir, agentId), { hasCore: await fs.pathExists(coreFilePath()) });
+}
+
+// 菜单和设置窗口只要名字和种类
+function outfitSummary(outfit) {
+    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit) };
+}
+
+async function resolveAssets(agentId, wantedOutfit) {
     const agentRoot = path.join(paths.agentDir, agentId);
     let name = agentId;
     try {
@@ -145,43 +144,25 @@ async function resolveAssets(agentId) {
         if (config?.name) name = config.name;
     } catch { /* 没有配置就用 id */ }
 
+    const outfits = await listAgentOutfits(agentId);
+    const outfit = outfitStore.pickOutfit(outfits, wantedOutfit);
+    // 选的这套没有立绘（Live2D、网格立绘）时，Live2D 用不了就退回助手目录的立绘
+    const fallback = outfits.find((o) => o.id === outfitStore.PORTRAIT_ID)?.portraits || null;
+    const avatar = IMAGE_EXTENSIONS.map((ext) => `avatar.${ext}`);
     const files = (await fs.pathExists(agentRoot)) ? await fs.readdir(agentRoot) : [];
-    const pick = (stem) => {
-        for (const ext of IMAGE_EXTENSIONS) {
-            const hit = files.find((f) => f.toLowerCase() === `${stem}.${ext}`);
-            if (hit) return agentUrl(agentId, path.join(agentRoot, hit));
-        }
-        return null;
-    };
-    // 与侧栏立绘相同的结构：{ default, light?, <键>?, <键>-light? }，交给 resolvePortrait 挑图。
-    const portraits = {};
-    const defaultPortrait = pick('portrait');
-    if (defaultPortrait) portraits.default = defaultPortrait;
-    const lightPortrait = pick('portrait.light');
-    if (lightPortrait) portraits.light = lightPortrait;
-    for (const key of PORTRAIT_KEYS) {
-        const url = pick(`portrait.${key}`);
-        if (url) portraits[key] = url;
-        const light = pick(`portrait.${key}-light`);
-        if (light) portraits[`${key}-light`] = light;
-    }
-    if (!portraits.default) {
-        // 只有差分没有默认立绘时，用 neutral / calm 顶上。
-        const fallback = portraits.neutral || portraits.calm || Object.values(portraits)[0];
-        if (fallback) portraits.default = fallback;
-    }
-    const model = await findBySuffix(path.join(agentRoot, 'deskpet'), '.model3.json');
-    const puppet = await findBySuffix(path.join(agentRoot, 'deskpet'), '.puppet.json');
+    const avatarFile = avatar.map((wanted) => files.find((f) => f.toLowerCase() === wanted)).find(Boolean);
     const hasCore = await fs.pathExists(coreFilePath());
     return {
         agentId,
         name,
-        live2d: model ? { modelUrl: agentUrl(agentId, model) } : null,
-        puppet: puppet ? { rigUrl: agentUrl(agentId, puppet) } : null,
+        outfit: outfit ? outfitSummary(outfit) : null,
+        outfits: outfits.map(outfitSummary),
+        live2d: outfit?.live2d ? { modelUrl: agentUrl(agentId, outfit.live2d) } : null,
+        puppet: outfit?.puppet ? { rigUrl: agentUrl(agentId, outfit.puppet) } : null,
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
         corePath: coreFilePath(),
-        portraits: portraits.default ? portraits : null,
-        avatar: pick('avatar'),
+        portraits: portraitUrls(agentId, outfit?.portraits || fallback),
+        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : null,
     };
 }
 
@@ -211,7 +192,22 @@ function savePetPosition(agentId, position) {
 }
 
 function sizeOf(pet) {
-    return petPrefs.windowSizeForScale(pet.scale);
+    return petPrefs.windowSizeForScale(pet.scale, pet.aspect);
+}
+
+// 每套形象量出来的长宽比记在 state.json 里，下次打开（或换回这一套）直接按它开窗口，不用先开再改大小。
+const MAX_REMEMBERED_FIGURES = 24;
+function rememberFigure(saved, outfitId, aspect) {
+    const figures = { ...(saved?.figures && typeof saved.figures === 'object' ? saved.figures : {}) };
+    delete figures[outfitId];
+    figures[outfitId] = aspect;
+    const keys = Object.keys(figures);
+    for (const key of keys.slice(0, Math.max(0, keys.length - MAX_REMEMBERED_FIGURES))) delete figures[key];
+    return figures;
+}
+
+function savedAspect(saved, outfitId) {
+    return petPrefs.normalizeAspect(saved?.figures?.[outfitId]);
 }
 
 function defaultPosition(index, size) {
@@ -265,7 +261,7 @@ function fitPetsToDisplays() {
         const b = pet.win.getBounds();
         const area = workAreaAt(b);
         const previous = { ...b, ...sizeOf(pet) };
-        const fitted = petPrefs.fitScale(pet.scale, area);
+        const fitted = petPrefs.fitScale(pet.scale, area, pet.aspect);
         const scaleChanged = fitted !== pet.scale;
         pet.scale = fitted;
         const size = sizeOf(pet);
@@ -361,9 +357,13 @@ async function openPet(agentId, { anchor = null } = {}) {
     }
     // 读状态期间同一个助手可能已经被另一次调用打开了（快捷键连按、启动恢复和点按钮撞在一起）
     const saved = (await readPetState())[agentId];
+    // 上次选的那套形象（没选过或已经删了就用默认那套）；量过它的长宽比就直接按它开窗口
+    const outfit = outfitStore.pickOutfit(await listAgentOutfits(agentId).catch(() => []), saved?.outfit);
     if (pets.has(agentId)) return openPet(agentId);
-    const scale = petPrefs.fitScale(saved?.scale ?? 1, workAreaAt(anchor || saved || screen.getPrimaryDisplay().workArea));
-    const size = petPrefs.windowSizeForScale(scale);
+    const outfitId = outfit?.id || null;
+    const aspect = outfitId ? savedAspect(saved, outfitId) : null;
+    const scale = petPrefs.fitScale(saved?.scale ?? 1, workAreaAt(anchor || saved || screen.getPrimaryDisplay().workArea), aspect);
+    const size = petPrefs.windowSizeForScale(scale, aspect);
     const win = new BrowserWindow({
         ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
         frame: false,
@@ -391,7 +391,7 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
-    const pet = { win, contents: win.webContents, agentId, scale, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0 };
+    const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0 };
     pets.set(agentId, pet);
     rememberOpen(agentId, true);
 
@@ -598,13 +598,65 @@ function prefsFor(pet) {
     return { scale: pet.scale, doNotDisturb: settings.doNotDisturb };
 }
 
+/**
+ * 换了长宽比（换装、页面量出了形象的实际比例）后按新比例改窗口：脚底中点不动，大小档位不变，
+ * 新比例在这块屏上放不下时缩到放得下。
+ */
+function applyAspect(pet, aspect) {
+    if (!pet || pet.win.isDestroyed()) return false;
+    const previous = { ...pet.win.getBounds(), ...sizeOf(pet) };
+    const area = workAreaAt(previous);
+    pet.aspect = aspect;
+    pet.scale = petPrefs.fitScale(pet.scale, area, aspect);
+    const size = sizeOf(pet);
+    if (size.width === previous.width && size.height === previous.height) return false;
+    const target = petPrefs.resizeAnchored(previous, size, area);
+    applyBounds(pet, target);
+    resetShape(pet);
+    sendPrefs(pet);
+    savePetState(pet.agentId, { x: target.x, y: target.y, scale: pet.scale });
+    return true;
+}
+
+/** 页面量出了当前这套形象的长宽比（不透明像素的包围盒，高 ÷ 宽）。 */
+async function onFigureMeasured(pet, report) {
+    const aspect = petPrefs.normalizeAspect(report?.aspect);
+    if (!aspect || !pet.outfit || report?.outfit !== pet.outfit || pet.win.isDestroyed()) return;
+    const saved = (await readPetState())[pet.agentId];
+    if (savedAspect(saved, pet.outfit) !== aspect) savePetState(pet.agentId, { figures: rememberFigure(saved, pet.outfit, aspect) });
+    // 拖着的时候不改窗口，放下以后下次量到再改
+    if (pet.drag || pet.win.isDestroyed() || report.outfit !== pet.outfit) return;
+    if (pet.aspect !== null && Math.abs(pet.aspect - aspect) < 0.03) return;
+    applyAspect(pet, aspect);
+    controls?.refreshSettingsWindow();
+}
+
+/** 换装：记住这次的选择，按这套的比例改窗口（脚底不动），再重新载入页面换上新形象。 */
+async function setPetOutfit(agentId, outfitId) {
+    const pet = pets.get(agentId);
+    if (!pet || pet.win.isDestroyed() || !outfitStore.isOutfitId(outfitId)) return false;
+    const outfit = (await listAgentOutfits(agentId).catch(() => [])).find((o) => o.id === outfitId);
+    if (!outfit || pet.win.isDestroyed()) return false;
+    if (pet.outfit === outfitId) return true;
+    stopDrag(pet, { save: true });
+    pet.outfit = outfitId;
+    const saved = (await readPetState())[agentId];
+    await savePetState(agentId, { outfit: outfitId });
+    if (pet.win.isDestroyed() || pet.outfit !== outfitId) return false;
+    // 没量过的形象先按默认比例开，页面量完会再报上来
+    applyAspect(pet, savedAspect(saved, outfitId));
+    pet.win.webContents.reload();
+    controls?.refreshSettingsWindow();
+    return true;
+}
+
 /** 改一个桌宠的大小：脚底不动，放不下就缩到当前屏放得下。 */
 function setPetScale(agentId, scale) {
     const pet = pets.get(agentId);
     if (!pet || pet.win.isDestroyed() || pet.drag) return null;
     const bounds = pet.win.getBounds();
     const area = workAreaAt(bounds);
-    const next = petPrefs.fitScale(scale, area);
+    const next = petPrefs.fitScale(scale, area, pet.aspect);
     if (next === pet.scale) return pet.scale;
     // 脚底位置按算出来的旧宽高定，不用读回来的（系统可能多算了一两个像素）
     const previous = { ...bounds, ...sizeOf(pet) };
@@ -686,14 +738,25 @@ function listPetsForSettings() {
         agentId: pet.agentId,
         name: pet.name || pet.agentId,
         scale: pet.scale,
-        maxScale: petPrefs.maxScaleForWorkArea(workAreaAt(pet.win.getBounds())),
+        maxScale: petPrefs.maxScaleForWorkArea(workAreaAt(pet.win.getBounds()), pet.aspect),
         visible: pet.win.isVisible(),
+        outfit: pet.outfit,
+        outfits: pet.outfits || [],
+    }));
+}
+
+function outfitMenu(pet, outfits) {
+    return outfits.map((outfit) => ({
+        label: outfitStore.outfitLabel(outfit),
+        type: 'radio',
+        checked: outfit.id === pet.outfit,
+        click: () => setPetOutfit(pet.agentId, outfit.id).catch((error) => console.warn('[DeskPet] outfit switch failed:', error.message)),
     }));
 }
 
 function scaleMenu(pet) {
     const presets = [0.6, 0.8, 1, 1.25, 1.5];
-    const max = petPrefs.maxScaleForWorkArea(workAreaAt(pet.win.getBounds()));
+    const max = petPrefs.maxScaleForWorkArea(workAreaAt(pet.win.getBounds()), pet.aspect);
     const shortcut = process.platform === 'darwin' ? 'Cmd' : 'Ctrl';
     return [
         { label: `放大（${shortcut}+滚轮）`, enabled: pet.scale < max, click: () => stepPetScale(pet.agentId, 1) },
@@ -895,9 +958,19 @@ function registerIpc() {
     ipcMain.handle('deskpet:get-assets', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return null;
-        const assets = await resolveAssets(pet.agentId);
+        const assets = await resolveAssets(pet.agentId, pet.outfit);
         pet.name = assets.name;
+        pet.outfits = assets.outfits;
+        // 记着的那套已经删了：换成实际显示的这套
+        pet.outfit = assets.outfit?.id || null;
         return assets;
+    });
+    // 页面量出了形象的长宽比：按它改窗口（全身像高、Q 版矮），记下来下次直接用
+    ipcMain.on('deskpet:figure', (event, report) => {
+        const pet = petFromEvent(event);
+        if (pet && report && typeof report === 'object') {
+            onFigureMeasured(pet, report).catch((error) => console.warn('[DeskPet] figure:', error.message));
+        }
     });
     ipcMain.handle('deskpet:get-prefs', (event) => {
         const pet = petFromEvent(event);
@@ -1003,9 +1076,12 @@ function registerIpc() {
     ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
-        const [agents, mood, voiceItem] = await Promise.all([listAgents().catch(() => []), readMood(pet.agentId), voice.menuItem(pet)]);
+        const [agents, mood, voiceItem, outfits] = await Promise.all([
+            listAgents().catch(() => []), readMood(pet.agentId), voice.menuItem(pet), listAgentOutfits(pet.agentId).catch(() => []),
+        ]);
         // 读助手列表期间桌宠可能已经被关掉了。
         if (pet.win.isDestroyed()) return;
+        pet.outfits = outfits.map(outfitSummary);
         Menu.buildFromTemplate([
             { label: moodMenuLabel(mood), enabled: false },
             { type: 'separator' },
@@ -1020,6 +1096,7 @@ function registerIpc() {
                     click: () => switchPet(pet.agentId, agent.id).catch((error) => console.warn('[DeskPet] switch failed:', error.message)),
                 })),
             },
+            { label: '换装', enabled: outfits.length > 1, submenu: outfitMenu(pet, outfits) },
             voiceItem,
             { label: '打开主窗口', click: openMainWindow },
             { type: 'separator' },
@@ -1068,6 +1145,7 @@ function initialize(options) {
             talk: () => talkToPet().catch((error) => console.warn('[DeskPet] talk failed:', error.message)),
             listPets: listPetsForSettings,
             setScale: (agentId, scale) => setPetScale(agentId, scale),
+            setOutfit: (agentId, outfitId) => setPetOutfit(agentId, outfitId),
         },
     });
     controls.registerIpc();

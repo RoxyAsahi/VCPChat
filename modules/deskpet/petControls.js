@@ -219,6 +219,11 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
             await actions.setScale(agentId, Number(scale));
             return snapshot();
         });
+        ipcMain.handle('deskpet-settings:set-outfit', async (event, agentId, outfitId) => {
+            if (!fromSettings(event) || typeof agentId !== 'string' || typeof outfitId !== 'string') return null;
+            await actions.setOutfit?.(agentId, outfitId);
+            return snapshot();
+        });
     }
 
     function dispose() {

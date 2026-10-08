@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld('deskPetSettingsAPI', Object.freeze({
     resetShortcuts: () => ipcRenderer.invoke('deskpet-settings:reset-shortcuts'),
     pauseShortcuts: paused => ipcRenderer.invoke('deskpet-settings:pause-shortcuts', !!paused),
     setScale: (agentId, scale) => ipcRenderer.invoke('deskpet-settings:set-scale', String(agentId || ''), Number(scale)),
+    setOutfit: (agentId, outfitId) => ipcRenderer.invoke('deskpet-settings:set-outfit', String(agentId || ''), String(outfitId || '')),
     onChanged,
 }));

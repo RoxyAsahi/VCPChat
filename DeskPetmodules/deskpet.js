@@ -15,6 +15,7 @@ import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
+import { measureSilhouette, silhouetteAspect, fitSilhouette } from 'vcp-deskpet://pet/app/figure.js';
 
 const api = window.deskPetAPI;
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle，睡着了再降到 sleep；
@@ -33,6 +34,7 @@ const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容�
 const DOUBLE_TAP_MS = 300;     // 这么短内的第二下算双击；单击的反应等这段时间过了再做
 const TOP_RESERVE = 150;       // 窗口上方留给气泡和输入框的高度（与样式一致）
 const COMPOSER_ROOM = 280;     // 头顶到窗口顶至少这么高，输入框才和气泡一起排在头顶上
+const FIGURE_MEASURE_MS = 450; // Live2D、网格立绘载入后过这么久（物理和待机动作稳下来）量一次轮廓
 const CONTEXT_LOST_RELOAD_MS = 250;
 const CONTEXT_LOSS_WINDOW_MS = 120000;
 const CONTEXT_LOSS_LIMIT = 3;
@@ -169,6 +171,7 @@ function renderBubble() {
         ? [mode === 'is-reply' ? replyStateLabel() || proactiveLabel() : '', queued].filter(Boolean).join(' · ')
         : '';
     el.classList.toggle('is-alarm', mode === 'is-reply' && bubble.proactive?.kind === 'alarm');
+    if (content) aimBubble(aimedHeadX);
 }
 
 // 流式片段很密，攒到下一帧一起画
@@ -390,6 +393,27 @@ function uiBounds() {
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
     }
     return rect;
+}
+
+// 气泡挪到头的正上方（窗口比气泡宽时），小尾巴指着头
+let aimedHeadX = null;
+function aimBubble(headX) {
+    aimedHeadX = headX;
+    if (headX === null) return;
+    const stack = $('uiStack');
+    const room = stack.clientWidth;
+    const left = stack.getBoundingClientRect().left;
+    for (const el of [$('bubble'), $('toolCard')]) {
+        if (el.hidden) continue;
+        const width = el.offsetWidth;
+        const slack = Math.max(0, (room - width) / 2);
+        const shift = Math.round(Math.max(-slack, Math.min(slack, headX - left - room / 2)));
+        el.style.translate = shift ? `${shift}px 0` : '';
+        if (el.id === 'bubble') {
+            const bubbleLeft = left + (room - width) / 2 + shift;
+            el.style.setProperty('--tail-x', `${Math.round(Math.max(16, Math.min(width - 16, headX - bubbleLeft)))}px`);
+        }
+    }
 }
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
@@ -660,15 +684,17 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         textureOptions: { lod: 'single-auto' },
     });
     app.stage.addChild(model);
-    // 角色画在下方，上面留给气泡和输入框。
-    const layout = () => {
-        const scale = Math.min(window.innerWidth / model.internalModel.width, (window.innerHeight - TOP_RESERVE) / model.internalModel.height) * 0.98;
-        model.scale.set(scale);
-        model.anchor.set(0.5, 1);
-        model.position.set(window.innerWidth / 2, window.innerHeight);
-    };
-    layout();
-    window.addEventListener('resize', layout);
+    model.anchor.set(0.5, 1);
+    // 角色画在下方，上面留给气泡和输入框；量出轮廓后按轮廓摆，脚底贴窗口底边（见 createFigureFit）。
+    let hop = 0;
+    const figure = createFigureFit(app, canvas, {
+        width: model.internalModel.width,
+        height: model.internalModel.height,
+        apply(fit) {
+            model.scale.set(fit.scale);
+            model.position.set(fit.x, fit.y - hop);
+        },
+    });
 
     // 可选的模型配置：<model 同目录>/deskpet.json
     //   { "expressions": { "happy": "exp_02" }, "motions": { "happy": "Tap" } }
@@ -704,7 +730,6 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     const current = {};
     let target = {};
     let mouthPhase = 0;
-    let hop = 0;
     internal.on('beforeModelUpdate', () => {
         // 闲时动作、困意、拖动摆动：叠在情绪之上；跳一下改的是模型位置
         const lifeFrame = life.step(app.ticker.deltaMS / 1000);
@@ -713,7 +738,7 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         }
         if (lifeFrame.hop !== hop) {
             hop = lifeFrame.hop;
-            model.position.y = window.innerHeight - hop;
+            model.position.y = figure.base().y - hop;
         }
         const keys = new Set([...Object.keys(current), ...Object.keys(target)]);
         for (const id of keys) {
@@ -740,6 +765,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         probe: alphaProbe.probe,
         focus(x, y) { model.focus(x, y); },
         bounds() { const b = model.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
+        head: () => figure.head(),
+        figureReady: figure.ready,
         tap() {
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
             if (group) model.motion(group);
@@ -780,9 +807,9 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             dragVelocity(vx) { life.dragVelocity(vx); },
             // 视线：g 以头为原点、-1..1；换算成窗口坐标交给模型自己的视线跟随
             gaze(g) {
-                const b = model.getBounds();
-                const hx = b.x + b.width / 2;
-                const hy = b.y + b.height * 0.18;
+                const h = figure.head();
+                const hx = h.x;
+                const hy = h.y + h.width * 0.5;
                 model.focus(hx + g.x * window.innerWidth * 0.6, hy - g.y * window.innerHeight * 0.6);
             },
         },
@@ -881,14 +908,17 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
     holder.addChild(puppet.root);
     app.stage.addChild(holder);
     let scale = 1;
-    const layout = () => {
-        scale = Math.min(window.innerWidth / puppet.width, (window.innerHeight - TOP_RESERVE) / puppet.height) * 0.98;
-        puppet.root.scale.set(scale);
-        puppet.root.pivot.set(puppet.width / 2, puppet.height);
-        holder.position.set(window.innerWidth / 2, window.innerHeight);
-    };
-    layout();
-    window.addEventListener('resize', layout);
+    puppet.root.pivot.set(puppet.width / 2, puppet.height);
+    // 与 Live2D 相同：先按底图大小摆，量出轮廓后按轮廓摆
+    const figure = createFigureFit(app, $('live2dCanvas'), {
+        width: puppet.width,
+        height: puppet.height,
+        apply(fit) {
+            scale = fit.scale;
+            puppet.root.scale.set(scale);
+            holder.position.set(fit.x, fit.y);
+        },
+    });
 
     const idle = createIdleAnimator();
     const params = {};
@@ -915,7 +945,7 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
         // 单击时跳一下：弹簧回到 0。
         hopV += (-180 * hop - 12 * hopV) * dt;
         hop += hopV * dt;
-        holder.position.y = window.innerHeight + hop - lifeFrame.hop;
+        holder.position.y = figure.base().y + hop - lifeFrame.hop;
 
         params.ParamAngleX = get('ParamAngleX') + look.x * 22 + a.swayX;
         params.ParamAngleY = get('ParamAngleY') + look.y * 16;
@@ -945,11 +975,10 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
             look.tx = clampUnit((x - hx) / (window.innerWidth * 0.6));
             look.ty = clampUnit((hy - y) / (window.innerHeight * 0.6));
         },
-        // 用静止时的版面框，不跟着呼吸、单击轻跳和头发摆动抖（气泡按它贴头顶）。
-        bounds() {
-            const w = puppet.width * scale, h = puppet.height * scale;
-            return { x: window.innerWidth / 2 - w / 2, y: window.innerHeight - h, width: w, height: h };
-        },
+        // 用静止时量出的轮廓，不跟着呼吸、单击轻跳和头发摆动抖（气泡按它贴头顶）。
+        bounds: () => figure.bounds(),
+        head: () => figure.head(),
+        figureReady: figure.ready,
         tap() { hopV = -260; },
         apply(f) {
             const intensity = Math.max(0.3, Math.min(1, f.intensity || 0.6));
@@ -975,6 +1004,66 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
 
 function clampUnit(v) {
     return Math.max(-1, Math.min(1, v));
+}
+
+// ---- 按轮廓摆放（Live2D、网格立绘） ------------------------------------------------
+// 模型画布、底图四周常留着透明边（全身模型脚下空一截），按画布摆脚会浮在半空。
+// 先按画布摆，等物理和待机动作稳下来，读回整帧量出不透明像素的轮廓和头，再按轮廓摆：
+// 脚底贴窗口底边、左右居中、塞满角色区。量之前画布透明，看不到它先浮着再落下来。
+// 坐标单位：以锚点（画布底边中点）为原点、1 倍缩放的模型像素；窗口一变就按同一个轮廓重摆。
+
+function createFigureFit(app, canvas, { width, height, apply }) {
+    let box = { left: -width / 2, right: width / 2, top: -height, bottom: 0 };
+    let head = null;
+    let fit = null;
+    let measured = false;
+    const layout = () => {
+        fit = fitSilhouette(box, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE })
+            || { scale: 1, x: window.innerWidth / 2, y: window.innerHeight };
+        apply(fit);
+    };
+    layout();
+    window.addEventListener('resize', layout);
+    canvas.style.opacity = '0';
+
+    const measure = () => {
+        app.render();
+        const gl = app.renderer.gl;
+        const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+        const pixels = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const s = measureSilhouette(pixels, w, h, { flipY: true });
+        if (!s) return null;
+        const r = app.renderer.resolution || 1;
+        const u = (px) => (px / r - fit.x) / fit.scale;
+        const v = (py) => (py / r - fit.y) / fit.scale;
+        box = { left: u(s.left), right: u(s.right), top: v(s.top), bottom: v(s.bottom) };
+        head = { x: u(s.head.x), y: v(s.head.y), width: s.head.width / r / fit.scale };
+        measured = true;
+        layout();
+        return silhouetteAspect(box);
+    };
+    const ready = new Promise((resolve) => {
+        setTimeout(() => {
+            let aspect = null;
+            try { aspect = measure(); } catch (error) { console.warn('[DeskPet] 量轮廓失败：', error); }
+            canvas.style.transition = 'opacity 160ms ease';
+            canvas.style.opacity = '1';
+            resolve(aspect);
+        }, FIGURE_MEASURE_MS);
+    });
+    const toWindow = (b) => ({ x: fit.x + b.left * fit.scale, y: fit.y + b.top * fit.scale, width: (b.right - b.left) * fit.scale, height: (b.bottom - b.top) * fit.scale });
+    return {
+        ready,
+        base: () => fit,
+        bounds: () => toWindow(box),
+        // 没量出来时按包围盒估：头在顶上、宽度取一半
+        head() {
+            if (measured && head) return { x: fit.x + head.x * fit.scale, y: fit.y + head.y * fit.scale, width: head.width * fit.scale };
+            const b = toWindow(box);
+            return { x: b.x + b.width / 2, y: b.y, width: b.width * 0.5 };
+        },
+    };
 }
 
 // 按像素命中：在当帧渲染之后读 alpha。
@@ -1065,14 +1154,11 @@ function createImageBackend(assets) {
     const sampler = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
     let activeImg = null;
 
-    // object-fit: contain 之后图片实际画在哪里。
+    // 图片实际画在哪里（含呼吸、跳一下这些变换），scale 是画出来的像素 ÷ 原图像素。
     function drawnRect(img) {
         const box = img.getBoundingClientRect();
         if (!img.naturalWidth || !box.width) return null;
-        const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
-        const w = img.naturalWidth * scale;
-        const h = img.naturalHeight * scale;
-        return { x: box.x + (box.width - w) / 2, y: box.y + box.height - h, width: w, height: h, scale };
+        return { x: box.x, y: box.y, width: box.width, height: box.height, scale: box.width / img.naturalWidth };
     }
 
     function pop() {
@@ -1086,9 +1172,51 @@ function createImageBackend(assets) {
         const theme = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
         $('portrait').hidden = false;
         const layers = [$('portraitA'), $('portraitB')];
+        const talkImg = $('portraitTalk');
         let front = 0;
         let currentSrc = null;
         const failed = new Set();
+
+        // 按轮廓摆：去掉透明边、脚底贴窗口底边。同一套差分画布一样大，都按第一张（默认立绘）的轮廓摆，
+        // 换表情时人不会跳；画布大小不一样的那张按它自己的轮廓摆。
+        const measured = new Map(); // src -> 轮廓（原图像素）
+        let reference = null; // { width, height, silhouette }
+        let resolveFigure = null;
+        const figureReady = new Promise((resolve) => { resolveFigure = resolve; });
+        const measureImage = (img) => {
+            if (measured.has(img.src)) return measured.get(img.src);
+            const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+            ctx.canvas.width = img.naturalWidth;
+            ctx.canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            let silhouette = null;
+            try {
+                silhouette = measureSilhouette(ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight).data, img.naturalWidth, img.naturalHeight);
+            } catch (error) {
+                console.warn('[DeskPet] 量立绘轮廓失败：', error);
+            }
+            // 整张都是透明的（或读不了像素）就按整张图摆
+            silhouette ||= { left: 0, top: 0, right: img.naturalWidth, bottom: img.naturalHeight, head: { x: img.naturalWidth / 2, y: 0, width: img.naturalWidth / 2 } };
+            measured.set(img.src, silhouette);
+            return silhouette;
+        };
+        const silhouetteOf = (img) => {
+            if (!img?.naturalWidth) return null;
+            if (reference && reference.width === img.naturalWidth && reference.height === img.naturalHeight) return reference.silhouette;
+            return measureImage(img);
+        };
+        const place = (img) => {
+            const silhouette = silhouetteOf(img);
+            if (!silhouette) return;
+            const fit = fitSilhouette(silhouette, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE });
+            if (!fit) return;
+            img.style.left = `${fit.x}px`;
+            img.style.top = `${fit.y}px`;
+            img.style.width = `${img.naturalWidth * fit.scale}px`;
+            img.style.height = `${img.naturalHeight * fit.scale}px`;
+        };
+        window.addEventListener('resize', () => [...layers, talkImg].forEach(place));
+
         const show = async (src, withPop) => {
             if (!src || src === currentSrc || failed.has(src)) return;
             currentSrc = src;
@@ -1098,9 +1226,16 @@ function createImageBackend(assets) {
                 await next.decode();
             } catch {
                 failed.add(src); // 坏图记住，不再尝试
+                if (!reference) resolveFigure(null);
                 return;
             }
             if (src !== currentSrc) return;
+            if (!reference) {
+                reference = { width: next.naturalWidth, height: next.naturalHeight, silhouette: measureImage(next) };
+                resolveFigure(silhouetteAspect(reference.silhouette));
+                if (talkImg.naturalWidth) place(talkImg);
+            }
+            place(next);
             next.classList.add('is-active');
             layers[front].classList.remove('is-active');
             front = 1 - front;
@@ -1114,15 +1249,24 @@ function createImageBackend(assets) {
         const urlFor = (f) => resolvePortrait(portraits, { state: f.state, emotion: f.emotion, theme })?.url;
         show(urlFor(frame), false);
         // 张嘴帧（portrait.talk.png，可选）：朗读时声音大过一点就换上，小下去再换回，中间留一段免得闪
-        const talkImg = $('portraitTalk');
         let talking = false;
-        if (portraits.talk) talkImg.src = portraits.talk;
+        if (portraits.talk) {
+            talkImg.src = portraits.talk;
+            talkImg.decode().then(() => place(talkImg)).catch(() => {});
+        }
         const setMouth = (open) => {
             if (!portraits.talk) return;
             const next = talking ? open > 0.08 : open > 0.2;
             if (next === talking) return;
             talking = next;
             $('portrait').classList.toggle('is-talking', talking);
+        };
+        // 轮廓（原图像素）换成窗口坐标
+        const inWindow = (img) => {
+            const r = img && drawnRect(img);
+            const silhouette = r && silhouetteOf(img);
+            if (!silhouette) return null;
+            return { r, silhouette };
         };
         return {
             kind: 'portrait',
@@ -1133,7 +1277,19 @@ function createImageBackend(assets) {
                 reportHit(a >= HIT_ALPHA);
             },
             focus() {},
-            bounds() { return activeImg ? drawnRect(activeImg) : null; },
+            bounds() {
+                const got = inWindow(activeImg);
+                if (!got) return null;
+                const { r, silhouette: sil } = got;
+                return { x: r.x + sil.left * r.scale, y: r.y + sil.top * r.scale, width: (sil.right - sil.left) * r.scale, height: (sil.bottom - sil.top) * r.scale };
+            },
+            head() {
+                const got = inWindow(activeImg);
+                if (!got) return null;
+                const { r, silhouette: sil } = got;
+                return { x: r.x + sil.head.x * r.scale, y: r.y + sil.head.y * r.scale, width: sil.head.width * r.scale };
+            },
+            figureReady,
             tap: pop,
             canShow: (emotion) => Boolean(portraits[emotion]),
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
@@ -1157,6 +1313,7 @@ function createImageBackend(assets) {
         },
         focus() {},
         bounds() { const b = $('avatar').getBoundingClientRect(); return { x: b.x - 6, y: b.y - 6, width: b.width + 12, height: b.height + 12 }; },
+        head() { const b = $('avatar').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y, width: b.width * 0.8 }; },
         tap() {},
         apply(f) {
             $('avatar').style.setProperty('--deskpet-ring', EMOTION_RING[f.emotion] || EMOTION_RING.neutral);
@@ -1447,8 +1604,11 @@ async function start() {
         notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
     });
     bindComposer();
-    // 头顶那一块：包围盒上方四分之一、中间六成宽（摸头、点头用）
+    // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
+    // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {
+        const h = backend.head?.();
+        if (h) return y >= h.y && y <= h.y + h.width * 0.9 && Math.abs(x - h.x) <= h.width / 2;
         const b = backend.bounds();
         if (!b) return false;
         return y >= b.y && y <= b.y + b.height * 0.25 && Math.abs(x - (b.x + b.width / 2)) <= b.width * 0.3;
@@ -1517,22 +1677,40 @@ async function start() {
     });
     // 定期看一眼角色占在哪里：气泡和输入框贴在头顶上方（小头像、矮立绘不会离得老远）；
     // Linux 用输入区代替整窗穿透（见主进程注释），把角色和界面的包围盒报上去。
-    let headY = TOP_RESERVE;
+    let headY = null; // 第一次量到头就摆上去，之后差得多才挪
+    let headX = null;
+    let headWidth = null;
     // 头顶上方放不下气泡加输入框时，输入框改到窗口底部（压在腿上，不挡脸，也不把气泡挤成一行）
-    const placeComposer = () => document.body.classList.toggle('is-cramped', headY < COMPOSER_ROOM);
+    const placeComposer = () => document.body.classList.toggle('is-cramped', (headY ?? TOP_RESERVE) < COMPOSER_ROOM);
     placeComposer();
+    // 气泡、角标、小符号都跟着头走：全身像的头在窗口上部，Q 版的大头矮矮的在中间，头歪在一边时气泡也挪过去
+    const followHead = () => {
+        const h = backend.head?.();
+        const b = h ? null : backend.bounds();
+        const head = h || (b && { x: b.x + b.width / 2, y: b.y, width: b.width * 0.5 });
+        if (!head) return;
+        const root = document.documentElement.style;
+        // 动作会让头顶上下晃，差得不多就不挪，免得气泡跟着抖
+        const y = Math.round(Math.max(TOP_RESERVE, Math.min(window.innerHeight - 40, head.y)));
+        if (headY === null || Math.abs(y - headY) > 16) {
+            headY = y;
+            root.setProperty('--pet-head', `${y}px`);
+            placeComposer();
+        }
+        const x = Math.round(Math.max(0, Math.min(window.innerWidth, head.x)));
+        const w = Math.round(Math.max(24, Math.min(window.innerWidth, head.width)));
+        if (headX === null || Math.abs(x - headX) > 8 || Math.abs(w - headWidth) > 8) {
+            headX = x;
+            headWidth = w;
+            root.setProperty('--pet-head-x', `${x}px`);
+            root.setProperty('--pet-head-w', `${w}px`);
+        }
+        aimBubble(headX);
+    };
     setInterval(() => {
         if (paused) return;
+        followHead();
         const b = backend.bounds();
-        if (b) {
-            // 动作会让头顶上下晃，差得不多就不挪，免得气泡跟着抖
-            const y = Math.round(Math.max(TOP_RESERVE, Math.min(window.innerHeight - 40, b.y)));
-            if (Math.abs(y - headY) > 16) {
-                headY = y;
-                document.documentElement.style.setProperty('--pet-head', `${y}px`);
-                placeComposer();
-            }
-        }
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
@@ -1548,6 +1726,13 @@ async function start() {
     // 调试和录屏：__deskPetLife.force('asleep') 直接睡着，__deskPetLife.perform('yawn') 演一个动作
     window.__deskPetLife = life;
     window.__deskPetBounds = () => backend.bounds();
+    window.__deskPetHead = () => backend.head?.() || null;
+    // 量出形象的长宽比后告诉主进程，窗口按比例改（全身像高、Q 版矮），脚底不动
+    Promise.resolve(backend.figureReady).then((aspect) => {
+        window.__deskPetFigure = { outfit: assets.outfit?.id || null, aspect };
+        if (aspect && assets.outfit) api.reportFigure?.({ outfit: assets.outfit.id, aspect });
+        followHead();
+    }).catch(() => {});
     console.log('[DeskPet] ready', JSON.stringify(window.__deskPetReady));
 }
 

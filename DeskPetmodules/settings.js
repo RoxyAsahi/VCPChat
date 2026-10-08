@@ -1,4 +1,4 @@
-// 桌宠设置窗口：免打扰、启动恢复、每个桌宠的大小、全局快捷键。
+// 桌宠设置窗口：免打扰、启动恢复、每个桌宠的形象（换装）和大小、全局快捷键。
 // 设置的读写都在主进程（modules/deskpet/petControls.js），这里只负责显示和录键。
 
 const api = window.deskPetSettingsAPI;
@@ -93,10 +93,38 @@ function renderSizes() {
                 pending = Number(slider.value);
                 push();
             });
-            row.append(name, slider, value);
+            // 换装：这个助手有好几套形象时才显示
+            const outfitLine = document.createElement('label');
+            outfitLine.className = 'outfit-line';
+            const outfitTitle = document.createElement('span');
+            outfitTitle.textContent = '形象';
+            const outfitSelect = document.createElement('select');
+            outfitSelect.dataset.agentId = pet.agentId;
+            outfitSelect.addEventListener('change', async () => {
+                outfitSelect.disabled = true;
+                try { state = (await api.setOutfit(pet.agentId, outfitSelect.value)) || state; } finally { outfitSelect.disabled = false; }
+                render();
+            });
+            outfitLine.append(outfitTitle, outfitSelect);
+            row.append(name, slider, value, outfitLine);
             list.append(row);
         }
-        const [name, slider, value] = row.children;
+        const [name, slider, value, outfitLine] = row.children;
+        const outfitSelect = outfitLine.lastElementChild;
+        const outfits = pet.outfits || [];
+        outfitLine.hidden = outfits.length < 2;
+        const optionKey = JSON.stringify(outfits.map((o) => [o.id, o.label || o.name]));
+        if (outfitSelect.dataset.options !== optionKey) {
+            outfitSelect.dataset.options = optionKey;
+            outfitSelect.replaceChildren(...outfits.map((o) => {
+                const option = document.createElement('option');
+                option.value = o.id;
+                option.textContent = o.label || o.name;
+                return option;
+            }));
+        }
+        if (document.activeElement !== outfitSelect || outfitSelect.disabled) outfitSelect.value = pet.outfit || '';
+        outfitSelect.setAttribute('aria-label', `${pet.name} 的形象`);
         name.textContent = pet.name;
         name.title = pet.name;
         if (!pet.visible) {
