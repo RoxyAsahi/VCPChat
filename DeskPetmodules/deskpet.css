@@ -20,20 +20,21 @@ html, body {
   height: 100%;
 }
 
+/* 立绘按不透明像素的轮廓摆（页面算好位置和大小写在每张图上）：透明边伸出窗口外也没关系，脚底贴着窗口底边 */
 #portrait {
   position: absolute;
-  inset: 150px 0 0 0;
+  inset: 0;
   transform-origin: 50% 100%;
   animation: deskpet-breathe 4.2s ease-in-out infinite;
 }
 
 #portrait img {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: 50% 100%;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  max-width: none;
   opacity: 0;
   transition: opacity 180ms ease;
 }
@@ -136,7 +137,7 @@ html, body {
 #bubble::after {
   content: "";
   position: absolute;
-  left: 50%;
+  left: var(--tail-x, 50%);
   bottom: -6px;
   width: 12px;
   height: 12px;
@@ -320,10 +321,13 @@ body.is-cramped #uiStack:has(#composer) #bubble::after {
   opacity: 0.6;
 }
 
+/* 角标、月亮、小符号都按头的位置摆（--pet-head 头顶、--pet-head-x 头的中线、--pet-head-w 头宽，页面量出来的），
+   不靠窗口边：Q 版矮胖的头在窗口中间，全身像的头又小又高 */
 #emotionBadge {
   position: absolute;
-  right: 10px;
-  top: var(--pet-head, 150px);
+  left: clamp(4px, calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.5 + 2px), calc(100% - 104px));
+  top: calc(var(--pet-head, 150px) + 4px);
+  white-space: nowrap;
   padding: 2px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.85);
@@ -340,7 +344,7 @@ body.is-cramped #uiStack:has(#composer) #bubble::after {
 /* 免打扰时头顶旁边一个小月亮，知道它为什么不出声 */
 #dndBadge {
   position: absolute;
-  left: calc(50% + 24px);
+  left: min(calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.3), calc(100% - 20px));
   top: calc(var(--pet-head, 150px) - 4px);
   font-size: 16px;
   line-height: 1;
@@ -520,7 +524,7 @@ body.is-paused *::after {
 /* 头顶冒出的小符号；睡着时一个 z 慢慢往上飘 */
 #lifeFx {
   position: absolute;
-  left: 58%;
+  left: min(calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.35), calc(100% - 30px));
   top: calc(var(--pet-head, 150px) - 6px);
   font-size: 22px;
   line-height: 1;

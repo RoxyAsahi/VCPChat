@@ -8,7 +8,11 @@
 'use strict';
 
 // 1 倍大小时角色占的区域；上方另外留出气泡和输入框的高度（与页面 TOP_RESERVE 一致）。
+// 还不知道形象的长宽比（头像、第一次打开）时用这一个。
 const BASE_CHARACTER = Object.freeze({ width: 360, height: 430 });
+// 知道形象的长宽比（高 ÷ 宽，按不透明像素算）以后，角色区跟着比例走：
+// 竖长的全身像更高、更窄，矮胖的 Q 版矮一点；高度按比例的平方根长，全身像不至于高出半个屏幕。
+const FIGURE = Object.freeze({ refAspect: BASE_CHARACTER.height / BASE_CHARACTER.width, minHeight: 360, maxHeight: 540, maxWidth: 420, sideRoom: 1.15 });
 const UI_RESERVE = 150;
 // 窗口再窄，气泡和输入框也排不下了。
 const MIN_WIDTH = 280;
@@ -56,24 +60,45 @@ function clampScale(scale) {
     return Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, value)) * 20) / 20;
 }
 
+function isAspect(aspect) {
+    const a = Number(aspect);
+    return Number.isFinite(a) && a >= 0.25 && a <= 8;
+}
+
+/** 1 倍大小时角色区的宽高。aspect 是形象的高 ÷ 宽（页面量出来报给主进程），不知道时用默认的。 */
+function characterBox(aspect) {
+    if (!isAspect(aspect)) return BASE_CHARACTER;
+    const a = Number(aspect);
+    const height = Math.min(FIGURE.maxHeight, Math.max(FIGURE.minHeight, BASE_CHARACTER.height * Math.sqrt(a / FIGURE.refAspect)));
+    // 两边留一点：Live2D 抬手、拖动时身子甩起来不碰窗口边
+    const width = Math.min(FIGURE.maxWidth, (height / a) * FIGURE.sideRoom);
+    return { width, height };
+}
+
 /** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
-function windowSizeForScale(scale) {
+function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
+    const box = characterBox(aspect);
     return {
-        width: Math.max(MIN_WIDTH, roundToGrid(BASE_CHARACTER.width * s)),
-        height: roundToGrid(UI_RESERVE + BASE_CHARACTER.height * s),
+        width: Math.max(MIN_WIDTH, roundToGrid(box.width * s)),
+        height: roundToGrid(UI_RESERVE + box.height * s),
     };
 }
 
 /** 这块工作区（显示器去掉任务栏）最多能放多大。 */
-function maxScaleForWorkArea(workArea) {
+function maxScaleForWorkArea(workArea, aspect) {
     if (!workArea || !(workArea.height > 0)) return SCALE_MAX;
-    const fit = (workArea.height - UI_RESERVE) / BASE_CHARACTER.height;
+    const fit = (workArea.height - UI_RESERVE) / characterBox(aspect).height;
     return Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.floor(fit * 20) / 20));
 }
 
-function fitScale(scale, workArea) {
-    return Math.min(clampScale(scale), maxScaleForWorkArea(workArea));
+function fitScale(scale, workArea, aspect) {
+    return Math.min(clampScale(scale), maxScaleForWorkArea(workArea, aspect));
+}
+
+/** 页面报上来的长宽比：不合理的值丢掉，其余保留两位小数（同一个形象每次量出来差一点点不算变了）。 */
+function normalizeAspect(aspect) {
+    return isAspect(aspect) ? Math.round(Number(aspect) * 100) / 100 : null;
 }
 
 /**
@@ -186,6 +211,8 @@ module.exports = {
     RESERVED_ACCELERATORS,
     DEFAULT_SETTINGS,
     clampScale,
+    characterBox,
+    normalizeAspect,
     windowSizeForScale,
     maxScaleForWorkArea,
     fitScale,
