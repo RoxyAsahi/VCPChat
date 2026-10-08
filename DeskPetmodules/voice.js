@@ -6,10 +6,11 @@
 //   createSpeech       一条回复的朗读：切句、送 TTS、跟踪念到哪一句、超时放弃
 import { createSpeechChunker } from './speechText.js';
 
-// 口型参数：小于噪声门的音量当作闭嘴；张嘴 45ms 跟上，合嘴 130ms 放下，嘴不会每个波形都抖。
+// 口型参数：小于噪声门的音量当作闭嘴；张嘴 40ms 跟上，合嘴 90ms 放下：
+// 嘴不会每个波形都抖，字与字之间的短停顿又来得及合上。
 const NOISE_GATE = 0.035;
-const ATTACK_S = 0.045;
-const RELEASE_S = 0.13;
+const ATTACK_S = 0.04;
+const RELEASE_S = 0.09;
 // 音量按分贝映射到 0..1：-50dB 以下算安静，-14dB 以上算张到最大。
 const DB_FLOOR = -50;
 const DB_CEIL = -14;
@@ -157,7 +158,7 @@ export function createVoicePlayer({ onError } = {}) {
 /**
  * 一条回复的朗读。调用顺序：begin(messageId) → update(raw, frame)…… → finish(raw, frame)。
  *   raw   到目前为止的回复原文（只追加），气泡就是它整理出来的
- *   frame 情绪导演此刻的帧；切出一句时记下，念到这句时再换上这个表情
+ *   frame 这句的表情帧，或者 (sentence) => 帧；切出一句时记下，念到这句时再换上
  *
  * 回调：
  *   onChange()      气泡该重画了（显示到哪儿变了、开始或结束朗读）
@@ -227,7 +228,7 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
 
     function addSentences(list, frame) {
         for (const sentence of list) {
-            sentence.frame = frame;
+            sentence.frame = typeof frame === 'function' ? frame(sentence) : frame;
             reply.sentences.push(sentence);
             if (reply.mode === 'voice') sendSentence(sentence);
         }

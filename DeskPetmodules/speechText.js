@@ -38,7 +38,7 @@ function isBoundary(text, i, final) {
  * start/end 是这句在原文里的位置；text 是要念的文字，可能是空串（只有代码、图片），调用方跳过即可。
  * 太短的句子（「嗯。」）并到下一句里念，免得一字一顿；第一句门槛更低，让 TA 尽快开口。
  */
-export function createSpeechChunker({ minChars = 8, firstMinChars = 4, maxChars = 90 } = {}) {
+export function createSpeechChunker({ minChars = 5, firstMinChars = 3, maxChars = 90 } = {}) {
     let consumed = 0;
     let index = 0;
 

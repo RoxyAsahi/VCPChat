@@ -61,6 +61,7 @@ const bubble = {
     region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
     proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
+    tags: [],           // 回复里的情绪标记 { at, emotion, intensity }，at 是它在 reply 里的位置（朗读时按句换表情）
     hovered: false,
     hideTimer: 0,
     noticeTimer: 0,
@@ -984,6 +985,15 @@ function applyFrame(next) {
     renderBubble();
 }
 
+// 朗读时一句话的表情：这句里（或之前）最后一个情绪标记；没有标记就用导演当前的情绪。
+// 不直接用导演的帧：回复流得比念得快，导演为了不闪会压着切换，切句时它可能还停在「思考」上。
+function sentenceFrame(sentence) {
+    const tag = [...(bubble.tags || [])].reverse().find((t) => t.at < sentence.end);
+    const base = director?.frame || frame;
+    if (!tag) return { ...base, state: null };
+    return { ...base, state: null, emotion: tag.emotion, intensity: tag.intensity ?? base.intensity, source: 'tag' };
+}
+
 function bindStream(director) {
     let scanner = null;
     toolCard = createToolCard({ el: $('toolCard'), onChange: queueRenderBubble });
@@ -994,6 +1004,7 @@ function bindStream(director) {
         bubble.reply = '';
         bubble.region = null;
         bubble.proactive = null;
+        bubble.tags = [];
         scanner = createEmotionTagScanner();
         speech.begin(messageId);
         toolCard.start();
@@ -1012,9 +1023,10 @@ function bindStream(director) {
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
                 else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
+                else if (item.type === 'tag') bubble.tags.push({ at: bubble.reply.length, emotion: item.emotion, intensity: item.intensity });
             }
             bubble.region = scanner.region;
-            speech.update(bubble.reply, director.frame);
+            speech.update(bubble.reply, sentenceFrame);
             queueRenderBubble();
             return;
         } else if (event.type === 'end' || event.type === 'error') {
@@ -1022,7 +1034,7 @@ function bindStream(director) {
             else director.fail(event.messageId);
             if (scanner && bubble.replyId === event.messageId) {
                 for (const item of scanner.finish()) if (item.type === 'text') bubble.reply += item.text;
-                if (event.type === 'end') speech.finish(bubble.reply, director.frame);
+                if (event.type === 'end') speech.finish(bubble.reply, sentenceFrame);
                 else speech.fail();
             }
             scanner = null;
