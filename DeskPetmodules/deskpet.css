@@ -383,3 +383,170 @@ body.is-paused *::after {
 [hidden] {
     display: none !important;
 }
+
+/* ---- 闲时生气：立绘和头像的阶段姿态与动作（Live2D 用参数演，不走这里） ---- */
+
+/* 拖动摆动和跳一下（页面只在动起来时更新这两个变量） */
+#stage {
+  transform-origin: 50% 100%;
+  rotate: var(--life-swing, 0deg);
+  translate: 0 var(--life-hop, 0px);
+}
+
+#lifeBody {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  transition: rotate 1.2s ease, translate 1.2s ease, scale 1.2s ease;
+}
+
+/* 犯困：头微微歪着，呼吸变慢；睡着：歪得更多、往下沉一点，呼吸更慢 */
+#lifeBody[data-life-phase="drowsy"] {
+  rotate: 1.5deg;
+}
+
+#lifeBody[data-life-phase="asleep"] {
+  rotate: 3deg;
+  translate: 0 4px;
+  scale: 1 0.99;
+}
+
+#lifeBody[data-life-phase="drowsy"] #portrait { animation-duration: 6s; }
+#lifeBody[data-life-phase="asleep"] #portrait { animation-duration: 7.5s; }
+#lifeBody[data-life-phase="asleep"] #avatar { animation-duration: 7s; }
+
+#lifeBody[data-life-act] {
+  animation-duration: var(--life-ms, 1s);
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: none;
+}
+
+#lifeBody[data-life-act="lookAround"] { animation-name: life-look; }
+#lifeBody[data-life-act="tilt"] { animation-name: life-tilt; }
+#lifeBody[data-life-act="stretch"] { animation-name: life-stretch; }
+#lifeBody[data-life-act="hum"] { animation-name: life-hum; }
+#lifeBody[data-life-act="yawn"] { animation-name: life-yawn; }
+#lifeBody[data-life-act="nod"] { animation-name: life-nod; }
+#lifeBody[data-life-act="wake"] { animation-name: life-wake; }
+#lifeBody[data-life-act="startle"] { animation-name: life-startle; }
+#lifeBody[data-life-act="headTap"],
+#lifeBody[data-life-act="pat"] { animation-name: life-squish; }
+#lifeBody[data-life-act="sleepPat"] { animation-name: life-sleep-pat; }
+#lifeBody[data-life-act="annoyed"] { animation-name: life-shake; }
+#lifeBody[data-life-act="dizzy"] { animation-name: life-dizzy; }
+#lifeBody[data-life-act="landed"] { animation-name: life-land; animation-timing-function: ease-out; }
+
+@keyframes life-look {
+  0%, 100% { translate: 0 0; rotate: 0deg; }
+  25% { translate: -6px 0; rotate: -1.5deg; }
+  65% { translate: 6px 0; rotate: 1.5deg; }
+}
+
+@keyframes life-tilt {
+  0%, 100% { rotate: 0deg; }
+  30%, 70% { rotate: 4deg; }
+}
+
+@keyframes life-stretch {
+  0%, 100% { scale: 1 1; }
+  40%, 60% { scale: 0.99 1.035; }
+  80% { scale: 1.01 0.99; }
+}
+
+@keyframes life-hum {
+  0%, 100% { rotate: 0deg; }
+  15%, 55% { rotate: -2deg; }
+  35%, 75% { rotate: 2deg; }
+}
+
+@keyframes life-yawn {
+  0%, 100% { scale: 1 1; rotate: 0deg; }
+  35% { scale: 0.99 1.025; rotate: -2deg; }
+  65% { scale: 1 1.01; rotate: 1deg; }
+}
+
+@keyframes life-nod {
+  0% { rotate: 1.5deg; translate: 0 0; }
+  55% { rotate: 4deg; translate: 0 6px; }
+  70% { rotate: 0deg; translate: 0 -2px; }
+  100% { rotate: 1.5deg; translate: 0 0; }
+}
+
+@keyframes life-wake {
+  0% { rotate: 3deg; translate: 0 4px; }
+  30% { rotate: -2deg; }
+  55% { rotate: 1.5deg; }
+  100% { rotate: 0deg; translate: 0 0; }
+}
+
+@keyframes life-startle {
+  0%, 100% { scale: 1 1; }
+  15% { scale: 0.97 1.04; }
+  40% { scale: 1.02 0.98; }
+}
+
+@keyframes life-squish {
+  0%, 100% { scale: 1 1; }
+  20%, 60% { scale: 1.025 0.97; }
+  40%, 80% { scale: 0.99 1.01; }
+}
+
+@keyframes life-sleep-pat {
+  0%, 100% { rotate: 3deg; }
+  50% { rotate: 1.5deg; }
+}
+
+@keyframes life-shake {
+  0%, 100% { translate: 0 0; }
+  10%, 30%, 50% { translate: -5px 0; }
+  20%, 40%, 60% { translate: 5px 0; }
+  70% { translate: 0 0; }
+}
+
+@keyframes life-dizzy {
+  0%, 100% { rotate: 0deg; }
+  20% { rotate: -5deg; }
+  40% { rotate: 5deg; }
+  60% { rotate: -3deg; }
+  80% { rotate: 2deg; }
+}
+
+@keyframes life-land {
+  0%, 100% { scale: 1 1; }
+  30% { scale: 1.04 0.95; }
+  60% { scale: 0.99 1.01; }
+}
+
+/* 头顶冒出的小符号；睡着时一个 z 慢慢往上飘 */
+#lifeFx {
+  position: absolute;
+  left: 58%;
+  top: calc(var(--pet-head, 150px) - 6px);
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+#lifeFx.is-pop {
+  animation: life-fx-pop 1.6s ease-out forwards;
+}
+
+#lifeFx.is-held {
+  animation: life-fx-pop 0.4s ease-out forwards;
+}
+
+/* 位置和透明度由页面每 400ms 改一次 */
+#lifeFx.is-zzz {
+  color: #cfd8ff;
+  font-weight: 700;
+  font-style: italic;
+}
+
+@keyframes life-fx-pop {
+  0% { opacity: 0; translate: 0 6px; scale: 0.6; }
+  20% { opacity: 1; translate: 0 0; scale: 1.1; }
+  35% { scale: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; translate: 0 -10px; }
+}
