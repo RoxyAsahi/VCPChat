@@ -47,6 +47,13 @@ function onStopTtsAudio(callback) {
     return () => ipcRenderer.removeListener('stop-tts-audio', listener);
 }
 
+function onProactive(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('deskpet:proactive', listener);
+    return () => ipcRenderer.removeListener('deskpet:proactive', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
@@ -59,6 +66,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     voiceBegin: messageId => ipcRenderer.invoke('deskpet:voice-begin', String(messageId || '')),
     voiceSay: payload => ipcRenderer.send('deskpet:voice-say', payload),
     voiceEnd: payload => ipcRenderer.send('deskpet:voice-end', payload),
+    onProactive,
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),
     setInteractive: on => ipcRenderer.send('deskpet:set-interactive', !!on),
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
@@ -66,4 +74,5 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     dragEnd: () => ipcRenderer.send('deskpet:drag-end'),
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
+    openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
 }));
