@@ -224,6 +224,19 @@ async function createStoreFixture(options = {}) {
     return { root, clock, sent, store, settle };
 }
 
+// 写盘是计时器触发后异步完成的；Windows 上可能比固定等待慢，所以等到文件出现为止
+async function readWhenWritten(file, timeoutMs = 5000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        try {
+            return await fs.readFile(file, 'utf8');
+        } catch (error) {
+            if (error.code !== 'ENOENT' || Date.now() > deadline) throw error;
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+    }
+}
+
 const chunk = text => ({ choices: [{ delta: { content: text } }] });
 
 test('the main-process store reads the user message and the finished reply, then saves and broadcasts', async () => {
@@ -237,8 +250,7 @@ test('the main-process store reads the user message and the finished reply, then
     assert.deepEqual(sent.map(item => item.payload.last.source), ['user', 'tag']);
     assert.equal(sent[1].payload.agentId, 'Nova');
     clock.advance(0);
-    await settle();
-    const saved = JSON.parse(await fs.readFile(path.join(root, 'Nova', 'mood.json'), 'utf8'));
+    const saved = JSON.parse(await readWhenWritten(path.join(root, 'Nova', 'mood.json')));
     assert.equal(saved.last.emotion, 'excited');
     assert.ok(saved.vad.valence > 0);
     const snapshot = await store.get('Nova');
