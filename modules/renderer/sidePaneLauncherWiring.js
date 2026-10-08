@@ -36,35 +36,38 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         controller.setLauncherProfileProvider(getLauncherProfile);
         return result;
     };
-    // 立绘按助手现取：主进程只看 Agent 目录里有没有 portrait 图。切到别的助手先回到圆头像，
-    // 同一个助手重新选中时保留当前立绘、后台再查一次（新放进去的立绘下次选中就能看到）
-    let portraitState = { id: null, portraits: null, loading: null };
+    // 立绘按助手现取：主进程只看 Agent 目录里有没有 portrait 图。查过的助手记住结果，切回来马上就是立绘、
+    // 不先闪一下圆头像；每次选中或回到新标签页时后台再查一次（距上次查过 1 秒以上），换了或删了立绘文件也能跟上
+    const portraitCache = new Map();
+    const PORTRAIT_RECHECK_MS = 1000;
     const loadPortraits = (item, { refresh = false } = {}) => {
         const id = item?.type === 'agent' ? item.id : null;
-        if (portraitState.id === id && (!refresh || portraitState.loading)) return;
-        if (portraitState.id !== id) portraitState = { id, portraits: null, loading: null };
         const api = chatAPI || win.electronAPI;
         if (!id || typeof api?.getAgentPortraits !== 'function') return;
+        const entry = portraitCache.get(id) || { portraits: null, known: false, loading: null, checkedAt: 0 };
+        portraitCache.set(id, entry);
+        if (entry.loading || (entry.known && (!refresh || Date.now() - entry.checkedAt < PORTRAIT_RECHECK_MS))) return;
         const loading = Promise.resolve(api.getAgentPortraits(id)).then((portraits) => {
-            if (disposed || portraitState.loading !== loading) return;
+            if (disposed) return;
             const next = portraits?.default ? portraits : null;
-            const changed = JSON.stringify(next) !== JSON.stringify(portraitState.portraits);
-            portraitState = { id, portraits: next, loading: null };
-            if (changed) controller.setLauncherProfileProvider(getLauncherProfile);
+            const changed = JSON.stringify(next) !== JSON.stringify(entry.portraits);
+            Object.assign(entry, { portraits: next, known: true, checkedAt: Date.now() });
+            if (changed && selectedItemRef.get()?.id === id) controller.setLauncherProfileProvider(getLauncherProfile);
         }).catch((error) => {
-            if (portraitState.loading === loading) portraitState.loading = null;
             console.warn('[SidePane] Failed to read agent portraits:', error);
+        }).finally(() => {
+            if (entry.loading === loading) entry.loading = null;
         });
-        portraitState.loading = loading;
+        entry.loading = loading;
     };
     const getLauncherProfile = () => {
         const item = selectedItemRef.get();
         if (!item?.id) return null;
-        loadPortraits(item);
+        loadPortraits(item, { refresh: true });
         return {
             name: item.name || '',
             avatarUrl: item.avatarUrl || '',
-            portraits: portraitState.id === item.id ? portraitState.portraits : null,
+            portraits: item.type === 'agent' ? portraitCache.get(item.id)?.portraits || null : null,
             onEditAvatar: item.type === 'agent' ? () => {
                 win.uiManager?.switchToTab?.('settings');
                 doc.getElementById('agentAvatarInput')?.click();
