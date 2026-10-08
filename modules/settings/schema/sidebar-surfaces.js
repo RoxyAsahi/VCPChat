@@ -53,7 +53,7 @@ const groupFields = Object.freeze([
 export const settingsSidebarSchema = Object.freeze({
     version: 1,
     agent: Object.freeze({
-        sections: Object.freeze(['identity', 'portrait', 'prompt', 'model', 'params', 'tts', 'regex']),
+        sections: Object.freeze(['identity', 'prompt', 'model', 'params', 'tts', 'regex']),
         fields: agentFields,
     }),
     group: Object.freeze({
@@ -304,6 +304,10 @@ function renderAgentIdentity(doc) {
         }
     });
     const controls = el(doc, 'div', { class: 'agent-style-controls', id: 'agentStyleControls' });
+    // 首页立绘放在自定义样式里、颜色开关前面：它和头像、名字一样是助手的外观
+    controls.append(el(doc, 'div', { class: 'style-control-item full-width agent-portrait-style-item' },
+        el(doc, 'span', { class: 'agent-portrait-style-title' }, '首页立绘'),
+        renderAgentPortrait(doc)));
     [['disableCustomColors', '助手页面中使用主题默认颜色'], ['useThemeColorsInChat', '会话界面中使用主题默认颜色']].forEach(([id, text]) => {
         const checkbox = el(doc, 'input', { id, type: 'checkbox', name: id });
         controls.append(el(doc, 'div', { class: 'style-control-item full-width' },
@@ -368,8 +372,8 @@ function renderAgentPortrait(doc) {
         el(doc, 'div', { class: 'slider-container' },
             el(doc, 'input', { id: 'agentPortraitHeight', type: 'range', min: 180, max: 360, step: 4, value: 248 }),
             el(doc, 'span', { id: 'agentPortraitHeightValue', class: 'slider-value-pill' }, '248px')));
-    return el(doc, 'div', { class: 'agent-settings-card-shell agent-portrait-settings', id: 'agentPortraitSettings' },
-        el(doc, 'p', { class: 'agent-portrait-hint' }, '有立绘时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字。'),
+    return el(doc, 'div', { class: 'agent-portrait-settings', id: 'agentPortraitSettings' },
+        el(doc, 'p', { class: 'agent-portrait-hint' }, '有立绘时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字。图片和位置的改动点保存后生效。'),
         preview,
         el(doc, 'div', { class: 'agent-portrait-preview-toolbar' }, themes,
             el(doc, 'button', { type: 'button', id: 'agentPortraitResetBtn', class: 'small-button' }, '重置位置')),
@@ -471,7 +475,6 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     const form = el(doc, 'form', { id: 'agentSettingsForm', novalidate: true });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingAgentId', name: 'agentId' }));
     form.append(renderSection(doc, { kind: 'agent', key: 'identity', title: '基础信息', summaryId: 'identitySummary', content: renderAgentIdentity }));
-    form.append(renderSection(doc, { kind: 'agent', key: 'portrait', title: '首页立绘', tooltip: '图片和位置的修改点保存后生效', summaryId: 'portraitSummary', content: renderAgentPortrait }));
     form.append(renderSection(doc, { kind: 'agent', key: 'prompt', title: '系统提示词', tooltip: '三个模块独立编辑后，注意保存以生效', summaryId: 'promptSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell' }, el(d, 'div', { id: 'systemPromptContainer', class: 'system-prompt-container' })) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'model', title: '模型设置', summaryId: 'modelSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell' }, el(d, 'div', { 'data-schema-field': agentFields[1].id }, el(d, 'div', { class: 'model-input-container' }, renderControl(d, agentFields[1]), el(d, 'button', { type: 'button', id: 'openModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '选择模型' }, el(d, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more'))))) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'params', title: '模型参数配置', summaryId: 'paramsSummary', content: renderAgentParams }));
