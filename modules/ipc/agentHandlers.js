@@ -4,6 +4,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { clearTrajectoriesOfOwner } = require('../modelTrajectory');
+const { resolvePortraitDisplayPath } = require('../services/agentPortraitImages');
 
 let AGENT_DIR_CACHE; // Cache the agent directory path
 let USER_DATA_DIR_CACHE; // Cache the user data directory path
@@ -37,7 +38,7 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
 
 // 立绘：Agent 目录下的 portrait.<ext> 是默认立绘，portrait.<key>.<ext> 是同一角色的其他版本
 // （light 给浅色主题用；以后的差分立绘也按这个规则取名，不用改读取逻辑）。
-const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp))$/i;
+const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp|avif))$/i;
 
 async function findPortraitUrls(agentDir) {
     let names;
@@ -55,7 +56,8 @@ async function findPortraitUrls(agentDir) {
         const filePath = path.join(agentDir, name);
         const stat = await fs.stat(filePath).catch(() => null);
         if (!stat?.isFile()) continue;
-        portraits[key] = `${pathToFileURL(filePath).toString()}?v=${Math.round(stat.mtimeMs)}`;
+        const displayPath = await resolvePortraitDisplayPath(filePath, stat, path.join(path.dirname(AGENT_DIR_CACHE), 'PortraitCache'));
+        portraits[key] = `${pathToFileURL(displayPath).toString()}?v=${Math.round(stat.mtimeMs)}`;
     }
     return portraits.default ? portraits : null;
 }

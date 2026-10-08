@@ -2,7 +2,6 @@
 'use strict';
 import { createSidePaneEntries } from './side-pane-entries.js';
 import { createLauncherPortrait } from './side-pane-launcher-portrait.js';
-import { applyPortraitDisplay } from './portrait-display.js';
 
 /**
  * 新标签页（引导页）：上面个人资料，下面工具 / 应用 / 通知分段。工具入口由各模块通过 registerEntry 自己登记，
@@ -101,12 +100,10 @@ export function createSidePaneLauncher({
     }
 
     // 有立绘时顶部换成一张向下渐隐的立绘，圆头像和名字都不显示；没有立绘就是原来的头像。
-    // 立绘、浅色版和差分怎么挑、怎么淡入淡出在 side-pane-launcher-portrait.js；
-    // display 是助手配置里的焦点和高度（见 portrait-display.js）
+    // 立绘、浅色版和差分怎么挑、先解码再换、坏图怎么退在 side-pane-launcher-portrait.js；
+    // display 是助手配置里的焦点和高度（见 portrait-display.js），跟着换上的那张图一起生效
     function renderPortrait(portraits, display) {
-        const hasPortrait = typeof portraits?.default === 'string' && Boolean(portraits.default);
-        if (view) applyPortraitDisplay(view, hasPortrait ? display : null);
-        portraitOwner.render(hasPortrait ? portraits : null);
+        portraitOwner.render(portraits, display);
     }
 
     if (profileAvatar) {
