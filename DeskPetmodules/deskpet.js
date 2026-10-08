@@ -9,15 +9,28 @@
 import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector.js';
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
+import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
 
 const api = window.deskPetAPI;
-const FPS_ACTIVE = 30;
-const FPS_IDLE = 15;
+// 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
+const FPS = { active: 30, idle: 15 };
+const FPS_SOFTWARE = { active: 20, idle: 8 };
 const IDLE_AFTER_MS = 30000;
 const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
-const REPLY_HOLD_MS = 12000;   // 回复结束后气泡停留多久
+// 回复结束后气泡停留多久：按字数给时间读完，鼠标停在气泡上时不收
+const REPLY_HOLD_MIN_MS = 8000;
+const REPLY_HOLD_MAX_MS = 30000;
+const REPLY_HOLD_PER_CHAR_MS = 60;
+const REPLY_HOLD_AFTER_HOVER_MS = 4000;
 const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容在主窗口
+const DOUBLE_TAP_MS = 300;     // 这么短内的第二下算双击；单击的反应等这段时间过了再做
+const TOP_RESERVE = 150;       // 窗口上方留给气泡和输入框的高度（与样式一致）
+const COMPOSER_ROOM = 280;     // 头顶到窗口顶至少这么高，输入框才和气泡一起排在头顶上
+const CONTEXT_LOST_RELOAD_MS = 250;
+const CONTEXT_LOSS_WINDOW_MS = 120000;
+const CONTEXT_LOSS_LIMIT = 3;
+const CONTEXT_LOSS_KEY = 'deskpet:webgl-losses';
 
 const EMOTION_LABEL = {
     neutral: '平静', calm: '放松', happy: '开心', excited: '兴奋', shy: '害羞', affectionate: '温柔',
@@ -41,23 +54,35 @@ let lastActivity = Date.now();
 // ---- 气泡：状态、回复文字、提示 ----------------------------------------------
 
 const bubble = {
-    reply: '',          // 当前回复里可见的文字
+    reply: '',          // 当前回复里可见的文字（还带着 Markdown 记号，显示前再整理）
     replyId: null,      // 正在流式的回复
+    region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
+    hovered: false,
     hideTimer: 0,
     noticeTimer: 0,
+    renderQueued: false,
 };
 
+// 状态写在回复下方的小字里：思考只在真的读到思维链时提示（刚开口那一下导演还停在「思考」上）
+function replyStateLabel() {
+    if (!frame.state) return '';
+    if (frame.state === 'thinking') return bubble.replyId && bubble.region === 'thought' ? STATE_LABEL.thinking : '';
+    return STATE_LABEL[frame.state] || '';
+}
+
 function renderBubble() {
+    bubble.renderQueued = false;
     const el = $('bubble');
     const text = $('bubbleText');
     let content = '';
     let mode = '';
+    const reply = bubble.reply.trim() ? toBubbleText(bubble.reply) : '';
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
-    } else if (bubble.reply.trim()) {
-        content = bubble.reply.trim().replace(/\n{2,}/g, '\n');
+    } else if (reply) {
+        content = reply;
         mode = 'is-reply';
     } else if (frame.state && STATE_LABEL[frame.state]) {
         content = STATE_LABEL[frame.state];
@@ -65,9 +90,39 @@ function renderBubble() {
     }
     el.hidden = !content;
     el.className = `pet-ui ${mode}`;
-    text.textContent = content.length > BUBBLE_MAX_CHARS ? `…${content.slice(-BUBBLE_MAX_CHARS)}` : content;
-    $('bubbleState').textContent = mode === 'is-reply' && frame.state ? STATE_LABEL[frame.state] || '' : '';
-    text.scrollTop = text.scrollHeight;
+    el.classList.toggle('is-streaming', mode === 'is-reply' && Boolean(bubble.replyId));
+    const shown = content.length > BUBBLE_MAX_CHARS ? `…${content.slice(-BUBBLE_MAX_CHARS)}` : content;
+    if (text.textContent !== shown) {
+        text.textContent = shown;
+        // 只有用户没往上翻时才跟到底部
+        if (!bubble.hovered) text.scrollTop = text.scrollHeight;
+    }
+    // 排队等发的话写在小字里，不盖住正在说的回复
+    const queued = composer.queued ? `说完就发：「${shorten(composer.queued)}」` : '';
+    $('bubbleState').textContent = mode === 'is-reply' || mode === 'is-state'
+        ? [mode === 'is-reply' ? replyStateLabel() : '', queued].filter(Boolean).join(' · ')
+        : '';
+}
+
+// 流式片段很密，攒到下一帧一起画
+function queueRenderBubble() {
+    if (bubble.renderQueued) return;
+    bubble.renderQueued = true;
+    requestAnimationFrame(renderBubble);
+}
+
+function replyHoldMs() {
+    const length = toBubbleText(bubble.reply).length;
+    return Math.min(REPLY_HOLD_MAX_MS, Math.max(REPLY_HOLD_MIN_MS, length * REPLY_HOLD_PER_CHAR_MS));
+}
+
+function scheduleReplyHide(ms) {
+    clearTimeout(bubble.hideTimer);
+    bubble.hideTimer = setTimeout(() => {
+        if (bubble.replyId || bubble.hovered) return;
+        bubble.reply = '';
+        renderBubble();
+    }, ms);
 }
 
 function notice(text, { error = false, ms = 6000 } = {}) {
@@ -89,7 +144,7 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false };
+const composer = { open: false, sending: false, queued: null };
 
 function openComposer() {
     composer.open = true;
@@ -104,26 +159,55 @@ function closeComposer() {
     api.setInteractive(false);
 }
 
-async function submitComposer() {
-    const input = $('composerInput');
-    const text = input.value.trim();
-    if (!text || composer.sending) return;
+function shorten(text, max = 16) {
+    const flat = text.replace(/\s+/g, ' ');
+    return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+async function sendText(text) {
     composer.sending = true;
     $('composerSend').disabled = true;
     try {
         const result = await api.send(text);
-        if (result?.success) {
-            input.value = '';
-            closeComposer();
-        } else {
-            notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
-        }
+        if (result?.success) return true;
+        notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
     } catch (error) {
         notice(`没发出去：${error.message}`, { error: true });
     } finally {
         composer.sending = false;
         $('composerSend').disabled = false;
     }
+    return false;
+}
+
+async function submitComposer() {
+    const input = $('composerInput');
+    const text = input.value.trim();
+    if (!text || composer.sending) return;
+    // TA 还在说话：先记下来，这条说完再发，不打断也不报错
+    if (bubble.replyId) {
+        // 连着说了几句就攒在一起，说完一次发出去
+        composer.queued = composer.queued ? `${composer.queued}\n${text}` : text;
+        input.value = '';
+        closeComposer();
+        renderBubble();
+        return;
+    }
+    if (await sendText(text)) {
+        input.value = '';
+        closeComposer();
+    }
+}
+
+// 回复结束后把排队的那句发出去；发不出去就放回输入框
+async function flushQueued() {
+    const text = composer.queued;
+    if (!text || bubble.replyId || composer.sending) return;
+    composer.queued = null;
+    renderBubble();
+    if (await sendText(text)) return;
+    $('composerInput').value = text;
+    openComposer();
 }
 
 function bindComposer() {
@@ -139,8 +223,17 @@ function bindComposer() {
     });
     $('composerSend').addEventListener('click', submitComposer);
     $('composerClose').addEventListener('click', closeComposer);
-    // 点气泡打开主窗口看完整回复。
-    $('bubble').addEventListener('click', () => api.openMainWindow());
+    // 点气泡打开主窗口看完整回复；鼠标停在气泡上时先不收起，方便读完或往上翻。
+    const bubbleEl = $('bubble');
+    bubbleEl.addEventListener('click', () => api.openMainWindow());
+    bubbleEl.addEventListener('mouseenter', () => {
+        bubble.hovered = true;
+        clearTimeout(bubble.hideTimer);
+    });
+    bubbleEl.addEventListener('mouseleave', () => {
+        bubble.hovered = false;
+        if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
+    });
     api.onOpenInput(openComposer);
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
@@ -175,9 +268,14 @@ function uiBounds() {
 function bindPointer({ onTap, onDoubleTap }) {
     let down = null;
     let lastTap = 0;
+    let tapTimer = 0;
     window.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
+        // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
+        if (down?.dragging) api.dragEnd();
         down = { x: e.screenX, y: e.screenY, dragging: false };
+        // 捕获指针：窗口跟着光标移动时 pointerup 也一定回到这里。
+        try { e.target?.setPointerCapture?.(e.pointerId); } catch { /* 指针已经没了 */ }
     });
     window.addEventListener('pointermove', (e) => {
         lastActivity = Date.now();
@@ -191,18 +289,29 @@ function bindPointer({ onTap, onDoubleTap }) {
         if (!down) return;
         if (down.dragging) {
             api.dragEnd();
-        } else if (Date.now() - lastTap < 350) {
+        } else if (Date.now() - lastTap < DOUBLE_TAP_MS) {
+            // 双击只打开输入框，不先做一遍单击的开心动作
+            clearTimeout(tapTimer);
             lastTap = 0;
             onDoubleTap();
         } else {
             lastTap = Date.now();
-            onTap();
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(onTap, DOUBLE_TAP_MS);
         }
         down = null;
     });
+    // 触屏手势被系统接管（pointercancel）、拖到一半切走窗口时收不到 pointerup，拖动必须在这里结束。
+    const abort = () => {
+        if (down?.dragging) api.dragEnd();
+        down = null;
+    };
+    window.addEventListener('pointercancel', abort);
+    window.addEventListener('blur', abort);
     window.addEventListener('contextmenu', (e) => {
         if (e.target?.closest?.('#composer')) return; // 输入框里保留系统的复制粘贴菜单
         e.preventDefault();
+        abort(); // 菜单会拿走指针，拖到一半右键也要先停下
         api.openContextMenu();
     });
 }
@@ -283,11 +392,30 @@ async function fetchJson(url) {
     }
 }
 
-function hasWebGL() {
+// 有没有 WebGL，以及是不是软件渲染（没有显卡或显卡被禁用时 Chromium 用 SwiftShader）
+function probeWebGL() {
     const probe = document.createElement('canvas');
     const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    gl?.getExtension('WEBGL_lose_context')?.loseContext();
-    return Boolean(gl);
+    if (!gl) return null;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return { renderer, software: /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer) };
+}
+
+function recentContextLosses() {
+    try {
+        const list = JSON.parse(sessionStorage.getItem(CONTEXT_LOSS_KEY) || '[]');
+        return Array.isArray(list) ? list.filter((t) => Date.now() - t < CONTEXT_LOSS_WINDOW_MS) : [];
+    } catch {
+        return [];
+    }
+}
+
+function recordContextLoss() {
+    try {
+        sessionStorage.setItem(CONTEXT_LOSS_KEY, JSON.stringify([...recentContextLosses(), Date.now()]));
+    } catch { /* 存不了就只是不计数 */ }
 }
 
 function userFacing(message) {
@@ -298,9 +426,13 @@ function userFacing(message) {
 
 async function createLive2DBackend(assets) {
     // 渲染引擎只认 WebGL；显卡被禁用时 Pixi 会退到 Canvas，模型画不出来。
-    if (!hasWebGL()) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），Live2D 画不出来，先用立绘代替。');
+    const webgl = probeWebGL();
+    if (!webgl) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），Live2D 画不出来，先用立绘代替。');
+    const fps = webgl.software ? FPS_SOFTWARE : FPS;
     await loadScript(assets.coreUrl);
+    // 文件损坏或放错了文件时脚本照样「加载成功」，只是没有定义 Core。
     const coreVersion = window.Live2DCubismCore?.Version?.csmGetVersion?.() || 0;
+    if (!coreVersion) throw userFacing(`${assets.corePath} 不是可用的 Cubism Core（文件损坏或放错了文件），请换一份 5.x 的 live2dcubismcore.min.js。先用立绘代替。`);
     if (coreVersion >= CORE_V6) throw userFacing('Cubism Core 是 6.x，当前渲染引擎只支持 5.x。请换一份 5.x 的 live2dcubismcore.min.js。');
     await loadScript('vcp-deskpet://pet/vendor/live2d/untitled-pixi-live2d-engine.cubism.min.js');
     const { Live2DModel, Live2DPlugin } = PIXI.live2d;
@@ -308,20 +440,42 @@ async function createLive2DBackend(assets) {
 
     const canvas = $('live2dCanvas');
     canvas.hidden = false;
+    // 显卡驱动重置、GPU 进程崩溃、睡眠唤醒都可能让 WebGL 上下文丢失；丢了以后模型不会自己画回来，
+    // 角色既看不见也点不到（命中靠读像素）。整页重载重建渲染；短时间内反复丢就改用立绘。
+    const onContextLost = (event) => {
+        event.preventDefault();
+        recordContextLoss();
+        notice('显卡渲染中断，正在重新载入桌宠…', { ms: 4000 });
+        setTimeout(() => window.location.reload(), CONTEXT_LOST_RELOAD_MS);
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost, { once: true });
     const app = new PIXI.Application();
     await app.init({
         canvas,
         resizeTo: window,
         preference: 'webgl',
         backgroundAlpha: 0,
-        antialias: true,
+        // 软件渲染时多重采样很贵，人物边缘的锯齿在桌面上也不明显
+        antialias: !webgl.software,
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
         preserveDrawingBuffer: false,
         powerPreference: 'low-power',
     });
-    app.ticker.maxFPS = FPS_ACTIVE;
+    app.ticker.maxFPS = fps.active;
+    try {
+        return await mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion, webgl, fps });
+    } catch (error) {
+        // 模型坏了：把已经建好的 WebGL 上下文和渲染循环一起收掉，不然它会一直空转。
+        // 销毁会主动释放上下文，这不是意外丢失，不能触发重载。
+        canvas.removeEventListener('webglcontextlost', onContextLost);
+        app.destroy({ removeView: false }, { children: true });
+        canvas.hidden = true;
+        throw error;
+    }
+}
 
+async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion, webgl, fps }) {
     const model = await Live2DModel.from(assets.live2d.modelUrl, {
         ticker: app.ticker,
         autoHitTest: false,
@@ -331,7 +485,6 @@ async function createLive2DBackend(assets) {
     });
     app.stage.addChild(model);
     // 角色画在下方，上面留给气泡和输入框。
-    const TOP_RESERVE = 150;
     const layout = () => {
         const scale = Math.min(window.innerWidth / model.internalModel.width, (window.innerHeight - TOP_RESERVE) / model.internalModel.height) * 0.98;
         model.scale.set(scale);
@@ -416,8 +569,13 @@ async function createLive2DBackend(assets) {
                 if (group) model.motion(group);
             }
         },
-        setFps(fps) { app.ticker.maxFPS = fps; },
-        info: { coreVersion, expressions: expressionNames, motionGroups },
+        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        // 窗口藏起来时整个停掉（窗口关了后台节流，不停的话隐藏着也在一直画）
+        setPaused(paused) {
+            if (paused) app.ticker.stop();
+            else if (!app.ticker.started) app.ticker.start();
+        },
+        info: { coreVersion, expressions: expressionNames, motionGroups, renderer: webgl.renderer, software: webgl.software },
     };
 }
 
@@ -466,28 +624,47 @@ function createIdleAnimator() {
 }
 
 async function createPuppetBackend(assets) {
-    if (!hasWebGL()) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），网格立绘画不出来，先用普通立绘代替。');
+    const webgl = probeWebGL();
+    if (!webgl) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），网格立绘画不出来，先用普通立绘代替。');
+    const fps = webgl.software ? FPS_SOFTWARE : FPS;
     const { createPuppet } = await import('vcp-deskpet://pet/app/puppet.js');
     const canvas = $('live2dCanvas');
     canvas.hidden = false;
+    // 与 Live2D 相同：上下文丢了就整页重载，短时间内反复丢由 start() 改用立绘。
+    const onContextLost = (event) => {
+        event.preventDefault();
+        recordContextLoss();
+        notice('显卡渲染中断，正在重新载入桌宠…', { ms: 4000 });
+        setTimeout(() => window.location.reload(), CONTEXT_LOST_RELOAD_MS);
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost, { once: true });
     const app = new PIXI.Application();
     await app.init({
         canvas,
         resizeTo: window,
         preference: 'webgl',
         backgroundAlpha: 0,
-        antialias: true,
+        antialias: !webgl.software,
         autoDensity: true,
         resolution: window.devicePixelRatio || 1,
         preserveDrawingBuffer: false,
         powerPreference: 'low-power',
     });
-    app.ticker.maxFPS = FPS_ACTIVE;
-    const puppet = await createPuppet(assets.puppet.rigUrl);
+    app.ticker.maxFPS = fps.active;
+    try {
+        return await mountPuppet(app, await createPuppet(assets.puppet.rigUrl), { webgl, fps });
+    } catch (error) {
+        canvas.removeEventListener('webglcontextlost', onContextLost);
+        app.destroy({ removeView: false }, { children: true });
+        canvas.hidden = true;
+        throw error;
+    }
+}
+
+async function mountPuppet(app, puppet, { webgl, fps }) {
     const holder = new PIXI.Container();
     holder.addChild(puppet.root);
     app.stage.addChild(holder);
-    const TOP_RESERVE = 150;
     let scale = 1;
     const layout = () => {
         scale = Math.min(window.innerWidth / puppet.width, (window.innerHeight - TOP_RESERVE) / puppet.height) * 0.98;
@@ -547,7 +724,11 @@ async function createPuppetBackend(assets) {
             look.tx = clampUnit((x - hx) / (window.innerWidth * 0.6));
             look.ty = clampUnit((hy - y) / (window.innerHeight * 0.6));
         },
-        bounds() { const b = puppet.root.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
+        // 用静止时的版面框，不跟着呼吸、单击轻跳和头发摆动抖（气泡按它贴头顶）。
+        bounds() {
+            const w = puppet.width * scale, h = puppet.height * scale;
+            return { x: window.innerWidth / 2 - w / 2, y: window.innerHeight - h, width: w, height: h };
+        },
         tap() { hopV = -260; },
         apply(f) {
             const intensity = Math.max(0.3, Math.min(1, f.intensity || 0.6));
@@ -555,8 +736,12 @@ async function createPuppetBackend(assets) {
             for (const [id, v] of Object.entries(EMOTION_PARAMS[f.emotion] || {})) target[id] = v * intensity;
             for (const [id, v] of Object.entries(STATE_PARAMS[f.state] || {})) target[id] = (target[id] || 0) + v;
         },
-        setFps(fps) { app.ticker.maxFPS = fps; },
-        info: puppet.info,
+        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        setPaused(paused) {
+            if (paused) app.ticker.stop();
+            else if (!app.ticker.started) app.ticker.start();
+        },
+        info: { ...puppet.info, renderer: webgl.renderer, software: webgl.software },
     };
 }
 
@@ -664,7 +849,8 @@ function createImageBackend(assets) {
             bounds() { return activeImg ? drawnRect(activeImg) : null; },
             tap: pop,
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
-            setFps() {},
+            setActive() {},
+            setPaused() {},
         };
     }
 
@@ -686,7 +872,8 @@ function createImageBackend(assets) {
             $('avatar').style.setProperty('--deskpet-ring', EMOTION_RING[f.emotion] || EMOTION_RING.neutral);
             $('avatarBadge').textContent = f.state === 'thinking' || f.state === 'tool' ? '💭' : (EMOTION_EMOJI[f.emotion] || '');
         },
-        setFps() {},
+        setActive() {},
+        setPaused() {},
     };
 }
 
@@ -697,7 +884,7 @@ function applyFrame(next) {
     const emotionChanged = next.emotion !== frame.emotion;
     frame = next;
     lastActivity = Date.now();
-    backend?.setFps(FPS_ACTIVE);
+    backend?.setActive(true);
     backend?.apply(frame, { changed });
     if (emotionChanged && (next.source === 'tag' || next.source === 'rule')) flashEmotionBadge(next.emotion, next.source);
     renderBubble();
@@ -709,6 +896,7 @@ function bindStream(director) {
         clearTimeout(bubble.hideTimer);
         bubble.replyId = messageId;
         bubble.reply = '';
+        bubble.region = null;
         scanner = createEmotionTagScanner();
     };
     api.onStream((event) => {
@@ -720,11 +908,14 @@ function bindStream(director) {
         } else if (event.type === 'data') {
             if (bubble.replyId !== event.messageId) startReply(event.messageId);
             director.append(event.messageId, event.text);
-            // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块用 […] 代替。
+            // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块写成 [代码]。
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
-                else if (item.type === 'enter' && item.region === 'code') bubble.reply += ' […] ';
+                else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
             }
+            bubble.region = scanner.region;
+            queueRenderBubble();
+            return;
         } else if (event.type === 'end' || event.type === 'error') {
             if (event.type === 'end') director.end(event.messageId);
             else director.fail(event.messageId);
@@ -733,12 +924,10 @@ function bindStream(director) {
             }
             scanner = null;
             bubble.replyId = null;
-            clearTimeout(bubble.hideTimer);
-            bubble.hideTimer = setTimeout(() => {
-                if (bubble.replyId) return;
-                bubble.reply = '';
-                renderBubble();
-            }, REPLY_HOLD_MS);
+            bubble.region = null;
+            scheduleReplyHide(replyHoldMs());
+            // 排队的话等气泡画完这一帧再发，免得和刚结束的回复挤在一起
+            if (composer.queued) setTimeout(flushQueued, 400);
         }
         renderBubble();
     });
@@ -752,7 +941,9 @@ async function start() {
     document.title = `${assets.name} · 桌宠`;
     $('composerInput').placeholder = `和 ${assets.name} 说点什么…（Enter 发送，Esc 收起）`;
 
-    if (assets.live2d && assets.coreUrl) {
+    if (assets.live2d && assets.coreUrl && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
+        notice('显卡渲染反复中断，这次先用立绘代替 Live2D。重新打开桌宠会再试。', { error: true, ms: 10000 });
+    } else if (assets.live2d && assets.coreUrl) {
         try {
             backend = await createLive2DBackend(assets);
         } catch (error) {
@@ -763,7 +954,9 @@ async function start() {
     } else if (assets.live2d && !assets.coreUrl && !assets.puppet) {
         notice(`找到了 Live2D 模型，但缺少 Cubism Core：请把 5.x 的 live2dcubismcore.min.js 放到 ${assets.corePath}`, { error: true, ms: 12000 });
     }
-    if (!backend && assets.puppet) {
+    if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
+        notice('显卡渲染反复中断，这次先用普通立绘。重新打开桌宠会再试。', { error: true, ms: 10000 });
+    } else if (!backend && assets.puppet) {
         try {
             backend = await createPuppetBackend(assets);
         } catch (error) {
@@ -792,13 +985,36 @@ async function start() {
         },
         onDoubleTap: openComposer,
     });
-    // Linux 用输入区代替整窗穿透（见主进程注释），定期把角色和界面的包围盒报上去。
+    // 窗口隐藏时停掉渲染和呼吸动画，显示回来再继续。
+    let paused = false;
+    api.onVisibility?.((visible) => {
+        paused = !visible;
+        document.body.classList.toggle('is-paused', paused);
+        backend.setPaused(paused);
+        if (!paused) lastActivity = Date.now();
+    });
+    // 定期看一眼角色占在哪里：气泡和输入框贴在头顶上方（小头像、矮立绘不会离得老远）；
+    // Linux 用输入区代替整窗穿透（见主进程注释），把角色和界面的包围盒报上去。
+    let headY = TOP_RESERVE;
+    // 头顶上方放不下气泡加输入框时，输入框改到窗口底部（压在腿上，不挡脸，也不把气泡挤成一行）
+    const placeComposer = () => document.body.classList.toggle('is-cramped', headY < COMPOSER_ROOM);
+    placeComposer();
     setInterval(() => {
+        if (paused) return;
         const b = backend.bounds();
+        if (b) {
+            // 动作会让头顶上下晃，差得不多就不挪，免得气泡跟着抖
+            const y = Math.round(Math.max(TOP_RESERVE, Math.min(window.innerHeight - 40, b.y)));
+            if (Math.abs(y - headY) > 16) {
+                headY = y;
+                document.documentElement.style.setProperty('--pet-head', `${y}px`);
+                placeComposer();
+            }
+        }
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
-        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setFps(FPS_IDLE);
+        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(false);
     }, 250);
 
     applyFrame(director.frame);

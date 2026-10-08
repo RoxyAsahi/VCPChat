@@ -1,0 +1,185 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Module, { createRequire } from 'node:module';
+import { EventEmitter } from 'node:events';
+
+const require = createRequire(import.meta.url);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 假的 electron：窗口记录位置、穿透和可聚焦状态，屏幕可以换布局、光标可以挪。
+function fakeElectron() {
+    const handlers = new Map();
+    const listeners = new Map();
+    const windows = [];
+    const screen = Object.assign(new EventEmitter(), {
+        displays: [{ workArea: { x: 0, y: 0, width: 1600, height: 1000 } }],
+        cursor: { x: 0, y: 0 },
+        getPrimaryDisplay() { return this.displays[0]; },
+        getAllDisplays() { return this.displays; },
+        getCursorScreenPoint() { return { ...this.cursor }; },
+    });
+    class BrowserWindow extends EventEmitter {
+        constructor(options) {
+            super();
+            this.options = options;
+            this.bounds = { x: options.x ?? 0, y: options.y ?? 0, width: options.width ?? 0, height: options.height ?? 0 };
+            this.sent = [];
+            this.ignoreMouse = [];
+            this.focusable = options.focusable;
+            this.visible = false;
+            this.destroyed = false;
+            this.webContents = Object.assign(new EventEmitter(), {
+                send: (channel, payload) => {
+                    if (this.sendThrows) throw new Error('Object has been destroyed');
+                    this.sent.push({ channel, payload });
+                },
+            });
+            windows.push(this);
+        }
+        isDestroyed() { return this.destroyed; }
+        isVisible() { return this.visible; }
+        showInactive() { this.visible = true; }
+        hide() { this.visible = false; }
+        close() { this.destroyed = true; this.emit('closed'); }
+        setAlwaysOnTop() {} moveTop() {} setVisibleOnAllWorkspaces() {} focus() {} loadURL() {} reload() {}
+        setIgnoreMouseEvents(ignore) { this.ignoreMouse.push(ignore); }
+        setFocusable(value) { this.focusable = value; }
+        getPosition() { return [this.bounds.x, this.bounds.y]; }
+        setPosition(x, y) { this.bounds = { ...this.bounds, x, y }; }
+        getBounds() { return { ...this.bounds }; }
+        setBounds(bounds) { this.bounds = { ...this.bounds, ...bounds }; }
+    }
+    const electron = {
+        BrowserWindow,
+        ipcMain: {
+            handle: (channel, fn) => handlers.set(channel, fn),
+            on: (channel, fn) => listeners.set(channel, fn),
+        },
+        protocol: { handle() {}, registerSchemesAsPrivileged() {} },
+        net: {},
+        Menu: {},
+        screen,
+    };
+    return { electron, handlers, listeners, windows, screen };
+}
+
+// 按 Windows 载入：按像素穿透（setIgnoreMouseEvents）那条路只在 Windows/macOS 上走。
+async function loadHandlers() {
+    const fake = fakeElectron();
+    const originalLoad = Module._load;
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Module._load = function load(request, ...rest) {
+        if (request === 'electron') return fake.electron;
+        return originalLoad.call(this, request, ...rest);
+    };
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const file = require.resolve('../modules/ipc/deskPetHandlers.js');
+    delete require.cache[file];
+    let handlers;
+    try {
+        handlers = require(file);
+    } finally {
+        Module._load = originalLoad;
+        Object.defineProperty(process, 'platform', platform);
+    }
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deskpet-life-'));
+    const agentDir = path.join(root, 'Agents');
+    for (const id of ['Nova', 'Coco']) {
+        fs.mkdirSync(path.join(agentDir, id), { recursive: true });
+        fs.writeFileSync(path.join(agentDir, id, 'config.json'), JSON.stringify({ name: id }));
+    }
+    const mainWindow = new fake.electron.BrowserWindow({});
+    handlers.initialize({ mainWindow, projectRoot: path.resolve('.'), appDataRoot: root, agentDir });
+    const open = async (agentId = 'Nova') => {
+        await fake.handlers.get('deskpet:toggle')({}, agentId);
+        const pet = fake.windows.at(-1);
+        pet.emit('ready-to-show');
+        return pet;
+    };
+    const fromPet = (pet) => ({ sender: pet.webContents });
+    return { handlers, fake, open, fromPet, root };
+}
+
+test('a second drag-start (lost pointerup) does not leave a timer chasing the cursor', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    const [x0, y0] = pet.getPosition();
+    fake.screen.cursor = { x: x0 + 10, y: y0 + 10 };
+    fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: x0 + 10, y: y0 + 10 });
+    await sleep(40);
+    fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: x0 + 10, y: y0 + 10 });
+    fake.screen.cursor = { x: x0 - 90, y: y0 - 40 };
+    await sleep(40);
+    fake.listeners.get('deskpet:drag-end')(fromPet(pet));
+    const dropped = pet.getPosition();
+    assert.deepEqual(dropped, [x0 - 100, y0 - 50]);
+    fake.screen.cursor = { x: 10, y: 10 };
+    await sleep(80);
+    assert.deepEqual(pet.getPosition(), dropped, '松手以后窗口不能再跟着光标走');
+    handlers.closeAll();
+});
+
+test('a renderer reload or crash puts the window back to click-through and ends the drag', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    // 光标在角色上（不穿透），输入框开着，正在拖动。
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), true);
+    fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: 5, y: 5 });
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    pet.webContents.emit('render-process-gone', {}, { reason: 'crashed' });
+    assert.equal(pet.ignoreMouse.at(-1), true, '重载后的页面从「没命中」开始，窗口必须回到穿透');
+    assert.equal(pet.focusable, false, 'Windows 上输入框没开时窗口回到不可聚焦');
+    const parked = pet.getPosition();
+    fake.screen.cursor = { x: 900, y: 700 };
+    await sleep(60);
+    assert.deepEqual(pet.getPosition(), parked, '崩溃时的拖动要停下');
+    // 页面重载开始时同样清零（刷新、自动恢复）。
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    pet.webContents.emit('did-start-loading');
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    handlers.closeAll();
+});
+
+test('a pet left on an unplugged display comes back to the primary one', async () => {
+    const { handlers, fake, open } = await loadHandlers();
+    fake.screen.displays = [
+        { workArea: { x: 0, y: 0, width: 1600, height: 1000 } },
+        { workArea: { x: 1600, y: 0, width: 1920, height: 1080 } },
+    ];
+    const pet = await open();
+    pet.setBounds({ x: 2400, y: 300, width: 300, height: 500 });
+    fake.screen.displays = [fake.screen.displays[0]];
+    fake.screen.emit('display-removed');
+    await sleep(500);
+    const b = pet.getBounds();
+    assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
+    assert.deepEqual([b.width, b.height], [360, 580], '尺寸恢复成桌宠窗口的固定大小');
+    handlers.closeAll();
+});
+
+test('stream hooks never throw into the main chat path', async () => {
+    const { handlers, open } = await loadHandlers();
+    const pet = await open();
+    pet.sendThrows = true;
+    assert.doesNotThrow(() => handlers.onRequestStart('m1', { agentId: 'Nova' }));
+    assert.doesNotThrow(() => handlers.onStreamPayload({ type: 'data', messageId: 'm1', context: { agentId: 'Nova' }, chunk: 'hi' }));
+    assert.doesNotThrow(() => handlers.onFullResponse('m1', { agentId: 'Nova' }, { choices: [{ message: { content: 'hi' } }] }));
+    const messages = [{ role: 'user', content: 'hi' }];
+    assert.ok(Array.isArray(handlers.appendProtocolToMessages(messages, 'Nova')));
+    handlers.closeAll();
+});
+
+test('agent ids that point at the Agents folder itself are refused', async () => {
+    const { handlers, fake } = await loadHandlers();
+    const toggle = fake.handlers.get('deskpet:toggle');
+    for (const bad of ['.', '..', 'Nova/..', '..\\Nova']) {
+        const result = await toggle({}, bad);
+        assert.equal(result.success, false, bad);
+    }
+    assert.equal(fake.windows.length, 1, '只有主窗口，没有建出桌宠窗口');
+    handlers.closeAll();
+});

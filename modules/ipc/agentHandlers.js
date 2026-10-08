@@ -79,14 +79,34 @@ function portraitBaseName(key) {
     return key === 'default' ? 'portrait' : `portrait.${key}`;
 }
 
-async function removePortraitFiles(agentDir, key) {
+// keepPath 是刚写好的那张：不区分大小写的磁盘上 portrait.PNG 和 portrait.png 是同一个文件，按 inode 认出来留着
+async function removePortraitFiles(agentDir, key, keepPath = null) {
     const names = await fs.readdir(agentDir).catch(() => []);
+    const keep = keepPath ? await fs.stat(keepPath).catch(() => null) : null;
     for (const name of names) {
         const match = PORTRAIT_FILE_PATTERN.exec(name);
-        if (match && (match[1] || 'default').toLowerCase() === key) {
-            await fs.remove(path.join(agentDir, name));
+        if (!match || (match[1] || 'default').toLowerCase() !== key) continue;
+        const filePath = path.join(agentDir, name);
+        if (keep && name.toLowerCase() === path.basename(keepPath).toLowerCase()) {
+            const stat = await fs.stat(filePath).catch(() => null);
+            if (stat && stat.ino === keep.ino && stat.dev === keep.dev) continue;
         }
+        await fs.remove(filePath);
     }
+}
+
+// 先写临时文件再改名换上，换上以后才删同一版本的其他扩展名：写盘失败（磁盘满、文件被占用）时原来的立绘还在
+async function writePortraitFile(agentDir, key, ext, buffer) {
+    const target = path.join(agentDir, `${portraitBaseName(key)}${ext}`);
+    const temp = `${target}.${process.pid}-${Date.now().toString(36)}.tmp`;
+    try {
+        await fs.writeFile(temp, buffer);
+        await fs.rename(temp, target);
+    } catch (error) {
+        await fs.remove(temp).catch(() => {});
+        throw error;
+    }
+    await removePortraitFiles(agentDir, key, target);
 }
 
 async function getAgentConfigById(agentId) {
@@ -319,7 +339,7 @@ function initialize(context) {
     });
 
     // 设置页上传立绘：variant 为 default 写 portrait.<ext>，其他键写 portrait.<key>.<ext>；
-    // 同一个版本的旧文件（不同扩展名）先删掉，保证每个版本只有一张图
+    // 新图换上以后删掉同一个版本的旧文件（不同扩展名），保证每个版本只有一张图
     ipcMain.handle('save-agent-portrait', async (event, agentId, variant, imageData) => {
         const agentDir = resolveAgentDir(agentId);
         const key = normalizePortraitVariant(variant);
@@ -331,8 +351,7 @@ function initialize(context) {
         if (buffer.length > PORTRAIT_MAX_BYTES) return { error: `立绘图片不能超过 ${PORTRAIT_MAX_BYTES / 1024 / 1024}MB。` };
         try {
             if (!(await fs.pathExists(agentDir))) return { error: 'Agent 不存在。' };
-            await removePortraitFiles(agentDir, key);
-            await fs.writeFile(path.join(agentDir, `${portraitBaseName(key)}${ext}`), buffer);
+            await writePortraitFile(agentDir, key, ext, buffer);
             return { success: true, portraits: await findPortraitUrls(agentDir) };
         } catch (error) {
             console.error(`保存 Agent ${agentId} 立绘失败:`, error);

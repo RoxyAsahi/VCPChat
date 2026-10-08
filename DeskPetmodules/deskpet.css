@@ -2,6 +2,8 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* 触屏拖动角色交给页面处理，不让浏览器当成滚动手势取消掉指针 */
+  touch-action: none;
   background: transparent;
   user-select: none;
   font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
@@ -71,25 +73,62 @@ html, body {
   line-height: 1;
 }
 
-#bubble {
+/* 气泡和输入框的容器：底边贴在角色头顶（--pet-head 由页面按角色的位置设置），往上长 */
+#uiStack {
   position: absolute;
   left: 12px;
   right: 12px;
   top: 8px;
+  bottom: calc(100% - var(--pet-head, 150px) + 6px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+#uiStack > .pet-ui {
+  pointer-events: auto;
+}
+
+#bubble {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 8px 12px;
   border-radius: 14px;
-  background: rgba(30, 33, 40, 0.86);
+  background: rgba(30, 33, 40, 0.88);
   color: #fff;
   font-size: 13px;
   line-height: 1.5;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+}
+
+/* 小尾巴指向角色；输入框打开时它夹在中间，尾巴就不要了 */
+#bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: inherit;
+  transform: rotate(45deg);
+  border-radius: 0 0 3px 0;
+}
+
+#uiStack:has(#composer:not([hidden])) #bubble::after {
+  display: none;
 }
 
 #bubble.is-state {
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
   white-space: nowrap;
   cursor: default;
 }
@@ -99,11 +138,22 @@ html, body {
 }
 
 #bubbleText {
-  max-height: 108px;
+  position: relative;
+  min-height: 0;
+  max-height: 132px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
   scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+/* 正在说话：文字末尾一个闪烁的光标 */
+#bubble.is-streaming #bubbleText::after {
+  content: "▍";
+  margin-left: 1px;
+  opacity: 0.7;
+  animation: deskpet-caret 1s steps(1) infinite;
 }
 
 #bubbleState:empty {
@@ -117,15 +167,27 @@ html, body {
 }
 
 #composer {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  top: 140px;
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
   padding: 8px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   user-select: text;
+  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+}
+
+body.is-cramped #composer {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: auto;
+}
+
+body.is-cramped #uiStack:has(#composer) #bubble::after {
+  display: block;
 }
 
 #composerInput {
@@ -170,7 +232,7 @@ html, body {
 #emotionBadge {
   position: absolute;
   right: 10px;
-  top: 150px;
+  top: var(--pet-head, 150px);
   padding: 2px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.85);
@@ -193,6 +255,21 @@ html, body {
   0% { transform: translateY(0) scale(1); }
   40% { transform: translateY(-4px) scale(1.012); }
   100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes deskpet-bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes deskpet-caret {
+  50% { opacity: 0; }
+}
+
+/* 窗口隐藏时连呼吸动画一起停 */
+body.is-paused *,
+body.is-paused *::after {
+  animation-play-state: paused !important;
 }
 
 @keyframes deskpet-bob {
