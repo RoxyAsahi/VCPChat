@@ -20,6 +20,9 @@ export const MOOD_DEFAULTS = Object.freeze({
     showThreshold: 0.22,
 });
 
+// 能成为心情的情绪：惊讶、好奇是一瞬间的反应，不会持续半天
+const MOOD_EMOTIONS = new Set(['calm', 'happy', 'excited', 'shy', 'affectionate', 'concerned', 'sad', 'tired', 'angry']);
+
 // 每次事件把心情往目标拉多少（再乘事件自身的强度）
 const PULL = Object.freeze({ tag: 0.35, rule: 0.2, user: 0.3 });
 const ORIGIN = Object.freeze({ valence: 0, arousal: 0, dominance: 0 });
@@ -73,7 +76,8 @@ export function applyMoodEvent(mood, event = {}, options = {}) {
         return { ...current, vad: scale(current.vad, 1 - clamp(event.settle, 0, 1)), last: { emotion: 'calm', source: event.source || 'user', at } };
     }
     const emotion = normalizeEmotion(event.emotion);
-    if (!emotion) return current;
+    // 惊讶、好奇是一瞬间的反应：立绘照样换表情，但不改心情
+    if (!emotion || !MOOD_EMOTIONS.has(emotion)) return current;
     const pull = (PULL[event.source] ?? PULL.rule) * clampIntensity(event.intensity, 0.7);
     if (!(pull > 0)) return current;
     return { ...current, vad: mix(current.vad, EMOTION_VAD[emotion], pull), last: { emotion, source: event.source || 'rule', at } };
@@ -88,13 +92,14 @@ export function moodEmotion(mood, { showThreshold = MOOD_DEFAULTS.showThreshold 
     if (length < 0.05) return { emotion: 'neutral', intensity: 0 };
     let best = null;
     for (const emotion of EMOTIONS) {
-        if (emotion === 'neutral') continue;
+        if (!MOOD_EMOTIONS.has(emotion)) continue;
         const anchor = EMOTION_VAD[emotion];
         const cosine = AXES.reduce((sum, axis) => sum + mood.vad[axis] * anchor[axis], 0) / (length * norm(anchor));
         if (!best || cosine > best.cosine) best = { emotion, cosine, anchor };
     }
-    const intensity = clamp(length / norm(best.anchor), 0, 1);
-    if (intensity < showThreshold || best.cosine < 0.5) return { emotion: 'neutral', intensity: 0 };
+    // 强度只算朝这个情绪方向的那一段：开心过后又听到坏消息，剩下的多是「还有点激动」，算不上兴奋
+    const intensity = clamp((length * best.cosine) / norm(best.anchor), 0, 1);
+    if (intensity < showThreshold || best.cosine < 0.7) return { emotion: 'neutral', intensity: 0 };
     return { emotion: best.emotion, intensity: Math.round(intensity * 100) / 100 };
 }
 

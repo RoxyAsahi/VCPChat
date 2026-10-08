@@ -77,6 +77,15 @@ test('one cheerful reply leaves a light mood, a few in a row make it clearly hap
     assert.ok(Math.abs(ruled.vad.valence) < Math.abs(applyMoodEvent(createMood(NOON), happy(NOON)).vad.valence));
 });
 
+test('surprise and curiosity change the face for a moment but not the mood', () => {
+    let mood = createMood(NOON);
+    for (let i = 0; i < 4; i += 1) mood = applyMoodEvent(mood, { emotion: 'curious', intensity: 0.9, source: 'tag', at: NOON });
+    mood = applyMoodEvent(mood, { emotion: 'surprised', intensity: 0.9, source: 'tag', at: NOON });
+    assert.deepEqual(moodEmotion(mood), { emotion: 'neutral', intensity: 0 });
+    // 开心了一阵又听到坏消息：剩下的只是有点激动，显示成平静而不是兴奋或惊讶
+    assert.deepEqual(moodEmotion({ vad: { valence: 0.07, arousal: 0.24, dominance: 0 } }), { emotion: 'neutral', intensity: 0 });
+});
+
 test('a different emotion moves the mood over instead of flipping it at once', () => {
     let mood = createMood(NOON);
     for (let i = 0; i < 4; i += 1) mood = applyMoodEvent(mood, happy(NOON + i));
