@@ -56,7 +56,36 @@ test('an agent without a default portrait, a missing agent and unsafe ids get nu
     }
 });
 
-test('a large portrait is served as a cached display-size copy, small ones and unreadable files as they are', async () => {
+// sharp 是可选依赖（CI 用 --omit=optional 安装，拿不到平台二进制），缩小图那条只在装了 sharp 的机器上跑
+const sharpUnavailable = (() => {
+    try {
+        require('sharp');
+        return false;
+    } catch {
+        return 'sharp (optional dependency) is not installed here';
+    }
+})();
+
+test('without sharp every portrait is served as it is', async () => {
+    const dir = path.join(agentDir, 'NoSharp');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'portrait.png'), 'x'.repeat(4096));
+    fs.writeFileSync(path.join(dir, 'portrait.light.webp'), 'x');
+    const load = Module._load;
+    Module._load = function loadWithoutSharp(request, parent, isMain) {
+        if (request === 'sharp') throw new Error('Could not load the "sharp" module');
+        return load.call(this, request, parent, isMain);
+    };
+    try {
+        const portraits = await getPortraits('NoSharp');
+        assert.match(portraits.default, /\/NoSharp\/portrait\.png\?v=\d+$/);
+        assert.match(portraits.light, /\/NoSharp\/portrait\.light\.webp\?v=\d+$/);
+    } finally {
+        Module._load = load;
+    }
+});
+
+test('a large portrait is served as a cached display-size copy, small ones and unreadable files as they are', { skip: sharpUnavailable }, async () => {
     const sharp = require('sharp');
     const dir = path.join(agentDir, 'Big');
     fs.mkdirSync(dir);
