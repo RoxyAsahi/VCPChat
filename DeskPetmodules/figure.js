@@ -57,6 +57,15 @@ export function measureSilhouette(pixels, width, height, { flipY = false, thresh
     return { ...box, head: { x: headX, y: box.top, width: Math.min(headWidth || box.right - box.left, box.right - box.left) } };
 }
 
+/**
+ * 轮廓碰到画面左、右或上边了：形象有一部分在窗口外，量出来的框是被裁过的，要按它重新摆好再量一次。
+ * 底边不算：摆好以后脚底本来就贴着窗口底边。
+ */
+export function touchesEdge(s, width, height, margin = 2) {
+    if (!s) return false;
+    return s.left <= margin || s.top <= margin || s.right >= width - margin;
+}
+
 /** 高 ÷ 宽，按轮廓算。 */
 export function silhouetteAspect(s) {
     if (!s) return null;

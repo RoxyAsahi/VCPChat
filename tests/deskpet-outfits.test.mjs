@@ -171,3 +171,15 @@ test('fitting puts the feet on the window bottom and the figure under the bubble
     assert.ok(Math.abs(center - 140) < 1e-6, '左右居中');
     assert.equal(fitSilhouette({ left: 0, right: 0, top: 0, bottom: 0 }, { width: 10, height: 10, topReserve: 0 }), null);
 });
+
+test('a re-measured figure that differs only a little keeps the remembered ratio; a clipped silhouette is detected', async () => {
+    const petPrefs = (await import('../modules/deskpet/petPrefs.js')).default;
+    assert.equal(petPrefs.sameAspect(2.46, 2.4), true, 'breathing / idle motion while measuring');
+    assert.equal(petPrefs.sameAspect(2.07, 2.4), false, 'a different outfit');
+    assert.equal(petPrefs.sameAspect(null, 2.4), false);
+    const { touchesEdge } = await import('../DeskPetmodules/figure.js');
+    assert.equal(touchesEdge({ left: 0, top: 40, right: 200, bottom: 400 }, 300, 500), true);
+    assert.equal(touchesEdge({ left: 50, top: 40, right: 250, bottom: 460 }, 300, 500), false);
+    assert.equal(touchesEdge({ left: 50, top: 40, right: 250, bottom: 500 }, 300, 500), false, 'feet on the window bottom are expected');
+    assert.equal(touchesEdge(null, 300, 500), false);
+});

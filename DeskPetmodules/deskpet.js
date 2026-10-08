@@ -16,7 +16,7 @@ import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { shapeGaze, limitGaze } from 'vcp-deskpet://pet/app/gaze.js';
 import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
-import { measureSilhouette, silhouetteAspect, fitSilhouette } from 'vcp-deskpet://pet/app/figure.js';
+import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 
 const api = window.deskPetAPI;
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle，睡着了再降到 sleep；
@@ -1031,14 +1031,14 @@ function createFigureFit(app, canvas, { width, height, apply }) {
     window.addEventListener('resize', layout);
     canvas.style.opacity = '0';
 
-    const measure = () => {
+    const measureOnce = () => {
         app.render();
         const gl = app.renderer.gl;
         const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
         const pixels = new Uint8Array(w * h * 4);
         gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         const s = measureSilhouette(pixels, w, h, { flipY: true });
-        if (!s) return null;
+        if (!s) return false;
         const r = app.renderer.resolution || 1;
         const u = (px) => (px / r - fit.x) / fit.scale;
         const v = (py) => (py / r - fit.y) / fit.scale;
@@ -1046,7 +1046,17 @@ function createFigureFit(app, canvas, { width, height, apply }) {
         head = { x: u(s.head.x), y: v(s.head.y), width: s.head.width / r / fit.scale };
         measured = true;
         layout();
-        return silhouetteAspect(box);
+        return touchesEdge(s, w, h) ? 'clipped' : true;
+    };
+    // 第一次摆的时候形象可能有一截在窗口外（模型画布四周留白不对称），量到的是被裁过的轮廓、摆出来会偏；
+    // 按量到的摆好以后再量，直到整个形象都在窗口里
+    const measure = () => {
+        let result = false;
+        for (let i = 0; i < 4; i++) {
+            result = measureOnce();
+            if (result !== 'clipped') break;
+        }
+        return result ? silhouetteAspect(box) : null;
     };
     const ready = new Promise((resolve) => {
         setTimeout(() => {

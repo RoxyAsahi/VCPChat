@@ -620,13 +620,16 @@ function applyAspect(pet, aspect) {
 
 /** 页面量出了当前这套形象的长宽比（不透明像素的包围盒，高 ÷ 宽）。 */
 async function onFigureMeasured(pet, report) {
-    const aspect = petPrefs.normalizeAspect(report?.aspect);
-    if (!aspect || !pet.outfit || report?.outfit !== pet.outfit || pet.win.isDestroyed()) return;
+    const measured = petPrefs.normalizeAspect(report?.aspect);
+    if (!measured || !pet.outfit || report?.outfit !== pet.outfit || pet.win.isDestroyed()) return;
     const saved = (await readPetState())[pet.agentId];
-    if (savedAspect(saved, pet.outfit) !== aspect) savePetState(pet.agentId, { figures: rememberFigure(saved, pet.outfit, aspect) });
+    const known = savedAspect(saved, pet.outfit);
+    // 和记着的差不多就沿用记着的：量的时候正呼吸、做动作，每次差一点，窗口不该跟着变
+    const aspect = known && petPrefs.sameAspect(measured, known) ? known : measured;
+    if (known !== aspect) savePetState(pet.agentId, { figures: rememberFigure(saved, pet.outfit, aspect) });
     // 拖着的时候不改窗口，放下以后下次量到再改
     if (pet.drag || pet.win.isDestroyed() || report.outfit !== pet.outfit) return;
-    if (pet.aspect !== null && Math.abs(pet.aspect - aspect) < 0.03) return;
+    if (pet.aspect !== null && petPrefs.sameAspect(aspect, pet.aspect)) return;
     applyAspect(pet, aspect);
     controls?.refreshSettingsWindow();
 }
