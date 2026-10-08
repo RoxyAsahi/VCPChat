@@ -244,3 +244,19 @@ test('mood shapes idle life: a sad pet never hums and moves less, a tired one ge
     faint.advance(LIFE_TIMINGS.drowsyAfterMs * 0.6);
     assert.equal(faint.life.phase, 'awake');
 });
+
+test('do-not-disturb: a reply wakes a sleeping pet without startling it', () => {
+    const { life, log, advance } = rig();
+    life.setQuiet(true);
+    advance(LIFE_TIMINGS.drowsyAfterMs + LIFE_TIMINGS.sleepAfterMs + 1000);
+    assert.equal(life.phase, 'asleep');
+    life.hold('reply', true);
+    assert.equal(life.phase, 'awake');
+    assert.equal(log.actions.includes('startle'), false);
+    life.hold('reply', false);
+    // 没开免打扰时照旧吓一跳
+    life.setQuiet(false);
+    advance(LIFE_TIMINGS.drowsyAfterMs + LIFE_TIMINGS.sleepAfterMs + 1000);
+    life.hold('reply', true);
+    assert.equal(log.actions.at(-1), 'startle');
+});

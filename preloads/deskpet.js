@@ -55,6 +55,14 @@ function onMood(callback) {
     return () => ipcRenderer.removeListener('agent-mood-changed', listener);
 }
 
+// 点的新话题已经被删掉了
+function onTopicMissing(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('deskpet:topic-missing', listener);
+    return () => ipcRenderer.removeListener('deskpet:topic-missing', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
@@ -69,6 +77,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     onOpenInput,
     onVisibility,
     onProactive,
+    onTopicMissing,
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),
     setInteractive: on => ipcRenderer.send('deskpet:set-interactive', !!on),
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),

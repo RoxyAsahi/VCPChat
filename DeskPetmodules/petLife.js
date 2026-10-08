@@ -217,7 +217,9 @@ export function createPetLife({
             else holds.delete(reason);
             if (on && !had && reason !== 'hidden') {
                 // 有人找它说话或拖它：困了、睡着了都要醒（被拖、来回复都算被吵醒）
-                interact({ startle: reason === 'drag' || reason === 'reply', gentle: reason === 'composer' });
+                // 免打扰时主窗口那边的回复不该把它吓一跳：慢慢醒
+                const quietReply = reason === 'reply' && quiet;
+                interact({ startle: reason === 'drag' || (reason === 'reply' && !quiet), gentle: reason === 'composer' || quietReply });
             }
             if (!on && had) {
                 lastInteraction = now();
