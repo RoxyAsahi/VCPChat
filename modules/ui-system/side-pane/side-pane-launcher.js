@@ -1,6 +1,7 @@
 /* Side pane new tab page: assistant profile or portrait, tool / app / notification sections and the open-tab entry registry. */
 'use strict';
 import { createSidePaneEntries } from './side-pane-entries.js';
+import { applyPortraitDisplay } from './portrait-display.js';
 
 /**
  * 新标签页（引导页）：上面个人资料，下面工具 / 应用 / 通知分段。工具入口由各模块通过 registerEntry 自己登记，
@@ -79,7 +80,7 @@ export function createSidePaneLauncher({
             console.warn('[SidePaneLauncher] Failed to read launcher profile:', error);
         }
         profile.hidden = !current;
-        renderPortrait(current?.portraits || null);
+        renderPortrait(current?.portraits || null, current?.portraitDisplay);
         profileEdit = typeof current?.onEditAvatar === 'function' ? current.onEditAvatar : null;
         profileRename = typeof current?.onRename === 'function' ? current.onRename : null;
         if (!current) return;
@@ -101,7 +102,8 @@ export function createSidePaneLauncher({
     }
 
     // 有立绘时顶部换成一张向下渐隐的立绘，圆头像和名字都不显示；没有立绘就是原来的头像。
-    // portraits 是 { default, light?, ... }：浅色主题有 light 就用 light，其余键留给以后的差分立绘
+    // portraits 是 { default, light?, ... }：浅色主题有 light 就用 light，其余键留给以后的差分立绘；
+    // display 是助手配置里的焦点和高度（见 portrait-display.js）
     function setImageSource(image, src) {
         if (!image) return;
         image.hidden = !src;
@@ -109,12 +111,17 @@ export function createSidePaneLauncher({
         else if (image.getAttribute('src') !== src) image.setAttribute('src', src);
     }
 
-    function renderPortrait(portraits) {
+    function renderPortrait(portraits, display) {
         const src = typeof portraits?.default === 'string' ? portraits.default : '';
         const lightSrc = src && typeof portraits.light === 'string' ? portraits.light : '';
         if (view) {
-            if (src) view.dataset.launcherPortrait = lightSrc ? 'themed' : 'single';
-            else delete view.dataset.launcherPortrait;
+            if (src) {
+                view.dataset.launcherPortrait = lightSrc ? 'themed' : 'single';
+                applyPortraitDisplay(view, display);
+            } else {
+                delete view.dataset.launcherPortrait;
+                applyPortraitDisplay(view, null);
+            }
         }
         if (!portrait) return;
         portrait.hidden = !src;

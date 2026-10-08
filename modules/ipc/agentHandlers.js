@@ -60,6 +60,33 @@ async function findPortraitUrls(agentDir) {
     return portraits.default ? portraits : null;
 }
 
+const PORTRAIT_TYPE_EXTENSIONS = Object.freeze({
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif'
+});
+const PORTRAIT_MAX_BYTES = 20 * 1024 * 1024;
+
+function normalizePortraitVariant(variant) {
+    const key = typeof variant === 'string' ? variant.trim().toLowerCase() : '';
+    return /^[a-z0-9_-]{1,32}$/.test(key) ? key : null;
+}
+
+function portraitBaseName(key) {
+    return key === 'default' ? 'portrait' : `portrait.${key}`;
+}
+
+async function removePortraitFiles(agentDir, key) {
+    const names = await fs.readdir(agentDir).catch(() => []);
+    for (const name of names) {
+        const match = PORTRAIT_FILE_PATTERN.exec(name);
+        if (match && (match[1] || 'default').toLowerCase() === key) {
+            await fs.remove(path.join(agentDir, name));
+        }
+    }
+}
+
 async function getAgentConfigById(agentId) {
     if (!AGENT_DIR_CACHE) {
         console.error("agentHandlers not initialized with AGENT_DIR. Cannot get agent config.");
@@ -115,6 +142,13 @@ async function getAgentConfigById(agentId) {
  * @param {function} context.startSelectionListener - Function to start the selection listener.
  * @param {object} context.settingsManager - The AppSettingsManager instance.
  */
+// Agent id 只能是 Agents 下的一层目录名
+function resolveAgentDir(agentId) {
+    const id = typeof agentId === 'string' ? agentId : '';
+    if (!AGENT_DIR_CACHE || !id || id !== path.basename(id) || id === '.' || id === '..') return null;
+    return path.join(AGENT_DIR_CACHE, id);
+}
+
 function initialize(context) {
     const { AGENT_DIR, USER_DATA_DIR, SETTINGS_FILE, USER_AVATAR_FILE, settingsManager, agentConfigManager } = context;
     AGENT_DIR_CACHE = AGENT_DIR; // Cache the directory path
@@ -278,9 +312,43 @@ function initialize(context) {
 
     // 侧栏首页的立绘：没有默认立绘时返回 null，界面保持圆头像
     ipcMain.handle('get-agent-portraits', async (event, agentId) => {
-        const id = typeof agentId === 'string' ? agentId : '';
-        if (!id || id !== path.basename(id) || id === '.' || id === '..') return null;
-        return findPortraitUrls(path.join(AGENT_DIR, id));
+        const agentDir = resolveAgentDir(agentId);
+        return agentDir ? findPortraitUrls(agentDir) : null;
+    });
+
+    // 设置页上传立绘：variant 为 default 写 portrait.<ext>，其他键写 portrait.<key>.<ext>；
+    // 同一个版本的旧文件（不同扩展名）先删掉，保证每个版本只有一张图
+    ipcMain.handle('save-agent-portrait', async (event, agentId, variant, imageData) => {
+        const agentDir = resolveAgentDir(agentId);
+        const key = normalizePortraitVariant(variant);
+        if (!agentDir || !key) return { error: '无效的 Agent 或立绘类型。' };
+        const ext = PORTRAIT_TYPE_EXTENSIONS[imageData?.type];
+        if (!ext) return { error: '立绘只支持 PNG、JPEG、WebP 或 GIF 图片。' };
+        const buffer = imageData?.buffer ? Buffer.from(imageData.buffer) : null;
+        if (!buffer?.length) return { error: '立绘图片是空的。' };
+        if (buffer.length > PORTRAIT_MAX_BYTES) return { error: `立绘图片不能超过 ${PORTRAIT_MAX_BYTES / 1024 / 1024}MB。` };
+        try {
+            if (!(await fs.pathExists(agentDir))) return { error: 'Agent 不存在。' };
+            await removePortraitFiles(agentDir, key);
+            await fs.writeFile(path.join(agentDir, `${portraitBaseName(key)}${ext}`), buffer);
+            return { success: true, portraits: await findPortraitUrls(agentDir) };
+        } catch (error) {
+            console.error(`保存 Agent ${agentId} 立绘失败:`, error);
+            return { error: `保存立绘失败: ${error.message}` };
+        }
+    });
+
+    ipcMain.handle('remove-agent-portrait', async (event, agentId, variant) => {
+        const agentDir = resolveAgentDir(agentId);
+        const key = normalizePortraitVariant(variant);
+        if (!agentDir || !key) return { error: '无效的 Agent 或立绘类型。' };
+        try {
+            await removePortraitFiles(agentDir, key);
+            return { success: true, portraits: await findPortraitUrls(agentDir) };
+        } catch (error) {
+            console.error(`删除 Agent ${agentId} 立绘失败:`, error);
+            return { error: `删除立绘失败: ${error.message}` };
+        }
     });
 
     ipcMain.handle('save-agent-config', async (event, agentId, config) => {
