@@ -15,3 +15,25 @@ export function shouldAddEmotionTagPrompt({ systemPrompt = '', enabled = true, h
     if (!hasDisplay || enabled === false) return false;
     return !/<!--\s*emo\s*[:：]/i.test(String(systemPrompt || ''));
 }
+
+/**
+ * 发给某个 agent 的请求要追加的表情标记说明（不加时为空字符串）。新消息和重新生成都走这里，
+ * 两条路的系统提示词才一致。api 需要 getAgentPortraits；读不到立绘时按没有差分处理，不挡发送。
+ */
+export async function resolveEmotionTagPrompt(api, agentId, agentConfig) {
+    if (!agentId || typeof api?.getAgentPortraits !== 'function') return '';
+    try {
+        const [{ hasPortraitVariants }, portraits] = await Promise.all([
+            import('./portraitVariants.js'),
+            api.getAgentPortraits(agentId),
+        ]);
+        return shouldAddEmotionTagPrompt({
+            systemPrompt: agentConfig?.systemPrompt,
+            enabled: agentConfig?.emotionTagPrompt,
+            hasDisplay: hasPortraitVariants(portraits),
+        }) ? EMOTION_TAG_PROMPT : '';
+    } catch (error) {
+        console.warn('[EmotionPrompt] Failed to prepare the emotion tag prompt:', error);
+        return '';
+    }
+}
