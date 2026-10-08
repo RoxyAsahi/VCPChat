@@ -332,6 +332,7 @@
     "modules/services/scriptoriumPptxImportService.js",
     "modules/services/senderTaskRegistry.js",
     "modules/services/sourceService.js",
+    "modules/services/themePreviewVariables.js",
     "modules/services/windowAppIds.js",
     "modules/services/windowPinService.js",
     "modules/services/windowService.js",
@@ -987,14 +988,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 219,
+          "line": 203,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 219,
+          "line": 203,
           "kind": "event-listener",
           "match": "ipcMain.on('apply-theme'"
         },
@@ -1711,7 +1712,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 146,
+          "line": 183,
           "kind": "custom-event-listener"
         },
         {
@@ -1824,7 +1825,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 146,
+          "line": 183,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('blur'"
         },
@@ -4498,27 +4499,27 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 103,
+          "line": 140,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 309,
+          "line": 346,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 319,
+          "line": 356,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 360,
+          "line": 397,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 373,
+          "line": 410,
           "kind": "custom-event-listener"
         },
         {
@@ -6112,31 +6113,31 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 103,
+          "line": 140,
           "kind": "custom-event-listener",
           "match": "profileAvatar.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 309,
+          "line": 346,
           "kind": "custom-event-listener",
           "match": "view.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 319,
+          "line": 356,
           "kind": "custom-event-listener",
           "match": "noticeCard.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 360,
+          "line": 397,
           "kind": "custom-event-listener",
           "match": "addButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 373,
+          "line": 410,
           "kind": "custom-event-listener",
           "match": "homeButton.addEventListener('click'"
         },
@@ -6955,7 +6956,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 193,
+          "line": 177,
           "kind": "event-listener"
         },
         {
@@ -7166,7 +7167,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 193,
+          "line": 177,
           "kind": "event-listener",
           "match": "themesWindow.on('closed'"
         },
@@ -7793,14 +7794,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 393,
+          "line": 425,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 393,
+          "line": 425,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-agent'"
         },
@@ -8587,14 +8588,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 449,
+          "line": 481,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 449,
+          "line": 481,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-agent'"
         },
@@ -12035,6 +12036,11 @@
           "kind": "custom-event-listener"
         },
         {
+          "file": "modules/ui-system/side-pane/side-pane-launcher.js",
+          "line": 132,
+          "kind": "custom-event-listener"
+        },
+        {
           "file": "modules/voice/voice-input-engine-adapter.js",
           "line": 156,
           "kind": "event-listener"
@@ -12364,6 +12370,12 @@
           "line": 1929,
           "kind": "custom-event-listener",
           "match": "img.addEventListener('error'"
+        },
+        {
+          "file": "modules/ui-system/side-pane/side-pane-launcher.js",
+          "line": 132,
+          "kind": "custom-event-listener",
+          "match": "portraitImage.addEventListener('error'"
         },
         {
           "file": "modules/voice/voice-input-engine-adapter.js",
@@ -12819,7 +12831,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 144,
+          "line": 181,
           "kind": "custom-event-listener"
         },
         {
@@ -12884,7 +12896,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 144,
+          "line": 181,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('focus'"
         },
@@ -13005,14 +13017,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 249,
+          "line": 274,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 249,
+          "line": 274,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-config'"
         },
@@ -13087,6 +13099,37 @@
       ]
     },
     {
+      "name": "get-agent-portraits",
+      "producers": [
+        {
+          "file": "preloads/api/agents.js",
+          "line": 18,
+          "kind": "preload-channel-definition"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ipc/agentHandlers.js",
+          "line": 280,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/agentHandlers.js",
+          "line": 280,
+          "kind": "event-listener",
+          "match": "ipcMain.handle('get-agent-portraits'"
+        },
+        {
+          "file": "preloads/api/agents.js",
+          "line": 18,
+          "kind": "preload-channel-definition",
+          "match": "invoke('get-agent-portraits'"
+        }
+      ]
+    },
+    {
       "name": "get-agent-topics",
       "producers": [
         {
@@ -13122,7 +13165,7 @@
       "producers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 109,
+          "line": 134,
           "kind": "event-send"
         },
         {
@@ -13134,20 +13177,20 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 124,
+          "line": 149,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 109,
+          "line": 134,
           "kind": "event-send",
           "match": "ipcMain.invoke('get-agents'"
         },
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 124,
+          "line": 149,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents'"
         },
@@ -13164,27 +13207,27 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 19,
+          "line": 20,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 105,
+          "line": 130,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 105,
+          "line": 130,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents-metadata'"
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 19,
+          "line": 20,
           "kind": "preload-channel-definition",
           "match": "invoke('get-agents-metadata'"
         }
@@ -13195,27 +13238,27 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 22,
+          "line": 23,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 483,
+          "line": 515,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 483,
+          "line": 515,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-all-items'"
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 22,
+          "line": 23,
           "kind": "preload-channel-definition",
           "match": "invoke('get-all-items'"
         }
@@ -13288,7 +13331,7 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 27,
+          "line": 28,
           "kind": "preload-channel-definition"
         }
       ],
@@ -13308,7 +13351,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 27,
+          "line": 28,
           "kind": "preload-channel-definition",
           "match": "invoke('get-cached-models'"
         }
@@ -13403,14 +13446,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 217,
+          "line": 201,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 217,
+          "line": 201,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-current-theme'"
         },
@@ -13507,7 +13550,7 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 30,
+          "line": 31,
           "kind": "preload-channel-definition"
         }
       ],
@@ -13527,7 +13570,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 30,
+          "line": 31,
           "kind": "preload-channel-definition",
           "match": "invoke('get-favorite-models'"
         }
@@ -13662,7 +13705,7 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 29,
+          "line": 30,
           "kind": "preload-channel-definition"
         }
       ],
@@ -13682,7 +13725,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 29,
+          "line": 30,
           "kind": "preload-channel-definition",
           "match": "invoke('get-hot-models'"
         }
@@ -13990,14 +14033,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 218,
+          "line": 202,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 218,
+          "line": 202,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-themes'"
         },
@@ -14052,14 +14095,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 220,
+          "line": 204,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 220,
+          "line": 204,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-wallpaper-thumbnail'"
         },
@@ -15815,12 +15858,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 145,
+          "line": 182,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 280,
+          "line": 317,
           "kind": "custom-event-listener"
         },
         {
@@ -16219,13 +16262,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 145,
+          "line": 182,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 280,
+          "line": 317,
           "kind": "custom-event-listener",
           "match": "segmentTabs.addEventListener('keydown'"
         },
@@ -19039,7 +19082,7 @@
       "consumers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 32,
+          "line": 33,
           "kind": "preload-channel-definition"
         }
       ],
@@ -19064,7 +19107,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 32,
+          "line": 33,
           "kind": "preload-channel-definition",
           "match": "on('models-updated'"
         }
@@ -22837,14 +22880,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 210,
+          "line": 194,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 210,
+          "line": 194,
           "kind": "event-listener",
           "match": "ipcMain.on('open-themes-window'"
         },
@@ -24798,7 +24841,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 189,
+          "line": 173,
           "kind": "event-listener"
         },
         {
@@ -24935,7 +24978,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 189,
+          "line": 173,
           "kind": "event-listener",
           "match": "themesWindow.once('ready-to-show'"
         },
@@ -25025,7 +25068,7 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 28,
+          "line": 29,
           "kind": "preload-channel-definition"
         }
       ],
@@ -25045,7 +25088,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 28,
+          "line": 29,
           "kind": "preload-channel-definition",
           "match": "invoke('refresh-models'"
         }
@@ -25138,14 +25181,14 @@
       "consumers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 18,
+          "line": 19,
           "kind": "preload-channel-definition"
         }
       ],
       "evidence": [
         {
           "file": "preloads/api/agents.js",
-          "line": 18,
+          "line": 19,
           "kind": "preload-channel-definition",
           "match": "on('reload-agent-settings'"
         }
@@ -25684,14 +25727,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 254,
+          "line": 286,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 254,
+          "line": 286,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-config'"
         },
@@ -25770,27 +25813,27 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 23,
+          "line": 24,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 235,
+          "line": 260,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 235,
+          "line": 260,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-order'"
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 23,
+          "line": 24,
           "kind": "preload-channel-definition",
           "match": "invoke('save-agent-order'"
         }
@@ -25839,14 +25882,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 308,
+          "line": 340,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 308,
+          "line": 340,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-avatar'"
         },
@@ -25956,27 +25999,27 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 24,
+          "line": 25,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 222,
+          "line": 247,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 222,
+          "line": 247,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-combined-item-order'"
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 24,
+          "line": 25,
           "kind": "preload-channel-definition",
           "match": "invoke('save-combined-item-order'"
         }
@@ -26428,14 +26471,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 464,
+          "line": 496,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 464,
+          "line": 496,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-user-avatar'"
         },
@@ -27368,14 +27411,14 @@
       "consumers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 211,
+          "line": 195,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 211,
+          "line": 195,
           "kind": "event-listener",
           "match": "ipcMain.on('set-theme-mode'"
         },
@@ -29408,7 +29451,7 @@
       "producers": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 246,
+          "line": 230,
           "kind": "event-send"
         }
       ],
@@ -29437,7 +29480,7 @@
       "evidence": [
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 246,
+          "line": 230,
           "kind": "event-send",
           "match": "contents.send('theme-updated'"
         },
@@ -29562,7 +29605,7 @@
       "producers": [
         {
           "file": "preloads/api/agents.js",
-          "line": 31,
+          "line": 32,
           "kind": "preload-channel-definition"
         }
       ],
@@ -29582,7 +29625,7 @@
         },
         {
           "file": "preloads/api/agents.js",
-          "line": 31,
+          "line": 32,
           "kind": "preload-channel-definition",
           "match": "invoke('toggle-favorite-model'"
         }
@@ -30190,7 +30233,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 214,
+          "line": 198,
           "kind": "event-listener"
         }
       ],
@@ -30203,7 +30246,7 @@
         },
         {
           "file": "modules/ipc/themeHandlers.js",
-          "line": 214,
+          "line": 198,
           "kind": "event-listener",
           "match": "nativeTheme.on('updated'"
         }

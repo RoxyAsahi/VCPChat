@@ -35,6 +35,31 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
     return null;
 }
 
+// 立绘：Agent 目录下的 portrait.<ext> 是默认立绘，portrait.<key>.<ext> 是同一角色的其他版本
+// （light 给浅色主题用；以后的差分立绘也按这个规则取名，不用改读取逻辑）。
+const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp))$/i;
+
+async function findPortraitUrls(agentDir) {
+    let names;
+    try {
+        names = await fs.readdir(agentDir);
+    } catch {
+        return null;
+    }
+    const portraits = {};
+    for (const name of names.sort()) {
+        const match = PORTRAIT_FILE_PATTERN.exec(name);
+        if (!match) continue;
+        const key = (match[1] || 'default').toLowerCase();
+        if (portraits[key]) continue;
+        const filePath = path.join(agentDir, name);
+        const stat = await fs.stat(filePath).catch(() => null);
+        if (!stat?.isFile()) continue;
+        portraits[key] = `${pathToFileURL(filePath).toString()}?v=${Math.round(stat.mtimeMs)}`;
+    }
+    return portraits.default ? portraits : null;
+}
+
 async function getAgentConfigById(agentId) {
     if (!AGENT_DIR_CACHE) {
         console.error("agentHandlers not initialized with AGENT_DIR. Cannot get agent config.");
@@ -249,6 +274,13 @@ function initialize(context) {
     ipcMain.handle('get-agent-config', (event, agentId) => {
         // Now this handler simply calls the exported function
         return getAgentConfigById(agentId);
+    });
+
+    // 侧栏首页的立绘：没有默认立绘时返回 null，界面保持圆头像
+    ipcMain.handle('get-agent-portraits', async (event, agentId) => {
+        const id = typeof agentId === 'string' ? agentId : '';
+        if (!id || id !== path.basename(id) || id === '.' || id === '..') return null;
+        return findPortraitUrls(path.join(AGENT_DIR, id));
     });
 
     ipcMain.handle('save-agent-config', async (event, agentId, config) => {

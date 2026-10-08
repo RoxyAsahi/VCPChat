@@ -1,6 +1,7 @@
 /* Compose the current assistant profile and the app/recommendation sources. */
 export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, uiHelper, selectedItemRef, controller }) {
     const owners = [];
+    let disposed = false;
     const subscriptions = { add: owner => owners.push(owner) };
     // 新标签页顶部显示当前助手：点头像去设置页换头像（群组只显示），点名字直接改名
     const renameSelectedItem = async (item, name) => {
@@ -35,12 +36,35 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         controller.setLauncherProfileProvider(getLauncherProfile);
         return result;
     };
+    // 立绘按助手现取：主进程只看 Agent 目录里有没有 portrait 图。切到别的助手先回到圆头像，
+    // 同一个助手重新选中时保留当前立绘、后台再查一次（新放进去的立绘下次选中就能看到）
+    let portraitState = { id: null, portraits: null, loading: null };
+    const loadPortraits = (item, { refresh = false } = {}) => {
+        const id = item?.type === 'agent' ? item.id : null;
+        if (portraitState.id === id && (!refresh || portraitState.loading)) return;
+        if (portraitState.id !== id) portraitState = { id, portraits: null, loading: null };
+        const api = chatAPI || win.electronAPI;
+        if (!id || typeof api?.getAgentPortraits !== 'function') return;
+        const loading = Promise.resolve(api.getAgentPortraits(id)).then((portraits) => {
+            if (disposed || portraitState.loading !== loading) return;
+            const next = portraits?.default ? portraits : null;
+            const changed = JSON.stringify(next) !== JSON.stringify(portraitState.portraits);
+            portraitState = { id, portraits: next, loading: null };
+            if (changed) controller.setLauncherProfileProvider(getLauncherProfile);
+        }).catch((error) => {
+            if (portraitState.loading === loading) portraitState.loading = null;
+            console.warn('[SidePane] Failed to read agent portraits:', error);
+        });
+        portraitState.loading = loading;
+    };
     const getLauncherProfile = () => {
         const item = selectedItemRef.get();
         if (!item?.id) return null;
+        loadPortraits(item);
         return {
             name: item.name || '',
             avatarUrl: item.avatarUrl || '',
+            portraits: portraitState.id === item.id ? portraitState.portraits : null,
             onEditAvatar: item.type === 'agent' ? () => {
                 win.uiManager?.switchToTab?.('settings');
                 doc.getElementById('agentAvatarInput')?.click();
@@ -49,7 +73,10 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         };
     };
     controller.setLauncherProfileProvider(getLauncherProfile);
-    const unbindLauncherProfile = chatManager?.onSelectionChange?.(() => controller.setLauncherProfileProvider(getLauncherProfile));
+    const unbindLauncherProfile = chatManager?.onSelectionChange?.(() => {
+        loadPortraits(selectedItemRef.get(), { refresh: true });
+        controller.setLauncherProfileProvider(getLauncherProfile);
+    });
     if (unbindLauncherProfile) subscriptions.add({ dispose: unbindLauncherProfile });
 
     // 新标签页的「应用」页：和顶部「+」启动台是同一批应用、同一套图标和打开方式。
@@ -131,5 +158,10 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         subscriptions.add({ dispose: () => recommendedIcons.dispose() });
     }
 
-    return Object.freeze({ dispose() { owners.splice(0).forEach(owner => owner.dispose?.()); } });
+    return Object.freeze({
+        dispose() {
+            disposed = true;
+            owners.splice(0).forEach(owner => owner.dispose?.());
+        }
+    });
 }

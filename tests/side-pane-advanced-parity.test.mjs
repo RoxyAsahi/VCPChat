@@ -41,6 +41,10 @@ function createParityTestDOM() {
             <div class="side-pane-content-container">
                 <section class="side-pane-view active" id="sidePaneViewNotifications" data-tab-id="notifications"></section>
                 <section class="side-pane-view" id="sidePaneViewLauncher" data-tab-id="launcher" hidden>
+                    <div class="side-pane-launcher-portrait" aria-hidden="true" hidden>
+                        <img data-portrait-theme="default" alt="">
+                        <img data-portrait-theme="light" alt="" hidden>
+                    </div>
                     <div class="side-pane-launcher-profile" hidden>
                         <button type="button" class="side-pane-launcher-avatar"><img alt=""></button>
                         <input type="text" class="side-pane-launcher-name" readonly>
@@ -250,6 +254,48 @@ test('Parity: the new tab page shows the current assistant and its avatar edit e
     current = null;
     ctrl.showLauncher();
     assert.equal(profile.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: an assistant with a portrait gets the portrait header, others keep the avatar', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const view = doc.getElementById('sidePaneViewLauncher');
+    const portrait = view.querySelector('.side-pane-launcher-portrait');
+    const [image, lightImage] = portrait.querySelectorAll('img');
+    let current = { name: 'Nova', avatarUrl: 'nova.png', portraits: { default: 'portrait.png', light: 'portrait.light.png', smile: 'portrait.smile.png' } };
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(view.dataset.launcherPortrait, 'themed');
+    assert.equal(portrait.hidden, false);
+    assert.equal(image.getAttribute('src'), 'portrait.png');
+    assert.equal(lightImage.hidden, false);
+    assert.equal(lightImage.getAttribute('src'), 'portrait.light.png');
+
+    // 只有默认立绘：浅色主题也用这一张
+    current = { ...current, portraits: { default: 'portrait.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(lightImage.hidden, true);
+    assert.equal(lightImage.hasAttribute('src'), false);
+
+    // 立绘读不出来时退回圆头像
+    image.dispatchEvent(new dom.window.Event('error'));
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+
+    // 换到没有立绘的助手
+    current = { name: '主题娘可可', avatarUrl: 'coco.png', portraits: null };
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    assert.equal(image.hasAttribute('src'), false);
+    assert.equal(view.querySelector('.side-pane-launcher-profile img').getAttribute('src'), 'coco.png');
 
     await ctrl.dispose();
     dom.window.close();

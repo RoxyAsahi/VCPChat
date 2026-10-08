@@ -1,4 +1,4 @@
-/* Side pane new tab page: assistant profile, tool / app / notification sections and the open-tab entry registry. */
+/* Side pane new tab page: assistant profile or portrait, tool / app / notification sections and the open-tab entry registry. */
 'use strict';
 import { createSidePaneEntries } from './side-pane-entries.js';
 
@@ -33,6 +33,9 @@ export function createSidePaneLauncher({
     const profileAvatar = find(profile, '.side-pane-launcher-avatar');
     const profileImage = find(profileAvatar, 'img');
     const profileName = find(profile, '.side-pane-launcher-name');
+    const portrait = find(view, '.side-pane-launcher-portrait');
+    const portraitImage = find(portrait, '[data-portrait-theme="default"]');
+    const portraitLightImage = find(portrait, '[data-portrait-theme="light"]');
     const segmentTabs = find(view, '.side-pane-launcher-tabs');
     const appsSection = find(view, '[data-launcher-section="apps"]');
     const appGrid = find(appsSection, '.side-pane-launcher-app-grid');
@@ -76,6 +79,7 @@ export function createSidePaneLauncher({
             console.warn('[SidePaneLauncher] Failed to read launcher profile:', error);
         }
         profile.hidden = !current;
+        renderPortrait(current?.portraits || null);
         profileEdit = typeof current?.onEditAvatar === 'function' ? current.onEditAvatar : null;
         profileRename = typeof current?.onRename === 'function' ? current.onRename : null;
         if (!current) return;
@@ -94,6 +98,39 @@ export function createSidePaneLauncher({
             profileAvatar.disabled = !profileEdit;
             profileAvatar.setAttribute('aria-label', profileEdit ? '编辑头像' : (current.name || '头像'));
         }
+    }
+
+    // 有立绘时顶部换成一张向下渐隐的立绘，圆头像和名字都不显示；没有立绘就是原来的头像。
+    // portraits 是 { default, light?, ... }：浅色主题有 light 就用 light，其余键留给以后的差分立绘
+    function setImageSource(image, src) {
+        if (!image) return;
+        image.hidden = !src;
+        if (!src) image.removeAttribute('src');
+        else if (image.getAttribute('src') !== src) image.setAttribute('src', src);
+    }
+
+    function renderPortrait(portraits) {
+        const src = typeof portraits?.default === 'string' ? portraits.default : '';
+        const lightSrc = src && typeof portraits.light === 'string' ? portraits.light : '';
+        if (view) {
+            if (src) view.dataset.launcherPortrait = lightSrc ? 'themed' : 'single';
+            else delete view.dataset.launcherPortrait;
+        }
+        if (!portrait) return;
+        portrait.hidden = !src;
+        setImageSource(portraitImage, src);
+        setImageSource(portraitLightImage, lightSrc);
+    }
+
+    // 立绘文件坏了或读不到时退回圆头像，不留一块空白
+    if (portraitImage) {
+        const onPortraitError = () => {
+            if (!portraitImage.getAttribute('src')) return;
+            if (view) delete view.dataset.launcherPortrait;
+            if (portrait) portrait.hidden = true;
+        };
+        portraitImage.addEventListener('error', onPortraitError);
+        cleanups.push(() => portraitImage.removeEventListener('error', onPortraitError));
     }
 
     if (profileAvatar) {
