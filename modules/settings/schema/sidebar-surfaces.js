@@ -327,6 +327,15 @@ function renderAgentIdentity(doc) {
 
 // 首页立绘：行为在 modules/ui-system/agent-portrait-settings.js；
 // [data-portrait-variants-slot] 留给差分立绘接入同样的「缩略图 + 上传 / 移除」行
+// 差分立绘的键和情绪源（modules/emotion/emotionVocabulary.js 的 EMOTIONS、STATES）一一对应，
+// 文件存成 Agent 目录里的 portrait.<键>.<扩展名>
+const PORTRAIT_VARIANT_SLOTS = Object.freeze([
+    ['neutral', '平常'], ['calm', '平静'], ['happy', '开心'], ['excited', '兴奋'],
+    ['shy', '害羞'], ['affectionate', '亲昵'], ['curious', '好奇'], ['surprised', '惊讶'],
+    ['concerned', '担心'], ['sad', '难过'], ['tired', '疲惫'], ['angry', '生气'],
+    ['thinking', '思考中（状态）'], ['tool', '调用工具（状态）'], ['error', '出错（状态）'],
+]);
+
 function renderAgentPortrait(doc) {
     const slot = (variant, title, hint) => {
         const inputId = `agentPortrait${variant[0].toUpperCase()}${variant.slice(1)}Input`;
@@ -366,7 +375,10 @@ function renderAgentPortrait(doc) {
             el(doc, 'button', { type: 'button', id: 'agentPortraitResetBtn', class: 'small-button' }, '重置位置')),
         slot('default', '立绘', '深色主题和没有浅色版时都用这张'),
         slot('light', '浅色主题立绘（可选）', '浅色主题优先用这张'),
-        el(doc, 'div', { class: 'agent-portrait-variants', 'data-portrait-variants-slot': '', hidden: true }),
+        el(doc, 'details', { class: 'agent-portrait-variants', 'data-portrait-variants-slot': '' },
+            el(doc, 'summary', { class: 'agent-portrait-variants-summary' }, '表情差分（可选）'),
+            el(doc, 'p', { class: 'agent-portrait-hint' }, '对话时立绘会跟着回复的情绪换成对应的差分；缺哪张就用相近情绪的图，都没有就用默认立绘。思考、调用工具、出错时优先显示对应的状态图。'),
+            ...PORTRAIT_VARIANT_SLOTS.map(([variant, title]) => slot(variant, title, '没有这张时用相近情绪的差分或默认立绘'))),
         height);
 }
 

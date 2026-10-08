@@ -3355,6 +3355,21 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants[hidden]
     display: none;
 }
 
+/* 表情差分：默认收起，展开后是和默认立绘同样的一排排上传行 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--vcp-settings-border);
+    padding-top: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants-summary {
+    color: var(--vcp-settings-text);
+    font-size: var(--vcp-settings-font-meta, 12px);
+    cursor: pointer;
+}
+
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings button:disabled,
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings input:disabled {
     opacity: 0.45;
