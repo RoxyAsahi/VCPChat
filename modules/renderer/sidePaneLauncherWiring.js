@@ -1,4 +1,8 @@
 /* Compose the current assistant profile and the app/recommendation sources. */
+import { createEmotionDirector } from '../emotion/emotionDirector.js';
+import { hasPortraitVariants } from '../emotion/portraitVariants.js';
+import { createAgentEmotionFeed } from './agentEmotionFeed.js';
+
 export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, uiHelper, selectedItemRef, controller }) {
     const owners = [];
     let disposed = false;
@@ -72,8 +76,32 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
             onRename: item.type === 'agent' || item.type === 'group' ? (name) => renameSelectedItem(item, name) : null
         };
     };
+    // 差分立绘：当前助手有情绪或状态立绘时，跟着它的回复换图。情绪源只看这个助手的流，
+    // 换了助手就清空回到默认立绘；没有差分的助手完全不读流
+    const emotionDirector = createEmotionDirector({
+        onFrame: frame => controller.setLauncherPortraitFrame?.(frame),
+    });
+    let emotionAgentId = null;
+    const syncEmotionAgent = () => {
+        const item = selectedItemRef.get();
+        const id = item?.type === 'agent' ? item.id : null;
+        if (id === emotionAgentId) return;
+        emotionAgentId = id;
+        emotionDirector.reset();
+    };
+    const emotionFeed = createAgentEmotionFeed({
+        chatAPI: chatAPI || win.electronAPI,
+        director: emotionDirector,
+        getAgentId: () => emotionAgentId,
+        isActive: () => portraitState.id === emotionAgentId && hasPortraitVariants(portraitState.portraits),
+    });
+    subscriptions.add(emotionFeed);
+    subscriptions.add({ dispose: () => emotionDirector.dispose() });
+
+    syncEmotionAgent();
     controller.setLauncherProfileProvider(getLauncherProfile);
     const unbindLauncherProfile = chatManager?.onSelectionChange?.(() => {
+        syncEmotionAgent();
         loadPortraits(selectedItemRef.get(), { refresh: true });
         controller.setLauncherProfileProvider(getLauncherProfile);
     });

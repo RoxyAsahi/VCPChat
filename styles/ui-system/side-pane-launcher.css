@@ -175,6 +175,18 @@ html .side-pane-launcher-portrait-image[hidden]:where(.vcp-ui-scope, .vcp-ui-sco
     display: none;
 }
 
+/* 两层叠放：换差分时新图在另一层解码好后淡入、旧图淡出，同一时间只有一层是 data-portrait-active */
+html .side-pane-launcher-portrait-layer:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity var(--vcp-motion-duration-slow) var(--vcp-motion-ease-standard);
+}
+
+html .side-pane-launcher-portrait-layer[data-portrait-active]:where(.vcp-ui-scope, .vcp-ui-scope *) {
+    opacity: 1;
+}
+
 html .side-pane-launcher-portrait-image:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: block;
     width: 100%;
@@ -184,8 +196,8 @@ html .side-pane-launcher-portrait-image:where(.vcp-ui-scope, .vcp-ui-scope *) {
     user-select: none;
 }
 
-/* 浅色主题有专门的浅色立绘就换上，没有就沿用默认那张 */
-html body[data-vcp-theme="light"] #sidePaneViewLauncher[data-launcher-portrait="themed"] .side-pane-launcher-portrait-image[data-portrait-theme="default"]:where(.vcp-ui-scope, .vcp-ui-scope *),
+/* 浅色主题有专门的浅色立绘就换上，没有就沿用默认那张（每一层各自判断，淡入淡出时两层可能不同） */
+html body[data-vcp-theme="light"] .side-pane-launcher-portrait-layer[data-portrait-themed] .side-pane-launcher-portrait-image[data-portrait-theme="default"]:where(.vcp-ui-scope, .vcp-ui-scope *),
 html body:not([data-vcp-theme="light"]) .side-pane-launcher-portrait-image[data-portrait-theme="light"]:where(.vcp-ui-scope, .vcp-ui-scope *) {
     display: none;
 }

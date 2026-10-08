@@ -159,6 +159,12 @@
     "modules/chatManager.js",
     "modules/contextSanitizer.js",
     "modules/emoticonManager.js",
+    "modules/emotion/emotionDirector.js",
+    "modules/emotion/emotionPrompt.js",
+    "modules/emotion/emotionRules.js",
+    "modules/emotion/emotionTags.js",
+    "modules/emotion/emotionVocabulary.js",
+    "modules/emotion/portraitVariants.js",
     "modules/event-listeners.js",
     "modules/fileManager.js",
     "modules/filterManager.js",
@@ -237,6 +243,7 @@
     "modules/musicScannerWorker.js",
     "modules/notificationCenter.js",
     "modules/notificationRenderer.js",
+    "modules/renderer/agentEmotionFeed.js",
     "modules/renderer/animation.js",
     "modules/renderer/chat-header-style.js",
     "modules/renderer/colorUtils.js",
@@ -467,6 +474,7 @@
     "modules/ui-system/side-pane/side-pane-dormancy.js",
     "modules/ui-system/side-pane/side-pane-entries.js",
     "modules/ui-system/side-pane/side-pane-focus.js",
+    "modules/ui-system/side-pane/side-pane-launcher-portrait.js",
     "modules/ui-system/side-pane/side-pane-launcher.js",
     "modules/ui-system/side-pane/side-pane-occurrence.js",
     "modules/ui-system/side-pane/side-pane-persistence.js",
@@ -1712,7 +1720,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 183,
+          "line": 155,
           "kind": "custom-event-listener"
         },
         {
@@ -1825,7 +1833,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 183,
+          "line": 155,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('blur'"
         },
@@ -4484,42 +4492,42 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1210,
+          "line": 1215,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1216,
+          "line": 1221,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1230,
+          "line": 1235,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 140,
+          "line": 112,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 346,
+          "line": 318,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 356,
+          "line": 328,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 397,
+          "line": 369,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 410,
+          "line": 382,
           "kind": "custom-event-listener"
         },
         {
@@ -6095,49 +6103,49 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1210,
+          "line": 1215,
           "kind": "custom-event-listener",
           "match": "toggleNotificationsBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1216,
+          "line": 1221,
           "kind": "custom-event-listener",
           "match": "expandButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1230,
+          "line": 1235,
           "kind": "custom-event-listener",
           "match": "closeSidePaneBtn.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 140,
+          "line": 112,
           "kind": "custom-event-listener",
           "match": "profileAvatar.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 346,
+          "line": 318,
           "kind": "custom-event-listener",
           "match": "view.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 356,
+          "line": 328,
           "kind": "custom-event-listener",
           "match": "noticeCard.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 397,
+          "line": 369,
           "kind": "custom-event-listener",
           "match": "addButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 410,
+          "line": 382,
           "kind": "custom-event-listener",
           "match": "homeButton.addEventListener('click'"
         },
@@ -12036,8 +12044,8 @@
           "kind": "custom-event-listener"
         },
         {
-          "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 132,
+          "file": "modules/ui-system/side-pane/side-pane-launcher-portrait.js",
+          "line": 145,
           "kind": "custom-event-listener"
         },
         {
@@ -12372,10 +12380,10 @@
           "match": "img.addEventListener('error'"
         },
         {
-          "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 132,
+          "file": "modules/ui-system/side-pane/side-pane-launcher-portrait.js",
+          "line": 145,
           "kind": "custom-event-listener",
-          "match": "portraitImage.addEventListener('error'"
+          "match": "image.addEventListener('error'"
         },
         {
           "file": "modules/voice/voice-input-engine-adapter.js",
@@ -12831,7 +12839,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 181,
+          "line": 153,
           "kind": "custom-event-listener"
         },
         {
@@ -12896,7 +12904,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 181,
+          "line": 153,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('focus'"
         },
@@ -15858,12 +15866,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 182,
+          "line": 154,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 317,
+          "line": 289,
           "kind": "custom-event-listener"
         },
         {
@@ -16262,13 +16270,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 182,
+          "line": 154,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 317,
+          "line": 289,
           "kind": "custom-event-listener",
           "match": "segmentTabs.addEventListener('keydown'"
         },
@@ -21708,14 +21716,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 396,
+          "line": 422,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 396,
+          "line": 422,
           "kind": "preload-subscription",
           "match": "electronAPI.onCanvasContentUpdate("
         }
@@ -21727,14 +21735,14 @@
       "consumers": [
         {
           "file": "modules/chatManager.js",
-          "line": 397,
+          "line": 423,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/chatManager.js",
-          "line": 397,
+          "line": 423,
           "kind": "preload-subscription",
           "match": "electronAPI.onCanvasWindowClosed("
         }
@@ -22188,12 +22196,23 @@
       "producers": [],
       "consumers": [
         {
+          "file": "modules/renderer/agentEmotionFeed.js",
+          "line": 12,
+          "kind": "preload-subscription"
+        },
+        {
           "file": "modules/renderer/mainChatEventBridge.js",
           "line": 19,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
+        {
+          "file": "modules/renderer/agentEmotionFeed.js",
+          "line": 12,
+          "kind": "preload-subscription",
+          "match": "chatAPI.onVCPStreamEvent("
+        },
         {
           "file": "modules/renderer/mainChatEventBridge.js",
           "line": 19,
@@ -25423,7 +25442,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1250,
+          "line": 1255,
           "kind": "custom-event-listener"
         },
         {
@@ -25523,7 +25542,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-controller.js",
-          "line": 1250,
+          "line": 1255,
           "kind": "custom-event-listener",
           "match": "win?.addEventListener?.('resize'"
         },
