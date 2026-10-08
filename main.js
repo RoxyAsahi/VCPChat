@@ -972,7 +972,8 @@ function createTray() {
         await toggleRagObserverVisibility();
     };
 
-    const contextMenu = Menu.buildFromTemplate([
+    // 桌宠那一项会随桌宠开关、免打扰变化，每次变了就重建菜单
+    const buildContextMenu = () => Menu.buildFromTemplate([
         {
             label: '显示/隐藏主窗口',
             click: () => {
@@ -991,6 +992,7 @@ function createTray() {
                 desktopHandlers.openDesktopWindow();
             }
         },
+        ...deskPetHandlers.trayMenuItems(),
         { type: 'separator' },
         {
             label: '退出',
@@ -1011,13 +1013,16 @@ function createTray() {
 
         // macOS: 右键点击 (tray.on('right-click')) 负责显示菜单
         tray.on('right-click', () => {
-            tray.popUpContextMenu(contextMenu);
+            tray.popUpContextMenu(buildContextMenu());
         });
 
         // 注意：在 macOS 上，不调用 tray.setContextMenu()，以确保左键点击不弹出菜单。
     } else {
         // Windows/Linux: 默认行为。
-        tray.setContextMenu(contextMenu);
+        tray.setContextMenu(buildContextMenu());
+        deskPetHandlers.setTrayRefresher(() => {
+            if (tray && !tray.isDestroyed()) tray.setContextMenu(buildContextMenu());
+        });
         tray.on('click', () => {
             void handleTrayPrimaryAction();
         });
