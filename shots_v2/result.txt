@@ -1,0 +1,5 @@
+Nova PSD2Live v2 desk pet test (deskpet-demo, Cubism Core 5.1.0)
+Fix: prep_psd2live.py builds an RGBA PSD (RGB dropped per-layer alpha -> rectangular cut-outs in v1).
+Renders: face, eyes, body, hair OK. Idle sway, cursor gaze, Nod/Shake motions OK.
+Forced ParamEyeL/ROpen=0: both eyes close. ParamMouthOpenY=1: mouth barely changes (~+20% mouth mesh height).
+Only error: 404 for optional deskpet.json.

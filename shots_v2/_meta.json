@@ -1,0 +1,47 @@
+{
+ "ready": {
+  "backend": "live2d",
+  "info": {
+   "coreVersion": 83951616,
+   "expressions": [],
+   "motionGroups": [
+    "Idle",
+    "Blink",
+    "Nod",
+    "Shake"
+   ]
+  }
+ },
+ "core": "5.1.0",
+ "params": [
+  "ParamAngleX",
+  "ParamAngleY",
+  "ParamAngleZ",
+  "ParamBodyAngleX",
+  "ParamBodyAngleY",
+  "ParamBodyAngleZ",
+  "ParamEyeLOpen",
+  "ParamEyeROpen",
+  "ParamEyeBallX",
+  "ParamEyeBallY",
+  "ParamEyeBallForm",
+  "ParamMouthForm",
+  "ParamMouthOpenY"
+ ],
+ "motion": {
+  "Nod": "true",
+  "Shake": "true"
+ },
+ "bounds": {
+  "x": 1910,
+  "y": 332,
+  "w": 362,
+  "h": 580,
+  "sw": 2294,
+  "sh": 960,
+  "dpr": 1.5
+ },
+ "logs": [
+  "[log.error] Failed to load resource: the server responded with a status of 404 (Not Found) vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/deskpet.json"
+ ]
+}
