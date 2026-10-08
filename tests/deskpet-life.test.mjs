@@ -223,3 +223,24 @@ test('do-not-disturb: no idle moves, yawns or nods, but it still dozes off and r
     assert.equal(life.phase, 'asleep');
     assert.equal(life.tap(), 'startle');
 });
+
+test('mood shapes idle life: a sad pet never hums and moves less, a tired one gets drowsy sooner', () => {
+    const sad = rig({ drowsyAfterMs: 1e9 });
+    sad.life.setMood({ emotion: 'sad', intensity: 0.9 });
+    const happy = rig({ drowsyAfterMs: 1e9 });
+    happy.life.setMood({ emotion: 'happy', intensity: 0.9 });
+    sad.advance(300000);
+    happy.advance(300000);
+    assert.ok(!sad.log.actions.includes('hum'));
+    assert.ok(sad.log.actions.length < happy.log.actions.length);
+
+    const tired = rig();
+    tired.life.setMood({ emotion: 'tired', intensity: 1 });
+    tired.advance(LIFE_TIMINGS.drowsyAfterMs * 0.6);
+    assert.equal(tired.life.phase, 'drowsy');
+    // 心情很淡时不影响
+    const faint = rig();
+    faint.life.setMood({ emotion: 'tired', intensity: 0.1 });
+    faint.advance(LIFE_TIMINGS.drowsyAfterMs * 0.6);
+    assert.equal(faint.life.phase, 'awake');
+});

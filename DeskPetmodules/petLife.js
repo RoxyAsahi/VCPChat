@@ -57,6 +57,20 @@ const MICRO_ACTIONS = [
     ['hum', 2],
 ];
 
+// 长期心情（侧栏和桌宠共用的 moodState）怎么影响闲时：
+//   pace 小动作间隔的倍数，sleepy 多久犯困的倍数，weights 覆盖各小动作的权重
+const MOOD_STYLE = {
+    happy: { pace: 0.75, sleepy: 1.2, weights: { hum: 4 } },
+    excited: { pace: 0.6, sleepy: 1.5, weights: { hum: 4, lookAround: 4 } },
+    affectionate: { pace: 0.85, sleepy: 1, weights: { hum: 3, tilt: 4 } },
+    shy: { pace: 1, sleepy: 1, weights: { tilt: 4, hum: 1 } },
+    calm: { pace: 1.2, sleepy: 1, weights: { hum: 1 } },
+    concerned: { pace: 1.3, sleepy: 1, weights: { lookAround: 4, hum: 0 } },
+    sad: { pace: 1.6, sleepy: 0.8, weights: { hum: 0, stretch: 1 } },
+    tired: { pace: 1.5, sleepy: 0.5, weights: { hum: 0, stretch: 4 } },
+    angry: { pace: 1.3, sleepy: 1.2, weights: { hum: 0, tilt: 1 } },
+};
+
 export function createPetLife({
     now = () => Date.now(),
     random = Math.random,
@@ -75,6 +89,7 @@ export function createPetLife({
     let nextNodAt = 0;
     let busyUntil = 0;             // 正在演的动作结束前不插新的小动作
     let lastMicro = null;
+    let style = null;              // MOOD_STYLE 里当前心情那一项，按强度插值过
     let quiet = false;             // 免打扰：不做引人注意的小动作，只安静地呼吸眨眼、打盹
     const holds = new Set();       // reply / composer / drag / hidden：期间不犯困、不做小动作
 
@@ -186,6 +201,15 @@ export function createPetLife({
         // 免打扰开着时不自己找事做（被碰到的反应照常）
         setQuiet(on) { quiet = Boolean(on); },
 
+        // 长期心情 { emotion, intensity }：开心时小动作多、爱哼歌，难过时少动、不哼歌，累了更早犯困
+        setMood(mood) {
+            const base = MOOD_STYLE[mood?.emotion];
+            const k = Math.max(0, Math.min(1, Number(mood?.intensity) || 0));
+            if (!base || k < 0.2) { style = null; return; }
+            const lerp = (v) => 1 + (v - 1) * k;
+            style = { pace: lerp(base.pace), sleepy: lerp(base.sleepy), weights: base.weights };
+        },
+
         // 回复在流、输入框开着、拖动中、窗口隐藏时按住时钟
         hold(reason, on) {
             const had = holds.has(reason);
@@ -280,7 +304,7 @@ export function createPetLife({
             }
             if (phase === 'awake') {
                 updateGaze();
-                if (!held && at - lastInteraction >= t.drowsyAfterMs) {
+                if (!held && at - lastInteraction >= t.drowsyAfterMs * (style?.sleepy || 1)) {
                     setPhase('drowsy');
                     if (!quiet) act('yawn');
                     return;
@@ -289,7 +313,7 @@ export function createPetLife({
                     const name = pickMicro();
                     lastMicro = name;
                     act(name);
-                    nextMicroAt = at + between(t.microMinMs, t.microMaxMs);
+                    nextMicroAt = at + between(t.microMinMs, t.microMaxMs) * (style?.pace || 1);
                 }
                 return;
             }
@@ -319,7 +343,9 @@ export function createPetLife({
     };
 
     function pickMicro() {
-        const pool = MICRO_ACTIONS.filter(([name]) => name !== lastMicro);
+        const pool = MICRO_ACTIONS
+            .map(([name, w]) => [name, style?.weights[name] ?? w])
+            .filter(([name, w]) => name !== lastMicro && w > 0);
         const total = pool.reduce((sum, [, w]) => sum + w, 0);
         let roll = random() * total;
         for (const [name, w] of pool) {

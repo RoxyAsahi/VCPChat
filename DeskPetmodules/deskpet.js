@@ -1413,6 +1413,7 @@ async function start() {
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
+        life.setMood(director.baseline);
         life.tick();
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
