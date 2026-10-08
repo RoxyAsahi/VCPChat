@@ -21,11 +21,16 @@ function setup() {
             this.visible = false;
             this.destroyed = false;
             this.sent = [];
-            this.webContents = Object.assign(new EventEmitter(), {
+            this.contents = Object.assign(new EventEmitter(), {
                 send: (channel, payload) => this.sent.push({ channel, payload }),
                 isDestroyed: () => this.destroyed,
             });
             windows.push(this);
+        }
+        // 和 Electron 一样：窗口销毁以后再读 webContents 会抛异常
+        get webContents() {
+            if (this.destroyed) throw new TypeError('Object has been destroyed');
+            return this.contents;
         }
         isDestroyed() { return this.destroyed; }
         isVisible() { return this.visible; }

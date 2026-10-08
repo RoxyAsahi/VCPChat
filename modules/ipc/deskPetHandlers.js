@@ -391,7 +391,7 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
-    const pet = { win, agentId, scale, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0 };
+    const pet = { win, contents: win.webContents, agentId, scale, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0 };
     pets.set(agentId, pet);
     rememberOpen(agentId, true);
 

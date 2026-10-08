@@ -88,7 +88,12 @@ function gate(sender, options) {
 
 /** 桌宠关掉、重载时：它发起的朗读停掉，占着的回复放开。 */
 function release(pet) {
-    const contents = pet?.win?.webContents;
+    // 窗口的 closed 事件里 win.webContents 已经销毁，一碰就抛异常（主进程会弹「JavaScript error」框卡住），
+    // 所以用打开窗口时记下的那个
+    let contents = pet?.contents;
+    if (!contents) {
+        try { contents = pet?.win?.webContents; } catch { contents = null; }
+    }
     if (!contents) return;
     for (const [id, claim] of claims) if (claim.contents === contents) claims.delete(id);
     speeches.delete(pet);
