@@ -53,7 +53,7 @@ const groupFields = Object.freeze([
 export const settingsSidebarSchema = Object.freeze({
     version: 1,
     agent: Object.freeze({
-        sections: Object.freeze(['identity', 'prompt', 'model', 'params', 'tts', 'regex']),
+        sections: Object.freeze(['identity', 'portrait', 'prompt', 'model', 'params', 'tts', 'regex']),
         fields: agentFields,
     }),
     group: Object.freeze({
@@ -172,6 +172,7 @@ function renderField(doc, spec, className = 'settings-schema-field') {
 // Section header icons: Lucide names, turned into SVG by the shared adapter.
 const SECTION_ICONS = {
     identity: 'user-round',
+    portrait: 'image',
     prompt: 'square-pen',
     model: 'cpu',
     params: 'sliders-horizontal',
@@ -324,6 +325,63 @@ function renderAgentIdentity(doc) {
     return el(doc, 'div', { class: 'agent-identity-container' }, identityMain, style);
 }
 
+// 首页立绘：行为在 modules/ui-system/agent-portrait-settings.js；
+// [data-portrait-variants-slot] 留给差分立绘接入同样的「缩略图 + 上传 / 移除」行
+// 差分立绘的键和情绪源（modules/emotion/emotionVocabulary.js 的 EMOTIONS、STATES）一一对应，
+// 文件存成 Agent 目录里的 portrait.<键>.<扩展名>
+const PORTRAIT_VARIANT_SLOTS = Object.freeze([
+    ['neutral', '平常'], ['calm', '平静'], ['happy', '开心'], ['excited', '兴奋'],
+    ['shy', '害羞'], ['affectionate', '亲昵'], ['curious', '好奇'], ['surprised', '惊讶'],
+    ['concerned', '担心'], ['sad', '难过'], ['tired', '疲惫'], ['angry', '生气'],
+    ['thinking', '思考中（状态）'], ['tool', '调用工具（状态）'], ['error', '出错（状态）'],
+]);
+
+function renderAgentPortrait(doc) {
+    const slot = (variant, title, hint) => {
+        const inputId = `agentPortrait${variant[0].toUpperCase()}${variant.slice(1)}Input`;
+        return el(doc, 'div', { class: 'agent-portrait-slot', 'data-portrait-variant': variant, 'data-state': 'empty' },
+            el(doc, 'span', { class: 'agent-portrait-slot-thumb', 'aria-hidden': 'true' }, el(doc, 'img', { alt: '', draggable: 'false', hidden: true })),
+            el(doc, 'span', { class: 'agent-portrait-slot-text' },
+                el(doc, 'span', { class: 'agent-portrait-slot-title' }, title),
+                el(doc, 'span', { class: 'agent-portrait-slot-status', title: hint }, '未设置')),
+            el(doc, 'span', { class: 'agent-portrait-slot-actions' },
+                el(doc, 'button', { type: 'button', class: 'small-button', 'data-portrait-action': 'pick', 'aria-controls': inputId }, '上传'),
+                el(doc, 'button', { type: 'button', class: 'small-button agent-portrait-remove-btn', 'data-portrait-action': 'remove', hidden: true }, '移除')),
+            el(doc, 'input', { id: inputId, type: 'file', hidden: true, 'aria-label': `选择${title}图片` }));
+    };
+    const preview = el(doc, 'div', {
+        class: 'agent-portrait-preview',
+        id: 'agentPortraitPreview',
+        role: 'group',
+        'aria-label': '立绘预览，点按或拖动设置焦点，方向键微调',
+        'data-empty': 'true',
+    },
+        el(doc, 'img', { class: 'agent-portrait-preview-image', alt: '', draggable: 'false', hidden: true }),
+        el(doc, 'span', { class: 'agent-portrait-preview-tabs', 'aria-hidden': 'true' }),
+        el(doc, 'span', { class: 'agent-portrait-focus-marker', 'aria-hidden': 'true', hidden: true }),
+        el(doc, 'span', { class: 'agent-portrait-preview-empty' }, '还没有立绘，首页显示头像和名字'));
+    const themes = el(doc, 'div', { class: 'agent-portrait-preview-themes', role: 'group', 'aria-label': '预览主题' },
+        el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'default', 'aria-pressed': 'true' }, '深色'),
+        el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'light', 'aria-pressed': 'false' }, '浅色'));
+    const height = el(doc, 'div', { class: 'agent-portrait-height' },
+        el(doc, 'label', { for: 'agentPortraitHeight' }, '立绘高度'),
+        el(doc, 'div', { class: 'slider-container' },
+            el(doc, 'input', { id: 'agentPortraitHeight', type: 'range', min: 180, max: 360, step: 4, value: 248 }),
+            el(doc, 'span', { id: 'agentPortraitHeightValue', class: 'slider-value-pill' }, '248px')));
+    return el(doc, 'div', { class: 'agent-settings-card-shell agent-portrait-settings', id: 'agentPortraitSettings' },
+        el(doc, 'p', { class: 'agent-portrait-hint' }, '有立绘时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字。'),
+        preview,
+        el(doc, 'div', { class: 'agent-portrait-preview-toolbar' }, themes,
+            el(doc, 'button', { type: 'button', id: 'agentPortraitResetBtn', class: 'small-button' }, '重置位置')),
+        slot('default', '立绘', '深色主题和没有浅色版时都用这张'),
+        slot('light', '浅色主题立绘（可选）', '浅色主题优先用这张'),
+        el(doc, 'details', { class: 'agent-portrait-variants', 'data-portrait-variants-slot': '' },
+            el(doc, 'summary', { class: 'agent-portrait-variants-summary' }, '表情差分（可选）'),
+            el(doc, 'p', { class: 'agent-portrait-hint' }, '对话时立绘会跟着回复的情绪换成对应的差分；缺哪张就用相近情绪的图，都没有就用默认立绘。思考、调用工具、出错时优先显示对应的状态图。'),
+            ...PORTRAIT_VARIANT_SLOTS.map(([variant, title]) => slot(variant, title, '没有这张时用相近情绪的差分或默认立绘'))),
+        height);
+}
+
 function renderAgentParams(doc) {
     const content = el(doc, 'div', { class: 'params-content', id: 'paramsContent' });
     agentFields.slice(2, 7).forEach(spec => content.append(renderField(doc, spec)));
@@ -413,6 +471,7 @@ export function renderAgentSettingsSurface(host, doc = host?.ownerDocument || do
     const form = el(doc, 'form', { id: 'agentSettingsForm', novalidate: true });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingAgentId', name: 'agentId' }));
     form.append(renderSection(doc, { kind: 'agent', key: 'identity', title: '基础信息', summaryId: 'identitySummary', content: renderAgentIdentity }));
+    form.append(renderSection(doc, { kind: 'agent', key: 'portrait', title: '首页立绘', tooltip: '图片和位置的修改点保存后生效', summaryId: 'portraitSummary', content: renderAgentPortrait }));
     form.append(renderSection(doc, { kind: 'agent', key: 'prompt', title: '系统提示词', tooltip: '三个模块独立编辑后，注意保存以生效', summaryId: 'promptSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell' }, el(d, 'div', { id: 'systemPromptContainer', class: 'system-prompt-container' })) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'model', title: '模型设置', summaryId: 'modelSummary', content: d => el(d, 'div', { class: 'agent-settings-card-shell' }, el(d, 'div', { 'data-schema-field': agentFields[1].id }, el(d, 'div', { class: 'model-input-container' }, renderControl(d, agentFields[1]), el(d, 'button', { type: 'button', id: 'openModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '选择模型' }, el(d, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more'))))) }));
     form.append(renderSection(doc, { kind: 'agent', key: 'params', title: '模型参数配置', summaryId: 'paramsSummary', content: renderAgentParams }));

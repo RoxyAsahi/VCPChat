@@ -23,7 +23,7 @@ function createDocument() {
 
 test('schema contract declares both settings domains, validation, dependency and tooltip metadata', () => {
     const { settingsSidebarSchema } = schema;
-    assert.deepEqual(settingsSidebarSchema.agent.sections, ['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
+    assert.deepEqual(settingsSidebarSchema.agent.sections, ['identity', 'portrait', 'prompt', 'model', 'params', 'tts', 'regex']);
     assert.deepEqual(settingsSidebarSchema.group.sections, ['identity', 'mode', 'model', 'prompt']);
     const temperature = settingsSidebarSchema.agent.fields.find(field => field.id === 'agentTemperature');
     assert.deepEqual(temperature.validation, { min: 0, max: 2 });
@@ -59,7 +59,7 @@ test('schema-rendered Agent surface exposes every business anchor and all contro
     assert.ok(document.getElementById('ttsSpeedValue')?.classList.contains('slider-value-pill'), 'ttsSpeedValue 必须包含 slider-value-pill 类');
 
     const sections = [...form.querySelectorAll('[data-schema-section][data-section-key]')];
-    assert.deepEqual(sections.map(section => section.dataset.sectionKey), ['identity', 'prompt', 'model', 'params', 'tts', 'regex']);
+    assert.deepEqual(sections.map(section => section.dataset.sectionKey), ['identity', 'portrait', 'prompt', 'model', 'params', 'tts', 'regex']);
     assert.equal(form.querySelectorAll('.agent-settings-section-title-row').length, sections.length);
     assert.equal(form.querySelector('[data-section-key="prompt"] .agent-settings-section-title-row > .agent-settings-section-title')?.textContent, '系统提示词');
     assert.equal(form.querySelector('#refreshTtsModelsBtn .vcp-ui-icon')?.textContent, 'refresh');
@@ -85,9 +85,9 @@ test('Agent 手风琴与自定义样式折叠展开测试：点击 Header、Togg
     const form = schema.renderAgentSettingsSurface(host, document);
 
     const sections = [...form.querySelectorAll('.agent-settings-section')];
-    assert.equal(sections.length, 6, 'Agent 设置必须有 6 个可折叠分区（含正则设置）');
+    assert.equal(sections.length, 7, 'Agent 设置必须有 7 个可折叠分区（含首页立绘和正则设置）');
 
-    // 逐个测试 6 大主分区点击与键盘切换
+    // 逐个测试 7 个主分区点击与键盘切换
     for (const section of sections) {
         const header = section.querySelector('.agent-settings-section-header');
         const toggle = section.querySelector('.agent-settings-toggle-btn');

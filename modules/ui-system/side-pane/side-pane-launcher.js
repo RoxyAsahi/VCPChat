@@ -1,6 +1,7 @@
-/* Side pane new tab page: assistant profile, tool / app / notification sections and the open-tab entry registry. */
+/* Side pane new tab page: assistant profile or portrait, tool / app / notification sections and the open-tab entry registry. */
 'use strict';
 import { createSidePaneEntries } from './side-pane-entries.js';
+import { createLauncherPortrait } from './side-pane-launcher-portrait.js';
 
 /**
  * 新标签页（引导页）：上面个人资料，下面工具 / 应用 / 通知分段。工具入口由各模块通过 registerEntry 自己登记，
@@ -33,6 +34,7 @@ export function createSidePaneLauncher({
     const profileAvatar = find(profile, '.side-pane-launcher-avatar');
     const profileImage = find(profileAvatar, 'img');
     const profileName = find(profile, '.side-pane-launcher-name');
+    const portraitOwner = createLauncherPortrait({ view });
     const segmentTabs = find(view, '.side-pane-launcher-tabs');
     const appsSection = find(view, '[data-launcher-section="apps"]');
     const appGrid = find(appsSection, '.side-pane-launcher-app-grid');
@@ -76,6 +78,7 @@ export function createSidePaneLauncher({
             console.warn('[SidePaneLauncher] Failed to read launcher profile:', error);
         }
         profile.hidden = !current;
+        renderPortrait(current?.portraits || null, current?.portraitDisplay);
         profileEdit = typeof current?.onEditAvatar === 'function' ? current.onEditAvatar : null;
         profileRename = typeof current?.onRename === 'function' ? current.onRename : null;
         if (!current) return;
@@ -94,6 +97,13 @@ export function createSidePaneLauncher({
             profileAvatar.disabled = !profileEdit;
             profileAvatar.setAttribute('aria-label', profileEdit ? '编辑头像' : (current.name || '头像'));
         }
+    }
+
+    // 有立绘时顶部换成一张向下渐隐的立绘，圆头像和名字都不显示；没有立绘就是原来的头像。
+    // 立绘、浅色版和差分怎么挑、先解码再换、坏图怎么退在 side-pane-launcher-portrait.js；
+    // display 是助手配置里的焦点和高度（见 portrait-display.js），跟着换上的那张图一起生效
+    function renderPortrait(portraits, display) {
+        portraitOwner.render(portraits, display);
     }
 
     if (profileAvatar) {
@@ -415,6 +425,11 @@ export function createSidePaneLauncher({
             renderProfile();
         },
 
+        /** 情绪源给出的画面（{ state, emotion, ... }），有差分立绘时换成对应的那张 */
+        setPortraitFrame(frame) {
+            portraitOwner.setFrame(frame);
+        },
+
         setAppsProvider(provider) {
             appsProvider = typeof provider === 'function' ? provider : null;
             if (!appsProvider) segment = 'tools';
@@ -435,6 +450,7 @@ export function createSidePaneLauncher({
         dispose() {
             disposed = true;
             entriesOwner.dispose();
+            portraitOwner.dispose();
             cleanups.forEach(cleanup => cleanup());
             cleanups.length = 0;
         }
