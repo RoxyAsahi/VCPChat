@@ -2512,12 +2512,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 412,
+          "line": 416,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 581,
+          "line": 584,
           "kind": "custom-event-listener"
         },
         {
@@ -2676,13 +2676,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 412,
+          "line": 416,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('change'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 581,
+          "line": 584,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('change'"
         },
@@ -3943,12 +3943,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 456,
+          "line": 460,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 457,
+          "line": 461,
           "kind": "custom-event-listener"
         },
         {
@@ -5437,13 +5437,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 456,
+          "line": 460,
           "kind": "custom-event-listener",
           "match": "addBtn.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 457,
+          "line": 461,
           "kind": "custom-event-listener",
           "match": "importBtn.addEventListener('click'"
         },
@@ -15157,7 +15157,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 411,
+          "line": 415,
           "kind": "custom-event-listener"
         },
         {
@@ -15329,7 +15329,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 411,
+          "line": 415,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('input'"
         },
@@ -33529,7 +33529,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2310,
+      "line": 2309,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "element.addEventListener(eventName",
@@ -33537,7 +33537,7 @@
     },
     {
       "file": "modules/settingsManager.js",
-      "line": 2339,
+      "line": 2338,
       "reason": "dynamic listener name: eventName",
       "kind": "custom-event-listener",
       "match": "systemPromptContainer.addEventListener(eventName",

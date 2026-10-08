@@ -726,13 +726,13 @@
       },
       {
         "file": "modules/settingsManager.js",
-        "line": 2310,
+        "line": 2309,
         "kind": "custom-event-listener",
         "match": "element.addEventListener(eventName"
       },
       {
         "file": "modules/settingsManager.js",
-        "line": 2339,
+        "line": 2338,
         "kind": "custom-event-listener",
         "match": "systemPromptContainer.addEventListener(eventName"
       }

@@ -392,7 +392,7 @@ test('Agent sections are schema-owned collapsible containers with manager toggle
     assert.match(manager, /toggleAgentSettingsSection:\s*\(key\)\s*=>\s*toggleAgentSettingsSection\(key\)/,
         'SettingsManager must expose canonical toggleAgentSettingsSection command');
 
-    const expectedSections = ['identity', 'portrait', 'prompt', 'model', 'params', 'tts', 'regex'];
+    const expectedSections = ['identity', 'prompt', 'model', 'params', 'tts', 'regex'];
     assert.deepEqual([...settingsSidebarSchema.agent.sections], expectedSections,
         'Agent schema must declare all 7 canonical sections');
 

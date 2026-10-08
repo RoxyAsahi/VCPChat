@@ -856,7 +856,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .gr
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(.agent-identity-container .agent-style-collapsible-container, .group-settings-identity-shell .group-settings-field-shell) {
-    max-height: 600px;
+    max-height: 4000px;
     opacity: 1;
     margin-top: 6px;
     padding-top: 6px;
@@ -1170,7 +1170,8 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-contain
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 600px;
+    /* 里面有首页立绘（预览、图片槽和展开的表情差分），给足高度只为保留展开动画 */
+    max-height: 4000px;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -3150,6 +3151,18 @@ html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .invite-agent-butt
     border-color: var(--accent-bg-light, var(--highlight-text));
 }
 
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-style-title {
+    font-size: var(--vcp-settings-font-sub);
+    font-weight: 500;
+    color: var(--secondary-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-style-item {
+    gap: 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
 
 /* --- 助手设置「首页立绘」：预览模拟侧栏首页头部（同样的渐隐），点按或拖动设置焦点 --- */
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings {
