@@ -42,6 +42,28 @@ html, body {
   opacity: 1;
 }
 
+/* 朗读时：张嘴帧（有的话）直接换上，不做淡入，跟得上音节；没有张嘴帧就随音量轻轻起伏 */
+#portrait {
+  scale: 1 calc(1 + var(--voice, 0) * 0.012);
+}
+
+#portrait.is-talking img.is-active {
+  opacity: 0;
+  transition: none;
+}
+
+#portrait #portraitTalk {
+  transition: none;
+}
+
+#portrait.is-talking #portraitTalk {
+  opacity: 1;
+}
+
+#avatarImg {
+  scale: calc(1 + var(--voice, 0) * 0.06);
+}
+
 #portrait.is-pop {
   animation: deskpet-pop 260ms ease-out, deskpet-breathe 4.2s ease-in-out infinite;
 }
