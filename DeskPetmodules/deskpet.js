@@ -12,6 +12,7 @@ import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
 import { createSpeech } from 'vcp-deskpet://pet/app/voice.js';
 import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
+import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette } from 'vcp-deskpet://pet/app/figure.js';
@@ -1501,13 +1502,10 @@ function applyPrefs(next) {
 // 心情一变，角色就换成新的待机表情，头顶的小牌子提示一下（「😊 开心（心情）」）；右键菜单第一行也写着现在的心情。
 
 function bindMood(director, agentId) {
-    let moodAt = 0;
+    // 先发的查询晚到时不能盖掉已经推过来的新心情；按主进程的广播序号比（系统时间可能被往回调）
+    const accept = createMoodOrder(agentId);
     const apply = (mood) => {
-        if (!mood || mood.agentId !== agentId) return;
-        // 先发的查询晚到时不能盖掉已经推过来的新心情
-        if (Number(mood.updatedAt) < moodAt) return;
-        moodAt = Number(mood.updatedAt) || 0;
-        director.setBaseline(mood);
+        if (accept(mood)) director.setBaseline(mood);
     };
     api.onMood?.(apply);
     Promise.resolve(api.getMood?.()).then(apply).catch((error) => console.warn('[DeskPet] 读取心情失败：', error));
