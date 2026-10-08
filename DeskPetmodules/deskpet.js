@@ -11,11 +11,14 @@ import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.j
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
 import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
+import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
+import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 
 const api = window.deskPetAPI;
-// 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
-const FPS = { active: 30, idle: 15 };
-const FPS_SOFTWARE = { active: 20, idle: 8 };
+// 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle，睡着了再降到 sleep；
+// 没有显卡、用软件渲染时整体再降一档。
+const FPS = { active: 30, idle: 15, sleep: 10 };
+const FPS_SOFTWARE = { active: 20, idle: 8, sleep: 5 };
 const IDLE_AFTER_MS = 30000;
 const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
@@ -46,11 +49,26 @@ const EMOTION_RING = {
     curious: '#6b8cff', surprised: '#59d0ff', concerned: '#b39ddb', sad: '#6c8fb3', tired: '#a58cff', angry: '#ff5f57',
 };
 const STATE_LABEL = { thinking: '思考中…', tool: '调用工具中…', error: '出错了' };
+// 被碰到才有的反应：回到高帧率；其余闲时小动作按当前帧率演
+const USER_REACTIONS = new Set(['poke', 'headTap', 'pat', 'annoyed', 'dizzy', 'startle', 'wake', 'landed']);
+// 反应期间临时换的情绪（立绘换差分、Live2D 换表情），演完换回来
+const REACTION_EMOTION = { headTap: 'shy', pat: 'affectionate', annoyed: 'angry', dizzy: 'surprised', startle: 'surprised' };
+// 头顶冒出的小符号
+const LIFE_FX = { annoyed: '💢', dizzy: '💫', pat: '💕', sleepPat: '💕', headTap: '♪', hum: '♪', startle: '❗', yawn: '💭', wake: '✨' };
+const LIFE_ANNOYED_AT = 3; // 与 petLife 的 annoyedAt 一致：连点到这一下就不再打开输入框
 
 const $ = (id) => document.getElementById(id);
 let backend = null;
 let frame = { state: null, emotion: 'neutral', intensity: 0, source: 'idle' };
 let lastActivity = Date.now();
+let life = null; // petLife：闲时小动作、困了睡、被吵醒、连点和摸头（start 里创建）
+
+// setActive 的参数：true/false 是旧的「有动静 / 空闲」，也可以直接给档位名
+function fpsTier(level) {
+    if (level === true) return 'active';
+    if (level === false) return 'idle';
+    return level === 'sleep' || level === 'idle' ? level : 'active';
+}
 // 主进程给的设置：大小、免打扰。别的模块（声音、待机反应）读 window.deskPetPrefs 或听 'deskpet:prefs' 事件。
 let prefs = { scale: 1, doNotDisturb: false };
 // 免打扰时只有「在回桌宠上说的话」的回复还显示气泡：发出后这么久内开始的回复，
@@ -165,6 +183,7 @@ function speakProactive(payload) {
     bubble.own = kind === 'alarm';
     bubble.reply = payload.text || payload.title;
     lastActivity = Date.now();
+    life?.wake({ startle: true });
     proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
     backend?.tap?.();
     renderBubble();
@@ -201,6 +220,7 @@ const composer = { open: false, sending: false, queued: null, lastSentAt: 0, own
 
 function openComposer() {
     composer.open = true;
+    life?.hold('composer', true);
     $('composer').hidden = false;
     api.setInteractive(true);
     setTimeout(() => $('composerInput').focus(), 30);
@@ -208,6 +228,7 @@ function openComposer() {
 
 function closeComposer() {
     composer.open = false;
+    life?.hold('composer', false);
     $('composer').hidden = true;
     api.setInteractive(false);
 }
@@ -331,7 +352,7 @@ function uiBounds() {
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
 
-function bindPointer({ onTap, onDoubleTap }) {
+function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
     let tapTimer = 0;
@@ -340,23 +361,35 @@ function bindPointer({ onTap, onDoubleTap }) {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
         // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
         if (down?.dragging) api.dragEnd();
-        down = { x: e.screenX, y: e.screenY, dragging: false };
+        down = { x: e.screenX, y: e.screenY, dragging: false, cx: e.clientX, cy: e.clientY };
         // 捕获指针：窗口跟着光标移动时 pointerup 也一定回到这里。
         try { e.target?.setPointerCapture?.(e.pointerId); } catch { /* 指针已经没了 */ }
     });
     window.addEventListener('pointermove', (e) => {
         lastActivity = Date.now();
-        if (!down || down.dragging) return;
+        if (!down) return;
+        if (down.dragging) {
+            onDrag('move', e);
+            return;
+        }
         if (Math.hypot(e.screenX - down.x, e.screenY - down.y) > 4) {
             down.dragging = true;
             api.dragStart({ x: down.x, y: down.y });
+            onDrag('start', e);
         }
     });
     window.addEventListener('pointerup', () => {
         if (!down) return;
+        const at = { x: down.cx, y: down.cy };
         if (down.dragging) {
             api.dragEnd();
-        } else if (Date.now() - lastTap < DOUBLE_TAP_MS) {
+            onDrag('end');
+            down = null;
+            return;
+        }
+        // 每一下都先报去数连点，再分单击、双击
+        onTapDown(at);
+        if (Date.now() - lastTap < DOUBLE_TAP_MS) {
             // 双击只打开输入框，不先做一遍单击的开心动作
             clearTimeout(tapTimer);
             lastTap = 0;
@@ -364,13 +397,16 @@ function bindPointer({ onTap, onDoubleTap }) {
         } else {
             lastTap = Date.now();
             clearTimeout(tapTimer);
-            tapTimer = setTimeout(onTap, DOUBLE_TAP_MS);
+            tapTimer = setTimeout(() => onTap(at), DOUBLE_TAP_MS);
         }
         down = null;
     });
     // 触屏手势被系统接管（pointercancel）、拖到一半切走窗口时收不到 pointerup，拖动必须在这里结束。
     const abort = () => {
-        if (down?.dragging) api.dragEnd();
+        if (down?.dragging) {
+            api.dragEnd();
+            onDrag('end');
+        }
         down = null;
     };
     window.addEventListener('pointercancel', abort);
@@ -424,6 +460,21 @@ const EMOTION_MOTIONS = {
     sad: ['FlickDown'],
     angry: ['Flick@Body', 'Flick'],
 };
+// 闲时和互动的动作：先看 deskpet.json 的 motions，再按组名找；都没有就只靠参数曲线演（lifeMotion.js）。
+const LIFE_MOTIONS = {
+    headTap: ['TapHead', 'Tap@Head', 'Head'],
+    pat: ['TapHead', 'Tap@Head', 'Head'],
+    annoyed: ['Angry', 'Flick@Body', 'Flick', 'Shake'],
+    dizzy: ['Dizzy', 'Shake', 'FlickDown'],
+    startle: ['Surprised', 'FlickUp', 'Flick'],
+    yawn: ['Yawn', 'Sleepy'],
+    stretch: ['Stretch'],
+    hum: ['Happy', 'Dance'],
+    wake: ['Wake', 'WakeUp'],
+    landed: ['Landing', 'FlickDown'],
+};
+const LIFE_MOTION_WEIGHT = 0.4; // 模型自己有这个动作时，参数曲线只轻轻叠一点
+
 // 官方示例模型的表情映射（按模型文件名认）；其他模型可以在模型旁放 deskpet.json 自己指定。
 const SAMPLE_EXPRESSIONS = {
     natori: { neutral: 'Normal', calm: 'Normal', happy: 'Smile', excited: 'exp_02', shy: 'Blushing', affectionate: 'Blushing', curious: 'exp_01', surprised: 'Surprised', concerned: 'exp_03', sad: 'Sad', tired: 'exp_05', angry: 'Angry' },
@@ -591,12 +642,28 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         if (configured && motionGroups.includes(configured)) return configured;
         return (EMOTION_MOTIONS[emotion] || []).find((g) => motionGroups.includes(g)) || null;
     }
+    function pickLifeMotion(name) {
+        const configured = profile.motions?.[name];
+        if (configured && motionGroups.includes(configured)) return configured;
+        return (LIFE_MOTIONS[name] || []).find((g) => motionGroups.includes(g)) || null;
+    }
+    const life = createLifeMotion();
 
     // 每帧在物理和 pose 之后、model.update 之前叠加情绪参数，平滑逼近目标。
     const current = {};
     let target = {};
     let mouthPhase = 0;
+    let hop = 0;
     internal.on('beforeModelUpdate', () => {
+        // 闲时动作、困意、拖动摆动：叠在情绪之上；跳一下改的是模型位置
+        const lifeFrame = life.step(app.ticker.deltaMS / 1000);
+        for (const [id, v] of Object.entries(lifeFrame.params)) {
+            if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), v);
+        }
+        if (lifeFrame.hop !== hop) {
+            hop = lifeFrame.hop;
+            model.position.y = window.innerHeight - hop;
+        }
         const keys = new Set([...Object.keys(current), ...Object.keys(target)]);
         for (const id of keys) {
             const goal = target[id] || 0;
@@ -643,7 +710,28 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
                 if (group) model.motion(group);
             }
         },
-        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        setActive(level) { app.ticker.maxFPS = fps[fpsTier(level)]; },
+        life: {
+            phase(p) { life.setPhase(p); },
+            act(name, ms) {
+                const group = pickLifeMotion(name);
+                life.play(name, ms, { weight: group ? LIFE_MOTION_WEIGHT : 1 });
+                // 互动动作要马上看到：打断待机动作再放（同一个动作连着放也能重播）
+                if (group) {
+                    internal.motionManager?.stopAllMotions?.();
+                    model.motion(group, undefined, PIXI.live2d.MotionPriority?.FORCE ?? 3);
+                }
+            },
+            held(on) { life.setHeld(on); },
+            dragVelocity(vx) { life.dragVelocity(vx); },
+            // 视线：g 以头为原点、-1..1；换算成窗口坐标交给模型自己的视线跟随
+            gaze(g) {
+                const b = model.getBounds();
+                const hx = b.x + b.width / 2;
+                const hy = b.y + b.height * 0.18;
+                model.focus(hx + g.x * window.innerWidth * 0.6, hy - g.y * window.innerHeight * 0.6);
+            },
+        },
         // 窗口藏起来时整个停掉（窗口关了后台节流，不停的话隐藏着也在一直画）
         setPaused(paused) {
             if (paused) app.ticker.stop();
@@ -755,20 +843,26 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
     let target = {};
     const look = { x: 0, y: 0, tx: 0, ty: 0 };
     let hop = 0, hopV = 0;
-    const get = (id) => current[id] || 0;
+    const life = createLifeMotion();
+    let lifeParams = {};
+    // 情绪目标 + 闲时动作和困意（lifeMotion）的增量
+    const get = (id) => (current[id] || 0) + (lifeParams[id] || 0);
     app.ticker.add((ticker) => {
         const dt = Math.min(0.1, ticker.deltaMS / 1000);
         const a = idle.step(dt);
+        const lifeFrame = life.step(dt);
+        lifeParams = lifeFrame.params;
         const ease = 1 - Math.pow(1 - 0.12, dt * 60);
         for (const id of new Set([...Object.keys(current), ...Object.keys(target)])) {
-            current[id] = get(id) + ((target[id] || 0) - get(id)) * ease;
+            const now = current[id] || 0;
+            current[id] = now + ((target[id] || 0) - now) * ease;
         }
         look.x += (look.tx - look.x) * (1 - Math.pow(1 - 0.08, dt * 60));
         look.y += (look.ty - look.y) * (1 - Math.pow(1 - 0.08, dt * 60));
         // 单击时跳一下：弹簧回到 0。
         hopV += (-180 * hop - 12 * hopV) * dt;
         hop += hopV * dt;
-        holder.position.y = window.innerHeight + hop;
+        holder.position.y = window.innerHeight + hop - lifeFrame.hop;
 
         params.ParamAngleX = get('ParamAngleX') + look.x * 22 + a.swayX;
         params.ParamAngleY = get('ParamAngleY') + look.y * 16;
@@ -777,7 +871,7 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
         params.ParamEyeBallY = clampUnit(get('ParamEyeBallY') + look.y * 0.8);
         for (const side of ['L', 'R']) {
             const open = puppet.defaults[`ParamEye${side}Open`] + get(`ParamEye${side}Open`);
-            params[`ParamEye${side}Open`] = open * (1 - a.eyeClose);
+            params[`ParamEye${side}Open`] = Math.max(0, open * (1 - a.eyeClose));
             params[`ParamEye${side}Smile`] = get(`ParamEye${side}Smile`);
         }
         params.ParamMouthForm = get('ParamMouthForm');
@@ -810,7 +904,14 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
             for (const [id, v] of Object.entries(EMOTION_PARAMS[f.emotion] || {})) target[id] = v * intensity;
             for (const [id, v] of Object.entries(STATE_PARAMS[f.state] || {})) target[id] = (target[id] || 0) + v;
         },
-        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        setActive(level) { app.ticker.maxFPS = fps[fpsTier(level)]; },
+        life: {
+            phase(p) { life.setPhase(p); },
+            act(name, ms) { life.play(name, ms); },
+            held(on) { life.setHeld(on); },
+            dragVelocity(vx) { life.dragVelocity(vx); },
+            gaze(g) { look.tx = clampUnit(g.x); look.ty = clampUnit(g.y); },
+        },
         setPaused(paused) {
             if (paused) app.ticker.stop();
             else if (!app.ticker.started) app.ticker.start();
@@ -858,8 +959,56 @@ function reportHit(hit) {
     }
 }
 
+// 立绘和头像没有参数可调：阶段和动作写成 #lifeBody 上的属性，由样式里的关键帧演；
+// 拖动摆动和跳一下用同一套单摆计算，只在动起来时跑 requestAnimationFrame，停稳就不再占帧。
+function createCssLife() {
+    const body = $('lifeBody');
+    const stage = $('stage');
+    const motion = createLifeMotion();
+    let raf = 0;
+    let last = 0;
+    let paused = false;
+    let actTimer = 0;
+    const loop = (ts) => {
+        raf = 0;
+        if (paused) return;
+        const dt = last ? (ts - last) / 1000 : 1 / 60;
+        last = ts;
+        const { swing, hop } = motion.step(dt);
+        stage.style.setProperty('--life-swing', `${swing.toFixed(2)}deg`);
+        stage.style.setProperty('--life-hop', `${(-hop).toFixed(1)}px`);
+        if (!motion.settled) raf = requestAnimationFrame(loop);
+        else { last = 0; stage.style.removeProperty('--life-swing'); stage.style.removeProperty('--life-hop'); }
+    };
+    const kick = () => { if (!raf && !paused) raf = requestAnimationFrame(loop); };
+    return {
+        phase(p) {
+            body.dataset.lifePhase = p;
+            motion.setPhase(p);
+        },
+        act(name, ms) {
+            clearTimeout(actTimer);
+            delete body.dataset.lifeAct;
+            void body.offsetWidth; // 同一个动作连着来也要从头播
+            body.style.setProperty('--life-ms', `${ms}ms`);
+            body.dataset.lifeAct = name;
+            actTimer = setTimeout(() => { delete body.dataset.lifeAct; }, ms);
+            motion.play(name, ms);
+            kick();
+        },
+        held(on) { motion.setHeld(on); kick(); },
+        dragVelocity(vx) { motion.dragVelocity(vx); kick(); },
+        gaze() {},
+        setPaused(p) {
+            paused = p;
+            if (!p) kick();
+        },
+    };
+}
+
 function createImageBackend(assets) {
     const portraits = assets.portraits;
+    const cssLife = createCssLife();
     const sampler = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
     let activeImg = null;
 
@@ -922,9 +1071,11 @@ function createImageBackend(assets) {
             focus() {},
             bounds() { return activeImg ? drawnRect(activeImg) : null; },
             tap: pop,
+            canShow: (emotion) => Boolean(portraits[emotion]),
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
             setActive() {},
-            setPaused() {},
+            setPaused(paused) { cssLife.setPaused(paused); },
+            life: cssLife,
         };
     }
 
@@ -947,7 +1098,65 @@ function createImageBackend(assets) {
             $('avatarBadge').textContent = f.state === 'thinking' || f.state === 'tool' ? '💭' : (EMOTION_EMOJI[f.emotion] || '');
         },
         setActive() {},
-        setPaused() {},
+        setPaused(paused) { cssLife.setPaused(paused); },
+        life: cssLife,
+    };
+}
+
+// ---- 头顶小符号（所有形象共用）：💢 💫 💕 ♪，睡着时冒 z ------------------------
+
+// 睡着时的 z 一秒只挪两三下：CSS 无限动画即使分段也每帧合成，软件渲染下多占 GPU 进程几个百分点
+const ZZZ_STEP_MS = 400;
+const ZZZ_STEPS = 8;
+
+function createLifeFx() {
+    const el = $('lifeFx');
+    let timer = 0;
+    let zzzTimer = 0;
+    let zzzStep = 0;
+    let sleeping = false;
+    const stepZzz = () => {
+        const k = zzzStep / (ZZZ_STEPS - 1);
+        el.style.opacity = String(k < 0.25 ? k * 4 : 1 - (k - 0.25) / 0.75);
+        el.style.translate = `${Math.round(14 * k)}px ${Math.round(-36 * k)}px`;
+        el.style.fontSize = `${Math.round(14 + 12 * k)}px`;
+        zzzStep = (zzzStep + 1) % ZZZ_STEPS;
+    };
+    const stopZzz = () => {
+        clearInterval(zzzTimer);
+        zzzTimer = 0;
+        el.style.removeProperty('opacity');
+        el.style.removeProperty('translate');
+        el.style.removeProperty('font-size');
+    };
+    const show = (glyph, ms, mode) => {
+        clearTimeout(timer);
+        stopZzz();
+        if (mode === 'is-zzz' && !document.body.classList.contains('is-paused')) {
+            zzzStep = 0;
+            stepZzz();
+            zzzTimer = setInterval(stepZzz, ZZZ_STEP_MS);
+        }
+        el.textContent = glyph;
+        el.className = '';
+        void el.offsetWidth;
+        el.className = mode;
+        el.hidden = false;
+        if (ms) timer = setTimeout(() => { if (sleeping) show('z', 0, 'is-zzz'); else el.hidden = true; }, ms);
+    };
+    return {
+        phase(p) {
+            sleeping = p === 'asleep';
+            if (sleeping) show('z', 0, 'is-zzz');
+            else if (el.classList.contains('is-zzz')) { stopZzz(); el.hidden = true; }
+        },
+        // 窗口隐藏时 z 也停下
+        setPaused(paused) {
+            if (paused) stopZzz();
+            else if (sleeping) show('z', 0, 'is-zzz');
+        },
+        act(name, ms) { if (LIFE_FX[name]) show(LIFE_FX[name], Math.min(ms, 1800), 'is-pop'); },
+        held(on) { if (on) show('💦', 0, 'is-held'); else if (el.classList.contains('is-held')) el.hidden = true; },
     };
 }
 
@@ -959,9 +1168,17 @@ function applyFrame(next) {
     frame = next;
     lastActivity = Date.now();
     backend?.setActive(true);
-    backend?.apply(frame, { changed });
+    backend?.apply(shownFrame(frame), { changed });
     if (emotionChanged && (next.source === 'tag' || next.source === 'rule' || next.source === 'mood')) flashEmotionBadge(next.emotion, next.source);
     renderBubble();
+}
+
+// 睡着时（又没在思考、调工具）换成疲惫的表情或差分；醒来恢复原来的情绪
+function shownFrame(f) {
+    if (life?.phase !== 'asleep' || f.state) return f;
+    // 立绘没画「疲惫」时不换（不然会退到「难过」之类不搭的差分），靠闭眼歪头和 z 表现睡着
+    if (backend?.canShow && !backend.canShow('tired')) return f;
+    return { ...f, emotion: 'tired', intensity: Math.max(0.7, f.intensity || 0) };
 }
 
 function bindStream(director) {
@@ -983,10 +1200,12 @@ function bindStream(director) {
         if (!event?.messageId) return;
         lastActivity = Date.now();
         if (event.type === 'start') {
+            life?.hold('reply', true);
             director.begin(event.messageId);
             startReply(event.messageId);
         } else if (event.type === 'data') {
             if (bubble.replyId !== event.messageId) startReply(event.messageId);
+            life?.hold('reply', true);
             director.append(event.messageId, event.text);
             toolCard.push(event.text);
             // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块写成 [代码]。
@@ -1005,6 +1224,7 @@ function bindStream(director) {
             }
             scanner = null;
             bubble.replyId = null;
+            life?.hold('reply', false);
             bubble.region = null;
             composer.ownReplyEndedAt = bubble.own ? Date.now() : 0;
             scheduleReplyHide(replyHoldMs());
@@ -1091,24 +1311,97 @@ async function start() {
     document.body.dataset.backend = backend.kind;
 
     const director = createEmotionDirector({ onFrame: applyFrame });
+    const lifeFx = createLifeFx();
+    let flashTimer = 0;
+    // 互动反应时临时换个表情（不改导演的心情，演完换回来）
+    const flashEmotion = (emotion, ms) => {
+        // 立绘没画这个情绪就不换，免得退回默认立绘闪一下
+        if (backend.canShow && !backend.canShow(emotion)) return;
+        clearTimeout(flashTimer);
+        backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
+        flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true }), ms);
+    };
+    life = createPetLife({
+        onPhase(phase) {
+            document.body.dataset.lifePhase = phase;
+            backend.life?.phase(phase);
+            lifeFx.phase(phase);
+            backend.apply(shownFrame(frame), { changed: true });
+            if (phase === 'asleep' && !frame.state) backend.setActive('sleep');
+        },
+        onAction({ name, ms }) {
+            backend.life?.act(name, ms);
+            if (!life.quiet || USER_REACTIONS.has(name)) lifeFx.act(name, ms);
+            if (USER_REACTIONS.has(name)) {
+                // 被碰到的反应要流畅：回到高帧率
+                lastActivity = Date.now();
+                backend.setActive(true);
+            }
+            if (name === 'poke') {
+                backend.tap();
+                director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
+            } else if (REACTION_EMOTION[name] && !frame.state) {
+                flashEmotion(REACTION_EMOTION[name], ms);
+            }
+        },
+        onGaze(g) { if (g) backend.life?.gaze(g); },
+    });
+    // 免打扰（桌宠设置里开）：不自己做小动作、不冒小符号
+    const syncQuiet = () => life.setQuiet(isQuiet());
+    syncQuiet();
+    window.addEventListener('deskpet:prefs', syncQuiet);
     bindStream(director);
     bindMood(director, assets.agentId);
     proactiveDirector = director;
     api.onProactive?.(speakProactive);
     bindComposer();
+    // 头顶那一块：包围盒上方四分之一、中间六成宽（摸头、点头用）
+    const onHead = (x, y) => {
+        const b = backend.bounds();
+        if (!b) return false;
+        return y >= b.y && y <= b.y + b.height * 0.25 && Math.abs(x - (b.x + b.width / 2)) <= b.width * 0.3;
+    };
     api.onCursor(({ x, y, outside }) => {
         if (!outside) {
             if (uiAt(x, y)) reportHit(true);
             else backend.probe(x, y);
         }
-        backend.focus(x, y);
+        life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
+        // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
+        if (!life.gaze) backend.focus(x, y);
     });
+    let streak = 0;
+    let drag = null;
     bindPointer({
-        onTap: () => {
-            backend.tap();
-            director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
+        onTap: (at) => life.tap({ onHead: onHead(at.x, at.y) }),
+        onTapDown: () => {
+            streak = life.tapDown();
+            // 连点时第二下打开的输入框没写东西就收回去，别让它跟着一开一关
+            if (streak >= LIFE_ANNOYED_AT && composer.open && !$('composerInput').value.trim()) closeComposer();
         },
-        onDoubleTap: openComposer,
+        onDoubleTap: () => { if (streak < LIFE_ANNOYED_AT) openComposer(); },
+        onDrag: (kind, e) => {
+            if (kind === 'start') {
+                drag = { x: e.screenX, at: performance.now(), vx: 0 };
+                life.hold('drag', true);
+                backend.life?.held(true);
+                lifeFx.held(true);
+            } else if (kind === 'move' && drag) {
+                const at = performance.now();
+                const dt = Math.max(1, at - drag.at);
+                // 速度做个平滑，免得一顿一顿地甩
+                drag.vx = drag.vx * 0.7 + (((e.screenX - drag.x) / dt) * 1000) * 0.3;
+                drag.x = e.screenX;
+                drag.at = at;
+                backend.life?.dragVelocity(drag.vx);
+            } else if (kind === 'end' && drag) {
+                drag = null;
+                backend.life?.held(false);
+                lifeFx.held(false);
+                life.hold('drag', false);
+                life.dragEnd();
+            }
+        },
     });
     // 窗口隐藏时停掉渲染和呼吸动画，显示回来再继续。
     let paused = false;
@@ -1116,6 +1409,8 @@ async function start() {
         paused = !visible;
         document.body.classList.toggle('is-paused', paused);
         backend.setPaused(paused);
+        lifeFx.setPaused(paused);
+        life.hold('hidden', paused);
         if (!paused) lastActivity = Date.now();
     });
     // 定期看一眼角色占在哪里：气泡和输入框贴在头顶上方（小头像、矮立绘不会离得老远）；
@@ -1139,11 +1434,18 @@ async function start() {
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
-        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(false);
+        life.setMood(director.baseline);
+        life.tick();
+        if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
 
     applyFrame(director.frame);
+    document.body.dataset.lifePhase = life.phase;
+    backend.life?.phase(life.phase);
     window.__deskPetReady = { backend: backend.kind, info: backend.info || null };
+    // 调试和录屏：__deskPetLife.force('asleep') 直接睡着，__deskPetLife.perform('yawn') 演一个动作
+    window.__deskPetLife = life;
+    window.__deskPetBounds = () => backend.bounds();
     console.log('[DeskPet] ready', JSON.stringify(window.__deskPetReady));
 }
 
