@@ -7838,14 +7838,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 525,
+          "line": 532,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 525,
+          "line": 532,
           "kind": "event-listener",
           "match": "ipcMain.handle('create-agent'"
         },
@@ -8632,14 +8632,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 581,
+          "line": 588,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 581,
+          "line": 588,
           "kind": "event-listener",
           "match": "ipcMain.handle('delete-agent'"
         },
@@ -13061,14 +13061,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 331,
+          "line": 338,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 331,
+          "line": 338,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-config'"
         },
@@ -13154,14 +13154,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 343,
+          "line": 350,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 343,
+          "line": 350,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-mood'"
         },
@@ -13185,14 +13185,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 337,
+          "line": 344,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 337,
+          "line": 344,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agent-portraits'"
         },
@@ -13240,7 +13240,7 @@
       "producers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 191,
+          "line": 198,
           "kind": "event-send"
         },
         {
@@ -13252,20 +13252,20 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 206,
+          "line": 213,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 191,
+          "line": 198,
           "kind": "event-send",
           "match": "ipcMain.invoke('get-agents'"
         },
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 206,
+          "line": 213,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents'"
         },
@@ -13289,14 +13289,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 187,
+          "line": 194,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 187,
+          "line": 194,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-agents-metadata'"
         },
@@ -13320,14 +13320,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 617,
+          "line": 628,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 617,
+          "line": 628,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-all-items'"
         },
@@ -25311,14 +25311,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 373,
+          "line": 380,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 373,
+          "line": 380,
           "kind": "event-listener",
           "match": "ipcMain.handle('remove-agent-portrait'"
         },
@@ -25863,14 +25863,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 386,
+          "line": 393,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 386,
+          "line": 393,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-config'"
         },
@@ -25956,14 +25956,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 317,
+          "line": 324,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 317,
+          "line": 324,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-order'"
         },
@@ -25987,14 +25987,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 354,
+          "line": 361,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 354,
+          "line": 361,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-agent-portrait'"
         },
@@ -26049,14 +26049,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 440,
+          "line": 447,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 440,
+          "line": 447,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-avatar'"
         },
@@ -26173,14 +26173,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 304,
+          "line": 311,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 304,
+          "line": 311,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-combined-item-order'"
         },
@@ -26638,14 +26638,14 @@
       "consumers": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 598,
+          "line": 609,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/agentHandlers.js",
-          "line": 598,
+          "line": 609,
           "kind": "event-listener",
           "match": "ipcMain.handle('save-user-avatar'"
         },

@@ -148,3 +148,30 @@ test('saving rejects unknown agents, bad variants, unsupported types and empty o
     assert.deepEqual(fs.readdirSync(path.join(agentDir, 'Strict')), []);
     assert.ok((await remove('..', 'default')).error);
 });
+
+test('removing a portrait, changing its format or deleting the agent drops its cached display copy', { skip: sharpUnavailable }, async () => {
+    const sharp = require('sharp');
+    const big = (file) => sharp({ create: { width: 4000, height: 6000, channels: 3, background: { r: 90, g: 120, b: 200 } } }).png().toFile(file);
+    const cachedOf = (url) => fileURLToPath(url.replace(/\?v=\d+$/, ''));
+    const dir = path.join(agentDir, 'Cached');
+    fs.mkdirSync(dir);
+    await big(path.join(dir, 'portrait.png'));
+    await big(path.join(dir, 'portrait.light.png'));
+    const first = await getPortraits('Cached');
+    const light = cachedOf(first.light);
+    assert.equal(path.dirname(light), path.join(root, 'PortraitCache'));
+
+    await remove('Cached', 'light');
+    assert.equal(fs.existsSync(light), false, '删掉的立绘不留缩小图');
+
+    // 换成另一种格式：原来那张 png 的缩小图跟着删掉
+    const oldDefault = cachedOf(first.default);
+    const jpeg = await sharp({ create: { width: 4000, height: 6000, channels: 3, background: { r: 10, g: 10, b: 10 } } }).jpeg().toBuffer();
+    assert.equal((await save('Cached', 'default', { type: 'image/jpeg', buffer: jpeg })).success, true);
+    assert.equal(fs.existsSync(oldDefault), false);
+    const current = cachedOf((await getPortraits('Cached')).default);
+    assert.ok(fs.existsSync(current));
+
+    assert.equal((await handlers.get('delete-agent')({}, 'Cached')).success, true);
+    assert.equal(fs.existsSync(current), false, '删掉助手不留缩小图');
+});
