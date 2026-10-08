@@ -1,0 +1,12 @@
+{
+  "name": "vcpchat-deskpet-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Live2D desk pet feasibility prototype. Not wired into VCPChat.",
+  "main": "main.js",
+  "scripts": {
+    "fetch-assets": "node scripts/fetch-assets.mjs",
+    "start": "electron main.js",
+    "e2e:linux": "scripts/xvfb-e2e.sh out/e2e"
+  }
+}
