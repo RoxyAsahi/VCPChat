@@ -30,6 +30,8 @@ function fakeElectron() {
         close() { this.destroyed = true; this.emit('closed'); }
         setAlwaysOnTop() {} moveTop() {} setVisibleOnAllWorkspaces() {} setIgnoreMouseEvents() {} isMinimized() { return false; } restore() {} show() { this.visible = true; }
         setFocusable(value) { this.focusable = value; } focus() {} loadURL() {} getPosition() { return [0, 0]; } setPosition() {}
+        // Windows 上主进程每隔一会儿用这些判断光标在不在窗口里
+        getBounds() { return { x: 0, y: 0, width: 360, height: 580 }; } setBounds() {} getContentSize() { return [360, 580]; }
     }
     const electron = {
         BrowserWindow,
