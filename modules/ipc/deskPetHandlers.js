@@ -15,6 +15,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
 const crypto = require('crypto');
+const voice = require('./deskPetVoice');
 
 const SCHEME = 'vcp-deskpet';
 // 上方留出气泡和输入框的位置。
@@ -28,9 +29,10 @@ const DRAG_TICK_MS = 16;
 // 光标轮询就再也发现不了宠物；Linux 改为把窗口输入区裁到内容包围盒。
 const USE_SHAPE = process.platform === 'linux';
 const IMAGE_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'avif'];
-// 与 modules/emotion/emotionVocabulary.js 一致：12 个情绪键加 3 个状态键。
+// 与 modules/emotion/emotionVocabulary.js 一致：12 个情绪键加 3 个状态键；
+// talk 是桌宠专用的张嘴帧（朗读时按音量和当前立绘切换）。
 const PORTRAIT_KEYS = ['neutral', 'calm', 'happy', 'excited', 'shy', 'affectionate', 'curious',
-    'surprised', 'concerned', 'sad', 'tired', 'angry', 'thinking', 'tool', 'error'];
+    'surprised', 'concerned', 'sad', 'tired', 'angry', 'thinking', 'tool', 'error', 'talk'];
 const SEND_TIMEOUT_MS = 10000;
 const DRAG_MAX_MS = 60000;
 const DISPLAY_SETTLE_MS = 400;
@@ -332,7 +334,10 @@ async function openPet(agentId, { bounds = null } = {}) {
         notifyMain(agentId);
     });
     // 第一次载入时状态本来就是初始值；之后的重载（崩溃恢复、刷新）要把主进程这边也清零。
-    win.webContents.on('did-start-loading', () => resetInputState(pet));
+    win.webContents.on('did-start-loading', () => {
+        resetInputState(pet);
+        voice.release(pet);
+    });
     win.webContents.on('render-process-gone', (_e, details) => {
         console.warn('[DeskPet] renderer gone:', details.reason);
         if (win.isDestroyed()) return;
@@ -348,6 +353,7 @@ async function openPet(agentId, { bounds = null } = {}) {
     win.on('hide', () => sendVisibility(false));
     win.on('show', () => sendVisibility(true));
     win.on('closed', () => {
+        voice.release(pet);
         clearInterval(pet.hitPoll);
         stopDrag(pet);
         pets.delete(agentId);
@@ -604,7 +610,7 @@ function registerIpc() {
     ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
-        const agents = await listAgents().catch(() => []);
+        const [agents, voiceItem] = await Promise.all([listAgents().catch(() => []), voice.menuItem(pet)]);
         // 读助手列表期间桌宠可能已经被关掉了。
         if (pet.win.isDestroyed()) return;
         Menu.buildFromTemplate([
@@ -619,6 +625,7 @@ function registerIpc() {
                     click: () => switchPet(pet.agentId, agent.id).catch((error) => console.warn('[DeskPet] switch failed:', error.message)),
                 })),
             },
+            voiceItem,
             { label: '打开主窗口', click: openMainWindow },
             { type: 'separator' },
             {
@@ -645,6 +652,7 @@ function initialize(options) {
     };
     registerProtocol();
     registerIpc();
+    voice.initialize({ paths, findPet: petFromEvent });
     screen.on('display-removed', onDisplaysChanged);
     screen.on('display-added', onDisplaysChanged);
     screen.on('display-metrics-changed', onDisplaysChanged);

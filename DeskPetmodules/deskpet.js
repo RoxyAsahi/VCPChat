@@ -10,6 +10,7 @@ import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
+import { createSpeech } from 'vcp-deskpet://pet/app/voice.js';
 
 const api = window.deskPetAPI;
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
@@ -64,6 +65,33 @@ const bubble = {
     renderQueued: false,
 };
 
+// ---- 出声：回复按句交给 TTS，气泡和表情跟着念到的那一句走（见 voice.js） ----------------
+
+let director = null;
+const speech = createSpeech({
+    api,
+    onChange: () => {
+        renderBubble();
+        // 回复早就结束、刚念完：现在才开始算气泡停留时间
+        if (!bubble.replyId && !speech.active() && bubble.reply) scheduleReplyHide(replyHoldMs());
+    },
+    onFrame: (next) => applyFrame(next),
+    onRelease: () => { if (director) applyFrame(director.frame); },
+    onLevel: (open) => {
+        document.body.style.setProperty('--voice', open.toFixed(3));
+        backend?.setMouth?.(open);
+        if (open) lastActivity = Date.now();
+    },
+    onError: (error) => console.warn('[DeskPet] 播放朗读音频失败：', error?.message || error),
+});
+
+// 说话时嘴张多大：朗读时跟着声音走；没有朗读时，回复流出来的那段时间假装在说（fake 给出假口型）。
+function talkLevel(fake) {
+    const voiced = speech.mouth();
+    if (voiced != null) return voiced;
+    return bubble.replyId && !frame.state ? fake() : 0;
+}
+
 // 状态写在回复下方的小字里：思考只在真的读到思维链时提示（刚开口那一下导演还停在「思考」上）
 function replyStateLabel() {
     if (!frame.state) return '';
@@ -77,7 +105,11 @@ function renderBubble() {
     const text = $('bubbleText');
     let content = '';
     let mode = '';
-    const reply = bubble.reply.trim() ? toBubbleText(bubble.reply) : '';
+    // 朗读时只显示到正在念的这一句；还没开口时显示省略号
+    const revealEnd = speech.revealEnd();
+    const source = revealEnd == null ? bubble.reply : bubble.reply.slice(0, revealEnd);
+    const waiting = revealEnd != null && !source.trim() && speech.active();
+    const reply = source.trim() ? toBubbleText(source) : (waiting ? '…' : '');
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
@@ -90,7 +122,7 @@ function renderBubble() {
     }
     el.hidden = !content;
     el.className = `pet-ui ${mode}`;
-    el.classList.toggle('is-streaming', mode === 'is-reply' && Boolean(bubble.replyId));
+    el.classList.toggle('is-streaming', mode === 'is-reply' && (Boolean(bubble.replyId) || speech.active()));
     const shown = content.length > BUBBLE_MAX_CHARS ? `…${content.slice(-BUBBLE_MAX_CHARS)}` : content;
     if (text.textContent !== shown) {
         text.textContent = shown;
@@ -119,7 +151,8 @@ function replyHoldMs() {
 function scheduleReplyHide(ms) {
     clearTimeout(bubble.hideTimer);
     bubble.hideTimer = setTimeout(() => {
-        if (bubble.replyId || bubble.hovered) return;
+        // 还在念就等念完（念完时会重新计时）
+        if (bubble.replyId || bubble.hovered || speech.active()) return;
         bubble.reply = '';
         renderBubble();
     }, ms);
@@ -530,11 +563,13 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             if (Math.abs(current[id]) < 0.001 && !goal) { delete current[id]; continue; }
             if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), current[id]);
         }
-        // 回复正在流出、又不在思考或调工具时，假装在说话（还没有接 TTS 口型）。
-        if (bubble.replyId && !frame.state && paramIds.has('ParamMouthOpenY')) {
-            mouthPhase += 0.55 + Math.random() * 0.35;
-            const open = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
-            coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
+        // 嘴：朗读时按声音的音量开合；没开朗读时回复流出来就假装在说话。
+        if (paramIds.has('ParamMouthOpenY')) {
+            const open = talkLevel(() => {
+                mouthPhase += 0.55 + Math.random() * 0.35;
+                return 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
+            });
+            if (open) coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
         }
     });
 
@@ -607,11 +642,10 @@ function createIdleAnimator() {
                 else if (doubleBlink) { doubleBlink = false; blinkT = 0; }
                 else blinkT = -1;
             }
-            let talk = 0;
-            if (bubble.replyId && !frame.state) {
+            const talk = talkLevel(() => {
                 mouthPhase += dt * (9 + Math.random() * 5);
-                talk = 0.2 + 0.45 * Math.max(0, Math.sin(mouthPhase)) * (0.6 + 0.4 * Math.sin(mouthPhase * 0.37));
-            }
+                return 0.2 + 0.45 * Math.max(0, Math.sin(mouthPhase)) * (0.6 + 0.4 * Math.sin(mouthPhase * 0.37));
+            });
             return {
                 breath: 0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / 3.6),
                 eyeClose,
@@ -837,6 +871,17 @@ function createImageBackend(assets) {
         };
         const urlFor = (f) => resolvePortrait(portraits, { state: f.state, emotion: f.emotion, theme })?.url;
         show(urlFor(frame), false);
+        // 张嘴帧（portrait.talk.png，可选）：朗读时声音大过一点就换上，小下去再换回，中间留一段免得闪
+        const talkImg = $('portraitTalk');
+        let talking = false;
+        if (portraits.talk) talkImg.src = portraits.talk;
+        const setMouth = (open) => {
+            if (!portraits.talk) return;
+            const next = talking ? open > 0.08 : open > 0.2;
+            if (next === talking) return;
+            talking = next;
+            $('portrait').classList.toggle('is-talking', talking);
+        };
         return {
             kind: 'portrait',
             probe(x, y) {
@@ -849,6 +894,7 @@ function createImageBackend(assets) {
             bounds() { return activeImg ? drawnRect(activeImg) : null; },
             tap: pop,
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
+            setMouth,
             setActive() {},
             setPaused() {},
         };
@@ -898,6 +944,7 @@ function bindStream(director) {
         bubble.reply = '';
         bubble.region = null;
         scanner = createEmotionTagScanner();
+        speech.begin(messageId);
     };
     api.onStream((event) => {
         if (!event?.messageId) return;
@@ -914,6 +961,7 @@ function bindStream(director) {
                 else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
             }
             bubble.region = scanner.region;
+            speech.update(bubble.reply, director.frame);
             queueRenderBubble();
             return;
         } else if (event.type === 'end' || event.type === 'error') {
@@ -921,6 +969,8 @@ function bindStream(director) {
             else director.fail(event.messageId);
             if (scanner && bubble.replyId === event.messageId) {
                 for (const item of scanner.finish()) if (item.type === 'text') bubble.reply += item.text;
+                if (event.type === 'end') speech.finish(bubble.reply, director.frame);
+                else speech.fail();
             }
             scanner = null;
             bubble.replyId = null;
@@ -968,8 +1018,12 @@ async function start() {
     if (!backend) backend = createImageBackend(assets);
     document.body.dataset.backend = backend.kind;
 
-    const director = createEmotionDirector({ onFrame: applyFrame });
+    // 朗读时表情跟着念到的句子换（见 speech），导演的新帧先不上脸
+    director = createEmotionDirector({ onFrame: (next) => { if (!speech.holdsFrames()) applyFrame(next); } });
     bindStream(director);
+    api.onPlayTtsAudio?.((payload) => speech.play(payload));
+    // 别的窗口开始朗读、在菜单里关了朗读：这条不念了，字全部显示出来
+    api.onStopTtsAudio?.(() => speech.stop());
     bindComposer();
     api.onCursor(({ x, y, outside }) => {
         if (!outside) {
@@ -980,6 +1034,11 @@ async function start() {
     });
     bindPointer({
         onTap: () => {
+            // 正在念的时候点一下：别念了
+            if (speech.active() || speech.speaking()) {
+                speech.stop();
+                return;
+            }
             backend.tap();
             director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
         },
@@ -989,6 +1048,8 @@ async function start() {
     let paused = false;
     api.onVisibility?.((visible) => {
         paused = !visible;
+        // 藏起来就不出声了
+        if (paused) speech.stop();
         document.body.classList.toggle('is-paused', paused);
         backend.setPaused(paused);
         if (!paused) lastActivity = Date.now();
