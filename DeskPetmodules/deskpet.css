@@ -1,0 +1,130 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+}
+
+#stage {
+  position: absolute;
+  inset: 0;
+}
+
+#live2dCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#portrait {
+  position: absolute;
+  inset: 40px 0 0 0;
+  transform-origin: 50% 100%;
+  animation: deskpet-breathe 4.2s ease-in-out infinite;
+}
+
+#portrait img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 100%;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+#portrait img.is-active {
+  opacity: 1;
+}
+
+#portrait.is-pop {
+  animation: deskpet-pop 260ms ease-out, deskpet-breathe 4.2s ease-in-out infinite;
+}
+
+#avatar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  width: 168px;
+  height: 168px;
+  margin-left: -84px;
+  animation: deskpet-bob 3.6s ease-in-out infinite;
+}
+
+#avatarImg {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 4px var(--deskpet-ring, #9aa4b2), 0 6px 18px rgba(0, 0, 0, 0.25);
+  transition: box-shadow 300ms ease;
+}
+
+#avatarBadge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  font-size: 34px;
+  line-height: 1;
+}
+
+#bubble {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  transform: translateX(-50%);
+  max-width: 280px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(30, 33, 40, 0.82);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+#bubble.is-error {
+  white-space: normal;
+  background: rgba(150, 40, 40, 0.9);
+}
+
+#emotionBadge {
+  position: absolute;
+  right: 10px;
+  top: 40px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #333;
+  font-size: 12px;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+
+#emotionBadge.is-fading {
+  opacity: 0;
+}
+
+@keyframes deskpet-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.006); }
+}
+
+@keyframes deskpet-pop {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-4px) scale(1.012); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes deskpet-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+[hidden] {
+    display: none !important;
+}

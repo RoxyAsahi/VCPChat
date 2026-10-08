@@ -32,6 +32,8 @@ function route(fetchResponse, { settings = null, abortSignal = AbortSignal } = {
         ['../modelTrajectory', require('../modules/modelTrajectory.js')],
         ['../services/attachmentDialogState', {}], ['../../Groupmodules/topicTitleManager', {}],
         ['../services/historyMutationQueue', {}], ['./workspaceHandlers', {}], ['./sideChatHandlers', {}],
+        // 桌宠没打开时这些钩子全是空操作，用真实模块。
+        ['./deskPetHandlers', require('../modules/ipc/deskPetHandlers.js')],
     ]);
     const load = name => { assert.ok(dependencies.has(name), 'unreviewed fixture dependency: ' + name); return dependencies.get(name); };
     vm.runInNewContext('(function(require,module,exports){' + source + '\n})', {

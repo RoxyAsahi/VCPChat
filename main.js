@@ -104,6 +104,8 @@ const ragHandlers = require('./modules/ipc/ragHandlers'); // Import RAG handlers
 const translatorHandlers = require('./modules/ipc/translatorHandlers'); // Import translator handlers
 const voiceHandlers = require('./modules/ipc/voiceHandlers'); // Import voice chat handlers
 const localSttHandlers = require('./modules/ipc/localSttHandlers'); // 本地 SenseVoice 语音识别
+const deskPetHandlers = require('./modules/ipc/deskPetHandlers'); // 桌宠（可选，默认关闭）
+deskPetHandlers.registerSchemes(); // 自定义协议必须在 app ready 之前登记
 // speechRecognizer is now lazy-loaded
 const canvasHandlers = require('./modules/ipc/canvasHandlers'); // Import canvas handlers
 const chartHandlers = require('./modules/ipc/chartHandlers'); // Agent 图表工作台与持久化服务
@@ -1827,6 +1829,7 @@ if (!gotTheLock) {
         tavernHandlers.initialize({ APP_DATA_ROOT_IN_PROJECT });
         voiceHandlers.initialize({ mainWindow, openChildWindows, settingsManager: appSettingsManager, projectRoot: PROJECT_ROOT });
         localSttHandlers.initialize({ appDataRoot: APP_DATA_ROOT_IN_PROJECT });
+        deskPetHandlers.initialize({ mainWindow, projectRoot: PROJECT_ROOT, appDataRoot: APP_DATA_ROOT_IN_PROJECT, agentDir: AGENT_DIR });
 
         ipcMain.on('minimize-to-tray', () => {
             if (mainWindow) {

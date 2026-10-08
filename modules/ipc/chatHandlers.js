@@ -14,6 +14,7 @@ const { beginTrajectoryCall, clearTrajectoryOf, sessionKeyFromContext, sourceFro
 const { HistoryMutationQueue } = require('../services/historyMutationQueue');
 const workspaceHandlers = require('./workspaceHandlers');
 const { removeSideChatChildrenOfParent } = require('./sideChatHandlers');
+const deskPetHandlers = require('./deskPetHandlers');
 
 /**
  * 若 filePath 属于已登记工作区且是文本/代码文件，创建真实路径实时引用；否则返回 null，
@@ -1057,7 +1058,12 @@ function initialize(mainWindow, context) {
             streamTask = null;
         };
         const sendStreamPayload = payload => {
-            if (streamTask?.controller.signal.aborted || event.sender.isDestroyed()) return false;
+            const aborted = streamTask?.controller.signal.aborted === true;
+            // 桌宠只看事件不看窗口；用户中止时把收尾当作正常结束，不显示出错表情。
+            if (!isGroupCall && !(aborted && payload.type === 'data')) {
+                deskPetHandlers.onStreamPayload(aborted ? { ...payload, type: 'end' } : payload);
+            }
+            if (aborted || event.sender.isDestroyed()) return false;
             try {
                 event.sender.send(streamChannel, { ...payload, streamOperationId });
                 return true;
@@ -1124,6 +1130,12 @@ function initialize(mainWindow, context) {
         } catch (validationError) {
             console.error('[Main - sendToVCP] Error validating messages:', validationError);
             return { error: `消息格式验证失败: ${validationError.message}` };
+        }
+
+        // 该 agent 的桌宠打开时，追加情绪标记协议，并让桌宠进入"思考"状态。
+        if (!isGroupCall && context?.agentId) {
+            messages = deskPetHandlers.appendProtocolToMessages(messages, context.agentId);
+            deskPetHandlers.onRequestStart(messageId, context);
         }
 
         let finalVcpUrl = vcpUrl;
@@ -1503,6 +1515,7 @@ function initialize(mainWindow, context) {
                 console.log('VCP响应: 非流式处理');
                 const vcpResponse = await response.json();
                 trajectoryCall.finish({ response: vcpResponse });
+                if (!isGroupCall) deskPetHandlers.onFullResponse(messageId, context, vcpResponse);
                 // For non-streaming, wrap the response with the original context
                 // so the renderer knows where to save the history.
                 return { response: vcpResponse, context };
@@ -1511,6 +1524,7 @@ function initialize(mainWindow, context) {
         } catch (error) {
             console.error('VCP请求错误 (catch block):', error);
             trajectoryCall?.finish({ error, aborted: error?.name === 'AbortError' || streamTask?.controller.signal.aborted === true });
+            if (!isGroupCall && modelConfig.stream !== true) deskPetHandlers.onStreamPayload({ type: 'error', messageId, context });
             if (modelConfig.stream === true && event && event.sender && !event.sender.isDestroyed()) {
                 const catchErrorPayload = { type: 'error', error: `VCP请求错误: ${error.message}`, messageId: messageId, context };
                 sendStreamPayload(catchErrorPayload);

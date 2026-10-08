@@ -31,6 +31,8 @@ function setup() {
         ['../modelTrajectory', require('../modules/modelTrajectory.js')],
         ['../services/attachmentDialogState', {}], ['../../Groupmodules/topicTitleManager', {}],
         ['../services/historyMutationQueue', { HistoryMutationQueue }], ['./workspaceHandlers', {}], ['./sideChatHandlers', sideChatHandlers],
+        // 桌宠没打开时这些钩子全是空操作，用真实模块。
+        ['./deskPetHandlers', require('../modules/ipc/deskPetHandlers.js')],
     ]);
     vm.runInNewContext('(function(require,module,exports){' + source + '\n})', { console: { log() {}, warn() {}, error() {} }, TextDecoder, URL, fetch, AbortSignal })(
         name => { assert.ok(dependencies.has(name), 'unreviewed fixture dependency: ' + name); return dependencies.get(name); }, module, module.exports);

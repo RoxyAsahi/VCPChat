@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src vcp-deskpet:; connect-src vcp-deskpet: data: blob:; img-src vcp-deskpet: blob: data:; style-src vcp-deskpet: 'unsafe-inline'; worker-src blob:">
+  <title>VCPChat 桌宠</title>
+  <link rel="stylesheet" href="vcp-deskpet://pet/app/deskpet.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="live2dCanvas" hidden></canvas>
+    <div id="portrait" hidden>
+      <img id="portraitA" alt="" draggable="false">
+      <img id="portraitB" alt="" draggable="false">
+    </div>
+    <div id="avatar" hidden>
+      <img id="avatarImg" alt="" draggable="false">
+      <span id="avatarBadge"></span>
+    </div>
+  </div>
+  <div id="bubble" hidden></div>
+  <div id="emotionBadge" hidden></div>
+  <!-- Pixi 8 与 CSP polyfill 用 VCPChat 自带的那份；Live2D 相关脚本按需加载。 -->
+  <script src="vcp-deskpet://pet/vendor/pixi.min.js"></script>
+  <script src="vcp-deskpet://pet/vendor/pixi-unsafe-eval.min.js"></script>
+  <script src="vcp-deskpet://pet/app/deskpet.js"></script>
+</body>
+</html>
