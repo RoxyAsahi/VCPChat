@@ -1,7 +1,9 @@
 /* Feed one agent's streamed replies into an emotion director.
  * A passive listener on the VCP stream channel: it only reads events (never consumes or changes
  * them), keeps only the agent isActive() names, and maps start / data / end / error onto the
- * director's begin / append / end / fail. */
+ * director's begin / append / end / fail. Group chat replies are skipped: they belong to the group's
+ * conversation, not to the agent being viewed, and a background group turn must not take over the
+ * portrait from the reply on screen. */
 import { normalizeStreamChunk } from '../chat/contentRuntime.js';
 
 export function createAgentEmotionFeed({ chatAPI, director, getAgentId, isActive = () => true }) {
@@ -13,7 +15,7 @@ export function createAgentEmotionFeed({ chatAPI, director, getAgentId, isActive
         if (disposed || !event || !isActive()) return;
         const agentId = event.context?.agentId;
         const messageId = event.messageId ? String(event.messageId) : '';
-        if (!agentId || !messageId || agentId !== getAgentId()) return;
+        if (!agentId || !messageId || agentId !== getAgentId() || event.context?.isGroupMessage) return;
         try {
             switch (event.type) {
                 case 'agent_thinking':

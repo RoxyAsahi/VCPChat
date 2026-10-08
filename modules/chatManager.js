@@ -15,24 +15,13 @@ const settlesWithin = (promise, ms) => new Promise(resolve => {
 
 // 有差分立绘的 agent 要在系统提示词末尾加一段表情标记说明（情绪源和立绘共用 modules/emotion）。
 // 只有主进程能回答「这个 agent 有没有差分」时才按需加载这部分代码。
-let emotionPromptModules = null;
+let emotionPromptModule = null;
 async function resolveEmotionTagPrompt(api, context, agentConfig) {
     const agentId = context?.itemType === 'agent' ? context.agentId : null;
     if (!agentId || typeof api?.getAgentPortraits !== 'function') return '';
     try {
-        emotionPromptModules ||= Promise.all([
-            import('./emotion/emotionPrompt.js'),
-            import('./emotion/portraitVariants.js'),
-        ]);
-        const [[prompt, variants], portraits] = await Promise.all([
-            emotionPromptModules,
-            api.getAgentPortraits(agentId),
-        ]);
-        return prompt.shouldAddEmotionTagPrompt({
-            systemPrompt: agentConfig?.systemPrompt,
-            enabled: agentConfig?.emotionTagPrompt,
-            hasDisplay: variants.hasPortraitVariants(portraits),
-        }) ? prompt.EMOTION_TAG_PROMPT : '';
+        emotionPromptModule ||= import('./emotion/emotionPrompt.js');
+        return await (await emotionPromptModule).resolveEmotionTagPrompt(api, agentId, agentConfig);
     } catch (error) {
         console.warn('[ChatManager] Failed to prepare the emotion tag prompt:', error);
         return '';

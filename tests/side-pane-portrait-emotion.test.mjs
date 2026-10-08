@@ -69,7 +69,8 @@ test('emotion tags are stripped from what people see, but not from code that exp
     // 流式尾巴上的半个标签先藏起来
     assert.equal(stripEmotionTags('好的<!--emo:hap', { streaming: true }), '好的');
     assert.equal(stripEmotionTags('好的<!-', { streaming: true }), '好的');
-    assert.equal(stripEmotionTags('好的<!--emo:hap'), '好的<!--emo:hap');
+    // 回复停在半个标签上（中断、截断）：标签本身去掉，不留给浏览器当成没闭合的注释
+    assert.equal(stripEmotionTags('好的<!--emo:happy'), '好的');
     assert.deepEqual(parseEmotionTagBody('emo:happy/bright_smile 0.8'), { emotion: 'happy', variant: 'bright_smile', intensity: 0.8 });
     assert.equal(parseEmotionTagBody('emo:unknownfeeling'), null);
 });
