@@ -9,6 +9,7 @@ import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
+import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 
 const api = window.deskPetAPI;
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
@@ -57,6 +58,7 @@ const bubble = {
     replyId: null,      // 正在流式的回复
     region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
+    proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
     hovered: false,
     hideTimer: 0,
     noticeTimer: 0,
@@ -67,6 +69,7 @@ const bubble = {
 function replyStateLabel() {
     if (!frame.state) return '';
     if (frame.state === 'thinking') return bubble.replyId && bubble.region === 'thought' ? STATE_LABEL.thinking : '';
+    if (frame.state === 'tool' && toolCard?.visible) return ''; // 小卡片已经说了在做什么
     return STATE_LABEL[frame.state] || '';
 }
 
@@ -83,7 +86,7 @@ function renderBubble() {
     } else if (reply) {
         content = reply;
         mode = 'is-reply';
-    } else if (frame.state && STATE_LABEL[frame.state]) {
+    } else if (frame.state && STATE_LABEL[frame.state] && !(frame.state === 'tool' && toolCard?.visible)) {
         content = STATE_LABEL[frame.state];
         mode = 'is-state';
     }
@@ -99,8 +102,9 @@ function renderBubble() {
     // 排队等发的话写在小字里，不盖住正在说的回复
     const queued = composer.queued ? `说完就发：「${shorten(composer.queued)}」` : '';
     $('bubbleState').textContent = mode === 'is-reply' || mode === 'is-state'
-        ? [mode === 'is-reply' ? replyStateLabel() : '', queued].filter(Boolean).join(' · ')
+        ? [mode === 'is-reply' ? replyStateLabel() || proactiveLabel() : '', queued].filter(Boolean).join(' · ')
         : '';
+    el.classList.toggle('is-alarm', mode === 'is-reply' && bubble.proactive?.kind === 'alarm');
 }
 
 // 流式片段很密，攒到下一帧一起画
@@ -120,8 +124,43 @@ function scheduleReplyHide(ms) {
     bubble.hideTimer = setTimeout(() => {
         if (bubble.replyId || bubble.hovered) return;
         bubble.reply = '';
+        bubble.proactive = null;
         renderBubble();
     }, ms);
+}
+
+function proactiveLabel() {
+    const p = bubble.proactive;
+    if (!p) return '';
+    if (p.kind === 'alarm') return '⏰ 闹钟';
+    return p.title ? `💬 新话题「${shorten(p.title)}」· 点我去看` : '💬 新话题 · 点我去看';
+}
+
+// 角色主动说话（AI 开了新话题、闹钟到点）。正在回复时先记着，回复说完再说。
+const PROACTIVE_HOLD_MS = { topic: 20000, alarm: 60000 };
+let pendingProactive = [];
+let toolCard = null; // 「正在做什么」小卡片（bindStream 里建）
+let proactiveDirector = null;
+
+function speakProactive(payload) {
+    if (!payload?.text && !payload?.title) return;
+    if (bubble.replyId) {
+        pendingProactive = [...pendingProactive, payload].slice(-3);
+        return;
+    }
+    const kind = payload.kind === 'alarm' ? 'alarm' : 'topic';
+    bubble.proactive = { kind, title: payload.title || '', topicId: payload.topicId || '' };
+    bubble.reply = payload.text || payload.title;
+    lastActivity = Date.now();
+    proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
+    backend?.tap?.();
+    renderBubble();
+    scheduleReplyHide(PROACTIVE_HOLD_MS[kind]);
+}
+
+function flushProactive() {
+    const next = pendingProactive.shift();
+    if (next) speakProactive(next);
 }
 
 function notice(text, { error = false, ms = 6000 } = {}) {
@@ -224,7 +263,11 @@ function bindComposer() {
     $('composerClose').addEventListener('click', closeComposer);
     // 点气泡打开主窗口看完整回复；鼠标停在气泡上时先不收起，方便读完或往上翻。
     const bubbleEl = $('bubble');
-    bubbleEl.addEventListener('click', () => api.openMainWindow());
+    bubbleEl.addEventListener('click', () => {
+        // 主动开的新话题：直接切到那个话题
+        if (bubble.proactive?.topicId && !bubble.replyId) api.openTopic(bubble.proactive.topicId);
+        else api.openMainWindow();
+    });
     bubbleEl.addEventListener('mouseenter', () => {
         bubble.hovered = true;
         clearTimeout(bubble.hideTimer);
@@ -714,12 +757,16 @@ function applyFrame(next) {
 
 function bindStream(director) {
     let scanner = null;
+    toolCard = createToolCard({ el: $('toolCard'), onChange: queueRenderBubble });
+    $('toolCard').addEventListener('click', () => api.openMainWindow());
     const startReply = (messageId) => {
         clearTimeout(bubble.hideTimer);
         bubble.replyId = messageId;
         bubble.reply = '';
         bubble.region = null;
+        bubble.proactive = null;
         scanner = createEmotionTagScanner();
+        toolCard.start();
     };
     api.onStream((event) => {
         if (!event?.messageId) return;
@@ -730,6 +777,7 @@ function bindStream(director) {
         } else if (event.type === 'data') {
             if (bubble.replyId !== event.messageId) startReply(event.messageId);
             director.append(event.messageId, event.text);
+            toolCard.push(event.text);
             // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块写成 [代码]。
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
@@ -748,6 +796,8 @@ function bindStream(director) {
             bubble.replyId = null;
             bubble.region = null;
             scheduleReplyHide(replyHoldMs());
+            toolCard.end();
+            if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));
             // 排队的话等气泡画完这一帧再发，免得和刚结束的回复挤在一起
             if (composer.queued) setTimeout(flushQueued, 400);
         }
@@ -781,6 +831,8 @@ async function start() {
 
     const director = createEmotionDirector({ onFrame: applyFrame });
     bindStream(director);
+    proactiveDirector = director;
+    api.onProactive?.(speakProactive);
     bindComposer();
     api.onCursor(({ x, y }) => {
         if (uiAt(x, y)) reportHit(true);
