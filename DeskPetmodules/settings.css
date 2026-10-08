@@ -1,0 +1,219 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1f2329;
+  --muted: #6b7280;
+  --line: #e4e7ec;
+  --accent: #c8553d;
+  --danger: #b42318;
+  --key-bg: #eef0f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1d22;
+    --card: #24272e;
+    --text: #e8eaed;
+    --muted: #9aa1ab;
+    --line: #33373f;
+    --accent: #e0745c;
+    --danger: #f97066;
+    --key-bg: #2f333b;
+  }
+}
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
+}
+
+h1 {
+  margin: 4px 0 14px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+section {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child,
+#sizeList .row:first-child,
+#shortcutList .row:first-child {
+  border-top: none;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 500;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.footnote {
+  margin: 8px 0;
+}
+
+.empty {
+  margin: 10px 0;
+  color: var(--muted);
+}
+
+.switch input {
+  flex: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  appearance: none;
+  border-radius: 10px;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 150ms ease;
+}
+
+.switch input:checked {
+  background: var(--accent);
+}
+
+.switch input:checked::after {
+  transform: translateX(16px);
+}
+
+.switch input:focus-visible,
+button:focus-visible,
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.size-name {
+  flex: 0 1 30%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.size-name .hidden-tag {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.size-value {
+  flex: none;
+  width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut {
+  flex-wrap: wrap;
+}
+
+.shortcut .key {
+  flex: none;
+  min-width: 140px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--key-bg);
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shortcut .key.is-recording {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shortcut .key.is-empty {
+  color: var(--muted);
+}
+
+.shortcut .error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.shortcut .error:empty {
+  display: none;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 0 10px;
+}
+
+.actions button {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}

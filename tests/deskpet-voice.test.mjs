@@ -178,3 +178,24 @@ test('stale audio from an older session is ignored; a new reply interrupts the o
     assert.equal(speech.revealEnd(), '第二条回复。'.length);
     speech.dispose();
 });
+
+test('do-not-disturb (silent) replies are not read, but still stop the one being read', async () => {
+    installFakeAudio();
+    const api = fakeApi();
+    let asked = 0;
+    api.voiceBegin = async () => { asked += 1; return { speaking: true }; };
+    const speech = createSpeech({ api });
+    speech.begin('a');
+    await sleep(5);
+    speech.update('正在念的这一句。后面', { emotion: 'neutral' });
+    speech.play({ audioData: audio(1), msgId: api.said[0].key, sessionId: 1 });
+    await sleep(60);
+    speech.begin('b', { silent: true });
+    assert.equal(speech.speaking(), false);
+    speech.update('免打扰时的回复。也不念。', { emotion: 'neutral' });
+    speech.finish('免打扰时的回复。也不念。', { emotion: 'neutral' });
+    assert.equal(asked, 1, '静音的回复不去问主进程');
+    assert.equal(api.said.length, 1);
+    assert.equal(speech.revealEnd(), null);
+    speech.dispose();
+});

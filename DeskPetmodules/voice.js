@@ -283,8 +283,11 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
     }
 
     return {
-        /** 新回复开始。主进程说这个助手能出声（设了音色、没静音）才进入朗读模式。 */
-        begin(messageId) {
+        /**
+         * 新回复开始。主进程说这个助手能出声（设了音色、没静音）才进入朗读模式；
+         * silent 时（免打扰）这条不念，但仍然打断上一条。
+         */
+        begin(messageId, { silent = false } = {}) {
             if (reply && reply.messageId === messageId) return;
             if (reply && reply.mode !== 'off') settle({ stopAudio: true });
             const chunker = createSpeechChunker();
@@ -293,6 +296,10 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
                 anySent: false, ended: false, waitingSince: null, lastAudioAt: 0,
             };
             reply = current;
+            if (silent) {
+                current.mode = 'off';
+                return;
+            }
             Promise.resolve(api.voiceBegin?.(messageId)).then((result) => {
                 if (reply !== current || current.mode !== 'pending') return;
                 current.mode = result?.speaking ? 'voice' : 'off';
