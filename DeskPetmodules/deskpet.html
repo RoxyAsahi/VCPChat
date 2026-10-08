@@ -19,11 +19,21 @@
       <span id="avatarBadge"></span>
     </div>
   </div>
-  <div id="bubble" hidden></div>
+  <div id="bubble" class="pet-ui" hidden title="点击打开主窗口看完整回复">
+    <div id="bubbleText"></div>
+    <div id="bubbleState"></div>
+  </div>
+  <form id="composer" class="pet-ui" hidden>
+    <textarea id="composerInput" rows="2" maxlength="8000"></textarea>
+    <div id="composerActions">
+      <button id="composerClose" type="button" title="收起（Esc）">✕</button>
+      <button id="composerSend" type="button" title="发送（Enter）">发送</button>
+    </div>
+  </form>
   <div id="emotionBadge" hidden></div>
-  <!-- Pixi 8 与 CSP polyfill 用 VCPChat 自带的那份；Live2D 相关脚本按需加载。 -->
+  <!-- Pixi 8 与 CSP polyfill 用 VCPChat 自带的那份；Live2D 相关脚本按需加载；情绪模块与侧栏立绘共用 modules/emotion。 -->
   <script src="vcp-deskpet://pet/vendor/pixi.min.js"></script>
   <script src="vcp-deskpet://pet/vendor/pixi-unsafe-eval.min.js"></script>
-  <script src="vcp-deskpet://pet/app/deskpet.js"></script>
+  <script type="module" src="vcp-deskpet://pet/app/deskpet.js"></script>
 </body>
 </html>

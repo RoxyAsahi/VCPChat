@@ -4,11 +4,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // 渠道名写成字面量，事件图能静态登记每个订阅。
-function onFrame(callback) {
+function onStream(callback) {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('deskpet:frame', listener);
-    return () => ipcRenderer.removeListener('deskpet:frame', listener);
+    ipcRenderer.on('deskpet:stream', listener);
+    return () => ipcRenderer.removeListener('deskpet:stream', listener);
 }
 
 function onCursor(callback) {
@@ -18,14 +18,24 @@ function onCursor(callback) {
     return () => ipcRenderer.removeListener('deskpet:cursor', listener);
 }
 
+function onOpenInput(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('deskpet:open-input', listener);
+    return () => ipcRenderer.removeListener('deskpet:open-input', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
-    getFrame: () => ipcRenderer.invoke('deskpet:get-frame'),
-    onFrame,
+    send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
+    onStream,
     onCursor,
+    onOpenInput,
     setHit: hit => ipcRenderer.send('deskpet:hit', !!hit),
+    setInteractive: on => ipcRenderer.send('deskpet:set-interactive', !!on),
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
     dragStart: origin => ipcRenderer.send('deskpet:drag-start', origin),
     dragEnd: () => ipcRenderer.send('deskpet:drag-end'),
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
+    openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
 }));

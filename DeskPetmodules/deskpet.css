@@ -20,7 +20,7 @@ html, body {
 
 #portrait {
   position: absolute;
-  inset: 40px 0 0 0;
+  inset: 150px 0 0 0;
   transform-origin: 50% 100%;
   animation: deskpet-breathe 4.2s ease-in-out infinite;
 }
@@ -73,29 +73,104 @@ html, body {
 
 #bubble {
   position: absolute;
-  left: 50%;
-  top: 6px;
-  transform: translateX(-50%);
-  max-width: 280px;
-  padding: 6px 12px;
+  left: 12px;
+  right: 12px;
+  top: 8px;
+  padding: 8px 12px;
   border-radius: 14px;
-  background: rgba(30, 33, 40, 0.82);
+  background: rgba(30, 33, 40, 0.86);
   color: #fff;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+#bubble.is-state {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   white-space: nowrap;
-  pointer-events: none;
+  cursor: default;
 }
 
 #bubble.is-error {
-  white-space: normal;
-  background: rgba(150, 40, 40, 0.9);
+  background: rgba(150, 40, 40, 0.92);
+}
+
+#bubbleText {
+  max-height: 108px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: thin;
+}
+
+#bubbleState:empty {
+  display: none;
+}
+
+#bubbleState {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+#composer {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 140px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  user-select: text;
+}
+
+#composerInput {
+  box-sizing: border-box;
+  width: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #222;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#composerActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+#composerActions button {
+  border: none;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: #eceef2;
+  color: #333;
+}
+
+#composerSend {
+  background: #c8553d !important;
+  color: #fff !important;
+}
+
+#composerSend:disabled {
+  opacity: 0.6;
 }
 
 #emotionBadge {
   position: absolute;
   right: 10px;
-  top: 40px;
+  top: 150px;
   padding: 2px 8px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.85);

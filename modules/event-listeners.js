@@ -1450,6 +1450,48 @@ export function setupEventListeners(deps) {
         }
         const agentNameEl = document.getElementById('currentChatAgentName');
         if (agentNameEl) new MutationObserver(syncDeskPetBtn).observe(agentNameEl, { childList: true, characterData: true, subtree: true });
+
+        // 桌宠上说的话：切到那个 Agent，借输入框按正常流程发送（历史、话题、流式都照旧）。
+        const waitFor = async (predicate, timeoutMs) => {
+            const deadline = Date.now() + timeoutMs;
+            while (!predicate()) {
+                if (Date.now() > deadline) return false;
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            return true;
+        };
+        const sendFromPet = async ({ agentId, text }) => {
+            if (refs.currentSelectedItem.get()?.id !== agentId) {
+                const entry = document.querySelector(`#agentList li[data-item-id="${CSS.escape(agentId)}"][data-item-type="agent"]`);
+                if (!entry) return { success: false, error: '助手列表里找不到这个 Agent' };
+                entry.click();
+                const switched = await waitFor(() => refs.currentSelectedItem.get()?.id === agentId && !sendMessageBtn.disabled, 5000);
+                if (!switched) return { success: false, error: '切换助手超时' };
+            }
+            if (sendMessageBtn.dataset.mode === 'interrupt') return { success: false, error: '上一条还在回复中' };
+            const draft = messageInput.value;
+            messageInput.value = text;
+            messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+            sendMessageBtn.click();
+            // 发出去后输入框会被清空；把用户原来没发的草稿放回去。
+            if (draft.trim()) {
+                await waitFor(() => messageInput.value === '', 2000);
+                if (messageInput.value === '') {
+                    messageInput.value = draft;
+                    messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+            return { success: true };
+        };
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text } = {}) => {
+            let result;
+            try {
+                result = await sendFromPet({ agentId, text });
+            } catch (error) {
+                result = { success: false, error: error.message };
+            }
+            chatAPI.deskPetSendResult?.({ requestId, result });
+        });
     }
 
     // 语音聊天按钮事件处理

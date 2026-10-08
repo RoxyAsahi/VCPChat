@@ -2,7 +2,7 @@
 
 // 桌宠：从当前 agent 打开/关闭桌宠窗口。
 // 主进程：modules/ipc/deskPetHandlers.js
-const { invoke, on } = require('../core/define');
+const { invoke, on, send } = require('../core/define');
 
 module.exports = {
     handlers: ['modules/ipc/deskPetHandlers.js'],
@@ -11,5 +11,8 @@ module.exports = {
         toggleDeskPet: invoke('deskpet:toggle', 'agentId'),
         getDeskPetOpenAgents: invoke('deskpet:get-open-agents'),
         onDeskPetStateChanged: on('deskpet:state-changed'),
+        // 桌宠上输入的话由主窗口按正常流程发送；结果回给主进程。
+        onDeskPetSendRequest: on('deskpet:send-request'),
+        deskPetSendResult: send('deskpet:send-result', 'payload'),
     },
 };

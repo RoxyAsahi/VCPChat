@@ -56,22 +56,7 @@ function findPersonaJsonEnd(text, startIndex) {
     return -1;
 }
 
-// 桌宠情绪标签 <!--emo:happy 0.8--> 只给桌宠看，显示时剥掉；流式末尾的半截标签也先藏起来。
-// 与 persona 回填共用一个步骤，工具结果里的同形文本同样视为数据不动。
-const DESKPET_EMO_TAG_REGEX = /<!--\s*emo\s*:[^>]*?-->/gi;
-const DESKPET_EMO_TAIL_REGEX = /<!--\s*(?:e(?:m(?:o(?:\s*:[^>]*)?)?)?)?$/i;
-
-function stripDeskPetEmoSegment(text) {
-    return text.replace(DESKPET_EMO_TAG_REGEX, '').replace(DESKPET_EMO_TAIL_REGEX, '');
-}
-
-function stripDeskPetEmoTags(text) {
-    if (!text || text.indexOf('<!--') === -1) return text;
-    return transformOutsideToolResults(text, stripDeskPetEmoSegment);
-}
-
 function stripPersonaBackfillTail(text) {
-    text = stripDeskPetEmoTags(text);
     if (!text || text.indexOf('persona_') === -1) return text;
     // 工具结果是权威数据域：其中出现的 persona 注释只是数据，不能被剥离；
     // 工具结果之前的半截回填也只能剥到工具结果边界，不得吞掉整个工具结果。

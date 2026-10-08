@@ -1,6 +1,7 @@
 // modules/ipc/deskPetHandlers.js
 // 桌宠（可选模块，默认关闭）：每个 agent 一个透明、无边框、置顶的小窗，
-// 显示该 agent 的 Live2D 模型或差分立绘，跟着这个 agent 的回复流换表情。
+// 显示该 agent 的 Live2D 模型或差分立绘。可以在桌宠上直接和这个 agent 说话（经主窗口发送，
+// 历史照常保存），回复以气泡显示，表情由页面里的情绪导演（modules/emotion）按回复流决定。
 //
 // 资源全部来自用户数据目录，VCPChat 不分发任何 Live2D 文件：
 //   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
@@ -12,11 +13,11 @@ const { BrowserWindow, ipcMain, protocol, net, screen, Menu } = require('electro
 const path = require('path');
 const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
-const { createPetDirector } = require('../deskpet/petDirector');
-const { EMOTIONS, EMO_PROTOCOL_PROMPT } = require('../deskpet/emoTags');
+const crypto = require('crypto');
 
 const SCHEME = 'vcp-deskpet';
-const PET_SIZE = { width: 320, height: 480 };
+// 上方留出气泡和输入框的位置。
+const PET_SIZE = { width: 360, height: 580 };
 // Windows：'pop-up-menu' 压住任务栏，又不像 'screen-saver' 那样和全屏程序抢；
 // macOS 需要 'screen-saver' 才能浮在全屏空间之上。
 const TOPMOST_LEVEL = process.platform === 'darwin' ? 'screen-saver' : 'pop-up-menu';
@@ -26,11 +27,17 @@ const DRAG_TICK_MS = 16;
 // 光标轮询就再也发现不了宠物；Linux 改为把窗口输入区裁到内容包围盒。
 const USE_SHAPE = process.platform === 'linux';
 const IMAGE_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'avif'];
+// 与 modules/emotion/emotionVocabulary.js 一致：12 个情绪键加 3 个状态键。
+const PORTRAIT_KEYS = ['neutral', 'calm', 'happy', 'excited', 'shy', 'affectionate', 'curious',
+    'surprised', 'concerned', 'sad', 'tired', 'angry', 'thinking', 'tool', 'error'];
+const SEND_TIMEOUT_MS = 10000;
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
 let initialized = false;
-const pets = new Map(); // agentId -> { win, director, ignoringMouse, hitPoll, drag, lastShape }
+const pets = new Map(); // agentId -> { win, ignoringMouse, interactive, hitPoll, drag, lastShape }
+const pendingSends = new Map(); // requestId -> resolve
+let emotionPrompt = null; // modules/emotion/emotionPrompt.js（ESM，初始化时异步载入）
 
 function registerSchemes() {
     protocol.registerSchemesAsPrivileged([
@@ -57,6 +64,7 @@ function resolveServedFile(urlString) {
     const root = segments.shift();
     if (root === 'app') return guard(path.join(paths.projectRoot, 'DeskPetmodules'), segments);
     if (root === 'vendor') return guard(path.join(paths.projectRoot, 'vendor'), segments);
+    if (root === 'emotion') return guard(path.join(paths.projectRoot, 'modules', 'emotion'), segments);
     if (root === 'core') {
         return segments.join('/') === 'live2dcubismcore.min.js' ? coreFilePath() : null;
     }
@@ -124,10 +132,22 @@ async function resolveAssets(agentId) {
         }
         return null;
     };
+    // 与侧栏立绘相同的结构：{ default, light?, <键>?, <键>-light? }，交给 resolvePortrait 挑图。
     const portraits = {};
-    for (const emotion of EMOTIONS) {
-        const url = pick(`portrait.${emotion}`);
-        if (url) portraits[emotion] = url;
+    const defaultPortrait = pick('portrait');
+    if (defaultPortrait) portraits.default = defaultPortrait;
+    const lightPortrait = pick('portrait.light');
+    if (lightPortrait) portraits.light = lightPortrait;
+    for (const key of PORTRAIT_KEYS) {
+        const url = pick(`portrait.${key}`);
+        if (url) portraits[key] = url;
+        const light = pick(`portrait.${key}-light`);
+        if (light) portraits[`${key}-light`] = light;
+    }
+    if (!portraits.default) {
+        // 只有差分没有默认立绘时，用 neutral / calm 顶上。
+        const fallback = portraits.neutral || portraits.calm || Object.values(portraits)[0];
+        if (fallback) portraits.default = fallback;
     }
     const model = await findModel3(path.join(agentRoot, 'deskpet'));
     const hasCore = await fs.pathExists(coreFilePath());
@@ -137,8 +157,7 @@ async function resolveAssets(agentId) {
         live2d: model ? { modelUrl: agentUrl(agentId, model) } : null,
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
         corePath: coreFilePath(),
-        portraits,
-        defaultPortrait: pick('portrait'),
+        portraits: portraits.default ? portraits : null,
         avatar: pick('avatar'),
     };
 }
@@ -172,10 +191,22 @@ function initialBounds(saved) {
     return { ...PET_SIZE, ...(onScreen ? { x: saved.x, y: saved.y } : fallback) };
 }
 
+function visibleAgents() {
+    return [...pets.entries()].filter(([, pet]) => !pet.win.isDestroyed() && pet.win.isVisible()).map(([id]) => id);
+}
+
 function notifyMain(agentId) {
     if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('deskpet:state-changed', { agentId, open: pets.has(agentId), openAgents: [...pets.keys()] });
+        const openAgents = visibleAgents();
+        mainWindow.webContents.send('deskpet:state-changed', { agentId, open: openAgents.includes(agentId), openAgents });
     }
+}
+
+function showPet(pet) {
+    pet.win.showInactive();
+    // Windows 上透明窗口隐藏再显示后可能丢掉 WS_EX_TOPMOST，每次显示后重新声明。
+    pet.win.setAlwaysOnTop(true, TOPMOST_LEVEL);
+    pet.win.moveTop();
 }
 
 function setIgnoreMouse(pet, ignore) {
@@ -189,7 +220,7 @@ function setIgnoreMouse(pet, ignore) {
 // 不依赖 forward 的鼠标钩子（Windows 上它会悄悄失效）。
 function startHitPoll(pet) {
     pet.hitPoll = setInterval(() => {
-        if (pet.win.isDestroyed() || pet.drag) return;
+        if (pet.win.isDestroyed() || pet.drag || pet.interactive || !pet.win.isVisible()) return;
         const p = screen.getCursorScreenPoint();
         const b = pet.win.getBounds();
         const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
@@ -201,9 +232,10 @@ function startHitPoll(pet) {
     }, HIT_POLL_MS);
 }
 
-async function openPet(agentId) {
+async function openPet(agentId, { bounds = null } = {}) {
     if (pets.has(agentId)) {
-        pets.get(agentId).win.showInactive();
+        showPet(pets.get(agentId));
+        notifyMain(agentId);
         return { success: true, open: true };
     }
     if (agentId !== path.basename(agentId) || !(await fs.pathExists(path.join(paths.agentDir, agentId)))) {
@@ -211,7 +243,7 @@ async function openPet(agentId) {
     }
     const saved = (await readPetState())[agentId];
     const win = new BrowserWindow({
-        ...initialBounds(saved),
+        ...(bounds ? { ...PET_SIZE, x: bounds.x, y: bounds.y } : initialBounds(saved)),
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
@@ -236,21 +268,15 @@ async function openPet(agentId) {
             backgroundThrottling: false,
         },
     });
-    const pet = { win, agentId, ignoringMouse: true, hitPoll: null, drag: null, lastShape: '' };
-    pet.director = createPetDirector({
-        agentId,
-        emit: (frame) => { if (!win.isDestroyed()) win.webContents.send('deskpet:frame', frame); },
-    });
+    const pet = { win, agentId, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '' };
     pets.set(agentId, pet);
 
     win.setAlwaysOnTop(true, TOPMOST_LEVEL);
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
     if (!USE_SHAPE) win.setIgnoreMouseEvents(true, { forward: true });
     win.once('ready-to-show', () => {
-        win.showInactive();
-        // Windows 上透明窗口隐藏再显示后可能丢掉 WS_EX_TOPMOST，每次显示后重新声明。
-        win.setAlwaysOnTop(true, TOPMOST_LEVEL);
-        win.moveTop();
+        showPet(pet);
+        notifyMain(agentId);
     });
     win.webContents.on('render-process-gone', (_e, details) => {
         console.warn('[DeskPet] renderer gone:', details.reason);
@@ -263,7 +289,6 @@ async function openPet(agentId) {
     win.on('closed', () => {
         clearInterval(pet.hitPoll);
         if (pet.drag) clearInterval(pet.drag.timer);
-        pet.director.dispose();
         pets.delete(agentId);
         notifyMain(agentId);
     });
@@ -288,45 +313,113 @@ function petFromEvent(event) {
 
 // ---- 回复流接入（chatHandlers 调用） ----------------------------------------
 
-/** 该 agent 的桌宠打开时，返回要追加到 system prompt 的情绪标记协议。 */
-function getSystemPromptAppend(agentId) {
-    return agentId && pets.has(agentId) ? EMO_PROTOCOL_PROMPT : '';
+/** 该 agent 的桌宠打开时，返回要追加到 system prompt 的情绪标记说明（与侧栏差分立绘共用一段）。 */
+function getSystemPromptAppend(agentId, systemPrompt = '') {
+    if (!agentId || !pets.has(agentId) || !emotionPrompt) return '';
+    // 侧栏立绘已经加过、或者角色自己的提示词里写了标记说明，就不再重复。
+    if (!emotionPrompt.shouldAddEmotionTagPrompt({ systemPrompt, hasDisplay: true })) return '';
+    return emotionPrompt.EMOTION_TAG_PROMPT;
 }
 
 function appendProtocolToMessages(messages, agentId) {
-    const append = getSystemPromptAppend(agentId);
-    if (!append || !Array.isArray(messages)) return messages;
+    if (!Array.isArray(messages)) return messages;
     const first = messages[0];
-    if (first && first.role === 'system' && typeof first.content === 'string') {
-        return [{ ...first, content: `${first.content}\n\n${append}` }, ...messages.slice(1)];
-    }
+    const hasSystem = first && first.role === 'system' && typeof first.content === 'string';
+    const append = getSystemPromptAppend(agentId, hasSystem ? first.content : '');
+    if (!append) return messages;
+    if (hasSystem) return [{ ...first, content: `${first.content}\n\n${append}` }, ...messages.slice(1)];
     return [{ role: 'system', content: append }, ...messages];
 }
 
+function extractDeltaText(chunk) {
+    if (typeof chunk === 'string') return chunk;
+    const choice = Array.isArray(chunk?.choices) ? chunk.choices[0] : null;
+    const delta = choice?.delta || choice?.message || {};
+    return typeof delta.content === 'string' ? delta.content : '';
+}
+
+// 回复流原样转给页面，由页面里的情绪导演决定表情和气泡内容。
+function forward(agentId, event) {
+    const pet = agentId && pets.get(agentId);
+    if (pet && !pet.win.isDestroyed()) pet.win.webContents.send('deskpet:stream', event);
+}
+
 function onRequestStart(messageId, context) {
-    const pet = context?.agentId && pets.get(context.agentId);
-    if (pet) pet.director.begin(messageId);
+    forward(context?.agentId, { type: 'start', messageId: String(messageId) });
 }
 
 function onStreamPayload(payload) {
-    const pet = payload?.context?.agentId && pets.get(payload.context.agentId);
-    if (!pet) return;
-    try {
-        if (payload.type === 'data') pet.director.data(payload.messageId, payload.chunk);
-        else if (payload.type === 'end') pet.director.end(payload.messageId);
-        else if (payload.type === 'error') pet.director.error(payload.messageId);
-    } catch (error) {
-        console.warn('[DeskPet] director failed:', error.message);
+    const agentId = payload?.context?.agentId;
+    if (!agentId || !pets.has(agentId)) return;
+    const messageId = String(payload.messageId);
+    if (payload.type === 'data') {
+        const text = extractDeltaText(payload.chunk);
+        if (text) forward(agentId, { type: 'data', messageId, text });
+    } else if (payload.type === 'end' || payload.type === 'error') {
+        forward(agentId, { type: payload.type, messageId });
     }
 }
 
-/** 非流式回复：整条内容一次性喂给导演。 */
+/** 非流式回复：整条内容一次性转过去。 */
 function onFullResponse(messageId, context, response) {
-    const pet = context?.agentId && pets.get(context.agentId);
-    if (!pet) return;
-    const content = response?.choices?.[0]?.message?.content;
-    if (typeof content === 'string') pet.director.data(messageId, { choices: [{ delta: { content } }] });
-    pet.director.end(messageId);
+    const agentId = context?.agentId;
+    if (!agentId || !pets.has(agentId)) return;
+    const text = response?.choices?.[0]?.message?.content;
+    if (typeof text === 'string' && text) forward(agentId, { type: 'data', messageId: String(messageId), text });
+    forward(agentId, { type: 'end', messageId: String(messageId) });
+}
+
+// ---- 从桌宠发消息：交给主窗口按正常流程发送 -----------------------------------
+
+function sendFromPet(agentId, text) {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingSends.delete(requestId);
+            resolve({ success: false, error: '主窗口没有响应' });
+        }, SEND_TIMEOUT_MS);
+        pendingSends.set(requestId, (result) => {
+            clearTimeout(timer);
+            pendingSends.delete(requestId);
+            resolve(result || { success: false });
+        });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text });
+    });
+}
+
+async function listAgents() {
+    const ids = (await fs.pathExists(paths.agentDir)) ? await fs.readdir(paths.agentDir) : [];
+    const agents = [];
+    for (const id of ids) {
+        try {
+            const config = await fs.readJson(path.join(paths.agentDir, id, 'config.json'));
+            agents.push({ id, name: config?.name || id });
+        } catch { /* 不是 agent 目录 */ }
+    }
+    return agents;
+}
+
+/** 在同一个位置把桌宠换成另一个 agent。 */
+async function switchPet(fromId, toId) {
+    const pet = pets.get(fromId);
+    if (!pet || fromId === toId) return;
+    const [x, y] = pet.win.getPosition();
+    if (pets.has(toId)) {
+        pets.get(toId).win.setPosition(x, y);
+        showPet(pets.get(toId));
+    } else {
+        await openPet(toId, { bounds: { x, y } });
+    }
+    closePet(fromId);
+    savePetPosition(toId, [x, y]).catch(() => {});
+}
+
+function openMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
 }
 
 // ---- IPC ----------------------------------------------------------------
@@ -334,16 +427,38 @@ function onFullResponse(messageId, context, response) {
 function registerIpc() {
     ipcMain.handle('deskpet:toggle', async (_e, agentId) => {
         if (typeof agentId !== 'string' || !agentId) return { success: false, error: 'invalid-agent' };
-        const result = await (pets.has(agentId) ? closePet(agentId) : openPet(agentId));
-        return { ...result, openAgents: [...pets.keys()] };
+        const pet = pets.get(agentId);
+        // 隐藏着的桌宠：再点一次是叫回来，不是关掉。
+        const result = await (pet && pet.win.isVisible() ? closePet(agentId) : openPet(agentId));
+        return { ...result, openAgents: visibleAgents() };
     });
-    ipcMain.handle('deskpet:get-open-agents', () => [...pets.keys()]);
+    ipcMain.handle('deskpet:get-open-agents', () => visibleAgents());
+    ipcMain.on('deskpet:send-result', (_e, payload) => {
+        pendingSends.get(payload?.requestId)?.(payload?.result);
+    });
 
     ipcMain.handle('deskpet:get-assets', (event) => {
         const pet = petFromEvent(event);
         return pet ? resolveAssets(pet.agentId) : null;
     });
-    ipcMain.handle('deskpet:get-frame', (event) => petFromEvent(event)?.director.snapshot() || null);
+    ipcMain.handle('deskpet:send', async (event, text) => {
+        const pet = petFromEvent(event);
+        const message = typeof text === 'string' ? text.trim() : '';
+        if (!pet || !message) return { success: false, error: '没有内容' };
+        return sendFromPet(pet.agentId, message.slice(0, 8000));
+    });
+    // 输入框打开时整窗可点、可聚焦；关上后回到按像素穿透。
+    ipcMain.on('deskpet:set-interactive', (event, on) => {
+        const pet = petFromEvent(event);
+        if (!pet || pet.win.isDestroyed()) return;
+        pet.interactive = !!on;
+        if (on) {
+            if (!USE_SHAPE) setIgnoreMouse(pet, false);
+            pet.win.setFocusable(true);
+            pet.win.focus();
+        }
+    });
+    ipcMain.on('deskpet:open-main', () => openMainWindow());
     ipcMain.on('deskpet:hit', (event, hit) => {
         const pet = petFromEvent(event);
         if (pet) setIgnoreMouse(pet, !hit);
@@ -386,20 +501,32 @@ function registerIpc() {
         savePetPosition(pet.agentId, pet.win.getPosition()).catch(() => {});
     });
 
-    ipcMain.on('deskpet:context-menu', (event) => {
+    ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
+        const agents = await listAgents().catch(() => []);
         Menu.buildFromTemplate([
+            { label: '和 TA 说话', click: () => !pet.win.isDestroyed() && pet.win.webContents.send('deskpet:open-input') },
             {
-                label: '打开主窗口',
+                label: '切换助手',
+                enabled: agents.length > 1,
+                submenu: agents.map((agent) => ({
+                    label: agent.name,
+                    type: 'radio',
+                    checked: agent.id === pet.agentId,
+                    click: () => switchPet(pet.agentId, agent.id).catch((error) => console.warn('[DeskPet] switch failed:', error.message)),
+                })),
+            },
+            { label: '打开主窗口', click: openMainWindow },
+            { type: 'separator' },
+            {
+                label: '隐藏桌宠',
                 click: () => {
-                    if (!mainWindow || mainWindow.isDestroyed()) return;
-                    if (mainWindow.isMinimized()) mainWindow.restore();
-                    mainWindow.show();
-                    mainWindow.focus();
+                    if (pet.win.isDestroyed()) return;
+                    pet.win.hide();
+                    notifyMain(pet.agentId);
                 },
             },
-            { type: 'separator' },
             { label: '关闭桌宠', click: () => closePet(pet.agentId) },
         ]).popup({ window: pet.win });
     });
@@ -416,6 +543,9 @@ function initialize(options) {
     };
     registerProtocol();
     registerIpc();
+    import(pathToFileURL(path.join(paths.projectRoot, 'modules', 'emotion', 'emotionPrompt.js')).href)
+        .then((mod) => { emotionPrompt = mod; })
+        .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
     // 主窗口关掉时桌宠跟着关，否则剩下的透明窗口会让应用无法退出。
     mainWindow?.on?.('closed', closeAll);
 }
@@ -434,6 +564,7 @@ module.exports = {
     onStreamPayload,
     onFullResponse,
     // 测试用
+    _promptReady: () => Boolean(emotionPrompt),
     _resolveServedFile: (url, testPaths) => {
         const previous = paths;
         paths = testPaths;
