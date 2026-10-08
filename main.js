@@ -89,6 +89,7 @@ const browserHandlers = require('./modules/ipc/browserHandlers'); // 侧栏浏�
 const { createDomainActivator, channelsForDomain } = require('./modules/ipc/domainActivator');
 const { describeApis } = require('./preloads/core/registry');
 const { configureSharedRecorder } = require('./modules/modelTrajectory');
+const { configureAgentMood, getAgentMoodStore } = require('./modules/agentMood');
 const domainActivator = createDomainActivator({ ipcMain });
 // 主进程推送按窗口订阅：只发给订阅了某个主题的窗口（V工程窗口、主窗口的状态面板和侧栏）
 const { createStateSubscriptions } = require('./modules/ipc/stateSubscriptions');
@@ -714,6 +715,7 @@ async function performQuitCleanup() {
 
     appQuitCleanupPromise = (async () => {
         await historyWatcherLeases.dispose();
+        await getAgentMoodStore()?.flush().catch(() => {});
 
         try {
             localSttHandlers.shutdown();
@@ -1551,6 +1553,13 @@ if (!gotTheLock) {
         });
         // 记录器必须早于 chatHandlers.initialize：聊天请求一发出就要有记录器；查看轨迹的 IPC 才按需激活
         configureSharedRecorder({ rootDir: path.join(APP_DATA_ROOT_IN_PROJECT, 'ModelTrajectory') });
+        // 助手的长期心情（Agents/<id>/mood.json）：聊天请求经 chatHandlers 喂进来，变化广播给所有窗口（侧栏立绘、桌宠）
+        configureAgentMood({
+            agentDir: AGENT_DIR,
+            broadcast: payload => BrowserWindow.getAllWindows().forEach((win) => {
+                if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('agent-mood-changed', payload);
+            }),
+        });
         domainActivator.register('modelTrajectory', {
             allowSender: sidePaneGuard('modelTrajectory'),
             channels: channelsForDomain(preloadApis, 'modelTrajectory'),

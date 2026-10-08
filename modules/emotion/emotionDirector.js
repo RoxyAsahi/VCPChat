@@ -3,7 +3,8 @@
  *   - inline <!--emo:...--> tags are the main signal; replies without tags fall back to local rules;
  *   - a shown frame stays at least minDwellMs, newer requests in that window collapse into the
  *     latest one, and an unchanged emotion never re-emits, so a streaming reply cannot flicker;
- *   - after a reply ends its last emotion holds for settleHoldMs, then eases back to neutral.
+ *   - after a reply ends its last emotion holds for settleHoldMs, then eases back to the baseline:
+ *     the assistant's long-lived mood (moodState.js) when the caller sets one, neutral otherwise.
  * Frames are plain data ({ seq, messageId, state, emotion, intensity, source }) so the side pane
  * portrait, a desk pet window or a Live2D backend can all consume them. No DOM or Electron use. */
 import { createEmotionTagScanner } from './emotionTags.js';
@@ -42,6 +43,10 @@ export function createEmotionDirector({
     };
     // 不带状态时显示的情绪：上一条回复留下的情绪在下一条回复给出新情绪前保持不变
     let mood = { emotion: 'neutral', intensity: 0, source: 'idle' };
+    // 回复的情绪过去以后回到的底色：助手的长期心情（setBaseline），没给就是 neutral
+    let baseline = { emotion: 'neutral', intensity: 0, source: 'idle' };
+    // 当前显示的是不是底色本身（没有回复留下的情绪在等回落）
+    let onBaseline = true;
 
     const sameLook = (a, b) => a.state === b.state && a.emotion === b.emotion;
 
@@ -106,16 +111,28 @@ export function createEmotionDirector({
         const key = normalizeEmotion(emotion);
         if (!key) return;
         mood = { emotion: key, intensity: clampIntensity(intensity, 0.7), source };
+        onBaseline = false;
+    }
+
+    function backToBaseline(source) {
+        mood = { ...baseline };
+        onBaseline = true;
+        refresh(source);
     }
 
     function scheduleSettle() {
         settleTimer = cancel(settleTimer);
-        if (!(settleHoldMs > 0) || mood.emotion === 'neutral') return;
+        if (onBaseline || !(settleHoldMs > 0)) return;
+        if (mood.emotion === baseline.emotion) {
+            // 回复的情绪就是底色：不用等，直接算回到了底色
+            mood = { ...baseline };
+            onBaseline = true;
+            return;
+        }
         settleTimer = setTimer(() => {
             settleTimer = null;
             if (reply || disposed) return;
-            mood = { emotion: 'neutral', intensity: 0, source: 'settle' };
-            refresh('settle');
+            backToBaseline(baseline.emotion === 'neutral' ? 'settle' : baseline.source);
         }, settleHoldMs);
     }
 
@@ -212,14 +229,34 @@ export function createEmotionDirector({
             if (emotion) setMood(emotion, intensity, source);
             if (state) request({ state, emotion: mood.emotion, intensity: mood.intensity, source });
             else refresh(source);
+            // 回复之外的反应（点一下桌宠）过一会儿也回到底色
+            if (emotion && !reply) scheduleSettle();
         },
-        /** 换了角色：丢掉一切，立刻回到默认 */
+        /**
+         * 长期心情变了：{ emotion, intensity }，null 表示没有心情（neutral）。
+         * 正显示着底色时马上换过去；回复的情绪还在停留时不打断，回落时回到新的底色
+         */
+        setBaseline(next, { source = 'mood' } = {}) {
+            if (disposed) return;
+            const key = normalizeEmotion(next?.emotion) || 'neutral';
+            baseline = key === 'neutral'
+                ? { emotion: 'neutral', intensity: 0, source: 'idle' }
+                : { emotion: key, intensity: clampIntensity(next.intensity, 0.5), source };
+            if (onBaseline) {
+                mood = { ...baseline };
+                if (!reply) refresh(baseline.source);
+            }
+        },
+        get baseline() { return { emotion: baseline.emotion, intensity: baseline.intensity }; },
+        /** 换了角色：丢掉一切（包括底色），立刻回到默认 */
         reset() {
             if (disposed) return;
             reply = null;
             settleTimer = cancel(settleTimer);
             errorTimer = cancel(errorTimer);
             mood = { emotion: 'neutral', intensity: 0, source: 'idle' };
+            baseline = { ...mood };
+            onBaseline = true;
             request({ ...NEUTRAL, messageId: null }, { immediate: true });
         },
         get frame() { return shown; },

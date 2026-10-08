@@ -62,12 +62,22 @@ function onProactive(callback) {
     return () => ipcRenderer.removeListener('deskpet:proactive', listener);
 }
 
+// 持续心情：主进程广播给所有窗口，页面按自己的 agentId 过滤
+function onMood(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('agent-mood-changed', listener);
+    return () => ipcRenderer.removeListener('agent-mood-changed', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
     onPrefs,
     wheelResize: deltaY => ipcRenderer.send('deskpet:wheel-resize', Number(deltaY) || 0),
     touched: () => ipcRenderer.send('deskpet:touched'),
+    getMood: () => ipcRenderer.invoke('deskpet:get-mood'),
+    onMood,
     send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
     onStream,
     onCursor,
