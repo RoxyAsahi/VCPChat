@@ -1,6 +1,7 @@
 /* global PIXI */
 // VCPChat 桌宠页面。
 //   形象：Live2D（agent 的 deskpet/ 里有 .model3.json，且用户放了 5.x 的 Cubism Core）
+//        → 网格立绘（deskpet/ 里有 .puppet.json，一张图切块做的可动角色，不需要 Core）
 //        → 差分立绘（portrait.<情绪>.png，与侧栏首页立绘同一套约定）→ 头像加情绪色环。
 //   表情：主进程把这个 agent 的回复流原样转过来，交给与侧栏立绘共用的情绪导演
 //        （modules/emotion），导演给出 { state, emotion, intensity } 帧。
@@ -9,6 +10,7 @@ import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
+import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 
 const api = window.deskPetAPI;
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle；没有显卡、用软件渲染时整体再降一档。
@@ -62,6 +64,7 @@ const bubble = {
     region: null,       // 回复正读到哪种区域（thought / tool / code），null 是正文
     notice: null,       // { text, error }，临时提示，优先显示
     own: false,         // 这条回复是不是在回桌宠上说的话
+    proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
     hovered: false,
     hideTimer: 0,
     noticeTimer: 0,
@@ -72,6 +75,7 @@ const bubble = {
 function replyStateLabel() {
     if (!frame.state) return '';
     if (frame.state === 'thinking') return bubble.replyId && bubble.region === 'thought' ? STATE_LABEL.thinking : '';
+    if (frame.state === 'tool' && toolCard?.visible) return ''; // 小卡片已经说了在做什么
     return STATE_LABEL[frame.state] || '';
 }
 
@@ -90,7 +94,7 @@ function renderBubble() {
     } else if (reply) {
         content = reply;
         mode = 'is-reply';
-    } else if (!muted && frame.state && STATE_LABEL[frame.state]) {
+    } else if (!muted && frame.state && STATE_LABEL[frame.state] && !(frame.state === 'tool' && toolCard?.visible)) {
         content = STATE_LABEL[frame.state];
         mode = 'is-state';
     }
@@ -106,8 +110,9 @@ function renderBubble() {
     // 排队等发的话写在小字里，不盖住正在说的回复
     const queued = composer.queued ? `说完就发：「${shorten(composer.queued)}」` : '';
     $('bubbleState').textContent = mode === 'is-reply' || mode === 'is-state'
-        ? [mode === 'is-reply' ? replyStateLabel() : '', queued].filter(Boolean).join(' · ')
+        ? [mode === 'is-reply' ? replyStateLabel() || proactiveLabel() : '', queued].filter(Boolean).join(' · ')
         : '';
+    el.classList.toggle('is-alarm', mode === 'is-reply' && bubble.proactive?.kind === 'alarm');
 }
 
 // 流式片段很密，攒到下一帧一起画
@@ -127,8 +132,46 @@ function scheduleReplyHide(ms) {
     bubble.hideTimer = setTimeout(() => {
         if (bubble.replyId || bubble.hovered) return;
         bubble.reply = '';
+        bubble.proactive = null;
         renderBubble();
     }, ms);
+}
+
+function proactiveLabel() {
+    const p = bubble.proactive;
+    if (!p) return '';
+    if (p.kind === 'alarm') return '⏰ 闹钟';
+    return p.title ? `💬 新话题「${shorten(p.title)}」· 点我去看` : '💬 新话题 · 点我去看';
+}
+
+// 角色主动说话（AI 开了新话题、闹钟到点）。正在回复时先记着，回复说完再说。
+const PROACTIVE_HOLD_MS = { topic: 20000, alarm: 60000 };
+let pendingProactive = [];
+let toolCard = null; // 「正在做什么」小卡片（bindStream 里建）
+let proactiveDirector = null;
+
+function speakProactive(payload) {
+    if (!payload?.text && !payload?.title) return;
+    if (bubble.replyId) {
+        pendingProactive = [...pendingProactive, payload].slice(-3);
+        return;
+    }
+    const kind = payload.kind === 'alarm' ? 'alarm' : 'topic';
+    // 免打扰：自己开新话题这种不说；闹钟是用户自己定的，照常叫
+    if (kind !== 'alarm' && isQuiet()) return;
+    bubble.proactive = { kind, title: payload.title || '', topicId: payload.topicId || '' };
+    bubble.own = kind === 'alarm';
+    bubble.reply = payload.text || payload.title;
+    lastActivity = Date.now();
+    proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
+    backend?.tap?.();
+    renderBubble();
+    scheduleReplyHide(PROACTIVE_HOLD_MS[kind]);
+}
+
+function flushProactive() {
+    const next = pendingProactive.shift();
+    if (next) speakProactive(next);
 }
 
 function notice(text, { error = false, ms = 6000 } = {}) {
@@ -235,7 +278,11 @@ function bindComposer() {
     $('composerClose').addEventListener('click', closeComposer);
     // 点气泡打开主窗口看完整回复；鼠标停在气泡上时先不收起，方便读完或往上翻。
     const bubbleEl = $('bubble');
-    bubbleEl.addEventListener('click', () => api.openMainWindow());
+    bubbleEl.addEventListener('click', () => {
+        // 主动开的新话题：直接切到那个话题
+        if (bubble.proactive?.topicId && !bubble.replyId) api.openTopic(bubble.proactive.topicId);
+        else api.openMainWindow();
+    });
     bubbleEl.addEventListener('mouseenter', () => {
         bubble.hovered = true;
         clearTimeout(bubble.hideTimer);
@@ -560,30 +607,12 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         }
     });
 
-    // ---- 按像素命中（在当帧渲染之后读 alpha） ----
-    const gl = app.renderer.gl;
-    const pixel = new Uint8Array(4);
-    let pendingProbe = null;
-    const readAlpha = (x, y) => {
-        const r = app.renderer.resolution;
-        gl.readPixels(Math.floor(x * r), Math.floor(gl.drawingBufferHeight - y * r - 1), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        return pixel[3];
-    };
-    app.ticker.add(() => {
-        if (!pendingProbe) return;
-        const { x, y } = pendingProbe;
-        pendingProbe = null;
-        reportHit(readAlpha(x, y) >= HIT_ALPHA);
-    }, null, PIXI.UPDATE_PRIORITY.UTILITY);
+    const alphaProbe = createAlphaProbe(app);
 
     let lastExpression = null;
     return {
         kind: 'live2d',
-        probe(x, y) {
-            if (app.ticker.started) { pendingProbe = { x, y }; return; }
-            app.render();
-            reportHit(readAlpha(x, y) >= HIT_ALPHA);
-        },
+        probe: alphaProbe.probe,
         focus(x, y) { model.focus(x, y); },
         bounds() { const b = model.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
         tap() {
@@ -616,6 +645,201 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             else if (!app.ticker.started) app.ticker.start();
         },
         info: { coreVersion, expressions: expressionNames, motionGroups, renderer: webgl.renderer, software: webgl.software },
+    };
+}
+
+// ---- 网格立绘后端（*.puppet.json，见 puppet.js） ------------------------------------
+
+// 呼吸、眨眼、视线和说话这些自动动作；Live2D 模型自带，网格立绘要自己做。
+function createIdleAnimator() {
+    let nextBlink = 1.5 + Math.random() * 3;
+    let blinkT = -1;
+    let doubleBlink = false;
+    let mouthPhase = 0;
+    let t = 0;
+    return {
+        step(dt) {
+            t += dt;
+            nextBlink -= dt;
+            if (blinkT < 0 && nextBlink <= 0) {
+                blinkT = 0;
+                doubleBlink = Math.random() < 0.18;
+                nextBlink = 2.5 + Math.random() * 4;
+            }
+            let eyeClose = 0;
+            if (blinkT >= 0) {
+                blinkT += dt;
+                const CLOSE = 0.07, HOLD = 0.04, OPEN = 0.11;
+                if (blinkT < CLOSE) eyeClose = blinkT / CLOSE;
+                else if (blinkT < CLOSE + HOLD) eyeClose = 1;
+                else if (blinkT < CLOSE + HOLD + OPEN) eyeClose = 1 - (blinkT - CLOSE - HOLD) / OPEN;
+                else if (doubleBlink) { doubleBlink = false; blinkT = 0; }
+                else blinkT = -1;
+            }
+            let talk = 0;
+            if (bubble.replyId && !frame.state) {
+                mouthPhase += dt * (9 + Math.random() * 5);
+                talk = 0.2 + 0.45 * Math.max(0, Math.sin(mouthPhase)) * (0.6 + 0.4 * Math.sin(mouthPhase * 0.37));
+            }
+            return {
+                breath: 0.5 + 0.5 * Math.sin((t * 2 * Math.PI) / 3.6),
+                eyeClose,
+                talk,
+                swayZ: 2.2 * Math.sin(t * 0.45) + 0.8 * Math.sin(t * 1.1),
+                swayX: 3 * Math.sin(t * 0.31),
+            };
+        },
+    };
+}
+
+async function createPuppetBackend(assets) {
+    const webgl = probeWebGL();
+    if (!webgl) throw userFacing('当前环境没有 WebGL（显卡加速被禁用？），网格立绘画不出来，先用普通立绘代替。');
+    const fps = webgl.software ? FPS_SOFTWARE : FPS;
+    const { createPuppet } = await import('vcp-deskpet://pet/app/puppet.js');
+    const canvas = $('live2dCanvas');
+    canvas.hidden = false;
+    // 与 Live2D 相同：上下文丢了就整页重载，短时间内反复丢由 start() 改用立绘。
+    const onContextLost = (event) => {
+        event.preventDefault();
+        recordContextLoss();
+        notice('显卡渲染中断，正在重新载入桌宠…', { ms: 4000 });
+        setTimeout(() => window.location.reload(), CONTEXT_LOST_RELOAD_MS);
+    };
+    canvas.addEventListener('webglcontextlost', onContextLost, { once: true });
+    const app = new PIXI.Application();
+    await app.init({
+        canvas,
+        resizeTo: window,
+        preference: 'webgl',
+        backgroundAlpha: 0,
+        antialias: !webgl.software,
+        autoDensity: true,
+        resolution: window.devicePixelRatio || 1,
+        preserveDrawingBuffer: false,
+        powerPreference: 'low-power',
+    });
+    app.ticker.maxFPS = fps.active;
+    try {
+        return await mountPuppet(app, await createPuppet(assets.puppet.rigUrl), { webgl, fps });
+    } catch (error) {
+        canvas.removeEventListener('webglcontextlost', onContextLost);
+        app.destroy({ removeView: false }, { children: true });
+        canvas.hidden = true;
+        throw error;
+    }
+}
+
+async function mountPuppet(app, puppet, { webgl, fps }) {
+    const holder = new PIXI.Container();
+    holder.addChild(puppet.root);
+    app.stage.addChild(holder);
+    let scale = 1;
+    const layout = () => {
+        scale = Math.min(window.innerWidth / puppet.width, (window.innerHeight - TOP_RESERVE) / puppet.height) * 0.98;
+        puppet.root.scale.set(scale);
+        puppet.root.pivot.set(puppet.width / 2, puppet.height);
+        holder.position.set(window.innerWidth / 2, window.innerHeight);
+    };
+    layout();
+    window.addEventListener('resize', layout);
+
+    const idle = createIdleAnimator();
+    const params = {};
+    const current = {};
+    let target = {};
+    const look = { x: 0, y: 0, tx: 0, ty: 0 };
+    let hop = 0, hopV = 0;
+    const get = (id) => current[id] || 0;
+    app.ticker.add((ticker) => {
+        const dt = Math.min(0.1, ticker.deltaMS / 1000);
+        const a = idle.step(dt);
+        const ease = 1 - Math.pow(1 - 0.12, dt * 60);
+        for (const id of new Set([...Object.keys(current), ...Object.keys(target)])) {
+            current[id] = get(id) + ((target[id] || 0) - get(id)) * ease;
+        }
+        look.x += (look.tx - look.x) * (1 - Math.pow(1 - 0.08, dt * 60));
+        look.y += (look.ty - look.y) * (1 - Math.pow(1 - 0.08, dt * 60));
+        // 单击时跳一下：弹簧回到 0。
+        hopV += (-180 * hop - 12 * hopV) * dt;
+        hop += hopV * dt;
+        holder.position.y = window.innerHeight + hop;
+
+        params.ParamAngleX = get('ParamAngleX') + look.x * 22 + a.swayX;
+        params.ParamAngleY = get('ParamAngleY') + look.y * 16;
+        params.ParamAngleZ = get('ParamAngleZ') + a.swayZ - look.x * 4;
+        params.ParamEyeBallX = clampUnit(get('ParamEyeBallX') + look.x * 0.9);
+        params.ParamEyeBallY = clampUnit(get('ParamEyeBallY') + look.y * 0.8);
+        for (const side of ['L', 'R']) {
+            const open = puppet.defaults[`ParamEye${side}Open`] + get(`ParamEye${side}Open`);
+            params[`ParamEye${side}Open`] = open * (1 - a.eyeClose);
+            params[`ParamEye${side}Smile`] = get(`ParamEye${side}Smile`);
+        }
+        params.ParamMouthForm = get('ParamMouthForm');
+        params.ParamMouthOpenY = Math.max(get('ParamMouthOpenY'), a.talk);
+        params.ParamCheek = get('ParamCheek');
+        params.ParamBreath = a.breath;
+        puppet.update(params, dt);
+    });
+
+    const probe = createAlphaProbe(app);
+    return {
+        kind: 'puppet',
+        probe: probe.probe,
+        focus(x, y) {
+            // 视线跟着光标：以脸为原点，按窗口尺寸归一化。
+            const hx = holder.position.x + (puppet.headCenter[0] - puppet.width / 2) * scale;
+            const hy = holder.position.y + (puppet.headCenter[1] - puppet.height) * scale;
+            look.tx = clampUnit((x - hx) / (window.innerWidth * 0.6));
+            look.ty = clampUnit((hy - y) / (window.innerHeight * 0.6));
+        },
+        // 用静止时的版面框，不跟着呼吸、单击轻跳和头发摆动抖（气泡按它贴头顶）。
+        bounds() {
+            const w = puppet.width * scale, h = puppet.height * scale;
+            return { x: window.innerWidth / 2 - w / 2, y: window.innerHeight - h, width: w, height: h };
+        },
+        tap() { hopV = -260; },
+        apply(f) {
+            const intensity = Math.max(0.3, Math.min(1, f.intensity || 0.6));
+            target = {};
+            for (const [id, v] of Object.entries(EMOTION_PARAMS[f.emotion] || {})) target[id] = v * intensity;
+            for (const [id, v] of Object.entries(STATE_PARAMS[f.state] || {})) target[id] = (target[id] || 0) + v;
+        },
+        setActive(active) { app.ticker.maxFPS = active ? fps.active : fps.idle; },
+        setPaused(paused) {
+            if (paused) app.ticker.stop();
+            else if (!app.ticker.started) app.ticker.start();
+        },
+        info: { ...puppet.info, renderer: webgl.renderer, software: webgl.software },
+    };
+}
+
+function clampUnit(v) {
+    return Math.max(-1, Math.min(1, v));
+}
+
+// 按像素命中：在当帧渲染之后读 alpha。
+function createAlphaProbe(app) {
+    const gl = app.renderer.gl;
+    const pixel = new Uint8Array(4);
+    let pending = null;
+    const readAlpha = (x, y) => {
+        const r = app.renderer.resolution;
+        gl.readPixels(Math.floor(x * r), Math.floor(gl.drawingBufferHeight - y * r - 1), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        return pixel[3];
+    };
+    app.ticker.add(() => {
+        if (!pending) return;
+        const { x, y } = pending;
+        pending = null;
+        reportHit(readAlpha(x, y) >= HIT_ALPHA);
+    }, null, PIXI.UPDATE_PRIORITY.UTILITY);
+    return {
+        probe(x, y) {
+            if (app.ticker.started) { pending = { x, y }; return; }
+            app.render();
+            reportHit(readAlpha(x, y) >= HIT_ALPHA);
+        },
     };
 }
 
@@ -737,13 +961,17 @@ function applyFrame(next) {
 
 function bindStream(director) {
     let scanner = null;
+    toolCard = createToolCard({ el: $('toolCard'), onChange: queueRenderBubble });
+    $('toolCard').addEventListener('click', () => api.openMainWindow());
     const startReply = (messageId) => {
         clearTimeout(bubble.hideTimer);
         bubble.own = Date.now() - composer.lastSentAt < OWN_REPLY_WINDOW_MS;
         bubble.replyId = messageId;
         bubble.reply = '';
         bubble.region = null;
+        bubble.proactive = null;
         scanner = createEmotionTagScanner();
+        toolCard.start();
     };
     api.onStream((event) => {
         if (!event?.messageId) return;
@@ -754,6 +982,7 @@ function bindStream(director) {
         } else if (event.type === 'data') {
             if (bubble.replyId !== event.messageId) startReply(event.messageId);
             director.append(event.messageId, event.text);
+            toolCard.push(event.text);
             // 气泡只显示正文：情绪标签、思维链、工具调用和结果都不显示，代码块写成 [代码]。
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
@@ -772,6 +1001,8 @@ function bindStream(director) {
             bubble.replyId = null;
             bubble.region = null;
             scheduleReplyHide(replyHoldMs());
+            toolCard.end();
+            if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));
             // 排队的话等气泡画完这一帧再发，免得和刚结束的回复挤在一起
             if (composer.queued) setTimeout(flushQueued, 400);
         }
@@ -818,18 +1049,33 @@ async function start() {
             $('live2dCanvas').hidden = true;
             notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
         }
-    } else if (assets.live2d && !assets.coreUrl) {
+    } else if (assets.live2d && !assets.coreUrl && !assets.puppet) {
         notice(`找到了 Live2D 模型，但缺少 Cubism Core：请把 5.x 的 live2dcubismcore.min.js 放到 ${assets.corePath}`, { error: true, ms: 12000 });
+    }
+    if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
+        notice('显卡渲染反复中断，这次先用普通立绘。重新打开桌宠会再试。', { error: true, ms: 10000 });
+    } else if (!backend && assets.puppet) {
+        try {
+            backend = await createPuppetBackend(assets);
+        } catch (error) {
+            console.error('[DeskPet] 网格立绘加载失败，改用立绘：', error);
+            $('live2dCanvas').hidden = true;
+            notice(error.userFacing ? error.message : `网格立绘加载失败：${error.message}`, { error: true, ms: 8000 });
+        }
     }
     if (!backend) backend = createImageBackend(assets);
     document.body.dataset.backend = backend.kind;
 
     const director = createEmotionDirector({ onFrame: applyFrame });
     bindStream(director);
+    proactiveDirector = director;
+    api.onProactive?.(speakProactive);
     bindComposer();
-    api.onCursor(({ x, y }) => {
-        if (uiAt(x, y)) reportHit(true);
-        else backend.probe(x, y);
+    api.onCursor(({ x, y, outside }) => {
+        if (!outside) {
+            if (uiAt(x, y)) reportHit(true);
+            else backend.probe(x, y);
+        }
         backend.focus(x, y);
     });
     bindPointer({

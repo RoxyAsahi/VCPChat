@@ -1470,6 +1470,18 @@ export function setupEventListeners(deps) {
             }
             chatAPI.deskPetSendResult?.({ requestId, result });
         });
+        chatAPI.onDeskPetOpenTopic?.(async ({ agentId, topicId } = {}) => {
+            try {
+                if (refs.currentSelectedItem.get()?.id !== agentId) {
+                    const item = itemListManager?.findItemById?.(agentId, 'agent');
+                    if (!item) return;
+                    await chatManager.selectItem(item.id, 'agent', item.name, item.avatarUrl, item.config || item);
+                }
+                if (refs.currentTopicId.get() !== topicId) await chatManager.selectTopic(topicId);
+            } catch (error) {
+                console.warn('[DeskPet] open topic failed:', error);
+            }
+        });
     }
 
     // 语音聊天按钮事件处理

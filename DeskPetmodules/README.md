@@ -6,6 +6,8 @@
 - **回复气泡：** 回复边流出边显示在角色头顶（情绪标记、思维链、工具调用不显示；Markdown 记号整理成纯文字，代码块显示为 [代码]，图片显示为 [图片]）。回复结束后按长短停留 8 到 30 秒，鼠标停在气泡上时不收。点气泡打开主窗口看完整内容。
 - **表情：** 跟着回复换表情；思考、调用工具、出错时有对应状态；单击角色会做个开心的动作（双击只打开输入框，不触发这个动作）。
 - **省电：** 空闲 30 秒后降帧；隐藏桌宠时完全停止渲染；没有显卡、用软件渲染时帧率再降一档并关掉抗锯齿。
+- **正在做什么：** 回复里调工具时，气泡下面有一条小卡片，比如「🔍 正在搜索 · 明天上海天气」，做完打勾、失败标红。
+- **主动搭话：** AI 用「AI 主动创建话题」插件开了新话题时，开着的桌宠会把第一句话说出来，点气泡直接切到那个话题；用 VCP 闹钟插件设的闹钟到点时，桌宠（藏起来的也会出来）说出提醒事项。闹钟原本的弹窗照旧。
 - **右键菜单：** 和 TA 说话、切换助手（原位置换成另一个 Agent）、打开主窗口、隐藏桌宠、关闭桌宠。
 
 不放任何素材时，桌宠只显示 Agent 的头像，加上一个情绪圆环。下面任意一种素材都能让它更像样。
@@ -35,6 +37,16 @@
    情绪键与侧栏差分立绘相同，共 12 个：`neutral calm happy excited shy affectionate curious surprised concerned sad tired angry`。没写的情绪按表情名去猜（含 smile、angry 之类的词）。
 
 本项目不附带任何 Live2D 文件（Core 和模型都受 Live2D 的许可约束），需要自己下载。
+
+### 1b. 或者放网格立绘（可选，不需要 Cubism Core）
+
+只有一张立绘、没有 Live2D 模型时，可以把图切成几块（底图、眼皮、睫毛、嘴型、腮红）做成 `*.puppet.json`，由 `puppet.js` 逐帧挪网格顶点：呼吸、眨眼、头和眼睛跟着光标、说话口型、按情绪换眼型嘴型和腮红。参数名与 Live2D 一致，情绪映射和 Live2D 共用。
+
+```
+<VCPChat>\AppData\Agents\<AgentId>\deskpet\<文件夹>\nova.puppet.json（及同目录的贴图）
+```
+
+Nova 的这一套由 `scripts/deskpet/build-nova-puppet.py` 从 `assets/nova_button_light.png` 生成（自动抠图，眼睛和嘴的位置手工标定）。同时放了 Live2D 模型和 Core 时优先用 Live2D。
 
 ### 2. 或者放差分立绘（可选）
 
@@ -67,5 +79,5 @@ AppData\Agents\<AgentId>\portrait.thinking.png  状态差分：thinking / tool /
 
 - `modules/ipc/deskPetHandlers.js`：主进程部分，负责窗口、`vcp-deskpet://` 资源协议、提示词注入、把回复流转给桌宠、桌宠发言转给主窗口、右键菜单。
 - `modules/emotion/`：情绪标签、规则兜底、情绪导演和差分挑图（与侧栏立绘共用）。
-- `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、立绘、头像；气泡和输入框（`bubbleText.js` 把回复整理成气泡里的纯文字）。
+- `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、网格立绘（`puppet.js`）、差分立绘、头像；气泡和输入框（`bubbleText.js` 把回复整理成气泡里的纯文字）。
 - `vendor/live2d/`：untitled-pixi-live2d-engine 1.4.0（MIT）。
