@@ -68,3 +68,31 @@ test('busy main chat, unknown agent and empty text are refused', async () => {
     assert.deepEqual(await bridge({ agentId: 'Bob', text: '   ' }), { success: false, error: '没有内容' });
     assert.equal(sent.length, 0);
 });
+
+test('two quick sends from the pet run one after the other', async () => {
+    const original = { selected: { id: 'Bob', type: 'agent' }, topicId: 'topic_Bob' };
+    const sent = [];
+    let active = 0;
+    let overlap = false;
+    const queued = createDeskPetSendBridge({
+        getSelectedItem: () => original.selected,
+        getTopicId: () => original.topicId,
+        findAgent: (id) => ({ id, type: 'agent', name: id }),
+        selectItem: async (item) => {
+            active += 1;
+            if (active > 1) overlap = true;
+            original.selected = { id: item.id, type: 'agent' };
+            original.topicId = null;
+            await new Promise((resolve) => setTimeout(resolve, 60));
+            original.topicId = `topic_${item.id}`;
+            active -= 1;
+        },
+        sendMessage: async () => { sent.push(original.selected.id); },
+        isBusy: () => false,
+        acceptMs: 20,
+    });
+    const results = await Promise.all([queued({ agentId: 'Alice', text: '1' }), queued({ agentId: 'Carol', text: '2' })]);
+    assert.deepEqual(results, [{ success: true }, { success: true }]);
+    assert.equal(overlap, false, '第二次发送要等第一次的切换做完');
+    assert.deepEqual(sent, ['Alice', 'Carol']);
+});

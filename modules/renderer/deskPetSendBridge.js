@@ -14,7 +14,15 @@ export function createDeskPetSendBridge({
     acceptMs = DESK_PET_SEND_ACCEPT_MS,
     wait = (ms) => new Promise(resolve => setTimeout(resolve, ms)),
 }) {
-    return async function sendFromPet({ agentId, text } = {}) {
+    // 桌宠的发送一条一条来：两次快速发送不能同时等切换、同时通过「上一条还在回复中」的检查。
+    let queue = Promise.resolve();
+    return function sendFromPet(request) {
+        const run = queue.then(() => sendOne(request));
+        queue = run.catch(() => {});
+        return run;
+    };
+
+    async function sendOne({ agentId, text } = {}) {
         if (typeof agentId !== 'string' || !agentId || typeof text !== 'string' || !text.trim()) {
             return { success: false, error: '没有内容' };
         }
@@ -38,5 +46,5 @@ export function createDeskPetSendBridge({
         // shownInChat：话已经存进历史，只是回复失败（聊天里有报错）；不能让桌宠当成没发出去再发一遍。
         if (early && !early.shownInChat) return { success: false, error: early.message || String(early) };
         return { success: true };
-    };
+    }
 }
