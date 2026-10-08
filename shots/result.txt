@@ -1,0 +1,20 @@
+Desk pet load test: PSD2Live Nova (nova_p2l, 2048 atlas)
+App: deskpet-demo worktree @ 503c5ad5, VCPCHAT_APP_DATA_DIR=deskpet-demo-appdata, CDP 9223
+Agent: _Agent_1760530265093_1760530265093 (Nova); model files placed directly in deskpet\ (Mao\ left in place, loader picks the top-level model3.json first)
+
+window.__deskPetReady = {"backend":"live2d","info":{"coreVersion":83951616,"expressions":[],"motionGroups":["Idle","Blink","Nod","Shake"]}}
+Cubism Core: 5.1.0 (csmGetVersion 0x05010000; MocVersion_50 supported)
+
+Console errors (verbatim):
+[log.error] Failed to load resource: the server responded with a status of 404 (Not Found) vcp-deskpet://pet/agent/_Agent_1760530265093_1760530265093/deskpet/deskpet.json
+(no exceptions; no Live2D load errors)
+
+Frames: idle_1..8 (0.5 s apart), gaze_left / gaze_right / gaze_top (real cursor moved via SetCursorPos, then restored).
+Gaze: head/hair shifts between left and right frames, so focus tracking works.
+
+Visual result: BROKEN RENDER. Only front hair, a strip of back hair and the collar are visible;
+face, eyes, mouth and body are missing, with hard rectangular cut edges.
+The same defect appears in PSD2Live's own GIF export (psd2live_preview_gif_frame0.png),
+so it is in the model/input PSD, not the desk pet renderer.
+Lead: psd_tools reports every layer of out/psd2live/nova_p2l.psd as 100% opaque within its bbox
+(e.g. mouth 66% white pixels), so the layers likely lost alpha in the PSD prep step (tools/prep_psd2live.py).
