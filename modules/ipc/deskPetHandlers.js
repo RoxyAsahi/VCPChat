@@ -264,7 +264,7 @@ async function openPet(agentId, { bounds = null } = {}) {
             contextIsolation: true,
             sandbox: true,
             nodeIntegration: false,
-            // 主窗口最小化时桌宠照常动；空闲暂停由页面自己做。
+            // 主窗口最小化时桌宠照常动；空闲降帧和隐藏时暂停由页面自己做。
             backgroundThrottling: false,
         },
     });
@@ -286,6 +286,10 @@ async function openPet(agentId, { bounds = null } = {}) {
         if (pet.crashes <= 3) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
         else win.close();
     });
+    // 窗口开着时关了后台节流（主窗口最小化时桌宠照常动），隐藏时页面感觉不到，主动告诉它停下。
+    const sendVisibility = (visible) => !win.isDestroyed() && win.webContents.send('deskpet:visibility', visible);
+    win.on('hide', () => sendVisibility(false));
+    win.on('show', () => sendVisibility(true));
     win.on('closed', () => {
         clearInterval(pet.hitPoll);
         if (pet.drag) clearInterval(pet.drag.timer);
