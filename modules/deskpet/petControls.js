@@ -126,7 +126,7 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
     function setShortcut(actionId, value) {
         if (!prefs.SHORTCUT_ACTIONS[actionId]) return { success: false, error: '未知的快捷键' };
         const accelerator = prefs.normalizeAccelerator(value);
-        if (accelerator === null) return { success: false, error: '至少要两个修饰键（Ctrl、Alt、Shift、Win 里任选，不能只有 Shift）加一个键，F1–F12 加一个修饰键也行' };
+        if (accelerator === null) return { success: false, error: '至少要两个修饰键（Ctrl、Alt、Shift、Win 里任选，不能只有 Shift）加一个键，F1–F24 加一个修饰键也行' };
         if (accelerator && prefs.isReserved(accelerator)) return { success: false, error: 'VCPChat 自己在用这个组合' };
         const other = Object.entries(settings.shortcuts).find(([id, acc]) => id !== actionId && acc && acc === accelerator);
         if (other) return { success: false, error: `已经给「${prefs.SHORTCUT_ACTIONS[other[0]].label}」用了` };

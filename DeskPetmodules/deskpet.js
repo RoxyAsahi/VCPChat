@@ -53,8 +53,10 @@ let frame = { state: null, emotion: 'neutral', intensity: 0, source: 'idle' };
 let lastActivity = Date.now();
 // 主进程给的设置：大小、免打扰。别的模块（声音、待机反应）读 window.deskPetPrefs 或听 'deskpet:prefs' 事件。
 let prefs = { scale: 1, doNotDisturb: false };
-// 从桌宠上发出的话之后多久内的回复算「在跟桌宠聊」：免打扰时只有这种回复还显示气泡
-const OWN_REPLY_WINDOW_MS = 120000;
+// 免打扰时只有「在回桌宠上说的话」的回复还显示气泡：发出后这么久内开始的回复，
+// 以及紧接着这种回复（工具调用后的续写）开始的回复
+const OWN_REPLY_WINDOW_MS = 30000;
+const OWN_FOLLOW_UP_MS = 5000;
 
 // ---- 气泡：状态、回复文字、提示 ----------------------------------------------
 
@@ -194,7 +196,7 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false, queued: null, lastSentAt: 0 };
+const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0 };
 
 function openComposer() {
     composer.open = true;
@@ -217,14 +219,16 @@ function shorten(text, max = 16) {
 async function sendText(text) {
     composer.sending = true;
     $('composerSend').disabled = true;
+    // 先记下发出时间：回复流的开头可能比发送结果先到
+    const previousSentAt = composer.lastSentAt;
+    composer.lastSentAt = Date.now();
     try {
         const result = await api.send(text);
-        if (result?.success) {
-            composer.lastSentAt = Date.now();
-            return true;
-        }
+        if (result?.success) return true;
+        composer.lastSentAt = previousSentAt;
         notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
     } catch (error) {
+        composer.lastSentAt = previousSentAt;
         notice(`没发出去：${error.message}`, { error: true });
     } finally {
         composer.sending = false;
@@ -965,7 +969,8 @@ function bindStream(director) {
     $('toolCard').addEventListener('click', () => api.openMainWindow());
     const startReply = (messageId) => {
         clearTimeout(bubble.hideTimer);
-        bubble.own = Date.now() - composer.lastSentAt < OWN_REPLY_WINDOW_MS;
+        bubble.own = Date.now() - composer.lastSentAt < OWN_REPLY_WINDOW_MS
+            || (composer.ownReplyEndedAt > 0 && Date.now() - composer.ownReplyEndedAt < OWN_FOLLOW_UP_MS);
         bubble.replyId = messageId;
         bubble.reply = '';
         bubble.region = null;
@@ -1000,6 +1005,7 @@ function bindStream(director) {
             scanner = null;
             bubble.replyId = null;
             bubble.region = null;
+            composer.ownReplyEndedAt = bubble.own ? Date.now() : 0;
             scheduleReplyHide(replyHoldMs());
             toolCard.end();
             if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));

@@ -315,11 +315,11 @@ body.is-cramped #uiStack:has(#composer) #bubble::after {
   opacity: 0;
 }
 
-/* 免打扰时头顶左边一个小月亮，知道它为什么不出声 */
+/* 免打扰时头顶旁边一个小月亮，知道它为什么不出声 */
 #dndBadge {
   position: absolute;
-  left: 10px;
-  top: var(--pet-head, 150px);
+  left: calc(50% + 24px);
+  top: calc(var(--pet-head, 150px) - 4px);
   font-size: 16px;
   line-height: 1;
   opacity: 0.75;
