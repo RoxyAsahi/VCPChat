@@ -75,6 +75,7 @@ export function createPetLife({
     let nextNodAt = 0;
     let busyUntil = 0;             // 正在演的动作结束前不插新的小动作
     let lastMicro = null;
+    let quiet = false;             // 免打扰：不做引人注意的小动作，只安静地呼吸眨眼、打盹
     const holds = new Set();       // reply / composer / drag / hidden：期间不犯困、不做小动作
 
     // 视线：光标在动时跟光标（gaze = null），停住后自己游走，困了、睡着时垂下来
@@ -180,6 +181,10 @@ export function createPetLife({
         get gaze() { return gaze; },
         get busy() { return now() < busyUntil; },
         get holds() { return [...holds]; },
+        get quiet() { return quiet; },
+
+        // 免打扰开着时不自己找事做（被碰到的反应照常）
+        setQuiet(on) { quiet = Boolean(on); },
 
         // 回复在流、输入框开着、拖动中、窗口隐藏时按住时钟
         hold(reason, on) {
@@ -240,11 +245,9 @@ export function createPetLife({
             lastTapAt = at;
             lastInteraction = at;
             if (phase !== 'awake') return tapStreak;
+            // 还在戳就继续晕（每多三下晕一次），连点没断之前双击也不再打开输入框
             if (tapStreak === t.annoyedAt) act('annoyed');
-            else if (tapStreak === t.dizzyAt) {
-                act('dizzy');
-                tapStreak = 0;
-            }
+            else if (tapStreak >= t.dizzyAt && (tapStreak - t.dizzyAt) % 3 === 0) act('dizzy');
             return tapStreak;
         },
 
@@ -279,10 +282,10 @@ export function createPetLife({
                 updateGaze();
                 if (!held && at - lastInteraction >= t.drowsyAfterMs) {
                     setPhase('drowsy');
-                    act('yawn');
+                    if (!quiet) act('yawn');
                     return;
                 }
-                if (!held && at >= nextMicroAt && at >= busyUntil) {
+                if (!held && !quiet && at >= nextMicroAt && at >= busyUntil) {
                     const name = pickMicro();
                     lastMicro = name;
                     act(name);
@@ -295,11 +298,16 @@ export function createPetLife({
                     setPhase('asleep');
                     return;
                 }
-                if (at >= nextNodAt && at >= busyUntil) {
+                if (!quiet && at >= nextNodAt && at >= busyUntil) {
                     act(random() < 0.3 ? 'yawn' : 'nod');
                     nextNodAt = at + between(t.nodMinMs, t.nodMaxMs);
                 }
             }
+        },
+
+        // 调试和录屏用：直接演某个动作
+        perform(name) {
+            if (ACTION_MS[name]) act(name);
         },
 
         // 调试和录屏用：直接跳到某个阶段

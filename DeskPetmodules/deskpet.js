@@ -1040,6 +1040,7 @@ function createImageBackend(assets) {
             focus() {},
             bounds() { return activeImg ? drawnRect(activeImg) : null; },
             tap: pop,
+            canShow: (emotion) => Boolean(portraits[emotion]),
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
             setActive() {},
             setPaused(paused) { cssLife.setPaused(paused); },
@@ -1073,12 +1074,38 @@ function createImageBackend(assets) {
 
 // ---- 头顶小符号（所有形象共用）：💢 💫 💕 ♪，睡着时冒 z ------------------------
 
+// 睡着时的 z 一秒只挪两三下：CSS 无限动画即使分段也每帧合成，软件渲染下多占 GPU 进程几个百分点
+const ZZZ_STEP_MS = 400;
+const ZZZ_STEPS = 8;
+
 function createLifeFx() {
     const el = $('lifeFx');
     let timer = 0;
+    let zzzTimer = 0;
+    let zzzStep = 0;
     let sleeping = false;
+    const stepZzz = () => {
+        const k = zzzStep / (ZZZ_STEPS - 1);
+        el.style.opacity = String(k < 0.25 ? k * 4 : 1 - (k - 0.25) / 0.75);
+        el.style.translate = `${Math.round(14 * k)}px ${Math.round(-36 * k)}px`;
+        el.style.fontSize = `${Math.round(14 + 12 * k)}px`;
+        zzzStep = (zzzStep + 1) % ZZZ_STEPS;
+    };
+    const stopZzz = () => {
+        clearInterval(zzzTimer);
+        zzzTimer = 0;
+        el.style.removeProperty('opacity');
+        el.style.removeProperty('translate');
+        el.style.removeProperty('font-size');
+    };
     const show = (glyph, ms, mode) => {
         clearTimeout(timer);
+        stopZzz();
+        if (mode === 'is-zzz' && !document.body.classList.contains('is-paused')) {
+            zzzStep = 0;
+            stepZzz();
+            zzzTimer = setInterval(stepZzz, ZZZ_STEP_MS);
+        }
         el.textContent = glyph;
         el.className = '';
         void el.offsetWidth;
@@ -1090,7 +1117,12 @@ function createLifeFx() {
         phase(p) {
             sleeping = p === 'asleep';
             if (sleeping) show('z', 0, 'is-zzz');
-            else if (el.classList.contains('is-zzz')) el.hidden = true;
+            else if (el.classList.contains('is-zzz')) { stopZzz(); el.hidden = true; }
+        },
+        // 窗口隐藏时 z 也停下
+        setPaused(paused) {
+            if (paused) stopZzz();
+            else if (sleeping) show('z', 0, 'is-zzz');
         },
         act(name, ms) { if (LIFE_FX[name]) show(LIFE_FX[name], Math.min(ms, 1800), 'is-pop'); },
         held(on) { if (on) show('💦', 0, 'is-held'); else if (el.classList.contains('is-held')) el.hidden = true; },
@@ -1113,6 +1145,8 @@ function applyFrame(next) {
 // 睡着时（又没在思考、调工具）换成疲惫的表情或差分；醒来恢复原来的情绪
 function shownFrame(f) {
     if (life?.phase !== 'asleep' || f.state) return f;
+    // 立绘没画「疲惫」时不换（不然会退到「难过」之类不搭的差分），靠闭眼歪头和 z 表现睡着
+    if (backend?.canShow && !backend.canShow('tired')) return f;
     return { ...f, emotion: 'tired', intensity: Math.max(0.7, f.intensity || 0) };
 }
 
@@ -1223,7 +1257,7 @@ async function start() {
         },
         onAction({ name, ms }) {
             backend.life?.act(name, ms);
-            lifeFx.act(name, ms);
+            if (!life.quiet || USER_REACTIONS.has(name)) lifeFx.act(name, ms);
             if (USER_REACTIONS.has(name)) {
                 // 被碰到的反应要流畅：回到高帧率
                 lastActivity = Date.now();
@@ -1238,6 +1272,10 @@ async function start() {
         },
         onGaze(g) { if (g) backend.life?.gaze(g); },
     });
+    // 免打扰（桌宠设置里开）：不自己做小动作、不冒小符号；没有这项设置时当作关
+    const syncQuiet = () => life.setQuiet(window.deskPetPrefs?.doNotDisturb === true);
+    syncQuiet();
+    window.addEventListener('deskpet:prefs', syncQuiet);
     bindStream(director);
     proactiveDirector = director;
     api.onProactive?.(speakProactive);
@@ -1296,6 +1334,7 @@ async function start() {
         paused = !visible;
         document.body.classList.toggle('is-paused', paused);
         backend.setPaused(paused);
+        lifeFx.setPaused(paused);
         life.hold('hidden', paused);
         if (!paused) lastActivity = Date.now();
     });
@@ -1328,8 +1367,9 @@ async function start() {
     document.body.dataset.lifePhase = life.phase;
     backend.life?.phase(life.phase);
     window.__deskPetReady = { backend: backend.kind, info: backend.info || null };
-    // 调试和录屏：__deskPetLife.force('asleep') 直接睡着
+    // 调试和录屏：__deskPetLife.force('asleep') 直接睡着，__deskPetLife.perform('yawn') 演一个动作
     window.__deskPetLife = life;
+    window.__deskPetBounds = () => backend.bounds();
     console.log('[DeskPet] ready', JSON.stringify(window.__deskPetReady));
 }
 

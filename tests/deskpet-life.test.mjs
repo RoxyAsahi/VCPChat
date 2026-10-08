@@ -119,8 +119,13 @@ test('rapid taps: third tap gets annoyed, sixth gets dizzy, and single-tap joy i
     assert.equal(life.tap(), null);
     life.tapDown();
     life.tapDown();
-    life.tapDown();
+    assert.equal(life.tapDown(), 6);
     assert.equal(log.actions.at(-1), 'dizzy');
+    // 继续戳：连点不断，计数不归零（页面靠它不让双击重新打开输入框）
+    assert.equal(life.tapDown(), 7);
+    life.tapDown();
+    life.tapDown();
+    assert.equal(log.actions.filter((n) => n === 'dizzy').length, 2);
 });
 
 test('taps spaced out are single pokes; head taps are head taps', () => {
@@ -208,4 +213,13 @@ test('life motion: a model with its own motion file only gets a light overlay', 
     let a, b;
     for (let i = 0; i < 15; i++) { a = full.step(1 / 30); b = light.step(1 / 30); }
     assert.ok(Math.abs(b.params.ParamMouthForm) < Math.abs(a.params.ParamMouthForm) * 0.5);
+});
+
+test('do-not-disturb: no idle moves, yawns or nods, but it still dozes off and reacts when touched', () => {
+    const { life, log, advance } = rig();
+    life.setQuiet(true);
+    advance(LIFE_TIMINGS.drowsyAfterMs + LIFE_TIMINGS.sleepAfterMs + 1000);
+    assert.deepEqual(log.actions, []);
+    assert.equal(life.phase, 'asleep');
+    assert.equal(life.tap(), 'startle');
 });

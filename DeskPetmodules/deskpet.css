@@ -483,7 +483,7 @@ body.is-paused *::after {
   60% { scale: 0.99 1.01; }
 }
 
-/* 头顶冒出的小符号；睡着时一串 z 慢慢往上飘（steps 让它一秒只变几次，不占渲染） */
+/* 头顶冒出的小符号；睡着时一个 z 慢慢往上飘 */
 #lifeFx {
   position: absolute;
   left: 58%;
@@ -502,11 +502,11 @@ body.is-paused *::after {
   animation: life-fx-pop 0.4s ease-out forwards;
 }
 
+/* 位置和透明度由页面每 400ms 改一次 */
 #lifeFx.is-zzz {
   color: #cfd8ff;
   font-weight: 700;
   font-style: italic;
-  animation: life-fx-zzz 3.2s steps(8) infinite;
 }
 
 @keyframes life-fx-pop {
@@ -515,10 +515,4 @@ body.is-paused *::after {
   35% { scale: 1; }
   80% { opacity: 1; }
   100% { opacity: 0; translate: 0 -10px; }
-}
-
-@keyframes life-fx-zzz {
-  0% { opacity: 0; translate: 0 0; font-size: 14px; }
-  25% { opacity: 1; }
-  100% { opacity: 0; translate: 14px -36px; font-size: 26px; }
 }
