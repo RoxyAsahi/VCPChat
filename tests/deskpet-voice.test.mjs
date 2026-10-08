@@ -199,3 +199,24 @@ test('do-not-disturb (silent) replies are not read, but still stop the one being
     assert.equal(speech.revealEnd(), null);
     speech.dispose();
 });
+
+test('when the first audio is slow, the bubble stops waiting on it and shows the text', async (t) => {
+    installFakeAudio();
+    t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    const api = fakeApi();
+    let changes = 0;
+    const speech = createSpeech({ api, onChange: () => { changes += 1; } });
+    speech.begin('slow');
+    await sleep(5);
+    speech.update('先说一句。还在写', { emotion: 'happy' });
+    await sleep(50);
+    assert.equal(speech.revealEnd(), 0, '刚送出去时还在等声音');
+    const before = changes;
+    t.mock.timers.tick(4100);
+    await sleep(80);
+    assert.equal(speech.revealEnd(), null, '等了几秒没声音就先把字放出来');
+    assert.ok(changes > before, '放出来时要重画气泡');
+    assert.equal(speech.active(), true, '声音来了照常念');
+    speech.stop();
+    speech.dispose();
+});

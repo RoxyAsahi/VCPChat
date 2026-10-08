@@ -18,6 +18,8 @@ const TICK_MS = 33;
 // 送出去的句子迟迟没有声音（TTS 服务没开、合成失败）就不等了，直接把字显示完。
 const FIRST_AUDIO_TIMEOUT_MS = 20000;
 const GAP_TIMEOUT_MS = 15000;
+// 第一句的声音这么久还没来（TTS 慢或者没开）：先把字全显示出来，别让气泡一直只有省略号；声音来了照常念
+const REVEAL_WAIT_MS = 4000;
 // 句与句之间、流式音频块之间的短暂空档不算念完。
 const DRAIN_GRACE_MS = 700;
 
@@ -264,6 +266,10 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
             // 上一句念完了，下一句的声音还没来
             reply.waitingSince = Date.now();
         }
+        if (reply.heard < 0 && !reply.revealAll && reply.waitingSince != null && Date.now() - reply.waitingSince > REVEAL_WAIT_MS) {
+            reply.revealAll = true;
+            onChange?.();
+        }
         const caughtUp = reply.heard >= reply.lastSent;
         const quiet = !busy && Date.now() - (reply.lastAudioAt || 0) > DRAIN_GRACE_MS;
         if (caughtUp && quiet) {
@@ -357,6 +363,7 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
         revealEnd() {
             if (!reply || reply.mode === 'off' || reply.messageId == null) return null;
             if (reply.mode === 'pending') return 0;
+            if (reply.revealAll) return null;
             if (!reply.anySent) return reply.ended ? null : 0;
             if (reply.heard < 0) return 0;
             const sentence = reply.sentences.find((s) => s.index === reply.heard);
