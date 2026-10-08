@@ -378,14 +378,14 @@ body.is-paused *::after {
   transition: rotate 1.2s ease, translate 1.2s ease, scale 1.2s ease;
 }
 
-/* 犯困：头微微歪着，呼吸变慢；睡着：歪得更多、往下沉一点，呼吸更慢 */
+/* 犯困：微微往下沉，呼吸变慢；睡着：沉得更多，呼吸更慢。
+   长时间停着的姿势不转角度：立绘按像素命中用的是没转过的包围盒，转了以后头发边上会点不中或挡住桌面 */
 #lifeBody[data-life-phase="drowsy"] {
-  rotate: 1.5deg;
+  translate: 0 2px;
 }
 
 #lifeBody[data-life-phase="asleep"] {
-  rotate: 3deg;
-  translate: 0 4px;
+  translate: 0 5px;
   scale: 1 0.99;
 }
 

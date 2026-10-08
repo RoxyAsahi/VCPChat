@@ -68,7 +68,7 @@ async function loadHandlers() {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deskpet-'));
     const agentDir = path.join(root, 'Agents');
     fs.mkdirSync(path.join(agentDir, 'Nova'), { recursive: true });
-    fs.writeFileSync(path.join(agentDir, 'Nova', 'config.json'), JSON.stringify({ name: 'Nova' }));
+    fs.writeFileSync(path.join(agentDir, 'Nova', 'config.json'), JSON.stringify({ name: 'Nova', topics: [{ id: 'topic_Nova', name: '默认' }, { id: 'topic_1', name: '关于昨晚的梦' }] }));
     const mainWindow = new fake.electron.BrowserWindow({});
     handlers.initialize({ mainWindow, projectRoot: path.resolve('.'), appDataRoot: root, agentDir });
     // 等情绪提示词模块异步载入
@@ -76,7 +76,7 @@ async function loadHandlers() {
         await new Promise((resolve) => setTimeout(resolve, 10));
         if (handlers.getSystemPromptAppend('none', '') === '' && handlers._promptReady?.()) break;
     }
-    return { handlers, fake, mainWindow };
+    return { handlers, fake, mainWindow, agentDir };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -103,8 +103,44 @@ test('a topic the agent opens by itself is said once on its open pet', async () 
     assert.deepEqual(proactiveOf(pet), [{ kind: 'topic', title: '关于昨晚的梦', text: '我梦到会飞的鱼！', topicId: 'topic_1' }]);
     // 点气泡：主窗口切到这个话题
     fake.listeners.get('deskpet:open-topic')({ sender: pet.webContents }, 'topic_1');
+    await sleep(50);
     const mainWindow = fake.windows[0];
     assert.deepEqual(mainWindow.sent.find((s) => s.channel === 'deskpet:open-topic').payload, { agentId: 'Nova', topicId: 'topic_1' });
+    handlers.closeAll();
+});
+
+test('a topic deleted before its bubble is clicked is not selected in the main window', async () => {
+    const { handlers, fake } = await loadHandlers();
+    const pet = await openNova(handlers, fake);
+    fake.listeners.get('deskpet:open-topic')({ sender: pet.webContents }, 'topic_gone');
+    await sleep(50);
+    const mainWindow = fake.windows[0];
+    // 选中一个不存在的话题，接着说的话会存进话题列表里看不到的历史
+    assert.equal(mainWindow.sent.some((s) => s.channel === 'deskpet:open-topic'), false);
+    assert.equal(pet.sent.some((s) => s.channel === 'deskpet:topic-missing'), true);
+    handlers.closeAll();
+});
+
+test('emotion tags and control markers in the first line are not spoken', async () => {
+    const { handlers, fake } = await loadHandlers();
+    const pet = await openNova(handlers, fake);
+    handlers.onDistributedToolResult('TopicSponsor', { command: 'CreateFlowlockTopic' }, {
+        topic_id: 'topic_f', topic_name: '自主工作', agent_id: 'Nova', initial_message: '<!--emo:happy 0.8-->开始干活啦！[[Flowlock::Start]]',
+    });
+    assert.equal(proactiveOf(pet)[0].text, '开始干活啦！');
+    handlers.closeAll();
+});
+
+test('the same alarm reported twice rings once', async () => {
+    const { handlers, fake } = await loadHandlers();
+    const pet = await openNova(handlers, fake);
+    const dueAt = Date.now() + 60;
+    handlers.onDistributedToolResult('VCPAlarm', { maid: 'Nova' }, { status: 'success', due_at: dueAt, reminder_text: '喝水' });
+    handlers.onDistributedToolResult('VCPAlarm', { maid: 'Nova' }, { status: 'success', due_at: dueAt + 20, reminder_text: '喝水' });
+    // 别的提醒照常排
+    handlers.onDistributedToolResult('VCPAlarm', { maid: 'Nova' }, { status: 'success', due_at: dueAt, reminder_text: '吃药' });
+    await sleep(200);
+    assert.deepEqual(proactiveOf(pet).map((p) => p.text).sort(), ['吃药', '喝水']);
     handlers.closeAll();
 });
 

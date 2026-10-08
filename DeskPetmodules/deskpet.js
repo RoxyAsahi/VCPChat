@@ -355,12 +355,17 @@ function uiBounds() {
 function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
+    let lastUp = 0;
+    let pairGap = Infinity; // 双击第一下离再前一下有多久：隔了一会儿才双击，是真想打开输入框，不是在连点
     let tapTimer = 0;
     window.addEventListener('pointerdown', (e) => {
         api.touched?.();
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
-        // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾。
-        if (down?.dragging) api.dragEnd();
+        // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾（窗口和被拎着的姿势都放下）。
+        if (down?.dragging) {
+            api.dragEnd();
+            onDrag('end');
+        }
         down = { x: e.screenX, y: e.screenY, dragging: false, cx: e.clientX, cy: e.clientY };
         // 捕获指针：窗口跟着光标移动时 pointerup 也一定回到这里。
         try { e.target?.setPointerCapture?.(e.pointerId); } catch { /* 指针已经没了 */ }
@@ -389,13 +394,17 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
         }
         // 每一下都先报去数连点，再分单击、双击
         onTapDown(at);
-        if (Date.now() - lastTap < DOUBLE_TAP_MS) {
+        const upAt = Date.now();
+        const gap = upAt - lastUp;
+        lastUp = upAt;
+        if (upAt - lastTap < DOUBLE_TAP_MS) {
             // 双击只打开输入框，不先做一遍单击的开心动作
             clearTimeout(tapTimer);
             lastTap = 0;
-            onDoubleTap();
+            onDoubleTap({ afterPause: pairGap >= DOUBLE_TAP_MS });
         } else {
-            lastTap = Date.now();
+            pairGap = gap;
+            lastTap = upAt;
             clearTimeout(tapTimer);
             tapTimer = setTimeout(() => onTap(at), DOUBLE_TAP_MS);
         }
@@ -691,7 +700,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
             if (group) model.motion(group);
         },
-        apply(f, { changed }) {
+        // motion: false 只换表情和参数（换阶段、互动反应演完换回来），不再放一遍情绪动作
+        apply(f, { changed, motion = true }) {
             const intensity = Math.max(0.3, Math.min(1, f.intensity || 0.6));
             target = {};
             for (const [id, v] of Object.entries(EMOTION_PARAMS[f.emotion] || {})) target[id] = v * intensity;
@@ -705,7 +715,7 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
                 internal.motionManager?.expressionManager?.resetExpression?.();
                 lastExpression = null;
             }
-            if (!f.state) {
+            if (!f.state && motion) {
                 const group = pickMotion(f.emotion);
                 if (group) model.motion(group);
             }
@@ -1183,7 +1193,7 @@ function shownFrame(f) {
 
 function bindStream(director) {
     let scanner = null;
-    toolCard = createToolCard({ el: $('toolCard'), onChange: queueRenderBubble });
+    toolCard = createToolCard({ el: $('toolCard'), onChange: queueRenderBubble, isMuted: () => isQuiet() && !bubble.own });
     $('toolCard').addEventListener('click', () => api.openMainWindow());
     const startReply = (messageId) => {
         clearTimeout(bubble.hideTimer);
@@ -1252,6 +1262,7 @@ function applyPrefs(next) {
     document.body.classList.toggle('is-dnd', isQuiet());
     $('dndBadge').hidden = !isQuiet();
     if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;
+    toolCard?.refresh();
     renderBubble();
     window.dispatchEvent(new CustomEvent('deskpet:prefs', { detail: window.deskPetPrefs }));
 }
@@ -1319,14 +1330,14 @@ async function start() {
         if (backend.canShow && !backend.canShow(emotion)) return;
         clearTimeout(flashTimer);
         backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
-        flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true }), ms);
+        flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), ms);
     };
     life = createPetLife({
         onPhase(phase) {
             document.body.dataset.lifePhase = phase;
             backend.life?.phase(phase);
             lifeFx.phase(phase);
-            backend.apply(shownFrame(frame), { changed: true });
+            backend.apply(shownFrame(frame), { changed: true, motion: false });
             if (phase === 'asleep' && !frame.state) backend.setActive('sleep');
         },
         onAction({ name, ms }) {
@@ -1354,6 +1365,13 @@ async function start() {
     bindMood(director, assets.agentId);
     proactiveDirector = director;
     api.onProactive?.(speakProactive);
+    api.onTopicMissing?.(() => {
+        if (bubble.proactive?.kind === 'topic') {
+            bubble.reply = '';
+            bubble.proactive = null;
+        }
+        notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
+    });
     bindComposer();
     // 头顶那一块：包围盒上方四分之一、中间六成宽（摸头、点头用）
     const onHead = (x, y) => {
@@ -1379,7 +1397,8 @@ async function start() {
             // 连点时第二下打开的输入框没写东西就收回去，别让它跟着一开一关
             if (streak >= LIFE_ANNOYED_AT && composer.open && !$('composerInput').value.trim()) closeComposer();
         },
-        onDoubleTap: () => { if (streak < LIFE_ANNOYED_AT) openComposer(); },
+        // 连点没断时双击不打开；停了一下再双击（比如第一次双击慢了，马上补一次）照常打开
+        onDoubleTap: ({ afterPause } = {}) => { if (streak < LIFE_ANNOYED_AT || afterPause) openComposer(); },
         onDrag: (kind, e) => {
             if (kind === 'start') {
                 drag = { x: e.screenX, at: performance.now(), vx: 0 };

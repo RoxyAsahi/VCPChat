@@ -12,6 +12,7 @@ const RESULT_OPEN = '[[VCP调用结果信息汇总:';
 const RESULT_CLOSE = 'VCP调用结果结束]]';
 const MAX_ACTIVITIES = 20;
 const TARGET_MAX = 28;
+const OPEN_HEAD_CHARS = 2048;
 
 // 按命令认类别（与主窗口工具行的分类一致），命令认不出再按工具名猜。
 const COMMAND_KINDS = {
@@ -139,12 +140,23 @@ export function createToolActivityTracker() {
         let changed = false;
         for (;;) {
             if (open) {
-                const close = buffer.indexOf(REQUEST_CLOSE, open.at);
-                const body = buffer.slice(open.at, close === -1 ? buffer.length : close);
+                // 写文件这类请求的参数能有几十 KB：结束标记只在新到的那段附近找，
+                // 参数只看开头一段（工具名、命令和对象都写在前面）
+                const close = buffer.indexOf(REQUEST_CLOSE, Math.max(open.at, open.searched - REQUEST_CLOSE.length));
+                open.searched = buffer.length;
+                const body = close === -1 ? buffer.slice(open.at, open.at + OPEN_HEAD_CHARS) : buffer.slice(open.at, close);
                 const before = `${open.activity.tool}|${open.activity.command}|${open.activity.target}`;
                 fillFromRequest(open.activity, body);
                 if (`${open.activity.tool}|${open.activity.command}|${open.activity.target}` !== before) changed = true;
-                if (close === -1) break;
+                if (close === -1) {
+                    // 开头之后的参数用不上，只留够认出结束标记的尾巴，缓冲不跟着请求变长
+                    const keep = open.at + OPEN_HEAD_CHARS;
+                    if (buffer.length > keep + REQUEST_CLOSE.length * 2) {
+                        buffer = buffer.slice(0, keep) + buffer.slice(-(REQUEST_CLOSE.length - 1));
+                        open.searched = buffer.length;
+                    }
+                    break;
+                }
                 cursor = close + REQUEST_CLOSE.length;
                 open = null;
                 continue;
@@ -160,7 +172,7 @@ export function createToolActivityTracker() {
                 const activity = { tool: '', command: '', target: '', status: 'running' };
                 activities.push(activity);
                 if (activities.length > MAX_ACTIVITIES) activities.shift();
-                open = { activity, at: req + REQUEST_OPEN.length };
+                open = { activity, at: req + REQUEST_OPEN.length, searched: 0 };
                 changed = true;
                 continue;
             }
@@ -177,7 +189,10 @@ export function createToolActivityTracker() {
             const drop = open ? Math.min(cursor, open.at - REQUEST_OPEN.length) : cursor;
             buffer = buffer.slice(drop);
             cursor -= drop;
-            if (open) open.at -= drop;
+            if (open) {
+                open.at -= drop;
+                open.searched -= drop;
+            }
         }
         return changed;
     };
