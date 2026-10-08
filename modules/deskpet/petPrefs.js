@@ -11,8 +11,9 @@
 // 还不知道形象的长宽比（头像、第一次打开）时用这一个。
 const BASE_CHARACTER = Object.freeze({ width: 360, height: 430 });
 // 知道形象的长宽比（高 ÷ 宽，按不透明像素算）以后，角色区跟着比例走：
-// 竖长的全身像更高、更窄，矮胖的 Q 版矮一点；高度按比例的平方根长，全身像不至于高出半个屏幕。
-const FIGURE = Object.freeze({ refAspect: BASE_CHARACTER.height / BASE_CHARACTER.width, minHeight: 360, maxHeight: 540, maxWidth: 420, sideRoom: 1.15 });
+// 半身立绘、Q 版（高宽比 1.6 以内）和以前一样高，宽度按比例收；竖长的全身像（2.6 以上）高到 540，
+// 中间平滑过渡。全身像的人比半身像小一截是自然的，但不至于高出半个屏幕。
+const FIGURE = Object.freeze({ tallFrom: 1.6, tallTo: 2.6, tallHeight: 540, maxWidth: 420, sideRoom: 1.15 });
 const UI_RESERVE = 150;
 // 窗口再窄，气泡和输入框也排不下了。
 const MIN_WIDTH = 280;
@@ -69,7 +70,8 @@ function isAspect(aspect) {
 function characterBox(aspect) {
     if (!isAspect(aspect)) return BASE_CHARACTER;
     const a = Number(aspect);
-    const height = Math.min(FIGURE.maxHeight, Math.max(FIGURE.minHeight, BASE_CHARACTER.height * Math.sqrt(a / FIGURE.refAspect)));
+    const tall = Math.min(1, Math.max(0, (a - FIGURE.tallFrom) / (FIGURE.tallTo - FIGURE.tallFrom)));
+    const height = BASE_CHARACTER.height + (FIGURE.tallHeight - BASE_CHARACTER.height) * tall;
     // 两边留一点：Live2D 抬手、拖动时身子甩起来不碰窗口边
     const width = Math.min(FIGURE.maxWidth, (height / a) * FIGURE.sideRoom);
     return { width, height };
