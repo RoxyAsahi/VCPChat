@@ -582,6 +582,8 @@ function initialize(context) {
         try {
             const agentDir = path.join(AGENT_DIR, agentId);
             const userDataAgentDir = path.join(USER_DATA_DIR, agentId);
+            // 先让心情不再写、等正在写的 mood.json 写完，否则删目录时可能撞上写入
+            await getAgentMoodStore()?.forget(agentId);
             if (await fs.pathExists(agentDir)) await fs.remove(agentDir);
             if (await fs.pathExists(userDataAgentDir)) await fs.remove(userDataAgentDir);
             await clearTrajectoriesOfOwner({ agentId }); // 侧栏「调用轨迹」按话题落盘的请求记录，助手没了就一起删
