@@ -6,6 +6,7 @@
 // 资源全部来自用户数据目录，VCPChat 不分发任何 Live2D 文件：
 //   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
 //   AppData/Agents/<id>/deskpet/**/*.model3.json Live2D 模型（找到的第一个）
+//   AppData/Agents/<id>/deskpet/**/*.puppet.json 网格立绘（一张图切块做的可动角色，不需要 Core）
 //   AppData/Agents/<id>/portrait.<情绪>.<ext>    差分立绘，没有 Live2D 模型时使用
 //   AppData/Agents/<id>/portrait.<ext>           默认立绘；再没有就用头像
 
@@ -98,14 +99,14 @@ function registerProtocol() {
     });
 }
 
-async function findModel3(dir, depth = 0) {
+async function findBySuffix(dir, suffix, depth = 0) {
     if (depth > 3 || !(await fs.pathExists(dir))) return null;
     const entries = await fs.readdir(dir, { withFileTypes: true });
-    const direct = entries.find((e) => e.isFile() && e.name.toLowerCase().endsWith('.model3.json'));
+    const direct = entries.find((e) => e.isFile() && e.name.toLowerCase().endsWith(suffix));
     if (direct) return path.join(dir, direct.name);
     for (const entry of entries) {
         if (!entry.isDirectory()) continue;
-        const found = await findModel3(path.join(dir, entry.name), depth + 1);
+        const found = await findBySuffix(path.join(dir, entry.name), suffix, depth + 1);
         if (found) return found;
     }
     return null;
@@ -149,12 +150,14 @@ async function resolveAssets(agentId) {
         const fallback = portraits.neutral || portraits.calm || Object.values(portraits)[0];
         if (fallback) portraits.default = fallback;
     }
-    const model = await findModel3(path.join(agentRoot, 'deskpet'));
+    const model = await findBySuffix(path.join(agentRoot, 'deskpet'), '.model3.json');
+    const puppet = await findBySuffix(path.join(agentRoot, 'deskpet'), '.puppet.json');
     const hasCore = await fs.pathExists(coreFilePath());
     return {
         agentId,
         name,
         live2d: model ? { modelUrl: agentUrl(agentId, model) } : null,
+        puppet: puppet ? { rigUrl: agentUrl(agentId, puppet) } : null,
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
         corePath: coreFilePath(),
         portraits: portraits.default ? portraits : null,
@@ -226,8 +229,14 @@ function startHitPoll(pet) {
         const inside = p.x >= b.x && p.y >= b.y && p.x < b.x + b.width && p.y < b.y + b.height;
         if (!inside) {
             setIgnoreMouse(pet, true);
+            // 光标在窗外时只用来让角色看过去；同一位置不重复发。
+            if (pet.lastGaze !== `${p.x},${p.y}`) {
+                pet.lastGaze = `${p.x},${p.y}`;
+                pet.win.webContents.send('deskpet:cursor', { x: p.x - b.x, y: p.y - b.y, outside: true });
+            }
             return;
         }
+        pet.lastGaze = null;
         pet.win.webContents.send('deskpet:cursor', { x: p.x - b.x, y: p.y - b.y });
     }, HIT_POLL_MS);
 }

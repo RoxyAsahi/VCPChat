@@ -17,6 +17,8 @@ test('desk pet protocol serves only the pet page, vendor, core and agent pet fil
     assert.equal(resolve('vcp-deskpet://pet/emotion/emotionDirector.js'), path.join(root, 'modules', 'emotion', 'emotionDirector.js'));
     assert.equal(resolve('vcp-deskpet://pet/core/live2dcubismcore.min.js'), path.join(paths.appDataRoot, 'deskpet', 'live2dcubismcore.min.js'));
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/deskpet/Mao/Mao.model3.json'), path.join(agentRoot, 'deskpet', 'Mao', 'Mao.model3.json'));
+    assert.equal(resolve('vcp-deskpet://pet/app/puppet.js'), path.join(root, 'DeskPetmodules', 'puppet.js'));
+    assert.equal(resolve('vcp-deskpet://pet/agent/Nova/deskpet/nova/nova.puppet.json'), path.join(agentRoot, 'deskpet', 'nova', 'nova.puppet.json'));
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/portrait.happy.png'), path.join(agentRoot, 'portrait.happy.png'));
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/avatar.png'), path.join(agentRoot, 'avatar.png'));
 });

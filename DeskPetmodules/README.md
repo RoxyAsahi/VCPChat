@@ -35,6 +35,16 @@
 
 本项目不附带任何 Live2D 文件（Core 和模型都受 Live2D 的许可约束），需要自己下载。
 
+### 1b. 或者放网格立绘（可选，不需要 Cubism Core）
+
+只有一张立绘、没有 Live2D 模型时，可以把图切成几块（底图、眼皮、睫毛、嘴型、腮红）做成 `*.puppet.json`，由 `puppet.js` 逐帧挪网格顶点：呼吸、眨眼、头和眼睛跟着光标、说话口型、按情绪换眼型嘴型和腮红。参数名与 Live2D 一致，情绪映射和 Live2D 共用。
+
+```
+<VCPChat>\AppData\Agents\<AgentId>\deskpet\<文件夹>\nova.puppet.json（及同目录的贴图）
+```
+
+Nova 的这一套由 `scripts/deskpet/build-nova-puppet.py` 从 `assets/nova_button_light.png` 生成（自动抠图，眼睛和嘴的位置手工标定）。同时放了 Live2D 模型和 Core 时优先用 Live2D。
+
 ### 2. 或者放差分立绘（可选）
 
 没有 Live2D 模型时，桌宠会使用立绘，和侧栏首页立绘是同一套文件（在 Agent 设置里上传的差分这里也能用）：
@@ -66,5 +76,5 @@ AppData\Agents\<AgentId>\portrait.thinking.png  状态差分：thinking / tool /
 
 - `modules/ipc/deskPetHandlers.js`：主进程部分，负责窗口、`vcp-deskpet://` 资源协议、提示词注入、把回复流转给桌宠、桌宠发言转给主窗口、右键菜单。
 - `modules/emotion/`：情绪标签、规则兜底、情绪导演和差分挑图（与侧栏立绘共用）。
-- `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、立绘、头像；气泡和输入框。
+- `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、网格立绘（`puppet.js`）、差分立绘、头像；气泡和输入框。
 - `vendor/live2d/`：untitled-pixi-live2d-engine 1.4.0（MIT）。
