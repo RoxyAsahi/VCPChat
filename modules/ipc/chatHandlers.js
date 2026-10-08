@@ -11,6 +11,7 @@ const {
 } = require('../services/attachmentDialogState');
 const topicTitleManager = require('../../Groupmodules/topicTitleManager');
 const { beginTrajectoryCall, clearTrajectoryOf, sessionKeyFromContext, sourceFromContext } = require('../modelTrajectory');
+const { observeAgentMood, teeCall } = require('../agentMood');
 const { HistoryMutationQueue } = require('../services/historyMutationQueue');
 const workspaceHandlers = require('./workspaceHandlers');
 const { removeSideChatChildrenOfParent } = require('./sideChatHandlers');
@@ -1297,14 +1298,15 @@ function initialize(mainWindow, context) {
             if (vcpchatExtensions) {
                 requestBody.vcpchatExtensions = vcpchatExtensions;
             }
-            trajectoryCall = beginTrajectoryCall({
+            // 同一个句柄也喂给助手的长期心情（modules/agentMood.js）：用户这句话现在算，回复结束时再算一次
+            trajectoryCall = teeCall(beginTrajectoryCall({
                 sessionKey: sessionKeyFromContext(context),
                 requestId: messageId,
                 source: sourceFromContext(context),
                 model: modelConfig.model,
                 params: modelConfig,
                 messages
-            });
+            }), observeAgentMood({ context, messages, messageId }));
 
             // 🔥 记录模型使用频率
             try {
