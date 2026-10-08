@@ -274,7 +274,10 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
             } catch (error) {
                 console.warn('[AgentPortraitSettings] Failed to read portraits:', error);
             }
-            if (token === loadToken) render();
+            if (token !== loadToken) return;
+            render();
+            // 读完以后让折叠栏摘要跟着刷新（只刷新摘要，不发 change：读盘不是改动，不能标成未保存）
+            onChange();
         },
 
         getDisplay() {

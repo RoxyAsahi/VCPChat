@@ -32,8 +32,14 @@ export function createEmotionDirector({
     let disposed = false;
     // 当前这条回复的读取状态；同一时间只跟一条，新回复开始时旧的作废
     let reply = null;
-    // 已经结束的回复：之后再来的迟到片段不能把它重新当成一条新回复
+    // 已经结束或被新回复顶替的回复：之后再来的片段不能把它重新当成一条新回复。
+    // 同一个助手同时有两路回复（主聊天和侧聊一起在流）时只跟最新开始的那条，不然两路片段交替到达，
+    // 每来一块就重开一次，立绘在「思考中」和情绪之间来回闪
     const finishedIds = new Set();
+    const retire = (messageId) => {
+        finishedIds.add(messageId);
+        if (finishedIds.size > 64) finishedIds.delete(finishedIds.values().next().value);
+    };
     // 不带状态时显示的情绪：上一条回复留下的情绪在下一条回复给出新情绪前保持不变
     let mood = { emotion: 'neutral', intensity: 0, source: 'idle' };
 
@@ -144,6 +150,7 @@ export function createEmotionDirector({
         if (disposed || !messageId) return;
         // 同一条回复不重新开始；已经结束的回复也不会被迟到的事件重新打开
         if (reply?.messageId === messageId || finishedIds.has(messageId)) return;
+        if (reply) retire(reply.messageId);
         settleTimer = cancel(settleTimer);
         errorTimer = cancel(errorTimer);
         reply = {
@@ -175,8 +182,7 @@ export function createEmotionDirector({
         if (disposed || !reply || reply.messageId !== messageId) return;
         handleEvents(reply.scanner.finish());
         probeRules({ final: true });
-        finishedIds.add(messageId);
-        if (finishedIds.size > 64) finishedIds.delete(finishedIds.values().next().value);
+        retire(messageId);
         if (failed) {
             reply.error = true;
             refresh('state');
