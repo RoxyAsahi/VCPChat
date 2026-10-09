@@ -50,7 +50,7 @@ for side in ['L', 'R']:
         requests.append(req)
         state = run(c, 'author_axis', req, pid, state)['state']
         print(parameter_id, len(shapes), 'shapes authored', flush=True)
-    
+
 state = run(c, 'project_save_as', {'path': str(root / f'{variant}-expression-trial.psd2live')}, pid, state)['state']
 export(c, pid, state, str(root / f'{variant}-expression-trial'))
 (root / 'axis-requests.json').write_text(json.dumps(requests, indent=2), encoding='utf-8')

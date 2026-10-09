@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
   protocol.handle('vcp-deskpet', async request => {
     const file = handlers._resolveServedFile(request.url, testPaths);
     if (!file || !fs.existsSync(file)) { result.errors.push(`404 ${request.url}`); return new Response('not found', { status: 404 }); }
-    if (file === path.join(root, 'DeskPetmodules', 'deskpet.js')) {
+    if (['deskpet.js', 'live2dBackend.js'].some(name => file === path.join(root, 'DeskPetmodules', name))) {
       // Instrument this QA response only; shipped renderer is unchanged.
       const source = fs.readFileSync(file, 'utf8')
         .replace('const coreModel = internal.coreModel;', 'const coreModel = internal.coreModel; window.__qaRig = { coreModel, model, app, internal };')
@@ -121,9 +121,3 @@ app.whenReady().then(async () => {
   handlers.closeAll(); clearTimeout(timer);
   app.exit(result.assertions.every(a => a.passed) && !result.errors.length ? 0 : 1);
 }).catch(error => { result.errors.push(error.stack); fs.writeFileSync(path.join(resultDir, 'result.json'), JSON.stringify(result, null, 2)); fs.writeFileSync(path.join(resultDir, 'logs.json'), JSON.stringify(logs, null, 2)); clearTimeout(timer); app.exit(1); });
-
-
-
-
-
-
