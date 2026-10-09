@@ -5,18 +5,58 @@
   "Parameters": [
     {
       "Id": "ParamMouthForm",
-      "Value": -0.65,
+      "Value": -0.7,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamEyeBallForm",
+      "Value": -0.2,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowLY",
-      "Value": 0.45,
+      "Value": 0.4,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowRY",
-      "Value": 0.45,
+      "Value": 0.4,
       "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamEyeLSmile",
+      "Value": 0,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamEyeRSmile",
+      "Value": 0,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamBrowLAngle",
+      "Value": 1,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamBrowRAngle",
+      "Value": 1,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamCheek",
+      "Value": 0,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamEyeLOpen",
+      "Value": 1,
+      "Blend": "Multiply"
+    },
+    {
+      "Id": "ParamEyeROpen",
+      "Value": 1,
+      "Blend": "Multiply"
     }
   ]
 }

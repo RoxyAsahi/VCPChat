@@ -5,22 +5,22 @@
   "Parameters": [
     {
       "Id": "ParamMouthForm",
-      "Value": -0.45,
+      "Value": 0.05,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamEyeBallForm",
-      "Value": -0.15,
+      "Value": 0.25,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowLY",
-      "Value": -0.6,
+      "Value": 0.55,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowRY",
-      "Value": -0.6,
+      "Value": 0.05,
       "Blend": "Overwrite"
     },
     {
@@ -30,17 +30,17 @@
     },
     {
       "Id": "ParamEyeRSmile",
-      "Value": 0,
+      "Value": 0.15,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowLAngle",
-      "Value": -1,
+      "Value": 0.5,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamBrowRAngle",
-      "Value": -1,
+      "Value": -0.15,
       "Blend": "Overwrite"
     },
     {

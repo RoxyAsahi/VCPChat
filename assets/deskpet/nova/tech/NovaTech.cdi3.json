@@ -2,166 +2,191 @@
 	"Version": 3,
 	"Parameters": [
 		{
+			"Id": "ParamCheek",
+			"GroupId": "",
+			"Name": "Cheek blush"
+		},
+		{
+			"Id": "ParamBrowRAngle",
+			"GroupId": "",
+			"Name": "ParamBrowRAngle"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "",
+			"Name": "ParamEyeRSmile"
+		},
+		{
+			"Id": "ParamBrowLAngle",
+			"GroupId": "",
+			"Name": "ParamBrowLAngle"
+		},
+		{
+			"Id": "ParamEyeLSmile",
+			"GroupId": "",
+			"Name": "ParamEyeLSmile"
+		},
+		{
 			"Id": "ParamAngleX",
 			"GroupId": "ParamGroupFace",
-			"Name": "Angle X"
+			"Name": "角度 X"
 		},
 		{
 			"Id": "ParamAngleY",
 			"GroupId": "ParamGroupFace",
-			"Name": "Angle Y"
+			"Name": "角度 Y"
 		},
 		{
 			"Id": "ParamAngleZ",
 			"GroupId": "ParamGroupFace",
-			"Name": "Angle Z"
-		},
-		{
-			"Id": "ParamBodyAngleX",
-			"GroupId": "ParamGroupBody",
-			"Name": "Body Angle X"
-		},
-		{
-			"Id": "ParamBodyAngleY",
-			"GroupId": "ParamGroupBody",
-			"Name": "Body Angle Y"
-		},
-		{
-			"Id": "ParamBodyAngleZ",
-			"GroupId": "ParamGroupBody",
-			"Name": "Body Angle Z"
-		},
-		{
-			"Id": "ParamBodyLean",
-			"GroupId": "ParamGroupBody",
-			"Name": "Body Lean"
-		},
-		{
-			"Id": "ParamProportion",
-			"GroupId": "ParamGroupBody",
-			"Name": "Proportion (Chibi)"
+			"Name": "角度 Z"
 		},
 		{
 			"Id": "ParamEyeLOpen",
 			"GroupId": "ParamGroupEyes",
-			"Name": "Left Eye Open"
+			"Name": "左眼开合"
 		},
 		{
 			"Id": "ParamEyeROpen",
 			"GroupId": "ParamGroupEyes",
-			"Name": "Right Eye Open"
+			"Name": "右眼开合"
 		},
 		{
 			"Id": "ParamEyeBallX",
 			"GroupId": "ParamGroupEyes",
-			"Name": "EyeBall X"
+			"Name": "眼球 X"
 		},
 		{
 			"Id": "ParamEyeBallY",
 			"GroupId": "ParamGroupEyes",
-			"Name": "EyeBall Y"
+			"Name": "眼球 Y"
 		},
 		{
 			"Id": "ParamEyeBallForm",
 			"GroupId": "ParamGroupEyes",
-			"Name": "Eye Jelly"
+			"Name": "果冻眼"
 		},
 		{
 			"Id": "ParamBrowLY",
 			"GroupId": "ParamGroupBrows",
-			"Name": "Left Brow Y"
+			"Name": "左眉 Y"
 		},
 		{
 			"Id": "ParamBrowRY",
 			"GroupId": "ParamGroupBrows",
-			"Name": "Right Brow Y"
+			"Name": "右眉 Y"
 		},
 		{
 			"Id": "ParamMouthForm",
 			"GroupId": "ParamGroupMouth",
-			"Name": "Mouth Form"
+			"Name": "嘴型"
 		},
 		{
 			"Id": "ParamMouthOpenY",
 			"GroupId": "ParamGroupMouth",
-			"Name": "Mouth Open"
+			"Name": "嘴巴开合"
+		},
+		{
+			"Id": "ParamBodyAngleX",
+			"GroupId": "ParamGroupBody",
+			"Name": "身体角度 X"
+		},
+		{
+			"Id": "ParamBodyAngleY",
+			"GroupId": "ParamGroupBody",
+			"Name": "身体角度 Y"
+		},
+		{
+			"Id": "ParamBodyAngleZ",
+			"GroupId": "ParamGroupBody",
+			"Name": "身体角度 Z"
+		},
+		{
+			"Id": "ParamBodyLean",
+			"GroupId": "ParamGroupBody",
+			"Name": "身体前后倾"
+		},
+		{
+			"Id": "ParamProportion",
+			"GroupId": "ParamGroupBody",
+			"Name": "大小变（头身比）"
 		},
 		{
 			"Id": "ParamBreath",
 			"GroupId": "ParamGroupBody",
-			"Name": "Breath"
+			"Name": "呼吸"
 		},
 		{
 			"Id": "ParamHairFront",
 			"GroupId": "ParamGroupPhysics",
-			"Name": "Front Hair Sway"
+			"Name": "前发摆动"
 		},
 		{
 			"Id": "ParamHairBack",
 			"GroupId": "ParamGroupPhysics",
-			"Name": "Back Hair Sway"
+			"Name": "后发摆动"
 		}
 	],
 	"ParameterGroups": [
 		{
 			"Id": "ParamGroupFace",
 			"GroupId": "",
-			"Name": "Face"
+			"Name": "面部"
 		},
 		{
 			"Id": "ParamGroupEyes",
 			"GroupId": "",
-			"Name": "Eyes"
+			"Name": "眼睛"
 		},
 		{
 			"Id": "ParamGroupBrows",
 			"GroupId": "",
-			"Name": "Brows"
+			"Name": "眉毛"
 		},
 		{
 			"Id": "ParamGroupMouth",
 			"GroupId": "",
-			"Name": "Mouth"
+			"Name": "嘴巴"
 		},
 		{
 			"Id": "ParamGroupBody",
 			"GroupId": "",
-			"Name": "Body"
+			"Name": "身体"
 		},
 		{
 			"Id": "ParamGroupPhysics",
 			"GroupId": "",
-			"Name": "Physics"
+			"Name": "物理"
 		}
 	],
 	"Parts": [
 		{
 			"Id": "PartHead",
-			"Name": "Head"
+			"Name": "头部"
 		},
 		{
 			"Id": "PartHairBack",
-			"Name": "Back Hair"
+			"Name": "后发"
 		},
 		{
 			"Id": "PartFace",
-			"Name": "Face"
+			"Name": "面部"
 		},
 		{
 			"Id": "PartHairFront",
-			"Name": "Front Hair"
+			"Name": "前发"
 		},
 		{
 			"Id": "PartHeadAccessories",
-			"Name": "Head Accessories"
+			"Name": "头部附件"
 		},
 		{
 			"Id": "PartExtra",
-			"Name": "Extra"
+			"Name": "附加物"
 		},
 		{
 			"Id": "PartBody",
-			"Name": "Body"
+			"Name": "身体"
 		}
 	],
 	"CombinedParameters": [
@@ -237,11 +262,19 @@
 		},
 		{
 			"Id": "ArtMeshMouth_lip_0",
-			"Name": "mouth / Upper lip outline"
+			"Name": "mouth / 上唇描边"
 		},
 		{
 			"Id": "ArtMeshMouth_lip_1",
-			"Name": "mouth / Lower lip outline"
+			"Name": "mouth / 下唇描边"
+		},
+		{
+			"Id": "ArtMeshFaceDetailR",
+			"Name": "cheek-R"
+		},
+		{
+			"Id": "ArtMeshFaceDetailL",
+			"Name": "cheek-L"
 		},
 		{
 			"Id": "ArtMeshFace",
