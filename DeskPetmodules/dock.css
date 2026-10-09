@@ -1,8 +1,8 @@
 /* 桌宠脚边的小胶囊（桌宠页面和设置页预览共用这一份样式）。
    同一个 .pet-dock 有四个样子，切换时宽高和内容都有过渡：
-     hidden  收起：缩小、下沉、淡出
+     hidden  收起：脚边一道小横条（只是个记号，点不到）
      pill    小胶囊：打字 | 说话
-     bar     输入条：麦克风、输入框、发送
+     bar     输入条：开新话题、输入框、发送
      rec     录音：打字 | 停止（光圈跟着音量动），.is-busy 时在识别
    宽度用 --dock-bar-w 给输入条定最宽，由外面的页面设。 */
 
@@ -20,37 +20,43 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.16);
   overflow: hidden;
   transform-origin: 50% 100%;
+  /* 高度和上下位移同一条曲线、同样长：收成小横条、再撑开时上沿不跳 */
   transition:
     width 380ms var(--dock-ease),
-    height 260ms cubic-bezier(.25, 1, .5, 1),
+    height 300ms cubic-bezier(.25, 1, .5, 1),
+    border-radius 300ms cubic-bezier(.25, 1, .5, 1),
+    box-shadow 300ms ease,
     opacity 200ms ease,
-    transform 340ms var(--dock-ease),
-    visibility 0s linear 0s;
+    transform 300ms cubic-bezier(.25, 1, .5, 1);
   font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
 }
 
 .pet-dock[data-mode="hidden"] {
-  opacity: 0;
-  transform: translateY(10px) scale(0.86);
-  visibility: hidden;
+  --dock-w: 30px;
+  --dock-h: 8px;
+  border-radius: 4px;
+  /* 贴在脚底下、胶囊上沿的位置：光标一来，从这道横条往两边、往下撑开成胶囊 */
+  transform: translateY(-36px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.22);
   pointer-events: none;
-  /* 淡出完了再藏起来，命中测试不再算它 */
+  /* 收的时候先让里面的按钮淡掉，外框再缩 */
   transition:
-    width 380ms var(--dock-ease),
-    height 260ms ease,
-    opacity 180ms ease,
-    transform 220ms ease-in,
-    visibility 0s linear 220ms;
+    width 320ms cubic-bezier(.4, 0, .2, 1) 60ms,
+    height 300ms cubic-bezier(.4, 0, .2, 1) 60ms,
+    border-radius 300ms cubic-bezier(.4, 0, .2, 1) 60ms,
+    box-shadow 300ms ease 60ms,
+    opacity 200ms ease,
+    transform 300ms cubic-bezier(.4, 0, .2, 1) 60ms;
 }
 
 .pet-dock[data-mode="bar"] {
   --dock-w: var(--dock-bar-w, 360px);
-  --dock-h: var(--dock-bar-h, 48px);
+  --dock-h: var(--dock-bar-h, 52px);
   border-radius: 24px;
 }
 
 .pet-dock[data-mode="rec"] {
-  --dock-w: 104px;
+  --dock-w: 112px;
 }
 
 .pet-dock .dock-layer {
@@ -124,7 +130,13 @@
   background: rgba(0, 0, 0, 0.12);
 }
 
+/* 输入条这一层始终是展开后的宽度、居中摆：外框变形时从中间往两边露出来，
+   收起状态下量输入框高度也按展开后的宽度量（不然几像素宽的输入框会量出好几行高） */
 .pet-dock .dock-bar {
+  right: auto;
+  left: 50%;
+  width: var(--dock-bar-w, 360px);
+  margin-left: calc(var(--dock-bar-w, 360px) / -2);
   gap: 6px;
   padding: 0 6px;
   align-items: flex-end;
@@ -138,13 +150,31 @@
   background: #f1f2f4;
 }
 
+.pet-dock .dock-round:hover {
+  background: #e6e8eb;
+}
+
+/* 开新话题打开时：加号转成叉，按钮变深 */
+.pet-dock .dock-round svg {
+  transition: transform 220ms var(--dock-ease);
+}
+
+.pet-dock .dock-round[aria-pressed="true"] {
+  background: #1f2328;
+  color: #fff;
+}
+
+.pet-dock .dock-round[aria-pressed="true"] svg {
+  transform: rotate(45deg);
+}
+
 .pet-dock .dock-input {
   flex: 1 1 auto;
   min-width: 0;
   box-sizing: border-box;
-  height: 36px;
+  height: 40px;
   max-height: 96px;
-  padding: 8px 2px;
+  padding: 10px 2px;
   border: none;
   outline: none;
   resize: none;
@@ -247,7 +277,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pet-dock,
-  .pet-dock .dock-layer {
+  .pet-dock .dock-layer,
+  .pet-dock .dock-round svg {
     transition-duration: 1ms !important;
     transition-delay: 0s !important;
   }

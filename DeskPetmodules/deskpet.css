@@ -79,7 +79,7 @@ body.is-ghost-hover #stage {
 #avatar {
   position: absolute;
   left: 50%;
-  bottom: calc(24px * var(--pet-scale, 1));
+  bottom: calc(54px + 8px * var(--pet-scale, 1));
   width: calc(168px * var(--pet-scale, 1));
   height: calc(168px * var(--pet-scale, 1));
   margin-left: calc(-84px * var(--pet-scale, 1));
@@ -451,7 +451,7 @@ body.is-drop-target #stage {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 10px;
+  bottom: 6px;
   /* 左右 auto 居中：宽度变的时候两边一起收放 */
   margin: 0 auto;
 }
@@ -776,4 +776,21 @@ body.is-paused *::after {
   35% { scale: 1; }
   80% { opacity: 1; }
   100% { opacity: 0; translate: 0 -10px; }
+}
+
+/* 溜达：主进程在挪窗口，角色一颠一颠、身子往前倾一点 */
+body[data-walk] #stage {
+  animation: pet-walk 520ms ease-in-out infinite;
+}
+
+body[data-walk="left"] #stage { --walk-lean: -2.5deg; }
+body[data-walk="right"] #stage { --walk-lean: 2.5deg; }
+
+@keyframes pet-walk {
+  0%, 100% { translate: 0 0; rotate: var(--walk-lean, 0deg); }
+  50% { translate: 0 -5px; rotate: calc(var(--walk-lean, 0deg) * 1.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-walk] #stage { animation: none; }
 }

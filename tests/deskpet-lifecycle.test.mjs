@@ -168,7 +168,7 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     await sleep(500);
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
-    assert.deepEqual([b.width, b.height], [280, 408], '尺寸恢复成桌宠窗口的固定大小');
+    assert.deepEqual([b.width, b.height], [360, 464], '尺寸恢复成桌宠窗口的固定大小');
     handlers.closeAll();
 });
 
@@ -357,19 +357,19 @@ test('files sent from the pet reach the main window cleaned up', async () => {
     const main = fake.windows[0];
     const pet = await open('Coco');
     const send = fake.handlers.get('deskpet:send');
-    const pending = send(fromPet(pet), '', [
+    const pending = send(fromPet(pet), '', { files: [
         { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
         { path: 'relative/b.txt', name: 'b.txt' },
         { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
         { data: new Uint8Array(0), name: 'empty.png' },
-    ]);
+    ] });
     const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
     assert.equal(request.text, '');
     assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
     fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
     assert.deepEqual(await pending, { success: true });
     // 没字也没文件：不往主窗口发
-    assert.equal((await send(fromPet(pet), ' ', [{ path: 'x' }])).success, false);
+    assert.equal((await send(fromPet(pet), ' ', { files: [{ path: 'x' }] })).success, false);
     handlers.closeAll();
 });
 
@@ -443,4 +443,51 @@ test('a pet flung on release slides on and lands on the taskbar; a slow drop sta
     await drag([[0, 0], [-40, -40], [-80, -80], [-120, -120]], { figure, free: true });
     await sleep(300);
     assert.notEqual(pet.getPosition()[1], floorY);
+});
+
+test('wandering: an idle pet on the taskbar strolls a little; touching it stops it in place', async (t) => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const floorY = 1000 - figure.y - figure.height;
+    pet.setBounds({ x: 600, y: floorY });
+    const walks = () => pet.sent.filter((m) => m.channel === 'deskpet:walk').map((m) => m.payload.dir);
+    // 默认关：页面来问也不走
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    await sleep(60);
+    assert.deepEqual(pet.getPosition(), [600, floorY]);
+    assert.deepEqual(walks(), []);
+    handlers._controls().update({ wander: true });
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.wander, true);
+    // 半空中不走
+    pet.setBounds({ x: 600, y: 200 });
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    assert.deepEqual(walks(), []);
+    // 站在任务栏上：沿着走一段，高度不变，走完停下
+    pet.setBounds({ x: 600, y: floorY });
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    assert.equal(walks().length, 1);
+    await sleep(200);
+    const [x1, y1] = pet.getPosition();
+    assert.notEqual(x1, 600);
+    assert.equal(y1, floorY);
+    // 光标碰到角色：停在原地
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(walks().at(-1), null);
+    const [x2] = pet.getPosition();
+    await sleep(100);
+    assert.equal(pet.getPosition()[0], x2);
+    fake.listeners.get('deskpet:hit')(fromPet(pet), false);
+    // 再走一次，页面说有动静了：停下；关掉溜达也停
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    await sleep(50);
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { stop: true });
+    assert.equal(walks().at(-1), null);
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    handlers._controls().update({ wander: false });
+    assert.equal(walks().at(-1), null);
+    const [x3] = pet.getPosition();
+    await sleep(100);
+    assert.equal(pet.getPosition()[0], x3);
 });

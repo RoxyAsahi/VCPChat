@@ -1419,13 +1419,14 @@ export function setupEventListeners(deps) {
             findAgent: agentId => itemListManager?.findItemById?.(agentId, 'agent') || null,
             selectItem: item => chatManager.selectItem(item.id, item.type || 'agent', item.name, item.avatarUrl, item.config || item),
             sendMessage: request => chatManager.handleSendMessage(request),
+            startTopic: item => chatManager.createNewTopicForItem(item.id, 'agent'),
             isBusy: () => sendMessageBtn.dataset.mode === 'interrupt',
             storeFiles: (agentId, topicId, files) => chatAPI.handleFileDrop(agentId, topicId, files),
         });
-        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, files, deadline } = {}) => {
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, files, newTopic, deadline } = {}) => {
             let result;
             try {
-                result = await sendFromPet({ agentId, text, files, deadline });
+                result = await sendFromPet({ agentId, text, files, newTopic: newTopic === true, deadline });
             } catch (error) {
                 result = { success: false, error: error.message };
             }

@@ -18,8 +18,11 @@ const BASE_CHARACTER = Object.freeze({ width: 360 * SIZE_FACTOR, height: 430 * S
 // 中间平滑过渡。全身像的人比半身像小一截是自然的，但不至于高出半个屏幕。
 const FIGURE = Object.freeze({ tallFrom: 1.6, tallTo: 2.6, tallHeight: 540 * SIZE_FACTOR, maxWidth: 420 * SIZE_FACTOR, sideRoom: 1.15 });
 const UI_RESERVE = 150;
-// 窗口再窄，气泡和输入框也排不下了。
-const MIN_WIDTH = 280;
+// 脚下留给小胶囊的高度（与页面 FOOT_RESERVE 一致）：胶囊在脚底下，不压着脚。
+const FOOT_RESERVE = 54;
+// 窗口再窄，气泡和输入框也排不下了；输入条要比角色宽出一截（约三个小胶囊宽），按这个定。
+// 角色两边多出来的是透明的，鼠标照样穿过去，贴边按角色本身算。
+const MIN_WIDTH = 360;
 const SCALE_MIN = 0.5;
 // 新的 1 倍小了，上限放到 3 倍：以前调到 2 倍的人换算过来还放得下
 const SCALE_MAX = 3;
@@ -55,6 +58,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     clickThrough: false,
     // 角色的不透明度（气泡、输入框不跟着变淡）
     opacity: 1,
+    // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
+    wander: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -97,14 +102,14 @@ function windowSizeForScale(scale, aspect) {
     const box = characterBox(aspect);
     return {
         width: Math.max(MIN_WIDTH, roundToGrid(box.width * s)),
-        height: roundToGrid(UI_RESERVE + box.height * s),
+        height: roundToGrid(UI_RESERVE + box.height * s + FOOT_RESERVE),
     };
 }
 
 /** 这块工作区（显示器去掉任务栏）最多能放多大。 */
 function maxScaleForWorkArea(workArea, aspect) {
     if (!workArea || !(workArea.height > 0)) return SCALE_MAX;
-    const fit = (workArea.height - UI_RESERVE) / characterBox(aspect).height;
+    const fit = (workArea.height - UI_RESERVE - FOOT_RESERVE) / characterBox(aspect).height;
     return Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.floor(fit * 20) / 20));
 }
 
@@ -241,6 +246,7 @@ function normalizeSettings(raw) {
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
         opacity: normalizeOpacity(input.opacity),
+        wander: input.wander === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
@@ -253,6 +259,7 @@ module.exports = {
     BASE_CHARACTER,
     SIZE_VERSION,
     UI_RESERVE,
+    FOOT_RESERVE,
     SCALE_MIN,
     SCALE_MAX,
     SCALE_STEP,

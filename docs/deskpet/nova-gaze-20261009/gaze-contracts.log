@@ -1,0 +1,7 @@
+npm warn Unknown project config "electron_mirror". This will stop working in the next major version of npm.
+npm warn Unknown project config "ELECTRON_MIRROR". This will stop working in the next major version of npm.
+
+> vcp-chat-desktop@1.0.0 check:chat-contracts
+> node scripts/check-chat-contracts.mjs
+
+Chat contract gate passed (66 registered contracts, 843 generated events).

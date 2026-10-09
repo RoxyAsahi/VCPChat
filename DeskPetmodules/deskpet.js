@@ -34,6 +34,9 @@ const PREVIEW = new URLSearchParams(location.search).has('preview');
 const FPS = { active: 30, idle: 15, sleep: 10 };
 const FPS_SOFTWARE = { active: 20, idle: 8, sleep: 5 };
 const IDLE_AFTER_MS = 30000;
+// 溜达（设置里打开）：这么久没人理、站在任务栏上才走；走过一次以后隔一阵再走
+const WANDER_AFTER_MS = 60000;
+const WANDER_GAP_MS = [40000, 100000];
 const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
 // 回复结束后气泡停留多久：按字数给时间读完，鼠标停在气泡上时不收
@@ -44,6 +47,8 @@ const REPLY_HOLD_AFTER_HOVER_MS = 4000;
 const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容在主窗口
 const DOUBLE_TAP_MS = 300;     // 这么短内的第二下算双击；单击的反应等这段时间过了再做
 const TOP_RESERVE = 150;       // 窗口上方留给气泡的高度（与样式一致）
+const FOOT_RESERVE = 54;       // 脚下留给小胶囊的高度（与 petPrefs、样式里 #avatar 的 54px 一致）
+const DOCK_BOTTOM = 6;         // 小胶囊离窗口底边（与 #dock 的 bottom 一致）
 const DOCK_SHOW_MS = 220;      // 光标在角色上停这么久，脚边的小胶囊冒出来
 const DOCK_HIDE_MS = 1400;     // 光标离开这么久，小胶囊收回去
 const FIGURE_MEASURE_MS = 450; // Live2D、网格立绘载入后过这么久（物理和待机动作稳下来）量一次轮廓
@@ -324,7 +329,8 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
+// fresh：输入条左边的「+」按下了，这一句开个新话题再发；queuedFresh：排着的那几句要不要开新话题
+const composer = { open: false, sending: false, queued: null, queuedFresh: false, fresh: false, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
 const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
@@ -382,7 +388,7 @@ function closeComposer() {
 function fitComposerInput() {
     const input = $('composerInput');
     input.style.height = 'auto';
-    const height = Math.min(96, Math.max(36, input.scrollHeight));
+    const height = Math.min(96, Math.max(40, input.scrollHeight));
     input.style.height = `${height}px`;
     $('dock').style.setProperty('--dock-bar-h', `${height + 12}px`);
     $('composerSend').classList.toggle('is-empty', !input.value.trim() && !composer.files.length);
@@ -448,7 +454,17 @@ function shorten(text, max = 16) {
     return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-async function sendText(text, files = []) {
+// 输入条左边的「+」：下一句开个新话题再发（和主窗口的「新话题」一样），再按一下取消
+let petName = 'TA';
+function setFresh(on) {
+    composer.fresh = on;
+    const button = $('composerNew');
+    button.setAttribute('aria-pressed', String(on));
+    button.title = on ? '取消，接着原来的话题说' : '开新话题';
+    $('composerInput').placeholder = on ? '开始新聊天' : `和 ${petName} 说点什么…`;
+}
+
+async function sendText(text, { fresh = false, files = [] } = {}) {
     composer.sending = true;
     $('composerSend').disabled = true;
     fitComposerInput();
@@ -456,7 +472,7 @@ async function sendText(text, files = []) {
     const previousSentAt = composer.lastSentAt;
     composer.lastSentAt = Date.now();
     try {
-        const result = await api.send(text, files);
+        const result = await api.send(text, { files, newTopic: fresh });
         if (result?.success) return true;
         composer.lastSentAt = previousSentAt;
         notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
@@ -484,15 +500,18 @@ async function submitComposer() {
     if (bubble.replyId) {
         // 连着说了几句就攒在一起，说完一次发出去
         composer.queued = composer.queued ? `${composer.queued}\n${text}` : text;
+        composer.queuedFresh ||= composer.fresh;
+        setFresh(false);
         input.value = '';
         fitComposerInput();
         closeComposer();
         renderBubble();
         return;
     }
-    if (await sendText(text, files)) {
+    if (await sendText(text, { fresh: composer.fresh, files })) {
         input.value = '';
         setFiles([]);
+        setFresh(false);
         fitComposerInput();
         closeComposer();
     }
@@ -572,10 +591,13 @@ function bindFileDrop() {
 async function flushQueued() {
     const text = composer.queued;
     if (!text || bubble.replyId || composer.sending) return;
+    const fresh = composer.queuedFresh;
     composer.queued = null;
+    composer.queuedFresh = false;
     renderBubble();
-    if (await sendText(text)) return;
+    if (await sendText(text, { fresh })) return;
     $('composerInput').value = text;
+    setFresh(fresh);
     openComposer();
 }
 
@@ -596,7 +618,7 @@ function bindComposer() {
     $('dockEdit').addEventListener('click', openComposer);
     $('recEdit').addEventListener('click', openComposer);
     $('dockVoice').addEventListener('click', startVoice);
-    $('composerMic').addEventListener('click', startVoice);
+    $('composerNew').addEventListener('click', () => { setFresh(!composer.fresh); input.focus(); });
     $('recStop').addEventListener('click', finishVoice);
     dock.voice = createDictation({
         status: () => api.sttStatus(),
@@ -638,7 +660,7 @@ function bindComposer() {
         if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
     });
     // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）；设置页预览里打的字直接发出去
-    api.onOpenInput(({ toggle, submit, voice } = {}) => {
+    api.onOpenInput(({ toggle, submit, voice, newTopic } = {}) => {
         if (voice) {
             // 语音快捷键：没在录就开始录，正在录就停下发出去
             if (dock.mode === 'rec') finishVoice();
@@ -650,8 +672,9 @@ function bindComposer() {
             // TA 正在回或上一句还在发：排到这条说完再发，连着来的几句不会互相顶掉
             if (composer.sending || bubble.replyId) {
                 composer.queued = composer.queued ? `${composer.queued}\n${submit}` : submit;
+                composer.queuedFresh ||= newTopic === true;
                 renderBubble();
-            } else sendText(submit);
+            } else sendText(submit, { fresh: newTopic === true });
         } else if (toggle && composer.open && !input.value.trim()) closeComposer();
         else openComposer();
     });
@@ -674,10 +697,12 @@ function union(a, b) {
     return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
-function uiBounds() {
+// 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上
+// （只给 Linux 的窗口形状用，不算就画不出来；闲逛、贴边探头只看真正打开的界面）
+function uiBounds({ withIdleDock = false } = {}) {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
-        if (el.hidden || el.dataset.mode === 'hidden') continue;
+        if (el.hidden || (el.dataset.mode === 'hidden' && !withIdleDock)) continue;
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -760,9 +785,12 @@ function bindApprovals(director) {
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
 
 // 角色在窗口里的包围盒（贴边用）；后端还没起来时没有
+// 往下算到小胶囊的底：贴任务栏时是胶囊落在任务栏上，悬停冒出来的胶囊不会被任务栏挡住
 function figureBounds() {
     try {
-        return window.__deskPetBounds?.() || null;
+        const b = window.__deskPetBounds?.();
+        if (!b) return null;
+        return { ...b, height: Math.max(b.height, window.innerHeight - DOCK_BOTTOM - b.y) };
     } catch {
         return null;
     }
@@ -1363,7 +1391,7 @@ function createFigureFit(app, canvas, { width, height, apply }) {
     let fit = null;
     let measured = false;
     const layout = () => {
-        fit = fitSilhouette(box, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE })
+        fit = fitSilhouette(box, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE, bottomReserve: FOOT_RESERVE })
             || { scale: 1, x: window.innerWidth / 2, y: window.innerHeight };
         apply(fit);
     };
@@ -1568,7 +1596,7 @@ function createImageBackend(assets) {
         const place = (img) => {
             const silhouette = silhouetteOf(img);
             if (!silhouette) return;
-            const fit = fitSilhouette(silhouette, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE });
+            const fit = fitSilhouette(silhouette, { width: window.innerWidth, height: window.innerHeight, topReserve: TOP_RESERVE, bottomReserve: FOOT_RESERVE });
             if (!fit) return;
             img.style.left = `${fit.x}px`;
             img.style.top = `${fit.y}px`;
@@ -1842,6 +1870,37 @@ function bindStream(director) {
     });
 }
 
+// ---- 溜达 ----------------------------------------------------------------------
+// 主进程挪窗口，页面只决定什么时候想走、走的时候一颠一颠；有了任何动静就停下（主进程那边也会停）。
+
+let walking = null; // 'left' | 'right' | null
+let nextWanderAt = 0;
+
+function wanderGap() {
+    return WANDER_GAP_MS[0] + Math.random() * (WANDER_GAP_MS[1] - WANDER_GAP_MS[0]);
+}
+
+function wanderTick(ui) {
+    const now = Date.now();
+    const busy = !!ui || !!frame.state || life.phase !== 'awake' || now - lastActivity < WANDER_AFTER_MS;
+    if (walking) {
+        if (busy) api.wander?.({ stop: true });
+        return;
+    }
+    if (prefs.wander !== true || busy || now < nextWanderAt) return;
+    nextWanderAt = now + wanderGap();
+    const figure = figureBounds();
+    if (figure) api.wander?.({ figure });
+}
+
+function bindWalk() {
+    api.onWalk?.(({ dir }) => {
+        walking = dir;
+        if (dir) document.body.dataset.walk = dir;
+        else delete document.body.dataset.walk;
+    });
+}
+
 // ---- 设置：大小、免打扰 -------------------------------------------------------------
 
 function isQuiet() {
@@ -1896,9 +1955,11 @@ async function start() {
     if (!assets) return;
     applyPrefs(await api.getPrefs?.().catch(() => null));
     api.onPrefs?.(applyPrefs);
+    bindWalk();
     document.title = `${assets.name} · 桌宠`;
     // 占位只写一句：窄窗口里也不折行；按键提示放在悬停说明里
-    $('composerInput').placeholder = `和 ${assets.name} 说点什么…`;
+    petName = assets.name;
+    $('composerInput').placeholder = `和 ${petName} 说点什么…`;
     $('composerInput').title = 'Enter 发送，Shift+Enter 换行，Esc 收起';
 
     if (assets.live2d && assets.coreUrl && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
@@ -2125,7 +2186,8 @@ async function start() {
         followHead();
         const b = backend.bounds();
         const ui = uiBounds();
-        const rect = b && ui ? union(b, ui) : (b || ui);
+        const drawn = uiBounds({ withIdleDock: true });
+        const rect = b && drawn ? union(b, drawn) : (b || drawn);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
         // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
         const wantOut = lastHit || Boolean(ui);
@@ -2135,6 +2197,7 @@ async function start() {
         }
         life.setMood(director.baseline);
         life.tick();
+        wanderTick(ui);
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
 

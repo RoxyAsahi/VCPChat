@@ -1,0 +1,451 @@
+[
+  {
+    "outfit": "tech",
+    "pose_eye_checks": [
+      {
+        "pose_eye": "gaze-1_0-L",
+        "isolated_blue_iris_pixels": 720,
+        "visible_blue_pixels_in_full_model": 695,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze-1_0-R",
+        "isolated_blue_iris_pixels": 679,
+        "visible_blue_pixels_in_full_model": 656,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_-1-L",
+        "isolated_blue_iris_pixels": 696,
+        "visible_blue_pixels_in_full_model": 689,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_-1-R",
+        "isolated_blue_iris_pixels": 639,
+        "visible_blue_pixels_in_full_model": 611,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_0-L",
+        "isolated_blue_iris_pixels": 736,
+        "visible_blue_pixels_in_full_model": 730,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_0-R",
+        "isolated_blue_iris_pixels": 681,
+        "visible_blue_pixels_in_full_model": 654,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_1-L",
+        "isolated_blue_iris_pixels": 699,
+        "visible_blue_pixels_in_full_model": 687,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_1-R",
+        "isolated_blue_iris_pixels": 688,
+        "visible_blue_pixels_in_full_model": 658,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze1_0-L",
+        "isolated_blue_iris_pixels": 734,
+        "visible_blue_pixels_in_full_model": 726,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze1_0-R",
+        "isolated_blue_iris_pixels": 658,
+        "visible_blue_pixels_in_full_model": 629,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_-1-L",
+        "isolated_blue_iris_pixels": 766,
+        "visible_blue_pixels_in_full_model": 740,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_-1-R",
+        "isolated_blue_iris_pixels": 617,
+        "visible_blue_pixels_in_full_model": 593,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_1-L",
+        "isolated_blue_iris_pixels": 731,
+        "visible_blue_pixels_in_full_model": 711,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_1-R",
+        "isolated_blue_iris_pixels": 639,
+        "visible_blue_pixels_in_full_model": 631,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_-1-L",
+        "isolated_blue_iris_pixels": 750,
+        "visible_blue_pixels_in_full_model": 732,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_-1-R",
+        "isolated_blue_iris_pixels": 546,
+        "visible_blue_pixels_in_full_model": 523,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": [
+          {
+            "x": 352,
+            "y": 801,
+            "white_alpha": 14,
+            "isolated_combined_alpha": 64,
+            "full_model_rgba": [
+              224,
+              229,
+              231,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "pose_eye": "turn-30-gaze1_1-L",
+        "isolated_blue_iris_pixels": 741,
+        "visible_blue_pixels_in_full_model": 724,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_1-R",
+        "isolated_blue_iris_pixels": 588,
+        "visible_blue_pixels_in_full_model": 557,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_-1-L",
+        "isolated_blue_iris_pixels": 615,
+        "visible_blue_pixels_in_full_model": 592,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_-1-R",
+        "isolated_blue_iris_pixels": 694,
+        "visible_blue_pixels_in_full_model": 672,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_1-L",
+        "isolated_blue_iris_pixels": 576,
+        "visible_blue_pixels_in_full_model": 560,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_1-R",
+        "isolated_blue_iris_pixels": 710,
+        "visible_blue_pixels_in_full_model": 693,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_-1-L",
+        "isolated_blue_iris_pixels": 674,
+        "visible_blue_pixels_in_full_model": 654,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_-1-R",
+        "isolated_blue_iris_pixels": 675,
+        "visible_blue_pixels_in_full_model": 654,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_1-L",
+        "isolated_blue_iris_pixels": 665,
+        "visible_blue_pixels_in_full_model": 643,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_1-R",
+        "isolated_blue_iris_pixels": 712,
+        "visible_blue_pixels_in_full_model": 688,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      }
+    ],
+    "passed": true,
+    "visible_white_alpha_threshold": 16,
+    "white_support_alpha_threshold": 1,
+    "blue_alpha_threshold": 32,
+    "scope": "actual GPU white + iris footprint, plus actual visible color in the complete model from the same frame; partly covered antialias edges are retained explicitly"
+  },
+  {
+    "outfit": "maid",
+    "pose_eye_checks": [
+      {
+        "pose_eye": "gaze-1_0-L",
+        "isolated_blue_iris_pixels": 795,
+        "visible_blue_pixels_in_full_model": 772,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze-1_0-R",
+        "isolated_blue_iris_pixels": 710,
+        "visible_blue_pixels_in_full_model": 697,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_-1-L",
+        "isolated_blue_iris_pixels": 800,
+        "visible_blue_pixels_in_full_model": 782,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_-1-R",
+        "isolated_blue_iris_pixels": 694,
+        "visible_blue_pixels_in_full_model": 677,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_0-L",
+        "isolated_blue_iris_pixels": 815,
+        "visible_blue_pixels_in_full_model": 787,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_0-R",
+        "isolated_blue_iris_pixels": 699,
+        "visible_blue_pixels_in_full_model": 677,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_1-L",
+        "isolated_blue_iris_pixels": 737,
+        "visible_blue_pixels_in_full_model": 713,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze0_1-R",
+        "isolated_blue_iris_pixels": 635,
+        "visible_blue_pixels_in_full_model": 611,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze1_0-L",
+        "isolated_blue_iris_pixels": 809,
+        "visible_blue_pixels_in_full_model": 790,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "gaze1_0-R",
+        "isolated_blue_iris_pixels": 675,
+        "visible_blue_pixels_in_full_model": 658,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_-1-L",
+        "isolated_blue_iris_pixels": 843,
+        "visible_blue_pixels_in_full_model": 821,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_-1-R",
+        "isolated_blue_iris_pixels": 663,
+        "visible_blue_pixels_in_full_model": 644,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_1-L",
+        "isolated_blue_iris_pixels": 758,
+        "visible_blue_pixels_in_full_model": 731,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze-1_1-R",
+        "isolated_blue_iris_pixels": 595,
+        "visible_blue_pixels_in_full_model": 569,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_-1-L",
+        "isolated_blue_iris_pixels": 853,
+        "visible_blue_pixels_in_full_model": 825,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_-1-R",
+        "isolated_blue_iris_pixels": 617,
+        "visible_blue_pixels_in_full_model": 591,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_1-L",
+        "isolated_blue_iris_pixels": 762,
+        "visible_blue_pixels_in_full_model": 726,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn-30-gaze1_1-R",
+        "isolated_blue_iris_pixels": 525,
+        "visible_blue_pixels_in_full_model": 503,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_-1-L",
+        "isolated_blue_iris_pixels": 737,
+        "visible_blue_pixels_in_full_model": 702,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_-1-R",
+        "isolated_blue_iris_pixels": 749,
+        "visible_blue_pixels_in_full_model": 733,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_1-L",
+        "isolated_blue_iris_pixels": 631,
+        "visible_blue_pixels_in_full_model": 601,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze-1_1-R",
+        "isolated_blue_iris_pixels": 673,
+        "visible_blue_pixels_in_full_model": 654,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_-1-L",
+        "isolated_blue_iris_pixels": 764,
+        "visible_blue_pixels_in_full_model": 740,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_-1-R",
+        "isolated_blue_iris_pixels": 735,
+        "visible_blue_pixels_in_full_model": 720,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_1-L",
+        "isolated_blue_iris_pixels": 679,
+        "visible_blue_pixels_in_full_model": 660,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      },
+      {
+        "pose_eye": "turn30-gaze1_1-R",
+        "isolated_blue_iris_pixels": 640,
+        "visible_blue_pixels_in_full_model": 614,
+        "isolated_blue_outside_nonzero_white_support": 0,
+        "visible_blue_outside_white_alpha16": 0,
+        "partly_covered_edge_samples": []
+      }
+    ],
+    "passed": true,
+    "visible_white_alpha_threshold": 16,
+    "white_support_alpha_threshold": 1,
+    "blue_alpha_threshold": 32,
+    "scope": "actual GPU white + iris footprint, plus actual visible color in the complete model from the same frame; partly covered antialias edges are retained explicitly"
+  }
+]

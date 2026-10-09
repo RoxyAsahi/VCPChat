@@ -1,0 +1,1100 @@
+TAP version 13
+# Subtest: desk pet protocol serves only the pet page, vendor, core and agent pet files
+ok 1 - desk pet protocol serves only the pet page, vendor, core and agent pet files
+  ---
+  duration_ms: 4.3877
+  type: 'test'
+  ...
+# Subtest: desk pet protocol refuses agent config, history and traversal
+ok 2 - desk pet protocol refuses agent config, history and traversal
+  ---
+  duration_ms: 1.4525
+  type: 'test'
+  ...
+# Subtest: desk pet protocol prompt is only appended while that agent has a pet open
+ok 3 - desk pet protocol prompt is only appended while that agent has a pet open
+  ---
+  duration_ms: 0.6017
+  type: 'test'
+  ...
+# (node:44612) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/bubbleText.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: bubble text drops markdown markers but keeps the words
+ok 4 - bubble text drops markdown markers but keeps the words
+  ---
+  duration_ms: 4.4732
+  type: 'test'
+  ...
+# Subtest: bubble text strips html tags and keeps plain comparisons and arithmetic
+ok 5 - bubble text strips html tags and keeps plain comparisons and arithmetic
+  ---
+  duration_ms: 0.7239
+  type: 'test'
+  ...
+# Subtest: bubble text leaves an unfinished marker alone while the reply is still streaming
+ok 6 - bubble text leaves an unfinished marker alone while the reply is still streaming
+  ---
+  duration_ms: 1.1575
+  type: 'test'
+  ...
+# Subtest: a fresh Nova offers all three bundled outfits without writing to its agent folder
+ok 7 - a fresh Nova offers all three bundled outfits without writing to its agent folder
+  ---
+  duration_ms: 298.5751
+  type: 'test'
+  ...
+# Subtest: custom models and non-Nova portraits stay the default, while built-ins remain selectable
+ok 8 - custom models and non-Nova portraits stay the default, while built-ins remain selectable
+  ---
+  duration_ms: 115.8576
+  type: 'test'
+  ...
+# Subtest: all three outfits have a usable portrait fallback when Core is absent
+ok 9 - all three outfits have a usable portrait fallback when Core is absent
+  ---
+  duration_ms: 52.3437
+  type: 'test'
+  ...
+# Subtest: bundled resources stay within Nova and never expose configuration or other app files
+ok 10 - bundled resources stay within Nova and never expose configuration or other app files
+  ---
+  duration_ms: 3.5263
+  type: 'test'
+  ...
+# Subtest: the shipped three models have complete runtime references and are included in packaging
+ok 11 - the shipped three models have complete runtime references and are included in packaging
+  ---
+  duration_ms: 43.897
+  type: 'test'
+  ...
+# Subtest: an agent without its own art keeps its avatar instead of turning into Nova
+ok 12 - an agent without its own art keeps its avatar instead of turning into Nova
+  ---
+  duration_ms: 68.372
+  type: 'test'
+  ...
+# Subtest: pet window sizes stay on a 4px grid so fractional display scaling does not round them up
+ok 13 - pet window sizes stay on a 4px grid so fractional display scaling does not round them up
+  ---
+  duration_ms: 6.2321
+  type: 'test'
+  ...
+# Subtest: the default size is smaller now; a size someone picked before looks the same as it did
+ok 14 - the default size is smaller now; a size someone picked before looks the same as it did
+  ---
+  duration_ms: 0.4336
+  type: 'test'
+  ...
+# Subtest: resizing keeps the character standing on the same spot and inside the work area
+ok 15 - resizing keeps the character standing on the same spot and inside the work area
+  ---
+  duration_ms: 2.3902
+  type: 'test'
+  ...
+# Subtest: shortcuts need real modifiers and never take what VCPChat already uses
+ok 16 - shortcuts need real modifiers and never take what VCPChat already uses
+  ---
+  duration_ms: 2.3599
+  type: 'test'
+  ...
+# Subtest: a hand-edited or broken settings file falls back to safe defaults
+ok 17 - a hand-edited or broken settings file falls back to safe defaults
+  ---
+  duration_ms: 2.9812
+  type: 'test'
+  ...
+# (node:63160) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/emotion/emotionPrompt.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: ctrl+wheel resizes a pet around its feet and the size is remembered per agent
+ok 18 - ctrl+wheel resizes a pet around its feet and the size is remembered per agent
+  ---
+  duration_ms: 741.6925
+  type: 'test'
+  ...
+# Subtest: do not disturb reaches every open pet and the tray item reflects it
+ok 19 - do not disturb reaches every open pet and the tray item reflects it
+  ---
+  duration_ms: 413.2506
+  type: 'test'
+  ...
+# Subtest: global shortcuts hide and bring back the pets and open the input box
+ok 20 - global shortcuts hide and bring back the pets and open the input box
+  ---
+  duration_ms: 122.485
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# Subtest: a shortcut another program holds is reported, and a reserved one is refused
+ok 21 - a shortcut another program holds is reported, and a reserved one is refused
+  ---
+  duration_ms: 47.0822
+  type: 'test'
+  ...
+# Subtest: pets open at quit come back on the next launch; ones the user closed do not
+ok 22 - pets open at quit come back on the next launch; ones the user closed do not
+  ---
+  duration_ms: 2038.0002
+  type: 'test'
+  ...
+# Subtest: a smaller display shrinks a pet that no longer fits
+ok 23 - a smaller display shrinks a pet that no longer fits
+  ---
+  duration_ms: 493.8827
+  type: 'test'
+  ...
+# Subtest: the settings page only answers the main window and lists the outfits of one agent
+ok 24 - the settings page only answers the main window and lists the outfits of one agent
+  ---
+  duration_ms: 68.775
+  type: 'test'
+  ...
+# Subtest: picking a card opens the pet in that outfit, picking none closes it
+ok 25 - picking a card opens the pet in that outfit, picking none closes it
+  ---
+  duration_ms: 225.4949
+  type: 'test'
+  ...
+# Subtest: words typed in the settings preview wait until the pet page is ready, then the pet sends them
+ok 26 - words typed in the settings preview wait until the pet page is ready, then the pet sends them
+  ---
+  duration_ms: 65.2682
+  type: 'test'
+  ...
+# Subtest: words for a pet whose page fails to start come back as not sent
+ok 27 - words for a pet whose page fails to start come back as not sent
+  ---
+  duration_ms: 76.5233
+  type: 'test'
+  ...
+# Subtest: show and hide from the settings page, and a closed pet remembers the size set there
+ok 28 - show and hide from the settings page, and a closed pet remembers the size set there
+  ---
+  duration_ms: 123.0995
+  type: 'test'
+  ...
+# Subtest: card snapshots are rendered offscreen once and reused while the files stay the same
+ok 29 - card snapshots are rendered offscreen once and reused while the files stay the same
+  ---
+  duration_ms: 192.2236
+  type: 'test'
+  ...
+# Subtest: a snapshot taken before the offscreen frame is drawn is retried, and a blank one is never cached
+ok 30 - a snapshot taken before the offscreen frame is drawn is retried, and a blank one is never cached
+  ---
+  duration_ms: 3254.7661
+  type: 'test'
+  ...
+# Subtest: the settings file and the settings page never claim the same channel
+ok 31 - the settings file and the settings page never claim the same channel
+  ---
+  duration_ms: 1.1013
+  type: 'test'
+  ...
+# Subtest: SDK release parsing: 5-r.5 and later carry Core 6 and are refused
+ok 32 - SDK release parsing: 5-r.5 and later carry Core 6 and are refused
+  ---
+  duration_ms: 4.4418
+  type: 'test'
+  ...
+# Subtest: extracts the root Core from an SDK zip and ignores sample copies
+ok 33 - extracts the root Core from an SDK zip and ignores sample copies
+  ---
+  duration_ms: 46.3045
+  type: 'test'
+  ...
+# Subtest: refuses zips without Core, with Core 6, or that are not zips
+ok 34 - refuses zips without Core, with Core 6, or that are not zips
+  ---
+  duration_ms: 18.0828
+  type: 'test'
+  ...
+# Subtest: local files: a bare Core or an SDK zip, anything else is refused
+ok 35 - local files: a bare Core or an SDK zip, anything else is refused
+  ---
+  duration_ms: 102.2869
+  type: 'test'
+  ...
+# Subtest: download reports progress, stops on oversize bodies and on HTTP errors
+ok 36 - download reports progress, stops on oversize bodies and on HTTP errors
+  ---
+  duration_ms: 3.391
+  type: 'test'
+  ...
+# Subtest: installer: verified 5.x replaces the Core, Core 6 and broken files keep the old one
+ok 37 - installer: verified 5.x replaces the Core, Core 6 and broken files keep the old one
+  ---
+  duration_ms: 245.1525
+  type: 'test'
+  ...
+# Subtest: installer runs one install at a time
+ok 38 - installer runs one install at a time
+  ---
+  duration_ms: 45.5718
+  type: 'test'
+  ...
+# Subtest: cancelling while the microphone is still opening closes it as soon as it arrives
+ok 39 - cancelling while the microphone is still opening closes it as soon as it arrives
+  ---
+  duration_ms: 73.6094
+  type: 'test'
+  ...
+# Subtest: cancelling while the model status is still being checked never asks for the microphone
+ok 40 - cancelling while the model status is still being checked never asks for the microphone
+  ---
+  duration_ms: 1.0619
+  type: 'test'
+  ...
+# (node:54368) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/dictation.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the figure, not the transparent window, snaps to the left, right and bottom edges
+ok 41 - the figure, not the transparent window, snaps to the left, right and bottom edges
+  ---
+  duration_ms: 6.2237
+  type: 'test'
+  ...
+# Subtest: far from every edge, or pushed well past one, nothing moves
+ok 42 - far from every edge, or pushed well past one, nothing moves
+  ---
+  duration_ms: 0.5973
+  type: 'test'
+  ...
+# Subtest: a second display with a negative origin works the same
+ok 43 - a second display with a negative origin works the same
+  ---
+  duration_ms: 0.6284
+  type: 'test'
+  ...
+# Subtest: the slide eases out and ends exactly on the target
+ok 44 - the slide eases out and ends exactly on the target
+  ---
+  duration_ms: 0.7187
+  type: 'test'
+  ...
+# (node:63936) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/expressionMap.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: main process and pet page agree on the twelve emotions
+ok 45 - main process and pet page agree on the twelve emotions
+  ---
+  duration_ms: 5.9146
+  type: 'test'
+  ...
+# Subtest: auto mapping: sample models by file name, others by expression name
+ok 46 - auto mapping: sample models by file name, others by expression name
+  ---
+  duration_ms: 1.7779
+  type: 'test'
+  ...
+# Subtest: deskpet.json wins when the model has that name; an empty motion means no motion
+ok 47 - deskpet.json wins when the model has that name; an empty motion means no motion
+  ---
+  duration_ms: 2.1761
+  type: 'test'
+  ...
+# Subtest: saving keeps unrelated keys, drops auto entries and names the model does not have
+ok 48 - saving keeps unrelated keys, drops auto entries and names the model does not have
+  ---
+  duration_ms: 1.219
+  type: 'test'
+  ...
+# Subtest: reads expression names and motion groups from model3.json and writes deskpet.json beside it
+ok 49 - reads expression names and motion groups from model3.json and writes deskpet.json beside it
+  ---
+  duration_ms: 182.4469
+  type: 'test'
+  ...
+# Subtest: the helper reports fullscreen as a monitor rect, anything else as none
+ok 50 - the helper reports fullscreen as a monitor rect, anything else as none
+  ---
+  duration_ms: 4.9326
+  type: 'test'
+  ...
+# Subtest: the script watches for VCPChat itself and only takes a numeric pid
+ok 51 - the script watches for VCPChat itself and only takes a numeric pid
+  ---
+  duration_ms: 21.2215
+  type: 'test'
+  ...
+# Subtest: outside Windows nothing is started
+ok 52 - outside Windows nothing is started
+  ---
+  duration_ms: 0.5589
+  type: 'test'
+  ...
+# Subtest: state changes reach the listener once, split lines included
+ok 53 - state changes reach the listener once, split lines included
+  ---
+  duration_ms: 1.8061
+  type: 'test'
+  ...
+# Subtest: if the helper dies while fullscreen, the pet comes back and the helper restarts a few times at most
+ok 54 - if the helper dies while fullscreen, the pet comes back and the helper restarts a few times at most
+  ---
+  duration_ms: 2.2759
+  type: 'test'
+  ...
+# Subtest: stopping cancels a pending restart
+ok 55 - stopping cancels a pending restart
+  ---
+  duration_ms: 0.9019
+  type: 'test'
+  ...
+# Subtest: Windows: the real helper starts and reports a first state
+ok 56 - Windows: the real helper starts and reports a first state
+  ---
+  duration_ms: 3875.2826
+  type: 'test'
+  ...
+# (node:66680) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/gaze.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a cursor near the face keeps the pet looking straight ahead
+ok 57 - a cursor near the face keeps the pet looking straight ahead
+  ---
+  duration_ms: 6.8221
+  type: 'test'
+  ...
+# Subtest: a cursor far above (the usual case for a pet at the bottom of the screen) only tilts the head up a little
+ok 58 - a cursor far above (the usual case for a pet at the bottom of the screen) only tilts the head up a little
+  ---
+  duration_ms: 0.9854
+  type: 'test'
+  ...
+# Subtest: turning grows with distance instead of jumping to the limit
+ok 59 - turning grows with distance instead of jumping to the limit
+  ---
+  duration_ms: 0.62
+  type: 'test'
+  ...
+# Subtest: idle wandering and drowsy looks are held to the same limits
+ok 60 - idle wandering and drowsy looks are held to the same limits
+  ---
+  duration_ms: 1.0082
+  type: 'test'
+  ...
+# (node:64500) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/gestures.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: tag variants map to life actions, anything else is not a gesture
+ok 61 - tag variants map to life actions, anything else is not a gesture
+  ---
+  duration_ms: 2.4169
+  type: 'test'
+  ...
+# Subtest: every gesture has a duration, a Live2D curve and an image animation
+ok 62 - every gesture has a duration, a Live2D curve and an image animation
+  ---
+  duration_ms: 14.4015
+  type: 'test'
+  ...
+# Subtest: a gesture plays once, when the text around its tag is revealed
+ok 63 - a gesture plays once, when the text around its tag is revealed
+  ---
+  duration_ms: 2.6037
+  type: 'test'
+  ...
+# Subtest: when the whole reply shows at once, only the last gesture plays
+ok 64 - when the whole reply shows at once, only the last gesture plays
+  ---
+  duration_ms: 0.9466
+  type: 'test'
+  ...
+# (node:59632) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/hitAreas.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: hit area names from common models map to head or body
+ok 65 - hit area names from common models map to head or body
+  ---
+  duration_ms: 2.1569
+  type: 'test'
+  ...
+# Subtest: only models that mark the head are trusted; body-only models fall back to the outline
+ok 66 - only models that mark the head are trusted; body-only models fall back to the outline
+  ---
+  duration_ms: 0.4346
+  type: 'test'
+  ...
+# (node:15508) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/petLife.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: left alone, the pet does small idle moves, then yawns, dozes and falls asleep
+ok 67 - left alone, the pet does small idle moves, then yawns, dozes and falls asleep
+  ---
+  duration_ms: 8.9499
+  type: 'test'
+  ...
+# Subtest: idle moves do not repeat back to back
+ok 68 - idle moves do not repeat back to back
+  ---
+  duration_ms: 2.6371
+  type: 'test'
+  ...
+# Subtest: a reply, an open composer or a drag keep it awake
+ok 69 - a reply, an open composer or a drag keep it awake
+  ---
+  duration_ms: 2.0469
+  type: 'test'
+  ...
+# Subtest: hidden pets freeze: no moves and no sleep progress
+ok 70 - hidden pets freeze: no moves and no sleep progress
+  ---
+  duration_ms: 0.5848
+  type: 'test'
+  ...
+# Subtest: waking up: a tap or a reply startles, wandering cursor wakes slowly, stroking the head does not wake
+ok 71 - waking up: a tap or a reply startles, wandering cursor wakes slowly, stroking the head does not wake
+  ---
+  duration_ms: 2.0093
+  type: 'test'
+  ...
+# Subtest: cursor outside the window never wakes it
+ok 72 - cursor outside the window never wakes it
+  ---
+  duration_ms: 1.1666
+  type: 'test'
+  ...
+# Subtest: rapid taps: third tap gets annoyed, sixth gets dizzy, and single-tap joy is suppressed
+ok 73 - rapid taps: third tap gets annoyed, sixth gets dizzy, and single-tap joy is suppressed
+  ---
+  duration_ms: 0.6694
+  type: 'test'
+  ...
+# Subtest: taps spaced out are single pokes; head taps are head taps
+ok 74 - taps spaced out are single pokes; head taps are head taps
+  ---
+  duration_ms: 0.6131
+  type: 'test'
+  ...
+# Subtest: stroking back and forth over the head is a pat; one pass is not
+ok 75 - stroking back and forth over the head is a pat; one pass is not
+  ---
+  duration_ms: 1.5329
+  type: 'test'
+  ...
+# Subtest: gaze follows the cursor while it moves and wanders once it stops
+ok 76 - gaze follows the cursor while it moves and wanders once it stops
+  ---
+  duration_ms: 1.1341
+  type: 'test'
+  ...
+# Subtest: drowsy pet perks up quietly when the cursor comes by
+ok 77 - drowsy pet perks up quietly when the cursor comes by
+  ---
+  duration_ms: 0.5733
+  type: 'test'
+  ...
+# Subtest: life motion: asleep closes the eyes and droops the head; awake returns to rest
+ok 78 - life motion: asleep closes the eyes and droops the head; awake returns to rest
+  ---
+  duration_ms: 13.1812
+  type: 'test'
+  ...
+# Subtest: life motion: actions play out and end, hops go up, drag swings opposite to motion and settles
+ok 79 - life motion: actions play out and end, hops go up, drag swings opposite to motion and settles
+  ---
+  duration_ms: 6.7079
+  type: 'test'
+  ...
+# Subtest: life motion: a model with its own motion file only gets a light overlay
+ok 80 - life motion: a model with its own motion file only gets a light overlay
+  ---
+  duration_ms: 2.1835
+  type: 'test'
+  ...
+# Subtest: do-not-disturb: no idle moves, yawns or nods, but it still dozes off and reacts when touched
+ok 81 - do-not-disturb: no idle moves, yawns or nods, but it still dozes off and reacts when touched
+  ---
+  duration_ms: 0.8021
+  type: 'test'
+  ...
+# Subtest: mood shapes idle life: a sad pet never hums and moves less, a tired one gets drowsy sooner
+ok 82 - mood shapes idle life: a sad pet never hums and moves less, a tired one gets drowsy sooner
+  ---
+  duration_ms: 4.3992
+  type: 'test'
+  ...
+# Subtest: do-not-disturb: a reply wakes a sleeping pet without startling it
+ok 83 - do-not-disturb: a reply wakes a sleeping pet without startling it
+  ---
+  duration_ms: 1.8846
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# (node:66188) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/emotion/emotionPrompt.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a second drag-start (lost pointerup) does not leave a timer chasing the cursor
+ok 84 - a second drag-start (lost pointerup) does not leave a timer chasing the cursor
+  ---
+  duration_ms: 488.511
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] renderer gone: crashed
+# Subtest: a renderer reload or crash puts the window back to click-through and ends the drag
+ok 85 - a renderer reload or crash puts the window back to click-through and ends the drag
+  ---
+  duration_ms: 95.3433
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: closing the input bar makes the window click-through again even if the cursor never moved
+ok 86 - closing the input bar makes the window click-through again even if the cursor never moved
+  ---
+  duration_ms: 40.9532
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a pet left on an unplugged display comes back to the primary one
+ok 87 - a pet left on an unplugged display comes back to the primary one
+  ---
+  duration_ms: 555.1603
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] onRequestStart failed: Object has been destroyed
+# [DeskPet] onStreamPayload failed: Object has been destroyed
+# [DeskPet] onFullResponse failed: Object has been destroyed
+# (node:66188) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# Subtest: stream hooks never throw into the main chat path
+ok 88 - stream hooks never throw into the main chat path
+  ---
+  duration_ms: 24.238
+  type: 'test'
+  ...
+# Subtest: agent ids that point at the Agents folder itself are refused
+ok 89 - agent ids that point at the Agents folder itself are refused
+  ---
+  duration_ms: 10.9553
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: Windows: a pet pushed down by another topmost window comes back on top
+ok 90 - Windows: a pet pushed down by another topmost window comes back on top
+  ---
+  duration_ms: 27.6344
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a fullscreen program hides the pet until it leaves fullscreen; the user can still call it back
+ok 91 - a fullscreen program hides the pet until it leaves fullscreen; the user can still call it back
+  ---
+  duration_ms: 20.9759
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: click-through mode: the mouse passes the pet, hits are ignored, the talk bar still works
+ok 92 - click-through mode: the mouse passes the pet, hits are ignored, the talk bar still works
+  ---
+  duration_ms: 28.9367
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: dropping the pet near a screen edge slides it flush; Alt or a far drop leaves it
+ok 93 - dropping the pet near a screen edge slides it flush; Alt or a far drop leaves it
+  ---
+  duration_ms: 1066.4534
+  type: 'test'
+  ...
+# (node:65492) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/moodOrder.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: after the system clock is set back, newer mood broadcasts are still taken
+ok 94 - after the system clock is set back, newer mood broadcasts are still taken
+  ---
+  duration_ms: 2.116
+  type: 'test'
+  ...
+# Subtest: a query answered before a broadcast but arriving after it does not win; other agents are ignored
+ok 95 - a query answered before a broadcast but arriving after it does not win; other agents are ignored
+  ---
+  duration_ms: 0.4644
+  type: 'test'
+  ...
+# (node:38900) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/figure.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: every folder under deskpet/ is an outfit, the old single-model layout keeps working
+ok 96 - every folder under deskpet/ is an outfit, the old single-model layout keeps working
+  ---
+  duration_ms: 138.1413
+  type: 'test'
+  ...
+# Subtest: without a choice the pet looks like before: Live2D when Core is there, else the mesh, else portraits
+ok 97 - without a choice the pet looks like before: Live2D when Core is there, else the mesh, else portraits
+  ---
+  duration_ms: 40.3825
+  type: 'test'
+  ...
+# Subtest: outfit ids stored in state.json stay plain folder names
+ok 98 - outfit ids stored in state.json stay plain folder names
+  ---
+  duration_ms: 0.6665
+  type: 'test'
+  ...
+# Subtest: tall full-body figures get a taller, narrower window, chibi ones a shorter one, unknown stays as before
+ok 99 - tall full-body figures get a taller, narrower window, chibi ones a shorter one, unknown stays as before
+  ---
+  duration_ms: 1.2032
+  type: 'test'
+  ...
+# Subtest: switching to a full-body outfit keeps the feet where they were
+ok 100 - switching to a full-body outfit keeps the feet where they were
+  ---
+  duration_ms: 0.4251
+  type: 'test'
+  ...
+# Subtest: the silhouette skips transparent margins and finds the head
+ok 101 - the silhouette skips transparent margins and finds the head
+  ---
+  duration_ms: 17.1541
+  type: 'test'
+  ...
+# Subtest: a chibi head is most of the body and the bubble anchor follows it
+ok 102 - a chibi head is most of the body and the bubble anchor follows it
+  ---
+  duration_ms: 5.0287
+  type: 'test'
+  ...
+# Subtest: wings or props reaching up beside the head do not make the head as wide as the figure
+ok 103 - wings or props reaching up beside the head do not make the head as wide as the figure
+  ---
+  duration_ms: 11.1195
+  type: 'test'
+  ...
+# Subtest: fitting puts the feet on the window bottom and the figure under the bubble area
+ok 104 - fitting puts the feet on the window bottom and the figure under the bubble area
+  ---
+  duration_ms: 1.1817
+  type: 'test'
+  ...
+# Subtest: cards describe each outfit, outfit.json can say it in its own words
+ok 105 - cards describe each outfit, outfit.json can say it in its own words
+  ---
+  duration_ms: 33.5356
+  type: 'test'
+  ...
+# Subtest: a Live2D outfit that falls back to its portraits still says it needs Cubism Core
+ok 106 - a Live2D outfit that falls back to its portraits still says it needs Cubism Core
+  ---
+  duration_ms: 30.3628
+  type: 'test'
+  ...
+# Subtest: importing a model copies its folder, importing pictures copies just those pictures
+ok 107 - importing a model copies its folder, importing pictures copies just those pictures
+  ---
+  duration_ms: 16.0173
+  type: 'test'
+  ...
+# Subtest: a re-measured figure that differs only a little keeps the remembered ratio; a clipped silhouette is detected
+ok 108 - a re-measured figure that differs only a little keeps the remembered ratio; a clipped silhouette is detected
+  ---
+  duration_ms: 24.7872
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# (node:62664) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/emotion/emotionPrompt.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a topic the agent opens by itself is said once on its open pet
+ok 109 - a topic the agent opens by itself is said once on its open pet
+  ---
+  duration_ms: 385.7579
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a topic deleted before its bubble is clicked is not selected in the main window
+ok 110 - a topic deleted before its bubble is clicked is not selected in the main window
+  ---
+  duration_ms: 119.0171
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: emotion tags and control markers in the first line are not spoken
+ok 111 - emotion tags and control markers in the first line are not spoken
+  ---
+  duration_ms: 40.2056
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: the same alarm reported twice rings once
+ok 112 - the same alarm reported twice rings once
+  ---
+  duration_ms: 238.2203
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a hidden pet is not woken for a new topic
+ok 113 - a hidden pet is not woken for a new topic
+  ---
+  duration_ms: 43.0481
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: an alarm rings on the pet of the agent that set it, even if that pet was hidden
+ok 114 - an alarm rings on the pet of the agent that set it, even if that pet was hidden
+  ---
+  duration_ms: 188.4947
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: closing everything cancels alarms that have not rung yet
+ok 115 - closing everything cancels alarms that have not rung yet
+  ---
+  duration_ms: 171.4208
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a broken tool result never throws into the distributed server
+ok 116 - a broken tool result never throws into the distributed server
+  ---
+  duration_ms: 31.5647
+  type: 'test'
+  ...
+# (node:55732) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/renderer/deskPetSendBridge.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a pet message for another agent waits until that agent has a topic
+ok 117 - a pet message for another agent waits until that agent has a topic
+  ---
+  duration_ms: 149.0625
+  type: 'test'
+  ...
+# Subtest: a pet message never carries the main input draft or its attachments
+ok 118 - a pet message never carries the main input draft or its attachments
+  ---
+  duration_ms: 1.3114
+  type: 'test'
+  ...
+# Subtest: a send that fails before it is saved is reported, not claimed as sent
+ok 119 - a send that fails before it is saved is reported, not claimed as sent
+  ---
+  duration_ms: 10.8284
+  type: 'test'
+  ...
+# Subtest: busy main chat, unknown agent and empty text are refused
+ok 120 - busy main chat, unknown agent and empty text are refused
+  ---
+  duration_ms: 1.0126
+  type: 'test'
+  ...
+# Subtest: two quick sends from the pet run one after the other
+ok 121 - two quick sends from the pet run one after the other
+  ---
+  duration_ms: 156.0986
+  type: 'test'
+  ...
+# Subtest: a pet message whose request already timed out on the pet side is not sent late
+ok 122 - a pet message whose request already timed out on the pet side is not sent late
+  ---
+  duration_ms: 94.7068
+  type: 'test'
+  ...
+# (node:27364) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/speechText.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a streamed reply is cut into sentences at the punctuation, the tail on finish
+ok 123 - a streamed reply is cut into sentences at the punctuation, the tail on finish
+  ---
+  duration_ms: 11.2577
+  type: 'test'
+  ...
+# Subtest: closing quotes and repeated marks stay with their sentence, even across stream chunks
+ok 124 - closing quotes and repeated marks stay with their sentence, even across stream chunks
+  ---
+  duration_ms: 1.1213
+  type: 'test'
+  ...
+# Subtest: tiny sentences are merged into the next one; the first one may be short
+ok 125 - tiny sentences are merged into the next one; the first one may be short
+  ---
+  duration_ms: 0.886
+  type: 'test'
+  ...
+# Subtest: english periods split only before whitespace, so numbers and links stay whole
+ok 126 - english periods split only before whitespace, so numbers and links stay whole
+  ---
+  duration_ms: 2.1993
+  type: 'test'
+  ...
+# Subtest: a long run without sentence marks is split at a comma
+ok 127 - a long run without sentence marks is split at a comma
+  ---
+  duration_ms: 0.7414
+  type: 'test'
+  ...
+# Subtest: markdown, code and image placeholders are not read aloud
+ok 128 - markdown, code and image placeholders are not read aloud
+  ---
+  duration_ms: 0.8437
+  type: 'test'
+  ...
+# Subtest: emotion tags and control markers are never read aloud
+ok 129 - emotion tags and control markers are never read aloud
+  ---
+  duration_ms: 0.2872
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# (node:56600) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/emotion/emotionPrompt.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# Subtest: stream events reach only the open pet, as plain text
+ok 130 - stream events reach only the open pet, as plain text
+  ---
+  duration_ms: 286.1921
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# Subtest: the tag prompt is added only while the pet is open and not already present
+ok 131 - the tag prompt is added only while the pet is open and not already present
+  ---
+  duration_ms: 42.32
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# Subtest: text typed on the pet is handed to the main window and the result comes back
+ok 132 - text typed on the pet is handed to the main window and the result comes back
+  ---
+  duration_ms: 62.1193
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# Subtest: hiding a pet keeps it alive and the header toggle brings it back
+ok 133 - hiding a pet keeps it alive and the header toggle brings it back
+  ---
+  duration_ms: 57.7114
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# [DeskPet] settings push failed: pet.win.getBounds is not a function
+# Subtest: on Windows the pet only takes focus while its input box is open
+ok 134 - on Windows the pet only takes focus while its input box is open
+  ---
+  duration_ms: 36.261
+  type: 'test'
+  ...
+# (node:1560) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/toolActivity.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: a search call reads as "searching · query" while running and gets its result status
+ok 135 - a search call reads as "searching · query" while running and gets its result status
+  ---
+  duration_ms: 6.0078
+  type: 'test'
+  ...
+# Subtest: markers split across chunks, several calls and a failure are all picked up
+ok 136 - markers split across chunks, several calls and a failure are all picked up
+  ---
+  duration_ms: 1.546
+  type: 'test'
+  ...
+# Subtest: the card shows up as soon as the tool name is written, before the request block closes
+ok 137 - the card shows up as soon as the tool name is written, before the request block closes
+  ---
+  duration_ms: 0.4455
+  type: 'test'
+  ...
+# Subtest: unknown tools fall back to their own name; a reply that ends without a result counts as done
+ok 138 - unknown tools fall back to their own name; a reply that ends without a result counts as done
+  ---
+  duration_ms: 2.5774
+  type: 'test'
+  ...
+# Subtest: ordinary text, however long, creates no activities
+ok 139 - ordinary text, however long, creates no activities
+  ---
+  duration_ms: 12.3595
+  type: 'test'
+  ...
+# Subtest: a long write request is read from its head and does not slow down as it streams
+ok 140 - a long write request is read from its head and does not slow down as it streams
+  ---
+  duration_ms: 332.9768
+  type: 'test'
+  ...
+# SovitsTTS IPC handlers initialisés.
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# (node:60776) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/modules/emotion/emotionPrompt.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# SovitsTTS IPC handlers initialisés.
+# Subtest: the pet speaks with the agent's own voice settings; agents without a voice stay silent
+ok 141 - the pet speaks with the agent's own voice settings; agents without a voice stay silent
+  ---
+  duration_ms: 300.0477
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# [IPC Handler] Sending 'stop-tts-audio' to requesting renderer.
+# SovitsTTS IPC handlers initialisés.
+# Subtest: one voice at a time, and the main window does not read the reply the pet is reading
+ok 142 - one voice at a time, and the main window does not read the reply the pet is reading
+  ---
+  duration_ms: 58.3211
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# SovitsTTS IPC handlers initialisés.
+# Subtest: turning reading off in the menu silences the pet and is remembered per agent
+ok 143 - turning reading off in the menu silences the pet and is remembered per agent
+  ---
+  duration_ms: 158.9228
+  type: 'test'
+  ...
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+P
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+M
+# [DeskPet] global shortcut unavailable: CommandOrControl+Alt+Shift+T
+# Subtest: a reply given up while its voice settings are still loading does not stay claimed
+ok 144 - a reply given up while its voice settings are still loading does not stay claimed
+  ---
+  duration_ms: 36.0426
+  type: 'test'
+  ...
+# (node:19684) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/CHENXI/Documents/Codex/2026-10-08/wo/work/nova-continuation/DeskPetmodules/voice.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to C:\\Users\\CHENXI\\Documents\\Codex\\2026-10-08\\wo\\work\\nova-continuation\\package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: loudness mapping and lip sync: silence closes the mouth, speech opens it quickly
+ok 145 - loudness mapping and lip sync: silence closes the mouth, speech opens it quickly
+  ---
+  duration_ms: 2.6806
+  type: 'test'
+  ...
+# Subtest: a spoken reply: bubble and face follow the sentence being read, then everything is shown
+ok 146 - a spoken reply: bubble and face follow the sentence being read, then everything is shown
+  ---
+  duration_ms: 1601.6732
+  type: 'test'
+  ...
+# Subtest: tapping (stop) silences the pet at once and shows the whole reply
+ok 147 - tapping (stop) silences the pet at once and shows the whole reply
+  ---
+  duration_ms: 111.6064
+  type: 'test'
+  ...
+# Subtest: no voice configured (or muted): nothing is sent and the bubble shows text as it streams
+ok 148 - no voice configured (or muted): nothing is sent and the bubble shows text as it streams
+  ---
+  duration_ms: 12.8945
+  type: 'test'
+  ...
+# Subtest: stale audio from an older session is ignored; a new reply interrupts the old one
+ok 149 - stale audio from an older session is ignored; a new reply interrupts the old one
+  ---
+  duration_ms: 153.3039
+  type: 'test'
+  ...
+# (node:19684) ExperimentalWarning: The MockTimers API is an experimental feature and might change at any time
+# Subtest: do-not-disturb (silent) replies are not read, but still stop the one being read
+ok 150 - do-not-disturb (silent) replies are not read, but still stop the one being read
+  ---
+  duration_ms: 76.6384
+  type: 'test'
+  ...
+# Subtest: when the first audio is slow, the bubble stops waiting on it and shows the text
+ok 151 - when the first audio is slow, the bubble stops waiting on it and shows the text
+  ---
+  duration_ms: 170.3198
+  type: 'test'
+  ...
+# Subtest: sentences the read-only-matching regex drops are not sent, so the bubble does not wait for them
+ok 152 - sentences the read-only-matching regex drops are not sent, so the bubble does not wait for them
+  ---
+  duration_ms: 1227.0724
+  type: 'test'
+  ...
+1..152
+# tests 152
+# suites 0
+# pass 152
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8182.5074

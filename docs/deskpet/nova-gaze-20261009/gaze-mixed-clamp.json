@@ -1,0 +1,260 @@
+[
+  {
+    "outfit": "tech",
+    "grid_pose_count": 49,
+    "clamp_comparison_count": 24,
+    "maximum_vertex_delta": 0.0,
+    "comparisons": [
+      {
+        "pose": "grid-1_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.65",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.35",
+        "reference_pose": "grid-0.65_-0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0",
+        "reference_pose": "grid-0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.35",
+        "reference_pose": "grid-0.65_0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.65",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.35_-1",
+        "reference_pose": "grid-0.35_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.35_1",
+        "reference_pose": "grid-0.35_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_-1",
+        "reference_pose": "grid0_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_1",
+        "reference_pose": "grid0_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_-1",
+        "reference_pose": "grid0.35_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_1",
+        "reference_pose": "grid0.35_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.65_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.65_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.65",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.35",
+        "reference_pose": "grid0.65_-0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0",
+        "reference_pose": "grid0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.35",
+        "reference_pose": "grid0.65_0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.65",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      }
+    ],
+    "passed": true
+  },
+  {
+    "outfit": "maid",
+    "grid_pose_count": 49,
+    "clamp_comparison_count": 24,
+    "maximum_vertex_delta": 0.0,
+    "comparisons": [
+      {
+        "pose": "grid-1_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.65",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.35",
+        "reference_pose": "grid-0.65_-0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0",
+        "reference_pose": "grid-0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.35",
+        "reference_pose": "grid-0.65_0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.65",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.35_-1",
+        "reference_pose": "grid-0.35_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.35_1",
+        "reference_pose": "grid-0.35_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_-1",
+        "reference_pose": "grid0_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_1",
+        "reference_pose": "grid0_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_-1",
+        "reference_pose": "grid0.35_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_1",
+        "reference_pose": "grid0.35_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.65_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.65_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.65",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.35",
+        "reference_pose": "grid0.65_-0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0",
+        "reference_pose": "grid0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.35",
+        "reference_pose": "grid0.65_0.35",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.65",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      }
+    ],
+    "passed": true
+  }
+]
