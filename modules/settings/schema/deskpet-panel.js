@@ -190,7 +190,7 @@ export function buildDeskPetPanel(doc) {
     const spacer = el(doc, 'span', 'dps-spacer');
     const refreshBtn = button(doc, 'dps-icon-btn', undefined, { title: '重新扫描形象、重画预览', 'aria-label': '刷新' });
     refreshBtn.append(icon(doc, 'refresh'));
-    const importBtn = button(doc, 'dps-btn', '导入形象', { title: '选 Live2D 模型（.model3.json 或压缩包 .zip）、网格立绘（.puppet.json），或者一张/几张立绘图片' });
+    const importBtn = button(doc, 'dps-btn', '导入形象', { title: '选 Live2D 模型（.model3.json 或压缩包 .zip）、网格立绘（.puppet.json），或者一张/几张立绘图片；也可以直接拖到下面的形象列表上' });
     head.append(headTitle, agentSelect, spacer, refreshBtn, importBtn);
     const grid = el(doc, 'div', 'dps-grid');
     grid.setAttribute('role', 'radiogroup');
@@ -752,17 +752,48 @@ export function buildDeskPetPanel(doc) {
         refreshBtn.classList.add('is-spinning');
         try { await loadCatalog(state.agentId, { refresh: true }); } finally { setTimeout(() => refreshBtn.classList.remove('is-spinning'), 500); }
     });
-    importBtn.addEventListener('click', async () => {
-        if (!state.agentId) return;
+    async function runImport(files) {
+        if (!state.agentId || importBtn.disabled) return;
         importBtn.disabled = true;
         try {
-            const result = await api.importDeskPetOutfit(state.agentId);
+            const result = await api.importDeskPetOutfit(state.agentId, files);
             if (result?.catalog) applyCatalog(result.catalog);
             if (result?.success) note(`导入好了，${state.catalog?.name || 'TA'} 已经换上「${result.outfitId}」`);
             else if (!result?.canceled && result?.error) note(result.error, { error: true, ms: 6000 });
         } finally {
             importBtn.disabled = false;
         }
+    }
+    importBtn.addEventListener('click', () => runImport());
+    // 把模型文件夹、.zip、.model3.json 或图片直接拖到形象列表上导入
+    const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes('Files');
+    let dragDepth = 0;
+    grid.addEventListener('dragenter', (event) => {
+        if (!hasFiles(event) || !state.agentId) return;
+        event.preventDefault();
+        dragDepth += 1;
+        grid.classList.add('is-drop');
+    });
+    grid.addEventListener('dragover', (event) => {
+        if (!hasFiles(event) || !state.agentId) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+    });
+    grid.addEventListener('dragleave', () => {
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (!dragDepth) grid.classList.remove('is-drop');
+    });
+    grid.addEventListener('drop', (event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth = 0;
+        grid.classList.remove('is-drop');
+        const files = Array.from(event.dataTransfer.files || []).map((file) => {
+            try { return api.getPathForFile?.(file) || ''; } catch { return ''; }
+        }).filter(Boolean);
+        if (!files.length) note('只能导入本机上的文件', { error: true });
+        else runImport(files);
     });
 
     // ---- Live2D 支持（Cubism Core）----

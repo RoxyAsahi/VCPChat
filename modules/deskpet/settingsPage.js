@@ -172,8 +172,21 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
         return { success: true };
     }
 
-    async function importOutfit(agentId) {
+    // 拖到设置页上的文件：只收本机上存在的绝对路径；拖进来一个文件夹就当模型文件夹
+    async function droppedPlan(files) {
+        const list = files.filter((file) => typeof file === 'string' && path.isAbsolute(file)).slice(0, IMPORT_MAX_FILES);
+        const existing = [];
+        for (const file of list) {
+            const stat = await fs.stat(file).catch(() => null);
+            if (stat?.isDirectory() && list.length === 1) return { kind: 'folder', source: file, name: path.basename(file) };
+            if (stat?.isFile()) existing.push(file);
+        }
+        return planImport(existing);
+    }
+
+    async function importOutfit(agentId, dropped = null) {
         if (!pets.isAgentId(agentId)) return { success: false, error: '找不到这个助手' };
+        if (Array.isArray(dropped)) return copyOutfit(agentId, await droppedPlan(dropped));
         const picked = await dialog.showOpenDialog(pets.mainWindow() || undefined, {
             title: '导入形象：选 Live2D 模型（.model3.json 或整个 .zip 压缩包）、网格立绘（.puppet.json），或者一张/几张立绘图片',
             properties: ['openFile', 'multiSelections'],
@@ -183,8 +196,11 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             ],
         });
         if (picked.canceled || !picked.filePaths?.length) return { success: false, canceled: true };
-        const plan = planImport(picked.filePaths);
-        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json、.zip 或图片' };
+        return copyOutfit(agentId, planImport(picked.filePaths));
+    }
+
+    async function copyOutfit(agentId, plan) {
+        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json、.zip、图片，或者模型所在的文件夹' };
         const base = path.join(agentRoot(agentId), 'deskpet');
         if (plan.kind === 'folder') {
             // 模型放在「下载」这种大文件夹里时，别把整个文件夹拷过去
@@ -311,8 +327,8 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             await pets.setVisible(visible === true, idOrNull(agentId));
             return catalog(idOrNull(agentId));
         }));
-        ipcMain.handle('deskpet-settings:import', guard(async (agentId) => {
-            let result = await importOutfit(String(agentId || ''));
+        ipcMain.handle('deskpet-settings:import', guard(async (agentId, files) => {
+            let result = await importOutfit(String(agentId || ''), Array.isArray(files) ? files : null);
             if (result.success) {
                 const chosen = await choose(String(agentId), result.outfitId);
                 // 拷进来了但没换上（比如形象太多没列出来）：别说「已经换上」
