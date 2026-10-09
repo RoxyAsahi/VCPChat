@@ -91,7 +91,7 @@ test('outfit ids stored in state.json stay plain folder names', () => {
 // ---- 全身显示：窗口跟着形象的长宽比 ----
 
 test('tall full-body figures get a taller, narrower window, chibi ones a shorter one, unknown stays as before', () => {
-    assert.deepEqual(prefs.windowSizeForScale(1), { width: 360, height: 580 });
+    assert.deepEqual(prefs.windowSizeForScale(1), { width: 280, height: 408 });
     assert.deepEqual(prefs.windowSizeForScale(1, null), prefs.windowSizeForScale(1));
     const full = prefs.windowSizeForScale(1, 2.8);
     const chibi = prefs.windowSizeForScale(1, 1.3);

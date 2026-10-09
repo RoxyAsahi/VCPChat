@@ -1,0 +1,14 @@
+[
+  {
+    "outfit": "tech",
+    "moc3_sha256": "dd363aba1554d81c8af4b29eb40b951f7af905c332258f6bcfc85fc5e7e26264",
+    "replay_moc3_sha256": "dd363aba1554d81c8af4b29eb40b951f7af905c332258f6bcfc85fc5e7e26264",
+    "equal": true
+  },
+  {
+    "outfit": "maid",
+    "moc3_sha256": "4845e2e2c8c326682952cc2dde10d179ffe586718c9427c8908d7b61a08fd957",
+    "replay_moc3_sha256": "4845e2e2c8c326682952cc2dde10d179ffe586718c9427c8908d7b61a08fd957",
+    "equal": true
+  }
+]

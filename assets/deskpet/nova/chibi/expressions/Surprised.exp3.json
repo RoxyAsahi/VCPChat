@@ -4,8 +4,8 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
-      "Id": "ParamMouthOpenY",
-      "Value": 0.6,
+      "Id": "ParamExpSurprised",
+      "Value": 1,
       "Blend": "Overwrite"
     },
     {
@@ -16,6 +16,11 @@
     {
       "Id": "ParamBrowRY",
       "Value": 0.7,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamExpNeutralHide",
+      "Value": 1,
       "Blend": "Overwrite"
     }
   ]

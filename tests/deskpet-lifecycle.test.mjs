@@ -168,7 +168,7 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     await sleep(500);
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
-    assert.deepEqual([b.width, b.height], [360, 580], '尺寸恢复成桌宠窗口的固定大小');
+    assert.deepEqual([b.width, b.height], [280, 408], '尺寸恢复成桌宠窗口的固定大小');
     handlers.closeAll();
 });
 
@@ -281,13 +281,13 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     dropAt(-25, bottom - 10, { figure, free: true });
     await sleep(200);
     assert.deepEqual(pet.getPosition(), [-25, bottom - 10]);
-    // 离边很远，或者故意拖出去一大截：不动
+    // 离边很远：不动；出去了但不到四成（离边超过吸附距离）：也不动
     dropAt(500, 300, { figure });
     await sleep(200);
     assert.deepEqual(pet.getPosition(), [500, 300]);
-    dropAt(-140, 300, { figure });
+    dropAt(-100, 300, { figure });
     await sleep(200);
-    assert.deepEqual(pet.getPosition(), [-140, 300]);
+    assert.deepEqual(pet.getPosition(), [-100, 300]);
     // 页面没报包围盒（老页面、后端没起来）：照旧放下
     dropAt(-25, 300);
     await sleep(200);
@@ -335,4 +335,112 @@ test('a pending tool approval reaches the pet of the agent that asked, and only 
     coco.close();
     assert.equal(handlers._pendingApprovals().has('r3'), false);
     handlers.closeAll();
+});
+
+test('the stop button on the pet asks the main window to interrupt that reply', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const pet = await open('Coco');
+    const requests = () => main.sent.filter((m) => m.channel === 'deskpet:interrupt-request').map((m) => m.payload);
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), 'msg_1');
+    assert.deepEqual(requests(), [{ agentId: 'Coco', messageId: 'msg_1' }]);
+    // 不是桌宠发来的、没有消息 id 的：不理
+    fake.listeners.get('deskpet:interrupt')({ sender: main.webContents }, 'msg_2');
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), '');
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), { id: 'x' });
+    assert.equal(requests().length, 1);
+    handlers.closeAll();
+});
+
+test('files sent from the pet reach the main window cleaned up', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const pet = await open('Coco');
+    const send = fake.handlers.get('deskpet:send');
+    const pending = send(fromPet(pet), '', [
+        { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
+        { path: 'relative/b.txt', name: 'b.txt' },
+        { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
+        { data: new Uint8Array(0), name: 'empty.png' },
+    ]);
+    const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
+    assert.equal(request.text, '');
+    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
+    fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
+    assert.deepEqual(await pending, { success: true });
+    // 没字也没文件：不往主窗口发
+    assert.equal((await send(fromPet(pet), ' ', [{ path: 'x' }])).success, false);
+    handlers.closeAll();
+});
+
+test('dragged well past a screen edge the pet tucks in, peeks out when wanted and tucks back', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const dropAt = (x, y, report) => {
+        const [wx, wy] = pet.getPosition();
+        fake.screen.cursor = { x: wx, y: wy };
+        fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: wx, y: wy });
+        fake.screen.cursor = { x, y };
+        fake.listeners.get('deskpet:drag-end')(fromPet(pet), report);
+    };
+    // 角色有一半在左边外面：收进去，只露 60（三成）
+    dropAt(-140, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-40 - 140, 300]);
+    const wantOut = (want) => fake.listeners.get('deskpet:want-out')(fromPet(pet), want);
+    wantOut(true);
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-40, 300], '探出来：角色贴着左边');
+    wantOut(false);
+    await sleep(300);
+    assert.deepEqual(pet.getPosition(), [-40, 300], '人刚走开先不缩');
+    await sleep(1200);
+    assert.deepEqual(pet.getPosition(), [-180, 300], '过一会儿缩回去');
+    // 右边也一样；按着 Alt 松手不藏
+    dropAt(1600 - 40 - 100, 300, { figure, free: true });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [1460, 300]);
+    wantOut(true);
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [1460, 300], '没藏就不动');
+    dropAt(1600 - 40 - 100, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [1600 - 60 - 40, 300]);
+    handlers.closeAll();
+});
+
+test('a pet flung on release slides on and lands on the taskbar; a slow drop stays put', async (t) => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const floorY = 1000 - figure.y - figure.height;
+    const drag = async (path, report) => {
+        const [wx, wy] = pet.getPosition();
+        fake.screen.cursor = { x: wx, y: wy };
+        fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: wx, y: wy });
+        for (const [dx, dy] of path) {
+            fake.screen.cursor = { x: wx + dx, y: wy + dy };
+            await sleep(20);
+        }
+        fake.listeners.get('deskpet:drag-end')(fromPet(pet), report);
+    };
+    // 默认位置已经贴着任务栏了：先放到半空，再慢慢挪过去放下：原地不动
+    pet.setPosition(pet.getPosition()[0], 300);
+    await drag([[10, 0], [20, 0], [30, 0]], { figure });
+    await sleep(100);
+    const [sx, sy] = pet.getPosition();
+    assert.ok(sy < floorY - 50, '放在半空也不掉');
+    // 往左上快速一甩（默认位置在屏幕右边，往左才有地方滑）
+    await drag([[0, 0], [-40, -10], [-80, -20], [-120, -30]], { figure });
+    await sleep(1500);
+    const [tx, ty] = pet.getPosition();
+    assert.equal(ty, floorY, '落在任务栏上');
+    assert.ok(tx < sx - 150, '带着速度往左滑了一段');
+    assert.ok(pet.sent.some((m) => m.channel === 'deskpet:landed'));
+    // 按着 Alt 甩：不甩
+    await drag([[0, 0], [-40, -40], [-80, -80], [-120, -120]], { figure, free: true });
+    await sleep(300);
+    assert.notEqual(pet.getPosition()[1], floorY);
 });

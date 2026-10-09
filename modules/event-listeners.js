@@ -1420,11 +1420,12 @@ export function setupEventListeners(deps) {
             selectItem: item => chatManager.selectItem(item.id, item.type || 'agent', item.name, item.avatarUrl, item.config || item),
             sendMessage: request => chatManager.handleSendMessage(request),
             isBusy: () => sendMessageBtn.dataset.mode === 'interrupt',
+            storeFiles: (agentId, topicId, files) => chatAPI.handleFileDrop(agentId, topicId, files),
         });
-        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, deadline } = {}) => {
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, files, deadline } = {}) => {
             let result;
             try {
-                result = await sendFromPet({ agentId, text, deadline });
+                result = await sendFromPet({ agentId, text, files, deadline });
             } catch (error) {
                 result = { success: false, error: error.message };
             }
@@ -1445,6 +1446,22 @@ export function setupEventListeners(deps) {
         // 桌宠上点了工具审批的允许/拒绝：按主窗口通知卡的流程应答
         chatAPI.onDeskPetApprovalAnswer?.(({ requestId, approved } = {}) => {
             window.notificationRenderer?.answerToolApproval?.(requestId, approved);
+        });
+        // 桌宠上点了停止：那条回复正显示在聊天里就按停止键走（界面状态一起收好）；
+        // 已经切到别的话题了就直接让主进程中止那条请求
+        chatAPI.onDeskPetInterrupt?.(async ({ messageId } = {}) => {
+            if (typeof messageId !== 'string' || !messageId) return;
+            const shown = [...document.querySelectorAll('#chatMessages .message-item.streaming')]
+                .some(item => item.dataset.messageId === messageId);
+            if (shown && sendMessageBtn.dataset.mode === 'interrupt') {
+                sendMessageBtn.click();
+                return;
+            }
+            try {
+                await chatAPI.interruptVcpRequest?.({ messageId });
+            } catch (error) {
+                console.warn('[DeskPet] interrupt failed:', error);
+            }
         });
         // 托盘、桌宠右键里的「桌宠设置…」：打开全局设置，切到桌宠分区（导航是异步搭起来的，等它出现）
         chatAPI.onDeskPetSettingsOpen?.(() => {

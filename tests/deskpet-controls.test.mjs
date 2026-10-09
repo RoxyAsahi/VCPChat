@@ -13,7 +13,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ---- 尺寸和设置（纯函数） ----
 
 test('pet window sizes stay on a 4px grid so fractional display scaling does not round them up', () => {
-    assert.deepEqual(prefs.windowSizeForScale(1), { width: 360, height: 580 });
+    assert.deepEqual(prefs.windowSizeForScale(1), { width: 280, height: 408 });
     for (let scale = prefs.SCALE_MIN; scale <= prefs.SCALE_MAX + 1e-9; scale += 0.05) {
         const { width, height } = prefs.windowSizeForScale(scale);
         assert.equal(width % 4, 0, `width at ${scale}`);
@@ -26,6 +26,18 @@ test('pet window sizes stay on a 4px grid so fractional display scaling does not
     assert.equal(prefs.clampScale('nope'), 1);
 });
 
+test('the default size is smaller now; a size someone picked before looks the same as it did', () => {
+    // 第一版的 1 倍（360×580 的窗口）太大，现在的 1 倍是它的六成
+    assert.ok(prefs.characterBox().height < 300);
+    assert.equal(prefs.savedScale(null), 1, '没记过：新的默认');
+    assert.equal(prefs.savedScale({ x: 1, y: 2 }), 1);
+    assert.equal(prefs.savedScale({ scale: 1 }), 1, '旧版没调过（1 倍）：也用新的默认');
+    assert.equal(prefs.savedScale({ scale: 1.5 }), 2.5, '旧版调到 1.5 倍：换算成同样的实际大小');
+    assert.equal(prefs.savedScale({ scale: 0.6 }), 1);
+    assert.equal(prefs.savedScale({ scale: 2 }), prefs.SCALE_MAX, '换算后超出上限就到上限');
+    assert.equal(prefs.savedScale({ scale: 1.5, sizeVersion: prefs.SIZE_VERSION }), 1.5, '新版记的原样用');
+});
+
 test('resizing keeps the character standing on the same spot and inside the work area', () => {
     const area = { x: 0, y: 0, width: 1920, height: 1040 };
     const before = { x: 1000, y: 400, width: 360, height: 580 };
@@ -34,7 +46,7 @@ test('resizing keeps the character standing on the same spot and inside the work
     assert.equal(after.y + after.height, before.y + before.height, '脚底高度不动');
     const corner = prefs.resizeAnchored({ x: 1700, y: 600, width: 360, height: 580 }, prefs.windowSizeForScale(1.5), area);
     assert.ok(corner.x + corner.width <= area.width && corner.y + corner.height <= area.height, '放大以后挪回屏幕里');
-    assert.ok(prefs.maxScaleForWorkArea({ height: 600 }) < 1.2, '矮屏放不下的大小要缩');
+    assert.ok(prefs.maxScaleForWorkArea({ height: 400 }) < 1.2, '矮屏放不下的大小要缩');
 });
 
 test('shortcuts need real modifiers and never take what VCPChat already uses', () => {
@@ -56,7 +68,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -71,6 +83,17 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.shortcuts.talk, '', '留空表示不用');
     assert.deepEqual(odd.openAgents, ['Nova', 'Coco']);
     assert.equal(odd.lastAgent, null);
+});
+
+test('pet opacity stays between 30% and fully opaque', () => {
+    assert.equal(prefs.normalizeOpacity(undefined), 1);
+    assert.equal(prefs.normalizeOpacity('abc'), 1);
+    assert.equal(prefs.normalizeOpacity(null), 1);
+    assert.equal(prefs.normalizeOpacity(0.6), 0.6);
+    assert.equal(prefs.normalizeOpacity(0.62), 0.6);
+    assert.equal(prefs.normalizeOpacity(0), 0.3, '不能淡到看不见');
+    assert.equal(prefs.normalizeOpacity(5), 1);
+    assert.equal(prefs.normalizeSettings({ opacity: 0.4 }).opacity, 0.4);
 });
 
 // ---- 主进程：大小、免打扰、快捷键、恢复 ----
@@ -212,7 +235,8 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     assert.deepEqual(pet.getBounds(), before);
     wheel(env.fromPet(pet), -60);
     const grown = pet.getBounds();
-    assert.ok(grown.width > before.width && grown.height > before.height, '往上滚放大');
+    // 默认大小下窗口已经是最窄（放得下气泡），放大先长高
+    assert.ok(grown.width >= before.width && grown.height > before.height, '往上滚放大');
     assert.deepEqual(bottomCenter(grown), bottomCenter(before), '脚底不动');
     assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.scale, 1.1);
     await sleep(30);
@@ -226,7 +250,7 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     assert.equal(prefsReply.scale, 1.1);
     // 另一个助手不受影响
     const coco = await again.open('Coco');
-    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [360, 580]);
+    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [280, 408]);
     again.handlers.closeAll();
 });
 
@@ -235,7 +259,8 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     const nova = await env.open('Nova');
     const coco = await env.open('Coco');
     let trayRebuilds = 0;
-    env.handlers.setTrayRefresher(() => { trayRebuilds += 1; });
+    const structure = [];
+    env.handlers.setTrayRefresher((structureChanged) => { trayRebuilds += 1; structure.push(structureChanged); });
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     assert.equal(trayRebuilds, 1, '菜单内容没变就不重建（换下来的旧菜单 Electron 不释放）');
@@ -244,9 +269,49 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     toggle.click({ checked: true });
     for (const pet of [nova, coco]) assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.doNotDisturb, true);
     assert.equal(trayRebuilds, 2);
+    assert.deepEqual(structure, [true, false], '只是勾选变了：改现有菜单，不建新的');
     assert.equal(env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰').checked, true);
     await sleep(300);
     assert.equal(env.readJson(env.settingsFile).doNotDisturb, true, '免打扰写进设置，重启后还在');
+    env.handlers.closeAll();
+});
+
+test('tray state is written into the menu already shown instead of a new one', async () => {
+    const env = await loadHandlers();
+    await env.open('Nova');
+    // 假菜单：按 id 找项，跟 Electron 的 Menu.getMenuItemById 一样
+    const fakeMenu = (items) => {
+        const byId = new Map();
+        const walk = (list) => { for (const item of list) { if (item.id) byId.set(item.id, { ...item }); if (Array.isArray(item.submenu)) walk(item.submenu); } };
+        walk(items);
+        return { getMenuItemById: (id) => byId.get(id) || null };
+    };
+    const menu = fakeMenu(env.handlers.trayMenuItems());
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, true);
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, false);
+    env.handlers.closeAll();
+    await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, false, '桌宠都关了：显示「显示桌宠」');
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, true);
+    env.handlers.trayMenuItems()[0].submenu.find((item) => item.id === 'deskpet-click-through').click({ checked: true });
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-click-through').checked, true);
+    // 菜单里没有这几项（比如还没建过）：要重建
+    assert.equal(env.handlers.applyTrayState({ getMenuItemById: () => null }), false);
+});
+
+test('opacity from the settings page reaches every pet and is saved', async () => {
+    const env = await loadHandlers();
+    const nova = await env.open('Nova');
+    const update = env.fake.handlers.get('deskpet-settings:update');
+    const snap = await update(fromMain(env), { opacity: 0.6 });
+    assert.equal(snap.settings?.opacity ?? snap.opacity, 0.6);
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6);
+    await update(fromMain(env), { opacity: 'x' });
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6, '不是数字的不理');
+    await sleep(300);
+    assert.equal(env.readJson(env.settingsFile).opacity, 0.6);
     env.handlers.closeAll();
 });
 
@@ -268,6 +333,12 @@ test('global shortcuts hide and bring back the pets and open the input box', asy
     await sleep(5);
     assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { toggle: true }, '最近碰过的那个弹输入框');
     assert.equal(coco.sent.some((m) => m.channel === 'deskpet:open-input'), false);
+    // 语音键：同一个桌宠开始录音（再按一下由页面停下发出去）
+    const voiceKey = prefs.DEFAULT_SETTINGS.shortcuts.voice;
+    assert.ok(env.fake.shortcuts.has(voiceKey));
+    await env.fake.shortcuts.get(voiceKey)();
+    await sleep(5);
+    assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { voice: true });
     env.handlers.closeAll();
     assert.equal(env.fake.shortcuts.size, 0, '退出时只注销自己的快捷键');
 });
@@ -309,8 +380,8 @@ test('a smaller display shrinks a pet that no longer fits', async () => {
     const pet = await env.open('Nova');
     env.handlers._controls(); // 已初始化
     await env.fake.handlers.get('deskpet-settings:set-scale')?.({ sender: null }, 'Nova', 2); // 不是设置窗口发的：不理
-    assert.equal(pet.getBounds().width, 360);
-    for (let i = 0; i < 6; i += 1) env.fake.listeners.get('deskpet:wheel-resize')(env.fromPet(pet), -100);
+    assert.equal(pet.getBounds().width, 280);
+    for (let i = 0; i < 16; i += 1) env.fake.listeners.get('deskpet:wheel-resize')(env.fromPet(pet), -100);
     assert.ok(pet.getBounds().height > 800);
     env.fake.screen.displays = [{ workArea: { x: 0, y: 0, width: 1280, height: 680 } }];
     env.fake.screen.emit('display-metrics-changed');

@@ -4,6 +4,11 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
+      "Id": "ParamExpHappy",
+      "Value": 1,
+      "Blend": "Overwrite"
+    },
+    {
       "Id": "ParamMouthForm",
       "Value": 0.8,
       "Blend": "Overwrite"
@@ -21,6 +26,11 @@
     {
       "Id": "ParamBrowRY",
       "Value": 0.2,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamExpNeutralHide",
+      "Value": 1,
       "Blend": "Overwrite"
     }
   ]

@@ -972,7 +972,7 @@ function createTray() {
         await toggleRagObserverVisibility();
     };
 
-    // 桌宠那一项会随桌宠开关、免打扰变化，每次变了就重建菜单
+    // 桌宠那一项会随桌宠开关、免打扰变化（见下面的 setTrayRefresher）
     const buildContextMenu = () => Menu.buildFromTemplate([
         {
             label: '显示/隐藏主窗口',
@@ -1019,9 +1019,14 @@ function createTray() {
         // 注意：在 macOS 上，不调用 tray.setContextMenu()，以确保左键点击不弹出菜单。
     } else {
         // Windows/Linux: 默认行为。
-        tray.setContextMenu(buildContextMenu());
-        deskPetHandlers.setTrayRefresher(() => {
-            if (tray && !tray.isDestroyed()) tray.setContextMenu(buildContextMenu());
+        let trayMenu = buildContextMenu();
+        tray.setContextMenu(trayMenu);
+        // 换下来的旧菜单 Electron 不释放：只是桌宠那几项的勾选、显示变了就改现有菜单再设回去（Linux 要重设才刷新），
+        // 文字或快捷键变了才建新的
+        deskPetHandlers.setTrayRefresher((structureChanged) => {
+            if (!tray || tray.isDestroyed()) return;
+            if (structureChanged || !deskPetHandlers.applyTrayState(trayMenu)) trayMenu = buildContextMenu();
+            tray.setContextMenu(trayMenu);
         });
         tray.on('click', () => {
             void handleTrayPrimaryAction();

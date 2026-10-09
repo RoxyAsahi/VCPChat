@@ -21,6 +21,8 @@ import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
 import { createApprovalQueue } from 'vcp-deskpet://pet/app/approvals.js';
+import { isMissed } from 'vcp-deskpet://pet/app/missedReply.js';
+import { addFiles, describeFiles, pastedName, MAX_FILES, MAX_PASTE_BYTES } from 'vcp-deskpet://pet/app/attachments.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
@@ -102,6 +104,9 @@ const bubble = {
     proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
     tags: [],           // 回复里的情绪标记 { at, emotion, intensity }，at 是它在 reply 里的位置（朗读时按句换表情）
     hovered: false,
+    startedAt: 0,       // 这条回复（主动说的话）开始的时候
+    endedAt: 0,         // 说完的时候
+    heardAt: 0,         // 最近一次真的念出声的时候：念出来过就算听到了
     hideTimer: 0,
     noticeTimer: 0,
     renderQueued: false,
@@ -125,7 +130,7 @@ const speech = createSpeech({
     onLevel: (open) => {
         document.body.style.setProperty('--voice', open.toFixed(3));
         backend?.setMouth?.(open);
-        if (open) lastActivity = Date.now();
+        if (open) lastActivity = bubble.heardAt = Date.now();
     },
     onError: (error) => console.warn('[DeskPet] 播放朗读音频失败：', error?.message || error),
 });
@@ -185,6 +190,8 @@ function renderBubble() {
         ? [mode === 'is-reply' ? replyStateLabel() || proactiveLabel() : '', queued].filter(Boolean).join(' · ')
         : '';
     el.classList.toggle('is-alarm', mode === 'is-reply' && bubble.proactive?.kind === 'alarm');
+    // 还在回（或还在念）：右上角能叫停
+    $('bubbleStop').hidden = !((mode === 'is-reply' || mode === 'is-state') && (bubble.replyId || speech.active()));
     if (content) aimBubble(aimedHeadX);
 }
 
@@ -205,10 +212,50 @@ function scheduleReplyHide(ms) {
     bubble.hideTimer = setTimeout(() => {
         // 还在念就等念完（念完时会重新计时）
         if (bubble.replyId || bubble.hovered || speech.active()) return;
+        keepIfMissed();
         bubble.reply = '';
         bubble.proactive = null;
         renderBubble();
     }, ms);
+}
+
+// ---- 没看到的回复 -------------------------------------------------------------------
+// 气泡到点就收起；收起时桌宠藏着、或者人一直没碰键盘鼠标（走开了），这段话就留着，
+// 头边一个 💬，点一下把它再摆出来。来了新回复就换成新的。
+
+const missed = { reply: '', proactive: null };
+
+function keepIfMissed() {
+    const muted = isQuiet() && !bubble.own;
+    if (!bubble.reply.trim() || muted || bubble.notice) return;
+    const saved = { reply: bubble.reply, proactive: bubble.proactive };
+    const times = { startedAt: bubble.startedAt, endedAt: bubble.endedAt, heardAt: bubble.heardAt };
+    const hidden = document.body.classList.contains('is-paused');
+    if (!hidden && times.heardAt > times.startedAt) return;
+    const idle = hidden ? Promise.resolve(0) : Promise.resolve(api.idleSeconds?.()).then((s) => Number(s) * 1000, () => 0);
+    idle.then((idleMs) => {
+        if (!isMissed({ hidden, idleMs, now: Date.now(), ...times })) return;
+        if (bubble.replyId || bubble.reply) return; // 已经在说新的了
+        Object.assign(missed, saved);
+        $('missedBadge').hidden = false;
+    });
+}
+
+function clearMissed() {
+    missed.reply = '';
+    missed.proactive = null;
+    $('missedBadge').hidden = true;
+}
+
+function replayMissed() {
+    if (!missed.reply || bubble.replyId) return;
+    bubble.reply = missed.reply;
+    bubble.proactive = missed.proactive;
+    bubble.tags = [];
+    bubble.endedAt = Date.now();
+    clearMissed();
+    renderBubble();
+    scheduleReplyHide(replyHoldMs());
 }
 
 function proactiveLabel() {
@@ -238,6 +285,8 @@ function speakProactive(payload) {
     bubble.proactive = { kind, title: payload.title || '', topicId: payload.topicId || '' };
     bubble.own = kind === 'alarm';
     bubble.reply = payload.text || payload.title;
+    bubble.startedAt = bubble.endedAt = Date.now();
+    clearMissed();
     lastActivity = Date.now();
     life?.wake({ startle: true });
     proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
@@ -275,10 +324,10 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0 };
+const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
-const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null };
+const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
 
 function setDock(mode) {
     if (dock.mode === mode) return;
@@ -336,15 +385,18 @@ function fitComposerInput() {
     const height = Math.min(96, Math.max(36, input.scrollHeight));
     input.style.height = `${height}px`;
     $('dock').style.setProperty('--dock-bar-h', `${height + 12}px`);
-    $('composerSend').classList.toggle('is-empty', !input.value.trim());
+    $('composerSend').classList.toggle('is-empty', !input.value.trim() && !composer.files.length);
 }
 
 // ---- 说话：本地语音识别成文字，放进输入条，看一眼再发 ----
 
-async function startVoice() {
+async function startVoice({ autoSend = false } = {}) {
     const voice = dock.voice;
     if (!voice || voice.active || voice.starting || $('recStop').classList.contains('is-busy')) return;
     const from = dock.mode;
+    // 开口就是插话：TA 正在念的先停下，也免得麦克风把 TA 的声音录进去
+    speech.stop();
+    dock.autoSend = autoSend;
     setDock('rec');
     try {
         await voice.start();
@@ -377,10 +429,14 @@ async function finishVoice() {
     }
     if (dock.mode !== 'rec') return; // 识别期间点了打字
     const input = $('composerInput');
+    const autoSend = dock.autoSend;
+    dock.autoSend = false;
     if (text) {
         input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
         setDock('bar');
         fitComposerInput();
+        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）
+        if (autoSend) submitComposer();
     } else {
         if (!input.value.trim()) notice('没听到说话', { ms: 3000 });
         setDock(input.value.trim() ? 'bar' : restingDock());
@@ -392,7 +448,7 @@ function shorten(text, max = 16) {
     return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-async function sendText(text) {
+async function sendText(text, files = []) {
     composer.sending = true;
     $('composerSend').disabled = true;
     fitComposerInput();
@@ -400,7 +456,7 @@ async function sendText(text) {
     const previousSentAt = composer.lastSentAt;
     composer.lastSentAt = Date.now();
     try {
-        const result = await api.send(text);
+        const result = await api.send(text, files);
         if (result?.success) return true;
         composer.lastSentAt = previousSentAt;
         notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
@@ -417,7 +473,13 @@ async function sendText(text) {
 async function submitComposer() {
     const input = $('composerInput');
     const text = input.value.trim();
-    if (!text || composer.sending) return;
+    const files = composer.files;
+    if ((!text && !files.length) || composer.sending) return;
+    // 带着文件的等 TA 说完再发（排队的那句只记文字）
+    if (bubble.replyId && files.length) {
+        notice('TA 说完再发带文件的这条', { ms: 3000 });
+        return;
+    }
     // TA 还在说话：先记下来，这条说完再发，不打断也不报错
     if (bubble.replyId) {
         // 连着说了几句就攒在一起，说完一次发出去
@@ -428,11 +490,82 @@ async function submitComposer() {
         renderBubble();
         return;
     }
-    if (await sendText(text)) {
+    if (await sendText(text, files)) {
         input.value = '';
+        setFiles([]);
         fitComposerInput();
         closeComposer();
     }
+}
+
+// ---- 给桌宠文件：拖到桌宠上、往输入框里粘贴图片 ---------------------------------------
+
+function setFiles(list) {
+    composer.files = list;
+    $('attachText').textContent = describeFiles(list);
+    $('attachText').title = list.map((f) => f.name).join('\n');
+    $('attachTray').hidden = !list.length;
+    $('composerSend').classList.toggle('is-empty', !$('composerInput').value.trim() && !list.length);
+}
+
+function takeFiles(files) {
+    const { list, dropped } = addFiles(composer.files, files);
+    setFiles(list);
+    if (dropped) notice(`一次最多带 ${MAX_FILES} 个文件，有 ${dropped} 个没加上`, { ms: 3500 });
+    if (list.length) {
+        openComposer();
+        requestAnimationFrame(() => $('composerInput').focus());
+    }
+}
+
+function bindFileDrop() {
+    const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    let depth = 0;
+    const leave = () => { depth = 0; document.body.classList.remove('is-drop-target'); };
+    // 不拦的话，文件掉进来窗口会直接打开这个文件
+    window.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        depth += 1;
+        document.body.classList.add('is-drop-target');
+    });
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = hasFiles(e) ? 'copy' : 'none';
+    });
+    window.addEventListener('dragleave', () => { if (--depth <= 0) leave(); });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        leave();
+        const files = [...(e.dataTransfer?.files || [])].map((file) => ({
+            path: api.filePath?.(file) || '',
+            name: file.name,
+            type: file.type,
+            size: file.size,
+        })).filter((f) => f.path);
+        if (files.length) takeFiles(files);
+    });
+    $('composerInput').addEventListener('paste', async (e) => {
+        const images = [...(e.clipboardData?.items || [])].filter((item) => item.kind === 'file' && item.type.startsWith('image/'));
+        if (!images.length) return;
+        e.preventDefault();
+        const files = [];
+        for (const item of images) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            if (file.size > MAX_PASTE_BYTES) {
+                notice('图片太大了（超过 20 MB），拖文件进来试试', { error: true, ms: 3500 });
+                continue;
+            }
+            const data = new Uint8Array(await file.arrayBuffer());
+            files.push({ data, name: pastedName(file.type), type: file.type, size: data.length });
+        }
+        if (files.length) takeFiles(files);
+    });
+    $('attachClear').addEventListener('click', (e) => {
+        e.stopPropagation();
+        setFiles([]);
+    });
 }
 
 // 回复结束后把排队的那句发出去；发不出去就放回输入框
@@ -485,6 +618,17 @@ function bindComposer() {
         if (bubble.proactive?.topicId && !bubble.replyId) api.openTopic(bubble.proactive.topicId);
         else api.openMainWindow();
     });
+    // 停止键：回复还在流就让主窗口中止那条请求（和主窗口的停止键一样），在念的也不念了
+    $('bubbleStop').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (bubble.replyId) api.interrupt?.(bubble.replyId);
+        speech.stop();
+        queueRenderBubble();
+    });
+    $('missedBadge').addEventListener('click', (e) => {
+        e.stopPropagation();
+        replayMissed();
+    });
     bubbleEl.addEventListener('mouseenter', () => {
         bubble.hovered = true;
         clearTimeout(bubble.hideTimer);
@@ -494,7 +638,13 @@ function bindComposer() {
         if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
     });
     // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）；设置页预览里打的字直接发出去
-    api.onOpenInput(({ toggle, submit } = {}) => {
+    api.onOpenInput(({ toggle, submit, voice } = {}) => {
+        if (voice) {
+            // 语音快捷键：没在录就开始录，正在录就停下发出去
+            if (dock.mode === 'rec') finishVoice();
+            else startVoice({ autoSend: true });
+            return;
+        }
         if (submit) {
             // 不展开输入条、不抢焦点（人还在主窗口的设置页里），也不动桌宠输入条里已经打的字；
             // TA 正在回或上一句还在发：排到这条说完再发，连着来的几句不会互相顶掉
@@ -1299,8 +1449,10 @@ function createAlphaProbe(app) {
 // ---- 差分立绘 / 头像后端 ---------------------------------------------------
 
 let lastHit = false;
+let lastWantOut = false;
 function reportHit(hit) {
-    // 只看不点：鼠标穿过去，悬停胶囊也不冒
+    // 只看不点：鼠标穿过去，悬停胶囊也不冒；光标压在角色上时角色变得很淡，看得清后面的东西
+    document.body.classList.toggle('is-ghost-hover', Boolean(prefs.clickThrough && hit));
     if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
@@ -1633,6 +1785,8 @@ function bindStream(director) {
         bubble.region = null;
         bubble.proactive = null;
         bubble.tags = [];
+        bubble.startedAt = Date.now();
+        clearMissed();
         scanner = createEmotionTagScanner();
         // 免打扰时主窗口里聊天的回复不念；在桌宠上说的话照常念
         speech.begin(messageId, { silent: isQuiet() && !bubble.own });
@@ -1677,6 +1831,7 @@ function bindStream(director) {
             life?.hold('reply', false);
             bubble.region = null;
             composer.ownReplyEndedAt = bubble.own ? Date.now() : 0;
+            bubble.endedAt = Date.now();
             scheduleReplyHide(replyHoldMs());
             toolCard.end();
             if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));
@@ -1699,6 +1854,7 @@ function applyPrefs(next) {
     prefs = { ...prefs, ...next };
     window.deskPetPrefs = Object.freeze({ ...prefs });
     document.documentElement.style.setProperty('--pet-scale', String(prefs.scale || 1));
+    document.documentElement.style.setProperty('--pet-opacity', String(prefs.opacity ?? 1));
     document.body.classList.toggle('is-dnd', isQuiet());
     $('dndBadge').hidden = !isQuiet();
     if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;
@@ -1840,6 +1996,7 @@ async function start() {
     });
     bindComposer();
     bindApprovals(director);
+    bindFileDrop();
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {
@@ -1913,6 +2070,8 @@ async function start() {
             }
         },
     });
+    // 甩出去落到任务栏上：再演一次落地
+    api.onLanded?.(() => life.perform('landed'));
     // 窗口隐藏时停掉渲染和呼吸动画，显示回来再继续。
     let paused = false;
     api.onVisibility?.((visible) => {
@@ -1968,6 +2127,12 @@ async function start() {
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
+        // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
+        const wantOut = lastHit || Boolean(ui);
+        if (wantOut !== lastWantOut) {
+            lastWantOut = wantOut;
+            api.wantOut?.(wantOut);
+        }
         life.setMood(director.baseline);
         life.tick();
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');

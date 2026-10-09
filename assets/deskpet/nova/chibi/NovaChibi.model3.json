@@ -27,6 +27,62 @@
         {
           "File": "NovaChibi.shake.motion3.json"
         }
+      ],
+      "Wave": [
+        {
+          "File": "NovaChibi.wave.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Salute": [
+        {
+          "File": "NovaChibi.salute.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Heart": [
+        {
+          "File": "NovaChibi.heart.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Tea": [
+        {
+          "File": "NovaChibi.tea.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Typing": [
+        {
+          "File": "NovaChibi.typing.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Shrug": [
+        {
+          "File": "NovaChibi.shrug.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Akimbo": [
+        {
+          "File": "NovaChibi.akimbo.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
+      ],
+      "Cheer": [
+        {
+          "File": "NovaChibi.cheer.motion3.json",
+          "FadeInTime": 0.2,
+          "FadeOutTime": 0.3
+        }
       ]
     },
     "Expressions": [
@@ -57,6 +113,22 @@
       {
         "Name": "Tired",
         "File": "expressions/Tired.exp3.json"
+      },
+      {
+        "Name": "Stars",
+        "File": "expressions/Stars.exp3.json"
+      },
+      {
+        "Name": "Wink",
+        "File": "expressions/Wink.exp3.json"
+      },
+      {
+        "Name": "Smug",
+        "File": "expressions/Smug.exp3.json"
+      },
+      {
+        "Name": "Speechless",
+        "File": "expressions/Speechless.exp3.json"
       }
     ]
   },
