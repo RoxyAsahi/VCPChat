@@ -14,6 +14,7 @@ const outfitStore = require('./outfits');
 const petPrefs = require('./petPrefs');
 const cubismCore = require('./cubismCore');
 const expressionProfile = require('./expressionProfile');
+const zipImport = require('./zipImport');
 
 const KIND_LABEL = { live2d: 'Live2D', puppet: '网格立绘', portrait: '立绘' };
 const IMPORT_MAX_FILES = 400;
@@ -22,6 +23,8 @@ const IMAGE_FILTER = outfitStore.IMAGE_EXTENSIONS;
 
 /** 导入：选中的文件决定拷什么。模型文件拷它所在的文件夹；图片拷这几张图。 */
 function planImport(files) {
+    const zip = files.find((file) => /\.zip$/i.test(file));
+    if (zip) return { kind: 'zip', source: zip, name: path.basename(zip, path.extname(zip)) };
     const model = files.find((file) => /\.(model3|puppet)\.json$/i.test(file));
     if (model) return { kind: 'folder', source: path.dirname(model), name: path.basename(path.dirname(model)) };
     const images = files.filter((file) => IMAGE_FILTER.includes(path.extname(file).slice(1).toLowerCase()));
@@ -78,7 +81,8 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
     /** 没指定助手时打开哪一个：最近碰过的桌宠、开着的、上次开的、有形象的、第一个。 */
     async function defaultAgent(agents) {
         const settings = controls.get();
-        const candidates = [pets.lastTouched(), ...pets.openAgents(), settings.lastAgent, ...settings.openAgents].filter(Boolean);
+        // 最近用过的排在开着的前面：几个桌宠都开着时，打开的是刚刚在用的那个
+        const candidates = [pets.lastTouched(), settings.lastAgent, ...pets.openAgents(), ...settings.openAgents].filter(Boolean);
         const known = new Set(agents.map((a) => a.id));
         const hit = candidates.find((id) => known.has(id));
         if (hit) return hit;
@@ -171,16 +175,16 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
     async function importOutfit(agentId) {
         if (!pets.isAgentId(agentId)) return { success: false, error: '找不到这个助手' };
         const picked = await dialog.showOpenDialog(pets.mainWindow() || undefined, {
-            title: '导入形象：选 Live2D 模型（.model3.json）、网格立绘（.puppet.json），或者一张/几张立绘图片',
+            title: '导入形象：选 Live2D 模型（.model3.json 或整个 .zip 压缩包）、网格立绘（.puppet.json），或者一张/几张立绘图片',
             properties: ['openFile', 'multiSelections'],
             filters: [
-                { name: '形象', extensions: ['json', ...IMAGE_FILTER] },
+                { name: '形象', extensions: ['json', 'zip', ...IMAGE_FILTER] },
                 { name: '所有文件', extensions: ['*'] },
             ],
         });
         if (picked.canceled || !picked.filePaths?.length) return { success: false, canceled: true };
         const plan = planImport(picked.filePaths);
-        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json 或图片' };
+        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json、.zip 或图片' };
         const base = path.join(agentRoot(agentId), 'deskpet');
         if (plan.kind === 'folder') {
             // 模型放在「下载」这种大文件夹里时，别把整个文件夹拷过去
@@ -197,7 +201,14 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
         const target = path.join(base, name);
         try {
             if (plan.kind === 'folder') await fs.copy(plan.source, target);
-            else {
+            else if (plan.kind === 'zip') {
+                if ((await fs.stat(plan.source)).size > IMPORT_MAX_BYTES) return { success: false, error: '压缩包太大了，先解压出模型所在的文件夹再导入' };
+                const unpacked = await zipImport.extractOutfitZip(await fs.readFile(plan.source), target, {
+                    limits: { files: IMPORT_MAX_FILES, bytes: IMPORT_MAX_BYTES },
+                    imageExtensions: IMAGE_FILTER,
+                });
+                if (!unpacked.success) return unpacked;
+            } else {
                 await fs.ensureDir(target);
                 for (const file of plan.files) await fs.copy(file, path.join(target, path.basename(file)));
             }
@@ -270,8 +281,10 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
         const catalogOfModel = await expressionProfile.readModelCatalog(outfit.live2d);
         const profile = expressionProfile.mergeProfile(await expressionProfile.readProfile(outfit.live2d), mapping, catalogOfModel);
         if (save) await expressionProfile.writeProfile(outfit.live2d, profile);
+        // 试一下：情绪名，或 tap:head / tap:body（点头、点身体的绑定）
+        const tap = typeof emotion === 'string' && emotion.startsWith('tap:') && expressionProfile.TAP_KEYS.includes(emotion.slice(4)) ? emotion.slice(4) : null;
         const wanted = expressionProfile.EMOTION_KEYS.includes(emotion) ? emotion : null;
-        const showing = pets.info(agentId)?.outfit === outfitId && pets.pushProfile(agentId, { profile, emotion: wanted });
+        const showing = pets.info(agentId)?.outfit === outfitId && pets.pushProfile(agentId, { profile, emotion: wanted, ...(tap ? { tap } : {}) });
         return { success: true, showing: Boolean(showing), profile };
     }
 

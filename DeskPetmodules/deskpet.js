@@ -12,7 +12,7 @@ import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
-import { createSpeech } from 'vcp-deskpet://pet/app/voice.js';
+import { createSpeech, VOWELS } from 'vcp-deskpet://pet/app/voice.js';
 import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { shapeGaze, limitGaze } from 'vcp-deskpet://pet/app/gaze.js';
@@ -20,11 +20,12 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { createApprovalQueue } from 'vcp-deskpet://pet/app/approvals.js';
 import { isMissed } from 'vcp-deskpet://pet/app/missedReply.js';
 import { addFiles, describeFiles, pastedName, MAX_FILES, MAX_PASTE_BYTES } from 'vcp-deskpet://pet/app/attachments.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
-import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
+import { pickExpression as mapExpression, pickMotion as mapMotion, pickTap, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
 const api = window.deskPetAPI;
 const PREVIEW = new URLSearchParams(location.search).has('preview');
@@ -138,6 +139,18 @@ const speech = createSpeech({
     },
     onError: (error) => console.warn('[DeskPet] 播放朗读音频失败：', error?.message || error),
 });
+
+// 模型里的元音口形参数：Cubism 标准名 ParamA、ParamI、ParamU、ParamE、ParamO（有些模型写成 ParamMouthA 这类）
+function vowelParamsOf(paramIds) {
+    const found = [];
+    for (const vowel of VOWELS) {
+        const upper = vowel.toUpperCase();
+        const id = [`Param${upper}`, `ParamMouth${upper}`, `PARAM_${upper}`].find((name) => paramIds.has(name));
+        if (id) found.push({ vowel, id });
+    }
+    // 只有一两个对得上多半是巧合（别的参数刚好叫这个名字）：至少要 a、i、u 三个齐
+    return ['a', 'i', 'u'].every((v) => found.some((f) => f.vowel === v)) ? found : [];
+}
 
 // 说话时嘴张多大：朗读时跟着声音走；没有朗读时，回复流出来的那段时间假装在说（fake 给出假口型）。
 function talkLevel(fake) {
@@ -293,7 +306,9 @@ function speakProactive(payload) {
     clearMissed();
     lastActivity = Date.now();
     life?.wake({ startle: true });
-    proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
+    // 闲时搭话带着自己写的情绪；别的按种类给个默认
+    const emotion = typeof payload.emotion === 'string' && payload.emotion ? payload.emotion : (kind === 'alarm' ? 'excited' : 'happy');
+    proactiveDirector?.nudge({ emotion, intensity: Number.isFinite(payload.intensity) ? payload.intensity : 0.7, source: 'proactive' });
     backend?.tap?.();
     // 主动说的话也念出来（助手设了音色、没在菜单里关掉朗读时）
     speech.begin(`deskpet-proactive-${Date.now()}`, { silent: isQuiet() && !bubble.own });
@@ -332,7 +347,8 @@ function flashEmotionBadge(emotion, source) {
 const composer = { open: false, sending: false, queued: null, queuedFresh: false, fresh: false, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
-const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
+// tucked：点了胶囊上的「收起」，光标离开之前不再冒出来
+const dock = { mode: 'hidden', hover: false, dragging: false, tucked: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
 
 function setDock(mode) {
     if (dock.mode === mode) return;
@@ -340,6 +356,8 @@ function setDock(mode) {
     dock.mode = mode;
     $('dock').dataset.mode = mode;
     composer.open = mode === 'bar';
+    // 只看不点时光标压着角色会变淡：打字、录音时得看得见
+    if (mode === 'bar' || mode === 'rec') document.body.classList.remove('is-ghost-hover');
     // 打字、录音的时候别打瞌睡
     life?.hold('composer', mode === 'bar' || mode === 'rec');
     // 输入条要打字、录音时要能按 Esc 取消：整窗可点、可聚焦；其余时候回到按像素穿透
@@ -361,8 +379,9 @@ function dockHover(on) {
     dock.hover = on;
     clearTimeout(dock.showTimer);
     clearTimeout(dock.hideTimer);
+    if (!on) dock.tucked = false;
     if (dock.mode === 'bar' || dock.mode === 'rec') return;
-    if (on && dock.mode === 'hidden') {
+    if (on && dock.mode === 'hidden' && !dock.tucked) {
         dock.showTimer = setTimeout(() => { if (dock.hover && !dock.dragging) setDock('pill'); }, DOCK_SHOW_MS);
     } else if (!on && dock.mode === 'pill') {
         dock.hideTimer = setTimeout(() => { if (!dock.hover) setDock('hidden'); }, DOCK_HIDE_MS);
@@ -370,7 +389,7 @@ function dockHover(on) {
 }
 
 function restingDock() {
-    return dock.hover && !dock.dragging ? 'pill' : 'hidden';
+    return dock.hover && !dock.dragging && !dock.tucked ? 'pill' : 'hidden';
 }
 
 function openComposer() {
@@ -380,7 +399,19 @@ function openComposer() {
 
 function closeComposer() {
     dock.voice?.cancel();
+    // 收起就不带这些文件了：不然条收了、📎 还挂在头顶，下一句语音快捷键会把它们一起发出去
+    if (composer.files.length) setFiles([]);
     setDock(restingDock());
+}
+
+// 输入条里有没有要发的东西（字或文件）
+function hasDraft() {
+    return Boolean($('composerInput').value.trim() || composer.files.length);
+}
+
+// 正在把录音识别成字：这时收起会把识别出的话丢掉
+function transcribing() {
+    return $('recStop').classList.contains('is-busy');
 }
 
 // 输入条跟着字数长高（最多 4 行），外框的高度一起动
@@ -432,16 +463,26 @@ async function finishVoice() {
     } finally {
         stop.classList.remove('is-busy');
     }
-    if (dock.mode !== 'rec') return; // 识别期间点了打字
     const input = $('composerInput');
     const autoSend = dock.autoSend;
     dock.autoSend = false;
+    if (dock.mode !== 'rec') {
+        // 识别期间输入条换了状态（点了打字、桌宠被藏起来）：识别出的话放进输入框，不能丢
+        if (text) {
+            input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
+            fitComposerInput();
+            if (autoSend && !composer.files.length) submitComposer();
+            else if (dock.mode !== 'bar') notice('听到的话放在输入框里了', { ms: 3000 });
+        }
+        return;
+    }
     if (text) {
         input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
         setDock('bar');
         fitComposerInput();
-        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）
-        if (autoSend) submitComposer();
+        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）；
+        // 录之前输入条里已经放了文件就不自动发，让人看一眼带的是什么
+        if (autoSend && !composer.files.length) submitComposer();
     } else {
         if (!input.value.trim()) notice('没听到说话', { ms: 3000 });
         setDock(input.value.trim() ? 'bar' : restingDock());
@@ -481,6 +522,8 @@ async function sendText(text, { fresh = false, files = [] } = {}) {
     } finally {
         composer.sending = false;
         $('composerSend').disabled = false;
+        // 发的时候又排进来一句，而这条的回复已经结束（或根本没开始）：别让它一直排着
+        if (composer.queued && !bubble.replyId) setTimeout(flushQueued, 400);
     }
     return false;
 }
@@ -530,6 +573,8 @@ function takeFiles(files) {
     const { list, dropped } = addFiles(composer.files, files);
     setFiles(list);
     if (dropped) notice(`一次最多带 ${MAX_FILES} 个文件，有 ${dropped} 个没加上`, { ms: 3500 });
+    // 正在录音：文件先挂上，录完进输入条时一起看到；不打断录音
+    if (dock.mode === 'rec') return;
     if (list.length) {
         openComposer();
         requestAnimationFrame(() => $('composerInput').focus());
@@ -595,9 +640,12 @@ async function flushQueued() {
     composer.queuedFresh = false;
     renderBubble();
     if (await sendText(text, { fresh })) return;
-    $('composerInput').value = text;
-    setFresh(fresh);
-    openComposer();
+    const input = $('composerInput');
+    input.value = input.value.trim() ? `${text}\n${input.value}` : text;
+    setFresh(fresh || composer.fresh);
+    fitComposerInput();
+    // 正在录音就别打断，放回输入框的话录完一起看到
+    if (dock.mode !== 'rec') openComposer();
 }
 
 function bindComposer() {
@@ -617,6 +665,10 @@ function bindComposer() {
     $('dockEdit').addEventListener('click', openComposer);
     $('recEdit').addEventListener('click', openComposer);
     $('dockVoice').addEventListener('click', startVoice);
+    $('dockHide').addEventListener('click', () => {
+        dock.tucked = true;
+        setDock('hidden');
+    });
     $('composerNew').addEventListener('click', () => { setFresh(!composer.fresh); input.focus(); });
     $('recStop').addEventListener('click', finishVoice);
     dock.voice = createDictation({
@@ -662,8 +714,11 @@ function bindComposer() {
     api.onOpenInput(({ toggle, submit, voice, newTopic } = {}) => {
         if (voice) {
             // 语音快捷键：没在录就开始录，正在录就停下发出去
-            if (dock.mode === 'rec') finishVoice();
-            else startVoice({ autoSend: true });
+            if (dock.mode === 'rec') {
+                // 用麦克风键开始录的也一样：快捷键这一下就是「停下发出去」
+                dock.autoSend = true;
+                finishVoice();
+            } else startVoice({ autoSend: true });
             return;
         }
         if (submit) {
@@ -680,8 +735,9 @@ function bindComposer() {
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
         // 录音中切到别的程序：麦克风别一直开着（Esc 也按不到这里了）
-        if (dock.mode === 'rec') closeComposer();
-        else if (composer.open && !input.value.trim()) closeComposer();
+        if (dock.mode === 'rec') {
+            if (!transcribing()) closeComposer();
+        } else if (composer.open && !hasDraft()) closeComposer();
     });
 }
 
@@ -698,10 +754,12 @@ function union(a, b) {
 
 // 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上
 // （只给 Linux 的窗口形状用，不算就画不出来；闲逛、贴边探头只看真正打开的界面）
-function uiBounds({ withIdleDock = false } = {}) {
+// withBadge：头边那个「没看到的回复」小气泡算不算（溜达不看它，不然它挂着就永远不走）
+function uiBounds({ withIdleDock = false, withBadge = true } = {}) {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
         if (el.hidden || (el.dataset.mode === 'hidden' && !withIdleDock)) continue;
+        if (!withBadge && el.id === 'missedBadge') continue;
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -717,7 +775,7 @@ function aimBubble(headX) {
     const stack = $('uiStack');
     const room = stack.clientWidth;
     const left = stack.getBoundingClientRect().left;
-    for (const el of [$('bubble'), $('toolCard')]) {
+    for (const el of [$('bubble'), $('toolCard'), $('approvalCard')]) {
         if (el.hidden) continue;
         const width = el.offsetWidth;
         const slack = Math.max(0, (room - width) / 2);
@@ -728,6 +786,57 @@ function aimBubble(headX) {
             el.style.setProperty('--tail-x', `${Math.round(Math.max(16, Math.min(width - 16, headX - bubbleLeft)))}px`);
         }
     }
+}
+
+// ---- 工具审批 ---------------------------------------------------------------------
+// 回复里要调的工具得有人点头时，主窗口除了自己的通知卡，也把它转给这个助手的桌宠。
+// 这里点了允许/拒绝交回主窗口去应答；任何一边答完、过期，主进程都会叫这里收起。
+
+function bindApprovals(director) {
+    const queue = createApprovalQueue();
+    const card = $('approvalCard');
+    let expiryTimer = 0;
+    let answering = '';
+    const render = () => {
+        const item = queue.current;
+        const wasHidden = card.hidden;
+        card.hidden = !item;
+        clearTimeout(expiryTimer);
+        if (item) {
+            $('approvalTitle').textContent = `要用「${item.toolName}」吗？`;
+            $('approvalTitle').title = item.toolName;
+            $('approvalCommand').textContent = item.command;
+            $('approvalCommand').title = item.command;
+            const more = queue.size - 1;
+            $('approvalMore').textContent = more > 0 ? `还有 ${more} 个` : '';
+            for (const id of ['approvalAllow', 'approvalReject']) $(id).disabled = answering === item.requestId;
+            if (item.expiresAt) expiryTimer = setTimeout(render, Math.max(0, item.expiresAt - Date.now()) + 50);
+        }
+        if (wasHidden && item) {
+            // 有事要问：露出担心的样子，从睡着/待机里醒过来
+            lastActivity = Date.now();
+            director.nudge({ emotion: 'concerned', intensity: 0.7, source: 'approval' });
+        }
+        if (wasHidden !== card.hidden) aimBubble(aimedHeadX);
+    };
+    const answer = (approved) => {
+        const item = queue.current;
+        if (!item || answering === item.requestId) return;
+        answering = item.requestId;
+        api.answerApproval(item.requestId, approved);
+        render();
+    };
+    $('approvalAllow').addEventListener('click', (e) => { e.stopPropagation(); answer(true); });
+    $('approvalReject').addEventListener('click', (e) => { e.stopPropagation(); answer(false); });
+    $('approvalDetail').addEventListener('click', (e) => { e.stopPropagation(); api.openMainWindow(); });
+    api.onApproval?.((payload) => {
+        if (queue.add(payload)) render();
+    });
+    api.onApprovalClear?.((requestId) => {
+        if (!queue.remove(String(requestId))) return;
+        if (answering === String(requestId)) answering = '';
+        render();
+    });
 }
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
@@ -744,6 +853,12 @@ function figureBounds() {
     }
 }
 
+// 放下时：光标还压在角色上是拖动留下的，不当成「鼠标停在上面」；探头状态重新报一次
+function afterDrag() {
+    hitFromDrag = true;
+    lastWantOut = null;
+}
+
 function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
@@ -755,6 +870,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
         // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾（窗口和被拎着的姿势都放下）。
         if (down?.dragging) {
+            afterDrag();
             api.dragEnd();
             onDrag('end');
         }
@@ -780,6 +896,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
         const at = { x: down.cx, y: down.cy };
         if (down.dragging) {
             // 松手的地方离屏幕边、任务栏很近时主进程会贴过去；按着 Alt 不贴
+            afterDrag();
             api.dragEnd({ figure: figureBounds(), free: e.altKey });
             onDrag('end');
             down = null;
@@ -806,6 +923,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     // 触屏手势被系统接管（pointercancel）、拖到一半切走窗口时收不到 pointerup，拖动必须在这里结束。
     const abort = () => {
         if (down?.dragging) {
+            afterDrag();
             api.dragEnd();
             onDrag('end');
         }
@@ -1024,6 +1142,7 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     const current = {};
     let target = {};
     let mouthPhase = 0;
+    const vowelParams = vowelParamsOf(paramIds);
     const naturalMovements = internal.updateNaturalMovements.bind(internal);
     internal.updateNaturalMovements = (now, dt) => {
         naturalMovements(now, dt);
@@ -1051,12 +1170,18 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             model.position.y = figure.base().y - hop;
         }
         // 嘴：朗读时按声音的音量开合；没开朗读时回复流出来就假装在说话。
-        if (paramIds.has('ParamMouthOpenY')) {
-            const open = talkLevel(() => {
-                mouthPhase += 0.55 + Math.random() * 0.35;
-                return 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
-            });
-            if (open) coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
+        const open = talkLevel(() => {
+            mouthPhase += 0.55 + Math.random() * 0.35;
+            return 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
+        });
+        if (open && paramIds.has('ParamMouthOpenY')) coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
+        // 模型带あいうえお口形参数（ParamA～ParamO）时，朗读按声音里的元音换口形；没有就只按张嘴程度
+        if (vowelParams.length) {
+            const weights = open ? speech.vowels() : null;
+            for (const { vowel, id } of vowelParams) {
+                const v = weights ? weights[vowel] * Math.min(1, open * 1.2) : 0;
+                if (v) coreModel.addParameterValueById(internal.getIdSafe(id), v);
+            }
         }
     });
 
@@ -1087,6 +1212,20 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         tap() {
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
             if (group) model.motion(group);
+        },
+        // 设置页给点头、点身体绑了表情 / 动作：照绑定的演，返回演了哪些（{ expression, motion }），没绑返回 null
+        playTap(zone) {
+            const bound = pickTap(zone, expressionNames, motionGroups, profile);
+            if (!bound) return null;
+            if (bound.motion) {
+                internal.motionManager?.stopAllMotions?.();
+                model.motion(bound.motion, undefined, PIXI.live2d.MotionPriority?.FORCE ?? 3);
+            }
+            if (bound.expression) {
+                model.expression(bound.expression);
+                lastExpression = bound.expression;
+            }
+            return bound;
         },
         // motion: false 只换表情和参数（换阶段、互动反应演完换回来），不再放一遍情绪动作
         apply(f, { changed, motion = true }) {
@@ -1425,13 +1564,18 @@ function createAlphaProbe(app) {
 // ---- 差分立绘 / 头像后端 ---------------------------------------------------
 
 let lastHit = false;
-let lastWantOut = false;
+// null：下一次一定报上去（页面刚加载、刚拖完放下时，主进程那边的探头状态可能和这里对不上）
+let lastWantOut = null;
+// 拖动时光标一直压在角色上；放下（可能刚收进边里）后在光标真正移开或移上来之前，不算「鼠标在角色上」，
+// 免得刚藏进去就又探出来，也免得一直报着拖动时的旧值、该探头时不探
+let hitFromDrag = false;
 function reportHit(hit) {
     // 只看不点：鼠标穿过去，悬停胶囊也不冒；光标压在角色上时角色变得很淡，看得清后面的东西
     document.body.classList.toggle('is-ghost-hover', Boolean(prefs.clickThrough && hit));
     if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
+        hitFromDrag = false;
         api.setHit(hit);
         dockHover(hit);
     }
@@ -1439,6 +1583,11 @@ function reportHit(hit) {
 
 // 立绘和头像没有参数可调：阶段和动作写成 #lifeBody 上的属性，由样式里的关键帧演；
 // 拖动摆动和跳一下用同一套单摆计算，只在动起来时跑 requestAnimationFrame，停稳就不再占帧。
+// 呼吸（立绘轻轻起伏、头像上下浮）也由页面按档位定时写一个变量，不用无限循环的 CSS 动画：
+// 那种动画让透明置顶窗口每秒合成 60 帧，实测立绘桌宠待机比 8 帧的 Live2D 还多花三倍 GPU。
+const BREATH_FPS = { active: 15, idle: 10, sleep: 6 };
+const BREATH_PERIOD_MS = { awake: 4000, drowsy: 6000, asleep: 7500 };
+
 function createCssLife() {
     const body = $('lifeBody');
     const stage = $('stage');
@@ -1447,6 +1596,28 @@ function createCssLife() {
     let last = 0;
     let paused = false;
     let actTimer = 0;
+    let breathTimer = 0;
+    let breathFps = BREATH_FPS.active;
+    let breathPeriod = BREATH_PERIOD_MS.awake;
+    let breathPhase = 0; // 0–1，换速度时接着当前位置走，不跳
+    let breathAt = 0;
+    const breathe = () => {
+        breathTimer = 0;
+        if (paused) return;
+        const now = performance.now();
+        breathPhase = (breathPhase + (breathAt ? (now - breathAt) / breathPeriod : 0)) % 1;
+        breathAt = now;
+        // 0 → 1 → 0 的缓入缓出，和原来的关键帧一样
+        stage.style.setProperty('--breath', ((1 - Math.cos(breathPhase * 2 * Math.PI)) / 2).toFixed(3));
+        breathTimer = setTimeout(breathe, 1000 / breathFps);
+    };
+    const restartBreath = () => {
+        clearTimeout(breathTimer);
+        breathTimer = 0;
+        breathAt = 0;
+        if (!paused) breathe();
+    };
+    restartBreath();
     const loop = (ts) => {
         raf = 0;
         if (paused) return;
@@ -1463,6 +1634,13 @@ function createCssLife() {
         phase(p) {
             body.dataset.lifePhase = p;
             motion.setPhase(p);
+            breathPeriod = BREATH_PERIOD_MS[p] || BREATH_PERIOD_MS.awake;
+        },
+        setActive(level) {
+            const fps = BREATH_FPS[fpsTier(level)];
+            if (fps === breathFps) return;
+            breathFps = fps;
+            restartBreath();
         },
         act(name, ms) {
             clearTimeout(actTimer);
@@ -1480,6 +1658,7 @@ function createCssLife() {
         setPaused(p) {
             paused = p;
             if (!p) kick();
+            restartBreath();
         },
     };
 }
@@ -1630,7 +1809,7 @@ function createImageBackend(assets) {
             canShow: (emotion) => Boolean(portraits[emotion]),
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
             setMouth,
-            setActive() {},
+            setActive(level) { cssLife.setActive(level); },
             setPaused(paused) { cssLife.setPaused(paused); },
             life: cssLife,
         };
@@ -1655,7 +1834,7 @@ function createImageBackend(assets) {
             $('avatar').style.setProperty('--deskpet-ring', EMOTION_RING[f.emotion] || EMOTION_RING.neutral);
             $('avatarBadge').textContent = f.state === 'thinking' || f.state === 'tool' ? '💭' : (EMOTION_EMOJI[f.emotion] || '');
         },
-        setActive() {},
+        setActive(level) { cssLife.setActive(level); },
         setPaused(paused) { cssLife.setPaused(paused); },
         life: cssLife,
     };
@@ -1716,6 +1895,18 @@ function createLifeFx() {
         act(name, ms) { if (LIFE_FX[name]) show(LIFE_FX[name], Math.min(ms, 1800), 'is-pop'); },
         held(on) { if (on) show('💦', 0, 'is-held'); else if (el.classList.contains('is-held')) el.hidden = true; },
     };
+}
+
+// 模型载入失败时给人看的一句话：原始报错里是一长串 vcp-deskpet:// 地址和加载器的名字，气泡里看不懂
+function live2DFailureText(error) {
+    const raw = String(error?.message || error || '');
+    const file = (pattern) => decodeURIComponent((raw.match(pattern) || [])[1] || '');
+    const texture = file(/([^/\s]+\.(?:png|jpe?g|webp))\b[^]*?(?:404|Not Found|Failed)/i);
+    if (texture) return `这套 Live2D 模型缺贴图（${texture}），先用立绘代替`;
+    if (/model3\.json|JSON|Network error|Unexpected token/i.test(raw)) return '这套 Live2D 模型的 .model3.json 读不了（文件可能坏了），先用立绘代替';
+    if (/moc3?|createModel|Invalid|consistency/i.test(raw)) return '这套 Live2D 模型的 .moc3 文件读不了（可能坏了或版本太新），先用立绘代替';
+    const short = raw.replace(/vcp-deskpet:\/\/\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    return short ? `Live2D 模型载入失败（${short}），先用立绘代替` : 'Live2D 模型载入失败，先用立绘代替';
 }
 
 // ---- 回复流 → 导演与气泡 ----------------------------------------------------------
@@ -1801,6 +1992,13 @@ function bindStream(director) {
                 for (const item of scanner.finish()) if (item.type === 'text') bubble.reply += item.text;
                 if (event.type === 'end') speech.finish(bubble.reply, sentenceFrame);
                 else speech.fail();
+            }
+            // 没回上来（断网、超时、服务器报错）：把原因说出来，免打扰时只说在桌宠上问的那条
+            if (event.type === 'error' && (!isQuiet() || bubble.own)) {
+                let reason = typeof event.error === 'string' ? event.error : '';
+                if (/fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET/i.test(reason)) reason = '连不上 VCP 服务器，看看服务器开着没有、地址对不对';
+                const lead = bubble.reply.trim() ? '没说完就断了' : '没回上来';
+                notice(reason ? `${lead}：${reason}` : `${lead}，可以再说一次试试`, { error: true, ms: 9000 });
             }
             scanner = null;
             bubble.replyId = null;
@@ -1918,7 +2116,7 @@ async function start() {
         } catch (error) {
             console.error('[DeskPet] Live2D 加载失败，改用立绘：', error);
             $('live2dCanvas').hidden = true;
-            notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
+            notice(error.userFacing ? error.message : live2DFailureText(error), { error: true, ms: 8000 });
         }
     } else if (assets.live2d && !assets.coreUrl && !assets.puppet && !assets.outfit?.builtIn) {
         // 内置 Nova 自带立绘：不每次打开都弹红字，设置页卡片和「Live2D 支持」上写着
@@ -1946,18 +2144,36 @@ async function start() {
     director = createEmotionDirector({ onFrame: (next) => { if (!speech.holdsFrames()) applyFrame(next); } });
     const lifeFx = createLifeFx();
     let flashTimer = 0;
+    let tapTimer = 0;
     // 互动反应时临时换个表情（不改导演的心情，演完换回来）
     const flashEmotion = (emotion, ms) => {
         // 立绘没画这个情绪就不换，免得退回默认立绘闪一下
         if (backend.canShow && !backend.canShow(emotion)) return;
         clearTimeout(flashTimer);
+        clearTimeout(tapTimer);
         backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
         flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), ms);
     };
-    // 设置页「表情映射」：换上新映射，emotion 给了就当场演一下这个情绪
-    api.onProfile?.(({ profile, emotion } = {}) => {
+    // 点头、点身体绑定的表情演一会儿（至少 2 秒，点身体的反应本身很短）再换回当前情绪
+    const playTap = (zone, ms) => {
+        const bound = backend.playTap?.(zone);
+        if (bound?.expression) {
+            clearTimeout(flashTimer);
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), Math.max(ms, 2000));
+        }
+        return bound || null;
+    };
+    // 设置页「表情映射」：换上新映射；emotion 给了就当场演一下这个情绪，tap 给了就演一下点这个区域
+    api.onProfile?.(({ profile, emotion, tap } = {}) => {
         backend.setProfile?.(profile);
-        if (emotion) flashEmotion(emotion, 3500);
+        if (tap) {
+            if (!playTap(tap, 3500)) {
+                // 这个区域没绑：演默认反应给你看
+                if (tap === 'head') flashEmotion(REACTION_EMOTION.headTap, 3500);
+                else backend.tap();
+            }
+        } else if (emotion) flashEmotion(emotion, 3500);
         else backend.apply(shownFrame(frame), { changed: true, motion: false });
     });
     life = createPetLife({
@@ -1976,17 +2192,22 @@ async function start() {
                 lastActivity = Date.now();
                 backend.setActive(true);
             }
+            // 点头、点身体：绑了的部分照绑定演，没绑的部分照原来的反应
+            const bound = name === 'poke' ? playTap('body', ms) : name === 'headTap' ? playTap('head', ms) : null;
             if (name === 'poke') {
-                backend.tap();
-                director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
-            } else if (REACTION_EMOTION[name] && !frame.state) {
+                if (!bound?.motion) backend.tap();
+                if (!bound?.expression) director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
+            } else if (REACTION_EMOTION[name] && !frame.state && !bound?.expression) {
                 flashEmotion(REACTION_EMOTION[name], ms);
             }
         },
         onGaze(g) { if (g) backend.life?.gaze(g); },
     });
     // 免打扰（桌宠设置里开）：不自己做小动作、不冒小符号
-    const syncQuiet = () => life.setQuiet(isQuiet());
+    const syncQuiet = () => {
+        life.setQuiet(isQuiet());
+        life.setFollowCursor(prefs.followCursor !== false);
+    };
     syncQuiet();
     window.addEventListener('deskpet:prefs', syncQuiet);
     bindStream(director);
@@ -2004,6 +2225,7 @@ async function start() {
         notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
     });
     bindComposer();
+    bindApprovals(director);
     bindFileDrop();
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
@@ -2032,7 +2254,7 @@ async function start() {
         } else reportHit(false); // 出了窗口也算离开：下次直接落在角色身上时胶囊照样冒出来
         life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
         // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
-        if (!life.gaze) backend.focus(x, y);
+        if (!life.gaze && prefs.followCursor !== false) backend.focus(x, y);
     });
     let streak = 0;
     let drag = null;
@@ -2087,7 +2309,7 @@ async function start() {
         // 藏起来就不出声了，录着的音也停掉（不然麦克风开着、整窗挡着点击）
         if (paused) {
             speech.stop();
-            if (dock.mode === 'rec' || (composer.open && !$('composerInput').value.trim())) closeComposer();
+            if ((dock.mode === 'rec' && !transcribing()) || (composer.open && !hasDraft())) closeComposer();
         }
         // 光标停在气泡上时被藏起来收不到 mouseleave：别让旧回复从此一直挂着
         if (bubble.hovered) {
@@ -2137,14 +2359,14 @@ async function start() {
         const rect = b && drawn ? union(b, drawn) : (b || drawn);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
         // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
-        const wantOut = lastHit || Boolean(ui);
+        const wantOut = (lastHit && !hitFromDrag) || Boolean(ui);
         if (wantOut !== lastWantOut) {
             lastWantOut = wantOut;
             api.wantOut?.(wantOut);
         }
         life.setMood(director.baseline);
         life.tick();
-        wanderTick(ui);
+        wanderTick(uiBounds({ withBadge: false }));
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
 

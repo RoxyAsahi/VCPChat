@@ -240,3 +240,66 @@ test('sentences the read-only-matching regex drops are not sent, so the bubble d
     assert.equal(speech.revealEnd(), null);
     speech.dispose();
 });
+
+// ---- 元音口形 ----
+
+// 合成元音：脉冲串（基频 f0）→ 声门低通、口唇差分 → 三个共振峰串联，取最后 1024 个采样（48kHz）
+const SR = 48000;
+const FORMANTS = { a: [850, 1400, 2800], i: [320, 2800, 3300], u: [350, 1450, 2600], e: [550, 2300, 2900], o: [520, 950, 2600] };
+function resonator(x, f, bw) {
+    const r = Math.exp(-Math.PI * bw / SR);
+    const c = -r * r;
+    const b = 2 * r * Math.cos(2 * Math.PI * f / SR);
+    const a = 1 - b - c;
+    const y = new Float64Array(x.length);
+    for (let n = 0; n < x.length; n++) y[n] = a * x[n] + b * (y[n - 1] || 0) + c * (y[n - 2] || 0);
+    return y;
+}
+function synthVowel(vowel, f0, amp = 0.2) {
+    const len = 4096;
+    let x = new Float64Array(len);
+    for (let n = 0; n < len; n++) x[n] = n % Math.round(SR / f0) === 0 ? 1 : 0;
+    for (let pass = 0; pass < 2; pass++) {
+        const k = Math.exp(-2 * Math.PI * 150 / SR);
+        for (let n = 1; n < len; n++) x[n] = (1 - k) * x[n] + k * x[n - 1];
+    }
+    for (let n = len - 1; n > 0; n--) x[n] -= x[n - 1];
+    let y = x;
+    FORMANTS[vowel].forEach((f, j) => { y = resonator(y, f, 60 + 30 * j); });
+    const tail = y.slice(len - 1024);
+    const peak = Math.max(...tail.map(Math.abs)) || 1;
+    return Float32Array.from(tail, (v) => (v / peak) * amp);
+}
+
+const top = (w) => Object.entries(w).sort((a, b) => b[1] - a[1])[0][0];
+
+test('vowels are told apart by their first two formants at any pitch', async () => {
+    const { vowelWeights } = await import('../DeskPetmodules/voice.js');
+    for (const f0 of [120, 200, 300]) {
+        for (const vowel of Object.keys(FORMANTS)) {
+            const w = vowelWeights(synthVowel(vowel, f0), SR);
+            assert.ok(w, `${vowel}@${f0}Hz 没认出来`);
+            assert.equal(top(w), vowel, `${vowel}@${f0}Hz 认成了 ${top(w)}`);
+            const sum = Object.values(w).reduce((a, b) => a + b, 0);
+            assert.ok(Math.abs(sum - 1) < 1e-6);
+        }
+    }
+    // 静音、太短、没有采样率
+    assert.equal(vowelWeights(new Float32Array(1024), SR), null);
+    assert.equal(vowelWeights(synthVowel('a', 200, 0.001), SR), null);
+    assert.equal(vowelWeights(new Float32Array(16).fill(0.1), SR), null);
+    assert.equal(vowelWeights(synthVowel('a', 200), 0), null);
+});
+
+test('vowel weights move smoothly and fall back to zero in pauses', async () => {
+    const { createVowelTracker } = await import('../DeskPetmodules/voice.js');
+    const tracker = createVowelTracker();
+    const a = { a: 1, i: 0, u: 0, e: 0, o: 0 };
+    const first = tracker.update(a, 0.033);
+    assert.ok(first.a > 0 && first.a < 1, '不会一下跳满');
+    let w = first;
+    for (let k = 0; k < 20; k += 1) w = tracker.update(a, 0.033);
+    assert.ok(w.a > 0.95);
+    for (let k = 0; k < 20; k += 1) w = tracker.update(null, 0.033);
+    assert.equal(w.a, 0);
+});

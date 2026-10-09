@@ -62,6 +62,7 @@ function fakeElectron() {
         net: {},
         Menu: {},
         screen,
+        powerMonitor: new EventEmitter(),
     };
     return { electron, handlers, listeners, windows, screen };
 }
@@ -169,6 +170,72 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
     assert.deepEqual([b.width, b.height], [360, 464], '尺寸恢复成桌宠窗口的固定大小');
+    handlers.closeAll();
+});
+
+test('after sleep or unlock a pet left off screen comes back', async () => {
+    const { handlers, fake, open } = await loadHandlers();
+    const pet = await open();
+    // 睡眠时拔了扩展坞：系统不一定补发显示器事件
+    pet.setBounds({ x: 2400, y: 300, width: 360, height: 464 });
+    fake.electron.powerMonitor.emit('resume');
+    await sleep(500);
+    const b = pet.getBounds();
+    assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
+    handlers.closeAll();
+});
+
+test('a pet that crashes now and then keeps coming back; one that keeps crashing is closed', async (t) => {
+    const { handlers, open } = await loadHandlers();
+    const pet = await open();
+    let reloads = 0;
+    pet.reload = () => { reloads += 1; };
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
+    const crash = () => pet.webContents.emit('render-process-gone', {}, { reason: 'crashed' });
+    // 一天里零零星星崩了好几次：每次都重载，不会因为攒够次数就关掉
+    for (let i = 0; i < 5; i += 1) {
+        crash();
+        now += 5 * 60 * 1000;
+    }
+    await sleep(300);
+    assert.equal(reloads, 5);
+    assert.equal(pet.isDestroyed(), false);
+    // 一分钟里连着崩：第四次放弃
+    for (let i = 0; i < 4; i += 1) {
+        crash();
+        now += 1000;
+    }
+    assert.equal(pet.isDestroyed(), true);
+    handlers.closeAll();
+});
+
+test('pets opened without a saved spot line up instead of piling into one corner', async () => {
+    const { handlers, open } = await loadHandlers();
+    const first = await open('Nova');
+    const second = await open('Coco');
+    const a = first.getBounds();
+    const b = second.getBounds();
+    const center = (r) => r.x + r.width / 2;
+    assert.ok(Math.abs(center(a) - center(b)) >= a.width * 0.5, `两个人物中心只差 ${Math.abs(center(a) - center(b))}px`);
+    handlers.closeAll();
+});
+
+test('deleting an agent closes its pet and forgets where it stood', async () => {
+    const { handlers, fake, open, root } = await loadHandlers();
+    const pet = await open('Nova');
+    await open('Coco');
+    await sleep(100);
+    const stateFile = path.join(root, 'deskpet', 'state.json');
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(stateFile, JSON.stringify({ Nova: { x: 10, y: 20, outfit: 'tech' }, Coco: { x: 30, y: 40 } }));
+    await handlers.forgetAgent('Nova');
+    assert.equal(pet.isDestroyed(), true);
+    const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
+    assert.deepEqual(state, { Coco: { x: 30, y: 40 } });
+    const settings = handlers._controls().get();
+    assert.deepEqual(settings.openAgents, ['Coco']);
+    assert.notEqual(settings.lastAgent, 'Nova');
     handlers.closeAll();
 });
 
@@ -295,6 +362,48 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     handlers.closeAll();
 });
 
+test('a pending tool approval reaches the pet of the agent that asked, and only main answers it', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const nova = await open('Nova');
+    const coco = await open('Coco');
+    for (const pet of [nova, coco]) fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const sentTo = (win, channel) => win.sent.filter((m) => m.channel === channel).map((m) => m.payload);
+    const offer = async (sender, payload) => {
+        fake.listeners.get('deskpet:approval-offer')({ sender }, payload);
+        await sleep(30);
+    };
+    // 别的窗口冒充主窗口：不理
+    await offer(nova.webContents, { requestId: 'fake', maid: 'Nova', toolName: 'X' });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    await offer(main.webContents, { requestId: 'r1', maid: 'coco', toolName: 'PowerShellExecutor', command: 'dir', expiresInMs: 60000 });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    const [card] = sentTo(coco, 'deskpet:approval');
+    assert.equal(card.requestId, 'r1');
+    assert.equal(card.toolName, 'PowerShellExecutor');
+    assert.ok(card.expiresAt > Date.now());
+    // 认不出是谁、也没人刚聊过：不往桌宠上放
+    await offer(main.webContents, { requestId: 'r2', maid: 'Someone', toolName: 'X' });
+    assert.equal(handlers._pendingApprovals().has('r2'), false);
+    // 不是这只桌宠的请求，它答不了；是它的就交回主窗口
+    fake.listeners.get('deskpet:approval-answer')(fromPet(nova), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), []);
+    fake.listeners.get('deskpet:approval-answer')(fromPet(coco), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), [{ requestId: 'r1', approved: true }]);
+    // 页面重载：还在等的再给一次
+    fake.listeners.get('deskpet:page-ready')(fromPet(coco));
+    assert.equal(sentTo(coco, 'deskpet:approval').length, 2);
+    // 主窗口说答完了：桌宠收起
+    fake.listeners.get('deskpet:approval-settled')({ sender: main.webContents }, 'r1');
+    assert.deepEqual(sentTo(coco, 'deskpet:approval-clear'), ['r1']);
+    assert.equal(handlers._pendingApprovals().size, 0);
+    // 桌宠关了：等着的审批不再留
+    await offer(main.webContents, { requestId: 'r3', maid: 'Coco', toolName: 'X' });
+    coco.close();
+    assert.equal(handlers._pendingApprovals().has('r3'), false);
+    handlers.closeAll();
+});
+
 test('the stop button on the pet asks the main window to interrupt that reply', async () => {
     const { handlers, fake, open, fromPet } = await loadHandlers();
     const main = fake.windows[0];
@@ -315,19 +424,29 @@ test('files sent from the pet reach the main window cleaned up', async () => {
     const main = fake.windows[0];
     const pet = await open('Coco');
     const send = fake.handlers.get('deskpet:send');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deskpet-drop-'));
+    const real = path.join(dir, 'a.png');
+    fs.writeFileSync(real, 'png');
     const pending = send(fromPet(pet), '', { files: [
-        { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
+        { path: real, name: '../../a.png', type: 'image/png' },
         { path: 'relative/b.txt', name: 'b.txt' },
         { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
         { data: new Uint8Array(0), name: 'empty.png' },
     ] });
+    await sleep(20);
     const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
     assert.equal(request.text, '');
-    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
+    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [[real, 'a.png'], ['bytes', 'p.png']]);
     fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
     assert.deepEqual(await pending, { success: true });
     // 没字也没文件：不往主窗口发
     assert.equal((await send(fromPet(pet), ' ', { files: [{ path: 'x' }] })).success, false);
+    // 拖进来的是文件夹、或者文件已经不在了：说清楚，不往主窗口发
+    const before = main.sent.filter((m) => m.channel === 'deskpet:send-request').length;
+    assert.match((await send(fromPet(pet), '看看', { files: [{ path: dir, name: 'drop' }] })).error, /不是能发的文件/);
+    assert.match((await send(fromPet(pet), '看看', { files: [{ path: path.join(dir, 'gone.png'), name: 'gone.png' }] })).error, /不是能发的文件/);
+    assert.equal(main.sent.filter((m) => m.channel === 'deskpet:send-request').length, before);
+    fs.rmSync(dir, { recursive: true, force: true });
     handlers.closeAll();
 });
 
@@ -365,6 +484,14 @@ test('dragged well past a screen edge the pet tucks in, peeks out when wanted an
     dropAt(1600 - 40 - 100, 300, { figure });
     await sleep(200);
     assert.deepEqual(pet.getPosition(), [1600 - 60 - 40, 300]);
+    // 关掉再开（下次启动也一样）：还藏在原来的地方，鼠标过来照样探出来
+    await fake.handlers.get('deskpet:toggle')({}, 'Nova');
+    await sleep(50);
+    const again = await open();
+    assert.deepEqual(again.getPosition(), [1600 - 60 - 40, 300], '重开不会被挪回屏里');
+    fake.listeners.get('deskpet:want-out')(fromPet(again), true);
+    await sleep(200);
+    assert.deepEqual(again.getPosition(), [1600 - 200 - 40, 300]);
     handlers.closeAll();
 });
 
@@ -448,4 +575,133 @@ test('wandering: an idle pet on the taskbar strolls a little; touching it stops 
     const [x3] = pet.getPosition();
     await sleep(100);
     assert.equal(pet.getPosition()[0], x3);
+});
+
+test('a pet saved by the old size version opens with its feet where they were', async () => {
+    const { handlers, open, root } = await loadHandlers();
+    fs.mkdirSync(path.join(root, 'deskpet'), { recursive: true });
+    // 旧版：360×580 的窗口，角色 430 高，脚在 300 + 150 + 430 = 880
+    fs.writeFileSync(path.join(root, 'deskpet', 'state.json'), JSON.stringify({ Nova: { x: 1000, y: 300, scale: 1 } }));
+    const pet = await open();
+    const b = pet.getBounds();
+    const prefs = require('../modules/deskpet/petPrefs.js');
+    assert.equal(b.y + prefs.UI_RESERVE + prefs.characterBox().height, 880, '脚底不动');
+    assert.equal(b.x + b.width / 2, 1000 + 360 / 2, '左右也按中点对齐');
+    await sleep(50);
+    const saved = JSON.parse(fs.readFileSync(path.join(root, 'deskpet', 'state.json'), 'utf8')).Nova;
+    assert.equal(saved.sizeVersion, prefs.SIZE_VERSION, '换算过的记成新版，下次不再换');
+    handlers.closeAll();
+});
+
+// 控制助手名称查询的完成时机，复现主窗口应答与目录读取交错，不依赖磁盘速度。
+function holdApprovalLookup(root) {
+    const extra = require('fs-extra');
+    const original = extra.readJson;
+    let release;
+    let started;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    extra.readJson = async function (file, ...args) {
+        if (String(file).startsWith(path.join(root, 'Agents')) && path.basename(file) === 'config.json') {
+            const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+            started();
+            await gate;
+            return config;
+        }
+        return original.call(this, file, ...args);
+    };
+    return { entered, release, restore() { release(); extra.readJson = original; } };
+}
+
+const drainApprovalLookup = () => new Promise((resolve) => setImmediate(() => setImmediate(resolve)));
+
+test('a main-window settlement during agent lookup cannot resurrect the pet card', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const main = fake.windows[0];
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'settled-early', maid: 'Nova' });
+    await lookup.entered;
+    fake.listeners.get('deskpet:approval-settled')({ sender: main.webContents }, 'settled-early');
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().has('settled-early'), false);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval'), []);
+});
+
+test('concurrent approval replays reserve one request before agent lookup finishes', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const main = fake.windows[0];
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    for (let i = 0; i < 2; i++) fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'duplicate', maid: 'Nova' });
+    await lookup.entered;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().size, 1);
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:approval').length, 1);
+});
+
+test('an approval that expires during agent lookup is not delivered with a renewed lifetime', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = originalNow; });
+    fake.listeners.get('deskpet:approval-offer')({ sender: fake.windows[0].webContents }, { requestId: 'expires-during-lookup', maid: 'Nova', expiresInMs: 10 });
+    await lookup.entered;
+    now += 10;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().has('expires-during-lookup'), false);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval'), []);
+});
+
+test('an expired approval answer is not forwarded to the main window', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = originalNow; });
+    const main = fake.windows[0];
+    fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'expires-before-answer', maid: 'Nova', expiresInMs: 10 });
+    await lookup.entered;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:approval').length, 1);
+    now += 10;
+    fake.listeners.get('deskpet:approval-answer')(fromPet(pet), { requestId: 'expires-before-answer', approved: true });
+    assert.deepEqual(main.sent.filter((m) => m.channel === 'deskpet:approval-answer'), []);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval-clear').map((m) => m.payload), ['expires-before-answer']);
+    assert.equal(handlers._pendingApprovals().size, 0);
+});
+
+test('closing all pets during approval lookup cancels the unresolved reservation', async (t) => {
+    const { handlers, fake, open, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    await open('Nova');
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    fake.listeners.get('deskpet:approval-offer')({ sender: fake.windows[0].webContents }, { requestId: 'quit-during-lookup', maid: 'Nova' });
+    await lookup.entered;
+    handlers.closeAll();
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().size, 0);
 });

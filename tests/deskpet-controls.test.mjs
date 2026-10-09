@@ -36,6 +36,15 @@ test('the default size is smaller now; a size someone picked before looks the sa
     assert.equal(prefs.savedScale({ scale: 0.6 }), 1);
     assert.equal(prefs.savedScale({ scale: 2 }), prefs.SCALE_MAX, '换算后超出上限就到上限');
     assert.equal(prefs.savedScale({ scale: 1.5, sizeVersion: prefs.SIZE_VERSION }), 1.5, '新版记的原样用');
+    // 旧版记的位置：换算后脚还站在原来的地方（站在任务栏上的不会悬空）
+    const feet = (saved, aspect, scale) => {
+        const pos = prefs.legacyPosition(saved, aspect, scale);
+        return [pos.x + prefs.windowSizeForScale(scale, aspect).width / 2, pos.y + prefs.UI_RESERVE + prefs.characterBox(aspect).height * scale];
+    };
+    assert.deepEqual(feet({ x: 1000, y: 420, scale: 1 }, null, 1), [1180, 1000], '旧 1 倍：360×580 的窗口，脚在 y=1000');
+    const [, tallFeet] = feet({ x: 500, y: 100, scale: 1.5 }, 2.4, prefs.savedScale({ scale: 1.5 }));
+    assert.ok(Math.abs(tallFeet - (100 + prefs.UI_RESERVE + (prefs.characterBox(2.4).height / 0.6) * 1.5)) < 1);
+    assert.equal(prefs.legacyPosition({ x: 1, y: 2, scale: 1, sizeVersion: prefs.SIZE_VERSION }, null, 1), null, '新版的不动');
 });
 
 test('resizing keeps the character standing on the same spot and inside the work area', () => {
@@ -68,7 +77,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        version: prefs.SETTINGS_VERSION, doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, followCursor: true, hideFromCapture: false, idleChat: false, idleChatMinutes: 30, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -85,6 +94,21 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.lastAgent, null);
 });
 
+test('the voice and click-through keys an older version saved as defaults are dropped once', () => {
+    const old = prefs.normalizeSettings({
+        shortcuts: { toggle: 'CommandOrControl+Alt+Shift+P', talk: 'CommandOrControl+Alt+Shift+M', voice: 'CommandOrControl+Alt+Shift+V', clickThrough: 'Ctrl+Alt+Shift+T' },
+    });
+    assert.equal(old.shortcuts.voice, '');
+    assert.equal(old.shortcuts.clickThrough, '');
+    assert.equal(old.shortcuts.toggle, 'CommandOrControl+Alt+Shift+P');
+    // 旧文件里自己录的别的键照留
+    assert.equal(prefs.normalizeSettings({ shortcuts: { voice: 'CommandOrControl+Alt+F9' } }).shortcuts.voice, 'CommandOrControl+Alt+F9');
+    // 新版本保存过以后，同一个组合是用户自己录的，不再清掉
+    const saved = prefs.normalizeSettings({ ...old, shortcuts: { ...old.shortcuts, voice: 'CommandOrControl+Alt+Shift+V' } });
+    assert.equal(saved.version, prefs.SETTINGS_VERSION);
+    assert.equal(prefs.normalizeSettings(JSON.parse(JSON.stringify(saved))).shortcuts.voice, 'CommandOrControl+Alt+Shift+V');
+});
+
 test('pet opacity stays between 30% and fully opaque', () => {
     assert.equal(prefs.normalizeOpacity(undefined), 1);
     assert.equal(prefs.normalizeOpacity('abc'), 1);
@@ -94,6 +118,13 @@ test('pet opacity stays between 30% and fully opaque', () => {
     assert.equal(prefs.normalizeOpacity(0), 0.3, '不能淡到看不见');
     assert.equal(prefs.normalizeOpacity(5), 1);
     assert.equal(prefs.normalizeSettings({ opacity: 0.4 }).opacity, 0.4);
+});
+
+test('cursor following defaults on and capture hiding defaults off', () => {
+    assert.equal(prefs.normalizeSettings({ followCursor: false }).followCursor, false);
+    assert.equal(prefs.normalizeSettings({ followCursor: 'no' }).followCursor, true);
+    assert.equal(prefs.normalizeSettings({ hideFromCapture: true }).hideFromCapture, true);
+    assert.equal(prefs.normalizeSettings({ hideFromCapture: 1 }).hideFromCapture, false);
 });
 
 // ---- 主进程：大小、免打扰、快捷键、恢复 ----
@@ -254,6 +285,29 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     again.handlers.closeAll();
 });
 
+test('the first press of the show key brings out Nova, or opens the desk pet settings', async () => {
+    const env = await loadHandlers();
+    const toggleKey = env.fake.shortcuts.get(prefs.DEFAULT_SETTINGS.shortcuts.toggle);
+    // 托盘里「显示桌宠」也能点：从没开过桌宠的人点了才有反应
+    const show = env.handlers.trayMenuItems()[0].submenu.find((item) => item.id === 'deskpet-show');
+    assert.notEqual(show.enabled, false);
+    toggleKey();
+    await sleep(50);
+    assert.equal(env.petWindows().length, 1);
+    assert.match(env.petWindows()[0].url, /agentId=Nova/);
+    const assets = await env.fake.handlers.get('deskpet:get-assets')({ sender: env.petWindows()[0].webContents });
+    assert.equal(assets.avatar, 'vcp-deskpet://pet/default-avatar.png', '没放头像的助手用默认头像');
+
+    const other = await loadHandlers();
+    fs.writeFileSync(path.join(other.root, 'Agents', 'Nova', 'config.json'), JSON.stringify({ name: '小助手' }));
+    other.fake.shortcuts.get(prefs.DEFAULT_SETTINGS.shortcuts.toggle)();
+    await sleep(50);
+    assert.equal(other.petWindows().length, 0, '没有 Nova 就不替用户挑一个');
+    assert.ok(other.mainWindow.sent.some((s) => s.channel === 'deskpet-settings:open'), '打开设置页的桌宠分区');
+    env.handlers.closeAll();
+    other.handlers.closeAll();
+});
+
 test('do not disturb reaches every open pet and the tray item reflects it', async () => {
     const env = await loadHandlers();
     const nova = await env.open('Nova');
@@ -334,7 +388,9 @@ test('global shortcuts hide and bring back the pets and open the input box', asy
     assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { toggle: true }, '最近碰过的那个弹输入框');
     assert.equal(coco.sent.some((m) => m.channel === 'deskpet:open-input'), false);
     // 语音键：同一个桌宠开始录音（再按一下由页面停下发出去）
-    const voiceKey = prefs.DEFAULT_SETTINGS.shortcuts.voice;
+    assert.equal(prefs.DEFAULT_SETTINGS.shortcuts.voice, '', '语音键默认不占');
+    assert.equal(env.handlers._controls().setShortcut('voice', 'Ctrl+Alt+Shift+V').success, true);
+    const voiceKey = 'CommandOrControl+Alt+Shift+V';
     assert.ok(env.fake.shortcuts.has(voiceKey));
     await env.fake.shortcuts.get(voiceKey)();
     await sleep(5);

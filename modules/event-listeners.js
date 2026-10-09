@@ -1432,6 +1432,10 @@ export function setupEventListeners(deps) {
             }
             chatAPI.deskPetSendResult?.({ requestId, result });
         });
+        chatAPI.onDeskPetWhereRequest?.(({ requestId } = {}) => {
+            const item = refs.currentSelectedItem.get();
+            chatAPI.deskPetWhereResult?.({ requestId, where: { itemId: item?.id || null, topicId: refs.currentTopicId.get() || null } });
+        });
         chatAPI.onDeskPetOpenTopic?.(async ({ agentId, topicId } = {}) => {
             try {
                 if (refs.currentSelectedItem.get()?.id !== agentId) {
@@ -1443,6 +1447,10 @@ export function setupEventListeners(deps) {
             } catch (error) {
                 console.warn('[DeskPet] open topic failed:', error);
             }
+        });
+        // 桌宠上点了工具审批的允许/拒绝：按主窗口通知卡的流程应答
+        chatAPI.onDeskPetApprovalAnswer?.(({ requestId, approved } = {}) => {
+            window.notificationRenderer?.answerToolApproval?.(requestId, approved);
         });
         // 桌宠上点了停止：那条回复正显示在聊天里就按停止键走（界面状态一起收好）；
         // 已经切到别的话题了就直接让主进程中止那条请求

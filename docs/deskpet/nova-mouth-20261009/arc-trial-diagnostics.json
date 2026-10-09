@@ -1,0 +1,530 @@
+{
+  "state": "2a4b2999-379d-45c5-8c63-656297bd862a:30:1",
+  "history_node_id": "history-75af9607-86d4-4dfc-b44b-0326437767ed",
+  "project_id": "96fc7beb-6d72-4589-ba75-0b97dcc4cd0c",
+  "changed": [
+    "mesh:ArtMeshMouth",
+    "mesh:ArtMeshMouth_lip_0",
+    "mesh:ArtMeshMouth_lip_1"
+  ],
+  "geometry_diagnostics": {
+    "safe": true,
+    "affectedTargets": [
+      "mesh:ArtMeshMouth",
+      "mesh:ArtMeshMouth_lip_0",
+      "mesh:ArtMeshMouth_lip_1"
+    ],
+    "affectedCoordinates": {
+      "mesh:ArtMeshMouth": [
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        }
+      ],
+      "mesh:ArtMeshMouth_lip_0": [
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        }
+      ],
+      "mesh:ArtMeshMouth_lip_1": [
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        }
+      ]
+    },
+    "newFlipCount": 0,
+    "newDegenerateCount": 0,
+    "newInvalidTopologyCount": 0,
+    "newNonFiniteCount": 0,
+    "preexistingFlipCount": 62,
+    "preexistingDegenerateCount": 282,
+    "preexistingCollapseCount": 6,
+    "newCollapseCount": 0,
+    "violations": [],
+    "warnings": [],
+    "diagnostics": [
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 14,
+        "preexistingDegenerateCount": 90,
+        "preexistingCollapseCount": 6,
+        "candidateFlipCount": 14,
+        "candidateDegenerateCount": 90,
+        "candidateCollapseCount": 6
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 6,
+        "preexistingDegenerateCount": 96,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 6,
+        "candidateDegenerateCount": 96,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 12,
+        "preexistingDegenerateCount": 96,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 12,
+        "candidateDegenerateCount": 96,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 75,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_0",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": -1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 0.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 4,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 4,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 0.5
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 1,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 1,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      },
+      {
+        "target": "mesh:ArtMeshMouth_lip_1",
+        "coordinate": {
+          "ParamMouthForm": 1.0,
+          "ParamMouthOpenY": 1.0
+        },
+        "pointCount": 98,
+        "preexistingFlipCount": 0,
+        "preexistingDegenerateCount": 0,
+        "preexistingCollapseCount": 0,
+        "candidateFlipCount": 0,
+        "candidateDegenerateCount": 0,
+        "candidateCollapseCount": 0
+      }
+    ],
+    "scope": "Affected parent-local native key coordinates only; large Cartesian products are sampled. No parent composition, masks, painted coverage, physics, or aesthetics. Targets compared: only those the committed commands address, their deformer descendants, glue partners and generator-owned targets; the other targets were not compared.",
+    "coverage": {
+      "mode": "scoped",
+      "checkedTargets": 3,
+      "totalTargets": 59
+    }
+  }
+}

@@ -102,6 +102,7 @@ export function createPetLife({
     let cursor = null;             // { x, y, at }
     let gaze = null;               // { x, y }，以角色为中心、-1..1
     let nextGazeAt = 0;
+    let followCursor = true;       // 关掉时光标动也不跟，只自己四处看
 
     // 连点、摸头、晃醒
     let tapStreak = 0;
@@ -141,7 +142,7 @@ export function createPetLife({
             setGaze({ x: 0, y: phase === 'asleep' ? -0.6 : -0.35 });
             return;
         }
-        const cursorFresh = cursor && at - cursor.at < t.gazeIdleMs;
+        const cursorFresh = followCursor && cursor && at - cursor.at < t.gazeIdleMs;
         if (cursorFresh) {
             setGaze(null);
             return;
@@ -205,6 +206,14 @@ export function createPetLife({
 
         // 免打扰开着时不自己找事做（被碰到的反应照常）
         setQuiet(on) { quiet = Boolean(on); },
+
+        // 视线跟不跟光标（设置里的开关）
+        setFollowCursor(on) {
+            const next = on !== false;
+            if (next === followCursor) return;
+            followCursor = next;
+            updateGaze(true);
+        },
 
         // 长期心情 { emotion, intensity }：开心时小动作多、爱哼歌，难过时少动、不哼歌，累了更早犯困
         setMood(mood) {

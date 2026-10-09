@@ -27,6 +27,7 @@ const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const edgeSnap = require('../deskpet/edgeSnap');
 const throwMotion = require('../deskpet/throwMotion');
 const wander = require('../deskpet/wander');
+const idleChat = require('../deskpet/idleChat');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -42,6 +43,9 @@ const DRAG_TICK_MS = 16;
 const USE_SHAPE = process.platform === 'linux';
 const IMAGE_EXTENSIONS = outfitStore.IMAGE_EXTENSIONS;
 const SEND_TIMEOUT_MS = 10000;
+// 主窗口发出后还要等一会儿（最多 1.5 s）确认存进了历史才回结果：截止时间要把这段留出来，
+// 不然发出去了、结果却晚于桌宠的超时，用户再点一次就发了两遍
+const SEND_ACCEPT_MARGIN_MS = 2000;
 const DRAG_MAX_MS = 60000;
 const DISPLAY_SETTLE_MS = 400;
 // 启动时恢复上次的桌宠：等主窗口载完再开，不和首屏抢。
@@ -69,6 +73,12 @@ let lastTouched = null; // 最近一次被点、被叫出来的桌宠，「和�
 let refreshTray = () => {};
 let lastTalkedAgentId = null; // 最近一次发出请求的 agent，闹钟认不出是谁设的时交给它的桌宠
 const alarms = new Map(); // id -> { timer, dueAt, text, maid }
+// 闲时主动搭话（modules/deskpet/idleChat.js）：每个助手最近一次有来往、上次试着说的时间
+const idleState = new Map(); // agentId -> { lastActivityAt, lastAttemptAt, lastFailedAt }
+let idleTimer = null;
+let idleRunning = false;
+const pendingWhere = new Map(); // requestId -> resolve：问主窗口现在开着哪个话题
+let services = {}; // { readSettings, historyQueue, agentOps }：main.js 传进来的聊天记录服务（取值函数）
 const announcedTopics = new Set(); // 已经在桌宠上说过的话题（同一请求重放时结果会重复回来）
 
 function registerSchemes() {
@@ -97,6 +107,8 @@ function resolveServedFile(urlString) {
     if (root === 'app') return guard(path.join(paths.projectRoot, 'DeskPetmodules'), segments);
     if (root === 'vendor') return guard(path.join(paths.projectRoot, 'vendor'), segments);
     if (root === 'emotion') return guard(path.join(paths.projectRoot, 'modules', 'emotion'), segments);
+    // 助手自己没放头像时用应用的默认头像（和主窗口侧栏里显示的一样）
+    if (root === 'default-avatar.png' && !segments.length) return defaultAvatarPath();
     if (root === 'builtin') {
         if (segments.shift() !== 'nova') return null;
         return guard(builtInDirectory(), segments);
@@ -128,6 +140,10 @@ function guard(base, segments) {
 
 function coreFilePath() {
     return path.join(paths.appDataRoot, 'deskpet', 'live2dcubismcore.min.js');
+}
+
+function defaultAvatarPath() {
+    return path.join(paths.projectRoot, 'assets', 'default_avatar.png');
 }
 
 function builtInDirectory() {
@@ -203,7 +219,8 @@ async function resolveAssets(agentId, wantedOutfit) {
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js?v=${Math.round(coreStat.mtimeMs)}` : null,
         corePath: coreFilePath(),
         portraits: portraitUrls(agentId, outfit?.portraits || fallback),
-        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : null,
+        // 新建的助手目录里没有头像文件，主窗口显示的是默认头像：桌宠也用它，不要只剩一个表情符号
+        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : `${SCHEME}://pet/default-avatar.png`,
     };
 }
 
@@ -237,8 +254,8 @@ async function readPetState() {
 function savePetState(agentId, patch) {
     stateWrites = stateWrites.then(async () => {
         const state = await readStateFile();
-        // 记大小时顺带记下是按哪一版的 1 倍算的（见 petPrefs.savedScale）
-        const versioned = patch.scale === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
+        // 记大小、位置时顺带记下是按哪一版的尺寸算的（见 petPrefs.savedScale、legacyPosition）
+        const versioned = patch.scale === undefined && patch.x === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
         state[agentId] = { ...(state[agentId] || {}), ...versioned };
         // 先写临时文件再改名：写到一半被杀掉也只丢这一次，不会留下半个文件
         const tmp = `${petStatePath()}.tmp`;
@@ -271,12 +288,21 @@ function savedAspect(saved, outfitId) {
     return petPrefs.normalizeAspect(saved?.figures?.[outfitId]);
 }
 
-function defaultPosition(index, size) {
+// 没有记下位置的桌宠从屏幕右下角往左排：已经有桌宠站着的地方让开（窗口两边是透明的，按中间那段人物算），
+// 不然几个桌宠叠在同一个角落，后开的把前面的整个挡住。index 是第几个位置（显示器变了、要挪回来时用）。
+function defaultPosition(index, size, { avoid = [] } = {}) {
     const area = screen.getPrimaryDisplay().workArea;
-    return {
-        x: area.x + area.width - size.width - 24 - index * 40,
-        y: area.y + area.height - size.height,
-    };
+    const step = Math.max(40, Math.round(size.width * 0.55));
+    const xAt = (slot) => Math.max(area.x, area.x + area.width - size.width - 24 - slot * step);
+    const middle = (x, width) => [x + width * 0.25, x + width * 0.75];
+    const taken = (x) => avoid.some((b) => {
+        const [a1, a2] = middle(x, size.width);
+        const [b1, b2] = middle(b.x, b.width);
+        return a1 < b2 && b1 < a2;
+    });
+    let slot = index;
+    for (let i = 0; i < 12 && taken(xAt(slot)); i += 1) slot += 1;
+    return { x: xAt(slot), y: area.y + area.height - size.height };
 }
 
 function isOnScreen(x, y, size) {
@@ -297,16 +323,21 @@ function hasSavedPosition(saved) {
 }
 
 function initialBounds(saved, size) {
-    const fallback = defaultPosition(pets.size, size);
+    const others = [...pets.values()].filter((p) => !p.win.isDestroyed()).map((p) => p.win.getBounds());
+    const fallback = defaultPosition(0, size, { avoid: others });
     if (!hasSavedPosition(saved)) return { ...size, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
     if (!isOnScreen(saved.x, saved.y, size)) return { ...size, ...fallback };
-    // 在那块屏上放不全（换了分辨率、上次在更大的屏上）：整个挪回屏里
+    // 上次藏在屏幕边里：窗口本来就有一大截在屏外，原样放回（openPet 接着按藏边处理）
+    const tucked = saved.tuck?.tucked;
+    if (tucked && tucked.x === saved.x && tucked.y === saved.y) return { ...size, x: saved.x, y: saved.y };
+    // 在那块屏上放不全（换了分辨率、上次在更大的屏上）：整个挪回屏里。
+    // 底边留出脚下那截透明的余量：贴着任务栏、甩下去落地的桌宠窗口本来就比工作区低一点，重开不能悬空
     const area = workAreaAt({ x: saved.x, y: saved.y, ...size });
     return {
         ...size,
         x: Math.min(Math.max(saved.x, area.x), area.x + area.width - size.width),
-        y: Math.min(Math.max(saved.y, area.y), area.y + area.height - size.height),
+        y: Math.min(Math.max(saved.y, area.y), area.y + area.height - size.height + petPrefs.FOOT_RESERVE),
     };
 }
 
@@ -512,6 +543,12 @@ function clickThroughOn() {
     return controls?.get().clickThrough === true;
 }
 
+// 截图、录屏、共享屏幕时不出现在画面里（Linux 上 Electron 不支持，调用也无害）
+function applyCaptureHiding(win) {
+    if (!win || win.isDestroyed()) return;
+    try { win.setContentProtection(controls?.get().hideFromCapture === true); } catch { /* 平台不支持 */ }
+}
+
 function applyClickThrough(pet) {
     if (!pet || pet.win.isDestroyed()) return;
     const through = clickThroughOn() && !pet.interactive;
@@ -584,8 +621,13 @@ async function openPet(agentId, { anchor = null } = {}) {
     const savedRect = hasSavedPosition(saved) ? { x: saved.x, y: saved.y, ...petPrefs.windowSizeForScale(savedSize, aspect) } : null;
     const scale = petPrefs.fitScale(savedSize, workAreaAt(anchor || savedRect || screen.getPrimaryDisplay().workArea), aspect);
     const size = petPrefs.windowSizeForScale(scale, aspect);
+    // 旧版记的位置：按脚底对齐换到新尺寸，记下来以后就是新版的了
+    const legacy = anchor ? null : petPrefs.legacyPosition(saved, aspect, scale);
+    // 旧版记的大小也一起换成新版的记下来：之后记位置会标上新版，旧的大小就不能再留着
+    const oldSize = saved?.scale != null && !(Number(saved.sizeVersion) >= petPrefs.SIZE_VERSION);
+    if (legacy || oldSize) savePetState(agentId, { ...(legacy || {}), scale }).catch(() => {});
     const win = new BrowserWindow({
-        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
+        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(legacy ? { ...saved, ...legacy, tuck: null } : saved, size)),
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
@@ -611,13 +653,21 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
+    applyCaptureHiding(win);
     const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingToggle: null, readyWaiters: [] };
     // 上次藏在屏幕边里、位置没被挪过：接着藏，鼠标过来照样探出来
     const savedTuck = saved?.tuck;
     if (!anchor && savedTuck?.tucked && savedTuck?.outPos) {
         const [atX, atY] = win.getPosition();
+        const area = workAreaAt(win.getBounds());
         if (savedTuck.tucked.x === atX && savedTuck.tucked.y === atY) {
-            pet.tuck = { side: savedTuck.side, tucked: savedTuck.tucked, outPos: savedTuck.outPos, isOut: false };
+            if (isOuterEdge(area, savedTuck.side, atY + win.getBounds().height / 2)) {
+                pet.tuck = { side: savedTuck.side, tucked: savedTuck.tucked, outPos: savedTuck.outPos, isOut: false };
+            } else {
+                // 那条边外面现在接了别的屏：不再藏，整只出来
+                win.setPosition(savedTuck.outPos.x, savedTuck.outPos.y);
+                savePetState(agentId, { x: savedTuck.outPos.x, y: savedTuck.outPos.y, tuck: null }).catch(() => {});
+            }
         }
     }
     pets.set(agentId, pet);
@@ -641,9 +691,11 @@ async function openPet(agentId, { anchor = null } = {}) {
         if (win.isDestroyed()) return;
         resetInputState(pet);
         if (details.reason === 'clean-exit') return;
-        // 最多自动重载 3 次，避免模型本身有问题时无限崩溃重启。
-        pet.crashes = (pet.crashes || 0) + 1;
-        if (pet.crashes <= 3) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
+        // 一分钟里崩了 3 次以上才放弃（模型本身有问题时别无限崩溃重启）；
+        // 偶尔崩一次（显卡驱动重置、睡眠唤醒）不攒着算，挂一整天的桌宠不会因为第四次偶发崩溃就消失
+        const now = Date.now();
+        pet.crashTimes = [...(pet.crashTimes || []).filter((at) => now - at < CRASH_WINDOW_MS), now];
+        if (pet.crashTimes.length <= CRASH_LIMIT) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
         else win.close();
     });
     // 窗口开着时关了后台节流（主窗口最小化时桌宠照常动），隐藏时页面感觉不到，主动告诉它停下。
@@ -662,6 +714,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         stopSnap(pet);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
+        for (const [requestId, entry] of pendingApprovals) if (entry.agentId === agentId) pendingApprovals.delete(requestId);
         pets.delete(agentId);
         updateTopmostGuard();
         updateFullscreenWatch();
@@ -683,8 +736,10 @@ async function openPet(agentId, { anchor = null } = {}) {
 function moveWithCursor(pet, drag) {
     const c = screen.getCursorScreenPoint();
     // 记最近几个光标位置：松手时按它算甩出去的速度
+    // 光标没动就不记：停稳了再松手时最后一个样本是旧的，才认得出「不是甩」
     const samples = drag.samples || (drag.samples = []);
-    samples.push({ t: Date.now(), x: c.x, y: c.y });
+    const last = samples[samples.length - 1];
+    if (!last || last.x !== c.x || last.y !== c.y) samples.push({ t: Date.now(), x: c.x, y: c.y });
     if (samples.length > 12) samples.shift();
     applyBounds(pet, { x: c.x - drag.dx, y: c.y - drag.dy, ...sizeOf(pet) }, { verify: false });
 }
@@ -787,6 +842,9 @@ function snapToEdge(pet, figure, { free = false } = {}) {
 function untuck(pet) {
     clearTimeout(pet.tuckTimer);
     pet.tuck = null;
+    // 正在滑、甩、溜达的也停下：它们的下一帧还按旧位置、旧屏走
+    stopSnap(pet);
+    stopWalk(pet, { save: false });
 }
 
 // 藏在边里的桌宠：鼠标停在露出来的那条上、气泡或输入框开着时整只探出来；都没了等一会儿再缩回去。
@@ -867,10 +925,43 @@ function resetInputState(pet) {
     applyClickThrough(pet);
 }
 
+const CRASH_WINDOW_MS = 60 * 1000;
+const CRASH_LIMIT = 3;
+
 function closePet(agentId) {
     const pet = pets.get(agentId);
     if (pet && !pet.win.isDestroyed()) pet.win.close();
     return { success: true, open: false };
+}
+
+/** 助手被删掉：关掉 TA 的桌宠，state.json、开着的列表、最近用过的、卡片快照里都不再留着 TA。
+ *  在删目录之前调用（Windows 上桌宠页面还开着时，正在用的模型文件可能删不掉）。 */
+async function forgetAgent(agentId) {
+    if (!paths || !isAgentId(agentId)) return; // 桌宠模块没启用
+    const pet = pets.get(agentId);
+    if (pet && !pet.win.isDestroyed()) {
+        const closed = new Promise((resolve) => pet.win.once('closed', resolve));
+        pet.win.close();
+        await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 2000))]);
+    }
+    if (controls) {
+        const settings = controls.get();
+        controls.update({
+            openAgents: settings.openAgents.filter((id) => id !== agentId),
+            ...(settings.lastAgent === agentId ? { lastAgent: null } : {}),
+        });
+    }
+    stateWrites = stateWrites.then(async () => {
+        const state = await readStateFile();
+        if (!(agentId in state)) return;
+        delete state[agentId];
+        const tmp = `${petStatePath()}.tmp`;
+        await fs.outputJson(tmp, state, { spaces: 2 });
+        await fs.move(tmp, petStatePath(), { overwrite: true });
+    }).catch((error) => console.warn('[DeskPet] state save failed:', error.message));
+    await stateWrites;
+    await previews?.forget(agentId);
+    refreshTray();
 }
 
 function petFromEvent(event) {
@@ -922,7 +1013,10 @@ function forward(agentId, event) {
 }
 
 function onRequestStart(messageId, context) {
-    if (context?.agentId) lastTalkedAgentId = context.agentId;
+    if (context?.agentId) {
+        lastTalkedAgentId = context.agentId;
+        noteActivity(context.agentId);
+    }
     forward(context?.agentId, { type: 'start', messageId: String(messageId) });
 }
 
@@ -933,8 +1027,12 @@ function onStreamPayload(payload) {
     if (payload.type === 'data') {
         const text = extractDeltaText(payload.chunk);
         if (text) forward(agentId, { type: 'data', messageId, text });
-    } else if (payload.type === 'end' || payload.type === 'error') {
-        forward(agentId, { type: payload.type, messageId });
+    } else if (payload.type === 'end') {
+        forward(agentId, { type: 'end', messageId });
+    } else if (payload.type === 'error') {
+        // 出错的原因也带过去（主窗口里显示的那句）：桌宠上只写「出错了」的话，用户不知道是断网、超时还是服务器报错
+        const reason = typeof payload.error === 'string' ? payload.error.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+        forward(agentId, { type: 'error', messageId, ...(reason ? { error: reason } : {}) });
     }
 }
 
@@ -952,6 +1050,8 @@ function onFullResponse(messageId, context, response) {
 // 桌宠带过来的文件：拖进来的（本机路径）或粘贴的图片（字节）。主窗口按拖进输入框的流程存成附件。
 const MAX_SEND_FILES = 10;
 const MAX_SEND_FILE_BYTES = 20 * 1024 * 1024;
+// 拖进来的文件：主窗口发送时整个读进内存再存一份，太大的会卡住整个程序
+const MAX_DROP_FILE_BYTES = 200 * 1024 * 1024;
 
 function cleanSendFiles(files) {
     if (!Array.isArray(files)) return [];
@@ -963,6 +1063,17 @@ function cleanSendFiles(files) {
         else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_SEND_FILE_BYTES) out.push({ data: Buffer.from(file.data), name, type });
     }
     return out;
+}
+
+// 拖进来的文件：只收普通文件（不收文件夹、设备），也不收大到会卡住主窗口的。返回第一个不行的原因
+async function checkDroppedFiles(files) {
+    for (const file of files) {
+        if (!file.path) continue;
+        const stat = await fs.stat(file.path).catch(() => null);
+        if (!stat?.isFile()) return `「${file.name}」不是能发的文件`;
+        if (stat.size > MAX_DROP_FILE_BYTES) return `「${file.name}」太大了（超过 200 MB）`;
+    }
+    return '';
 }
 
 function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
@@ -979,7 +1090,7 @@ function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - SEND_ACCEPT_MARGIN_MS });
     });
 }
 
@@ -1034,6 +1145,7 @@ function prefsFor(pet) {
         clickThrough: settings.clickThrough === true,
         opacity: settings.opacity ?? 1,
         wander: settings.wander === true,
+        followCursor: settings.followCursor !== false,
         // 页面提示里写怎么关：按平台写成 Ctrl / Cmd
         clickThroughKey: key.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl'),
     };
@@ -1158,9 +1270,14 @@ async function toggleAllPets() {
         for (const pet of live) showPet(pet);
     } else {
         const settings = controls?.get();
-        const candidates = [...(settings?.openAgents || []), settings?.lastAgent].filter(Boolean);
-        for (const agentId of [...new Set(candidates)].slice(0, 1)) await openPet(agentId);
-        if (!pets.size) openMainWindow();
+        let candidates = [...new Set([...(settings?.openAgents || []), settings?.lastAgent].filter(Boolean))];
+        // 第一次按：还没开过桌宠。有叫 Nova 的助手就请出内置 Nova；没有就打开设置页的桌宠分区，告诉 TA 从哪开始
+        if (!candidates.length) {
+            const nova = (await listAgents()).find((agent) => agent.name.trim().toLowerCase() === 'nova');
+            if (nova) candidates = [nova.id];
+        }
+        for (const agentId of candidates.slice(0, 1)) await openPet(agentId);
+        if (!pets.size) openSettingsPage();
     }
     for (const pet of live) notifyMain(pet.agentId);
     refreshTray();
@@ -1308,7 +1425,6 @@ function trayMenuItems() {
     const settings = controls.get();
     const live = [...pets.values()].filter((pet) => !pet.win.isDestroyed());
     const anyVisible = live.some((pet) => pet.win.isVisible());
-    const hasCandidate = live.length > 0 || settings.openAgents.length > 0 || Boolean(settings.lastAgent);
     // 只显示快捷键，不在菜单里再注册一次（全局快捷键已经注册过了）
     const shortcut = (id) => (settings.shortcuts[id] ? { accelerator: settings.shortcuts[id], registerAccelerator: false } : {});
     const toggle = () => toggleAllPets().catch(() => {});
@@ -1316,9 +1432,9 @@ function trayMenuItems() {
     return [{
         label: '桌宠',
         submenu: [
-            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, enabled: hasCandidate, click: toggle },
-            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, enabled: hasCandidate, click: toggle },
-            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
+            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, click: toggle },
+            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, click: toggle },
+            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
             { id: 'deskpet-dnd', label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
             { id: 'deskpet-click-through', label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
@@ -1427,6 +1543,63 @@ async function alarmTarget(maid) {
     return visibleAgents()[0] || [...pets.keys()][0] || null;
 }
 
+// ---- 工具审批 ---------------------------------------------------------------------
+// 服务器要人点头的工具调用，主窗口判完自动允许规则后仍待批的，转给发起它的助手的桌宠一份。
+// 应答仍由主窗口发出（它管着去重、过期和理由框），桌宠只是另一个按钮；谁先答都算，答完两边都收起。
+
+const MAX_PENDING_APPROVALS = 50;
+const pendingApprovals = new Map(); // requestId → { agentId, payload }
+
+async function offerApproval(raw) {
+    if (!raw || typeof raw !== 'object') return false;
+    const requestId = typeof raw.requestId === 'string' || typeof raw.requestId === 'number' ? String(raw.requestId) : '';
+    if (!requestId || pendingApprovals.has(requestId)) return false;
+    const ttl = Number(raw.expiresInMs);
+    if (raw.expiresInMs != null && Number.isFinite(ttl) && ttl <= 0) return false;
+    const payload = {
+        requestId,
+        toolName: String(raw.toolName || '').slice(0, 120),
+        command: String(raw.command ?? '').slice(0, 2000),
+        expiresAt: Number.isFinite(ttl) && ttl > 0 ? Date.now() + ttl : null,
+    };
+    // 查助手目录前先占位：查询期间主窗口可能已经应答，也可能重放同一请求。
+    // 过期时间从收到请求起算，不能被慢查询延长。
+    const entry = { agentId: null, payload };
+    pendingApprovals.set(requestId, entry);
+    if (pendingApprovals.size > MAX_PENDING_APPROVALS) settleApproval(pendingApprovals.keys().next().value);
+    try {
+        // 认得出是谁要的就给谁；认不出（没写 maid、名字对不上）就给最近在聊的那个
+        const agentId = (await agentIdByName(raw.maid)) || (lastTalkedAgentId && pets.has(lastTalkedAgentId) ? lastTalkedAgentId : null);
+        if (pendingApprovals.get(requestId) !== entry) return false;
+        if (payload.expiresAt !== null && payload.expiresAt <= Date.now()) return false;
+        const pet = agentId && pets.get(agentId);
+        if (!pet || pet.win.isDestroyed() || shuttingDown) return false;
+        entry.agentId = agentId;
+        if (pet.ready) pet.win.webContents.send('deskpet:approval', payload);
+        return true;
+    } finally {
+        if (!entry.agentId && pendingApprovals.get(requestId) === entry) pendingApprovals.delete(requestId);
+    }
+}
+
+function settleApproval(requestId) {
+    const entry = pendingApprovals.get(String(requestId));
+    if (!entry) return false;
+    pendingApprovals.delete(String(requestId));
+    const pet = pets.get(entry.agentId);
+    if (pet && !pet.win.isDestroyed()) pet.win.webContents.send('deskpet:approval-clear', String(requestId));
+    return true;
+}
+
+// 页面重载（换装、崩溃恢复）后把还在等的审批再给它
+function resendApprovals(pet) {
+    const now = Date.now();
+    for (const [requestId, entry] of pendingApprovals) {
+        if (entry.payload.expiresAt && entry.payload.expiresAt <= now) pendingApprovals.delete(requestId);
+        else if (entry.agentId === pet.agentId) pet.win.webContents.send('deskpet:approval', entry.payload);
+    }
+}
+
 function parsePluginOutput(result) {
     if (result && typeof result === 'object') return result;
     const text = String(result || '');
@@ -1498,6 +1671,183 @@ async function openTopic(agentId, topicId) {
     return true;
 }
 
+// ---- 闲时主动搭话 ------------------------------------------------------------
+// 设置里打开后，每分钟看一眼：人在电脑前、这么久没和助手说话、没开免打扰、桌宠露着，就让助手说一句。
+// 一次只让一个桌宠说（最近聊过的那个优先）。说的话记进这个助手的「桌宠闲聊」话题，点气泡切过去接着聊。
+
+const IDLE_TICK_MS = 60 * 1000;
+const WHERE_TIMEOUT_MS = 1500;
+
+function noteActivity(agentId) {
+    if (!agentId) return;
+    const state = idleState.get(agentId) || { lastActivityAt: 0, lastAttemptAt: 0, lastFailedAt: 0 };
+    state.lastActivityAt = Date.now();
+    state.activity = (state.activity || 0) + 1;
+    idleState.set(agentId, state);
+}
+
+function idleStateFor(agentId) {
+    let state = idleState.get(agentId);
+    if (!state) {
+        // 刚打开的桌宠从现在开始算，不会一开就说
+        state = { lastActivityAt: Date.now(), lastAttemptAt: 0, lastFailedAt: 0 };
+        idleState.set(agentId, state);
+    }
+    return state;
+}
+
+function updateIdleTimer() {
+    const on = controls?.get().idleChat === true;
+    if (on && !idleTimer) {
+        idleTimer = setInterval(() => { idleTick().catch((error) => console.warn('[DeskPet] idle chat failed:', error?.message || error)); }, IDLE_TICK_MS);
+        idleTimer.unref?.();
+    } else if (!on && idleTimer) {
+        clearInterval(idleTimer);
+        idleTimer = null;
+    }
+}
+
+function systemAway() {
+    try {
+        const idleSec = electron.powerMonitor?.getSystemIdleTime?.() ?? 0;
+        const lockState = electron.powerMonitor?.getSystemIdleState?.(idleChat.AWAY_AFTER_SEC);
+        return { idleSec, locked: lockState === 'locked' };
+    } catch {
+        return { idleSec: 0, locked: false };
+    }
+}
+
+// 主窗口现在开着哪个助手的哪个话题：开着「桌宠闲聊」时不往里写（主窗口手里的那份历史会盖掉这一句）
+function mainWhere() {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(null);
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingWhere.delete(requestId);
+            resolve(null);
+        }, WHERE_TIMEOUT_MS);
+        pendingWhere.set(requestId, (where) => {
+            clearTimeout(timer);
+            pendingWhere.delete(requestId);
+            resolve(where && typeof where === 'object' ? where : null);
+        });
+        mainWindow.webContents.send('deskpet:where-request', { requestId });
+    });
+}
+
+// 最近在聊的话题（历史文件最新改过的那个）里的最后几句，给助手接话用
+async function recentHistory(agentId, config) {
+    const queue = services.historyQueue?.();
+    const topics = Array.isArray(config?.topics) ? config.topics.slice(0, 30) : [];
+    if (!queue || !topics.length) return [];
+    let best = null;
+    for (const topic of topics) {
+        if (!topic?.id) continue;
+        let file;
+        try { file = queue.getHistoryPath(agentId, topic.id); } catch { continue; }
+        const stat = await fs.stat(file).catch(() => null);
+        if (stat && (!best || stat.mtimeMs > best.mtimeMs)) best = { id: topic.id, mtimeMs: stat.mtimeMs };
+    }
+    if (!best) return [];
+    return queue.read({ itemId: agentId, itemType: 'agent', topicId: best.id }).catch(() => []);
+}
+
+function idleCandidates() {
+    const visible = visibleAgents().filter((id) => {
+        const pet = pets.get(id);
+        return pet && !pet.win.isDestroyed() && pet.win.isVisible();
+    });
+    if (lastTalkedAgentId && visible.includes(lastTalkedAgentId)) return [lastTalkedAgentId, ...visible.filter((id) => id !== lastTalkedAgentId)];
+    return visible;
+}
+
+async function idleTick({ now = Date.now(), force = false } = {}) {
+    if (idleRunning || shuttingDown) return { spoke: false, reason: 'running' };
+    const settings = controls?.get() || petPrefs.DEFAULT_SETTINGS;
+    const away = systemAway();
+    const agentId = idleCandidates()[0];
+    if (!agentId) return { spoke: false, reason: 'no-pet' };
+    const state = idleStateFor(agentId);
+    const verdict = force ? { ok: true } : idleChat.shouldSpeak({
+        enabled: settings.idleChat === true,
+        minutes: settings.idleChatMinutes,
+        now,
+        ...state,
+        systemIdleSec: away.idleSec,
+        locked: away.locked,
+        doNotDisturb: settings.doNotDisturb === true,
+        visible: true,
+    });
+    if (!verdict.ok) return { spoke: false, reason: verdict.reason };
+    idleRunning = true;
+    state.lastAttemptAt = now;
+    try {
+        return await speakIdle(agentId, state);
+    } finally {
+        idleRunning = false;
+    }
+}
+
+async function speakIdle(agentId, state) {
+    // 生成这段时间里有了来往（用户开始说话了）就不说：按次数比，不按毫秒比
+    const activityBefore = state.activity || 0;
+    const agentOps = services.agentOps?.();
+    const queue = services.historyQueue?.();
+    const appSettings = await services.readSettings?.().catch(() => null);
+    if (!agentOps || !queue || !appSettings?.vcpServerUrl) return { spoke: false, reason: 'no-service' };
+    const fail = (reason) => {
+        state.lastFailedAt = Date.now();
+        return { spoke: false, reason };
+    };
+    let config;
+    try { config = await agentOps.readAgent(agentId); } catch { return fail('no-agent'); }
+    const agentName = config?.name || agentId;
+    const history = await recentHistory(agentId, config);
+    const messages = idleChat.buildMessages({
+        config,
+        agentName,
+        history,
+        promptAppend: getSystemPromptAppend(agentId, promptText(config)),
+        userName: appSettings.userName || '用户',
+    });
+    let line;
+    try {
+        line = idleChat.cleanLine(await idleChat.generate({ url: appSettings.vcpServerUrl, key: appSettings.vcpApiKey, model: config?.model, messages }));
+    } catch (error) {
+        console.warn('[DeskPet] idle chat generate failed:', error?.message || error);
+        return fail('generate');
+    }
+    if (!line) return fail('empty');
+    // 等回复这段时间里用户可能开始说话了、开了免打扰、把桌宠藏了：这句就不说了
+    const pet = pets.get(agentId);
+    if (!pet || pet.win.isDestroyed() || !pet.win.isVisible() || controls?.get().doNotDisturb) return { spoke: false, reason: 'changed' };
+    if ((state.activity || 0) !== activityBefore) return { spoke: false, reason: 'changed' };
+    const where = await mainWhere();
+    const topics = Array.isArray(config?.topics) ? config.topics : [];
+    const idleTopic = topics.find((t) => t?.creatorSource === idleChat.IDLE_TOPIC_SOURCE);
+    if (!where || (idleTopic && where.itemId === agentId && where.topicId === idleTopic.id)) return { spoke: false, reason: 'topic-open' };
+    const tag = line.emotion ? `<!--emo:${line.emotion} ${line.intensity}-->` : '';
+    let topicId;
+    try {
+        topicId = await idleChat.recordLine({
+            agent: { id: agentId, name: agentName, avatarColor: config?.avatarCalculatedColor || config?.avatarColor },
+            text: `${tag}${line.text}`,
+            updateConfig: (id, updater) => agentOps.updateAgent(id, updater),
+            historyQueue: queue,
+        });
+    } catch (error) {
+        console.warn('[DeskPet] idle chat record failed:', error?.message || error);
+        return fail('record');
+    }
+    const spoke = proactive(agentId, { kind: 'topic', title: idleChat.IDLE_TOPIC_NAME, text: line.text, topicId, emotion: line.emotion, intensity: line.intensity });
+    if (spoke) state.lastActivityAt = Date.now();
+    return { spoke, topicId, text: line.text };
+}
+
+function promptText(config) {
+    return String(config?.systemPrompt ?? config?.originalSystemPrompt ?? '');
+}
+
 // ---- 持续心情 ----------------------------------------------------------------
 
 const MOOD_LABEL = {
@@ -1535,6 +1885,10 @@ function registerIpc() {
     ipcMain.on('deskpet:send-result', (_e, payload) => {
         pendingSends.get(payload?.requestId)?.(payload?.result);
     });
+    ipcMain.on('deskpet:where-result', (event, payload) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        pendingWhere.get(payload?.requestId)?.(payload?.where);
+    });
 
     ipcMain.handle('deskpet:get-assets', async (event) => {
         const pet = petFromEvent(event);
@@ -1564,6 +1918,7 @@ function registerIpc() {
         const pending = pet.pendingToggle;
         pet.pendingToggle = null;
         if (pending) openInput(pet, pending);
+        resendApprovals(pet);
         settleReady(pet);
     });
     // 页面启动失败：等着交给它的话不再等
@@ -1608,6 +1963,10 @@ function registerIpc() {
         const message = typeof text === 'string' ? text.trim() : '';
         const attached = cleanSendFiles(options?.files);
         if (!pet || (!message && !attached.length)) return { success: false, error: '没有内容' };
+        if (attached.some((f) => f.path)) {
+            const problem = await checkDroppedFiles(attached);
+            if (problem) return { success: false, error: problem };
+        }
         stopWalk(pet);
         return sendFromPet(pet.agentId, message.slice(0, 8000), { files: attached, newTopic: options?.newTopic === true });
     });
@@ -1634,6 +1993,27 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    // 工具审批：主窗口转来、主窗口说答完了；桌宠上点了允许/拒绝交回主窗口
+    ipcMain.on('deskpet:approval-offer', (event, payload) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        offerApproval(payload).catch((error) => console.warn('[DeskPet] approval offer failed:', error?.message || error));
+    });
+    ipcMain.on('deskpet:approval-settled', (event, requestId) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        settleApproval(requestId);
+    });
+    ipcMain.on('deskpet:approval-answer', (event, answer) => {
+        const pet = petFromEvent(event);
+        const requestId = String(answer?.requestId || '');
+        const entry = pendingApprovals.get(requestId);
+        if (!pet || entry?.agentId !== pet.agentId) return;
+        if (entry.payload.expiresAt !== null && entry.payload.expiresAt <= Date.now()) {
+            settleApproval(requestId);
+            return;
+        }
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('deskpet:approval-answer', { requestId, approved: answer?.approved === true });
+    });
     // 桌宠上点了停止：交给主窗口按它的中止流程停掉那条回复
     ipcMain.on('deskpet:interrupt', (event, messageId) => {
         const pet = petFromEvent(event);
@@ -1715,7 +2095,10 @@ function registerIpc() {
         const f = report?.figure;
         const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
         const free = report?.free === true;
-        if (!free && figure && throwPet(pet, figure, samples)) return;
+        // 拖出屏幕边一大截松手是想藏起来，不当成甩
+        const win = pet.win.getBounds();
+        const tucking = figure && edgeSnap.tuckPosition(win, figure, workAreaAt(win), (side, y) => isOuterEdge(workAreaAt(win), side, y));
+        if (!free && figure && !tucking && throwPet(pet, figure, samples)) return;
         snapToEdge(pet, figure, { free });
     });
 
@@ -1802,6 +2185,11 @@ function initialize(options) {
         appDataRoot: options.appDataRoot,
         agentDir: options.agentDir,
     };
+    services = {
+        readSettings: typeof options.readSettings === 'function' ? options.readSettings : null,
+        historyQueue: typeof options.historyQueue === 'function' ? options.historyQueue : null,
+        agentOps: typeof options.agentOps === 'function' ? options.agentOps : null,
+    };
     registerProtocol();
     registerIpc();
     voice.initialize({ paths, findPet: petFromEvent });
@@ -1857,7 +2245,7 @@ function initialize(options) {
                 const pet = pets.get(agentId);
                 if (!pet || pet.win.isDestroyed() || !pet.ready) return false;
                 pet.win.webContents.send('deskpet:profile', payload);
-                if (payload?.emotion) showPet(pet);
+                if (payload?.emotion || payload?.tap) showPet(pet);
                 return true;
             },
             setVisible: setPetsVisible,
@@ -1870,15 +2258,18 @@ function initialize(options) {
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander')) broadcastPrefs();
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander' || key === 'followCursor')) broadcastPrefs();
+        if (changed.includes('hideFromCapture')) for (const pet of pets.values()) applyCaptureHiding(pet.win);
         if (changed.includes('wander') && controls.get().wander !== true) for (const pet of pets.values()) stopWalk(pet);
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
+        if (changed.includes('idleChat')) updateIdleTimer();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
     });
     const settingsReady = controls.load().then(() => {
         controls.applyShortcuts();
         refreshTray();
+        updateIdleTimer();
     });
     // 主窗口载完以后再恢复上次的桌宠
     const scheduleRestore = () => settingsReady.then(() => setTimeout(restoreOpenPets, RESTORE_DELAY_MS));
@@ -1887,6 +2278,9 @@ function initialize(options) {
     screen.on('display-removed', onDisplaysChanged);
     screen.on('display-added', onDisplaysChanged);
     screen.on('display-metrics-changed', onDisplaysChanged);
+    // 睡眠唤醒、解锁以后：笔记本可能拔了扩展坞、换了分辨率，置顶也可能被系统取消。和显示器变了一样重新摆一遍
+    electron.powerMonitor?.on?.('resume', onDisplaysChanged);
+    electron.powerMonitor?.on?.('unlock-screen', onDisplaysChanged);
     import(pathToFileURL(path.join(paths.projectRoot, 'modules', 'emotion', 'emotionPrompt.js')).href)
         .then((mod) => { emotionPrompt = mod; })
         .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
@@ -1899,12 +2293,15 @@ function initialize(options) {
 function closeAll() {
     // 退出（或主窗口关掉）时一起关：恢复列表保持原样，下次启动照旧打开
     shuttingDown = true;
+    pendingApprovals.clear();
     for (const agentId of [...pets.keys()]) closePet(agentId);
     fullscreenWatch?.stop();
     controls?.dispose();
     previews?.dispose();
     for (const { timer } of alarms.values()) clearTimeout(timer);
     alarms.clear();
+    if (idleTimer) clearInterval(idleTimer);
+    idleTimer = null;
 }
 
 // chatHandlers 在主聊天的发送和流式路径上调用这些钩子；桌宠出任何错都不能打断主聊天。
@@ -1933,11 +2330,15 @@ module.exports = {
     onStreamPayload: isolated('onStreamPayload', onStreamPayload),
     onFullResponse: isolated('onFullResponse', onFullResponse),
     onDistributedToolResult: isolated('onDistributedToolResult', onDistributedToolResult),
+    forgetAgent: (agentId) => Promise.resolve(forgetAgent(agentId)).catch((error) => console.warn('[DeskPet] forget agent failed:', error.message)),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _applyFullscreen: applyFullscreen,
+    _idleTick: idleTick,
+    _idleState: () => idleState,
     _controls: () => controls,
     _pets: () => pets,
+    _pendingApprovals: () => pendingApprovals,
     _resolveServedFile: (url, testPaths) => {
         const previous = paths;
         paths = testPaths;

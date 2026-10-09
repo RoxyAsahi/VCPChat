@@ -32,9 +32,11 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
-    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）
-    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: 'CommandOrControl+Alt+Shift+V' },
-    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
+    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）。
+    // 这两个默认不占键：全局快捷键对所有程序生效，Cmd+Opt+Shift+V（macOS 的「粘贴并匹配样式」）、
+    // Ctrl+Alt+Shift+T（JetBrains 的重构）这类组合一占，别的程序里就按不出来了。要用在设置页里录一个。
+    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: '' },
+    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: '' },
 });
 
 // VCPChat 自己已经占用的组合键（全局快捷键和菜单），桌宠不能抢。
@@ -60,6 +62,13 @@ const DEFAULT_SETTINGS = Object.freeze({
     opacity: 1,
     // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
     wander: false,
+    // 视线跟着光标走；关掉后只自己四处看（光标在屏幕上来回动时不会一直盯着）
+    followCursor: true,
+    // 截图、录屏、共享屏幕时桌宠不出现在画面里（Windows、macOS 有效）
+    hideFromCapture: false,
+    // 闲时主动搭话：人在电脑前、这么久（分钟）没和助手说话时让 TA 说一句（会调用模型，默认关）
+    idleChat: false,
+    idleChatMinutes: 30,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -97,6 +106,26 @@ function characterBox(aspect) {
 }
 
 /** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
+/**
+ * 旧版（sizeVersion < 2）记下的窗口位置换到新尺寸下：旧窗口没有脚下的余量、1 倍也更大，
+ * 原样用左上角的话脚会离开原来站的地方（站在任务栏上的会悬空）。按角色脚底中点对齐算新的左上角。
+ * scale 是换算后的新倍数；不是旧版记录、没有位置时返回 null。
+ */
+function legacyPosition(saved, aspect, scale) {
+    if (!saved || Number(saved.sizeVersion) >= SIZE_VERSION) return null;
+    // 旧版量完形象就会记一次大小；没记过大小的是新版里还没改过大小的，不动
+    if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y) || saved.scale == null || !Number.isFinite(Number(saved.scale))) return null;
+    const raw = Number(saved.scale);
+    const box = characterBox(aspect);
+    const oldWidth = Math.max(280, roundToGrid((box.width / SIZE_FACTOR) * raw));
+    const oldFeet = saved.y + UI_RESERVE + (box.height / SIZE_FACTOR) * raw;
+    const size = windowSizeForScale(scale, aspect);
+    return {
+        x: Math.round(saved.x + (oldWidth - size.width) / 2),
+        y: Math.round(oldFeet - UI_RESERVE - box.height * clampScale(scale)),
+    };
+}
+
 function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
     const box = characterBox(aspect);
@@ -220,6 +249,8 @@ function isAgentIdLike(value) {
 }
 
 const OPACITY_MIN = 0.3;
+// 闲时主动搭话的间隔可选项（分钟），与 modules/deskpet/idleChat.js 一致
+const IDLE_CHAT_MINUTES = Object.freeze([10, 30, 60]);
 
 /** 不透明度：0.3–1，按 0.05 取整；不是数就当 1 */
 function normalizeOpacity(value) {
@@ -229,24 +260,43 @@ function normalizeOpacity(value) {
 }
 
 /** 把磁盘上读到的设置（可能缺字段、被手改坏）整理成完整、合法的设置。 */
+// 设置文件的格式版本。2：语音、只看不点两个快捷键默认不再占键；之前的文件里存着的旧默认键当作没设
+const SETTINGS_VERSION = 2;
+const RETIRED_DEFAULTS = Object.freeze({
+    voice: 'CommandOrControl+Alt+Shift+V',
+    clickThrough: 'CommandOrControl+Alt+Shift+T',
+});
+
 function normalizeSettings(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
+    const legacy = !(Number(input.version) >= SETTINGS_VERSION);
     const shortcuts = {};
     for (const id of Object.keys(SHORTCUT_ACTIONS)) {
-        const given = input.shortcuts && Object.prototype.hasOwnProperty.call(input.shortcuts, id) ? input.shortcuts[id] : undefined;
+        let given = input.shortcuts && Object.prototype.hasOwnProperty.call(input.shortcuts, id) ? input.shortcuts[id] : undefined;
+        if (legacy && given !== undefined && RETIRED_DEFAULTS[id] && normalizeAccelerator(given) === RETIRED_DEFAULTS[id]) given = undefined;
         const normalized = given === undefined ? DEFAULT_SETTINGS.shortcuts[id] : normalizeAccelerator(given);
         shortcuts[id] = normalized === null || isReserved(normalized) ? DEFAULT_SETTINGS.shortcuts[id] : normalized;
     }
-    // 两个动作撞了同一个键：后一个作废
-    if (shortcuts.talk && shortcuts.talk === shortcuts.toggle) shortcuts.talk = '';
+    // 几个动作撞了同一个键：排在后面的作废
+    const used = new Set();
+    for (const id of Object.keys(shortcuts)) {
+        if (!shortcuts[id]) continue;
+        if (used.has(shortcuts[id])) shortcuts[id] = '';
+        else used.add(shortcuts[id]);
+    }
     const openAgents = Array.isArray(input.openAgents) ? [...new Set(input.openAgents.filter(isAgentIdLike))].slice(0, 16) : [];
     return {
+        version: SETTINGS_VERSION,
         doNotDisturb: input.doNotDisturb === true,
         restoreOnLaunch: input.restoreOnLaunch !== false,
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
         opacity: normalizeOpacity(input.opacity),
         wander: input.wander === true,
+        followCursor: input.followCursor !== false,
+        hideFromCapture: input.hideFromCapture === true,
+        idleChat: input.idleChat === true,
+        idleChatMinutes: IDLE_CHAT_MINUTES.includes(Number(input.idleChatMinutes)) ? Number(input.idleChatMinutes) : 30,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
@@ -256,6 +306,7 @@ function normalizeSettings(raw) {
 module.exports = {
     normalizeOpacity,
     OPACITY_MIN,
+    IDLE_CHAT_MINUTES,
     BASE_CHARACTER,
     SIZE_VERSION,
     UI_RESERVE,
@@ -275,7 +326,9 @@ module.exports = {
     maxScaleForWorkArea,
     fitScale,
     resizeAnchored,
+    legacyPosition,
     normalizeAccelerator,
     isReserved,
     normalizeSettings,
+    SETTINGS_VERSION,
 };

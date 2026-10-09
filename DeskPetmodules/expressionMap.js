@@ -11,6 +11,29 @@ export const EMOTION_LABELS = [
 ];
 export const EMOTION_KEYS = EMOTION_LABELS.map(([key]) => key);
 
+// 点到哪儿（DeskPetmodules/hitAreas.js 的区域）→ 自己绑定的表情和动作，写在 deskpet.json 的 taps 下：
+//   { "taps": { "head": { "expression": "Blushing", "motion": "TapHead" }, "body": { "motion": "TapBody" } } }
+// 没绑定的按原来的反应演（点头害羞、点身体开心）。
+export const TAP_ZONES = [['head', '点头'], ['body', '点身体']];
+export const TAP_KEYS = TAP_ZONES.map(([key]) => key);
+
+/** 这个区域绑定的 { expression, motion }（模型里没有的名字当没绑）；什么都没绑返回 null。 */
+export function pickTap(zone, names, groups, profile = {}) {
+    const bound = profile?.taps?.[zone];
+    if (!bound || typeof bound !== 'object') return null;
+    const expression = typeof bound.expression === 'string' && names.includes(bound.expression) ? bound.expression : null;
+    const motion = typeof bound.motion === 'string' && groups.includes(bound.motion) ? bound.motion : null;
+    return expression || motion ? { expression, motion } : null;
+}
+
+/** 设置页用：每个区域现在绑了什么（没绑是 null，交给默认反应）。 */
+export function describeTaps({ names = [], groups = [], profile = {} } = {}) {
+    return TAP_ZONES.map(([zone, label]) => {
+        const bound = pickTap(zone, names, groups, profile);
+        return { zone, label, expression: bound?.expression ?? null, motion: bound?.motion ?? null };
+    });
+}
+
 // 换情绪时点缀一个动作；组不存在就跳过。
 export const EMOTION_MOTIONS = {
     happy: ['Tap', 'TapBody', 'Tap@Body'],

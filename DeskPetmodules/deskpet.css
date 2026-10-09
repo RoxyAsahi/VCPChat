@@ -32,7 +32,8 @@ body.is-ghost-hover #stage {
   position: absolute;
   inset: 0;
   transform-origin: 50% 100%;
-  animation: deskpet-breathe 4.2s ease-in-out infinite;
+  /* 呼吸：页面按帧率档位写 --breath（0–1），见 deskpet.js createCssLife */
+  transform: scaleY(calc(1 + 0.006 * var(--breath, 0)));
 }
 
 #portrait img {
@@ -73,7 +74,7 @@ body.is-ghost-hover #stage {
 }
 
 #portrait.is-pop {
-  animation: deskpet-pop 260ms ease-out, deskpet-breathe 4.2s ease-in-out infinite;
+  animation: deskpet-pop 260ms ease-out;
 }
 
 #avatar {
@@ -83,7 +84,7 @@ body.is-ghost-hover #stage {
   width: calc(168px * var(--pet-scale, 1));
   height: calc(168px * var(--pet-scale, 1));
   margin-left: calc(-84px * var(--pet-scale, 1));
-  animation: deskpet-bob 3.6s ease-in-out infinite;
+  transform: translateY(calc(-5px * var(--breath, 0)));
 }
 
 #avatarImg {
@@ -279,6 +280,42 @@ body.is-ghost-hover #stage {
   color: #a02a2a;
 }
 
+/* 工具审批：比气泡醒目一点的白卡，按钮够大好点 */
+#approvalCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(300px, 100%);
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.97);
+  color: #2b2b2b;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 0 0 2px rgba(232, 156, 48, 0.85), 0 6px 18px rgba(0, 0, 0, 0.28);
+  cursor: default;
+  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+}
+
+#approvalCard[hidden] {
+  display: none;
+}
+
+.approval-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+}
+
+#approvalTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 要一起发的文件 */
 #attachTray {
   display: flex;
@@ -305,6 +342,70 @@ body.is-ghost-hover #stage {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#approvalMore {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 11px;
+  color: #8a7a60;
+}
+
+#approvalMore:empty,
+#approvalCommand:empty {
+  display: none;
+}
+
+#approvalCommand {
+  max-height: 60px;
+  overflow: hidden;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.approval-actions button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.07);
+  color: inherit;
+}
+
+.approval-actions button:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+#approvalDetail {
+  margin-right: auto;
+  background: transparent;
+  color: #8a7a60;
+}
+
+#approvalAllow {
+  background: #2e9b57;
+  color: #fff;
+}
+
+#approvalAllow:hover {
+  background: #278a4c;
+}
+
+.approval-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 #attachClear {
@@ -412,7 +513,8 @@ body.is-preview #lifeFx {
   font-size: 16px;
   line-height: 30px;
   cursor: pointer;
-  animation: deskpet-missed-bob 1.6s ease-in-out infinite;
+  /* 跳几下引起注意就停：人不在的时候它可能一直挂着，无限动画会让窗口一直每秒合成 60 帧 */
+  animation: deskpet-missed-bob 1.6s ease-in-out 4;
 }
 
 #missedBadge[hidden] {
@@ -445,10 +547,6 @@ body.is-paused #missedBadge {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
-@keyframes deskpet-breathe {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(1.006); }
-}
 
 @keyframes deskpet-pop {
   0% { transform: translateY(0) scale(1); }
@@ -471,10 +569,6 @@ body.is-paused *::after {
   animation-play-state: paused !important;
 }
 
-@keyframes deskpet-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
 
 [hidden] {
     display: none !important;
@@ -507,9 +601,6 @@ body.is-paused *::after {
   scale: 1 0.99;
 }
 
-#lifeBody[data-life-phase="drowsy"] #portrait { animation-duration: 6s; }
-#lifeBody[data-life-phase="asleep"] #portrait { animation-duration: 7.5s; }
-#lifeBody[data-life-phase="asleep"] #avatar { animation-duration: 7s; }
 
 #lifeBody[data-life-act] {
   animation-duration: var(--life-ms, 1s);
