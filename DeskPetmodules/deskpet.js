@@ -696,7 +696,8 @@ function union(a, b) {
     return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
-// 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上（Linux 上窗口形状按这个裁，不算就画不出来）
+// 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上
+// （只给 Linux 的窗口形状用，不算就画不出来；闲逛、贴边探头只看真正打开的界面）
 function uiBounds({ withIdleDock = false } = {}) {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
