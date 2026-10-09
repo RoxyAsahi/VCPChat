@@ -20,4 +20,15 @@ Windows Electron QA used separate profiles and AppData with the user's locally s
 
 The first hidden-window QA fixture correctly paused entrance animations at opacity zero, despite DOM visibility and successful pointer events. The final fixture sends the real visible-state IPC while keeping the OS window hidden. Screenshots were inspected after this correction; no product animation code was changed to make the fixture pass.
 
-These results do not prove native OS hit testing across mixed-DPI monitors or click-through preference modes. The feature's existing watch-only mode limitation remains documented. Full side-pane/chat-evidence integration gates have not been rerun for this approval branch; it is not yet merged into #34. GitHub CI has no result claimed here.
+These results do not prove native OS hit testing across mixed-DPI monitors or click-through preference modes. The feature's existing watch-only mode limitation remains documented. Full integration validation is recorded below. GitHub CI has no result claimed here.
+
+## Final integration validation
+
+After merging the latest #34 first-run fixes (PR #86, 4e6f6a308368f63e50b924493aeb8f65adcca757) into the repaired approval tree e92f6e15a:
+
+- deskpet: 194/194; side-pane: 672/672; chat-kernel: 279/279; workbench: 264/264; settings: 100/100.
+- Chat contracts: 66 contracts / 857 events. Full check:chat-evidence and check:ui-system passed.
+- Native release build and built-artifact smoke passed. Packaged-artifact smoke skipped because no unpacked build was supplied; the deliberate-invalid packaged-artifact runner passed.
+- Separate Windows Electron run: 63 assertions, zero errors. Each outfit reports actual devicePixelRatio 1.5, renders the approval card in a pixel-checked screenshot, and completes real pointer/main-window/expiry round trips. See electron-150.json and *-approval-card-150.png.
+
+The first scale experiment used only the process switch and reported devicePixelRatio 1, so it was rejected as 150% evidence. The installed Electron 44 offscreen API defaults its deviceScaleFactor to 1. The final fixture explicitly requests offscreen.deviceScaleFactor=1.5 and asserts the observed value. This is renderer-scale coverage, not a claim that native OS multi-monitor hit testing or the complete fresh-user setup flow passed. All profiles and AppData were isolated; normal application data and the user's running app were not changed.

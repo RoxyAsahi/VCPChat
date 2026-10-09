@@ -819,3 +819,8 @@
     transition: none;
   }
 }
+
+/* 上面给 .dps-map、.dps-row 设了 display，盖住了 hidden：没有 Live2D 形象时的「表情映射」、非 Windows 上的「全屏时让开」都该藏起来 */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps [hidden] {
+  display: none;
+}

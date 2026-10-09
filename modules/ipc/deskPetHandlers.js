@@ -100,6 +100,8 @@ function resolveServedFile(urlString) {
     if (root === 'app') return guard(path.join(paths.projectRoot, 'DeskPetmodules'), segments);
     if (root === 'vendor') return guard(path.join(paths.projectRoot, 'vendor'), segments);
     if (root === 'emotion') return guard(path.join(paths.projectRoot, 'modules', 'emotion'), segments);
+    // 助手自己没放头像时用应用的默认头像（和主窗口侧栏里显示的一样）
+    if (root === 'default-avatar.png' && !segments.length) return defaultAvatarPath();
     if (root === 'builtin') {
         if (segments.shift() !== 'nova') return null;
         return guard(builtInDirectory(), segments);
@@ -131,6 +133,10 @@ function guard(base, segments) {
 
 function coreFilePath() {
     return path.join(paths.appDataRoot, 'deskpet', 'live2dcubismcore.min.js');
+}
+
+function defaultAvatarPath() {
+    return path.join(paths.projectRoot, 'assets', 'default_avatar.png');
 }
 
 function builtInDirectory() {
@@ -206,7 +212,8 @@ async function resolveAssets(agentId, wantedOutfit) {
         coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js?v=${Math.round(coreStat.mtimeMs)}` : null,
         corePath: coreFilePath(),
         portraits: portraitUrls(agentId, outfit?.portraits || fallback),
-        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : null,
+        // 新建的助手目录里没有头像文件，主窗口显示的是默认头像：桌宠也用它，不要只剩一个表情符号
+        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : `${SCHEME}://pet/default-avatar.png`,
     };
 }
 
@@ -1196,9 +1203,14 @@ async function toggleAllPets() {
         for (const pet of live) showPet(pet);
     } else {
         const settings = controls?.get();
-        const candidates = [...(settings?.openAgents || []), settings?.lastAgent].filter(Boolean);
-        for (const agentId of [...new Set(candidates)].slice(0, 1)) await openPet(agentId);
-        if (!pets.size) openMainWindow();
+        let candidates = [...new Set([...(settings?.openAgents || []), settings?.lastAgent].filter(Boolean))];
+        // 第一次按：还没开过桌宠。有叫 Nova 的助手就请出内置 Nova；没有就打开设置页的桌宠分区，告诉 TA 从哪开始
+        if (!candidates.length) {
+            const nova = (await listAgents()).find((agent) => agent.name.trim().toLowerCase() === 'nova');
+            if (nova) candidates = [nova.id];
+        }
+        for (const agentId of candidates.slice(0, 1)) await openPet(agentId);
+        if (!pets.size) openSettingsPage();
     }
     for (const pet of live) notifyMain(pet.agentId);
     refreshTray();
@@ -1346,7 +1358,6 @@ function trayMenuItems() {
     const settings = controls.get();
     const live = [...pets.values()].filter((pet) => !pet.win.isDestroyed());
     const anyVisible = live.some((pet) => pet.win.isVisible());
-    const hasCandidate = live.length > 0 || settings.openAgents.length > 0 || Boolean(settings.lastAgent);
     // 只显示快捷键，不在菜单里再注册一次（全局快捷键已经注册过了）
     const shortcut = (id) => (settings.shortcuts[id] ? { accelerator: settings.shortcuts[id], registerAccelerator: false } : {});
     const toggle = () => toggleAllPets().catch(() => {});
@@ -1354,9 +1365,9 @@ function trayMenuItems() {
     return [{
         label: '桌宠',
         submenu: [
-            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, enabled: hasCandidate, click: toggle },
-            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, enabled: hasCandidate, click: toggle },
-            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
+            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, click: toggle },
+            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, click: toggle },
+            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
             { id: 'deskpet-dnd', label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
             { id: 'deskpet-click-through', label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
