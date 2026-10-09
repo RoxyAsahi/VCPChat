@@ -160,6 +160,19 @@ test('a chibi head is most of the body and the bubble anchor follows it', () => 
     assert.ok(silhouetteAspect(s) < 1.7);
 });
 
+test('wings or props reaching up beside the head do not make the head as wide as the figure', () => {
+    const fig = { width: 400, height: 400, headR: 30, headCx: 200, headTop: 40, bodyW: 60, bodyBottom: 380 };
+    const pixels = drawFigure(fig);
+    // 两边的翅膀尖伸到头顶往下 10% 那么高，和头隔着一大段空白
+    for (let y = 60; y < 300; y++) {
+        for (const [a, b] of [[10, 90], [310, 390]]) for (let x = a; x < b; x++) pixels[(y * fig.width + x) * 4 + 3] = 255;
+    }
+    const s = measureSilhouette(pixels, fig.width, fig.height);
+    assert.ok(s.right - s.left > 350, '包围盒照样包住翅膀');
+    assert.ok(Math.abs(s.head.x - 200) <= 2, `头的中线 ${s.head.x}`);
+    assert.ok(s.head.width >= 50 && s.head.width <= 70, `头宽只算头：${s.head.width}`);
+});
+
 test('fitting puts the feet on the window bottom and the figure under the bubble area', () => {
     const box = { left: 100, top: 30, right: 140, bottom: 370 };
     const fit = fitSilhouette(box, { width: 280, height: 692, topReserve: 150 });
