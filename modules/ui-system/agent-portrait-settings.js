@@ -1,4 +1,5 @@
-/* Agent settings: the side pane home portrait (default and light images, focus point and height). */
+/* Agent settings: the side pane home portrait (default and light images, focus point and height).
+ * A portrait can be a still or animated image, or a short muted video. */
 import {
     PORTRAIT_DISPLAY_DEFAULTS,
     PORTRAIT_HEIGHT_RANGE,
@@ -6,11 +7,16 @@ import {
     isDefaultPortraitDisplay,
     normalizePortraitDisplay
 } from './side-pane/portrait-display.js';
+import {
+    PORTRAIT_ACCEPT,
+    createPortraitMediaLike,
+    isPortraitType,
+    isPortraitVideo,
+    isVideoElement,
+    portraitMaxBytes,
+    releasePortraitMedia
+} from './side-pane/portrait-media.js';
 
-const PORTRAIT_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
-const PORTRAIT_TYPES = new Set(PORTRAIT_ACCEPT.split(','));
-// 和主进程的上限一致；选图时先挡一次，不用等保存才报错
-const PORTRAIT_MAX_BYTES = 20 * 1024 * 1024;
 const FOCUS_STEP = 2;
 
 /**
@@ -26,7 +32,8 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
     const doc = host?.ownerDocument || win?.document;
     const find = selector => host?.querySelector?.(selector) || null;
     const preview = find('.agent-portrait-preview');
-    const previewImage = find('.agent-portrait-preview-image');
+    // 预览和缩略图在图片和视频之间换的时候会换成另一种元素
+    let previewImage = find('.agent-portrait-preview-image');
     const focusMarker = find('.agent-portrait-focus-marker');
     const themeButtons = [...(host?.querySelectorAll?.('[data-portrait-preview-theme]') || [])];
     const heightInput = find('#agentPortraitHeight');
@@ -37,7 +44,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         const variant = row.getAttribute('data-portrait-variant');
         slots.set(variant, {
             row,
-            thumb: row.querySelector('.agent-portrait-slot-thumb img'),
+            thumb: row.querySelector('.agent-portrait-slot-thumb > :is(img, video)'),
             status: row.querySelector('.agent-portrait-slot-status'),
             input: row.querySelector('input[type="file"]'),
             pick: row.querySelector('[data-portrait-action="pick"]'),
@@ -68,6 +75,39 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         return typeof saved[variant] === 'string' ? saved[variant] : '';
     }
 
+    // 暂存的是 blob 地址，看不出扩展名，按选中文件的类型判断
+    function isVideo(variant) {
+        const change = pending().get(variant);
+        if (change?.file) return isPortraitVideo('', change.file.type);
+        return isPortraitVideo(effectiveUrl(variant));
+    }
+
+    // 把 node 换成能放这个地址的元素（img 或 video），返回现在在页面上的那个
+    function showMedia(node, url, video) {
+        if (!node) return node;
+        let current = node;
+        if (url && isVideoElement(node) !== video) {
+            current = createPortraitMediaLike(node, video);
+            node.replaceWith(current);
+            releasePortraitMedia(node);
+        }
+        current.hidden = !url;
+        if (!url) releasePortraitMedia(current);
+        else if (current.getAttribute('src') !== url) current.setAttribute('src', url);
+        return current;
+    }
+
+    // 预览里的视频只在设置页看得见、窗口没最小化、系统没要求减少动态时播放；缩略图只显示第一帧
+    const reducedMotion = win?.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
+    let previewInView = typeof win?.IntersectionObserver !== 'function';
+    function syncPreviewPlayback() {
+        if (!isVideoElement(previewImage)) return;
+        const play = previewInView && !previewImage.hidden && previewImage.getAttribute('src')
+            && doc?.visibilityState !== 'hidden' && !reducedMotion?.matches;
+        if (play && previewImage.paused) Promise.resolve(previewImage.play?.()).catch(() => {});
+        else if (!play && !previewImage.paused) previewImage.pause?.();
+    }
+
     function hasPortrait() {
         return Boolean(effectiveUrl('default'));
     }
@@ -78,11 +118,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         slots.forEach((slot, variant) => {
             const url = effectiveUrl(variant);
             const change = pending().get(variant);
-            if (slot.thumb) {
-                slot.thumb.hidden = !url;
-                if (url) slot.thumb.src = url;
-                else slot.thumb.removeAttribute('src');
-            }
+            slot.thumb = showMedia(slot.thumb, url, isVideo(variant));
             slot.row.dataset.state = change ? (change.remove ? 'removing' : 'staged') : (url ? 'set' : 'empty');
             if (slot.status) {
                 slot.status.textContent = change
@@ -100,18 +136,16 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
 
         // 没有立绘时只留上传入口，预览主题、位置和高度都用不上
         host.dataset.hasPortrait = String(Boolean(defaultUrl));
-        const shownUrl = previewTheme === 'light' ? (effectiveUrl('light') || defaultUrl) : defaultUrl;
+        const shownVariant = previewTheme === 'light' && effectiveUrl('light') ? 'light' : 'default';
+        const shownUrl = effectiveUrl(shownVariant);
         if (preview) {
             preview.dataset.empty = String(!shownUrl);
             applyPortraitDisplay(preview, display);
             preview.setAttribute('aria-valuetext', `焦点 左右 ${display.focusX}%，上下 ${display.focusY}%`);
             preview.tabIndex = shownUrl ? 0 : -1;
         }
-        if (previewImage) {
-            previewImage.hidden = !shownUrl;
-            if (shownUrl) previewImage.src = shownUrl;
-            else previewImage.removeAttribute('src');
-        }
+        previewImage = showMedia(previewImage, shownUrl, isVideo(shownVariant));
+        syncPreviewPlayback();
         if (focusMarker) focusMarker.hidden = !shownUrl;
         themeButtons.forEach(button => {
             button.setAttribute('aria-pressed', String(button.getAttribute('data-portrait-preview-theme') === previewTheme));
@@ -142,12 +176,14 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
 
     function stage(variant, file) {
         if (!agentId || !slots.has(variant) || !file) return;
-        if (!PORTRAIT_TYPES.has(file.type)) {
-            notify('立绘只支持 PNG、JPEG、WebP 或 GIF 图片。', 'error');
+        if (!isPortraitType(file.type)) {
+            notify('立绘只支持 PNG、JPEG、WebP、GIF 图片或 MP4、WebM 视频。', 'error');
             return;
         }
-        if (file.size > PORTRAIT_MAX_BYTES) {
-            notify(`立绘图片不能超过 ${PORTRAIT_MAX_BYTES / 1024 / 1024}MB。`, 'error');
+        // 和主进程的上限一致；选文件时先挡一次，不用等保存才报错
+        const maxBytes = portraitMaxBytes(file.type);
+        if (file.size > maxBytes) {
+            notify(`立绘${isPortraitVideo('', file.type) ? '视频' : '图片'}不能超过 ${maxBytes / 1024 / 1024}MB。`, 'error');
             return;
         }
         const map = pendingByAgent.get(agentId) || new Map();
@@ -207,6 +243,17 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         });
         on(slot.remove, 'click', () => unstageOrRemove(variant));
     });
+
+    if (preview && typeof win?.IntersectionObserver === 'function') {
+        const observer = new win.IntersectionObserver((entries) => {
+            previewInView = Boolean(entries[entries.length - 1]?.isIntersecting);
+            syncPreviewPlayback();
+        });
+        observer.observe(preview);
+        cleanups.push(() => observer.disconnect());
+    }
+    on(doc, 'visibilitychange', syncPreviewPlayback);
+    on(reducedMotion, 'change', syncPreviewPlayback);
 
     themeButtons.forEach(button => on(button, 'click', () => {
         previewTheme = button.getAttribute('data-portrait-preview-theme') === 'light' ? 'light' : 'default';
@@ -331,6 +378,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
 
         dispose() {
             cleanups.splice(0).forEach(cleanup => cleanup());
+            if (isVideoElement(previewImage)) previewImage.pause?.();
             [...pendingByAgent.keys()].forEach(clearPending);
         }
     });

@@ -81,8 +81,39 @@ test('wrong file types and oversized files are rejected before staging', async (
     await t.owner.load('Coco', {});
     t.pick('default', t.file('image/svg+xml'));
     t.pick('default', t.file('image/png', 20 * 1024 * 1024 + 1));
+    t.pick('default', t.file('video/webm', 64 * 1024 * 1024 + 1));
+    t.pick('default', t.file('video/quicktime'));
     assert.equal(t.owner.hasPendingFiles(), false);
-    assert.equal(t.toasts.length, 2);
+    assert.equal(t.toasts.length, 4);
+    t.dom.window.close();
+});
+
+test('animated images stay images, videos preview as a muted looping video and switch back', async () => {
+    const t = setup({ portraits: { default: 'file:///portrait.mp4?v=1' } });
+    const preview = () => t.host.querySelector('.agent-portrait-preview-image');
+    const thumb = variant => t.slot(variant).querySelector('.agent-portrait-slot-thumb > *');
+    await t.owner.load('Nova', {});
+    assert.equal(preview().tagName, 'VIDEO', '磁盘上的 mp4 按扩展名认成视频');
+    assert.equal(preview().getAttribute('src'), 'file:///portrait.mp4?v=1');
+    assert.equal(preview().muted, true);
+    assert.ok(preview().hasAttribute('loop') && preview().hasAttribute('playsinline'));
+    assert.equal(thumb('default').tagName, 'VIDEO');
+
+    // 暂存的 blob 地址看不出扩展名，按文件类型判断；GIF 照样用 img（动图自己会动）
+    t.pick('default', t.file('image/gif', 4 * 1024 * 1024));
+    assert.equal(preview().tagName, 'IMG');
+    assert.equal(preview().getAttribute('src'), 'blob:portrait-1');
+    assert.ok(preview().classList.contains('agent-portrait-preview-image'));
+    assert.equal(thumb('default').tagName, 'IMG');
+
+    t.pick('light', t.file('video/webm', 30 * 1024 * 1024));
+    t.host.querySelector('[data-portrait-preview-theme="light"]').click();
+    assert.equal(preview().tagName, 'VIDEO', '视频可以超过图片的 20MB');
+    assert.equal(preview().getAttribute('src'), 'blob:portrait-2');
+    assert.equal(t.host.querySelectorAll('.agent-portrait-preview-image').length, 1, '换元素时不留下旧的');
+
+    await t.owner.commit('Nova');
+    assert.deepEqual(t.calls.map(call => call.slice(2, 4)), [['light', 'video/webm'], ['default', 'image/gif']]);
     t.dom.window.close();
 });
 
