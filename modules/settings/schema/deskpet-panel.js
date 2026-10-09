@@ -230,7 +230,9 @@ export function buildDeskPetPanel(doc) {
     const options = el(doc, 'div', 'dps-card');
     const dnd = buildSwitchRow(doc, '免打扰', '不主动说话、不出声，主窗口里聊天的回复也不在桌宠头上冒出来。在桌宠上跟 TA 说的话照常回。');
     const restore = buildSwitchRow(doc, '启动时恢复桌宠', '打开 VCPChat 时，把上次开着的桌宠放回原来的位置。');
-    options.append(dnd.row, restore.row);
+    const yieldFs = buildSwitchRow(doc, '全屏时让开', '看视频、玩游戏、放幻灯片时桌宠先躲起来，退出全屏再回来。只在 Windows 上有效。');
+    yieldFs.row.hidden = true;
+    options.append(dnd.row, restore.row, yieldFs.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -905,6 +907,8 @@ export function buildDeskPetPanel(doc) {
         if (!settings) return;
         dnd.input.checked = settings.doNotDisturb === true;
         restore.input.checked = settings.restoreOnLaunch === true;
+        yieldFs.input.checked = settings.yieldToFullscreen !== false;
+        yieldFs.row.hidden = state.snapshot.platform !== 'win32';
     }
 
     async function update(patch) {
@@ -913,6 +917,7 @@ export function buildDeskPetPanel(doc) {
     }
     dnd.input.addEventListener('change', () => update({ doNotDisturb: dnd.input.checked }));
     restore.input.addEventListener('change', () => update({ restoreOnLaunch: restore.input.checked }));
+    yieldFs.input.addEventListener('change', () => update({ yieldToFullscreen: yieldFs.input.checked }));
 
     function renderShortcuts() {
         const snapshot = state.snapshot;

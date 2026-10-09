@@ -23,6 +23,7 @@ const { createPetControls } = require('../deskpet/petControls');
 const { createPetPreviews } = require('../deskpet/petPreviews');
 const { createSettingsPage } = require('../deskpet/settingsPage');
 const { createCoreInstaller } = require('../deskpet/cubismCore');
+const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -329,7 +330,8 @@ function onDisplaysChanged() {
 }
 
 function visibleAgents() {
-    return [...pets.entries()].filter(([, pet]) => !pet.win.isDestroyed() && pet.win.isVisible()).map(([id]) => id);
+    // 全屏时躲起来的也算开着：主窗口头部的开关不跟着跳
+    return [...pets.entries()].filter(([, pet]) => !pet.win.isDestroyed() && (pet.win.isVisible() || pet.yielded)).map(([id]) => id);
 }
 
 function notifyMain(agentId) {
@@ -398,6 +400,7 @@ function openSettingsPage() {
 }
 
 function showPet(pet) {
+    pet.yielded = false;
     lastTouched = pet.agentId;
     pet.win.showInactive();
     // Windows 上透明窗口隐藏再显示后可能丢掉 WS_EX_TOPMOST，每次显示后重新声明。
@@ -421,6 +424,44 @@ function updateTopmostGuard() {
         clearInterval(topmostGuard);
         topmostGuard = null;
     }
+}
+
+// ---- 全屏让位（modules/deskpet/fullscreenWatch.js）---------------------------------
+// 别的程序在某块屏上全屏时，那块屏上露着的桌宠先藏起来（记作 yielded），退出全屏再放出来。
+// 只在进出全屏的那一下动手：全屏期间用户自己把桌宠叫出来就留着，自己藏起来的也不会被放回来。
+
+let fullscreenWatch = null;
+function updateFullscreenWatch() {
+    if (!fullscreenWatch) return;
+    const settings = controls?.get() || petPrefs.DEFAULT_SETTINGS;
+    if (settings.yieldToFullscreen && pets.size > 0 && !shuttingDown) fullscreenWatch.start();
+    else fullscreenWatch.stop();
+}
+
+/** 全屏的那块屏（DIP）上有没有这个桌宠；只有一块屏时都算。 */
+function onFullscreenDisplay(pet, area) {
+    const displays = screen.getAllDisplays();
+    if (displays.length <= 1) return true;
+    return screen.getDisplayMatching(area).id === screen.getDisplayMatching(pet.win.getBounds()).id;
+}
+
+function applyFullscreen(state) {
+    let area = null;
+    if (state?.fullscreen && state.rect) {
+        // 脚本报的是物理像素；只有 Windows 有 screenToDipRect，也只有 Windows 会报
+        area = typeof screen.screenToDipRect === 'function' ? screen.screenToDipRect(null, state.rect) : state.rect;
+    }
+    for (const pet of pets.values()) {
+        if (pet.win.isDestroyed()) continue;
+        if (area && onFullscreenDisplay(pet, area)) {
+            if (!pet.win.isVisible() || pet.drag || pet.interactive) continue;
+            pet.yielded = true;
+            pet.win.hide();
+        } else if (pet.yielded) {
+            showPet(pet);
+        }
+    }
+    refreshTray();
 }
 
 function setIgnoreMouse(pet, ignore) {
@@ -546,6 +587,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
         updateTopmostGuard();
+        updateFullscreenWatch();
         if (lastTouched === agentId) lastTouched = null;
         // 用户关掉的下次不再恢复；退出时一起关掉的照旧恢复
         if (!shuttingDown) rememberOpen(agentId, false);
@@ -554,6 +596,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     win.loadURL(`${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}`);
     if (!USE_SHAPE) startHitPoll(pet);
     updateTopmostGuard();
+    updateFullscreenWatch();
     notifyMain(agentId);
     return { success: true, open: true };
 }
@@ -843,6 +886,7 @@ async function toggleAllPets() {
     const visible = live.filter((pet) => pet.win.isVisible());
     if (visible.length) {
         for (const pet of visible) pet.win.hide();
+        for (const pet of live) pet.yielded = false;
     } else if (live.length) {
         for (const pet of live) showPet(pet);
     } else {
@@ -924,7 +968,10 @@ async function talkFromSettings(agentId, text) {
 async function setPetsVisible(visible, agentId) {
     const live = [...pets.values()].filter((pet) => !pet.win.isDestroyed());
     if (!visible) {
-        for (const pet of live) if (pet.win.isVisible()) pet.win.hide();
+        for (const pet of live) {
+            pet.yielded = false;
+            if (pet.win.isVisible()) pet.win.hide();
+        }
     } else if (live.length) {
         for (const pet of live) showPet(pet);
     } else if (agentId && isAgentId(agentId)) {
@@ -1364,6 +1411,7 @@ function registerIpc() {
                 label: '隐藏桌宠',
                 click: () => {
                     if (pet.win.isDestroyed()) return;
+                    pet.yielded = false;
                     pet.win.hide();
                     notifyMain(pet.agentId);
                     refreshTray();
@@ -1447,8 +1495,10 @@ function initialize(options) {
     }).registerIpc();
     // 主窗口刷新时设置页没了：录快捷键录到一半暂停的全局快捷键要恢复
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
+    fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
         if (changed.includes('doNotDisturb')) broadcastPrefs();
+        if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
     });
     const settingsReady = controls.load().then(() => {
@@ -1473,6 +1523,7 @@ function closeAll() {
     // 退出（或主窗口关掉）时一起关：恢复列表保持原样，下次启动照旧打开
     shuttingDown = true;
     for (const agentId of [...pets.keys()]) closePet(agentId);
+    fullscreenWatch?.stop();
     controls?.dispose();
     previews?.dispose();
     for (const { timer } of alarms.values()) clearTimeout(timer);
@@ -1506,6 +1557,7 @@ module.exports = {
     onDistributedToolResult: isolated('onDistributedToolResult', onDistributedToolResult),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
+    _applyFullscreen: applyFullscreen,
     _controls: () => controls,
     _pets: () => pets,
     _resolveServedFile: (url, testPaths) => {

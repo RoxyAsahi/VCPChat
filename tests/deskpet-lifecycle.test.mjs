@@ -213,3 +213,24 @@ test('Windows: a pet pushed down by another topmost window comes back on top', a
     assert.equal(pet.raised, shown + 2);
     pet.close();
 });
+
+test('a fullscreen program hides the pet until it leaves fullscreen; the user can still call it back', async () => {
+    const { handlers, open, fake } = await loadHandlers();
+    const pet = await open();
+    const states = () => fake.windows[0].sent.filter((m) => m.channel === 'deskpet:state-changed');
+    const before = states().length;
+    const full = { fullscreen: true, rect: { x: 0, y: 0, width: 1600, height: 1000 } };
+    handlers._applyFullscreen(full);
+    assert.equal(pet.isVisible(), false);
+    assert.equal(states().length, before, 'the header toggle does not flip');
+    handlers._applyFullscreen({ fullscreen: false, rect: null });
+    assert.equal(pet.isVisible(), true);
+    // 全屏期间用户自己把它叫出来：留着，退出全屏时也不再动它
+    handlers._applyFullscreen(full);
+    assert.equal(pet.isVisible(), false);
+    await fake.handlers.get('deskpet:toggle')({}, 'Nova');
+    assert.equal(pet.isVisible(), true);
+    handlers._applyFullscreen({ fullscreen: false, rect: null });
+    assert.equal(pet.isVisible(), true);
+    handlers.closeAll();
+});
