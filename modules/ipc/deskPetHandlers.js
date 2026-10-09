@@ -240,8 +240,8 @@ async function readPetState() {
 function savePetState(agentId, patch) {
     stateWrites = stateWrites.then(async () => {
         const state = await readStateFile();
-        // 记大小时顺带记下是按哪一版的 1 倍算的（见 petPrefs.savedScale）
-        const versioned = patch.scale === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
+        // 记大小、位置时顺带记下是按哪一版的尺寸算的（见 petPrefs.savedScale、legacyPosition）
+        const versioned = patch.scale === undefined && patch.x === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
         state[agentId] = { ...(state[agentId] || {}), ...versioned };
         // 先写临时文件再改名：写到一半被杀掉也只丢这一次，不会留下半个文件
         const tmp = `${petStatePath()}.tmp`;
@@ -591,8 +591,13 @@ async function openPet(agentId, { anchor = null } = {}) {
     const savedRect = hasSavedPosition(saved) ? { x: saved.x, y: saved.y, ...petPrefs.windowSizeForScale(savedSize, aspect) } : null;
     const scale = petPrefs.fitScale(savedSize, workAreaAt(anchor || savedRect || screen.getPrimaryDisplay().workArea), aspect);
     const size = petPrefs.windowSizeForScale(scale, aspect);
+    // 旧版记的位置：按脚底对齐换到新尺寸，记下来以后就是新版的了
+    const legacy = anchor ? null : petPrefs.legacyPosition(saved, aspect, scale);
+    // 旧版记的大小也一起换成新版的记下来：之后记位置会标上新版，旧的大小就不能再留着
+    const oldSize = saved?.scale != null && !(Number(saved.sizeVersion) >= petPrefs.SIZE_VERSION);
+    if (legacy || oldSize) savePetState(agentId, { ...(legacy || {}), scale }).catch(() => {});
     const win = new BrowserWindow({
-        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
+        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(legacy ? { ...saved, ...legacy, tuck: null } : saved, size)),
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
