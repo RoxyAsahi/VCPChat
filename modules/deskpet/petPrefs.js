@@ -47,6 +47,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     yieldToFullscreen: false,
     // 只看不点：鼠标整个穿过桌宠，点不到也拖不动；托盘、快捷键关掉
     clickThrough: false,
+    // 角色的不透明度（气泡、输入框不跟着变淡）
+    opacity: 1,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -194,6 +196,15 @@ function isAgentIdLike(value) {
     return typeof value === 'string' && value.length > 0 && value.length < 200 && !/[\\/]/.test(value) && value !== '.' && value !== '..';
 }
 
+const OPACITY_MIN = 0.3;
+
+/** 不透明度：0.3–1，按 0.05 取整；不是数就当 1 */
+function normalizeOpacity(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || value === null || value === '') return 1;
+    return Math.round(Math.min(1, Math.max(OPACITY_MIN, n)) * 20) / 20;
+}
+
 /** 把磁盘上读到的设置（可能缺字段、被手改坏）整理成完整、合法的设置。 */
 function normalizeSettings(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
@@ -211,6 +222,7 @@ function normalizeSettings(raw) {
         restoreOnLaunch: input.restoreOnLaunch !== false,
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
+        opacity: normalizeOpacity(input.opacity),
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
@@ -218,6 +230,8 @@ function normalizeSettings(raw) {
 }
 
 module.exports = {
+    normalizeOpacity,
+    OPACITY_MIN,
     BASE_CHARACTER,
     UI_RESERVE,
     SCALE_MIN,

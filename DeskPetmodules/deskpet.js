@@ -1248,7 +1248,8 @@ function createAlphaProbe(app) {
 
 let lastHit = false;
 function reportHit(hit) {
-    // 只看不点：鼠标穿过去，悬停胶囊也不冒
+    // 只看不点：鼠标穿过去，悬停胶囊也不冒；光标压在角色上时角色变得很淡，看得清后面的东西
+    document.body.classList.toggle('is-ghost-hover', Boolean(prefs.clickThrough && hit));
     if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
@@ -1647,6 +1648,7 @@ function applyPrefs(next) {
     prefs = { ...prefs, ...next };
     window.deskPetPrefs = Object.freeze({ ...prefs });
     document.documentElement.style.setProperty('--pet-scale', String(prefs.scale || 1));
+    document.documentElement.style.setProperty('--pet-opacity', String(prefs.opacity ?? 1));
     document.body.classList.toggle('is-dnd', isQuiet());
     $('dndBadge').hidden = !isQuiet();
     if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;

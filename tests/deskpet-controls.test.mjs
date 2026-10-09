@@ -56,7 +56,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -71,6 +71,17 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.shortcuts.talk, '', '留空表示不用');
     assert.deepEqual(odd.openAgents, ['Nova', 'Coco']);
     assert.equal(odd.lastAgent, null);
+});
+
+test('pet opacity stays between 30% and fully opaque', () => {
+    assert.equal(prefs.normalizeOpacity(undefined), 1);
+    assert.equal(prefs.normalizeOpacity('abc'), 1);
+    assert.equal(prefs.normalizeOpacity(null), 1);
+    assert.equal(prefs.normalizeOpacity(0.6), 0.6);
+    assert.equal(prefs.normalizeOpacity(0.62), 0.6);
+    assert.equal(prefs.normalizeOpacity(0), 0.3, '不能淡到看不见');
+    assert.equal(prefs.normalizeOpacity(5), 1);
+    assert.equal(prefs.normalizeSettings({ opacity: 0.4 }).opacity, 0.4);
 });
 
 // ---- 主进程：大小、免打扰、快捷键、恢复 ----
@@ -247,6 +258,20 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     assert.equal(env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰').checked, true);
     await sleep(300);
     assert.equal(env.readJson(env.settingsFile).doNotDisturb, true, '免打扰写进设置，重启后还在');
+    env.handlers.closeAll();
+});
+
+test('opacity from the settings page reaches every pet and is saved', async () => {
+    const env = await loadHandlers();
+    const nova = await env.open('Nova');
+    const update = env.fake.handlers.get('deskpet-settings:update');
+    const snap = await update(fromMain(env), { opacity: 0.6 });
+    assert.equal(snap.settings?.opacity ?? snap.opacity, 0.6);
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6);
+    await update(fromMain(env), { opacity: 'x' });
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6, '不是数字的不理');
+    await sleep(300);
+    assert.equal(env.readJson(env.settingsFile).opacity, 0.6);
     env.handlers.closeAll();
 });
 
