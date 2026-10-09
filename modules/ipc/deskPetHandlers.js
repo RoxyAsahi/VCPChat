@@ -608,6 +608,10 @@ async function listAgents() {
             agents.push({ id, name: config?.name || id });
         } catch { /* 不是 agent 目录 */ }
     }
+    // 同名的助手（比如复制出来的两个 Nova）在菜单、设置页下拉里分不清：名字后面带上 id 末尾几位
+    const counts = new Map();
+    for (const agent of agents) counts.set(agent.name, (counts.get(agent.name) || 0) + 1);
+    for (const agent of agents) agent.label = counts.get(agent.name) > 1 ? `${agent.name} · ${agent.id.slice(-4)}` : agent.name;
     return agents;
 }
 
@@ -1252,7 +1256,7 @@ function registerIpc() {
                 label: '切换助手',
                 enabled: agents.length > 1,
                 submenu: agents.map((agent) => ({
-                    label: agent.name,
+                    label: agent.label,
                     type: 'radio',
                     checked: agent.id === pet.agentId,
                     click: () => switchPet(pet.agentId, agent.id).catch((error) => console.warn('[DeskPet] switch failed:', error.message)),

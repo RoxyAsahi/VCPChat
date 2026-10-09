@@ -107,7 +107,7 @@ test('the pet speaks with the agent\'s own voice settings; agents without a voic
     const nova = await open('Nova');
     const coco = await open('Coco');
     assert.deepEqual(await handlers.get('deskpet:voice-begin')(from(coco), 'c1'), { speaking: false });
-    assert.deepEqual(await handlers.get('deskpet:voice-begin')(from(nova), 'n1'), { speaking: true });
+    assert.deepEqual(await handlers.get('deskpet:voice-begin')(from(nova), 'n1'), { speaking: true, ttsRegex: '', ttsRegexSecondary: '' });
     listeners.get('deskpet:voice-say')(from(nova), { messageId: 'n1', key: 'n1#deskpet-0', text: '你好呀！', first: true });
     listeners.get('deskpet:voice-say')(from(nova), { messageId: 'n1', key: 'n1#deskpet-1', text: '今天怎么样？', first: false });
     assert.equal(spoken.length, 2);
@@ -186,7 +186,7 @@ test('a reply given up while its voice settings are still loading does not stay 
     const older = handlers.get('deskpet:voice-begin')(from(nova), 'n2');
     const newer = handlers.get('deskpet:voice-begin')(from(nova), 'n3');
     assert.deepEqual(await older, { speaking: false });
-    assert.deepEqual(await newer, { speaking: true });
+    assert.deepEqual(await newer, { speaking: true, ttsRegex: '', ttsRegexSecondary: '' });
     assert.deepEqual([...claims.keys()], ['n3']);
     cleanup();
 });

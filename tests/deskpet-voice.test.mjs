@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createLipSync, createSpeech, rmsToLevel } from '../DeskPetmodules/voice.js';
+import { createLipSync, createSpeech, rmsToLevel, speaksAnything } from '../DeskPetmodules/voice.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -51,13 +51,13 @@ function installFakeAudio() {
 }
 
 // 假的主进程：记下送去合成的句子，按需要把「音频」发回来。
-function fakeApi({ speaking = true } = {}) {
+function fakeApi({ speaking = true, filter = {} } = {}) {
     const said = [];
     const ended = [];
     return {
         said,
         ended,
-        voiceBegin: async () => ({ speaking }),
+        voiceBegin: async () => ({ speaking, ...filter }),
         voiceSay: (payload) => said.push(payload),
         voiceEnd: (payload) => ended.push(payload),
     };
@@ -218,5 +218,25 @@ test('when the first audio is slow, the bubble stops waiting on it and shows the
     assert.ok(changes > before, '放出来时要重画气泡');
     assert.equal(speech.active(), true, '声音来了照常念');
     speech.stop();
+    speech.dispose();
+});
+
+test('sentences the read-only-matching regex drops are not sent, so the bubble does not wait for them', async () => {
+    assert.equal(speaksAnything('她笑了笑。', { ttsRegex: '「[^」]+」' }), false);
+    assert.equal(speaksAnything('「你好」她说。', { ttsRegex: '「[^」]+」' }), true);
+    assert.equal(speaksAnything('(sigh)', { ttsRegex: '「[^」]+」', ttsRegexSecondary: '\\(([^)]+)\\)' }), true);
+    assert.equal(speaksAnything('随便什么', { ttsRegex: '[' }), true, '正则写坏了交给 TTS');
+    installFakeAudio();
+    const api = fakeApi({ filter: { ttsRegex: '「[^」]+」' } });
+    const speech = createSpeech({ api });
+    speech.begin('m9');
+    await sleep(5);
+    const raw = '「早上好！」她伸了个懒腰。';
+    speech.finish(raw, { emotion: 'happy' });
+    assert.deepEqual(api.said.map((s) => s.text), ['「早上好！」'], '只有旁白的那句不送');
+    speech.play({ audioData: audio(0.2), msgId: api.said[0].key, sessionId: 3 });
+    await sleep(1200);
+    assert.equal(speech.active(), false, '念完能念的那句就结束，不等旁白的声音');
+    assert.equal(speech.revealEnd(), null);
     speech.dispose();
 });
