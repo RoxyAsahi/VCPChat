@@ -1897,6 +1897,18 @@ function createLifeFx() {
     };
 }
 
+// 模型载入失败时给人看的一句话：原始报错里是一长串 vcp-deskpet:// 地址和加载器的名字，气泡里看不懂
+function live2DFailureText(error) {
+    const raw = String(error?.message || error || '');
+    const file = (pattern) => decodeURIComponent((raw.match(pattern) || [])[1] || '');
+    const texture = file(/([^/\s]+\.(?:png|jpe?g|webp))\b[^]*?(?:404|Not Found|Failed)/i);
+    if (texture) return `这套 Live2D 模型缺贴图（${texture}），先用立绘代替`;
+    if (/model3\.json|JSON|Network error|Unexpected token/i.test(raw)) return '这套 Live2D 模型的 .model3.json 读不了（文件可能坏了），先用立绘代替';
+    if (/moc3?|createModel|Invalid|consistency/i.test(raw)) return '这套 Live2D 模型的 .moc3 文件读不了（可能坏了或版本太新），先用立绘代替';
+    const short = raw.replace(/vcp-deskpet:\/\/\S+/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    return short ? `Live2D 模型载入失败（${short}），先用立绘代替` : 'Live2D 模型载入失败，先用立绘代替';
+}
+
 // ---- 回复流 → 导演与气泡 ----------------------------------------------------------
 
 function applyFrame(next) {
@@ -1980,6 +1992,13 @@ function bindStream(director) {
                 for (const item of scanner.finish()) if (item.type === 'text') bubble.reply += item.text;
                 if (event.type === 'end') speech.finish(bubble.reply, sentenceFrame);
                 else speech.fail();
+            }
+            // 没回上来（断网、超时、服务器报错）：把原因说出来，免打扰时只说在桌宠上问的那条
+            if (event.type === 'error' && (!isQuiet() || bubble.own)) {
+                let reason = typeof event.error === 'string' ? event.error : '';
+                if (/fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET/i.test(reason)) reason = '连不上 VCP 服务器，看看服务器开着没有、地址对不对';
+                const lead = bubble.reply.trim() ? '没说完就断了' : '没回上来';
+                notice(reason ? `${lead}：${reason}` : `${lead}，可以再说一次试试`, { error: true, ms: 9000 });
             }
             scanner = null;
             bubble.replyId = null;
@@ -2097,7 +2116,7 @@ async function start() {
         } catch (error) {
             console.error('[DeskPet] Live2D 加载失败，改用立绘：', error);
             $('live2dCanvas').hidden = true;
-            notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
+            notice(error.userFacing ? error.message : live2DFailureText(error), { error: true, ms: 8000 });
         }
     } else if (assets.live2d && !assets.coreUrl && !assets.puppet && !assets.outfit?.builtIn) {
         // 内置 Nova 自带立绘：不每次打开都弹红字，设置页卡片和「Live2D 支持」上写着
