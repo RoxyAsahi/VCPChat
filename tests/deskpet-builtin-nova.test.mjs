@@ -59,6 +59,8 @@ test('all three outfits have a usable portrait fallback when Core is absent', as
         assert.ok(o.live2d, 'model becomes available again when Core is installed');
     }
     assert.equal(outfits.pickOutfit(list, 'removed-preset').id, 'builtin:nova-tech');
+    // 设置页卡片说清楚这是 Live2D、缺 Core 才先用立绘；桌宠页面不再每次打开都弹红字
+    assert.match(outfits.outfitDescription(list.find((o) => o.id === 'builtin:nova-tech')), /Cubism Core/);
 });
 
 test('bundled resources stay within Nova and never expose configuration or other app files', () => {

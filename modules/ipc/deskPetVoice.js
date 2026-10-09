@@ -20,6 +20,9 @@ let findPet = null; // event → pet
 let muted = null; // agentId → true，懒加载
 const claims = new Map(); // messageId → { contents, until }
 const speeches = new WeakMap(); // pet → { messageId, session, options }
+// 还在读配置的 voice-begin：期间又来了新的 begin 或这条已经 end，读完就不再占
+const beginning = new WeakMap(); // pet → { messageId, seq }
+let beginSeq = 0;
 
 function voicePrefsPath() {
     return path.join(paths.appDataRoot, 'deskpet', 'voice.json');
@@ -97,6 +100,7 @@ function release(pet) {
     if (!contents) return;
     for (const [id, claim] of claims) if (claim.contents === contents) claims.delete(id);
     speeches.delete(pet);
+    beginning.delete(pet);
     sovits.stopSpeechFrom(contents);
 }
 
@@ -106,7 +110,12 @@ function registerIpc() {
         const pet = findPet(event);
         const id = typeof messageId === 'string' ? messageId : '';
         if (!pet || !id) return { speaking: false };
+        const seq = ++beginSeq;
+        beginning.set(pet, { messageId: id, seq });
         const status = await voiceStatus(pet.agentId);
+        // 读配置期间被新回复顶掉、被 voice-end 放弃：不能再占，否则这条一直占着（主窗口也念不了它）
+        if (beginning.get(pet)?.seq !== seq) return { speaking: false };
+        beginning.delete(pet);
         if (!status.hasVoice || status.muted || pet.win.isDestroyed()) return { speaking: false };
         pruneClaims();
         claims.set(id, { contents: pet.win.webContents, until: 0 });
@@ -137,6 +146,7 @@ function registerIpc() {
         if (!pet || pet.win.isDestroyed()) return;
         const contents = pet.win.webContents;
         const speech = speeches.get(pet);
+        if (payload?.messageId && beginning.get(pet)?.messageId === payload.messageId) beginning.delete(pet);
         if (payload?.messageId) releaseClaim(String(payload.messageId), contents);
         if (speech && speech.messageId === payload?.messageId) speeches.delete(pet);
         if (payload?.stop) sovits.stopSpeechFrom(contents);

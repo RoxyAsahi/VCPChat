@@ -164,7 +164,7 @@ async function listAgentOutfits(agentId) {
 
 // 菜单和设置窗口只要名字和种类
 function outfitSummary(outfit) {
-    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit) };
+    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit), builtIn: outfit.builtIn === true };
 }
 
 async function resolveAssets(agentId, wantedOutfit) {
@@ -956,6 +956,22 @@ function trayMenuItems() {
     }];
 }
 
+// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份），
+// 所以只在桌宠那一项真的变了时才重建。
+function trayMenuKey() {
+    return JSON.stringify(trayMenuItems(), (key, value) => (typeof value === 'function' ? undefined : value));
+}
+
+function refreshWhenChanged(rebuild) {
+    let shown = null;
+    return () => {
+        const key = trayMenuKey();
+        if (key === shown) return;
+        shown = key;
+        rebuild();
+    };
+}
+
 // 启动时打开上次开着的桌宠（设置里可以关掉）。
 function restoreOpenPets() {
     const settings = controls?.get();
@@ -1125,11 +1141,12 @@ function registerIpc() {
             const job = previews?.jobFor(event.sender);
             return job ? { ...(await resolveAssets(job.agentId, job.outfitId)), preview: true } : null;
         }
-        const assets = await resolveAssets(pet.agentId, pet.outfit);
+        const wanted = pet.outfit;
+        const assets = await resolveAssets(pet.agentId, wanted);
         pet.name = assets.name;
         pet.outfits = assets.outfits;
-        // 记着的那套已经删了：换成实际显示的这套
-        pet.outfit = assets.outfit?.id || null;
+        // 记着的那套已经删了：换成实际显示的这套。等待期间又换了装（连点卡片）就别把新选的盖回去
+        if (pet.outfit === wanted) pet.outfit = assets.outfit?.id || null;
         return assets;
     });
     ipcMain.on('deskpet:preview-ready', (event, report) => {
@@ -1140,6 +1157,8 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet) return;
         pet.ready = true;
+        // 藏着的时候重载（换装、崩溃恢复）：新页面默认在跑，告诉它停下
+        if (!pet.win.isDestroyed() && !pet.win.isVisible()) pet.win.webContents.send('deskpet:visibility', false);
         const pending = pet.pendingToggle;
         pet.pendingToggle = null;
         if (pending) openInput(pet, pending);
@@ -1197,9 +1216,15 @@ function registerIpc() {
             if (!USE_SHAPE) setIgnoreMouse(pet, false);
             pet.win.setFocusable(true);
             pet.win.focus();
-        } else if (!PET_FOCUSABLE) {
-            // 输入框收起：回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
-            pet.win.setFocusable(false);
+        } else {
+            // 输入框收起：先回到整窗穿透，页面下一次命中会重新报上来（光标不在角色上时不会再报，
+            // 不回到穿透的话整块透明窗口会一直挡着下面的点击）
+            if (!USE_SHAPE) {
+                pet.ignoringMouse = null;
+                setIgnoreMouse(pet, true);
+            }
+            // 回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
+            if (!PET_FOCUSABLE) pet.win.setFocusable(false);
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
@@ -1425,7 +1450,7 @@ module.exports = {
     closeAll,
     // 托盘：main.js 建菜单时取「桌宠」这一项，并在桌宠状态变了时重建菜单
     trayMenuItems: isolated('trayMenuItems', trayMenuItems, []),
-    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', fn) : () => {}; },
+    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', refreshWhenChanged(fn)) : () => {}; },
     getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
     appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),
     onRequestStart: isolated('onRequestStart', onRequestStart),

@@ -172,3 +172,21 @@ test('turning reading off in the menu silences the pet and is remembered per age
     assert.equal((await voiceItem(nova)).checked, false);
     cleanup();
 });
+
+test('a reply given up while its voice settings are still loading does not stay claimed', async () => {
+    const { handlers, listeners, open, cleanup } = setup();
+    const claims = require('../modules/ipc/deskPetVoice.js')._claims;
+    const nova = await open('Nova');
+    // 用户在读配置的那一下点了停：end 先到，begin 读完以后不能再占
+    const pending = handlers.get('deskpet:voice-begin')(from(nova), 'n1');
+    listeners.get('deskpet:voice-end')(from(nova), { messageId: 'n1', stop: true });
+    assert.deepEqual(await pending, { speaking: false });
+    assert.equal(claims.has('n1'), false);
+    // 新回复紧跟着开始：只有新的那条占着
+    const older = handlers.get('deskpet:voice-begin')(from(nova), 'n2');
+    const newer = handlers.get('deskpet:voice-begin')(from(nova), 'n3');
+    assert.deepEqual(await older, { speaking: false });
+    assert.deepEqual(await newer, { speaking: true });
+    assert.deepEqual([...claims.keys()], ['n3']);
+    cleanup();
+});

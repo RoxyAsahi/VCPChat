@@ -112,7 +112,8 @@ const speech = createSpeech({
         life?.hold('speak', speech.active());
         renderBubble();
         // 回复早就结束、刚念完：现在才开始算气泡停留时间
-        if (!bubble.replyId && !speech.active() && bubble.reply) scheduleReplyHide(replyHoldMs());
+        // 闹钟、新话题按它们自己的停留时间算（念完不能把 60 秒的闹钟缩成几秒）
+        if (!bubble.replyId && !speech.active() && bubble.reply) scheduleReplyHide(Math.max(replyHoldMs(), PROACTIVE_HOLD_MS[bubble.proactive?.kind] || 0));
     },
     onFrame: (next) => applyFrame(next),
     onRelease: () => { if (director) applyFrame(director.frame); },
@@ -282,7 +283,11 @@ function setDock(mode) {
     life?.hold('composer', mode === 'bar' || mode === 'rec');
     // 输入条要打字、录音时要能按 Esc 取消：整窗可点、可聚焦；其余时候回到按像素穿透
     const focused = (m) => m === 'bar' || m === 'rec';
-    if (focused(mode) !== focused(previous)) api.setInteractive(focused(mode));
+    if (focused(mode) !== focused(previous)) {
+        api.setInteractive(focused(mode));
+        // 收起后主进程回到穿透：下一次命中不管和上次一样不一样都要报上去
+        if (!focused(mode)) lastHit = null;
+    }
     if (mode === 'bar') {
         fitComposerInput();
         setTimeout(() => $('composerInput').focus(), 60);
@@ -495,7 +500,9 @@ function bindComposer() {
     });
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
-        if (composer.open && !input.value.trim()) closeComposer();
+        // 录音中切到别的程序：麦克风别一直开着（Esc 也按不到这里了）
+        if (dock.mode === 'rec') closeComposer();
+        else if (composer.open && !input.value.trim()) closeComposer();
     });
 }
 
@@ -1579,7 +1586,9 @@ function bindStream(director) {
             director.begin(event.messageId);
             startReply(event.messageId);
         } else if (event.type === 'data') {
-            if (bubble.replyId !== event.messageId) startReply(event.messageId);
+            // 同一个助手同时有两条在流（另一个话题、主窗口和桌宠撞在一起）：气泡只跟当前这条，别的不来回抢
+            if (bubble.replyId && bubble.replyId !== event.messageId) return;
+            if (!bubble.replyId) startReply(event.messageId);
             life?.hold('reply', true);
             director.append(event.messageId, event.text);
             toolCard.push(event.text);
@@ -1596,6 +1605,8 @@ function bindStream(director) {
         } else if (event.type === 'end' || event.type === 'error') {
             if (event.type === 'end') director.end(event.messageId);
             else director.fail(event.messageId);
+            // 别的那条结束了：不动正在显示的这条
+            if (bubble.replyId && bubble.replyId !== event.messageId) return;
             if (scanner && bubble.replyId === event.messageId) {
                 for (const item of scanner.finish()) if (item.type === 'text') bubble.reply += item.text;
                 if (event.type === 'end') speech.finish(bubble.reply, sentenceFrame);
@@ -1674,7 +1685,8 @@ async function start() {
             $('live2dCanvas').hidden = true;
             notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
         }
-    } else if (assets.live2d && !assets.coreUrl && !assets.puppet) {
+    } else if (assets.live2d && !assets.coreUrl && !assets.puppet && !assets.outfit?.builtIn) {
+        // 内置 Nova 自带立绘：不每次打开都弹红字，设置页卡片和「Live2D 支持」上写着
         notice('这套是 Live2D 模型，还缺 Cubism Core，先用立绘代替。右键「桌宠设置…」里的「Live2D 支持」可以一键装好。', { error: true, ms: 12000 });
     }
     if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
@@ -1826,8 +1838,16 @@ async function start() {
     let paused = false;
     api.onVisibility?.((visible) => {
         paused = !visible;
-        // 藏起来就不出声了
-        if (paused) speech.stop();
+        // 藏起来就不出声了，录着的音也停掉（不然麦克风开着、整窗挡着点击）
+        if (paused) {
+            speech.stop();
+            if (dock.mode === 'rec' || (composer.open && !$('composerInput').value.trim())) closeComposer();
+        }
+        // 光标停在气泡上时被藏起来收不到 mouseleave：别让旧回复从此一直挂着
+        if (bubble.hovered) {
+            bubble.hovered = false;
+            if (!paused && bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
+        }
         document.body.classList.toggle('is-paused', paused);
         backend.setPaused(paused);
         lifeFx.setPaused(paused);

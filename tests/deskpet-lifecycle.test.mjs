@@ -144,6 +144,17 @@ test('a renderer reload or crash puts the window back to click-through and ends 
     handlers.closeAll();
 });
 
+test('closing the input bar makes the window click-through again even if the cursor never moved', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    // 快捷键打开输入框时光标不在角色上：页面最后报的是「没命中」，收起后不会再报一次
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), false);
+    assert.equal(pet.ignoreMouse.at(-1), true, '收起输入框后整块透明窗口不能继续挡着点击');
+    handlers.closeAll();
+});
+
 test('a pet left on an unplugged display comes back to the primary one', async () => {
     const { handlers, fake, open } = await loadHandlers();
     fake.screen.displays = [
