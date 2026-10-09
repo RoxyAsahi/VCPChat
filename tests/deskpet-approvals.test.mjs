@@ -10,7 +10,7 @@ test('approval requests are normalized for the card', () => {
     const long = normalizeApproval({ requestId: 'a', command: 'x'.repeat(500) });
     assert.equal(long.command.length, 160);
     assert.ok(long.command.endsWith('…'));
-    assert.equal(normalizeApproval({ requestId: 'a', expiresAt: 5 }, 10).expiresAt, null, 'already expired');
+    assert.equal(normalizeApproval({ requestId: 'a', expiresAt: 5 }, 10), null, 'already expired');
 });
 
 test('the queue shows the oldest pending request first and drops duplicates', () => {
@@ -42,4 +42,13 @@ test('the queue keeps at most 20 requests', () => {
     for (let i = 0; i < 25; i++) q.add({ requestId: `r${i}` });
     assert.equal(q.size, 20);
     assert.equal(q.current.requestId, 'r5');
+});
+
+test('an expired replay cannot turn into a request with no expiry', () => {
+    const q = createApprovalQueue({ now: () => 1000 });
+    assert.equal(q.add({ requestId: 'late', expiresAt: 999 }), false);
+    assert.equal(q.add({ requestId: 'boundary', expiresAt: 1000 }), false);
+    assert.equal(q.current, null);
+    assert.equal(q.size, 0);
+    assert.equal(q.add({ requestId: 'unlimited', expiresAt: null }), true);
 });

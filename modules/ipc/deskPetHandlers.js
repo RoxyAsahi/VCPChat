@@ -1476,21 +1476,32 @@ async function offerApproval(raw) {
     if (!raw || typeof raw !== 'object') return false;
     const requestId = typeof raw.requestId === 'string' || typeof raw.requestId === 'number' ? String(raw.requestId) : '';
     if (!requestId || pendingApprovals.has(requestId)) return false;
-    // 认得出是谁要的就给谁；认不出（没写 maid、名字对不上）就给最近在聊的那个
-    const agentId = (await agentIdByName(raw.maid)) || (lastTalkedAgentId && pets.has(lastTalkedAgentId) ? lastTalkedAgentId : null);
-    const pet = agentId && pets.get(agentId);
-    if (!pet || pet.win.isDestroyed()) return false;
     const ttl = Number(raw.expiresInMs);
+    if (raw.expiresInMs != null && Number.isFinite(ttl) && ttl <= 0) return false;
     const payload = {
         requestId,
         toolName: String(raw.toolName || '').slice(0, 120),
         command: String(raw.command ?? '').slice(0, 2000),
         expiresAt: Number.isFinite(ttl) && ttl > 0 ? Date.now() + ttl : null,
     };
-    pendingApprovals.set(requestId, { agentId, payload });
-    if (pendingApprovals.size > MAX_PENDING_APPROVALS) pendingApprovals.delete(pendingApprovals.keys().next().value);
-    if (pet.ready) pet.win.webContents.send('deskpet:approval', payload);
-    return true;
+    // 查助手目录前先占位：查询期间主窗口可能已经应答，也可能重放同一请求。
+    // 过期时间从收到请求起算，不能被慢查询延长。
+    const entry = { agentId: null, payload };
+    pendingApprovals.set(requestId, entry);
+    if (pendingApprovals.size > MAX_PENDING_APPROVALS) settleApproval(pendingApprovals.keys().next().value);
+    try {
+        // 认得出是谁要的就给谁；认不出（没写 maid、名字对不上）就给最近在聊的那个
+        const agentId = (await agentIdByName(raw.maid)) || (lastTalkedAgentId && pets.has(lastTalkedAgentId) ? lastTalkedAgentId : null);
+        if (pendingApprovals.get(requestId) !== entry) return false;
+        if (payload.expiresAt !== null && payload.expiresAt <= Date.now()) return false;
+        const pet = agentId && pets.get(agentId);
+        if (!pet || pet.win.isDestroyed() || shuttingDown) return false;
+        entry.agentId = agentId;
+        if (pet.ready) pet.win.webContents.send('deskpet:approval', payload);
+        return true;
+    } finally {
+        if (!entry.agentId && pendingApprovals.get(requestId) === entry) pendingApprovals.delete(requestId);
+    }
 }
 
 function settleApproval(requestId) {
@@ -1735,7 +1746,12 @@ function registerIpc() {
     ipcMain.on('deskpet:approval-answer', (event, answer) => {
         const pet = petFromEvent(event);
         const requestId = String(answer?.requestId || '');
-        if (!pet || pendingApprovals.get(requestId)?.agentId !== pet.agentId) return;
+        const entry = pendingApprovals.get(requestId);
+        if (!pet || entry?.agentId !== pet.agentId) return;
+        if (entry.payload.expiresAt !== null && entry.payload.expiresAt <= Date.now()) {
+            settleApproval(requestId);
+            return;
+        }
         if (!mainWindow || mainWindow.isDestroyed()) return;
         mainWindow.webContents.send('deskpet:approval-answer', { requestId, approved: answer?.approved === true });
     });
@@ -2007,6 +2023,7 @@ function initialize(options) {
 function closeAll() {
     // 退出（或主窗口关掉）时一起关：恢复列表保持原样，下次启动照旧打开
     shuttingDown = true;
+    pendingApprovals.clear();
     for (const agentId of [...pets.keys()]) closePet(agentId);
     fullscreenWatch?.stop();
     controls?.dispose();

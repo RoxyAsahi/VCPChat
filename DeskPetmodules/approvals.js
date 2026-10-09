@@ -12,11 +12,12 @@ export function normalizeApproval(raw, now = Date.now()) {
     if (!requestId) return null;
     const command = String(raw.command ?? '').replace(/\s+/g, ' ').trim();
     const expiresAt = Number(raw.expiresAt);
+    if (raw.expiresAt != null && Number.isFinite(expiresAt) && expiresAt <= now) return null;
     return {
         requestId,
         toolName: String(raw.toolName || '').trim().slice(0, 60) || '工具',
         command: command.length > COMMAND_MAX ? `${command.slice(0, COMMAND_MAX - 1)}…` : command,
-        expiresAt: Number.isFinite(expiresAt) && expiresAt > now ? expiresAt : null,
+        expiresAt: raw.expiresAt != null && Number.isFinite(expiresAt) ? expiresAt : null,
     };
 }
 
