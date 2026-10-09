@@ -78,7 +78,9 @@ export function createSidePaneLauncher({
             console.warn('[SidePaneLauncher] Failed to read launcher profile:', error);
         }
         profile.hidden = !current;
-        renderPortrait(current?.portraits || null, current?.portraitDisplay);
+        // 助手设置里选了「头像」时立绘文件还在，只是首页不用它
+        const showPortrait = current?.portraitDisplay?.header !== 'avatar';
+        renderPortrait(showPortrait ? current?.portraits || null : null, current?.portraitDisplay);
         profileEdit = typeof current?.onEditAvatar === 'function' ? current.onEditAvatar : null;
         profileRename = typeof current?.onRename === 'function' ? current.onRename : null;
         if (!current) return;

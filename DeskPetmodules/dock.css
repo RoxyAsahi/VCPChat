@@ -1,0 +1,254 @@
+/* 桌宠脚边的小胶囊（桌宠页面和设置页预览共用这一份样式）。
+   同一个 .pet-dock 有四个样子，切换时宽高和内容都有过渡：
+     hidden  收起：缩小、下沉、淡出
+     pill    小胶囊：打字 | 说话
+     bar     输入条：麦克风、输入框、发送
+     rec     录音：打字 | 停止（光圈跟着音量动），.is-busy 时在识别
+   宽度用 --dock-bar-w 给输入条定最宽，由外面的页面设。 */
+
+.pet-dock {
+  --dock-h: 44px;
+  --dock-w: 112px;
+  --dock-ease: cubic-bezier(.34, 1.32, .5, 1);
+  position: relative;
+  box-sizing: border-box;
+  width: var(--dock-w);
+  height: var(--dock-h);
+  border-radius: 22px;
+  background: #fff;
+  color: #1f2328;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  transform-origin: 50% 100%;
+  transition:
+    width 380ms var(--dock-ease),
+    height 260ms cubic-bezier(.25, 1, .5, 1),
+    opacity 200ms ease,
+    transform 340ms var(--dock-ease),
+    visibility 0s linear 0s;
+  font-family: "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+}
+
+.pet-dock[data-mode="hidden"] {
+  opacity: 0;
+  transform: translateY(10px) scale(0.86);
+  visibility: hidden;
+  pointer-events: none;
+  /* 淡出完了再藏起来，命中测试不再算它 */
+  transition:
+    width 380ms var(--dock-ease),
+    height 260ms ease,
+    opacity 180ms ease,
+    transform 220ms ease-in,
+    visibility 0s linear 220ms;
+}
+
+.pet-dock[data-mode="bar"] {
+  --dock-w: var(--dock-bar-w, 360px);
+  --dock-h: var(--dock-bar-h, 48px);
+  border-radius: 24px;
+}
+
+.pet-dock[data-mode="rec"] {
+  --dock-w: 104px;
+}
+
+.pet-dock .dock-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  margin: 0;
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 260ms var(--dock-ease);
+}
+
+/* 新的一层在外框变形到一半时淡入，旧的一层马上淡出 */
+.pet-dock[data-mode="pill"] .dock-pill,
+.pet-dock[data-mode="bar"] .dock-bar,
+.pet-dock[data-mode="rec"] .dock-rec {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition: opacity 200ms ease 90ms, transform 300ms var(--dock-ease) 60ms;
+}
+
+.pet-dock .dock-pill,
+.pet-dock .dock-rec {
+  justify-content: center;
+  gap: 2px;
+  padding: 0 6px;
+}
+
+.pet-dock .dock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.pet-dock .dock-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.pet-dock .dock-btn:active {
+  transform: scale(0.92);
+}
+
+.pet-dock svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pet-dock .dock-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.pet-dock .dock-bar {
+  gap: 6px;
+  padding: 0 6px;
+  align-items: flex-end;
+  padding-bottom: 6px;
+}
+
+.pet-dock .dock-round {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f1f2f4;
+}
+
+.pet-dock .dock-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 36px;
+  max-height: 96px;
+  padding: 8px 2px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: #1f2328;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  user-select: text;
+  scrollbar-width: thin;
+}
+
+.pet-dock .dock-input::placeholder {
+  color: #9aa0a8;
+}
+
+.pet-dock .dock-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #2f80ed;
+  color: #fff;
+  cursor: pointer;
+  transition: background 160ms ease, opacity 160ms ease, transform 160ms var(--dock-ease);
+}
+
+.pet-dock .dock-send:disabled,
+.pet-dock .dock-send.is-empty {
+  background: #b9d4fa;
+  cursor: default;
+}
+
+.pet-dock .dock-send:not(:disabled):not(.is-empty):active {
+  transform: scale(0.9);
+}
+
+/* 录音：灰色圆钮里一个黑点，外圈跟着音量（--level，0–1）扩散 */
+.pet-dock .rec-stop {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  margin: 0 3px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #eceef0;
+  cursor: pointer;
+  box-shadow: 0 0 0 calc(var(--level, 0) * 7px) rgba(47, 128, 237, 0.18);
+  transition: box-shadow 80ms linear, background 160ms ease;
+}
+
+.pet-dock .rec-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #111;
+  transition: border-radius 200ms ease, width 200ms ease, height 200ms ease;
+  animation: pet-dock-rec 1.6s ease-in-out infinite;
+}
+
+.pet-dock .rec-stop:hover .rec-dot {
+  border-radius: 3px;
+}
+
+/* 识别中：黑点变成转圈 */
+.pet-dock .rec-stop.is-busy {
+  cursor: progress;
+  box-shadow: none;
+}
+
+.pet-dock .rec-stop.is-busy .rec-dot {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid #111;
+  border-right-color: transparent;
+  border-radius: 50%;
+  background: transparent;
+  animation: pet-dock-spin 700ms linear infinite;
+}
+
+@keyframes pet-dock-rec {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes pet-dock-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-dock,
+  .pet-dock .dock-layer {
+    transition-duration: 1ms !important;
+    transition-delay: 0s !important;
+  }
+}

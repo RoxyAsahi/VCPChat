@@ -100,6 +100,15 @@ function fakeElectron({ taken = [] } = {}) {
                 send: (channel, payload) => this.sent.push({ channel, payload }),
                 isLoading: () => false,
                 getURL: () => 'file://main.html',
+                isDestroyed: () => this.destroyed,
+                reload: () => { this.reloads = (this.reloads || 0) + 1; },
+                setFrameRate() {},
+                loadURL: (url) => { this.contentsUrl = url; return Promise.resolve(); },
+                // 离屏快照：截到的是一张 40×80 的图
+                capturePage: async (rect) => {
+                    this.captured = rect;
+                    return { isEmpty: () => false, getSize: () => ({ width: 40, height: 80 }), resize: () => this, toPNG: () => Buffer.from('png') };
+                },
             });
             windows.push(this);
         }
@@ -110,6 +119,8 @@ function fakeElectron({ taken = [] } = {}) {
         showInactive() { this.visible = true; this.emit('show'); }
         hide() { this.visible = false; this.emit('hide'); }
         close() { this.destroyed = true; this.emit('closed'); }
+        destroy() { this.close(); }
+        setContentSize(width, height) { this.bounds = { ...this.bounds, width, height }; }
         setAlwaysOnTop() {} moveTop() {} setVisibleOnAllWorkspaces() {} focus() {} loadURL(url) { this.url = url; } reload() {}
         restore() {} setMenu() {} setResizable() {}
         setIgnoreMouseEvents() {}
@@ -140,6 +151,8 @@ function fakeElectron({ taken = [] } = {}) {
         Menu: {},
         screen,
         globalShortcut,
+        dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+        shell: { openPath: async () => '' },
     };
     return { electron, handlers, listeners, windows, screen, shortcuts };
 }
@@ -174,6 +187,8 @@ async function loadHandlers({ root = fs.mkdtempSync(path.join(os.tmpdir(), 'desk
         await fake.handlers.get('deskpet:toggle')({}, agentId);
         const pet = fake.windows.at(-1);
         pet.emit('ready-to-show');
+        // 页面载完形象、输入框能用了
+        fake.listeners.get('deskpet:page-ready')({ sender: pet.webContents });
         return pet;
     };
     const fromPet = (pet) => ({ sender: pet.webContents });
@@ -299,4 +314,146 @@ test('a smaller display shrinks a pet that no longer fits', async () => {
     const b = pet.getBounds();
     assert.ok(b.height <= 680 && b.y >= 0 && b.y + b.height <= 680, `fits: ${JSON.stringify(b)}`);
     env.handlers.closeAll();
+});
+
+// ---- 全局设置 → 桌宠 ----
+
+const fromMain = (env) => ({ sender: env.mainWindow.webContents });
+
+function addOutfit(env, agentId, folder, name) {
+    const dir = path.join(env.root, 'Agents', agentId, 'deskpet', folder);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'portrait.png'), 'x');
+    fs.writeFileSync(path.join(dir, 'outfit.json'), JSON.stringify({ name, description: `${name}的介绍` }));
+}
+
+test('the settings page only answers the main window and lists the outfits of one agent', async () => {
+    const env = await loadHandlers();
+    addOutfit(env, 'Nova', 'maid', '女仆');
+    addOutfit(env, 'Nova', 'tech', '科技服');
+    const catalog = env.fake.handlers.get('deskpet-settings:catalog');
+    assert.equal(await catalog({ sender: null }, 'Nova'), null, '不是主窗口发的不理');
+    const page = await catalog(fromMain(env), 'Nova');
+    assert.equal(page.agentId, 'Nova');
+    assert.deepEqual(page.outfits.filter((o) => !o.builtIn).map((o) => o.name), ['科技服', '女仆'].sort((a, b) => a.localeCompare(b, 'zh')));
+    assert.ok(page.outfits.filter((o) => o.builtIn).every((o) => o.kindLabel.startsWith('内置')), '自带的 Nova 形象标着内置');
+    assert.equal(page.outfits.find((o) => o.id === 'maid').description, '女仆的介绍');
+    assert.equal(page.open, false);
+    assert.equal(page.outfit, null, '关着的桌宠选中的是「无」');
+    assert.deepEqual(page.agents.map((a) => a.id).sort(), ['Coco', 'Nova']);
+    env.handlers.closeAll();
+});
+
+test('picking a card opens the pet in that outfit, picking none closes it', async () => {
+    const env = await loadHandlers();
+    addOutfit(env, 'Nova', 'maid', '女仆');
+    addOutfit(env, 'Nova', 'tech', '科技服');
+    const choose = env.fake.handlers.get('deskpet-settings:choose');
+    const result = await choose(fromMain(env), 'Nova', 'tech');
+    assert.equal(result.success, true);
+    const pet = env.petWindows()[0];
+    assert.ok(pet, '没开着的桌宠打开了');
+    assert.equal(env.readJson(path.join(env.root, 'deskpet', 'state.json')).Nova.outfit, 'tech', '直接按选的那套开');
+    pet.emit('ready-to-show');
+    assert.equal(result.catalog.outfit, 'tech');
+    const switched = await choose(fromMain(env), 'Nova', 'maid');
+    assert.equal(switched.catalog.outfit, 'maid', '开着的桌宠换装');
+    const none = await choose(fromMain(env), 'Nova', '');
+    assert.equal(none.success, true);
+    assert.equal(env.petWindows().length, 0, '「无」收起这个助手的桌宠');
+    assert.equal(none.catalog.outfit, null);
+    assert.equal((await choose(fromMain(env), '../x', 'maid')).success, false);
+    env.handlers.closeAll();
+});
+
+test('words typed in the settings preview wait until the pet page is ready, then the pet sends them', async () => {
+    const env = await loadHandlers();
+    const talk = env.fake.handlers.get('deskpet-settings:talk');
+    assert.equal((await talk(fromMain(env), 'Nova', '   ')).success, false);
+    const pending = talk(fromMain(env), 'Nova', '你好');
+    await sleep(30);
+    const pet = env.petWindows()[0];
+    pet.emit('ready-to-show');
+    assert.equal(pet.sent.some((m) => m.channel === 'deskpet:open-input'), false, '页面还没好，先不发');
+    env.fake.listeners.get('deskpet:page-ready')({ sender: pet.webContents });
+    assert.equal((await pending).success, true, '交到页面手里才算发出');
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { submit: '你好' });
+    // 第二句直接交给已经准备好的页面，不会顶掉第一句
+    assert.equal((await talk(fromMain(env), 'Nova', '还在吗')).success, true);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').map((m) => m.payload.submit), ['你好', '还在吗']);
+    env.handlers.closeAll();
+});
+
+test('words for a pet whose page fails to start come back as not sent', async () => {
+    const env = await loadHandlers();
+    const talk = env.fake.handlers.get('deskpet-settings:talk');
+    const pending = talk(fromMain(env), 'Coco', '你好');
+    await sleep(30);
+    const pet = env.petWindows()[0];
+    env.fake.listeners.get('deskpet:page-failed')({ sender: pet.webContents }, '模型载不进来');
+    const result = await pending;
+    assert.equal(result.success, false);
+    assert.match(result.error, /模型载不进来/);
+    assert.equal(pet.sent.some((m) => m.channel === 'deskpet:open-input'), false);
+    env.handlers.closeAll();
+});
+
+test('show and hide from the settings page, and a closed pet remembers the size set there', async () => {
+    const env = await loadHandlers();
+    const visible = env.fake.handlers.get('deskpet-settings:set-visible');
+    let page = await visible(fromMain(env), true, 'Coco');
+    const coco = env.petWindows()[0];
+    coco.emit('ready-to-show');
+    assert.ok(coco.url.includes('agentId=Coco'), '一个都没开时打开正在看的那个助手');
+    page = await visible(fromMain(env), false, 'Coco');
+    assert.equal(coco.isVisible(), false);
+    assert.equal(page.anyVisible, false);
+    await env.fake.handlers.get('deskpet-settings:set-scale')(fromMain(env), 'Nova', 1.5);
+    await sleep(30);
+    assert.equal(env.readJson(path.join(env.root, 'deskpet', 'state.json')).Nova.scale, 1.5);
+    env.handlers.closeAll();
+});
+
+test('card snapshots are rendered offscreen once and reused while the files stay the same', async () => {
+    const env = await loadHandlers();
+    addOutfit(env, 'Nova', 'maid', '女仆');
+    const catalog = env.fake.handlers.get('deskpet-settings:catalog');
+    const first = await catalog(fromMain(env), 'Nova');
+    assert.equal(first.outfits[0].preview, null, '第一次没有现成的快照');
+    const offscreen = env.fake.windows.find((w) => w.options.webPreferences?.offscreen);
+    assert.ok(offscreen, '在离屏窗口里画');
+    assert.match(offscreen.contentsUrl, /preview=1/);
+    // 离屏页面问自己该画谁
+    const assets = await env.fake.handlers.get('deskpet:get-assets')({ sender: offscreen.webContents });
+    assert.equal(assets.preview, true);
+    assert.equal(assets.outfit.id, 'maid');
+    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 100, y: 200, width: 120, height: 300 }, aspect: 2.5 });
+    await sleep(50);
+    assert.deepEqual(offscreen.captured, { x: 94, y: 194, width: 132, height: 312 }, '只截角色那一块，四周留一点边');
+    const pushed = env.mainWindow.sent.find((m) => m.channel === 'deskpet-settings:preview');
+    assert.equal(pushed.payload.outfitId, 'maid');
+    assert.match(pushed.payload.url, /^file:.*\.png\?v=/);
+    const second = await catalog(fromMain(env), 'Nova');
+    assert.equal(second.outfits[0].preview, pushed.payload.url, '文件没变就直接用');
+    env.handlers.closeAll();
+});
+
+test('the settings file and the settings page never claim the same channel', () => {
+    const { createPetControls } = require('../modules/deskpet/petControls.js');
+    const { createSettingsPage } = require('../modules/deskpet/settingsPage.js');
+    const channels = new Set();
+    // 和 Electron 一样，同一个频道注册两次直接报错
+    const ipcMain = {
+        handle(channel) {
+            if (channels.has(channel)) throw new Error(`second handler for ${channel}`);
+            channels.add(channel);
+        },
+        on() {},
+    };
+    const electron = { ipcMain, globalShortcut: { register() { return true; }, unregister() {}, isRegistered() { return false; } }, dialog: {}, shell: {} };
+    const controls = createPetControls({ electron, appDataRoot: os.tmpdir(), actions: {} });
+    controls.registerIpc();
+    createSettingsPage({ electron, paths: { agentDir: os.tmpdir() }, controls, previews: {}, pets: {} }).registerIpc();
+    assert.ok(channels.has('deskpet-settings:get'));
+    controls.dispose?.();
 });

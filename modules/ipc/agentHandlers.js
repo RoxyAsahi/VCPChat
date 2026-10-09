@@ -5,7 +5,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { clearTrajectoriesOfOwner } = require('../modelTrajectory');
 const { getAgentMoodStore } = require('../agentMood');
-const { resolvePortraitDisplayPath } = require('../services/agentPortraitImages');
+const { resolvePortraitDisplayPath, forgetPortraitDisplayImages } = require('../services/agentPortraitImages');
 
 let AGENT_DIR_CACHE; // Cache the agent directory path
 let USER_DATA_DIR_CACHE; // Cache the user data directory path
@@ -42,6 +42,10 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
 // 立绘可以是图片、动图或静音循环播放的短视频（mp4、webm）。
 const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp|avif|mp4|webm))$/i;
 
+function portraitCacheDir() {
+    return AGENT_DIR_CACHE ? path.join(path.dirname(AGENT_DIR_CACHE), 'PortraitCache') : null;
+}
+
 async function findPortraitUrls(agentDir) {
     let names;
     try {
@@ -58,7 +62,7 @@ async function findPortraitUrls(agentDir) {
         const filePath = path.join(agentDir, name);
         const stat = await fs.stat(filePath).catch(() => null);
         if (!stat?.isFile()) continue;
-        const displayPath = await resolvePortraitDisplayPath(filePath, stat, path.join(path.dirname(AGENT_DIR_CACHE), 'PortraitCache'));
+        const displayPath = await resolvePortraitDisplayPath(filePath, stat, portraitCacheDir());
         portraits[key] = `${pathToFileURL(displayPath).toString()}?v=${Math.round(stat.mtimeMs)}`;
     }
     return portraits.default ? portraits : null;
@@ -90,6 +94,7 @@ function portraitBaseName(key) {
 async function removePortraitFiles(agentDir, key, keepPath = null) {
     const names = await fs.readdir(agentDir).catch(() => []);
     const keep = keepPath ? await fs.stat(keepPath).catch(() => null) : null;
+    const removed = [];
     for (const name of names) {
         const match = PORTRAIT_FILE_PATTERN.exec(name);
         if (!match || (match[1] || 'default').toLowerCase() !== key) continue;
@@ -99,7 +104,9 @@ async function removePortraitFiles(agentDir, key, keepPath = null) {
             if (stat && stat.ino === keep.ino && stat.dev === keep.dev) continue;
         }
         await fs.remove(filePath);
+        removed.push(filePath);
     }
+    await forgetPortraitDisplayImages(removed, portraitCacheDir());
 }
 
 // 先写临时文件再改名换上，换上以后才删同一版本的其他扩展名：写盘失败（磁盘满、文件被占用）时原来的立绘还在
@@ -592,7 +599,11 @@ function initialize(context) {
             const userDataAgentDir = path.join(USER_DATA_DIR, agentId);
             // 先让心情不再写、等正在写的 mood.json 写完，否则删目录时可能撞上写入
             await getAgentMoodStore()?.forget(agentId);
+            const portraitFiles = (await fs.readdir(agentDir).catch(() => []))
+                .filter(name => PORTRAIT_FILE_PATTERN.test(name))
+                .map(name => path.join(agentDir, name));
             if (await fs.pathExists(agentDir)) await fs.remove(agentDir);
+            await forgetPortraitDisplayImages(portraitFiles, portraitCacheDir());
             if (await fs.pathExists(userDataAgentDir)) await fs.remove(userDataAgentDir);
             await clearTrajectoriesOfOwner({ agentId }); // 侧栏「调用轨迹」按话题落盘的请求记录，助手没了就一起删
             invalidateCaches();

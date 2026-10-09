@@ -1170,7 +1170,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-contain
     display: flex;
     flex-direction: column;
     gap: 8px;
-    /* 里面有首页立绘（预览、图片槽和展开的表情差分），给足高度只为保留展开动画 */
+    /* 里面有首页立绘（预览和图片槽），给足高度只为保留展开动画 */
     max-height: 4000px;
     opacity: 1;
     visibility: visible;
@@ -3266,21 +3266,36 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview:not([dat
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes {
+/* 设置侧栏很窄：按钮文字不折行，放不下时整组换到下一行 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar > .small-button {
+    flex: none;
+    white-space: nowrap;
+}
+
+/* 分段按钮（首页顶部显示立绘还是头像、预览主题）：选中的那一格用强调色实底，深浅主题下都一眼看得出 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented {
     display: inline-flex;
+    flex: none;
+    gap: 2px;
     padding: 2px;
+    border: 0.5px solid var(--vcp-settings-border);
     border-radius: 7px;
     background: var(--vcp-settings-input);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes button {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button {
     min-height: 22px;
-    padding: 0 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 8px;
+    line-height: 22px;
+    white-space: nowrap;
     border: none;
     border-radius: 5px;
     background: transparent;
@@ -3288,11 +3303,40 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes b
     font: inherit;
     font-size: var(--vcp-settings-font-meta, 12px);
     cursor: pointer;
+    transition: background-color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard), color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard);
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes button[aria-pressed="true"] {
-    background: var(--vcp-settings-surface);
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button:not([aria-pressed="true"]):not(:disabled):hover {
     color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button[aria-pressed="true"] {
+    background: var(--vcp-settings-accent);
+    color: var(--vcp-ui-on-accent);
+    font-weight: 600;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--vcp-settings-accent) 60%, transparent);
+    outline-offset: 1px;
+}
+
+/* 首页顶部显示立绘还是头像 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-choice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-label {
+    font-size: var(--vcp-settings-font-sub);
+    color: var(--vcp-settings-text);
+}
+
+/* 选了头像：立绘还留着、还能调，预览淡一点表示首页现在不用它 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings[data-header="avatar"][data-has-portrait="true"] .agent-portrait-preview {
+    opacity: 0.5;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot {
