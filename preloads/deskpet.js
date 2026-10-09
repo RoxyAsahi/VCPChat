@@ -113,7 +113,12 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
     reportFigure: report => ipcRenderer.send('deskpet:figure', { outfit: String(report?.outfit || ''), aspect: Number(report?.aspect) }),
     dragStart: origin => ipcRenderer.send('deskpet:drag-start', origin),
-    dragEnd: () => ipcRenderer.send('deskpet:drag-end'),
+    // figure：角色在窗口里的包围盒，主进程据此贴边；free：按着 Alt 松手，不贴
+    dragEnd: (report) => {
+        const f = report?.figure;
+        const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
+        ipcRenderer.send('deskpet:drag-end', { figure, free: report?.free === true });
+    },
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),

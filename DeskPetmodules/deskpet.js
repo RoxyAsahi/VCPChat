@@ -552,6 +552,15 @@ function aimBubble(headX) {
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
 
+// 角色在窗口里的包围盒（贴边用）；后端还没起来时没有
+function figureBounds() {
+    try {
+        return window.__deskPetBounds?.() || null;
+    } catch {
+        return null;
+    }
+}
+
 function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
@@ -583,11 +592,12 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
             onDrag('start', e);
         }
     });
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', (e) => {
         if (!down) return;
         const at = { x: down.cx, y: down.cy };
         if (down.dragging) {
-            api.dragEnd();
+            // 松手的地方离屏幕边、任务栏很近时主进程会贴过去；按着 Alt 不贴
+            api.dragEnd({ figure: figureBounds(), free: e.altKey });
             onDrag('end');
             down = null;
             return;
