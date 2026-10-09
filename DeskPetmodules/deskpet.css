@@ -306,6 +306,42 @@ body.is-preview #lifeFx {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
+/* 回复说完时人不在（桌宠藏着、一直没碰键盘鼠标）：头边留个小气泡，点一下再说一遍 */
+#missedBadge {
+  position: absolute;
+  left: clamp(4px, calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.5 - 6px), calc(100% - 34px));
+  top: calc(var(--pet-head, 150px) + 22px);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-size: 16px;
+  line-height: 30px;
+  cursor: pointer;
+  animation: deskpet-missed-bob 1.6s ease-in-out infinite;
+}
+
+#missedBadge[hidden] {
+  display: none;
+}
+
+#missedBadge:hover {
+  animation: none;
+  transform: scale(1.1);
+}
+
+body.is-paused #missedBadge {
+  animation: none;
+}
+
+@keyframes deskpet-missed-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
 /* 只看不点时头顶另一边一个小幽灵：知道为什么点不到它 */
 #throughBadge {
   position: absolute;

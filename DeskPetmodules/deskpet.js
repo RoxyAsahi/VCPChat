@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { isMissed } from 'vcp-deskpet://pet/app/missedReply.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
@@ -101,6 +102,9 @@ const bubble = {
     proactive: null,    // 角色主动说的话（新话题、闹钟）：{ kind, title, topicId }，正文放在 reply 里
     tags: [],           // 回复里的情绪标记 { at, emotion, intensity }，at 是它在 reply 里的位置（朗读时按句换表情）
     hovered: false,
+    startedAt: 0,       // 这条回复（主动说的话）开始的时候
+    endedAt: 0,         // 说完的时候
+    heardAt: 0,         // 最近一次真的念出声的时候：念出来过就算听到了
     hideTimer: 0,
     noticeTimer: 0,
     renderQueued: false,
@@ -124,7 +128,7 @@ const speech = createSpeech({
     onLevel: (open) => {
         document.body.style.setProperty('--voice', open.toFixed(3));
         backend?.setMouth?.(open);
-        if (open) lastActivity = Date.now();
+        if (open) lastActivity = bubble.heardAt = Date.now();
     },
     onError: (error) => console.warn('[DeskPet] 播放朗读音频失败：', error?.message || error),
 });
@@ -204,10 +208,50 @@ function scheduleReplyHide(ms) {
     bubble.hideTimer = setTimeout(() => {
         // 还在念就等念完（念完时会重新计时）
         if (bubble.replyId || bubble.hovered || speech.active()) return;
+        keepIfMissed();
         bubble.reply = '';
         bubble.proactive = null;
         renderBubble();
     }, ms);
+}
+
+// ---- 没看到的回复 -------------------------------------------------------------------
+// 气泡到点就收起；收起时桌宠藏着、或者人一直没碰键盘鼠标（走开了），这段话就留着，
+// 头边一个 💬，点一下把它再摆出来。来了新回复就换成新的。
+
+const missed = { reply: '', proactive: null };
+
+function keepIfMissed() {
+    const muted = isQuiet() && !bubble.own;
+    if (!bubble.reply.trim() || muted || bubble.notice) return;
+    const saved = { reply: bubble.reply, proactive: bubble.proactive };
+    const times = { startedAt: bubble.startedAt, endedAt: bubble.endedAt, heardAt: bubble.heardAt };
+    const hidden = document.body.classList.contains('is-paused');
+    if (!hidden && times.heardAt > times.startedAt) return;
+    const idle = hidden ? Promise.resolve(0) : Promise.resolve(api.idleSeconds?.()).then((s) => Number(s) * 1000, () => 0);
+    idle.then((idleMs) => {
+        if (!isMissed({ hidden, idleMs, now: Date.now(), ...times })) return;
+        if (bubble.replyId || bubble.reply) return; // 已经在说新的了
+        Object.assign(missed, saved);
+        $('missedBadge').hidden = false;
+    });
+}
+
+function clearMissed() {
+    missed.reply = '';
+    missed.proactive = null;
+    $('missedBadge').hidden = true;
+}
+
+function replayMissed() {
+    if (!missed.reply || bubble.replyId) return;
+    bubble.reply = missed.reply;
+    bubble.proactive = missed.proactive;
+    bubble.tags = [];
+    bubble.endedAt = Date.now();
+    clearMissed();
+    renderBubble();
+    scheduleReplyHide(replyHoldMs());
 }
 
 function proactiveLabel() {
@@ -237,6 +281,8 @@ function speakProactive(payload) {
     bubble.proactive = { kind, title: payload.title || '', topicId: payload.topicId || '' };
     bubble.own = kind === 'alarm';
     bubble.reply = payload.text || payload.title;
+    bubble.startedAt = bubble.endedAt = Date.now();
+    clearMissed();
     lastActivity = Date.now();
     life?.wake({ startle: true });
     proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
@@ -483,6 +529,10 @@ function bindComposer() {
         // 主动开的新话题：直接切到那个话题
         if (bubble.proactive?.topicId && !bubble.replyId) api.openTopic(bubble.proactive.topicId);
         else api.openMainWindow();
+    });
+    $('missedBadge').addEventListener('click', (e) => {
+        e.stopPropagation();
+        replayMissed();
     });
     bubbleEl.addEventListener('mouseenter', () => {
         bubble.hovered = true;
@@ -1581,6 +1631,8 @@ function bindStream(director) {
         bubble.region = null;
         bubble.proactive = null;
         bubble.tags = [];
+        bubble.startedAt = Date.now();
+        clearMissed();
         scanner = createEmotionTagScanner();
         // 免打扰时主窗口里聊天的回复不念；在桌宠上说的话照常念
         speech.begin(messageId, { silent: isQuiet() && !bubble.own });
@@ -1625,6 +1677,7 @@ function bindStream(director) {
             life?.hold('reply', false);
             bubble.region = null;
             composer.ownReplyEndedAt = bubble.own ? Date.now() : 0;
+            bubble.endedAt = Date.now();
             scheduleReplyHide(replyHoldMs());
             toolCard.end();
             if (pendingProactive.length) setTimeout(flushProactive, Math.min(replyHoldMs(), 6000));

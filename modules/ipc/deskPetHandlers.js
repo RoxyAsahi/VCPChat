@@ -1426,6 +1426,10 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    // 多久没碰键盘鼠标了（秒）：回复说完时人在不在
+    ipcMain.handle('deskpet:idle-seconds', () => {
+        try { return electron.powerMonitor?.getSystemIdleTime?.() ?? 0; } catch { return 0; }
+    });
     ipcMain.on('deskpet:open-topic', (event, topicId) => {
         const pet = petFromEvent(event);
         if (!pet) return;
