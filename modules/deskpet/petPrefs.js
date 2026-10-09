@@ -42,8 +42,9 @@ const RESERVED_ACCELERATORS = Object.freeze([
 const DEFAULT_SETTINGS = Object.freeze({
     doNotDisturb: false,
     restoreOnLaunch: true,
-    // 别的程序全屏时先躲开（只在 Windows 上做，见 modules/deskpet/fullscreenWatch.js）
-    yieldToFullscreen: true,
+    // 别的程序全屏时先躲开（只在 Windows 上做，见 modules/deskpet/fullscreenWatch.js）。
+    // 先默认关着，等 Windows 上的 CI 验证过检测脚本再打开
+    yieldToFullscreen: false,
     // 只看不点：鼠标整个穿过桌宠，点不到也拖不动；托盘、快捷键关掉
     clickThrough: false,
     shortcuts: Object.freeze(Object.fromEntries(
@@ -208,7 +209,7 @@ function normalizeSettings(raw) {
     return {
         doNotDisturb: input.doNotDisturb === true,
         restoreOnLaunch: input.restoreOnLaunch !== false,
-        yieldToFullscreen: input.yieldToFullscreen !== false,
+        yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
         shortcuts,
         openAgents,

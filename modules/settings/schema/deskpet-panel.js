@@ -908,7 +908,7 @@ export function buildDeskPetPanel(doc) {
         if (!settings) return;
         dnd.input.checked = settings.doNotDisturb === true;
         restore.input.checked = settings.restoreOnLaunch === true;
-        yieldFs.input.checked = settings.yieldToFullscreen !== false;
+        yieldFs.input.checked = settings.yieldToFullscreen === true;
         yieldFs.row.hidden = state.snapshot.platform !== 'win32';
         through.input.checked = settings.clickThrough === true;
     }
