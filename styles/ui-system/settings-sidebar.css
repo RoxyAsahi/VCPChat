@@ -3266,14 +3266,22 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview:not([dat
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
 }
 
+/* 设置侧栏很窄：按钮文字不折行，放不下时整组换到下一行 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar > .small-button {
+    flex: none;
+    white-space: nowrap;
+}
+
 /* 分段按钮（首页顶部显示立绘还是头像、预览主题）：选中的那一格用强调色实底，深浅主题下都一眼看得出 */
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented {
     display: inline-flex;
+    flex: none;
     gap: 2px;
     padding: 2px;
     border: 0.5px solid var(--vcp-settings-border);
@@ -3283,7 +3291,11 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented {
 
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button {
     min-height: 22px;
-    padding: 0 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 8px;
+    line-height: 22px;
+    white-space: nowrap;
     border: none;
     border-radius: 5px;
     background: transparent;
