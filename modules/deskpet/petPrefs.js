@@ -41,6 +41,8 @@ const RESERVED_ACCELERATORS = Object.freeze([
 const DEFAULT_SETTINGS = Object.freeze({
     doNotDisturb: false,
     restoreOnLaunch: true,
+    // 别的程序全屏时先躲开（只在 Windows 上做，见 modules/deskpet/fullscreenWatch.js）
+    yieldToFullscreen: true,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -203,6 +205,7 @@ function normalizeSettings(raw) {
     return {
         doNotDisturb: input.doNotDisturb === true,
         restoreOnLaunch: input.restoreOnLaunch !== false,
+        yieldToFullscreen: input.yieldToFullscreen !== false,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
