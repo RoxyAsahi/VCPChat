@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
 const api = window.deskPetAPI;
@@ -154,6 +155,8 @@ function renderBubble() {
     const source = revealEnd == null ? bubble.reply : bubble.reply.slice(0, revealEnd);
     const waiting = revealEnd != null && !source.trim() && speech.active();
     const reply = muted ? '' : source.trim() ? toBubbleText(source) : (waiting ? '…' : '');
+    // 回复里写了动作：显示（念）到那句时演出来；免打扰下不冒气泡的回复也不动
+    if (!muted && life) for (const gesture of dueGestures(bubble.tags, revealEnd)) life.perform(gesture);
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
@@ -671,6 +674,10 @@ const LIFE_MOTIONS = {
     hum: ['Happy', 'Dance'],
     wake: ['Wake', 'WakeUp'],
     landed: ['Landing', 'FlickDown'],
+    agree: ['Nod', 'Agree', 'Yes'],
+    disagree: ['Shake', 'Disagree', 'No'],
+    cheer: ['Cheer', 'Jump', 'Happy'],
+    bow: ['Bow'],
 };
 const LIFE_MOTION_WEIGHT = 0.4; // 模型自己有这个动作时，参数曲线只轻轻叠一点
 
@@ -1572,7 +1579,7 @@ function bindStream(director) {
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
                 else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
-                else if (item.type === 'tag') bubble.tags.push({ at: bubble.reply.length, emotion: item.emotion, intensity: item.intensity });
+                else if (item.type === 'tag') bubble.tags.push({ at: bubble.reply.length, emotion: item.emotion, intensity: item.intensity, gesture: gestureOf(item.variant) });
             }
             bubble.region = scanner.region;
             speech.update(bubble.reply, sentenceFrame);

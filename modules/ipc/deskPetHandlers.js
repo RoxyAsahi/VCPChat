@@ -600,12 +600,20 @@ function petFromEvent(event) {
 
 // ---- 回复流接入（chatHandlers 调用） ----------------------------------------
 
-/** 该 agent 的桌宠打开时，返回要追加到 system prompt 的情绪标记说明（与侧栏差分立绘共用一段）。 */
+// 桌宠能演的动作写在情绪标记的斜杠后面（DeskPetmodules/gestures.js），标记本身哪里都会去掉。
+const GESTURE_PROMPT = [
+    '【桌宠动作】桌面上的你还会做动作：想配合动作时，把动作名写在情绪标记的斜杠后面，例如 <!--emo:happy/nod 0.8-->。',
+    '动作只能是：nod（点头）shake（摇头）tilt（歪头）cheer（开心地跳一下）bow（鞠躬）。只在真的有这个动作时写，不要每句都写。',
+].join('\n');
+
+/** 该 agent 的桌宠打开时，返回要追加到 system prompt 的情绪标记和动作说明（情绪标记与侧栏差分立绘共用一段）。 */
 function getSystemPromptAppend(agentId, systemPrompt = '') {
     if (!agentId || !pets.has(agentId) || !emotionPrompt) return '';
     // 侧栏立绘已经加过、或者角色自己的提示词里写了标记说明，就不再重复。
-    if (!emotionPrompt.shouldAddEmotionTagPrompt({ systemPrompt, hasDisplay: true })) return '';
-    return emotionPrompt.EMOTION_TAG_PROMPT;
+    const parts = [];
+    if (emotionPrompt.shouldAddEmotionTagPrompt({ systemPrompt, hasDisplay: true })) parts.push(emotionPrompt.EMOTION_TAG_PROMPT);
+    if (!/【桌宠动作】|<!--\s*emo\s*[:：][^>]*\/(?:nod|shake|tilt|cheer|bow)\b/i.test(String(systemPrompt || ''))) parts.push(GESTURE_PROMPT);
+    return parts.join('\n');
 }
 
 function appendProtocolToMessages(messages, agentId) {
