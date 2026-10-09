@@ -3,7 +3,7 @@
 The lower part of the back-hair layer is a hard-edged rectangle (atlas x 174..549, y 222..~905) carrying
 inpaint residue (collar wedges, a wavy patch) on its sides. At rest it is covered by the side hair, but
 with head tilt (ParamAngleZ ~ +-12 already in idle) the side hair swings off it and the residue shows.
-This fills the residue with the flat hair colour and fades the straight sides out.
+This fills the residue with the flat hair colour, the straight sides included, so they read as hair when exposed.
 It also thickens the neutral eyelashes and the closed mouth by 2 px: the closed eye is the lash bent into a lid curve and read too thin,
 and erases two brow-tip specks the segmentation left on the bottom edge of the headwear layer (drawn above the bangs).
 Usage: fix_chibi_backhair.py <texture_00.png>   (in place; refuses a texture whose layout differs)
@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-X0, X1, Y0, Y1 = 174, 549, 222, 880
+X0, X1 = 174, 549
 
 
 def main(path):
@@ -38,10 +38,9 @@ def main(path):
     sm[sm > 200] = 255
     for x, (x0, x1) in enumerate(strands):
         a[546:608, x0:x1] = keep[x][:62]
-    # an outline here reads as a stray straight line once exposed: fade the straight sides out instead
-    ramp = np.clip((np.arange(X1 - X0 + 1) + 0.5) / 34.0, 0, 1)
-    ramp = np.minimum(ramp, ramp[::-1])
-    a[Y0:Y1, X0:X1 + 1, 3] = (a[Y0:Y1, X0:X1 + 1, 3] * ramp[None, :]).astype(np.uint8)
+    # the straight sides are plain hair colour now (filled above), so they read as hair once exposed.  They stay fully
+    # opaque: the side hair meets them edge to edge, and any fade (it was 34 px) showed the background as a see-through
+    # band between the body and the side hair (#63 N3)
     # neutral eyelash L / R and the closed mouth (a thin line that breaks into dashes at pet size):
     # grow the stroke 2 px, filled with the stroke colour
     for x0, y0, x1, y1 in ((1164, 1618, 1239, 1652), (1163, 1654, 1238, 1688), (1076, 1864, 1176, 1892)):
