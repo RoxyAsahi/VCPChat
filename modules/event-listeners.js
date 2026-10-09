@@ -1420,11 +1420,12 @@ export function setupEventListeners(deps) {
             selectItem: item => chatManager.selectItem(item.id, item.type || 'agent', item.name, item.avatarUrl, item.config || item),
             sendMessage: request => chatManager.handleSendMessage(request),
             isBusy: () => sendMessageBtn.dataset.mode === 'interrupt',
+            storeFiles: (agentId, topicId, files) => chatAPI.handleFileDrop(agentId, topicId, files),
         });
-        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, deadline } = {}) => {
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, files, deadline } = {}) => {
             let result;
             try {
-                result = await sendFromPet({ agentId, text, deadline });
+                result = await sendFromPet({ agentId, text, files, deadline });
             } catch (error) {
                 result = { success: false, error: error.message };
             }

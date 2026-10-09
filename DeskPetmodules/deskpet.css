@@ -272,6 +272,56 @@ html, body {
   color: #a02a2a;
 }
 
+/* 要一起发的文件 */
+#attachTray {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+}
+
+#attachTray[hidden] {
+  display: none;
+}
+
+#attachText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#attachClear {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.07);
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#attachClear:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* 文件拖到桌宠上方：角色周围亮一圈，知道松手能收到 */
+body.is-drop-target #stage {
+  filter: drop-shadow(0 0 6px rgba(90, 160, 255, 0.95)) drop-shadow(0 0 2px rgba(90, 160, 255, 0.95));
+}
+
 #bubble.is-alarm {
   background: rgba(200, 85, 61, 0.94);
   animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1), deskpet-alarm-shake 600ms ease-in-out 3;
