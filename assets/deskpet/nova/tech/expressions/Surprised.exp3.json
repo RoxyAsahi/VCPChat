@@ -5,12 +5,12 @@
   "Parameters": [
     {
       "Id": "ParamEyeLOpen",
-      "Value": 1.0,
+      "Value": 1.25,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamEyeROpen",
-      "Value": 1.0,
+      "Value": 1.25,
       "Blend": "Overwrite"
     },
     {
