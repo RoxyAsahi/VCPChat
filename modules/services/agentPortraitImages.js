@@ -40,9 +40,13 @@ async function isAnimatedPng(filePath) {
     }
 }
 
+function cachePrefix(filePath) {
+    return `${crypto.createHash('sha1').update(path.resolve(filePath)).digest('hex').slice(0, 20)}-`;
+}
+
 function cacheKey(filePath, stat) {
-    const hash = crypto.createHash('sha1').update(path.resolve(filePath)).digest('hex').slice(0, 20);
-    return { prefix: `${hash}-`, name: `${hash}-${Math.round(stat.mtimeMs)}-${stat.size}.webp` };
+    const prefix = cachePrefix(filePath);
+    return { prefix, name: `${prefix}${Math.round(stat.mtimeMs)}-${stat.size}.webp` };
 }
 
 let sharpModule = null;
@@ -106,4 +110,17 @@ async function resolvePortraitDisplayPath(filePath, stat, cacheDir) {
     return (await pending.get(target)) || filePath;
 }
 
-module.exports = { resolvePortraitDisplayPath, DISPLAY_WIDTH, DISPLAY_HEIGHT };
+/** 原图删掉了（删立绘、换了扩展名、删助手）：它的缩小图也删掉，不然缓存目录只增不减 */
+async function forgetPortraitDisplayImages(filePaths, cacheDir) {
+    if (!cacheDir || !filePaths?.length) return;
+    const prefixes = filePaths.map(cachePrefix);
+    for (const name of keepOriginal) {
+        if (prefixes.some(prefix => name.startsWith(prefix))) keepOriginal.delete(name);
+    }
+    const names = await fs.readdir(cacheDir).catch(() => []);
+    await Promise.all(names
+        .filter(name => prefixes.some(prefix => name.startsWith(prefix)))
+        .map(name => fs.remove(path.join(cacheDir, name)).catch(() => {})));
+}
+
+module.exports = { resolvePortraitDisplayPath, forgetPortraitDisplayImages, DISPLAY_WIDTH, DISPLAY_HEIGHT };
