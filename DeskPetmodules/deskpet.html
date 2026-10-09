@@ -38,6 +38,19 @@
       <span class="tool-card-text"></span>
       <span class="tool-card-count"></span>
     </div>
+    <!-- 工具调用等人点头：允许 / 拒绝（主窗口里那张审批也同时在） -->
+    <div id="approvalCard" class="pet-ui" hidden role="alertdialog" aria-labelledby="approvalTitle">
+      <div class="approval-head">
+        <span id="approvalTitle"></span>
+        <span id="approvalMore"></span>
+      </div>
+      <div id="approvalCommand"></div>
+      <div class="approval-actions">
+        <button id="approvalDetail" type="button" title="在主窗口里看完整内容、写理由">详情</button>
+        <button id="approvalReject" type="button">拒绝</button>
+        <button id="approvalAllow" type="button">允许</button>
+      </div>
+    </div>
     <!-- 拖进来、粘贴进来的文件：和下一句话一起发 -->
     <div id="attachTray" class="pet-ui" hidden>
       <span id="attachText"></span>
