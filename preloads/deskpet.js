@@ -53,6 +53,7 @@ function onOpenInput(callback) {
         toggle: options?.toggle === true,
         submit: typeof options?.submit === 'string' ? options.submit : '',
         voice: options?.voice === true,
+        newTopic: options?.newTopic === true,
     });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);

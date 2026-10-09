@@ -32,9 +32,11 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
-    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）
-    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: 'CommandOrControl+Alt+Shift+V' },
-    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
+    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）。
+    // 这两个默认不占键：全局快捷键对所有程序生效，Cmd+Opt+Shift+V（macOS 的「粘贴并匹配样式」）、
+    // Ctrl+Alt+Shift+T（JetBrains 的重构）这类组合一占，别的程序里就按不出来了。要用在设置页里录一个。
+    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: '' },
+    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: '' },
 });
 
 // VCPChat 自己已经占用的组合键（全局快捷键和菜单），桌宠不能抢。
@@ -237,8 +239,13 @@ function normalizeSettings(raw) {
         const normalized = given === undefined ? DEFAULT_SETTINGS.shortcuts[id] : normalizeAccelerator(given);
         shortcuts[id] = normalized === null || isReserved(normalized) ? DEFAULT_SETTINGS.shortcuts[id] : normalized;
     }
-    // 两个动作撞了同一个键：后一个作废
-    if (shortcuts.talk && shortcuts.talk === shortcuts.toggle) shortcuts.talk = '';
+    // 几个动作撞了同一个键：排在后面的作废
+    const used = new Set();
+    for (const id of Object.keys(shortcuts)) {
+        if (!shortcuts[id]) continue;
+        if (used.has(shortcuts[id])) shortcuts[id] = '';
+        else used.add(shortcuts[id]);
+    }
     const openAgents = Array.isArray(input.openAgents) ? [...new Set(input.openAgents.filter(isAgentIdLike))].slice(0, 16) : [];
     return {
         doNotDisturb: input.doNotDisturb === true,
