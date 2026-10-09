@@ -127,7 +127,11 @@ test('text typed on the pet is handed to the main window and the result comes ba
     assert.equal(request.text, '早上好');
     fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
     assert.deepEqual(await pending, { success: true });
+    assert.equal(request.newTopic, false);
     assert.deepEqual(await fake.handlers.get('deskpet:send')({ sender: pet.webContents }, '   '), { success: false, error: '没有内容' });
+    // 输入条上按了「+」：主窗口先开新话题再发
+    fake.handlers.get('deskpet:send')({ sender: pet.webContents }, '换个话题', { newTopic: true });
+    assert.equal(mainWindow.sent.filter((s) => s.channel === 'deskpet:send-request').at(-1).payload.newTopic, true);
     handlers.closeAll();
 });
 

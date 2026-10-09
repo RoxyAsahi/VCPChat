@@ -13,7 +13,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ---- 尺寸和设置（纯函数） ----
 
 test('pet window sizes stay on a 4px grid so fractional display scaling does not round them up', () => {
-    assert.deepEqual(prefs.windowSizeForScale(1), { width: 280, height: 408 });
+    assert.deepEqual(prefs.windowSizeForScale(1), { width: 360, height: 464 });
     for (let scale = prefs.SCALE_MIN; scale <= prefs.SCALE_MAX + 1e-9; scale += 0.05) {
         const { width, height } = prefs.windowSizeForScale(scale);
         assert.equal(width % 4, 0, `width at ${scale}`);
@@ -21,7 +21,7 @@ test('pet window sizes stay on a 4px grid so fractional display scaling does not
         // 125%、150%、175% 下换成物理像素都是整数
         for (const factor of [1.25, 1.5, 1.75]) assert.ok(Number.isInteger(width * factor) && Number.isInteger(height * factor));
     }
-    assert.ok(prefs.windowSizeForScale(0.5).width >= 280, '缩到最小也要放得下气泡和输入框');
+    assert.ok(prefs.windowSizeForScale(0.5).width >= 360, '缩到最小也要放得下气泡和输入框');
     assert.equal(prefs.clampScale(9), prefs.SCALE_MAX);
     assert.equal(prefs.clampScale('nope'), 1);
 });
@@ -68,7 +68,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -83,6 +83,17 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.shortcuts.talk, '', '留空表示不用');
     assert.deepEqual(odd.openAgents, ['Nova', 'Coco']);
     assert.equal(odd.lastAgent, null);
+});
+
+test('pet opacity stays between 30% and fully opaque', () => {
+    assert.equal(prefs.normalizeOpacity(undefined), 1);
+    assert.equal(prefs.normalizeOpacity('abc'), 1);
+    assert.equal(prefs.normalizeOpacity(null), 1);
+    assert.equal(prefs.normalizeOpacity(0.6), 0.6);
+    assert.equal(prefs.normalizeOpacity(0.62), 0.6);
+    assert.equal(prefs.normalizeOpacity(0), 0.3, '不能淡到看不见');
+    assert.equal(prefs.normalizeOpacity(5), 1);
+    assert.equal(prefs.normalizeSettings({ opacity: 0.4 }).opacity, 0.4);
 });
 
 // ---- 主进程：大小、免打扰、快捷键、恢复 ----
@@ -239,7 +250,7 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     assert.equal(prefsReply.scale, 1.1);
     // 另一个助手不受影响
     const coco = await again.open('Coco');
-    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [280, 408]);
+    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [360, 464]);
     again.handlers.closeAll();
 });
 
@@ -288,6 +299,20 @@ test('tray state is written into the menu already shown instead of a new one', a
     assert.equal(menu.getMenuItemById('deskpet-click-through').checked, true);
     // 菜单里没有这几项（比如还没建过）：要重建
     assert.equal(env.handlers.applyTrayState({ getMenuItemById: () => null }), false);
+});
+
+test('opacity from the settings page reaches every pet and is saved', async () => {
+    const env = await loadHandlers();
+    const nova = await env.open('Nova');
+    const update = env.fake.handlers.get('deskpet-settings:update');
+    const snap = await update(fromMain(env), { opacity: 0.6 });
+    assert.equal(snap.settings?.opacity ?? snap.opacity, 0.6);
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6);
+    await update(fromMain(env), { opacity: 'x' });
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6, '不是数字的不理');
+    await sleep(300);
+    assert.equal(env.readJson(env.settingsFile).opacity, 0.6);
+    env.handlers.closeAll();
 });
 
 test('global shortcuts hide and bring back the pets and open the input box', async () => {
@@ -355,7 +380,7 @@ test('a smaller display shrinks a pet that no longer fits', async () => {
     const pet = await env.open('Nova');
     env.handlers._controls(); // 已初始化
     await env.fake.handlers.get('deskpet-settings:set-scale')?.({ sender: null }, 'Nova', 2); // 不是设置窗口发的：不理
-    assert.equal(pet.getBounds().width, 280);
+    assert.equal(pet.getBounds().width, 360);
     for (let i = 0; i < 16; i += 1) env.fake.listeners.get('deskpet:wheel-resize')(env.fromPet(pet), -100);
     assert.ok(pet.getBounds().height > 800);
     env.fake.screen.displays = [{ workArea: { x: 0, y: 0, width: 1280, height: 680 } }];
@@ -427,10 +452,13 @@ test('words typed in the settings preview wait until the pet page is ready, then
     assert.equal(pet.sent.some((m) => m.channel === 'deskpet:open-input'), false, '页面还没好，先不发');
     env.fake.listeners.get('deskpet:page-ready')({ sender: pet.webContents });
     assert.equal((await pending).success, true, '交到页面手里才算发出');
-    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { submit: '你好' });
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { submit: '你好', newTopic: false });
     // 第二句直接交给已经准备好的页面，不会顶掉第一句
     assert.equal((await talk(fromMain(env), 'Nova', '还在吗')).success, true);
     assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').map((m) => m.payload.submit), ['你好', '还在吗']);
+    // 预览输入条上按了「+」：交给桌宠时带上开新话题
+    assert.equal((await talk(fromMain(env), 'Nova', '换个话题', { newTopic: true })).success, true);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { submit: '换个话题', newTopic: true });
     env.handlers.closeAll();
 });
 

@@ -90,8 +90,9 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: 16px;
-  bottom: 54px;
+  top: 12px;
+  /* 角色站在小胶囊上面，不让胶囊压着脚（胶囊离底 22、高 44） */
+  bottom: 76px;
   transition: transform 380ms var(--dps-spring);
 }
 
@@ -183,7 +184,9 @@
 
 /* 小胶囊在角色脚边；没有桌宠（「无」）时它独自在正中间 */
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage-dock {
-  --dock-bar-w: min(460px, calc(100% - 32px));
+  /* 按这一栏的宽度算（输入条那一层自己定宽，百分比会算到胶囊上） */
+  container-type: inline-size;
+  --dock-bar-w: min(460px, calc(100cqw - 32px));
   position: absolute;
   left: 0;
   right: 0;
@@ -196,6 +199,11 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage[data-state="none"] .dps-stage-dock,
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage[data-state="empty"] .dps-stage-dock {
   bottom: calc(50% - 22px);
+}
+
+/* 预览里的胶囊多一个收起钮，比桌面上的宽一些 */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-dock[data-mode="pill"] {
+  --dock-w: 154px;
 }
 
 /* 展开成输入条时角色往上让一点 */
@@ -236,6 +244,28 @@
   right: 14px;
   bottom: 14px;
   background: var(--vcp-ui-bg-1, white);
+  transition: opacity 180ms ease;
+}
+
+/* 输入条展开得比较宽，右下角的「自定义」先让开 */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage[data-dock="bar"] .dps-stage-custom,
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage[data-dock="rec"] .dps-stage-custom {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 输入条里的输入框和桌面上一样是光秃秃的一行：设置页给多行输入框的边框、底色、最小高度在这里不要
+   （两个 ID 才压得过设置页的多行输入框规则） */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .dps-dock .dock-input {
+  min-height: 0;
+  margin: 0;
+  padding: 10px 2px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 20px;
+  resize: none;
 }
 
 /* ---- 自定义抽屉：grid 行高 0fr → 1fr 做高度过渡 ---- */

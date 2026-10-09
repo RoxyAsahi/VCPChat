@@ -25,6 +25,8 @@ const { createSettingsPage } = require('../deskpet/settingsPage');
 const { createCoreInstaller } = require('../deskpet/cubismCore');
 const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const edgeSnap = require('../deskpet/edgeSnap');
+const throwMotion = require('../deskpet/throwMotion');
+const wander = require('../deskpet/wander');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -656,6 +658,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         voice.release(pet);
         clearInterval(pet.hitPoll);
         clearTimeout(pet.tuckTimer);
+        clearInterval(pet.walk);
         stopSnap(pet);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
@@ -679,7 +682,36 @@ async function openPet(agentId, { anchor = null } = {}) {
 // 混合 DPI 多屏之间 setPosition 可能顺带改尺寸，统一用 setBounds 固定宽高。
 function moveWithCursor(pet, drag) {
     const c = screen.getCursorScreenPoint();
+    // 记最近几个光标位置：松手时按它算甩出去的速度
+    const samples = drag.samples || (drag.samples = []);
+    samples.push({ t: Date.now(), x: c.x, y: c.y });
+    if (samples.length > 12) samples.shift();
     applyBounds(pet, { x: c.x - drag.dx, y: c.y - drag.dy, ...sizeOf(pet) }, { verify: false });
+}
+
+// 甩出去（modules/deskpet/throwMotion.js）：松手时光标还在快速移动就带着速度滑出去、落到任务栏上，
+// 落地时页面演一下「落地」。按着 Alt 松手、慢慢放下的不甩。
+function throwPet(pet, figure, samples) {
+    const win = pet.win.getBounds();
+    const frames = throwMotion.throwPath(win, figure, workAreaAt(win), throwMotion.releaseVelocity(samples, Date.now()), DRAG_TICK_MS);
+    if (!frames) return false;
+    stopSnap(pet);
+    const size = sizeOf(pet);
+    pet.snap = setInterval(() => {
+        const next = frames.shift();
+        if (!next || pet.win.isDestroyed() || pet.drag) {
+            stopSnap(pet);
+            return;
+        }
+        applyBounds(pet, { ...next, ...size }, { verify: false });
+        if (!frames.length) {
+            stopSnap(pet);
+            // 甩走了就不再藏在边里（拿起来时 pet.tuck 已清，这里把存下的也清掉）
+            savePetState(pet.agentId, { x: next.x, y: next.y, tuck: null }).catch(() => {});
+            pet.win.webContents.send('deskpet:landed');
+        }
+    }, DRAG_TICK_MS);
+    return true;
 }
 
 // 贴边（modules/deskpet/edgeSnap.js）：松手时角色离屏幕左右边或任务栏很近，就滑过去贴齐。
@@ -775,6 +807,38 @@ function setWantOut(pet, want) {
             slideTo(pet, tuck.tucked);
         }, TUCK_BACK_MS);
     }
+}
+
+// 溜达（modules/deskpet/wander.js）：页面闲了一阵来问，主进程沿任务栏慢慢挪窗口；
+// 鼠标碰到角色、拖动、说话、藏起来都会停在原地。
+function stopWalk(pet, { save = true } = {}) {
+    if (!pet.walk) return;
+    clearInterval(pet.walk);
+    pet.walk = null;
+    if (pet.win.isDestroyed()) return;
+    pet.win.webContents.send('deskpet:walk', { dir: null });
+    if (save) savePetPosition(pet.agentId, pet.win.getPosition()).catch(() => {});
+}
+
+function startWalk(pet, figure) {
+    if (controls?.get().wander !== true || pet.walk || pet.drag || pet.snap || pet.tuck || pet.interactive) return false;
+    if (pet.win.isDestroyed() || !pet.win.isVisible()) return false;
+    const win = pet.win.getBounds();
+    const target = wander.wanderTarget(win, figure, workAreaAt(win));
+    if (!target) return false;
+    const frames = wander.walkFrames(win, target, DRAG_TICK_MS);
+    const size = sizeOf(pet);
+    pet.win.webContents.send('deskpet:walk', { dir: target.dir });
+    pet.walk = setInterval(() => {
+        const next = frames.shift();
+        if (!next || pet.win.isDestroyed() || pet.drag || !pet.win.isVisible()) {
+            stopWalk(pet);
+            return;
+        }
+        applyBounds(pet, { ...next, ...size }, { verify: false });
+        if (!frames.length) stopWalk(pet);
+    }, DRAG_TICK_MS);
+    return true;
 }
 
 function stopDrag(pet, { save = false } = {}) {
@@ -901,7 +965,7 @@ function cleanSendFiles(files) {
     return out;
 }
 
-function sendFromPet(agentId, text, files = []) {
+function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
     if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
@@ -915,7 +979,7 @@ function sendFromPet(agentId, text, files = []) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
     });
 }
 
@@ -968,6 +1032,8 @@ function prefsFor(pet) {
         scale: pet.scale,
         doNotDisturb: settings.doNotDisturb,
         clickThrough: settings.clickThrough === true,
+        opacity: settings.opacity ?? 1,
+        wander: settings.wander === true,
         // 页面提示里写怎么关：按平台写成 Ctrl / Cmd
         clickThroughKey: key.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl'),
     };
@@ -1121,6 +1187,7 @@ async function talkToPet({ voice = false } = {}) {
 // 刚打开的桌宠页面还没准备好（形象还在载入）时先记着，页面报 ready 以后再弹输入框
 function openInput(pet, options) {
     if (pet.win.isDestroyed()) return;
+    stopWalk(pet);
     if (pet.ready) pet.win.webContents.send('deskpet:open-input', options);
     else pet.pendingToggle = options;
 }
@@ -1145,7 +1212,7 @@ function settleReady(pet, error = null) {
 }
 
 /** 设置页预览里输入的话：叫出这个助手的桌宠（没开就打开），由桌宠发出去，回复显示在桌宠头上。 */
-async function talkFromSettings(agentId, text) {
+async function talkFromSettings(agentId, text, { newTopic = false } = {}) {
     if (!pets.has(agentId)) {
         const opened = await openPet(agentId);
         if (!opened?.success) return { success: false, error: '桌宠打不开' };
@@ -1162,7 +1229,7 @@ async function talkFromSettings(agentId, text) {
         return { success: false, error: error.message };
     }
     if (pet.win.isDestroyed()) return { success: false, error: '桌宠已经关了' };
-    pet.win.webContents.send('deskpet:open-input', { submit: text });
+    pet.win.webContents.send('deskpet:open-input', { submit: text, newTopic });
     return { success: true };
 }
 
@@ -1203,6 +1270,17 @@ function outfitMenu(pet, outfits) {
         type: 'radio',
         checked: outfit.id === pet.outfit,
         click: () => setPetOutfit(pet.agentId, outfit.id).catch((error) => console.warn('[DeskPet] outfit switch failed:', error.message)),
+    }));
+}
+
+// 角色淡一点，后面的字能透出来；气泡和输入框不变
+function opacityMenu() {
+    const current = controls?.get().opacity ?? 1;
+    return [1, 0.8, 0.6, 0.4].map((value) => ({
+        label: value === 1 ? '不透明' : `${Math.round(value * 100)}%`,
+        type: 'radio',
+        checked: Math.abs(current - value) < 0.001,
+        click: () => controls?.update({ opacity: value }),
     }));
 }
 
@@ -1525,12 +1603,13 @@ function registerIpc() {
         const pet = petFromEvent(event);
         return pet ? readMood(pet.agentId) : null;
     });
-    ipcMain.handle('deskpet:send', async (event, text, files) => {
+    ipcMain.handle('deskpet:send', async (event, text, options) => {
         const pet = petFromEvent(event);
         const message = typeof text === 'string' ? text.trim() : '';
-        const attached = cleanSendFiles(files);
+        const attached = cleanSendFiles(options?.files);
         if (!pet || (!message && !attached.length)) return { success: false, error: '没有内容' };
-        return sendFromPet(pet.agentId, message.slice(0, 8000), attached);
+        stopWalk(pet);
+        return sendFromPet(pet.agentId, message.slice(0, 8000), { files: attached, newTopic: options?.newTopic === true });
     });
     // 输入框打开时整窗可点、可聚焦；关上后回到按像素穿透。
     ipcMain.on('deskpet:set-interactive', (event, on) => {
@@ -1575,7 +1654,9 @@ function registerIpc() {
     });
     ipcMain.on('deskpet:hit', (event, hit) => {
         const pet = petFromEvent(event);
-        if (pet) setIgnoreMouse(pet, !hit);
+        if (!pet) return;
+        if (hit) stopWalk(pet);
+        setIgnoreMouse(pet, !hit);
     });
     // 藏在边里时：页面说现在要不要探出来（鼠标在角色上、气泡或输入框开着）
     ipcMain.on('deskpet:want-out', (event, want) => {
@@ -1607,6 +1688,7 @@ function registerIpc() {
         // 拿起来了：藏边的状态作废，松手时重新算
         clearTimeout(pet.tuckTimer);
         pet.tuck = null;
+        stopWalk(pet, { save: false });
         const p = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y) ? origin : screen.getCursorScreenPoint();
         const [wx, wy] = pet.win.getPosition();
         const drag = { dx: p.x - wx, dy: p.y - wy, timer: null, startedAt: Date.now() };
@@ -1628,15 +1710,32 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet?.drag || pet.win.isDestroyed()) return;
         moveWithCursor(pet, pet.drag);
+        const samples = pet.drag.samples;
         stopDrag(pet, { save: true });
         const f = report?.figure;
         const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
-        snapToEdge(pet, figure, { free: report?.free === true });
+        const free = report?.free === true;
+        if (!free && figure && throwPet(pet, figure, samples)) return;
+        snapToEdge(pet, figure, { free });
+    });
+
+    // 页面闲了一阵：figure 是角色在窗口里的包围盒；stop 是页面那边有了动静
+    ipcMain.on('deskpet:wander', (event, report) => {
+        const pet = petFromEvent(event);
+        if (!pet || pet.win.isDestroyed()) return;
+        if (report?.stop === true) {
+            stopWalk(pet);
+            return;
+        }
+        const f = report?.figure;
+        const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
+        if (figure) startWalk(pet, figure);
     });
 
     ipcMain.on('deskpet:context-menu', async (event) => {
         const pet = petFromEvent(event);
         if (!pet) return;
+        stopWalk(pet);
         const [agents, mood, voiceItem, outfits] = await Promise.all([
             listAgents().catch(() => []), readMood(pet.agentId), voice.menuItem(pet), listAgentOutfits(pet.agentId).catch(() => []),
         ]);
@@ -1662,11 +1761,18 @@ function registerIpc() {
             { label: '打开主窗口', click: openMainWindow },
             { type: 'separator' },
             { label: '大小', submenu: scaleMenu(pet) },
+            { label: '透明度', submenu: opacityMenu() },
             {
                 label: '免打扰',
                 type: 'checkbox',
                 checked: controls?.get().doNotDisturb === true,
                 click: (item) => setDoNotDisturb(item.checked),
+            },
+            {
+                label: '在桌面上溜达',
+                type: 'checkbox',
+                checked: controls?.get().wander === true,
+                click: (item) => controls?.update({ wander: item.checked }),
             },
             // 打开后点不到桌宠了：从托盘或快捷键关
             { label: '只看不点（鼠标穿透）', click: () => setClickThrough(true) },
@@ -1764,7 +1870,8 @@ function initialize(options) {
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts')) broadcastPrefs();
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander')) broadcastPrefs();
+        if (changed.includes('wander') && controls.get().wander !== true) for (const pet of pets.values()) stopWalk(pet);
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
