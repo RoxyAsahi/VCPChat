@@ -12,7 +12,7 @@ import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
 import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
-import { createSpeech } from 'vcp-deskpet://pet/app/voice.js';
+import { createSpeech, VOWELS } from 'vcp-deskpet://pet/app/voice.js';
 import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { shapeGaze, limitGaze } from 'vcp-deskpet://pet/app/gaze.js';
@@ -139,6 +139,18 @@ const speech = createSpeech({
     },
     onError: (error) => console.warn('[DeskPet] 播放朗读音频失败：', error?.message || error),
 });
+
+// 模型里的元音口形参数：Cubism 标准名 ParamA、ParamI、ParamU、ParamE、ParamO（有些模型写成 ParamMouthA 这类）
+function vowelParamsOf(paramIds) {
+    const found = [];
+    for (const vowel of VOWELS) {
+        const upper = vowel.toUpperCase();
+        const id = [`Param${upper}`, `ParamMouth${upper}`, `PARAM_${upper}`].find((name) => paramIds.has(name));
+        if (id) found.push({ vowel, id });
+    }
+    // 只有一两个对得上多半是巧合（别的参数刚好叫这个名字）：至少要 a、i、u 三个齐
+    return ['a', 'i', 'u'].every((v) => found.some((f) => f.vowel === v)) ? found : [];
+}
 
 // 说话时嘴张多大：朗读时跟着声音走；没有朗读时，回复流出来的那段时间假装在说（fake 给出假口型）。
 function talkLevel(fake) {
@@ -1130,6 +1142,7 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     const current = {};
     let target = {};
     let mouthPhase = 0;
+    const vowelParams = vowelParamsOf(paramIds);
     const naturalMovements = internal.updateNaturalMovements.bind(internal);
     internal.updateNaturalMovements = (now, dt) => {
         naturalMovements(now, dt);
@@ -1157,12 +1170,18 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             model.position.y = figure.base().y - hop;
         }
         // 嘴：朗读时按声音的音量开合；没开朗读时回复流出来就假装在说话。
-        if (paramIds.has('ParamMouthOpenY')) {
-            const open = talkLevel(() => {
-                mouthPhase += 0.55 + Math.random() * 0.35;
-                return 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
-            });
-            if (open) coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
+        const open = talkLevel(() => {
+            mouthPhase += 0.55 + Math.random() * 0.35;
+            return 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(mouthPhase));
+        });
+        if (open && paramIds.has('ParamMouthOpenY')) coreModel.addParameterValueById(internal.getIdSafe('ParamMouthOpenY'), open);
+        // 模型带あいうえお口形参数（ParamA～ParamO）时，朗读按声音里的元音换口形；没有就只按张嘴程度
+        if (vowelParams.length) {
+            const weights = open ? speech.vowels() : null;
+            for (const { vowel, id } of vowelParams) {
+                const v = weights ? weights[vowel] * Math.min(1, open * 1.2) : 0;
+                if (v) coreModel.addParameterValueById(internal.getIdSafe(id), v);
+            }
         }
     });
 
