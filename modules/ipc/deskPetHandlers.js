@@ -907,6 +907,22 @@ function trayMenuItems() {
     }];
 }
 
+// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份），
+// 所以只在桌宠那一项真的变了时才重建。
+function trayMenuKey() {
+    return JSON.stringify(trayMenuItems(), (key, value) => (typeof value === 'function' ? undefined : value));
+}
+
+function refreshWhenChanged(rebuild) {
+    let shown = null;
+    return () => {
+        const key = trayMenuKey();
+        if (key === shown) return;
+        shown = key;
+        rebuild();
+    };
+}
+
 // 启动时打开上次开着的桌宠（设置里可以关掉）。
 function restoreOpenPets() {
     const settings = controls?.get();
@@ -1378,7 +1394,7 @@ module.exports = {
     closeAll,
     // 托盘：main.js 建菜单时取「桌宠」这一项，并在桌宠状态变了时重建菜单
     trayMenuItems: isolated('trayMenuItems', trayMenuItems, []),
-    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', fn) : () => {}; },
+    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', refreshWhenChanged(fn)) : () => {}; },
     getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
     appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),
     onRequestStart: isolated('onRequestStart', onRequestStart),
