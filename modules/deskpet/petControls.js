@@ -84,6 +84,7 @@ function createPetControls({ electron, appDataRoot, actions }) {
     function handlerFor(actionId) {
         if (actionId === 'toggle') return () => actions.toggleAll();
         if (actionId === 'talk') return () => actions.talk();
+        if (actionId === 'clickThrough') return () => update({ clickThrough: !settings.clickThrough });
         return null;
     }
 
@@ -174,6 +175,7 @@ function createPetControls({ electron, appDataRoot, actions }) {
             if (typeof patch.doNotDisturb === 'boolean') allowed.doNotDisturb = patch.doNotDisturb;
             if (typeof patch.restoreOnLaunch === 'boolean') allowed.restoreOnLaunch = patch.restoreOnLaunch;
             if (typeof patch.yieldToFullscreen === 'boolean') allowed.yieldToFullscreen = patch.yieldToFullscreen;
+            if (typeof patch.clickThrough === 'boolean') allowed.clickThrough = patch.clickThrough;
             update(allowed);
             return snapshot();
         });

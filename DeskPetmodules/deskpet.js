@@ -82,7 +82,8 @@ function fpsTier(level) {
     return level === 'sleep' || level === 'idle' ? level : 'active';
 }
 // 主进程给的设置：大小、免打扰。别的模块（声音、待机反应）读 window.deskPetPrefs 或听 'deskpet:prefs' 事件。
-let prefs = { scale: 1, doNotDisturb: false };
+let prefs = { scale: 1, doNotDisturb: false, clickThrough: false };
+let prefsLoaded = false;
 // 免打扰时只有「在回桌宠上说的话」的回复还显示气泡：发出后这么久内开始的回复，
 // 以及紧接着这种回复（工具调用后的续写）开始的回复
 const OWN_REPLY_WINDOW_MS = 30000;
@@ -1225,6 +1226,8 @@ function createAlphaProbe(app) {
 
 let lastHit = false;
 function reportHit(hit) {
+    // 只看不点：鼠标穿过去，悬停胶囊也不冒
+    if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
         api.setHit(hit);
@@ -1625,11 +1628,21 @@ function applyPrefs(next) {
     document.body.classList.toggle('is-dnd', isQuiet());
     $('dndBadge').hidden = !isQuiet();
     if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;
+    $('throughBadge').hidden = !prefs.clickThrough;
+    if (prefs.clickThrough && !previous.clickThrough) {
+        reportHit(false);
+        // 第一次载入就是穿透的（上次没关）不提示，只有刚打开时说一声怎么关
+        if (prefsLoaded) {
+            const how = prefs.clickThroughKey ? `托盘菜单或 ${prefs.clickThroughKey} ` : '托盘菜单';
+            notice(`鼠标现在会直接穿过我。想再点到我，从${how}关掉「只看不点」。`, { ms: 8000 });
+        }
+    }
     // 刚开了免打扰：正在念的主窗口回复停下
     if (isQuiet() && !previous.doNotDisturb && !bubble.own) speech.stop();
     toolCard?.refresh();
     renderBubble();
     window.dispatchEvent(new CustomEvent('deskpet:prefs', { detail: window.deskPetPrefs }));
+    prefsLoaded = true;
 }
 
 // ---- 持续心情 ----------------------------------------------------------------
