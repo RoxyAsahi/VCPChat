@@ -260,3 +260,37 @@ test('click-through mode: the mouse passes the pet, hits are ignored, the talk b
     assert.equal(pet.ignoreMouse.at(-1), false);
     handlers.closeAll();
 });
+
+test('dropping the pet near a screen edge slides it flush; Alt or a far drop leaves it', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const dropAt = (x, y, report) => {
+        const [wx, wy] = pet.getPosition();
+        fake.screen.cursor = { x: wx, y: wy };
+        fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: wx, y: wy });
+        fake.screen.cursor = { x, y };
+        fake.listeners.get('deskpet:drag-end')(fromPet(pet), report);
+    };
+    // 角色左边离屏幕左边 15：滑过去贴齐；脚底离工作区底边也近：一起落到任务栏上
+    const bottom = 1000 - figure.y - figure.height;
+    dropAt(-25, bottom - 10, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-40, bottom]);
+    // 按着 Alt 松手：不吸
+    dropAt(-25, bottom - 10, { figure, free: true });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-25, bottom - 10]);
+    // 离边很远，或者故意拖出去一大截：不动
+    dropAt(500, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [500, 300]);
+    dropAt(-140, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-140, 300]);
+    // 页面没报包围盒（老页面、后端没起来）：照旧放下
+    dropAt(-25, 300);
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-25, 300]);
+    handlers.closeAll();
+});

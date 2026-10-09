@@ -24,6 +24,7 @@ const { createPetPreviews } = require('../deskpet/petPreviews');
 const { createSettingsPage } = require('../deskpet/settingsPage');
 const { createCoreInstaller } = require('../deskpet/cubismCore');
 const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
+const edgeSnap = require('../deskpet/edgeSnap');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -642,6 +643,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     win.on('closed', () => {
         voice.release(pet);
         clearInterval(pet.hitPoll);
+        stopSnap(pet);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
@@ -665,6 +667,39 @@ async function openPet(agentId, { anchor = null } = {}) {
 function moveWithCursor(pet, drag) {
     const c = screen.getCursorScreenPoint();
     applyBounds(pet, { x: c.x - drag.dx, y: c.y - drag.dy, ...sizeOf(pet) }, { verify: false });
+}
+
+// 贴边（modules/deskpet/edgeSnap.js）：松手时角色离屏幕左右边或任务栏很近，就滑过去贴齐。
+// figure 是页面报的角色包围盒（窗口内坐标）；free 是按着 Alt 松手，不吸。
+function stopSnap(pet) {
+    clearInterval(pet.snap);
+    pet.snap = null;
+}
+
+function snapToEdge(pet, figure, { free = false } = {}) {
+    stopSnap(pet);
+    if (free || pet.win.isDestroyed()) return false;
+    const win = pet.win.getBounds();
+    const inside = figure && figure.x >= -1 && figure.y >= -1
+        && figure.x + figure.width <= win.width + 1 && figure.y + figure.height <= win.height + 1;
+    if (!inside) return false;
+    const target = edgeSnap.snapPosition(win, figure, workAreaAt(win));
+    if (!target || (target.x === win.x && target.y === win.y)) return false;
+    const frames = edgeSnap.snapFrames(win, target);
+    const size = sizeOf(pet);
+    pet.snap = setInterval(() => {
+        const next = frames.shift();
+        if (!next || pet.win.isDestroyed() || pet.drag) {
+            stopSnap(pet);
+            return;
+        }
+        applyBounds(pet, { ...next, ...size }, { verify: false });
+        if (!frames.length) {
+            stopSnap(pet);
+            savePetPosition(pet.agentId, [next.x, next.y]).catch(() => {});
+        }
+    }, DRAG_TICK_MS);
+    return true;
 }
 
 function stopDrag(pet, { save = false } = {}) {
@@ -1423,6 +1458,7 @@ function registerIpc() {
         // 上一次拖动的 pointerup 丢了（触屏 pointercancel、拖动中弹出菜单）时还会再来一次 drag-start；
         // 先收掉旧的定时器，否则它会一直跟着光标，drag-end 之后还会每帧抛异常。
         stopDrag(pet);
+        stopSnap(pet);
         const p = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y) ? origin : screen.getCursorScreenPoint();
         const [wx, wy] = pet.win.getPosition();
         const drag = { dx: p.x - wx, dy: p.y - wy, timer: null, startedAt: Date.now() };
@@ -1440,11 +1476,14 @@ function registerIpc() {
         }, DRAG_TICK_MS);
         pet.drag = drag;
     });
-    ipcMain.on('deskpet:drag-end', (event) => {
+    ipcMain.on('deskpet:drag-end', (event, report) => {
         const pet = petFromEvent(event);
         if (!pet?.drag || pet.win.isDestroyed()) return;
         moveWithCursor(pet, pet.drag);
         stopDrag(pet, { save: true });
+        const f = report?.figure;
+        const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
+        snapToEdge(pet, figure, { free: report?.free === true });
     });
 
     ipcMain.on('deskpet:context-menu', async (event) => {
