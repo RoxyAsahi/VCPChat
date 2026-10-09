@@ -294,3 +294,18 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     assert.deepEqual(pet.getPosition(), [-25, 300]);
     handlers.closeAll();
 });
+
+test('the stop button on the pet asks the main window to interrupt that reply', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const pet = await open('Coco');
+    const requests = () => main.sent.filter((m) => m.channel === 'deskpet:interrupt-request').map((m) => m.payload);
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), 'msg_1');
+    assert.deepEqual(requests(), [{ agentId: 'Coco', messageId: 'msg_1' }]);
+    // 不是桌宠发来的、没有消息 id 的：不理
+    fake.listeners.get('deskpet:interrupt')({ sender: main.webContents }, 'msg_2');
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), '');
+    fake.listeners.get('deskpet:interrupt')(fromPet(pet), { id: 'x' });
+    assert.equal(requests().length, 1);
+    handlers.closeAll();
+});

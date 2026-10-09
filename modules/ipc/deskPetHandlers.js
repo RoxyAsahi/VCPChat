@@ -1426,6 +1426,13 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    // 桌宠上点了停止：交给主窗口按它的中止流程停掉那条回复
+    ipcMain.on('deskpet:interrupt', (event, messageId) => {
+        const pet = petFromEvent(event);
+        if (!pet || typeof messageId !== 'string' || !messageId || messageId.length > 200) return;
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('deskpet:interrupt-request', { agentId: pet.agentId, messageId });
+    });
     ipcMain.on('deskpet:open-topic', (event, topicId) => {
         const pet = petFromEvent(event);
         if (!pet) return;

@@ -1442,6 +1442,22 @@ export function setupEventListeners(deps) {
                 console.warn('[DeskPet] open topic failed:', error);
             }
         });
+        // 桌宠上点了停止：那条回复正显示在聊天里就按停止键走（界面状态一起收好）；
+        // 已经切到别的话题了就直接让主进程中止那条请求
+        chatAPI.onDeskPetInterrupt?.(async ({ messageId } = {}) => {
+            if (typeof messageId !== 'string' || !messageId) return;
+            const shown = [...document.querySelectorAll('#chatMessages .message-item.streaming')]
+                .some(item => item.dataset.messageId === messageId);
+            if (shown && sendMessageBtn.dataset.mode === 'interrupt') {
+                sendMessageBtn.click();
+                return;
+            }
+            try {
+                await chatAPI.interruptVcpRequest?.({ messageId });
+            } catch (error) {
+                console.warn('[DeskPet] interrupt failed:', error);
+            }
+        });
         // 托盘、桌宠右键里的「桌宠设置…」：打开全局设置，切到桌宠分区（导航是异步搭起来的，等它出现）
         chatAPI.onDeskPetSettingsOpen?.(() => {
             const tab = () => document.getElementById('vcpSettingsTab-deskpet');
