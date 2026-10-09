@@ -467,3 +467,19 @@ test('wandering: an idle pet on the taskbar strolls a little; touching it stops 
     await sleep(100);
     assert.equal(pet.getPosition()[0], x3);
 });
+
+test('a pet saved by the old size version opens with its feet where they were', async () => {
+    const { handlers, open, root } = await loadHandlers();
+    fs.mkdirSync(path.join(root, 'deskpet'), { recursive: true });
+    // 旧版：360×580 的窗口，角色 430 高，脚在 300 + 150 + 430 = 880
+    fs.writeFileSync(path.join(root, 'deskpet', 'state.json'), JSON.stringify({ Nova: { x: 1000, y: 300, scale: 1 } }));
+    const pet = await open();
+    const b = pet.getBounds();
+    const prefs = require('../modules/deskpet/petPrefs.js');
+    assert.equal(b.y + prefs.UI_RESERVE + prefs.characterBox().height, 880, '脚底不动');
+    assert.equal(b.x + b.width / 2, 1000 + 360 / 2, '左右也按中点对齐');
+    await sleep(50);
+    const saved = JSON.parse(fs.readFileSync(path.join(root, 'deskpet', 'state.json'), 'utf8')).Nova;
+    assert.equal(saved.sizeVersion, prefs.SIZE_VERSION, '换算过的记成新版，下次不再换');
+    handlers.closeAll();
+});

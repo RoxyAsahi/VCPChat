@@ -99,6 +99,26 @@ function characterBox(aspect) {
 }
 
 /** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
+/**
+ * 旧版（sizeVersion < 2）记下的窗口位置换到新尺寸下：旧窗口没有脚下的余量、1 倍也更大，
+ * 原样用左上角的话脚会离开原来站的地方（站在任务栏上的会悬空）。按角色脚底中点对齐算新的左上角。
+ * scale 是换算后的新倍数；不是旧版记录、没有位置时返回 null。
+ */
+function legacyPosition(saved, aspect, scale) {
+    if (!saved || Number(saved.sizeVersion) >= SIZE_VERSION) return null;
+    // 旧版量完形象就会记一次大小；没记过大小的是新版里还没改过大小的，不动
+    if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y) || saved.scale == null || !Number.isFinite(Number(saved.scale))) return null;
+    const raw = Number(saved.scale);
+    const box = characterBox(aspect);
+    const oldWidth = Math.max(280, roundToGrid((box.width / SIZE_FACTOR) * raw));
+    const oldFeet = saved.y + UI_RESERVE + (box.height / SIZE_FACTOR) * raw;
+    const size = windowSizeForScale(scale, aspect);
+    return {
+        x: Math.round(saved.x + (oldWidth - size.width) / 2),
+        y: Math.round(oldFeet - UI_RESERVE - box.height * clampScale(scale)),
+    };
+}
+
 function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
     const box = characterBox(aspect);
@@ -282,6 +302,7 @@ module.exports = {
     maxScaleForWorkArea,
     fitScale,
     resizeAnchored,
+    legacyPosition,
     normalizeAccelerator,
     isReserved,
     normalizeSettings,
