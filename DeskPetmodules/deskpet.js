@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
@@ -827,6 +828,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     const expressionNames = (internal.motionManager?.expressionManager?.definitions || [])
         .map((d) => d.Name || d.name).filter(Boolean);
     const motionGroups = Object.keys(internal.motionManager?.definitions || {});
+    // 模型标了头的点击区就按它判断点在哪（DeskPetmodules/hitAreas.js）
+    const useZones = hasZones(Object.keys(internal.hitAreas || {}));
 
     const pickExpression = (emotion) => mapExpression(emotion, expressionNames, profile, modelName);
     const pickMotion = (emotion) => mapMotion(emotion, motionGroups, profile);
@@ -893,6 +896,15 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         },
         bounds() { const b = model.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
         head: () => figure.head(),
+        // 'head' / 'body' / null（点在没标的地方）；模型没标点击区时 undefined，交给轮廓估计
+        zone(x, y) {
+            if (!useZones) return undefined;
+            try {
+                return zoneOf(model.hitTest(x, y));
+            } catch {
+                return undefined;
+            }
+        },
         figureReady: figure.ready,
         tap() {
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
@@ -1778,6 +1790,8 @@ async function start() {
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {
+        const zone = backend.zone?.(x, y);
+        if (zone !== undefined) return zone === 'head';
         const h = backend.head?.();
         if (h) return y >= h.y && y <= h.y + h.width * 0.9 && Math.abs(x - h.x) <= h.width / 2;
         const b = backend.bounds();
