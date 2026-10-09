@@ -168,7 +168,6 @@ function createPetControls({ electron, appDataRoot, actions }) {
     }
 
     function registerIpc() {
-        ipcMain.handle('deskpet-settings:get', (event) => (fromSettings(event) ? snapshot() : null));
         ipcMain.handle('deskpet-settings:update', (event, patch) => {
             if (!fromSettings(event) || !patch || typeof patch !== 'object') return null;
             const allowed = {};

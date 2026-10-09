@@ -416,3 +416,23 @@ test('card snapshots are rendered offscreen once and reused while the files stay
     assert.equal(second.outfits[0].preview, pushed.payload.url, '文件没变就直接用');
     env.handlers.closeAll();
 });
+
+test('the settings file and the settings page never claim the same channel', () => {
+    const { createPetControls } = require('../modules/deskpet/petControls.js');
+    const { createSettingsPage } = require('../modules/deskpet/settingsPage.js');
+    const channels = new Set();
+    // 和 Electron 一样，同一个频道注册两次直接报错
+    const ipcMain = {
+        handle(channel) {
+            if (channels.has(channel)) throw new Error(`second handler for ${channel}`);
+            channels.add(channel);
+        },
+        on() {},
+    };
+    const electron = { ipcMain, globalShortcut: { register() { return true; }, unregister() {}, isRegistered() { return false; } }, dialog: {}, shell: {} };
+    const controls = createPetControls({ electron, appDataRoot: os.tmpdir(), actions: {} });
+    controls.registerIpc();
+    createSettingsPage({ electron, paths: { agentDir: os.tmpdir() }, controls, previews: {}, pets: {} }).registerIpc();
+    assert.ok(channels.has('deskpet-settings:get'));
+    controls.dispose?.();
+});

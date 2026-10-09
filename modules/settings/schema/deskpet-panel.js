@@ -400,6 +400,12 @@ export function buildDeskPetPanel(doc) {
             setDock('pill');
         }
     });
+    // 设置页的 Esc 在 document 捕获阶段就把整个设置关了；输入条 / 录音条展开时，
+    // 先在 window 捕获阶段标记掉，Esc 只收回胶囊（上面两个 keydown 照常处理）
+    win?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || dockParts.dock.dataset.mode === 'pill' || !dockParts.dock.contains(e.target)) return;
+        e.preventDefault();
+    }, true);
     // 点到预览外面、输入条是空的：收回小胶囊
     doc.addEventListener('pointerdown', (e) => {
         if (dockParts.dock.dataset.mode === 'bar' && !dockParts.input.value.trim() && !dockParts.dock.contains(e.target)) setDock('pill');
