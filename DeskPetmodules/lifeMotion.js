@@ -99,6 +99,26 @@ const ACTIONS = {
             ParamMouthOpenY: 0.3 * k, ParamEyeLOpen: -0.2 * k, ParamEyeROpen: -0.2 * k,
         };
     },
+    // 回复里的动作
+    agree: (p) => {
+        // 点两下头，眼睛笑一笑
+        const k = envelope(p, 0.1, 0.25);
+        const nods = Math.max(0, Math.sin(p * Math.PI * 4));
+        return { ParamAngleY: -14 * nods * k, ParamBodyAngleY: -3 * nods * k, ParamEyeLSmile: 0.4 * k, ParamEyeRSmile: 0.4 * k, ParamMouthForm: 0.4 * k };
+    },
+    disagree: (p, t) => {
+        // 左右摇两三下，越摇越轻
+        const k = envelope(p, 0.08, 0.3);
+        return { ParamAngleX: 18 * Math.sin(t * 15) * k * (1 - 0.5 * p), ParamBodyAngleX: 3 * Math.sin(t * 15 - 0.5) * k, ParamBrowLY: -0.2 * k, ParamBrowRY: -0.2 * k };
+    },
+    cheer: (p) => {
+        const k = envelope(p, 0.1, 0.35);
+        return { ParamEyeLSmile: k, ParamEyeRSmile: k, ParamMouthForm: k, ParamMouthOpenY: 0.4 * bump(p, 0.1, 0.7), ParamAngleY: 6 * bump(p, 0.1, 0.6), ParamCheek: 0.4 * k };
+    },
+    bow: (p) => {
+        const k = envelope(p, 0.3, 0.35);
+        return { ParamAngleY: -24 * k, ParamBodyAngleY: -10 * k, ParamEyeLOpen: -0.5 * k, ParamEyeROpen: -0.5 * k };
+    },
     landed: (p) => {
         const k = bump(p, 0, 1);
         return { ParamAngleY: -6 * k, ParamEyeLOpen: -0.5 * bump(p, 0.1, 0.5), ParamEyeROpen: -0.5 * bump(p, 0.1, 0.5) };
@@ -109,7 +129,7 @@ const ACTIONS = {
 const LIFTED = { ParamEyeLOpen: 0.3, ParamEyeROpen: 0.3, ParamBrowLY: 0.5, ParamBrowRY: 0.5, ParamMouthOpenY: 0.3, ParamMouthForm: -0.4 };
 
 // 跳起高度（像素，向上为正）
-const HOPS = { startle: [0.0, 0.45, 26], poke: [0, 0.6, 14], headTap: [0, 0.4, 6], landed: [0, 1, -10], annoyed: [0, 0.3, 8] };
+const HOPS = { startle: [0.0, 0.45, 26], poke: [0, 0.6, 14], headTap: [0, 0.4, 6], landed: [0, 1, -10], annoyed: [0, 0.3, 8], cheer: [0.05, 0.6, 22], bow: [0.25, 0.75, -6] };
 
 export function createLifeMotion({ random = Math.random } = {}) {
     const weights = { awake: 1, drowsy: 0, asleep: 0 };

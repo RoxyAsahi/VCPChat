@@ -4,18 +4,8 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
-      "Id": "ParamExpSurprised",
+      "Id": "ParamExpSpeechless",
       "Value": 1,
-      "Blend": "Overwrite"
-    },
-    {
-      "Id": "ParamBrowLY",
-      "Value": 0.7,
-      "Blend": "Overwrite"
-    },
-    {
-      "Id": "ParamBrowRY",
-      "Value": 0.7,
       "Blend": "Overwrite"
     },
     {

@@ -20,6 +20,8 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
+import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
 const api = window.deskPetAPI;
@@ -81,7 +83,8 @@ function fpsTier(level) {
     return level === 'sleep' || level === 'idle' ? level : 'active';
 }
 // 主进程给的设置：大小、免打扰。别的模块（声音、待机反应）读 window.deskPetPrefs 或听 'deskpet:prefs' 事件。
-let prefs = { scale: 1, doNotDisturb: false };
+let prefs = { scale: 1, doNotDisturb: false, clickThrough: false };
+let prefsLoaded = false;
 // 免打扰时只有「在回桌宠上说的话」的回复还显示气泡：发出后这么久内开始的回复，
 // 以及紧接着这种回复（工具调用后的续写）开始的回复
 const OWN_REPLY_WINDOW_MS = 30000;
@@ -154,6 +157,8 @@ function renderBubble() {
     const source = revealEnd == null ? bubble.reply : bubble.reply.slice(0, revealEnd);
     const waiting = revealEnd != null && !source.trim() && speech.active();
     const reply = muted ? '' : source.trim() ? toBubbleText(source) : (waiting ? '…' : '');
+    // 回复里写了动作：显示（念）到那句时演出来；免打扰下不冒气泡的回复也不动
+    if (!muted && life) for (const gesture of dueGestures(bubble.tags, revealEnd)) life.perform(gesture);
     if (bubble.notice) {
         content = bubble.notice.text;
         mode = bubble.notice.error ? 'is-error' : 'is-notice';
@@ -552,6 +557,15 @@ function aimBubble(headX) {
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
 
+// 角色在窗口里的包围盒（贴边用）；后端还没起来时没有
+function figureBounds() {
+    try {
+        return window.__deskPetBounds?.() || null;
+    } catch {
+        return null;
+    }
+}
+
 function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
@@ -583,11 +597,12 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
             onDrag('start', e);
         }
     });
-    window.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', (e) => {
         if (!down) return;
         const at = { x: down.cx, y: down.cy };
         if (down.dragging) {
-            api.dragEnd();
+            // 松手的地方离屏幕边、任务栏很近时主进程会贴过去；按着 Alt 不贴
+            api.dragEnd({ figure: figureBounds(), free: e.altKey });
             onDrag('end');
             down = null;
             return;
@@ -671,6 +686,10 @@ const LIFE_MOTIONS = {
     hum: ['Happy', 'Dance'],
     wake: ['Wake', 'WakeUp'],
     landed: ['Landing', 'FlickDown'],
+    agree: ['Nod', 'Agree', 'Yes'],
+    disagree: ['Shake', 'Disagree', 'No'],
+    cheer: ['Cheer', 'Jump', 'Happy'],
+    bow: ['Bow'],
 };
 const LIFE_MOTION_WEIGHT = 0.4; // 模型自己有这个动作时，参数曲线只轻轻叠一点
 
@@ -809,6 +828,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     const expressionNames = (internal.motionManager?.expressionManager?.definitions || [])
         .map((d) => d.Name || d.name).filter(Boolean);
     const motionGroups = Object.keys(internal.motionManager?.definitions || {});
+    // 模型标了头的点击区就按它判断点在哪（DeskPetmodules/hitAreas.js）
+    const useZones = hasZones(Object.keys(internal.hitAreas || {}));
 
     const pickExpression = (emotion) => mapExpression(emotion, expressionNames, profile, modelName);
     const pickMotion = (emotion) => mapMotion(emotion, motionGroups, profile);
@@ -875,6 +896,15 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         },
         bounds() { const b = model.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
         head: () => figure.head(),
+        // 'head' / 'body' / null（点在没标的地方）；模型没标点击区时 undefined，交给轮廓估计
+        zone(x, y) {
+            if (!useZones) return undefined;
+            try {
+                return zoneOf(model.hitTest(x, y));
+            } catch {
+                return undefined;
+            }
+        },
         figureReady: figure.ready,
         tap() {
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
@@ -1218,6 +1248,8 @@ function createAlphaProbe(app) {
 
 let lastHit = false;
 function reportHit(hit) {
+    // 只看不点：鼠标穿过去，悬停胶囊也不冒
+    if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
         api.setHit(hit);
@@ -1572,7 +1604,7 @@ function bindStream(director) {
             for (const item of scanner.push(event.text)) {
                 if (item.type === 'text') bubble.reply += item.text;
                 else if (item.type === 'enter' && item.region === 'code') bubble.reply += '\n[代码]\n';
-                else if (item.type === 'tag') bubble.tags.push({ at: bubble.reply.length, emotion: item.emotion, intensity: item.intensity });
+                else if (item.type === 'tag') bubble.tags.push({ at: bubble.reply.length, emotion: item.emotion, intensity: item.intensity, gesture: gestureOf(item.variant) });
             }
             bubble.region = scanner.region;
             speech.update(bubble.reply, sentenceFrame);
@@ -1618,11 +1650,21 @@ function applyPrefs(next) {
     document.body.classList.toggle('is-dnd', isQuiet());
     $('dndBadge').hidden = !isQuiet();
     if (isQuiet() && !previous.doNotDisturb) $('emotionBadge').hidden = true;
+    $('throughBadge').hidden = !prefs.clickThrough;
+    if (prefs.clickThrough && !previous.clickThrough) {
+        reportHit(false);
+        // 第一次载入就是穿透的（上次没关）不提示，只有刚打开时说一声怎么关
+        if (prefsLoaded) {
+            const how = prefs.clickThroughKey ? `托盘菜单或 ${prefs.clickThroughKey} ` : '托盘菜单';
+            notice(`鼠标现在会直接穿过我。想再点到我，从${how}关掉「只看不点」。`, { ms: 8000 });
+        }
+    }
     // 刚开了免打扰：正在念的主窗口回复停下
     if (isQuiet() && !previous.doNotDisturb && !bubble.own) speech.stop();
     toolCard?.refresh();
     renderBubble();
     window.dispatchEvent(new CustomEvent('deskpet:prefs', { detail: window.deskPetPrefs }));
+    prefsLoaded = true;
 }
 
 // ---- 持续心情 ----------------------------------------------------------------
@@ -1748,6 +1790,8 @@ async function start() {
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {
+        const zone = backend.zone?.(x, y);
+        if (zone !== undefined) return zone === 'head';
         const h = backend.head?.();
         if (h) return y >= h.y && y <= h.y + h.width * 0.9 && Math.abs(x - h.x) <= h.width / 2;
         const b = backend.bounds();

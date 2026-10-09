@@ -152,8 +152,12 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             return { success: true };
         }
         if (!outfitStore.isOutfitId(outfitId)) return { success: false, error: '没有这套形象' };
+        // 文件夹刚被删掉、或者超过了能列出来的套数：照实说换不上，不要假装已经换好
+        const outfits = await pets.listOutfits(agentId).catch(() => []);
+        if (!outfits.some((outfit) => outfit.id === outfitId)) return { success: false, error: '没找到这套形象（文件夹可能被删了，或者形象太多没列出来）' };
         if (pets.info(agentId)) {
-            await pets.setOutfit(agentId, outfitId);
+            const switched = await pets.setOutfit(agentId, outfitId);
+            if (!switched) return { success: false, error: '没换成' };
             pets.showPet(agentId);
         } else {
             // 先记下选择，打开时直接按这套开（省一次换装重载）
@@ -184,7 +188,10 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             if (size.files > IMPORT_MAX_FILES || size.bytes > IMPORT_MAX_BYTES) {
                 return { success: false, error: '模型所在的文件夹太大了（会把整个文件夹拷进来）。先把模型单独放进一个文件夹再导入' };
             }
-            if (path.resolve(plan.source).startsWith(path.resolve(base) + path.sep)) return { success: false, error: '这套已经在形象文件夹里了' };
+            // 选的就在形象文件夹里（或者是它的上级）：拷进自己会出错
+            const source = path.resolve(plan.source);
+            const target = path.resolve(base);
+            if (source === target || source.startsWith(target + path.sep) || target.startsWith(source + path.sep)) return { success: false, error: '这套已经在形象文件夹里了' };
         }
         const name = await freeFolderName(base, plan.name);
         const target = path.join(base, name);
@@ -292,8 +299,12 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             return catalog(idOrNull(agentId));
         }));
         ipcMain.handle('deskpet-settings:import', guard(async (agentId) => {
-            const result = await importOutfit(String(agentId || ''));
-            if (result.success) await choose(String(agentId), result.outfitId);
+            let result = await importOutfit(String(agentId || ''));
+            if (result.success) {
+                const chosen = await choose(String(agentId), result.outfitId);
+                // 拷进来了但没换上（比如形象太多没列出来）：别说「已经换上」
+                if (!chosen.success) result = { success: false, error: `导入好了，但没换上：${chosen.error}` };
+            }
             return { ...result, catalog: await catalog(String(agentId || '')) };
         }));
         ipcMain.handle('deskpet-settings:open-folder', guard((agentId) => openFolder(String(agentId || ''))));

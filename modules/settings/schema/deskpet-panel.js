@@ -230,7 +230,10 @@ export function buildDeskPetPanel(doc) {
     const options = el(doc, 'div', 'dps-card');
     const dnd = buildSwitchRow(doc, '免打扰', '不主动说话、不出声，主窗口里聊天的回复也不在桌宠头上冒出来。在桌宠上跟 TA 说的话照常回。');
     const restore = buildSwitchRow(doc, '启动时恢复桌宠', '打开 VCPChat 时，把上次开着的桌宠放回原来的位置。');
-    options.append(dnd.row, restore.row);
+    const yieldFs = buildSwitchRow(doc, '全屏时让开', '看视频、玩游戏、放幻灯片时桌宠先躲起来，退出全屏再回来。只在 Windows 上有效。');
+    yieldFs.row.hidden = true;
+    const through = buildSwitchRow(doc, '只看不点', '鼠标直接穿过桌宠，点不到也拖不动，适合专心工作时。用托盘菜单或快捷键关掉；「和桌宠说话」的快捷键照常能用。');
+    options.append(dnd.row, through.row, restore.row, yieldFs.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -585,6 +588,10 @@ export function buildDeskPetPanel(doc) {
         } finally {
             state.choosing = false;
             renderGrid(false);
+            if (state.reloadPending) {
+                state.reloadPending = false;
+                scheduleReload();
+            }
         }
     }
 
@@ -651,7 +658,12 @@ export function buildDeskPetPanel(doc) {
     let reloadTimer = 0;
     function scheduleReload() {
         clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(() => { if (state.visible && !state.choosing) loadCatalog(); }, CATALOG_DEBOUNCE_MS);
+        reloadTimer = setTimeout(() => {
+            if (!state.visible) return;
+            // 正在换卡片：等它换完再刷新（桌宠刚显示出来的推送常常落在这时候，丢了的话会一直显示「已隐藏」）
+            if (state.choosing) state.reloadPending = true;
+            else loadCatalog();
+        }, CATALOG_DEBOUNCE_MS);
     }
 
     agentSelect.addEventListener('change', () => {
@@ -905,6 +917,9 @@ export function buildDeskPetPanel(doc) {
         if (!settings) return;
         dnd.input.checked = settings.doNotDisturb === true;
         restore.input.checked = settings.restoreOnLaunch === true;
+        yieldFs.input.checked = settings.yieldToFullscreen === true;
+        yieldFs.row.hidden = state.snapshot.platform !== 'win32';
+        through.input.checked = settings.clickThrough === true;
     }
 
     async function update(patch) {
@@ -913,6 +928,8 @@ export function buildDeskPetPanel(doc) {
     }
     dnd.input.addEventListener('change', () => update({ doNotDisturb: dnd.input.checked }));
     restore.input.addEventListener('change', () => update({ restoreOnLaunch: restore.input.checked }));
+    yieldFs.input.addEventListener('change', () => update({ yieldToFullscreen: yieldFs.input.checked }));
+    through.input.addEventListener('change', () => update({ clickThrough: through.input.checked }));
 
     function renderShortcuts() {
         const snapshot = state.snapshot;

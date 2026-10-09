@@ -47,6 +47,11 @@ export const ACTION_MS = Object.freeze({
     annoyed: 2000,
     dizzy: 2600,
     landed: 700,
+    // 回复里的动作（DeskPetmodules/gestures.js）
+    agree: 1300,
+    disagree: 1300,
+    cheer: 1100,
+    bow: 1800,
 });
 
 // 待机小动作和权重；不连着做同一个。

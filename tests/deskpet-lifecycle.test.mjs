@@ -45,7 +45,7 @@ function fakeElectron() {
         hide() { this.visible = false; }
         close() { this.destroyed = true; this.emit('closed'); }
         setAlwaysOnTop() {} moveTop() { this.raised = (this.raised || 0) + 1; } setVisibleOnAllWorkspaces() {} focus() {} loadURL() {} reload() {}
-        setIgnoreMouseEvents(ignore) { this.ignoreMouse.push(ignore); }
+        setIgnoreMouseEvents(ignore, options) { this.ignoreMouse.push(ignore); this.forwarding = Boolean(options?.forward); }
         setFocusable(value) { this.focusable = value; }
         getPosition() { return [this.bounds.x, this.bounds.y]; }
         setPosition(x, y) { this.bounds = { ...this.bounds, x, y }; }
@@ -212,4 +212,85 @@ test('Windows: a pet pushed down by another topmost window comes back on top', a
     t.mock.timers.tick(10000);
     assert.equal(pet.raised, shown + 2);
     pet.close();
+});
+
+test('a fullscreen program hides the pet until it leaves fullscreen; the user can still call it back', async () => {
+    const { handlers, open, fake } = await loadHandlers();
+    const pet = await open();
+    const states = () => fake.windows[0].sent.filter((m) => m.channel === 'deskpet:state-changed');
+    const before = states().length;
+    const full = { fullscreen: true, rect: { x: 0, y: 0, width: 1600, height: 1000 } };
+    handlers._applyFullscreen(full);
+    assert.equal(pet.isVisible(), false);
+    assert.equal(states().length, before, 'the header toggle does not flip');
+    handlers._applyFullscreen({ fullscreen: false, rect: null });
+    assert.equal(pet.isVisible(), true);
+    // 全屏期间用户自己把它叫出来：留着，退出全屏时也不再动它
+    handlers._applyFullscreen(full);
+    assert.equal(pet.isVisible(), false);
+    await fake.handlers.get('deskpet:toggle')({}, 'Nova');
+    assert.equal(pet.isVisible(), true);
+    handlers._applyFullscreen({ fullscreen: false, rect: null });
+    assert.equal(pet.isVisible(), true);
+    handlers.closeAll();
+});
+
+test('click-through mode: the mouse passes the pet, hits are ignored, the talk bar still works', async () => {
+    const { handlers, open, fake, fromPet } = await loadHandlers();
+    const pet = await open();
+    const item = () => handlers.trayMenuItems()[0].submenu.find((i) => i.label?.startsWith('只看不点'));
+    assert.equal(item().checked, false);
+    item().click({ checked: true });
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    assert.equal(pet.forwarding, false, '不转发鼠标：页面碰不到悬停');
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.clickThrough, true);
+    // 页面报命中也不变成可点
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    // 输入框打开时可点，收起后回到穿透
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), false);
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    assert.equal(pet.forwarding, false);
+    // 关掉：回到按像素穿透（转发鼠标，命中时可点）
+    item().click({ checked: false });
+    assert.equal(pet.forwarding, true);
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    handlers.closeAll();
+});
+
+test('dropping the pet near a screen edge slides it flush; Alt or a far drop leaves it', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const dropAt = (x, y, report) => {
+        const [wx, wy] = pet.getPosition();
+        fake.screen.cursor = { x: wx, y: wy };
+        fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: wx, y: wy });
+        fake.screen.cursor = { x, y };
+        fake.listeners.get('deskpet:drag-end')(fromPet(pet), report);
+    };
+    // 角色左边离屏幕左边 15：滑过去贴齐；脚底离工作区底边也近：一起落到任务栏上
+    const bottom = 1000 - figure.y - figure.height;
+    dropAt(-25, bottom - 10, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-40, bottom]);
+    // 按着 Alt 松手：不吸
+    dropAt(-25, bottom - 10, { figure, free: true });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-25, bottom - 10]);
+    // 离边很远，或者故意拖出去一大截：不动
+    dropAt(500, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [500, 300]);
+    dropAt(-140, 300, { figure });
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-140, 300]);
+    // 页面没报包围盒（老页面、后端没起来）：照旧放下
+    dropAt(-25, 300);
+    await sleep(200);
+    assert.deepEqual(pet.getPosition(), [-25, 300]);
+    handlers.closeAll();
 });

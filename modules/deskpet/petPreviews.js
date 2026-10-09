@@ -18,6 +18,18 @@ const RENDER_TIMEOUT_MS = 15000;
 const IDLE_CLOSE_MS = 15000;
 const MAX_HEIGHT = 480;
 const PAD = 6;
+// 页面报「画好了」时离屏帧可能还没合成出来（机器忙、高缩放时常见），截到的是全透明；隔一会儿再截
+const BLANK_RETRIES = 6;
+const BLANK_RETRY_MS = 250;
+
+// 截图里有没有一个不透明的像素（按行跳着看，几百个点就够）
+function hasPixels(image) {
+    const bitmap = image.toBitmap?.();
+    if (!bitmap || !bitmap.length) return !image.isEmpty();
+    const step = Math.max(4, Math.floor(bitmap.length / 4 / 4000) * 4);
+    for (let i = 3; i < bitmap.length; i += step) if (bitmap[i] > 0) return true;
+    return false;
+}
 
 function keyOf(outfitId) {
     return crypto.createHash('sha1').update(String(outfitId)).digest('hex').slice(0, 16);
@@ -33,9 +45,27 @@ async function statKey(file) {
     }
 }
 
-/** 形象有没有变：主文件（模型、网格立绘、默认立绘）的路径、大小、修改时间，加上实际会用的种类。 */
+// 模型文件夹里最近一次改动（换了贴图、动作、表情也要重画）；只往下看两层、最多几百个文件
+async function newestIn(dir, depth = 0, budget = { files: 400 }) {
+    if (!dir || depth > 2 || budget.files <= 0) return 0;
+    let newest = 0;
+    for (const entry of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+        if (budget.files <= 0) break;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) newest = Math.max(newest, await newestIn(full, depth + 1, budget));
+        else if (entry.isFile()) {
+            budget.files -= 1;
+            newest = Math.max(newest, (await fs.stat(full).catch(() => null))?.mtimeMs || 0);
+        }
+    }
+    return newest;
+}
+
+/** 形象有没有变：主文件（模型、网格立绘、默认立绘）的路径、大小、修改时间，模型所在文件夹里最新的改动，加上实际会用的种类。 */
 async function fingerprintOf(outfit) {
-    const parts = [outfit.kind || '', await statKey(outfit.live2d), await statKey(outfit.puppet), await statKey(outfit.portraits?.default)];
+    const modelDir = outfit.live2d || outfit.puppet ? path.dirname(outfit.live2d || outfit.puppet) : null;
+    const parts = [outfit.kind || '', await statKey(outfit.live2d), await statKey(outfit.puppet), await statKey(outfit.portraits?.default),
+        Math.round(await newestIn(modelDir))];
     return crypto.createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 16);
 }
 
@@ -46,6 +76,7 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
     let win = null;
     let idleTimer = null;
     let disposed = false;
+    let jobSeq = 0;
 
     const dirOf = (agentId) => path.join(cacheRoot, agentId);
     const fileOf = (agentId, outfitId) => path.join(dirOf(agentId), `${keyOf(outfitId)}.png`);
@@ -120,10 +151,11 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
             return;
         }
         current = next;
+        next.id = String(++jobSeq);
         try {
             const target = ensureWindow(windowSize(next.aspect));
             next.timer = setTimeout(() => finish(null), RENDER_TIMEOUT_MS);
-            target.webContents.loadURL(pageUrl(next.agentId, next.outfit.id)).catch(() => {});
+            target.webContents.loadURL(`${pageUrl(next.agentId, next.outfit.id)}&job=${next.id}`).catch(() => {});
         } catch (error) {
             console.warn('[DeskPet] preview window failed:', error.message);
             finish(null);
@@ -151,7 +183,7 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
     /** 页面画好了，报上角色的包围盒（窗口内 CSS 像素）。 */
     async function ready(sender, report) {
         const job = current;
-        if (!job || !win || win.isDestroyed() || sender !== win.webContents) return;
+        if (!job || !win || win.isDestroyed() || sender !== win.webContents || String(report?.job) !== job.id) return;
         try {
             const [width, height] = win.getContentSize();
             const b = report?.bounds;
@@ -162,8 +194,14 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
                 ? { x, y, width: Math.min(width - x, Math.ceil(b.width + PAD * 2)), height: Math.min(height - y, Math.ceil(b.height + PAD * 2)) }
                 : { x: 0, y: 0, width, height };
             let image = await win.webContents.capturePage(rect);
+            for (let tries = 0; current === job && !image.isEmpty() && !hasPixels(image) && tries < BLANK_RETRIES; tries++) {
+                await new Promise((resolve) => setTimeout(resolve, BLANK_RETRY_MS));
+                if (current !== job || !win || win.isDestroyed()) return;
+                image = await win.webContents.capturePage(rect);
+            }
             if (current !== job) return;
-            if (image.isEmpty()) {
+            // 空白的不存：存下来指纹不变，卡片就一直是空的
+            if (image.isEmpty() || !hasPixels(image)) {
                 finish(null);
                 return;
             }

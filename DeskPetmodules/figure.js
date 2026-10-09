@@ -12,7 +12,8 @@ const MAX_SAMPLES = 400000;   // 大图隔几个像素取一个，量一次不�
  * flipY：WebGL readPixels 读出来的行是从下往上的。
  * 返回 null 表示一个不透明像素都没有；否则
  *   { left, top, right, bottom, head: { x, y, width } }（right、bottom 不含）。
- * 头：从头顶往下 2%–10% 那几行的中点是头的中线，头顶往下 15% 以内最宽的一行是头宽（长发、双马尾算进去）。
+ * 头：从头顶往下 2%–10% 那几行的中点是头的中线，头顶往下 15% 以内和中线连着的最宽一段是头宽
+ *（长发、双马尾算进去，和头隔开的翅膀、道具不算）。
  */
 export function measureSilhouette(pixels, width, height, { flipY = false, threshold = DEFAULT_THRESHOLD } = {}) {
     if (!pixels || !(width > 0) || !(height > 0)) return null;
@@ -41,19 +42,42 @@ export function measureSilhouette(pixels, width, height, { flipY = false, thresh
     if (top < 0) return null;
     const box = { left, top, right: Math.min(width, right + step), bottom: Math.min(height, bottom + step) };
     const h = box.bottom - box.top;
-    let sum = 0, count = 0, headWidth = 0;
+    let sum = 0, count = 0;
     for (let i = 0; i < rowLeft.length; i++) {
         const y = i * step;
         if (rowLeft[i] < 0 || y < box.top) continue;
         const depth = (y - box.top) / h;
-        if (depth > 0.15) break;
-        headWidth = Math.max(headWidth, rowRight[i] + step - rowLeft[i]);
-        if (depth >= 0.02 && depth <= 0.1) {
+        if (depth > 0.1) break;
+        if (depth >= 0.02) {
             sum += (rowLeft[i] + rowRight[i] + step) / 2;
             count += 1;
         }
     }
     const headX = count ? sum / count : (box.left + box.right) / 2;
+    // 头宽：头顶往下 15% 以内，从头的中线往两边数连着的不透明像素（隔几像素的发丝缝也算连着），取最宽的一行。
+    // 只看整行最左到最右的话，翅膀、举起的道具、飘开的裙摆伸到头顶这么高时，「头」就成了整个角色那么宽。
+    const opaque = (x, y) => pixels[(flipY ? height - 1 - y : y) * width * 4 + x * 4 + 3] >= threshold;
+    const maxGap = Math.max(step * 2, Math.round((box.right - box.left) * 0.03));
+    const runAt = (y) => {
+        const cx = Math.min(box.right - 1, Math.max(box.left, Math.round(headX / step) * step));
+        let l = -1;
+        // 中线上恰好是空的（王冠两个尖之间）：往两边找最近的不透明像素
+        for (let d = 0; d <= maxGap && l < 0; d += step) {
+            if (cx - d >= box.left && opaque(cx - d, y)) l = cx - d;
+            else if (cx + d < box.right && opaque(cx + d, y)) l = cx + d;
+        }
+        if (l < 0) return 0;
+        let r = l;
+        for (let x = l - step, gap = 0; x >= box.left && gap <= maxGap; x -= step) {
+            if (opaque(x, y)) { l = x; gap = 0; } else gap += step;
+        }
+        for (let x = r + step, gap = 0; x < box.right && gap <= maxGap; x += step) {
+            if (opaque(x, y)) { r = x; gap = 0; } else gap += step;
+        }
+        return r + step - l;
+    };
+    let headWidth = 0;
+    for (let y = box.top; y < box.bottom && (y - box.top) / h <= 0.15; y += step) headWidth = Math.max(headWidth, runAt(y));
     return { ...box, head: { x: headX, y: box.top, width: Math.min(headWidth || box.right - box.left, box.right - box.left) } };
 }
 

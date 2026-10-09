@@ -113,7 +113,12 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     setContentBounds: rect => ipcRenderer.send('deskpet:content-bounds', rect),
     reportFigure: report => ipcRenderer.send('deskpet:figure', { outfit: String(report?.outfit || ''), aspect: Number(report?.aspect) }),
     dragStart: origin => ipcRenderer.send('deskpet:drag-start', origin),
-    dragEnd: () => ipcRenderer.send('deskpet:drag-end'),
+    // figure：角色在窗口里的包围盒，主进程据此贴边；free：按着 Alt 松手，不贴
+    dragEnd: (report) => {
+        const f = report?.figure;
+        const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
+        ipcRenderer.send('deskpet:drag-end', { figure, free: report?.free === true });
+    },
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
@@ -124,6 +129,8 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     previewReady: report => ipcRenderer.send('deskpet:preview-ready', {
         bounds: report?.bounds ? { x: Number(report.bounds.x), y: Number(report.bounds.y), width: Number(report.bounds.width), height: Number(report.bounds.height) } : null,
         aspect: Number(report?.aspect) || null,
+        // 哪一次渲染：离屏窗口一套接一套地用，超时后上一套迟到的报告不能截成下一套的图
+        job: new URLSearchParams(location.search).get('job'),
     }),
     // 语音输入：和主窗口共用本地 SenseVoice（全局设置 → 语音设置里安装）
     sttStatus: () => ipcRenderer.invoke('local-stt:status'),
