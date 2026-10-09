@@ -696,11 +696,11 @@ function union(a, b) {
     return { x, y, width: Math.max(a.x + a.width, b.x + b.width) - x, height: Math.max(a.y + a.height, b.y + b.height) - y };
 }
 
-function uiBounds() {
+// 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上（Linux 上窗口形状按这个裁，不算就画不出来）
+function uiBounds({ withIdleDock = false } = {}) {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
-        // 收起的小胶囊还是脚边那道小横条，也要画出来（Linux 上窗口形状按这个裁）
-        if (el.hidden) continue;
+        if (el.hidden || (el.dataset.mode === 'hidden' && !withIdleDock)) continue;
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -2132,7 +2132,8 @@ async function start() {
         followHead();
         const b = backend.bounds();
         const ui = uiBounds();
-        const rect = b && ui ? union(b, ui) : (b || ui);
+        const drawn = uiBounds({ withIdleDock: true });
+        const rect = b && drawn ? union(b, drawn) : (b || drawn);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
         // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
         const wantOut = lastHit || Boolean(ui);
