@@ -1397,6 +1397,7 @@ function createAlphaProbe(app) {
 // ---- 差分立绘 / 头像后端 ---------------------------------------------------
 
 let lastHit = false;
+let lastWantOut = false;
 function reportHit(hit) {
     // 只看不点：鼠标穿过去，悬停胶囊也不冒
     if (prefs.clickThrough) hit = false;
@@ -2069,6 +2070,12 @@ async function start() {
         const ui = uiBounds();
         const rect = b && ui ? union(b, ui) : (b || ui);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
+        // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
+        const wantOut = lastHit || Boolean(ui);
+        if (wantOut !== lastWantOut) {
+            lastWantOut = wantOut;
+            api.wantOut?.(wantOut);
+        }
         life.setMood(director.baseline);
         life.tick();
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
