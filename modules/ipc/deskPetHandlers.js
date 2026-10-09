@@ -1336,6 +1336,13 @@ function initialize(options) {
             closePet: (agentId) => { closePet(agentId); refreshTray(); },
             showPet: (agentId) => { const pet = pets.get(agentId); if (pet && !pet.win.isDestroyed()) { showPet(pet); notifyMain(agentId); } },
             setOutfit: setPetOutfit,
+            pushProfile: (agentId, payload) => {
+                const pet = pets.get(agentId);
+                if (!pet || pet.win.isDestroyed() || !pet.ready) return false;
+                pet.win.webContents.send('deskpet:profile', payload);
+                if (payload?.emotion) showPet(pet);
+                return true;
+            },
             setVisible: setPetsVisible,
             talk: talkFromSettings,
             mainWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
