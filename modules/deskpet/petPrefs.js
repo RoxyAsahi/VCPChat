@@ -9,16 +9,20 @@
 
 // 1 倍大小时角色占的区域；上方另外留出气泡和输入框的高度（与页面 TOP_RESERVE 一致）。
 // 还不知道形象的长宽比（头像、第一次打开）时用这一个。
-const BASE_CHARACTER = Object.freeze({ width: 360, height: 430 });
+// 第一版的 1 倍太占地方，第二版（SIZE_VERSION 2）把角色区整体缩到原来的六成。
+const SIZE_FACTOR = 0.6;
+const SIZE_VERSION = 2;
+const BASE_CHARACTER = Object.freeze({ width: 360 * SIZE_FACTOR, height: 430 * SIZE_FACTOR });
 // 知道形象的长宽比（高 ÷ 宽，按不透明像素算）以后，角色区跟着比例走：
-// 半身立绘、Q 版（高宽比 1.6 以内）和以前一样高，宽度按比例收；竖长的全身像（2.6 以上）高到 540，
+// 半身立绘、Q 版（高宽比 1.6 以内）和以前一样高，宽度按比例收；竖长的全身像（2.6 以上）高到 324，
 // 中间平滑过渡。全身像的人比半身像小一截是自然的，但不至于高出半个屏幕。
-const FIGURE = Object.freeze({ tallFrom: 1.6, tallTo: 2.6, tallHeight: 540, maxWidth: 420, sideRoom: 1.15 });
+const FIGURE = Object.freeze({ tallFrom: 1.6, tallTo: 2.6, tallHeight: 540 * SIZE_FACTOR, maxWidth: 420 * SIZE_FACTOR, sideRoom: 1.15 });
 const UI_RESERVE = 150;
 // 窗口再窄，气泡和输入框也排不下了。
 const MIN_WIDTH = 280;
 const SCALE_MIN = 0.5;
-const SCALE_MAX = 2;
+// 新的 1 倍小了，上限放到 3 倍：以前调到 2 倍的人换算过来还放得下
+const SCALE_MAX = 3;
 const SCALE_STEP = 0.1;
 const SIZE_GRID = 4;
 
@@ -98,6 +102,18 @@ function maxScaleForWorkArea(workArea, aspect) {
     if (!workArea || !(workArea.height > 0)) return SCALE_MAX;
     const fit = (workArea.height - UI_RESERVE) / characterBox(aspect).height;
     return Math.max(SCALE_MIN, Math.min(SCALE_MAX, Math.floor(fit * 20) / 20));
+}
+
+/**
+ * state.json 里记的大小换成现在的倍数。第一版记的倍数是按大的那套 1 倍算的：
+ * 没调过（1 倍）的直接用新的默认；调过的换算成同样的实际大小，看起来不变。
+ */
+function savedScale(saved) {
+    const raw = Number(saved?.scale);
+    if (!Number.isFinite(raw)) return 1;
+    if (Number(saved.sizeVersion) >= SIZE_VERSION) return clampScale(raw);
+    if (Math.abs(raw - 1) < 0.001) return 1;
+    return clampScale(raw / SIZE_FACTOR);
 }
 
 function fitScale(scale, workArea, aspect) {
@@ -219,6 +235,7 @@ function normalizeSettings(raw) {
 
 module.exports = {
     BASE_CHARACTER,
+    SIZE_VERSION,
     UI_RESERVE,
     SCALE_MIN,
     SCALE_MAX,
@@ -227,6 +244,7 @@ module.exports = {
     RESERVED_ACCELERATORS,
     DEFAULT_SETTINGS,
     clampScale,
+    savedScale,
     characterBox,
     normalizeAspect,
     sameAspect,
