@@ -230,7 +230,8 @@ export function buildDeskPetPanel(doc) {
     const options = el(doc, 'div', 'dps-card');
     const dnd = buildSwitchRow(doc, '免打扰', '不主动说话、不出声，主窗口里聊天的回复也不在桌宠头上冒出来。在桌宠上跟 TA 说的话照常回。');
     const restore = buildSwitchRow(doc, '启动时恢复桌宠', '打开 VCPChat 时，把上次开着的桌宠放回原来的位置。');
-    options.append(dnd.row, restore.row);
+    const through = buildSwitchRow(doc, '只看不点', '鼠标直接穿过桌宠，点不到也拖不动，适合专心工作时。用托盘菜单或快捷键关掉；「和桌宠说话」的快捷键照常能用。');
+    options.append(dnd.row, through.row, restore.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -905,6 +906,7 @@ export function buildDeskPetPanel(doc) {
         if (!settings) return;
         dnd.input.checked = settings.doNotDisturb === true;
         restore.input.checked = settings.restoreOnLaunch === true;
+        through.input.checked = settings.clickThrough === true;
     }
 
     async function update(patch) {
@@ -913,6 +915,7 @@ export function buildDeskPetPanel(doc) {
     }
     dnd.input.addEventListener('change', () => update({ doNotDisturb: dnd.input.checked }));
     restore.input.addEventListener('change', () => update({ restoreOnLaunch: restore.input.checked }));
+    through.input.addEventListener('change', () => update({ clickThrough: through.input.checked }));
 
     function renderShortcuts() {
         const snapshot = state.snapshot;

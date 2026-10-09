@@ -424,10 +424,38 @@ function updateTopmostGuard() {
 }
 
 function setIgnoreMouse(pet, ignore) {
-    if (USE_SHAPE || pet.win.isDestroyed() || ignore === pet.ignoringMouse) return;
+    if (USE_SHAPE || pet.win.isDestroyed() || ignore === pet.ignoringMouse || pet.ignoringMouse === 'through') return;
     pet.ignoringMouse = ignore;
     // forward:true 让 Windows/macOS 在穿透时仍把 mousemove 送到页面。
     pet.win.setIgnoreMouseEvents(ignore, { forward: true });
+}
+
+// 只看不点：整窗穿透且不转发鼠标，页面碰不到悬停、点击和拖动。输入框打开时（快捷键「和桌宠说话」）照常可用，
+// 收起后回到穿透。按像素穿透那套（setIgnoreMouse、Linux 的输入区）在这期间不动窗口。
+function clickThroughOn() {
+    return controls?.get().clickThrough === true;
+}
+
+function applyClickThrough(pet) {
+    if (!pet || pet.win.isDestroyed()) return;
+    const through = clickThroughOn() && !pet.interactive;
+    if (through) {
+        if (pet.ignoringMouse === 'through') return;
+        pet.ignoringMouse = 'through';
+        pet.win.setIgnoreMouseEvents(true);
+    } else if (pet.ignoringMouse === 'through') {
+        pet.ignoringMouse = null;
+        if (USE_SHAPE) {
+            pet.win.setIgnoreMouseEvents(false);
+            resetShape(pet);
+        } else {
+            setIgnoreMouse(pet, true);
+        }
+    }
+}
+
+function setClickThrough(on) {
+    controls?.update({ clickThrough: !!on });
 }
 
 // 光标在窗口范围内时把窗口内坐标发给页面，页面按像素 alpha 回答是否命中。
@@ -553,6 +581,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     });
     win.loadURL(`${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}`);
     if (!USE_SHAPE) startHitPoll(pet);
+    applyClickThrough(pet);
     updateTopmostGuard();
     notifyMain(agentId);
     return { success: true, open: true };
@@ -579,10 +608,15 @@ function resetInputState(pet) {
     pet.lastShape = '';
     if (pet.win.isDestroyed()) return;
     pet.win.setFocusable(PET_FOCUSABLE);
+    if (pet.ignoringMouse === 'through') {
+        // 页面重载后输入区要重新报；穿透本身保持
+        return;
+    }
     if (!USE_SHAPE) {
         pet.ignoringMouse = null;
         setIgnoreMouse(pet, true);
     }
+    applyClickThrough(pet);
 }
 
 function closePet(agentId) {
@@ -720,7 +754,14 @@ function sendPrefs(pet) {
 
 function prefsFor(pet) {
     const settings = controls?.get() || petPrefs.DEFAULT_SETTINGS;
-    return { scale: pet.scale, doNotDisturb: settings.doNotDisturb };
+    const key = settings.shortcuts?.clickThrough || '';
+    return {
+        scale: pet.scale,
+        doNotDisturb: settings.doNotDisturb,
+        clickThrough: settings.clickThrough === true,
+        // 页面提示里写怎么关：按平台写成 Ctrl / Cmd
+        clickThroughKey: key.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl'),
+    };
 }
 
 /**
@@ -983,6 +1024,7 @@ function trayMenuItems() {
             { label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
             { label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
+            { label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
             { label: '桌宠设置…', click: () => controls.openSettings() },
         ],
     }];
@@ -1244,6 +1286,7 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet || pet.win.isDestroyed()) return;
         pet.interactive = !!on;
+        applyClickThrough(pet);
         if (on) {
             if (!USE_SHAPE) setIgnoreMouse(pet, false);
             pet.win.setFocusable(true);
@@ -1255,6 +1298,7 @@ function registerIpc() {
                 pet.ignoringMouse = null;
                 setIgnoreMouse(pet, true);
             }
+            applyClickThrough(pet);
             // 回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
             if (!PET_FOCUSABLE) pet.win.setFocusable(false);
         }
@@ -1273,7 +1317,7 @@ function registerIpc() {
     });
     ipcMain.on('deskpet:content-bounds', (event, rect) => {
         const pet = petFromEvent(event);
-        if (!USE_SHAPE || !pet || pet.win.isDestroyed() || !rect) return;
+        if (!USE_SHAPE || !pet || pet.win.isDestroyed() || !rect || pet.ignoringMouse === 'through') return;
         const [w, h] = pet.win.getContentSize();
         const x = Math.max(0, Math.floor(rect.x));
         const y = Math.max(0, Math.floor(rect.y));
@@ -1350,6 +1394,8 @@ function registerIpc() {
                 checked: controls?.get().doNotDisturb === true,
                 click: (item) => setDoNotDisturb(item.checked),
             },
+            // 打开后点不到桌宠了：从托盘或快捷键关
+            { label: '只看不点（鼠标穿透）', click: () => setClickThrough(true) },
             { label: '桌宠设置…', click: () => controls?.openSettings() },
             { type: 'separator' },
             {
@@ -1440,8 +1486,9 @@ function initialize(options) {
     // 主窗口刷新时设置页没了：录快捷键录到一半暂停的全局快捷键要恢复
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     controls.onChange((_settings, changed) => {
-        if (changed.includes('doNotDisturb')) broadcastPrefs();
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts')) broadcastPrefs();
+        if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
     });
     const settingsReady = controls.load().then(() => {
         controls.applyShortcuts();

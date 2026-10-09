@@ -45,7 +45,7 @@ function fakeElectron() {
         hide() { this.visible = false; }
         close() { this.destroyed = true; this.emit('closed'); }
         setAlwaysOnTop() {} moveTop() { this.raised = (this.raised || 0) + 1; } setVisibleOnAllWorkspaces() {} focus() {} loadURL() {} reload() {}
-        setIgnoreMouseEvents(ignore) { this.ignoreMouse.push(ignore); }
+        setIgnoreMouseEvents(ignore, options) { this.ignoreMouse.push(ignore); this.forwarding = Boolean(options?.forward); }
         setFocusable(value) { this.focusable = value; }
         getPosition() { return [this.bounds.x, this.bounds.y]; }
         setPosition(x, y) { this.bounds = { ...this.bounds, x, y }; }
@@ -212,4 +212,30 @@ test('Windows: a pet pushed down by another topmost window comes back on top', a
     t.mock.timers.tick(10000);
     assert.equal(pet.raised, shown + 2);
     pet.close();
+});
+
+test('click-through mode: the mouse passes the pet, hits are ignored, the talk bar still works', async () => {
+    const { handlers, open, fake, fromPet } = await loadHandlers();
+    const pet = await open();
+    const item = () => handlers.trayMenuItems()[0].submenu.find((i) => i.label?.startsWith('只看不点'));
+    assert.equal(item().checked, false);
+    item().click({ checked: true });
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    assert.equal(pet.forwarding, false, '不转发鼠标：页面碰不到悬停');
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.clickThrough, true);
+    // 页面报命中也不变成可点
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    // 输入框打开时可点，收起后回到穿透
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    fake.listeners.get('deskpet:set-interactive')(fromPet(pet), false);
+    assert.equal(pet.ignoreMouse.at(-1), true);
+    assert.equal(pet.forwarding, false);
+    // 关掉：回到按像素穿透（转发鼠标，命中时可点）
+    item().click({ checked: false });
+    assert.equal(pet.forwarding, true);
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(pet.ignoreMouse.at(-1), false);
+    handlers.closeAll();
 });

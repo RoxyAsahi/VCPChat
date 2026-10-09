@@ -269,6 +269,7 @@ body.is-preview #dock,
 body.is-preview #uiStack,
 body.is-preview #emotionBadge,
 body.is-preview #dndBadge,
+body.is-preview #throughBadge,
 body.is-preview #lifeFx {
   display: none !important;
 }
@@ -297,6 +298,18 @@ body.is-preview #lifeFx {
 #dndBadge {
   position: absolute;
   left: min(calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.3), calc(100% - 20px));
+  top: calc(var(--pet-head, 150px) - 4px);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.75;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* 只看不点时头顶另一边一个小幽灵：知道为什么点不到它 */
+#throughBadge {
+  position: absolute;
+  left: max(4px, calc(var(--pet-head-x, 50%) - var(--pet-head-w, 80px) * 0.3 - 16px));
   top: calc(var(--pet-head, 150px) - 4px);
   font-size: 16px;
   line-height: 1;
