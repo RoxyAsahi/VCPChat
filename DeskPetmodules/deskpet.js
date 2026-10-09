@@ -340,6 +340,8 @@ function setDock(mode) {
     dock.mode = mode;
     $('dock').dataset.mode = mode;
     composer.open = mode === 'bar';
+    // 只看不点时光标压着角色会变淡：打字、录音时得看得见
+    if (mode === 'bar' || mode === 'rec') document.body.classList.remove('is-ghost-hover');
     // 打字、录音的时候别打瞌睡
     life?.hold('composer', mode === 'bar' || mode === 'rec');
     // 输入条要打字、录音时要能按 Esc 取消：整窗可点、可聚焦；其余时候回到按像素穿透
@@ -380,7 +382,19 @@ function openComposer() {
 
 function closeComposer() {
     dock.voice?.cancel();
+    // 收起就不带这些文件了：不然条收了、📎 还挂在头顶，下一句语音快捷键会把它们一起发出去
+    if (composer.files.length) setFiles([]);
     setDock(restingDock());
+}
+
+// 输入条里有没有要发的东西（字或文件）
+function hasDraft() {
+    return Boolean($('composerInput').value.trim() || composer.files.length);
+}
+
+// 正在把录音识别成字：这时收起会把识别出的话丢掉
+function transcribing() {
+    return $('recStop').classList.contains('is-busy');
 }
 
 // 输入条跟着字数长高（最多 4 行），外框的高度一起动
@@ -432,16 +446,26 @@ async function finishVoice() {
     } finally {
         stop.classList.remove('is-busy');
     }
-    if (dock.mode !== 'rec') return; // 识别期间点了打字
     const input = $('composerInput');
     const autoSend = dock.autoSend;
     dock.autoSend = false;
+    if (dock.mode !== 'rec') {
+        // 识别期间输入条换了状态（点了打字、桌宠被藏起来）：识别出的话放进输入框，不能丢
+        if (text) {
+            input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
+            fitComposerInput();
+            if (autoSend && !composer.files.length) submitComposer();
+            else if (dock.mode !== 'bar') notice('听到的话放在输入框里了', { ms: 3000 });
+        }
+        return;
+    }
     if (text) {
         input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
         setDock('bar');
         fitComposerInput();
-        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）
-        if (autoSend) submitComposer();
+        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）；
+        // 录之前输入条里已经放了文件就不自动发，让人看一眼带的是什么
+        if (autoSend && !composer.files.length) submitComposer();
     } else {
         if (!input.value.trim()) notice('没听到说话', { ms: 3000 });
         setDock(input.value.trim() ? 'bar' : restingDock());
@@ -481,6 +505,8 @@ async function sendText(text, { fresh = false, files = [] } = {}) {
     } finally {
         composer.sending = false;
         $('composerSend').disabled = false;
+        // 发的时候又排进来一句，而这条的回复已经结束（或根本没开始）：别让它一直排着
+        if (composer.queued && !bubble.replyId) setTimeout(flushQueued, 400);
     }
     return false;
 }
@@ -530,6 +556,8 @@ function takeFiles(files) {
     const { list, dropped } = addFiles(composer.files, files);
     setFiles(list);
     if (dropped) notice(`一次最多带 ${MAX_FILES} 个文件，有 ${dropped} 个没加上`, { ms: 3500 });
+    // 正在录音：文件先挂上，录完进输入条时一起看到；不打断录音
+    if (dock.mode === 'rec') return;
     if (list.length) {
         openComposer();
         requestAnimationFrame(() => $('composerInput').focus());
@@ -595,9 +623,12 @@ async function flushQueued() {
     composer.queuedFresh = false;
     renderBubble();
     if (await sendText(text, { fresh })) return;
-    $('composerInput').value = text;
-    setFresh(fresh);
-    openComposer();
+    const input = $('composerInput');
+    input.value = input.value.trim() ? `${text}\n${input.value}` : text;
+    setFresh(fresh || composer.fresh);
+    fitComposerInput();
+    // 正在录音就别打断，放回输入框的话录完一起看到
+    if (dock.mode !== 'rec') openComposer();
 }
 
 function bindComposer() {
@@ -662,8 +693,11 @@ function bindComposer() {
     api.onOpenInput(({ toggle, submit, voice, newTopic } = {}) => {
         if (voice) {
             // 语音快捷键：没在录就开始录，正在录就停下发出去
-            if (dock.mode === 'rec') finishVoice();
-            else startVoice({ autoSend: true });
+            if (dock.mode === 'rec') {
+                // 用麦克风键开始录的也一样：快捷键这一下就是「停下发出去」
+                dock.autoSend = true;
+                finishVoice();
+            } else startVoice({ autoSend: true });
             return;
         }
         if (submit) {
@@ -680,8 +714,9 @@ function bindComposer() {
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
     window.addEventListener('blur', () => {
         // 录音中切到别的程序：麦克风别一直开着（Esc 也按不到这里了）
-        if (dock.mode === 'rec') closeComposer();
-        else if (composer.open && !input.value.trim()) closeComposer();
+        if (dock.mode === 'rec') {
+            if (!transcribing()) closeComposer();
+        } else if (composer.open && !hasDraft()) closeComposer();
     });
 }
 
@@ -698,10 +733,12 @@ function union(a, b) {
 
 // 正在显示的气泡、输入条这些；withIdleDock：连收起时脚边那道小横条也算上
 // （只给 Linux 的窗口形状用，不算就画不出来；闲逛、贴边探头只看真正打开的界面）
-function uiBounds({ withIdleDock = false } = {}) {
+// withBadge：头边那个「没看到的回复」小气泡算不算（溜达不看它，不然它挂着就永远不走）
+function uiBounds({ withIdleDock = false, withBadge = true } = {}) {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
         if (el.hidden || (el.dataset.mode === 'hidden' && !withIdleDock)) continue;
+        if (!withBadge && el.id === 'missedBadge') continue;
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -744,6 +781,12 @@ function figureBounds() {
     }
 }
 
+// 放下时：光标还压在角色上是拖动留下的，不当成「鼠标停在上面」；探头状态重新报一次
+function afterDrag() {
+    hitFromDrag = true;
+    lastWantOut = null;
+}
+
 function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     let down = null;
     let lastTap = 0;
@@ -755,6 +798,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
         if (e.button !== 0 || e.target?.closest?.('.pet-ui')) return;
         // 上一次按下没收到 pointerup（被菜单、切窗口打断）时，先把它的拖动收尾（窗口和被拎着的姿势都放下）。
         if (down?.dragging) {
+            afterDrag();
             api.dragEnd();
             onDrag('end');
         }
@@ -780,6 +824,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
         const at = { x: down.cx, y: down.cy };
         if (down.dragging) {
             // 松手的地方离屏幕边、任务栏很近时主进程会贴过去；按着 Alt 不贴
+            afterDrag();
             api.dragEnd({ figure: figureBounds(), free: e.altKey });
             onDrag('end');
             down = null;
@@ -806,6 +851,7 @@ function bindPointer({ onTap, onDoubleTap, onTapDown, onDrag }) {
     // 触屏手势被系统接管（pointercancel）、拖到一半切走窗口时收不到 pointerup，拖动必须在这里结束。
     const abort = () => {
         if (down?.dragging) {
+            afterDrag();
             api.dragEnd();
             onDrag('end');
         }
@@ -1425,13 +1471,18 @@ function createAlphaProbe(app) {
 // ---- 差分立绘 / 头像后端 ---------------------------------------------------
 
 let lastHit = false;
-let lastWantOut = false;
+// null：下一次一定报上去（页面刚加载、刚拖完放下时，主进程那边的探头状态可能和这里对不上）
+let lastWantOut = null;
+// 拖动时光标一直压在角色上；放下（可能刚收进边里）后在光标真正移开或移上来之前，不算「鼠标在角色上」，
+// 免得刚藏进去就又探出来，也免得一直报着拖动时的旧值、该探头时不探
+let hitFromDrag = false;
 function reportHit(hit) {
     // 只看不点：鼠标穿过去，悬停胶囊也不冒；光标压在角色上时角色变得很淡，看得清后面的东西
     document.body.classList.toggle('is-ghost-hover', Boolean(prefs.clickThrough && hit));
     if (prefs.clickThrough) hit = false;
     if (hit !== lastHit) {
         lastHit = hit;
+        hitFromDrag = false;
         api.setHit(hit);
         dockHover(hit);
     }
@@ -2087,7 +2138,7 @@ async function start() {
         // 藏起来就不出声了，录着的音也停掉（不然麦克风开着、整窗挡着点击）
         if (paused) {
             speech.stop();
-            if (dock.mode === 'rec' || (composer.open && !$('composerInput').value.trim())) closeComposer();
+            if ((dock.mode === 'rec' && !transcribing()) || (composer.open && !hasDraft())) closeComposer();
         }
         // 光标停在气泡上时被藏起来收不到 mouseleave：别让旧回复从此一直挂着
         if (bubble.hovered) {
@@ -2137,14 +2188,14 @@ async function start() {
         const rect = b && drawn ? union(b, drawn) : (b || drawn);
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
         // 藏在屏幕边里时，主进程按这个决定探不探出来：鼠标在角色上，或者头顶有气泡、输入框
-        const wantOut = lastHit || Boolean(ui);
+        const wantOut = (lastHit && !hitFromDrag) || Boolean(ui);
         if (wantOut !== lastWantOut) {
             lastWantOut = wantOut;
             api.wantOut?.(wantOut);
         }
         life.setMood(director.baseline);
         life.tick();
-        wanderTick(ui);
+        wanderTick(uiBounds({ withBadge: false }));
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
 

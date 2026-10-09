@@ -315,19 +315,29 @@ test('files sent from the pet reach the main window cleaned up', async () => {
     const main = fake.windows[0];
     const pet = await open('Coco');
     const send = fake.handlers.get('deskpet:send');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'deskpet-drop-'));
+    const real = path.join(dir, 'a.png');
+    fs.writeFileSync(real, 'png');
     const pending = send(fromPet(pet), '', { files: [
-        { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
+        { path: real, name: '../../a.png', type: 'image/png' },
         { path: 'relative/b.txt', name: 'b.txt' },
         { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
         { data: new Uint8Array(0), name: 'empty.png' },
     ] });
+    await sleep(20);
     const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
     assert.equal(request.text, '');
-    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
+    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [[real, 'a.png'], ['bytes', 'p.png']]);
     fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
     assert.deepEqual(await pending, { success: true });
     // 没字也没文件：不往主窗口发
     assert.equal((await send(fromPet(pet), ' ', { files: [{ path: 'x' }] })).success, false);
+    // 拖进来的是文件夹、或者文件已经不在了：说清楚，不往主窗口发
+    const before = main.sent.filter((m) => m.channel === 'deskpet:send-request').length;
+    assert.match((await send(fromPet(pet), '看看', { files: [{ path: dir, name: 'drop' }] })).error, /不是能发的文件/);
+    assert.match((await send(fromPet(pet), '看看', { files: [{ path: path.join(dir, 'gone.png'), name: 'gone.png' }] })).error, /不是能发的文件/);
+    assert.equal(main.sent.filter((m) => m.channel === 'deskpet:send-request').length, before);
+    fs.rmSync(dir, { recursive: true, force: true });
     handlers.closeAll();
 });
 
@@ -365,6 +375,14 @@ test('dragged well past a screen edge the pet tucks in, peeks out when wanted an
     dropAt(1600 - 40 - 100, 300, { figure });
     await sleep(200);
     assert.deepEqual(pet.getPosition(), [1600 - 60 - 40, 300]);
+    // 关掉再开（下次启动也一样）：还藏在原来的地方，鼠标过来照样探出来
+    await fake.handlers.get('deskpet:toggle')({}, 'Nova');
+    await sleep(50);
+    const again = await open();
+    assert.deepEqual(again.getPosition(), [1600 - 60 - 40, 300], '重开不会被挪回屏里');
+    fake.listeners.get('deskpet:want-out')(fromPet(again), true);
+    await sleep(200);
+    assert.deepEqual(again.getPosition(), [1600 - 200 - 40, 300]);
     handlers.closeAll();
 });
 
