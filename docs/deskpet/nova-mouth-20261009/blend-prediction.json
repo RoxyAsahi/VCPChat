@@ -1,0 +1,226 @@
+{
+  "predicted_linear_displacement_scan": [
+    {
+      "blend": 0.035,
+      "new_flips": 0
+    },
+    {
+      "blend": 0.07,
+      "new_flips": 0
+    },
+    {
+      "blend": 0.105,
+      "new_flips": 0
+    },
+    {
+      "blend": 0.14,
+      "new_flips": 2
+    },
+    {
+      "blend": 0.175,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.21,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.245,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.28,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.315,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.35,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.385,
+      "new_flips": 3
+    },
+    {
+      "blend": 0.42,
+      "new_flips": 4
+    },
+    {
+      "blend": 0.455,
+      "new_flips": 4
+    },
+    {
+      "blend": 0.49,
+      "new_flips": 4
+    },
+    {
+      "blend": 0.525,
+      "new_flips": 4
+    },
+    {
+      "blend": 0.56,
+      "new_flips": 4
+    },
+    {
+      "blend": 0.595,
+      "new_flips": 9
+    },
+    {
+      "blend": 0.63,
+      "new_flips": 10
+    },
+    {
+      "blend": 0.665,
+      "new_flips": 10
+    },
+    {
+      "blend": 0.7,
+      "new_flips": 10
+    }
+  ],
+  "initial_failed_triangles": [
+    {
+      "pose": "interp-open0.4-form0.5",
+      "mesh": "ArtMeshMouth_lip_0",
+      "triangles": [
+        5
+      ],
+      "areas_before": [
+        2.2527152365725556e-09
+      ],
+      "areas_after": [
+        -8.128355655223629e-09
+      ],
+      "epsilon": 1.7406036151301764e-10
+    },
+    {
+      "pose": "interp-open0.4-form0.5",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        2
+      ],
+      "areas_before": [
+        2.2527152365725556e-09
+      ],
+      "areas_after": [
+        -1.0765506486265508e-08
+      ],
+      "epsilon": 1.8998234868200515e-10
+    },
+    {
+      "pose": "interp-open0.5-form-1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        5.1207132090169694e-08
+      ],
+      "areas_after": [
+        -1.271595018170757e-08
+      ],
+      "epsilon": 1.730101120865288e-10
+    },
+    {
+      "pose": "interp-open0.6-form0.5",
+      "mesh": "ArtMeshMouth_lip_0",
+      "triangles": [
+        51
+      ],
+      "areas_before": [
+        1.667847843167536e-08
+      ],
+      "areas_after": [
+        -1.3950792854267036e-08
+      ],
+      "epsilon": 1.8958469921726008e-10
+    },
+    {
+      "pose": "interp-open0.6-form0.5",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        1.667847843167536e-08
+      ],
+      "areas_after": [
+        -7.190586603922355e-08
+      ],
+      "epsilon": 2.0156589805413184e-10
+    },
+    {
+      "pose": "interp-open0.6-form1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        8.16994698560336e-08
+      ],
+      "areas_after": [
+        -1.0794204419184439e-08
+      ],
+      "epsilon": 2.094878882467899e-10
+    },
+    {
+      "pose": "turn-30_-20-open0.5-form-1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        5.5758156536356296e-08
+      ],
+      "areas_after": [
+        -1.384757640499057e-08
+      ],
+      "epsilon": 1.71091238551635e-10
+    },
+    {
+      "pose": "turn-30_20-open0.5-form-1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        5.091107482813051e-08
+      ],
+      "areas_after": [
+        -1.2532790694130824e-08
+      ],
+      "epsilon": 1.5597160571978465e-10
+    },
+    {
+      "pose": "turn30_-20-open0.5-form-1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        4.403619502379996e-08
+      ],
+      "areas_after": [
+        -1.0806117445305574e-08
+      ],
+      "epsilon": 1.8267595616183742e-10
+    },
+    {
+      "pose": "turn30_20-open0.5-form-1",
+      "mesh": "ArtMeshMouth_lip_1",
+      "triangles": [
+        52
+      ],
+      "areas_before": [
+        4.194585900840764e-08
+      ],
+      "areas_after": [
+        -1.027970308875581e-08
+      ],
+      "epsilon": 1.7391426936352871e-10
+    }
+  ]
+}
