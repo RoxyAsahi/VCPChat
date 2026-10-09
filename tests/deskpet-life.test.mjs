@@ -164,6 +164,19 @@ test('gaze follows the cursor while it moves and wanders once it stops', () => {
     assert.equal(life.gaze, null);
 });
 
+test('with cursor following off the gaze keeps wandering while the cursor moves', () => {
+    const { life, advance } = rig({ drowsyAfterMs: 1e9 });
+    life.setFollowCursor(false);
+    assert.ok(life.gaze, '关掉后马上自己看别处');
+    life.cursor({ x: 10, y: 10 });
+    advance(500);
+    life.cursor({ x: 60, y: 60 });
+    assert.ok(life.gaze, '光标在动也不跟');
+    life.setFollowCursor(true);
+    life.cursor({ x: 90, y: 90 });
+    assert.equal(life.gaze, null);
+});
+
 test('drowsy pet perks up quietly when the cursor comes by', () => {
     const { life, log } = rig();
     life.force('drowsy');

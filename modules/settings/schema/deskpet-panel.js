@@ -190,7 +190,7 @@ export function buildDeskPetPanel(doc) {
     const spacer = el(doc, 'span', 'dps-spacer');
     const refreshBtn = button(doc, 'dps-icon-btn', undefined, { title: '重新扫描形象、重画预览', 'aria-label': '刷新' });
     refreshBtn.append(icon(doc, 'refresh'));
-    const importBtn = button(doc, 'dps-btn', '导入形象', { title: '选 Live2D 模型（.model3.json）、网格立绘（.puppet.json），或者一张/几张立绘图片' });
+    const importBtn = button(doc, 'dps-btn', '导入形象', { title: '选 Live2D 模型（.model3.json 或压缩包 .zip）、网格立绘（.puppet.json），或者一张/几张立绘图片' });
     head.append(headTitle, agentSelect, spacer, refreshBtn, importBtn);
     const grid = el(doc, 'div', 'dps-grid');
     grid.setAttribute('role', 'radiogroup');
@@ -237,7 +237,24 @@ export function buildDeskPetPanel(doc) {
     const yieldFs = buildSwitchRow(doc, '全屏时让开', '看视频、玩游戏、放幻灯片时桌宠先躲起来，退出全屏再回来。只在 Windows 上有效。');
     yieldFs.row.hidden = true;
     const through = buildSwitchRow(doc, '只看不点', '鼠标直接穿过桌宠，点不到也拖不动，适合专心工作时。用托盘菜单或快捷键关掉；「和桌宠说话」的快捷键照常能用。');
-    options.append(dnd.row, through.row, restore.row, yieldFs.row);
+    const follow = buildSwitchRow(doc, '视线跟随光标', '光标在屏幕上移动时 TA 跟着看过去。关掉后只自己四处看看，不会一直盯着光标。');
+    const wander = buildSwitchRow(doc, '在桌面上溜达', '站在任务栏上闲了一阵，会沿着任务栏走一小段。');
+    const hideCapture = buildSwitchRow(doc, '截图、录屏时隐藏', '截图、录屏、开会共享屏幕时画面里不出现桌宠，自己屏幕上照常看得到。');
+    hideCapture.row.hidden = true;
+    const opacityRow = el(doc, 'div', 'dps-row');
+    const opacityCopy = el(doc, 'span', 'dps-row-copy');
+    opacityCopy.append(el(doc, 'span', 'dps-row-title', '不透明度'), el(doc, 'span', 'dps-row-hint', '角色淡一点，后面的字能透出来；气泡和输入框不变。'));
+    const opacityControl = el(doc, 'span', 'dps-size');
+    const opacitySlider = el(doc, 'input', 'dps-slider');
+    opacitySlider.type = 'range';
+    opacitySlider.min = '0.3';
+    opacitySlider.max = '1';
+    opacitySlider.step = '0.05';
+    opacitySlider.setAttribute('aria-label', '桌宠不透明度');
+    const opacityValue = el(doc, 'span', 'dps-size-value');
+    opacityControl.append(opacitySlider, opacityValue);
+    opacityRow.append(opacityCopy, opacityControl);
+    options.append(dnd.row, through.row, follow.row, wander.row, opacityRow, hideCapture.row, restore.row, yieldFs.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -954,6 +971,14 @@ export function buildDeskPetPanel(doc) {
         yieldFs.input.checked = settings.yieldToFullscreen === true;
         yieldFs.row.hidden = state.snapshot.platform !== 'win32';
         through.input.checked = settings.clickThrough === true;
+        follow.input.checked = settings.followCursor !== false;
+        wander.input.checked = settings.wander === true;
+        hideCapture.input.checked = settings.hideFromCapture === true;
+        // Linux 上 Electron 做不到「截图时不出现」
+        hideCapture.row.hidden = state.snapshot.platform !== 'win32' && state.snapshot.platform !== 'darwin';
+        const opacity = Number(settings.opacity ?? 1);
+        if (doc.activeElement !== opacitySlider) opacitySlider.value = String(opacity);
+        opacityValue.textContent = `${Math.round(Number(opacitySlider.value) * 100)}%`;
     }
 
     async function update(patch) {
@@ -964,6 +989,12 @@ export function buildDeskPetPanel(doc) {
     restore.input.addEventListener('change', () => update({ restoreOnLaunch: restore.input.checked }));
     yieldFs.input.addEventListener('change', () => update({ yieldToFullscreen: yieldFs.input.checked }));
     through.input.addEventListener('change', () => update({ clickThrough: through.input.checked }));
+    follow.input.addEventListener('change', () => update({ followCursor: follow.input.checked }));
+    wander.input.addEventListener('change', () => update({ wander: wander.input.checked }));
+    hideCapture.input.addEventListener('change', () => update({ hideFromCapture: hideCapture.input.checked }));
+    // 拖动时先只改数字，松手再存（拖的过程中桌宠不跟着一下下闪）
+    opacitySlider.addEventListener('input', () => { opacityValue.textContent = `${Math.round(Number(opacitySlider.value) * 100)}%`; });
+    opacitySlider.addEventListener('change', () => update({ opacity: Number(opacitySlider.value) }));
 
     function renderShortcuts() {
         const snapshot = state.snapshot;
