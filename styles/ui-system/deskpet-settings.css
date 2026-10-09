@@ -201,11 +201,6 @@
   bottom: calc(50% - 22px);
 }
 
-/* 预览里的胶囊多一个收起钮，比桌面上的宽一些 */
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-dock[data-mode="pill"] {
-  --dock-w: 154px;
-}
-
 /* 展开成输入条时角色往上让一点 */
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-stage[data-dock="bar"] .dps-stage-figure {
   transform: translateY(-6px);
@@ -421,6 +416,19 @@
   stroke-linejoin: round;
 }
 
+/* 预览里的胶囊图标和桌面上一样小一号、细一点（输入条里的加号、发送箭头除外） */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps .pet-dock svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.8;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps .pet-dock .dock-bar svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
@@ -522,20 +530,27 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-mini-pill {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   align-self: center;
   height: 40px;
-  padding: 0 16px;
+  padding: 0 12px;
   border-radius: 20px;
   background: white;
   color: color-mix(in srgb, black 86%, white);
-  box-shadow: 0 1px 2px color-mix(in srgb, black 8%, transparent), 0 6px 18px color-mix(in srgb, black 12%, transparent);
+  /* 和桌面上的胶囊同一套：一圈很淡的描边加轻阴影 */
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, black 8%, transparent), 0 1px 2px color-mix(in srgb, black 6%, transparent), 0 4px 14px color-mix(in srgb, black 10%, transparent);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-mini-pill svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.8;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-mini-pill i {
   width: 1px;
-  height: 16px;
-  background: color-mix(in srgb, black 12%, transparent);
+  height: 20px;
+  background: color-mix(in srgb, black 10%, transparent);
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-pet-name {

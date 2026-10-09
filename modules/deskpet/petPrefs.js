@@ -62,6 +62,10 @@ const DEFAULT_SETTINGS = Object.freeze({
     opacity: 1,
     // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
     wander: false,
+    // 视线跟着光标走；关掉后只自己四处看（光标在屏幕上来回动时不会一直盯着）
+    followCursor: true,
+    // 截图、录屏、共享屏幕时桌宠不出现在画面里（Windows、macOS 有效）
+    hideFromCapture: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -284,6 +288,8 @@ function normalizeSettings(raw) {
         clickThrough: input.clickThrough === true,
         opacity: normalizeOpacity(input.opacity),
         wander: input.wander === true,
+        followCursor: input.followCursor !== false,
+        hideFromCapture: input.hideFromCapture === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,

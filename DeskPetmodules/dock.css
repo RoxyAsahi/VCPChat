@@ -1,23 +1,24 @@
 /* 桌宠脚边的小胶囊（桌宠页面和设置页预览共用这一份样式）。
    同一个 .pet-dock 有四个样子，切换时宽高和内容都有过渡：
      hidden  收起：脚边一道小横条（只是个记号，点不到）
-     pill    小胶囊：打字 | 说话
+     pill    小胶囊：打字 | 说话 | 收起
      bar     输入条：开新话题、输入框、发送
      rec     录音：打字 | 停止（光圈跟着音量动），.is-busy 时在识别
    宽度用 --dock-bar-w 给输入条定最宽，由外面的页面设。 */
 
 .pet-dock {
-  --dock-h: 44px;
-  --dock-w: 112px;
+  --dock-h: 40px;
+  --dock-w: 124px;
   --dock-ease: cubic-bezier(.34, 1.32, .5, 1);
   position: relative;
   box-sizing: border-box;
   width: var(--dock-w);
   height: var(--dock-h);
-  border-radius: 22px;
+  border-radius: 20px;
   background: #fff;
   color: #1f2328;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.16);
+  /* 很淡的一圈描边加一层轻阴影：浅色桌面上也看得出边，又不显得厚重 */
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.1);
   overflow: hidden;
   transform-origin: 50% 100%;
   /* 高度和上下位移同一条曲线、同样长：收成小横条、再撑开时上沿不跳 */
@@ -36,7 +37,7 @@
   --dock-h: 8px;
   border-radius: 4px;
   /* 贴在脚底下、胶囊上沿的位置：光标一来，从这道横条往两边、往下撑开成胶囊 */
-  transform: translateY(-36px);
+  transform: translateY(-32px);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.22);
   pointer-events: none;
   /* 收的时候先让里面的按钮淡掉，外框再缩 */
@@ -56,7 +57,7 @@
 }
 
 .pet-dock[data-mode="rec"] {
-  --dock-w: 112px;
+  --dock-w: 96px;
 }
 
 .pet-dock .dock-layer {
@@ -85,8 +86,8 @@
 .pet-dock .dock-pill,
 .pet-dock .dock-rec {
   justify-content: center;
-  gap: 2px;
-  padding: 0 6px;
+  gap: 0;
+  padding: 0 1px;
 }
 
 .pet-dock .dock-btn {
@@ -95,10 +96,10 @@
   justify-content: center;
   flex: 0 0 auto;
   width: 40px;
-  height: 36px;
+  height: 32px;
   padding: 0;
   border: none;
-  border-radius: 18px;
+  border-radius: 16px;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -106,7 +107,7 @@
 }
 
 .pet-dock .dock-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .pet-dock .dock-btn:active {
@@ -114,11 +115,11 @@
 }
 
 .pet-dock svg {
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -126,8 +127,8 @@
 .pet-dock .dock-sep {
   flex: 0 0 auto;
   width: 1px;
-  height: 18px;
-  background: rgba(0, 0, 0, 0.12);
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 /* 输入条这一层始终是展开后的宽度、居中摆：外框变形时从中间往两边露出来，
@@ -141,6 +142,13 @@
   padding: 0 6px;
   align-items: flex-end;
   padding-bottom: 6px;
+}
+
+/* 输入条高一些，里面的加号、发送箭头跟着大一号 */
+.pet-dock .dock-bar svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 
 .pet-dock .dock-round {

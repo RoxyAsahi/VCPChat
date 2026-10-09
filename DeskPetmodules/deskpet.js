@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { createApprovalQueue } from 'vcp-deskpet://pet/app/approvals.js';
 import { isMissed } from 'vcp-deskpet://pet/app/missedReply.js';
 import { addFiles, describeFiles, pastedName, MAX_FILES, MAX_PASTE_BYTES } from 'vcp-deskpet://pet/app/attachments.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
@@ -332,7 +333,8 @@ function flashEmotionBadge(emotion, source) {
 const composer = { open: false, sending: false, queued: null, queuedFresh: false, fresh: false, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
-const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
+// tucked：点了胶囊上的「收起」，光标离开之前不再冒出来
+const dock = { mode: 'hidden', hover: false, dragging: false, tucked: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
 
 function setDock(mode) {
     if (dock.mode === mode) return;
@@ -363,8 +365,9 @@ function dockHover(on) {
     dock.hover = on;
     clearTimeout(dock.showTimer);
     clearTimeout(dock.hideTimer);
+    if (!on) dock.tucked = false;
     if (dock.mode === 'bar' || dock.mode === 'rec') return;
-    if (on && dock.mode === 'hidden') {
+    if (on && dock.mode === 'hidden' && !dock.tucked) {
         dock.showTimer = setTimeout(() => { if (dock.hover && !dock.dragging) setDock('pill'); }, DOCK_SHOW_MS);
     } else if (!on && dock.mode === 'pill') {
         dock.hideTimer = setTimeout(() => { if (!dock.hover) setDock('hidden'); }, DOCK_HIDE_MS);
@@ -372,7 +375,7 @@ function dockHover(on) {
 }
 
 function restingDock() {
-    return dock.hover && !dock.dragging ? 'pill' : 'hidden';
+    return dock.hover && !dock.dragging && !dock.tucked ? 'pill' : 'hidden';
 }
 
 function openComposer() {
@@ -648,6 +651,10 @@ function bindComposer() {
     $('dockEdit').addEventListener('click', openComposer);
     $('recEdit').addEventListener('click', openComposer);
     $('dockVoice').addEventListener('click', startVoice);
+    $('dockHide').addEventListener('click', () => {
+        dock.tucked = true;
+        setDock('hidden');
+    });
     $('composerNew').addEventListener('click', () => { setFresh(!composer.fresh); input.focus(); });
     $('recStop').addEventListener('click', finishVoice);
     dock.voice = createDictation({
@@ -754,7 +761,7 @@ function aimBubble(headX) {
     const stack = $('uiStack');
     const room = stack.clientWidth;
     const left = stack.getBoundingClientRect().left;
-    for (const el of [$('bubble'), $('toolCard')]) {
+    for (const el of [$('bubble'), $('toolCard'), $('approvalCard')]) {
         if (el.hidden) continue;
         const width = el.offsetWidth;
         const slack = Math.max(0, (room - width) / 2);
@@ -765,6 +772,57 @@ function aimBubble(headX) {
             el.style.setProperty('--tail-x', `${Math.round(Math.max(16, Math.min(width - 16, headX - bubbleLeft)))}px`);
         }
     }
+}
+
+// ---- 工具审批 ---------------------------------------------------------------------
+// 回复里要调的工具得有人点头时，主窗口除了自己的通知卡，也把它转给这个助手的桌宠。
+// 这里点了允许/拒绝交回主窗口去应答；任何一边答完、过期，主进程都会叫这里收起。
+
+function bindApprovals(director) {
+    const queue = createApprovalQueue();
+    const card = $('approvalCard');
+    let expiryTimer = 0;
+    let answering = '';
+    const render = () => {
+        const item = queue.current;
+        const wasHidden = card.hidden;
+        card.hidden = !item;
+        clearTimeout(expiryTimer);
+        if (item) {
+            $('approvalTitle').textContent = `要用「${item.toolName}」吗？`;
+            $('approvalTitle').title = item.toolName;
+            $('approvalCommand').textContent = item.command;
+            $('approvalCommand').title = item.command;
+            const more = queue.size - 1;
+            $('approvalMore').textContent = more > 0 ? `还有 ${more} 个` : '';
+            for (const id of ['approvalAllow', 'approvalReject']) $(id).disabled = answering === item.requestId;
+            if (item.expiresAt) expiryTimer = setTimeout(render, Math.max(0, item.expiresAt - Date.now()) + 50);
+        }
+        if (wasHidden && item) {
+            // 有事要问：露出担心的样子，从睡着/待机里醒过来
+            lastActivity = Date.now();
+            director.nudge({ emotion: 'concerned', intensity: 0.7, source: 'approval' });
+        }
+        if (wasHidden !== card.hidden) aimBubble(aimedHeadX);
+    };
+    const answer = (approved) => {
+        const item = queue.current;
+        if (!item || answering === item.requestId) return;
+        answering = item.requestId;
+        api.answerApproval(item.requestId, approved);
+        render();
+    };
+    $('approvalAllow').addEventListener('click', (e) => { e.stopPropagation(); answer(true); });
+    $('approvalReject').addEventListener('click', (e) => { e.stopPropagation(); answer(false); });
+    $('approvalDetail').addEventListener('click', (e) => { e.stopPropagation(); api.openMainWindow(); });
+    api.onApproval?.((payload) => {
+        if (queue.add(payload)) render();
+    });
+    api.onApprovalClear?.((requestId) => {
+        if (!queue.remove(String(requestId))) return;
+        if (answering === String(requestId)) answering = '';
+        render();
+    });
 }
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
@@ -2072,7 +2130,10 @@ async function start() {
         onGaze(g) { if (g) backend.life?.gaze(g); },
     });
     // 免打扰（桌宠设置里开）：不自己做小动作、不冒小符号
-    const syncQuiet = () => life.setQuiet(isQuiet());
+    const syncQuiet = () => {
+        life.setQuiet(isQuiet());
+        life.setFollowCursor(prefs.followCursor !== false);
+    };
     syncQuiet();
     window.addEventListener('deskpet:prefs', syncQuiet);
     bindStream(director);
@@ -2090,6 +2151,7 @@ async function start() {
         notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
     });
     bindComposer();
+    bindApprovals(director);
     bindFileDrop();
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
@@ -2118,7 +2180,7 @@ async function start() {
         } else reportHit(false); // 出了窗口也算离开：下次直接落在角色身上时胶囊照样冒出来
         life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
         // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
-        if (!life.gaze) backend.focus(x, y);
+        if (!life.gaze && prefs.followCursor !== false) backend.focus(x, y);
     });
     let streak = 0;
     let drag = null;

@@ -295,6 +295,48 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     handlers.closeAll();
 });
 
+test('a pending tool approval reaches the pet of the agent that asked, and only main answers it', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const nova = await open('Nova');
+    const coco = await open('Coco');
+    for (const pet of [nova, coco]) fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const sentTo = (win, channel) => win.sent.filter((m) => m.channel === channel).map((m) => m.payload);
+    const offer = async (sender, payload) => {
+        fake.listeners.get('deskpet:approval-offer')({ sender }, payload);
+        await sleep(30);
+    };
+    // 别的窗口冒充主窗口：不理
+    await offer(nova.webContents, { requestId: 'fake', maid: 'Nova', toolName: 'X' });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    await offer(main.webContents, { requestId: 'r1', maid: 'coco', toolName: 'PowerShellExecutor', command: 'dir', expiresInMs: 60000 });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    const [card] = sentTo(coco, 'deskpet:approval');
+    assert.equal(card.requestId, 'r1');
+    assert.equal(card.toolName, 'PowerShellExecutor');
+    assert.ok(card.expiresAt > Date.now());
+    // 认不出是谁、也没人刚聊过：不往桌宠上放
+    await offer(main.webContents, { requestId: 'r2', maid: 'Someone', toolName: 'X' });
+    assert.equal(handlers._pendingApprovals().has('r2'), false);
+    // 不是这只桌宠的请求，它答不了；是它的就交回主窗口
+    fake.listeners.get('deskpet:approval-answer')(fromPet(nova), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), []);
+    fake.listeners.get('deskpet:approval-answer')(fromPet(coco), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), [{ requestId: 'r1', approved: true }]);
+    // 页面重载：还在等的再给一次
+    fake.listeners.get('deskpet:page-ready')(fromPet(coco));
+    assert.equal(sentTo(coco, 'deskpet:approval').length, 2);
+    // 主窗口说答完了：桌宠收起
+    fake.listeners.get('deskpet:approval-settled')({ sender: main.webContents }, 'r1');
+    assert.deepEqual(sentTo(coco, 'deskpet:approval-clear'), ['r1']);
+    assert.equal(handlers._pendingApprovals().size, 0);
+    // 桌宠关了：等着的审批不再留
+    await offer(main.webContents, { requestId: 'r3', maid: 'Coco', toolName: 'X' });
+    coco.close();
+    assert.equal(handlers._pendingApprovals().has('r3'), false);
+    handlers.closeAll();
+});
+
 test('the stop button on the pet asks the main window to interrupt that reply', async () => {
     const { handlers, fake, open, fromPet } = await loadHandlers();
     const main = fake.windows[0];
@@ -482,4 +524,117 @@ test('a pet saved by the old size version opens with its feet where they were', 
     const saved = JSON.parse(fs.readFileSync(path.join(root, 'deskpet', 'state.json'), 'utf8')).Nova;
     assert.equal(saved.sizeVersion, prefs.SIZE_VERSION, '换算过的记成新版，下次不再换');
     handlers.closeAll();
+});
+
+// 控制助手名称查询的完成时机，复现主窗口应答与目录读取交错，不依赖磁盘速度。
+function holdApprovalLookup(root) {
+    const extra = require('fs-extra');
+    const original = extra.readJson;
+    let release;
+    let started;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const entered = new Promise((resolve) => { started = resolve; });
+    extra.readJson = async function (file, ...args) {
+        if (String(file).startsWith(path.join(root, 'Agents')) && path.basename(file) === 'config.json') {
+            const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+            started();
+            await gate;
+            return config;
+        }
+        return original.call(this, file, ...args);
+    };
+    return { entered, release, restore() { release(); extra.readJson = original; } };
+}
+
+const drainApprovalLookup = () => new Promise((resolve) => setImmediate(() => setImmediate(resolve)));
+
+test('a main-window settlement during agent lookup cannot resurrect the pet card', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const main = fake.windows[0];
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'settled-early', maid: 'Nova' });
+    await lookup.entered;
+    fake.listeners.get('deskpet:approval-settled')({ sender: main.webContents }, 'settled-early');
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().has('settled-early'), false);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval'), []);
+});
+
+test('concurrent approval replays reserve one request before agent lookup finishes', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const main = fake.windows[0];
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    for (let i = 0; i < 2; i++) fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'duplicate', maid: 'Nova' });
+    await lookup.entered;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().size, 1);
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:approval').length, 1);
+});
+
+test('an approval that expires during agent lookup is not delivered with a renewed lifetime', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = originalNow; });
+    fake.listeners.get('deskpet:approval-offer')({ sender: fake.windows[0].webContents }, { requestId: 'expires-during-lookup', maid: 'Nova', expiresInMs: 10 });
+    await lookup.entered;
+    now += 10;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().has('expires-during-lookup'), false);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval'), []);
+});
+
+test('an expired approval answer is not forwarded to the main window', async (t) => {
+    const { handlers, fake, open, fromPet, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open('Nova');
+    fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    const originalNow = Date.now;
+    let now = originalNow();
+    Date.now = () => now;
+    t.after(() => { Date.now = originalNow; });
+    const main = fake.windows[0];
+    fake.listeners.get('deskpet:approval-offer')({ sender: main.webContents }, { requestId: 'expires-before-answer', maid: 'Nova', expiresInMs: 10 });
+    await lookup.entered;
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:approval').length, 1);
+    now += 10;
+    fake.listeners.get('deskpet:approval-answer')(fromPet(pet), { requestId: 'expires-before-answer', approved: true });
+    assert.deepEqual(main.sent.filter((m) => m.channel === 'deskpet:approval-answer'), []);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:approval-clear').map((m) => m.payload), ['expires-before-answer']);
+    assert.equal(handlers._pendingApprovals().size, 0);
+});
+
+test('closing all pets during approval lookup cancels the unresolved reservation', async (t) => {
+    const { handlers, fake, open, root } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    await open('Nova');
+    const lookup = holdApprovalLookup(root);
+    t.after(() => lookup.restore());
+    fake.listeners.get('deskpet:approval-offer')({ sender: fake.windows[0].webContents }, { requestId: 'quit-during-lookup', maid: 'Nova' });
+    await lookup.entered;
+    handlers.closeAll();
+    lookup.release();
+    await drainApprovalLookup();
+    assert.equal(handlers._pendingApprovals().size, 0);
 });
