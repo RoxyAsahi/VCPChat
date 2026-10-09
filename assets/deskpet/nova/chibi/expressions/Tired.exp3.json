@@ -4,18 +4,18 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
-      "Id": "ParamEyeLOpen",
-      "Value": 0.55,
-      "Blend": "Overwrite"
-    },
-    {
-      "Id": "ParamEyeROpen",
-      "Value": 0.55,
+      "Id": "ParamExpSleepy",
+      "Value": 1,
       "Blend": "Overwrite"
     },
     {
       "Id": "ParamMouthForm",
       "Value": -0.1,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamExpNeutralHide",
+      "Value": 1,
       "Blend": "Overwrite"
     }
   ]
