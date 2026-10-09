@@ -83,12 +83,14 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         return isPortraitVideo(effectiveUrl(variant));
     }
 
-    // 把 node 换成能放这个地址的元素（img 或 video），返回现在在页面上的那个
-    function showMedia(node, url, video) {
+    // 把 node 换成能放这个地址的元素（img 或 video），返回现在在页面上的那个。
+    // 缩略图只显示第一帧，视频只读到第一帧为止（preload=metadata），不把整段视频读进内存
+    function showMedia(node, url, video, { thumbnail = false } = {}) {
         if (!node) return node;
         let current = node;
         if (url && isVideoElement(node) !== video) {
             current = createPortraitMediaLike(node, video);
+            if (thumbnail && video) current.preload = 'metadata';
             node.replaceWith(current);
             releasePortraitMedia(node);
         }
@@ -119,7 +121,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         slots.forEach((slot, variant) => {
             const url = effectiveUrl(variant);
             const change = pending().get(variant);
-            slot.thumb = showMedia(slot.thumb, url, isVideo(variant));
+            slot.thumb = showMedia(slot.thumb, url, isVideo(variant), { thumbnail: true });
             slot.row.dataset.state = change ? (change.remove ? 'removing' : 'staged') : (url ? 'set' : 'empty');
             if (slot.status) {
                 slot.status.textContent = change

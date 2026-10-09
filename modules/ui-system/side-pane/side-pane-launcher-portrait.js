@@ -195,9 +195,11 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
         const layer = layers[index];
         Promise.all([decodeInto(slotOf(layer, 'default'), target.dark), decodeInto(slotOf(layer, 'light'), target.light)])
             .then(([dark, light]) => {
-                if (disposed || token !== request) return;
+                // 不上页面的解码结果（请求已经过时，或另一张没解出来要重挑）放掉解码器，视频不再缓冲
+                const release = () => [dark, light].forEach((node) => { if (node && !node.isConnected) releasePortraitMedia(node); });
+                if (disposed || token !== request) { release(); return; }
                 // 有图没解出来：它已经记进 failed，按剩下的图重新挑
-                if (dark === false || light === false) { apply({ fade }); return; }
+                if (dark === false || light === false) { release(); apply({ fade }); return; }
                 cancelRelease();
                 paint(layer, { default: dark, light });
                 const previous = active;

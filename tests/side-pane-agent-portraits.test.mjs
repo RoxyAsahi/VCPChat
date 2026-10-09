@@ -134,6 +134,20 @@ test('animated PNGs and videos are served as they are, so the animation is kept'
     assert.match(portraits.happy, /\/Moving\/portrait\.happy\.mp4\?v=\d+$/);
 });
 
+test('a phone photo with an EXIF rotation is scaled by its upright size and keeps the whole picture', { skip: sharpUnavailable }, async () => {
+    const sharp = require('sharp');
+    const dir = path.join(agentDir, 'Rotated');
+    fs.mkdirSync(dir);
+    // 存成 6000×4000 横图，EXIF 方向 6（顺时针转 90°）：摆正后是 4000×6000 的竖图
+    await sharp({ create: { width: 6000, height: 4000, channels: 3, background: { r: 30, g: 60, b: 90 } } })
+        .jpeg()
+        .withMetadata({ orientation: 6 })
+        .toFile(path.join(dir, 'portrait.jpg'));
+    const portraits = await getPortraits('Rotated');
+    const meta = await sharp(fileURLToPath(portraits.default.replace(/\?v=\d+$/, ''))).metadata();
+    assert.deepEqual([meta.width, meta.height], [1600, 2400]);
+});
+
 const png = { type: 'image/png', buffer: new Uint8Array([1, 2, 3]).buffer };
 const save = (id, variant, data) => handlers.get('save-agent-portrait')({}, id, variant, data);
 const remove = (id, variant) => handlers.get('remove-agent-portrait')({}, id, variant);
