@@ -1,0 +1,77 @@
+# 交接总览 2026-10-09 03:35Z
+
+本文件交接给 Roxy 本机的 Codex，在云端代理额度用完期间继续推进 VCPChat Live2D 桌宠工作。
+
+
+## 更新 03:40Z（以此为准）
+
+- #34 head 现在是 `418fc36b`（#66、#67 已合入）。
+- #63 Q 版 Nova v2 已修好 N1（表情下说话嘴）、N2（眨眼）、N3（灰带），QA 第三轮验收通过，正在合进 #34。下文“#63 暂缓”和 nova.md 列表里的 N1-N3 已过时。
+- 科技服/女仆的修复还没开始做，起点是 WIP 分支 `claude/nova-tech-maid-wip`（c09e10e9，科技服高清重建）。
+
+## 规则
+
+- 仓库是 fork RoxyAsahi/VCPChat（Codex 那边 remote 叫 `fork`）。
+- 绝不推 `pr/side-pane-workbench`，也不 force push 别人的分支。
+- 每项改动开新分支，draft PR 进 #34 的分支 `claude/project-thread-njw5ge`；推完要 pull。
+- 代码注释、测试名、commit message 里不能出现 "ZCode"/"DSH"。
+- 不提交 Cubism Core、Mao/Kurisu/Frieren/Fern 模型和美术。
+- 改 appdata-real 前先备份。
+- GitHub Actions 在 fork 上被禁用了（02:18Z 之后没跑过 CI）。
+  - Roxy 需要去 https://github.com/RoxyAsahi/VCPChat/settings/actions 重新打开。
+  - 打开之前，合并的依据是本地检查：
+    - `npm run test:deskpet`
+    - `test:side-pane`
+    - settings 测试
+    - `check:chat-contracts`
+    - `check:chat-evidence`
+    - `check:ui-system`
+- 改了 `deskPetHandlers.js` 或 IPC 之后，要跑 `node scripts/build-chat-event-graph.mjs` 并提交结果。
+- 按 win32 加载 handlers 的测试，结束时必须关掉 pet（`closeAll`），否则测试进程不会退出。
+
+## PR 线
+
+### #31 立绘线
+
+- 分支 `claude/project-thread-jgqxch`。
+- 上游 draft PR：lioensky/VCPChat#238（分支 `claude/portrait-upstream-h3m82g`）。
+- 云端对上游是 403，要用 Roxy 本机的 `gh` 操作。
+
+### #34 桌宠线
+
+- head `9aadeceb`（03:26Z）。
+- 已合入 #54-#62、#64（标题栏开关移进全局设置）、#65（贴边停靠）。
+- 本地检查全过，真机冒烟测试通过。
+
+### 待合
+
+- #66：按模型 HitArea 判断摸头。
+- #67：带翅膀模型头部区域修正。
+- #63 Q 版 Nova v2 暂缓：任何非中性表情下嘴不跟着说话动。
+  - 这是模型问题：ParamExpNeutralHide 把中性嘴藏了，表情嘴没有 MouthOpenY keyform。
+
+## 未完成（各自的详细交接文件在同目录）
+
+- `settings-page.md`：
+  - 桌宠默认尺寸缩到约 60%（只改没手动调过大小的用户）。
+  - 照 ChatGPT 宠物补齐 悬停胶囊 → 输入展开 → 发送 → 回复气泡 → 语音 的交互和过渡动效。
+  - 参考图在该线程原始 brief。
+- `nova.md`：
+  - Q 版 N1：嘴。
+  - N2：五个表情的眨眼仍是旧的 V 形。
+  - N3：身体和头发之间的灰色半透明带。
+  - N4：手势切换生硬（加 0.15-0.2s 交叉淡入淡出）。
+  - 之后修科技装/女仆装：闭眼露虹膜、歪头时后发整片转、虹膜越界、表情区分度、补笑眼/脸红/皱眉、女仆下巴阴影。
+- `nova-qa.md`：截图验收的 harness 和未关闭的缺陷。
+- `features.md`：新一轮功能缺口清单（`/mnt/project-files/deskpet/gaps-round3.md`）。
+- `review.md`：对抗审查剩余项。
+- `integration.md`：合并流程。
+- 泄漏：线程正在 `9aadeceb` 上重跑，报告在 `/mnt/project-files/leaks-20261008/`。
+
+## Roxy 本机
+
+- 日常 VCPChat：`C:\Users\CHENXI\Documents\Codex\daily-deskpet`
+  - 本地分支 `daily/deskpet`，用 appdata-real 运行。
+  - 还在较老的 #34 版本上，可更新到 `9aadeceb` 或更新的版本。
+  - 重启前先问 Roxy，并先备份 appdata-real。
+- 上一份交接模板：`/mnt/project-files/handoff/codex-handoff-20261008.md`。
