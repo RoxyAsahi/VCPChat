@@ -18,6 +18,18 @@ const RENDER_TIMEOUT_MS = 15000;
 const IDLE_CLOSE_MS = 15000;
 const MAX_HEIGHT = 480;
 const PAD = 6;
+// 页面报「画好了」时离屏帧可能还没合成出来（机器忙、高缩放时常见），截到的是全透明；隔一会儿再截
+const BLANK_RETRIES = 6;
+const BLANK_RETRY_MS = 250;
+
+// 截图里有没有一个不透明的像素（按行跳着看，几百个点就够）
+function hasPixels(image) {
+    const bitmap = image.toBitmap?.();
+    if (!bitmap || !bitmap.length) return !image.isEmpty();
+    const step = Math.max(4, Math.floor(bitmap.length / 4 / 4000) * 4);
+    for (let i = 3; i < bitmap.length; i += step) if (bitmap[i] > 0) return true;
+    return false;
+}
 
 function keyOf(outfitId) {
     return crypto.createHash('sha1').update(String(outfitId)).digest('hex').slice(0, 16);
@@ -182,8 +194,14 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
                 ? { x, y, width: Math.min(width - x, Math.ceil(b.width + PAD * 2)), height: Math.min(height - y, Math.ceil(b.height + PAD * 2)) }
                 : { x: 0, y: 0, width, height };
             let image = await win.webContents.capturePage(rect);
+            for (let tries = 0; current === job && !image.isEmpty() && !hasPixels(image) && tries < BLANK_RETRIES; tries++) {
+                await new Promise((resolve) => setTimeout(resolve, BLANK_RETRY_MS));
+                if (current !== job || !win || win.isDestroyed()) return;
+                image = await win.webContents.capturePage(rect);
+            }
             if (current !== job) return;
-            if (image.isEmpty()) {
+            // 空白的不存：存下来指纹不变，卡片就一直是空的
+            if (image.isEmpty() || !hasPixels(image)) {
                 finish(null);
                 return;
             }
