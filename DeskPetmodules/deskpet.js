@@ -1860,6 +1860,8 @@ async function start() {
             }
         },
     });
+    // 甩出去落到任务栏上：再演一次落地
+    api.onLanded?.(() => life.perform('landed'));
     // 窗口隐藏时停掉渲染和呼吸动画，显示回来再继续。
     let paused = false;
     api.onVisibility?.((visible) => {

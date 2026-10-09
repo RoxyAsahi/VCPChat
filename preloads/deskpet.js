@@ -87,6 +87,14 @@ function onTopicMissing(callback) {
     return () => ipcRenderer.removeListener('deskpet:topic-missing', listener);
 }
 
+// 甩出去以后落到了任务栏上
+function onLanded(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('deskpet:landed', listener);
+    return () => ipcRenderer.removeListener('deskpet:landed', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
@@ -121,6 +129,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     },
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
+    onLanded,
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),

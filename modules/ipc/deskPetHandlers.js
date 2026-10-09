@@ -25,6 +25,7 @@ const { createSettingsPage } = require('../deskpet/settingsPage');
 const { createCoreInstaller } = require('../deskpet/cubismCore');
 const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const edgeSnap = require('../deskpet/edgeSnap');
+const throwMotion = require('../deskpet/throwMotion');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -666,7 +667,35 @@ async function openPet(agentId, { anchor = null } = {}) {
 // 混合 DPI 多屏之间 setPosition 可能顺带改尺寸，统一用 setBounds 固定宽高。
 function moveWithCursor(pet, drag) {
     const c = screen.getCursorScreenPoint();
+    // 记最近几个光标位置：松手时按它算甩出去的速度
+    const samples = drag.samples || (drag.samples = []);
+    samples.push({ t: Date.now(), x: c.x, y: c.y });
+    if (samples.length > 12) samples.shift();
     applyBounds(pet, { x: c.x - drag.dx, y: c.y - drag.dy, ...sizeOf(pet) }, { verify: false });
+}
+
+// 甩出去（modules/deskpet/throwMotion.js）：松手时光标还在快速移动就带着速度滑出去、落到任务栏上，
+// 落地时页面演一下「落地」。按着 Alt 松手、慢慢放下的不甩。
+function throwPet(pet, figure, samples) {
+    const win = pet.win.getBounds();
+    const frames = throwMotion.throwPath(win, figure, workAreaAt(win), throwMotion.releaseVelocity(samples, Date.now()), DRAG_TICK_MS);
+    if (!frames) return false;
+    stopSnap(pet);
+    const size = sizeOf(pet);
+    pet.snap = setInterval(() => {
+        const next = frames.shift();
+        if (!next || pet.win.isDestroyed() || pet.drag) {
+            stopSnap(pet);
+            return;
+        }
+        applyBounds(pet, { ...next, ...size }, { verify: false });
+        if (!frames.length) {
+            stopSnap(pet);
+            savePetPosition(pet.agentId, [next.x, next.y]).catch(() => {});
+            pet.win.webContents.send('deskpet:landed');
+        }
+    }, DRAG_TICK_MS);
+    return true;
 }
 
 // 贴边（modules/deskpet/edgeSnap.js）：松手时角色离屏幕左右边或任务栏很近，就滑过去贴齐。
@@ -1480,10 +1509,13 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet?.drag || pet.win.isDestroyed()) return;
         moveWithCursor(pet, pet.drag);
+        const samples = pet.drag.samples;
         stopDrag(pet, { save: true });
         const f = report?.figure;
         const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
-        snapToEdge(pet, figure, { free: report?.free === true });
+        const free = report?.free === true;
+        if (!free && figure && throwPet(pet, figure, samples)) return;
+        snapToEdge(pet, figure, { free });
     });
 
     ipcMain.on('deskpet:context-menu', async (event) => {

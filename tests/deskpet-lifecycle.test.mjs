@@ -294,3 +294,37 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     assert.deepEqual(pet.getPosition(), [-25, 300]);
     handlers.closeAll();
 });
+
+test('a pet flung on release slides on and lands on the taskbar; a slow drop stays put', async (t) => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const floorY = 1000 - figure.y - figure.height;
+    const drag = async (path, report) => {
+        const [wx, wy] = pet.getPosition();
+        fake.screen.cursor = { x: wx, y: wy };
+        fake.listeners.get('deskpet:drag-start')(fromPet(pet), { x: wx, y: wy });
+        for (const [dx, dy] of path) {
+            fake.screen.cursor = { x: wx + dx, y: wy + dy };
+            await sleep(20);
+        }
+        fake.listeners.get('deskpet:drag-end')(fromPet(pet), report);
+    };
+    // 慢慢挪过去放下：原地不动
+    await drag([[10, 0], [20, 0], [30, 0]], { figure });
+    await sleep(100);
+    const [sx, sy] = pet.getPosition();
+    assert.ok(sy < floorY - 50, '放在半空也不掉');
+    // 往左上快速一甩（默认位置在屏幕右边，往左才有地方滑）
+    await drag([[0, 0], [-40, -10], [-80, -20], [-120, -30]], { figure });
+    await sleep(1500);
+    const [tx, ty] = pet.getPosition();
+    assert.equal(ty, floorY, '落在任务栏上');
+    assert.ok(tx < sx - 150, '带着速度往左滑了一段');
+    assert.ok(pet.sent.some((m) => m.channel === 'deskpet:landed'));
+    // 按着 Alt 甩：不甩
+    await drag([[0, 0], [-40, -40], [-80, -80], [-120, -120]], { figure, free: true });
+    await sleep(300);
+    assert.notEqual(pet.getPosition()[1], floorY);
+});
