@@ -14,6 +14,7 @@ const outfitStore = require('./outfits');
 const petPrefs = require('./petPrefs');
 const cubismCore = require('./cubismCore');
 const expressionProfile = require('./expressionProfile');
+const zipImport = require('./zipImport');
 
 const KIND_LABEL = { live2d: 'Live2D', puppet: '网格立绘', portrait: '立绘' };
 const IMPORT_MAX_FILES = 400;
@@ -22,6 +23,8 @@ const IMAGE_FILTER = outfitStore.IMAGE_EXTENSIONS;
 
 /** 导入：选中的文件决定拷什么。模型文件拷它所在的文件夹；图片拷这几张图。 */
 function planImport(files) {
+    const zip = files.find((file) => /\.zip$/i.test(file));
+    if (zip) return { kind: 'zip', source: zip, name: path.basename(zip, path.extname(zip)) };
     const model = files.find((file) => /\.(model3|puppet)\.json$/i.test(file));
     if (model) return { kind: 'folder', source: path.dirname(model), name: path.basename(path.dirname(model)) };
     const images = files.filter((file) => IMAGE_FILTER.includes(path.extname(file).slice(1).toLowerCase()));
@@ -172,16 +175,16 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
     async function importOutfit(agentId) {
         if (!pets.isAgentId(agentId)) return { success: false, error: '找不到这个助手' };
         const picked = await dialog.showOpenDialog(pets.mainWindow() || undefined, {
-            title: '导入形象：选 Live2D 模型（.model3.json）、网格立绘（.puppet.json），或者一张/几张立绘图片',
+            title: '导入形象：选 Live2D 模型（.model3.json 或整个 .zip 压缩包）、网格立绘（.puppet.json），或者一张/几张立绘图片',
             properties: ['openFile', 'multiSelections'],
             filters: [
-                { name: '形象', extensions: ['json', ...IMAGE_FILTER] },
+                { name: '形象', extensions: ['json', 'zip', ...IMAGE_FILTER] },
                 { name: '所有文件', extensions: ['*'] },
             ],
         });
         if (picked.canceled || !picked.filePaths?.length) return { success: false, canceled: true };
         const plan = planImport(picked.filePaths);
-        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json 或图片' };
+        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json、.zip 或图片' };
         const base = path.join(agentRoot(agentId), 'deskpet');
         if (plan.kind === 'folder') {
             // 模型放在「下载」这种大文件夹里时，别把整个文件夹拷过去
@@ -198,7 +201,14 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
         const target = path.join(base, name);
         try {
             if (plan.kind === 'folder') await fs.copy(plan.source, target);
-            else {
+            else if (plan.kind === 'zip') {
+                if ((await fs.stat(plan.source)).size > IMPORT_MAX_BYTES) return { success: false, error: '压缩包太大了，先解压出模型所在的文件夹再导入' };
+                const unpacked = await zipImport.extractOutfitZip(await fs.readFile(plan.source), target, {
+                    limits: { files: IMPORT_MAX_FILES, bytes: IMPORT_MAX_BYTES },
+                    imageExtensions: IMAGE_FILTER,
+                });
+                if (!unpacked.success) return unpacked;
+            } else {
                 await fs.ensureDir(target);
                 for (const file of plan.files) await fs.copy(file, path.join(target, path.basename(file)));
             }

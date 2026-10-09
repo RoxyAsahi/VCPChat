@@ -2095,7 +2095,10 @@ async function start() {
         onGaze(g) { if (g) backend.life?.gaze(g); },
     });
     // 免打扰（桌宠设置里开）：不自己做小动作、不冒小符号
-    const syncQuiet = () => life.setQuiet(isQuiet());
+    const syncQuiet = () => {
+        life.setQuiet(isQuiet());
+        life.setFollowCursor(prefs.followCursor !== false);
+    };
     syncQuiet();
     window.addEventListener('deskpet:prefs', syncQuiet);
     bindStream(director);
@@ -2142,7 +2145,7 @@ async function start() {
         } else reportHit(false); // 出了窗口也算离开：下次直接落在角色身上时胶囊照样冒出来
         life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
         // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
-        if (!life.gaze) backend.focus(x, y);
+        if (!life.gaze && prefs.followCursor !== false) backend.focus(x, y);
     });
     let streak = 0;
     let drag = null;
