@@ -177,17 +177,36 @@ test('the portrait follows the emotion with theme, nearest-emotion and default f
     assert.equal(resolvePortrait(null, { emotion: 'happy' }), null);
 });
 
-test('the agent settings form offers one upload row per emotion and state variant', async () => {
+test('the agent settings form offers one upload row per variant only while expression variants are on', async () => {
     const { JSDOM } = await import('jsdom');
     const { renderAgentSettingsSurface } = await import('../modules/settings/schema/sidebar-surfaces.js');
     const { EMOTIONS, STATES } = await import('../modules/emotion/emotionVocabulary.js');
+    const { PORTRAIT_EXPRESSIONS_ENABLED } = await import('../modules/ui-system/side-pane/portrait-features.js');
     const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>');
     const form = renderAgentSettingsSurface(dom.window.document.getElementById('host'), dom.window.document);
     const variants = form.querySelector('[data-portrait-variants-slot]');
-    assert.equal(variants.hidden, false);
-    const keys = [...variants.querySelectorAll('[data-portrait-variant]')].map(row => row.getAttribute('data-portrait-variant'));
-    assert.deepEqual(keys, [...EMOTIONS, ...STATES]);
+    const keys = [...form.querySelectorAll('[data-portrait-variant]')].map(row => row.getAttribute('data-portrait-variant'));
+    if (PORTRAIT_EXPRESSIONS_ENABLED) {
+        assert.equal(variants.hidden, false);
+        assert.deepEqual(keys, ['default', 'light', ...EMOTIONS, ...STATES]);
+    } else {
+        assert.equal(variants, null, '差分关着时不出现差分上传');
+        assert.deepEqual(keys, ['default', 'light']);
+    }
     const ids = [...form.querySelectorAll('[data-portrait-variant] input[type="file"]')].map(input => input.id);
     assert.equal(new Set(ids).size, ids.length, 'file inputs keep unique ids');
     dom.window.close();
+});
+
+test('with expression variants off the side pane only uses the default and light portraits', async () => {
+    const { PORTRAIT_EXPRESSIONS_ENABLED, visiblePortraits } = await import('../modules/ui-system/side-pane/portrait-features.js');
+    const portraits = { default: 'p.png', light: 'p.light.png', happy: 'p.happy.png', 'sad-light': 'p.sad-light.png' };
+    if (PORTRAIT_EXPRESSIONS_ENABLED) {
+        assert.equal(visiblePortraits(portraits), portraits);
+        return;
+    }
+    assert.deepEqual(visiblePortraits(portraits), { default: 'p.png', light: 'p.light.png' });
+    assert.deepEqual(visiblePortraits({ default: 'p.png', happy: 'p.happy.png' }), { default: 'p.png' });
+    assert.equal(visiblePortraits({ light: 'p.light.png', happy: 'p.happy.png' }), null);
+    assert.equal(visiblePortraits(null), null);
 });

@@ -1,10 +1,20 @@
 /* Side pane new tab page portrait header: the agent's portrait, its light-theme version and its
  * expression variants. Every new image is decoded off screen first and only then put on the page,
  * so the header never shows a blank, half-painted or broken frame. A new portrait set replaces the
- * images in place; an emotion frame cross-fades to the variant on the second layer. */
+ * images in place; an emotion frame cross-fades to the variant on the second layer.
+ * A portrait can also be a video (MP4, WebM): it plays muted and looped only while it can be seen,
+ * stops when the window is hidden or the header is folded away, and stays on its first frame when
+ * the system asks for reduced motion. */
 'use strict';
 import { resolvePortrait } from '../../emotion/portraitVariants.js';
 import { applyPortraitDisplay } from './portrait-display.js';
+import {
+    createPortraitMediaLike,
+    isPortraitVideo,
+    isVideoElement,
+    releasePortraitMedia,
+    whenPortraitMediaReady
+} from './portrait-media.js';
 
 // 交叉淡入的时长和样式里一致；换层后多等一会儿再把旧层的图清掉
 const LAYER_RELEASE_MS = 400;
@@ -27,6 +37,12 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
     let disposed = false;
     // 解不出来的图按地址记下来，之后不再用（换了文件地址会带新的 ?v=，不受影响）
     const failed = new Set();
+    const win = view?.ownerDocument?.defaultView || null;
+    const doc = view?.ownerDocument || null;
+    // 视频只在看得见时播：进了可视区、所在那层是当前层、窗口没最小化、头部没收起
+    const inView = new WeakSet();
+    const reducedMotion = win?.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
+    let mediaObserver = null;
 
     const slotOf = (layer, theme) => layer.querySelector(`[data-portrait-theme="${theme}"]`);
 
@@ -56,9 +72,40 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
             const slot = slotOf(layer, theme);
             if (!slot) continue;
             slot.hidden = true;
-            slot.removeAttribute('src');
+            releasePortraitMedia(slot);
         }
         delete layer.dataset.portraitThemed;
+        syncPlayback();
+    }
+
+    function videos() {
+        return portrait ? [...portrait.querySelectorAll('video[data-portrait-theme]')] : [];
+    }
+
+    function canPlay(video) {
+        if (disposed || reducedMotion?.matches || doc?.visibilityState === 'hidden') return false;
+        if (!portrait || portrait.hidden || video.hidden || !video.getAttribute('src')) return false;
+        if (view?.dataset?.launcherSegment === 'notifications') return false;
+        const layer = video.closest('.side-pane-launcher-portrait-layer');
+        if (layer && layer !== portrait && !layer.hasAttribute('data-portrait-active')) return false;
+        return !mediaObserver || inView.has(video);
+    }
+
+    function syncPlayback() {
+        for (const video of videos()) {
+            if (canPlay(video)) {
+                if (video.paused) Promise.resolve(video.play?.()).catch(() => {});
+            } else if (!video.paused) {
+                video.pause?.();
+            }
+        }
+    }
+
+    // 换了元素以后重新挂可视区观察（主题切换把另一张藏成 display:none 时也算看不见）
+    function observeVideos() {
+        if (!mediaObserver) return;
+        mediaObserver.disconnect();
+        videos().forEach(video => mediaObserver.observe(video));
     }
 
     // 换上已经解码好的图；没有图的那一格藏起来
@@ -66,14 +113,17 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
         for (const theme of THEMES) {
             const slot = slotOf(layer, theme);
             const image = images[theme];
-            if (image && slot && image !== slot) slot.replaceWith(image);
-            else if (!image && slot) {
+            if (image && slot && image !== slot) {
+                slot.replaceWith(image);
+                releasePortraitMedia(slot);
+            } else if (!image && slot) {
                 slot.hidden = true;
-                slot.removeAttribute('src');
+                releasePortraitMedia(slot);
             }
         }
         if (images.light) layer.dataset.portraitThemed = '';
         else delete layer.dataset.portraitThemed;
+        observeVideos();
     }
 
     function activate(index) {
@@ -112,16 +162,19 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
         markShown(null);
     }
 
-    // 复制这一格的 img 在屏幕外解码；成功给出新 img，失败记下地址并给出 false
+    // 照这一格做一个新的 img 或 video 在屏幕外解码；成功给出新元素，失败记下地址并给出 false
     function decodeInto(slot, src) {
         if (!slot || !src) return Promise.resolve(null);
-        if (!slot.hidden && slot.getAttribute('src') === src && slot.complete && slot.naturalWidth) return Promise.resolve(slot);
-        const next = slot.cloneNode(false);
+        const video = isPortraitVideo(src);
+        if (!slot.hidden && slot.getAttribute('src') === src && isVideoElement(slot) === video
+            && (video ? slot.readyState >= 2 : slot.complete && slot.naturalWidth)) return Promise.resolve(slot);
+        const next = createPortraitMediaLike(slot, video);
         next.hidden = false;
-        next.decoding = 'async';
+        if (!video) next.decoding = 'async';
         next.setAttribute('src', src);
-        if (typeof next.decode !== 'function') return Promise.resolve(next);
-        return next.decode().then(() => next, () => {
+        return whenPortraitMediaReady(next).then((ok) => {
+            if (ok) return next;
+            releasePortraitMedia(next);
             failed.add(src);
             return false;
         });
@@ -150,6 +203,7 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
                 const previous = active;
                 activate(index);
                 markShown(target);
+                syncPlayback();
                 if (previous === index) {
                     layers.forEach((other, i) => { if (i !== index && other !== portrait) clearLayer(other); });
                     return;
@@ -174,6 +228,28 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
         };
         portrait.addEventListener('error', onError, true);
         cleanups.push(() => portrait.removeEventListener('error', onError, true));
+
+        if (typeof win?.IntersectionObserver === 'function') {
+            mediaObserver = new win.IntersectionObserver((entries) => {
+                entries.forEach(entry => (entry.isIntersecting ? inView.add(entry.target) : inView.delete(entry.target)));
+                syncPlayback();
+            });
+            cleanups.push(() => mediaObserver.disconnect());
+        }
+        if (doc) {
+            doc.addEventListener('visibilitychange', syncPlayback);
+            cleanups.push(() => doc.removeEventListener('visibilitychange', syncPlayback));
+        }
+        if (reducedMotion?.addEventListener) {
+            reducedMotion.addEventListener('change', syncPlayback);
+            cleanups.push(() => reducedMotion.removeEventListener('change', syncPlayback));
+        }
+        // 切到通知页时头部淡出收起，视频跟着停
+        if (view && typeof win?.MutationObserver === 'function') {
+            const segmentObserver = new win.MutationObserver(syncPlayback);
+            segmentObserver.observe(view, { attributes: true, attributeFilter: ['data-launcher-segment'] });
+            cleanups.push(() => segmentObserver.disconnect());
+        }
     }
 
     return Object.freeze({
@@ -196,6 +272,7 @@ export function createLauncherPortrait({ view, scheduler = globalThis }) {
             cancelRelease();
             cleanups.forEach(cleanup => cleanup());
             cleanups.length = 0;
+            videos().forEach(video => video.pause?.());
         },
     });
 }

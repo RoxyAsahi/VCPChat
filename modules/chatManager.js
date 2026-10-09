@@ -14,12 +14,14 @@ const settlesWithin = (promise, ms) => new Promise(resolve => {
 });
 
 // 有差分立绘的 agent 要在系统提示词末尾加一段表情标记说明（情绪源和立绘共用 modules/emotion）。
-// 只有主进程能回答「这个 agent 有没有差分」时才按需加载这部分代码。
+// 只有主进程能回答「这个 agent 有没有差分」时才按需加载这部分代码。差分关着时不加。
 let emotionPromptModule = null;
 async function resolveEmotionTagPrompt(api, context, agentConfig) {
     const agentId = context?.itemType === 'agent' ? context.agentId : null;
     if (!agentId || typeof api?.getAgentPortraits !== 'function') return '';
     try {
+        const { PORTRAIT_EXPRESSIONS_ENABLED } = await import('./ui-system/side-pane/portrait-features.js');
+        if (!PORTRAIT_EXPRESSIONS_ENABLED) return '';
         emotionPromptModule ||= import('./emotion/emotionPrompt.js');
         return await (await emotionPromptModule).resolveEmotionTagPrompt(api, agentId, agentConfig);
     } catch (error) {

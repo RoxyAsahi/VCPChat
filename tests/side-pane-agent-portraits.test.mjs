@@ -113,6 +113,27 @@ test('a large portrait is served as a cached display-size copy, small ones and u
     assert.equal((await sharp(fileURLToPath(second.default.replace(/\?v=\d+$/, ''))).metadata()).width, 1600);
 });
 
+test('animated PNGs and videos are served as they are, so the animation is kept', { skip: sharpUnavailable }, async () => {
+    const sharp = require('sharp');
+    const dir = path.join(agentDir, 'Moving');
+    fs.mkdirSync(dir);
+    // 大图加一个 acTL 块就是 APNG：缩小图只会留下第一帧，所以不能缩
+    const still = await sharp({ create: { width: 4000, height: 6000, channels: 3, background: { r: 10, g: 20, b: 30 } } }).png().toBuffer();
+    const acTL = Buffer.alloc(20);
+    acTL.writeUInt32BE(8, 0);
+    acTL.write('acTL', 4, 'latin1');
+    acTL.writeUInt32BE(1, 8);
+    const ihdrEnd = 8 + 8 + 13 + 4;
+    fs.writeFileSync(path.join(dir, 'portrait.png'), Buffer.concat([still.subarray(0, ihdrEnd), acTL, still.subarray(ihdrEnd)]));
+    fs.writeFileSync(path.join(dir, 'portrait.light.webm'), 'webm');
+    fs.writeFileSync(path.join(dir, 'portrait.happy.mp4'), 'mp4');
+
+    const portraits = await getPortraits('Moving');
+    assert.match(portraits.default, /\/Moving\/portrait\.png\?v=\d+$/);
+    assert.match(portraits.light, /\/Moving\/portrait\.light\.webm\?v=\d+$/);
+    assert.match(portraits.happy, /\/Moving\/portrait\.happy\.mp4\?v=\d+$/);
+});
+
 const png = { type: 'image/png', buffer: new Uint8Array([1, 2, 3]).buffer };
 const save = (id, variant, data) => handlers.get('save-agent-portrait')({}, id, variant, data);
 const remove = (id, variant) => handlers.get('remove-agent-portrait')({}, id, variant);
@@ -131,6 +152,14 @@ test('saving a portrait replaces the same variant in any extension and leaves th
     await save('Saver', 'Smile', { type: 'image/jpeg', buffer: png.buffer });
     assert.ok(fs.existsSync(path.join(dir, 'portrait.smile.jpg')));
 
+    // 视频可以比图片大；换成视频以后同一版本的图片删掉
+    const video = await save('Saver', 'light', { type: 'video/webm', buffer: new ArrayBuffer(21 * 1024 * 1024) });
+    assert.equal(video.success, true);
+    assert.match(video.portraits.light, /\/Saver\/portrait\.light\.webm\?v=\d+$/);
+    await save('Saver', 'light', { type: 'image/apng', buffer: png.buffer });
+    assert.ok(fs.existsSync(path.join(dir, 'portrait.light.png')));
+    assert.equal(fs.existsSync(path.join(dir, 'portrait.light.webm')), false);
+
     const removed = await remove('Saver', 'default');
     assert.equal(removed.success, true);
     assert.equal(removed.portraits, null, '没有默认立绘就不算有立绘');
@@ -145,6 +174,7 @@ test('saving rejects unknown agents, bad variants, unsupported types and empty o
     assert.ok((await save('Strict', 'default', { type: 'image/svg+xml', buffer: png.buffer })).error);
     assert.ok((await save('Strict', 'default', { type: 'image/png', buffer: new ArrayBuffer(0) })).error);
     assert.ok((await save('Strict', 'default', { type: 'image/png', buffer: new ArrayBuffer(20 * 1024 * 1024 + 1) })).error);
+    assert.ok((await save('Strict', 'default', { type: 'video/mp4', buffer: new ArrayBuffer(64 * 1024 * 1024 + 1) })).error);
     assert.deepEqual(fs.readdirSync(path.join(agentDir, 'Strict')), []);
     assert.ok((await remove('..', 'default')).error);
 });

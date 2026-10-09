@@ -2,6 +2,7 @@
 import { createEmotionDirector } from '../emotion/emotionDirector.js';
 import { hasPortraitVariants } from '../emotion/portraitVariants.js';
 import { createAgentEmotionFeed } from './agentEmotionFeed.js';
+import { PORTRAIT_EXPRESSIONS_ENABLED, visiblePortraits } from '../ui-system/side-pane/portrait-features.js';
 
 export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, uiHelper, selectedItemRef, controller }) {
     const owners = [];
@@ -72,7 +73,7 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         return {
             name: item.name || '',
             avatarUrl: item.avatarUrl || '',
-            portraits: item.type === 'agent' ? portraitCache.get(item.id)?.portraits || null : null,
+            portraits: item.type === 'agent' ? visiblePortraits(portraitCache.get(item.id)?.portraits) : null,
             portraitDisplay: item.config?.portraitDisplay ?? item.portraitDisplay ?? null,
             onEditAvatar: item.type === 'agent' ? () => {
                 win.uiManager?.switchToTab?.('settings');
@@ -82,9 +83,10 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         };
     };
     // 差分立绘：当前助手有情绪或状态立绘时，跟着它的回复换图。情绪源只看这个助手的流，
-    // 换了助手就清空回到默认立绘；没有差分的助手完全不读流
+    // 换了助手就清空回到默认立绘；没有差分的助手完全不读流。差分暂时关着（portrait-features.js），
+    // 这时立绘不跟情绪换
     const emotionDirector = createEmotionDirector({
-        onFrame: frame => controller.setLauncherPortraitFrame?.(frame),
+        onFrame: frame => { if (PORTRAIT_EXPRESSIONS_ENABLED) controller.setLauncherPortraitFrame?.(frame); },
     });
     let emotionAgentId = null;
     // 回复的情绪过去以后回到这个助手的长期心情（主进程按聊天记着，桌宠用的是同一份）
@@ -120,7 +122,7 @@ export function createSidePaneLauncherWiring({ doc, win, chatAPI, chatManager, u
         chatAPI: chatAPI || win.electronAPI,
         director: emotionDirector,
         getAgentId: () => emotionAgentId,
-        isActive: () => hasPortraitVariants(portraitCache.get(emotionAgentId)?.portraits),
+        isActive: () => PORTRAIT_EXPRESSIONS_ENABLED && hasPortraitVariants(portraitCache.get(emotionAgentId)?.portraits),
     });
     subscriptions.add(emotionFeed);
     subscriptions.add({ dispose: () => emotionDirector.dispose() });
