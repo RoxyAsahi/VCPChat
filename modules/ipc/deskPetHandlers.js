@@ -45,6 +45,10 @@ const RESTORE_DELAY_MS = 1500;
 const WHEEL_NOTCH = 100;
 // 窗口平时是否可聚焦（见 openPet）；输入框关上或页面重载后回到它。
 const PET_FOCUSABLE = process.platform !== 'win32';
+// Windows 上别的置顶程序（任务管理器、置顶播放器、部分全屏切窗口）弹到前面后，桌宠会被压在下面且不会自己回来；
+// 低频补一次置顶层级。只动 z 序，不抢焦点。
+const TOPMOST_GUARD_MS = 10000;
+const USE_TOPMOST_GUARD = process.platform === 'win32';
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
@@ -312,7 +316,7 @@ function onDisplaysChanged() {
     clearTimeout(displayTimer);
     displayTimer = setTimeout(() => {
         displayTimer = null;
-        try { fitPetsToDisplays(); } catch (error) { console.warn('[DeskPet] display change:', error.message); }
+        try { fitPetsToDisplays(); for (const pet of pets.values()) reassertTopmost(pet); } catch (error) { console.warn('[DeskPet] display change:', error.message); }
     }, DISPLAY_SETTLE_MS);
 }
 
@@ -350,6 +354,24 @@ function showPet(pet) {
     // Windows 上透明窗口隐藏再显示后可能丢掉 WS_EX_TOPMOST，每次显示后重新声明。
     pet.win.setAlwaysOnTop(true, TOPMOST_LEVEL);
     pet.win.moveTop();
+}
+
+function reassertTopmost(pet) {
+    if (!pet || pet.win.isDestroyed() || !pet.win.isVisible() || pet.drag) return;
+    pet.win.setAlwaysOnTop(true, TOPMOST_LEVEL);
+    pet.win.moveTop();
+}
+
+let topmostGuard = null;
+function updateTopmostGuard() {
+    const wanted = USE_TOPMOST_GUARD && pets.size > 0;
+    if (wanted && !topmostGuard) {
+        topmostGuard = setInterval(() => { for (const pet of pets.values()) reassertTopmost(pet); }, TOPMOST_GUARD_MS);
+        topmostGuard.unref?.();
+    } else if (!wanted && topmostGuard) {
+        clearInterval(topmostGuard);
+        topmostGuard = null;
+    }
 }
 
 function setIgnoreMouse(pet, ignore) {
@@ -464,12 +486,17 @@ async function openPet(agentId, { anchor = null } = {}) {
     const sendVisibility = (visible) => !win.isDestroyed() && win.webContents.send('deskpet:visibility', visible);
     win.on('hide', () => sendVisibility(false));
     win.on('show', () => sendVisibility(true));
+    // 置顶被系统或别的程序取消时（例如别的程序调用了 SetWindowPos），马上补回来
+    win.on('always-on-top-changed', (_e, onTop) => {
+        if (!onTop && !shuttingDown) setImmediate(() => reassertTopmost(pet));
+    });
     win.on('closed', () => {
         voice.release(pet);
         clearInterval(pet.hitPoll);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
+        updateTopmostGuard();
         if (lastTouched === agentId) lastTouched = null;
         // 用户关掉的下次不再恢复；退出时一起关掉的照旧恢复
         if (!shuttingDown) rememberOpen(agentId, false);
@@ -477,6 +504,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     });
     win.loadURL(`${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}`);
     if (!USE_SHAPE) startHitPoll(pet);
+    updateTopmostGuard();
     notifyMain(agentId);
     return { success: true, open: true };
 }
