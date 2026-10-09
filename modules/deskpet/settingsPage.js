@@ -124,7 +124,7 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             }).catch(() => {});
         }
         previews.prune(agentId, outfits.map((o) => o.id)).catch(() => {});
-        const scale = live?.scale ?? petPrefs.clampScale(saved?.scale ?? 1);
+        const scale = live?.scale ?? petPrefs.savedScale(saved);
         return {
             agents,
             agentId,

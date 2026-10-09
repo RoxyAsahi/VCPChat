@@ -218,7 +218,9 @@ let stateWrites = Promise.resolve();
 function savePetState(agentId, patch) {
     stateWrites = stateWrites.then(async () => {
         const state = await readPetState();
-        state[agentId] = { ...(state[agentId] || {}), ...patch };
+        // 记大小时顺带记下是按哪一版的 1 倍算的（见 petPrefs.savedScale）
+        const versioned = patch.scale === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
+        state[agentId] = { ...(state[agentId] || {}), ...versioned };
         await fs.outputJson(petStatePath(), state, { spaces: 2 });
     }).catch((error) => console.warn('[DeskPet] state save failed:', error.message));
     return stateWrites;
@@ -475,7 +477,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     if (pets.has(agentId)) return openPet(agentId);
     const outfitId = outfit?.id || null;
     const aspect = outfitId ? savedAspect(saved, outfitId) : null;
-    const scale = petPrefs.fitScale(saved?.scale ?? 1, workAreaAt(anchor || saved || screen.getPrimaryDisplay().workArea), aspect);
+    const scale = petPrefs.fitScale(petPrefs.savedScale(saved), workAreaAt(anchor || saved || screen.getPrimaryDisplay().workArea), aspect);
     const size = petPrefs.windowSizeForScale(scale, aspect);
     const win = new BrowserWindow({
         ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
@@ -950,7 +952,7 @@ function outfitMenu(pet, outfits) {
 }
 
 function scaleMenu(pet) {
-    const presets = [0.6, 0.8, 1, 1.25, 1.5];
+    const presets = [0.8, 1, 1.25, 1.5, 2, 2.5];
     const max = petPrefs.maxScaleForWorkArea(workAreaAt(pet.win.getBounds()), pet.aspect);
     const shortcut = process.platform === 'darwin' ? 'Cmd' : 'Ctrl';
     return [
@@ -1397,7 +1399,8 @@ function initialize(options) {
         cacheRoot: path.join(paths.appDataRoot, 'deskpet', 'previews'),
         preload: path.join(paths.projectRoot, 'preloads', 'deskpet.js'),
         pageUrl: (agentId) => `${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}&preview=1`,
-        windowSize: (aspect) => petPrefs.windowSizeForScale(1, aspect),
+        // 卡片快照按 2 倍画：比桌面上默认的大，缩进卡片里也清楚
+        windowSize: (aspect) => petPrefs.windowSizeForScale(2, aspect),
     });
     coreInstaller = createCoreInstaller({ appDataRoot: paths.appDataRoot, fetch: (url, init) => net.fetch(url, init), probe: probeCore });
     createSettingsPage({
