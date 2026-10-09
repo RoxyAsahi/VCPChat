@@ -105,7 +105,6 @@ function characterBox(aspect) {
     return { width, height };
 }
 
-/** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
 /**
  * 旧版（sizeVersion < 2）记下的窗口位置换到新尺寸下：旧窗口没有脚下的余量、1 倍也更大，
  * 原样用左上角的话脚会离开原来站的地方（站在任务栏上的会悬空）。按角色脚底中点对齐算新的左上角。
@@ -126,6 +125,7 @@ function legacyPosition(saved, aspect, scale) {
     };
 }
 
+/** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
 function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
     const box = characterBox(aspect);
