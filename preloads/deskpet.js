@@ -124,6 +124,8 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     previewReady: report => ipcRenderer.send('deskpet:preview-ready', {
         bounds: report?.bounds ? { x: Number(report.bounds.x), y: Number(report.bounds.y), width: Number(report.bounds.width), height: Number(report.bounds.height) } : null,
         aspect: Number(report?.aspect) || null,
+        // 哪一次渲染：离屏窗口一套接一套地用，超时后上一套迟到的报告不能截成下一套的图
+        job: new URLSearchParams(location.search).get('job'),
     }),
     // 语音输入：和主窗口共用本地 SenseVoice（全局设置 → 语音设置里安装）
     sttStatus: () => ipcRenderer.invoke('local-stt:status'),

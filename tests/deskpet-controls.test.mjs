@@ -427,7 +427,12 @@ test('card snapshots are rendered offscreen once and reused while the files stay
     const assets = await env.fake.handlers.get('deskpet:get-assets')({ sender: offscreen.webContents });
     assert.equal(assets.preview, true);
     assert.equal(assets.outfit.id, 'maid');
-    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 100, y: 200, width: 120, height: 300 }, aspect: 2.5 });
+    const job = new URL(offscreen.contentsUrl).searchParams.get('job');
+    // 上一次渲染（超时了）迟到的报告：不能截成这一套
+    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 0, y: 0, width: 50, height: 50 }, job: `${job}0` });
+    await sleep(20);
+    assert.equal(offscreen.captured, undefined);
+    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 100, y: 200, width: 120, height: 300 }, aspect: 2.5, job });
     await sleep(50);
     assert.deepEqual(offscreen.captured, { x: 94, y: 194, width: 132, height: 312 }, '只截角色那一块，四周留一点边');
     const pushed = env.mainWindow.sent.find((m) => m.channel === 'deskpet-settings:preview');

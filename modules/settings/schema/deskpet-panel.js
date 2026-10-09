@@ -585,6 +585,10 @@ export function buildDeskPetPanel(doc) {
         } finally {
             state.choosing = false;
             renderGrid(false);
+            if (state.reloadPending) {
+                state.reloadPending = false;
+                scheduleReload();
+            }
         }
     }
 
@@ -651,7 +655,12 @@ export function buildDeskPetPanel(doc) {
     let reloadTimer = 0;
     function scheduleReload() {
         clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(() => { if (state.visible && !state.choosing) loadCatalog(); }, CATALOG_DEBOUNCE_MS);
+        reloadTimer = setTimeout(() => {
+            if (!state.visible) return;
+            // 正在换卡片：等它换完再刷新（桌宠刚显示出来的推送常常落在这时候，丢了的话会一直显示「已隐藏」）
+            if (state.choosing) state.reloadPending = true;
+            else loadCatalog();
+        }, CATALOG_DEBOUNCE_MS);
     }
 
     agentSelect.addEventListener('change', () => {
