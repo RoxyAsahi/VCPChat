@@ -99,6 +99,12 @@ function fitScale(scale, workArea, aspect) {
 }
 
 /** 页面报上来的长宽比：不合理的值丢掉，其余保留两位小数（同一个形象每次量出来差一点点不算变了）。 */
+// 同一套形象每次量出来会差一点（Live2D 量的时候正呼吸、做待机动作）：相差 5% 以内算同一个比例，不改窗口、不重记
+const ASPECT_TOLERANCE = 0.05;
+function sameAspect(a, b) {
+    return isAspect(a) && isAspect(b) && Math.abs(Number(a) - Number(b)) / Number(b) < ASPECT_TOLERANCE;
+}
+
 function normalizeAspect(aspect) {
     return isAspect(aspect) ? Math.round(Number(aspect) * 100) / 100 : null;
 }
@@ -215,6 +221,7 @@ module.exports = {
     clampScale,
     characterBox,
     normalizeAspect,
+    sameAspect,
     windowSizeForScale,
     maxScaleForWorkArea,
     fitScale,

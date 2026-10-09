@@ -332,7 +332,8 @@ test('the settings page only answers the main window and lists the outfits of on
     assert.equal(await catalog({ sender: null }, 'Nova'), null, '不是主窗口发的不理');
     const page = await catalog(fromMain(env), 'Nova');
     assert.equal(page.agentId, 'Nova');
-    assert.deepEqual(page.outfits.map((o) => o.name), ['科技服', '女仆'].sort((a, b) => a.localeCompare(b, 'zh')));
+    assert.deepEqual(page.outfits.filter((o) => !o.builtIn).map((o) => o.name), ['科技服', '女仆'].sort((a, b) => a.localeCompare(b, 'zh')));
+    assert.ok(page.outfits.filter((o) => o.builtIn).every((o) => o.kindLabel.startsWith('内置')), '自带的 Nova 形象标着内置');
     assert.equal(page.outfits.find((o) => o.id === 'maid').description, '女仆的介绍');
     assert.equal(page.open, false);
     assert.equal(page.outfit, null, '关着的桌宠选中的是「无」');

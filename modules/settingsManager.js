@@ -148,7 +148,7 @@ const settingsManager = (() => {
         portraitSettings = window.VCPAgentPortraitSettings.create({
             host,
             api: electronAPI,
-            onChange: () => { void updateSectionSummary('portrait'); },
+            onChange: () => {},
             notify: (message, type) => uiHelper?.showToastNotification?.(message, type)
         });
         return portraitSettings;
@@ -2122,7 +2122,6 @@ function resolveRegexSlots() {
     function getCurrentCollapseStates() {
         return {
             identityCollapsed: getSectionContainer('identity')?.classList.contains('collapsed') ?? true,
-            portraitCollapsed: getSectionContainer('portrait')?.classList.contains('collapsed') ?? true,
             promptCollapsed: getSectionContainer('prompt')?.classList.contains('collapsed') ?? true,
             modelCollapsed: getSectionContainer('model')?.classList.contains('collapsed') ?? true,
             paramsCollapsed: getSectionContainer('params')?.classList.contains('collapsed') ?? true,
@@ -2296,7 +2295,7 @@ function resolveRegexSlots() {
         sectionControllers.clear();
 
         createSectionController('identity', buildIdentitySummary);
-        createSectionController('portrait', () => ensurePortraitSettings()?.summary() || '未设置，首页显示头像');
+        ensurePortraitSettings();
         createSectionController('prompt', buildPromptSummary);
         createSectionController('model', buildModelSummary);
         createSectionController('params', buildParamsSummary);
@@ -2441,7 +2440,6 @@ function resolveRegexSlots() {
         const isFirstSettingsLoadThisSession = agentId && !initializedCollapseStateAgents.has(agentId);
         const states = {
             identityCollapsed: true,
-            portraitCollapsed: true,
             promptCollapsed: true,
             modelCollapsed: true,
             paramsCollapsed: true,
@@ -2457,7 +2455,6 @@ function resolveRegexSlots() {
 
         [
             ['identity', states.identityCollapsed],
-            ['portrait', states.portraitCollapsed],
             ['prompt', states.promptCollapsed],
             ['model', states.modelCollapsed],
             ['params', states.paramsCollapsed],

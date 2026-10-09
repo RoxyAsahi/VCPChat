@@ -15,9 +15,10 @@ import { toBubbleText } from 'vcp-deskpet://pet/app/bubbleText.js';
 import { createSpeech } from 'vcp-deskpet://pet/app/voice.js';
 import { createToolCard } from 'vcp-deskpet://pet/app/toolCard.js';
 import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
+import { shapeGaze, limitGaze } from 'vcp-deskpet://pet/app/gaze.js';
 import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
-import { measureSilhouette, silhouetteAspect, fitSilhouette } from 'vcp-deskpet://pet/app/figure.js';
+import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
 
 const api = window.deskPetAPI;
@@ -877,7 +878,12 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     return {
         kind: 'live2d',
         probe: alphaProbe.probe,
-        focus(x, y) { model.focus(x, y); },
+        // 视线跟光标：不用模型自带的 focus（它只取方向，光标在上面就仰到最大），按离头多远、往哪边转多少
+        focus(x, y) {
+            const h = figure.head();
+            const g = shapeGaze((x - h.x) / (window.innerWidth * 0.6), (h.y + h.width * 0.5 - y) / (window.innerHeight * 0.6));
+            internal.focusController.focus(g.x, g.y);
+        },
         bounds() { const b = model.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; },
         head: () => figure.head(),
         figureReady: figure.ready,
@@ -921,10 +927,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             dragVelocity(vx) { life.dragVelocity(vx); },
             // 视线：g 以头为原点、-1..1；换算成窗口坐标交给模型自己的视线跟随
             gaze(g) {
-                const h = figure.head();
-                const hx = h.x;
-                const hy = h.y + h.width * 0.5;
-                model.focus(hx + g.x * window.innerWidth * 0.6, hy - g.y * window.innerHeight * 0.6);
+                const v = limitGaze(g);
+                internal.focusController.focus(v.x, v.y);
             },
         },
         // 窗口藏起来时整个停掉（窗口关了后台节流，不停的话隐藏着也在一直画）
@@ -1086,8 +1090,9 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
             // 视线跟着光标：以脸为原点，按窗口尺寸归一化。
             const hx = holder.position.x + (puppet.headCenter[0] - puppet.width / 2) * scale;
             const hy = holder.position.y + (puppet.headCenter[1] - puppet.height) * scale;
-            look.tx = clampUnit((x - hx) / (window.innerWidth * 0.6));
-            look.ty = clampUnit((hy - y) / (window.innerHeight * 0.6));
+            const g = shapeGaze((x - hx) / (window.innerWidth * 0.6), (hy - y) / (window.innerHeight * 0.6));
+            look.tx = g.x;
+            look.ty = g.y;
         },
         // 用静止时量出的轮廓，不跟着呼吸、单击轻跳和头发摆动抖（气泡按它贴头顶）。
         bounds: () => figure.bounds(),
@@ -1106,7 +1111,7 @@ async function mountPuppet(app, puppet, { webgl, fps }) {
             act(name, ms) { life.play(name, ms); },
             held(on) { life.setHeld(on); },
             dragVelocity(vx) { life.dragVelocity(vx); },
-            gaze(g) { look.tx = clampUnit(g.x); look.ty = clampUnit(g.y); },
+            gaze(g) { const v = limitGaze(g); look.tx = v.x; look.ty = v.y; },
         },
         setPaused(paused) {
             if (paused) app.ticker.stop();
@@ -1140,14 +1145,14 @@ function createFigureFit(app, canvas, { width, height, apply }) {
     window.addEventListener('resize', layout);
     canvas.style.opacity = '0';
 
-    const measure = () => {
+    const measureOnce = () => {
         app.render();
         const gl = app.renderer.gl;
         const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
         const pixels = new Uint8Array(w * h * 4);
         gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         const s = measureSilhouette(pixels, w, h, { flipY: true });
-        if (!s) return null;
+        if (!s) return false;
         const r = app.renderer.resolution || 1;
         const u = (px) => (px / r - fit.x) / fit.scale;
         const v = (py) => (py / r - fit.y) / fit.scale;
@@ -1155,7 +1160,17 @@ function createFigureFit(app, canvas, { width, height, apply }) {
         head = { x: u(s.head.x), y: v(s.head.y), width: s.head.width / r / fit.scale };
         measured = true;
         layout();
-        return silhouetteAspect(box);
+        return touchesEdge(s, w, h) ? 'clipped' : true;
+    };
+    // 第一次摆的时候形象可能有一截在窗口外（模型画布四周留白不对称），量到的是被裁过的轮廓、摆出来会偏；
+    // 按量到的摆好以后再量，直到整个形象都在窗口里
+    const measure = () => {
+        let result = false;
+        for (let i = 0; i < 4; i++) {
+            result = measureOnce();
+            if (result !== 'clipped') break;
+        }
+        return result ? silhouetteAspect(box) : null;
     };
     const ready = new Promise((resolve) => {
         setTimeout(() => {
