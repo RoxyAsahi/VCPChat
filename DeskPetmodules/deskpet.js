@@ -25,7 +25,7 @@ import { isMissed } from 'vcp-deskpet://pet/app/missedReply.js';
 import { addFiles, describeFiles, pastedName, MAX_FILES, MAX_PASTE_BYTES } from 'vcp-deskpet://pet/app/attachments.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
-import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
+import { pickExpression as mapExpression, pickMotion as mapMotion, pickTap, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
 const api = window.deskPetAPI;
 const PREVIEW = new URLSearchParams(location.search).has('preview');
@@ -1213,6 +1213,20 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             const group = pickMotion('happy') || motionGroups.find((g) => /tap/i.test(g));
             if (group) model.motion(group);
         },
+        // 设置页给点头、点身体绑了表情 / 动作：照绑定的演，返回演了哪些（{ expression, motion }），没绑返回 null
+        playTap(zone) {
+            const bound = pickTap(zone, expressionNames, motionGroups, profile);
+            if (!bound) return null;
+            if (bound.motion) {
+                internal.motionManager?.stopAllMotions?.();
+                model.motion(bound.motion, undefined, PIXI.live2d.MotionPriority?.FORCE ?? 3);
+            }
+            if (bound.expression) {
+                model.expression(bound.expression);
+                lastExpression = bound.expression;
+            }
+            return bound;
+        },
         // motion: false 只换表情和参数（换阶段、互动反应演完换回来），不再放一遍情绪动作
         apply(f, { changed, motion = true }) {
             const intensity = Math.max(0.3, Math.min(1, f.intensity || 0.6));
@@ -2111,18 +2125,36 @@ async function start() {
     director = createEmotionDirector({ onFrame: (next) => { if (!speech.holdsFrames()) applyFrame(next); } });
     const lifeFx = createLifeFx();
     let flashTimer = 0;
+    let tapTimer = 0;
     // 互动反应时临时换个表情（不改导演的心情，演完换回来）
     const flashEmotion = (emotion, ms) => {
         // 立绘没画这个情绪就不换，免得退回默认立绘闪一下
         if (backend.canShow && !backend.canShow(emotion)) return;
         clearTimeout(flashTimer);
+        clearTimeout(tapTimer);
         backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
         flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), ms);
     };
-    // 设置页「表情映射」：换上新映射，emotion 给了就当场演一下这个情绪
-    api.onProfile?.(({ profile, emotion } = {}) => {
+    // 点头、点身体绑定的表情演一会儿（至少 2 秒，点身体的反应本身很短）再换回当前情绪
+    const playTap = (zone, ms) => {
+        const bound = backend.playTap?.(zone);
+        if (bound?.expression) {
+            clearTimeout(flashTimer);
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), Math.max(ms, 2000));
+        }
+        return bound || null;
+    };
+    // 设置页「表情映射」：换上新映射；emotion 给了就当场演一下这个情绪，tap 给了就演一下点这个区域
+    api.onProfile?.(({ profile, emotion, tap } = {}) => {
         backend.setProfile?.(profile);
-        if (emotion) flashEmotion(emotion, 3500);
+        if (tap) {
+            if (!playTap(tap, 3500)) {
+                // 这个区域没绑：演默认反应给你看
+                if (tap === 'head') flashEmotion(REACTION_EMOTION.headTap, 3500);
+                else backend.tap();
+            }
+        } else if (emotion) flashEmotion(emotion, 3500);
         else backend.apply(shownFrame(frame), { changed: true, motion: false });
     });
     life = createPetLife({
@@ -2141,10 +2173,12 @@ async function start() {
                 lastActivity = Date.now();
                 backend.setActive(true);
             }
+            // 点头、点身体：绑了的部分照绑定演，没绑的部分照原来的反应
+            const bound = name === 'poke' ? playTap('body', ms) : name === 'headTap' ? playTap('head', ms) : null;
             if (name === 'poke') {
-                backend.tap();
-                director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
-            } else if (REACTION_EMOTION[name] && !frame.state) {
+                if (!bound?.motion) backend.tap();
+                if (!bound?.expression) director.nudge({ emotion: 'happy', intensity: 0.6, source: 'tap' });
+            } else if (REACTION_EMOTION[name] && !frame.state && !bound?.expression) {
                 flashEmotion(REACTION_EMOTION[name], ms);
             }
         },

@@ -677,6 +677,10 @@
   font-size: var(--vcp-ui-text-caption);
 }
 
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-head:not(:first-child) {
+  margin-top: 8px;
+}
+
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-label {
   color: var(--dps-ink);
   font-size: var(--vcp-ui-text-caption);

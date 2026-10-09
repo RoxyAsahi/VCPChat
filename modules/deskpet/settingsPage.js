@@ -281,8 +281,10 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
         const catalogOfModel = await expressionProfile.readModelCatalog(outfit.live2d);
         const profile = expressionProfile.mergeProfile(await expressionProfile.readProfile(outfit.live2d), mapping, catalogOfModel);
         if (save) await expressionProfile.writeProfile(outfit.live2d, profile);
+        // 试一下：情绪名，或 tap:head / tap:body（点头、点身体的绑定）
+        const tap = typeof emotion === 'string' && emotion.startsWith('tap:') && expressionProfile.TAP_KEYS.includes(emotion.slice(4)) ? emotion.slice(4) : null;
         const wanted = expressionProfile.EMOTION_KEYS.includes(emotion) ? emotion : null;
-        const showing = pets.info(agentId)?.outfit === outfitId && pets.pushProfile(agentId, { profile, emotion: wanted });
+        const showing = pets.info(agentId)?.outfit === outfitId && pets.pushProfile(agentId, { profile, emotion: wanted, ...(tap ? { tap } : {}) });
         return { success: true, showing: Boolean(showing), profile };
     }
 
