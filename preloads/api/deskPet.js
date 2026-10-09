@@ -30,6 +30,8 @@ module.exports = {
         installDeskPetCore: invoke('deskpet-settings:core-install', 'source', 'agentId'),
         openDeskPetCoreLink: invoke('deskpet-settings:core-link', 'which'),
         onDeskPetCoreProgress: on('deskpet-settings:core-progress'),
+        getDeskPetMapping: invoke('deskpet-settings:mapping', 'agentId', 'outfitId'),
+        applyDeskPetMapping: invoke('deskpet-settings:mapping-apply', 'agentId', 'outfitId', 'mapping', 'options'),
         talkToDeskPet: invoke('deskpet-settings:talk', 'agentId', 'text'),
         updateDeskPetSettings: invoke('deskpet-settings:update', 'patch'),
         setDeskPetShortcut: invoke('deskpet-settings:set-shortcut', 'actionId', 'accelerator'),
