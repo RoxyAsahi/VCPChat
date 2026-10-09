@@ -1758,7 +1758,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 156,
+          "line": 158,
           "kind": "custom-event-listener"
         },
         {
@@ -1871,7 +1871,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 156,
+          "line": 158,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('blur'"
         },
@@ -2514,12 +2514,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 418,
+          "line": 423,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 586,
+          "line": 591,
           "kind": "custom-event-listener"
         },
         {
@@ -2683,13 +2683,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 418,
+          "line": 423,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('change'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 586,
+          "line": 591,
           "kind": "custom-event-listener",
           "match": "form.addEventListener('change'"
         },
@@ -3956,12 +3956,12 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 462,
+          "line": 467,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 463,
+          "line": 468,
           "kind": "custom-event-listener"
         },
         {
@@ -4556,27 +4556,27 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 113,
+          "line": 115,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 319,
+          "line": 321,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 329,
+          "line": 331,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 370,
+          "line": 372,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 383,
+          "line": 385,
           "kind": "custom-event-listener"
         },
         {
@@ -5450,13 +5450,13 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 462,
+          "line": 467,
           "kind": "custom-event-listener",
           "match": "addBtn.addEventListener('click'"
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 463,
+          "line": 468,
           "kind": "custom-event-listener",
           "match": "importBtn.addEventListener('click'"
         },
@@ -6170,31 +6170,31 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 113,
+          "line": 115,
           "kind": "custom-event-listener",
           "match": "profileAvatar.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 319,
+          "line": 321,
           "kind": "custom-event-listener",
           "match": "view.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 329,
+          "line": 331,
           "kind": "custom-event-listener",
           "match": "noticeCard.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 370,
+          "line": 372,
           "kind": "custom-event-listener",
           "match": "addButton.addEventListener('click'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 383,
+          "line": 385,
           "kind": "custom-event-listener",
           "match": "homeButton.addEventListener('click'"
         },
@@ -12899,7 +12899,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 154,
+          "line": 156,
           "kind": "custom-event-listener"
         },
         {
@@ -12964,7 +12964,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 154,
+          "line": 156,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('focus'"
         },
@@ -15181,7 +15181,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 417,
+          "line": 422,
           "kind": "custom-event-listener"
         },
         {
@@ -15353,7 +15353,7 @@
         },
         {
           "file": "modules/settings/schema/sidebar-surfaces.js",
-          "line": 417,
+          "line": 422,
           "kind": "custom-event-listener",
           "match": "speedInput?.addEventListener('input'"
         },
@@ -15957,12 +15957,12 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 155,
+          "line": 157,
           "kind": "custom-event-listener"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 290,
+          "line": 292,
           "kind": "custom-event-listener"
         },
         {
@@ -16361,13 +16361,13 @@
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 155,
+          "line": 157,
           "kind": "custom-event-listener",
           "match": "profileName.addEventListener('keydown'"
         },
         {
           "file": "modules/ui-system/side-pane/side-pane-launcher.js",
-          "line": 290,
+          "line": 292,
           "kind": "custom-event-listener",
           "match": "segmentTabs.addEventListener('keydown'"
         },
@@ -33615,7 +33615,7 @@
     },
     {
       "file": "modules/ui-system/agent-portrait-settings.js",
-      "line": 58,
+      "line": 59,
       "reason": "dynamic listener name: type",
       "kind": "custom-event-listener",
       "match": "target.addEventListener(type",

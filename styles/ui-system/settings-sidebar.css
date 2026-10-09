@@ -3295,6 +3295,29 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes b
     color: var(--vcp-settings-text);
 }
 
+/* 首页顶部显示立绘还是头像：和预览主题用同一种分段按钮 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-choice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-label {
+    font-size: var(--vcp-settings-font-sub);
+    color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-themes button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* 选了头像：立绘还留着、还能调，预览淡一点表示首页现在不用它 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings[data-header="avatar"][data-has-portrait="true"] .agent-portrait-preview {
+    opacity: 0.5;
+}
+
 html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot {
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr);

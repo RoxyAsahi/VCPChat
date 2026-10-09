@@ -375,7 +375,12 @@ function renderAgentPortrait(doc) {
             el(doc, 'input', { id: 'agentPortraitHeight', type: 'range', min: 180, max: 360, step: 4, value: 248 }),
             el(doc, 'span', { id: 'agentPortraitHeightValue', class: 'slider-value-pill' }, '248px')));
     return el(doc, 'div', { class: 'agent-portrait-settings', id: 'agentPortraitSettings' },
-        el(doc, 'p', { class: 'agent-portrait-hint' }, '有立绘时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字。可以用图片、动图（GIF、WebP、APNG）或视频（MP4、WebM，静音循环播放）。改动点保存后生效。'),
+        el(doc, 'div', { class: 'agent-portrait-header-choice' },
+            el(doc, 'span', { id: 'agentPortraitHeaderLabel', class: 'agent-portrait-header-label' }, '首页顶部显示'),
+            el(doc, 'div', { class: 'agent-portrait-preview-themes', role: 'group', 'aria-labelledby': 'agentPortraitHeaderLabel' },
+                el(doc, 'button', { type: 'button', 'data-portrait-header': 'portrait', 'aria-pressed': 'false' }, '立绘'),
+                el(doc, 'button', { type: 'button', 'data-portrait-header': 'avatar', 'aria-pressed': 'true' }, '头像'))),
+        el(doc, 'p', { class: 'agent-portrait-hint' }, '选「立绘」时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字；选「头像」时立绘留着但不显示。可以用图片、动图（GIF、WebP、APNG）或视频（MP4、WebM，静音循环播放）。改动点保存后生效。'),
         preview,
         el(doc, 'div', { class: 'agent-portrait-preview-toolbar' }, themes,
             el(doc, 'button', { type: 'button', id: 'agentPortraitResetBtn', class: 'small-button' }, '重置位置')),
