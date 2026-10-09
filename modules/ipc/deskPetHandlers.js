@@ -42,6 +42,9 @@ const DRAG_TICK_MS = 16;
 const USE_SHAPE = process.platform === 'linux';
 const IMAGE_EXTENSIONS = outfitStore.IMAGE_EXTENSIONS;
 const SEND_TIMEOUT_MS = 10000;
+// 主窗口发出后还要等一会儿（最多 1.5 s）确认存进了历史才回结果：截止时间要把这段留出来，
+// 不然发出去了、结果却晚于桌宠的超时，用户再点一次就发了两遍
+const SEND_ACCEPT_MARGIN_MS = 2000;
 const DRAG_MAX_MS = 60000;
 const DISPLAY_SETTLE_MS = 400;
 // 启动时恢复上次的桌宠：等主窗口载完再开，不和首屏抢。
@@ -237,8 +240,8 @@ async function readPetState() {
 function savePetState(agentId, patch) {
     stateWrites = stateWrites.then(async () => {
         const state = await readStateFile();
-        // 记大小时顺带记下是按哪一版的 1 倍算的（见 petPrefs.savedScale）
-        const versioned = patch.scale === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
+        // 记大小、位置时顺带记下是按哪一版的尺寸算的（见 petPrefs.savedScale、legacyPosition）
+        const versioned = patch.scale === undefined && patch.x === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
         state[agentId] = { ...(state[agentId] || {}), ...versioned };
         // 先写临时文件再改名：写到一半被杀掉也只丢这一次，不会留下半个文件
         const tmp = `${petStatePath()}.tmp`;
@@ -301,12 +304,16 @@ function initialBounds(saved, size) {
     if (!hasSavedPosition(saved)) return { ...size, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
     if (!isOnScreen(saved.x, saved.y, size)) return { ...size, ...fallback };
-    // 在那块屏上放不全（换了分辨率、上次在更大的屏上）：整个挪回屏里
+    // 上次藏在屏幕边里：窗口本来就有一大截在屏外，原样放回（openPet 接着按藏边处理）
+    const tucked = saved.tuck?.tucked;
+    if (tucked && tucked.x === saved.x && tucked.y === saved.y) return { ...size, x: saved.x, y: saved.y };
+    // 在那块屏上放不全（换了分辨率、上次在更大的屏上）：整个挪回屏里。
+    // 底边留出脚下那截透明的余量：贴着任务栏、甩下去落地的桌宠窗口本来就比工作区低一点，重开不能悬空
     const area = workAreaAt({ x: saved.x, y: saved.y, ...size });
     return {
         ...size,
         x: Math.min(Math.max(saved.x, area.x), area.x + area.width - size.width),
-        y: Math.min(Math.max(saved.y, area.y), area.y + area.height - size.height),
+        y: Math.min(Math.max(saved.y, area.y), area.y + area.height - size.height + petPrefs.FOOT_RESERVE),
     };
 }
 
@@ -584,8 +591,13 @@ async function openPet(agentId, { anchor = null } = {}) {
     const savedRect = hasSavedPosition(saved) ? { x: saved.x, y: saved.y, ...petPrefs.windowSizeForScale(savedSize, aspect) } : null;
     const scale = petPrefs.fitScale(savedSize, workAreaAt(anchor || savedRect || screen.getPrimaryDisplay().workArea), aspect);
     const size = petPrefs.windowSizeForScale(scale, aspect);
+    // 旧版记的位置：按脚底对齐换到新尺寸，记下来以后就是新版的了
+    const legacy = anchor ? null : petPrefs.legacyPosition(saved, aspect, scale);
+    // 旧版记的大小也一起换成新版的记下来：之后记位置会标上新版，旧的大小就不能再留着
+    const oldSize = saved?.scale != null && !(Number(saved.sizeVersion) >= petPrefs.SIZE_VERSION);
+    if (legacy || oldSize) savePetState(agentId, { ...(legacy || {}), scale }).catch(() => {});
     const win = new BrowserWindow({
-        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
+        ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(legacy ? { ...saved, ...legacy, tuck: null } : saved, size)),
         frame: false,
         transparent: true,
         backgroundColor: '#00000000',
@@ -616,8 +628,15 @@ async function openPet(agentId, { anchor = null } = {}) {
     const savedTuck = saved?.tuck;
     if (!anchor && savedTuck?.tucked && savedTuck?.outPos) {
         const [atX, atY] = win.getPosition();
+        const area = workAreaAt(win.getBounds());
         if (savedTuck.tucked.x === atX && savedTuck.tucked.y === atY) {
-            pet.tuck = { side: savedTuck.side, tucked: savedTuck.tucked, outPos: savedTuck.outPos, isOut: false };
+            if (isOuterEdge(area, savedTuck.side, atY + win.getBounds().height / 2)) {
+                pet.tuck = { side: savedTuck.side, tucked: savedTuck.tucked, outPos: savedTuck.outPos, isOut: false };
+            } else {
+                // 那条边外面现在接了别的屏：不再藏，整只出来
+                win.setPosition(savedTuck.outPos.x, savedTuck.outPos.y);
+                savePetState(agentId, { x: savedTuck.outPos.x, y: savedTuck.outPos.y, tuck: null }).catch(() => {});
+            }
         }
     }
     pets.set(agentId, pet);
@@ -684,8 +703,10 @@ async function openPet(agentId, { anchor = null } = {}) {
 function moveWithCursor(pet, drag) {
     const c = screen.getCursorScreenPoint();
     // 记最近几个光标位置：松手时按它算甩出去的速度
+    // 光标没动就不记：停稳了再松手时最后一个样本是旧的，才认得出「不是甩」
     const samples = drag.samples || (drag.samples = []);
-    samples.push({ t: Date.now(), x: c.x, y: c.y });
+    const last = samples[samples.length - 1];
+    if (!last || last.x !== c.x || last.y !== c.y) samples.push({ t: Date.now(), x: c.x, y: c.y });
     if (samples.length > 12) samples.shift();
     applyBounds(pet, { x: c.x - drag.dx, y: c.y - drag.dy, ...sizeOf(pet) }, { verify: false });
 }
@@ -788,6 +809,9 @@ function snapToEdge(pet, figure, { free = false } = {}) {
 function untuck(pet) {
     clearTimeout(pet.tuckTimer);
     pet.tuck = null;
+    // 正在滑、甩、溜达的也停下：它们的下一帧还按旧位置、旧屏走
+    stopSnap(pet);
+    stopWalk(pet, { save: false });
 }
 
 // 藏在边里的桌宠：鼠标停在露出来的那条上、气泡或输入框开着时整只探出来；都没了等一会儿再缩回去。
@@ -953,6 +977,8 @@ function onFullResponse(messageId, context, response) {
 // 桌宠带过来的文件：拖进来的（本机路径）或粘贴的图片（字节）。主窗口按拖进输入框的流程存成附件。
 const MAX_SEND_FILES = 10;
 const MAX_SEND_FILE_BYTES = 20 * 1024 * 1024;
+// 拖进来的文件：主窗口发送时整个读进内存再存一份，太大的会卡住整个程序
+const MAX_DROP_FILE_BYTES = 200 * 1024 * 1024;
 
 function cleanSendFiles(files) {
     if (!Array.isArray(files)) return [];
@@ -964,6 +990,17 @@ function cleanSendFiles(files) {
         else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_SEND_FILE_BYTES) out.push({ data: Buffer.from(file.data), name, type });
     }
     return out;
+}
+
+// 拖进来的文件：只收普通文件（不收文件夹、设备），也不收大到会卡住主窗口的。返回第一个不行的原因
+async function checkDroppedFiles(files) {
+    for (const file of files) {
+        if (!file.path) continue;
+        const stat = await fs.stat(file.path).catch(() => null);
+        if (!stat?.isFile()) return `「${file.name}」不是能发的文件`;
+        if (stat.size > MAX_DROP_FILE_BYTES) return `「${file.name}」太大了（超过 200 MB）`;
+    }
+    return '';
 }
 
 function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
@@ -980,7 +1017,7 @@ function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - SEND_ACCEPT_MARGIN_MS });
     });
 }
 
@@ -1656,6 +1693,10 @@ function registerIpc() {
         const message = typeof text === 'string' ? text.trim() : '';
         const attached = cleanSendFiles(options?.files);
         if (!pet || (!message && !attached.length)) return { success: false, error: '没有内容' };
+        if (attached.some((f) => f.path)) {
+            const problem = await checkDroppedFiles(attached);
+            if (problem) return { success: false, error: problem };
+        }
         stopWalk(pet);
         return sendFromPet(pet.agentId, message.slice(0, 8000), { files: attached, newTopic: options?.newTopic === true });
     });
@@ -1779,7 +1820,10 @@ function registerIpc() {
         const f = report?.figure;
         const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
         const free = report?.free === true;
-        if (!free && figure && throwPet(pet, figure, samples)) return;
+        // 拖出屏幕边一大截松手是想藏起来，不当成甩
+        const win = pet.win.getBounds();
+        const tucking = figure && edgeSnap.tuckPosition(win, figure, workAreaAt(win), (side, y) => isOuterEdge(workAreaAt(win), side, y));
+        if (!free && figure && !tucking && throwPet(pet, figure, samples)) return;
         snapToEdge(pet, figure, { free });
     });
 

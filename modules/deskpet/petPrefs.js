@@ -32,9 +32,11 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
-    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）
-    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: 'CommandOrControl+Alt+Shift+V' },
-    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
+    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）。
+    // 这两个默认不占键：全局快捷键对所有程序生效，Cmd+Opt+Shift+V（macOS 的「粘贴并匹配样式」）、
+    // Ctrl+Alt+Shift+T（JetBrains 的重构）这类组合一占，别的程序里就按不出来了。要用在设置页里录一个。
+    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: '' },
+    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: '' },
 });
 
 // VCPChat 自己已经占用的组合键（全局快捷键和菜单），桌宠不能抢。
@@ -97,6 +99,26 @@ function characterBox(aspect) {
 }
 
 /** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
+/**
+ * 旧版（sizeVersion < 2）记下的窗口位置换到新尺寸下：旧窗口没有脚下的余量、1 倍也更大，
+ * 原样用左上角的话脚会离开原来站的地方（站在任务栏上的会悬空）。按角色脚底中点对齐算新的左上角。
+ * scale 是换算后的新倍数；不是旧版记录、没有位置时返回 null。
+ */
+function legacyPosition(saved, aspect, scale) {
+    if (!saved || Number(saved.sizeVersion) >= SIZE_VERSION) return null;
+    // 旧版量完形象就会记一次大小；没记过大小的是新版里还没改过大小的，不动
+    if (!Number.isFinite(saved.x) || !Number.isFinite(saved.y) || saved.scale == null || !Number.isFinite(Number(saved.scale))) return null;
+    const raw = Number(saved.scale);
+    const box = characterBox(aspect);
+    const oldWidth = Math.max(280, roundToGrid((box.width / SIZE_FACTOR) * raw));
+    const oldFeet = saved.y + UI_RESERVE + (box.height / SIZE_FACTOR) * raw;
+    const size = windowSizeForScale(scale, aspect);
+    return {
+        x: Math.round(saved.x + (oldWidth - size.width) / 2),
+        y: Math.round(oldFeet - UI_RESERVE - box.height * clampScale(scale)),
+    };
+}
+
 function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
     const box = characterBox(aspect);
@@ -237,8 +259,13 @@ function normalizeSettings(raw) {
         const normalized = given === undefined ? DEFAULT_SETTINGS.shortcuts[id] : normalizeAccelerator(given);
         shortcuts[id] = normalized === null || isReserved(normalized) ? DEFAULT_SETTINGS.shortcuts[id] : normalized;
     }
-    // 两个动作撞了同一个键：后一个作废
-    if (shortcuts.talk && shortcuts.talk === shortcuts.toggle) shortcuts.talk = '';
+    // 几个动作撞了同一个键：排在后面的作废
+    const used = new Set();
+    for (const id of Object.keys(shortcuts)) {
+        if (!shortcuts[id]) continue;
+        if (used.has(shortcuts[id])) shortcuts[id] = '';
+        else used.add(shortcuts[id]);
+    }
     const openAgents = Array.isArray(input.openAgents) ? [...new Set(input.openAgents.filter(isAgentIdLike))].slice(0, 16) : [];
     return {
         doNotDisturb: input.doNotDisturb === true,
@@ -275,6 +302,7 @@ module.exports = {
     maxScaleForWorkArea,
     fitScale,
     resizeAnchored,
+    legacyPosition,
     normalizeAccelerator,
     isReserved,
     normalizeSettings,

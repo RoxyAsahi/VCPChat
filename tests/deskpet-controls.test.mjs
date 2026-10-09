@@ -36,6 +36,15 @@ test('the default size is smaller now; a size someone picked before looks the sa
     assert.equal(prefs.savedScale({ scale: 0.6 }), 1);
     assert.equal(prefs.savedScale({ scale: 2 }), prefs.SCALE_MAX, '换算后超出上限就到上限');
     assert.equal(prefs.savedScale({ scale: 1.5, sizeVersion: prefs.SIZE_VERSION }), 1.5, '新版记的原样用');
+    // 旧版记的位置：换算后脚还站在原来的地方（站在任务栏上的不会悬空）
+    const feet = (saved, aspect, scale) => {
+        const pos = prefs.legacyPosition(saved, aspect, scale);
+        return [pos.x + prefs.windowSizeForScale(scale, aspect).width / 2, pos.y + prefs.UI_RESERVE + prefs.characterBox(aspect).height * scale];
+    };
+    assert.deepEqual(feet({ x: 1000, y: 420, scale: 1 }, null, 1), [1180, 1000], '旧 1 倍：360×580 的窗口，脚在 y=1000');
+    const [, tallFeet] = feet({ x: 500, y: 100, scale: 1.5 }, 2.4, prefs.savedScale({ scale: 1.5 }));
+    assert.ok(Math.abs(tallFeet - (100 + prefs.UI_RESERVE + (prefs.characterBox(2.4).height / 0.6) * 1.5)) < 1);
+    assert.equal(prefs.legacyPosition({ x: 1, y: 2, scale: 1, sizeVersion: prefs.SIZE_VERSION }, null, 1), null, '新版的不动');
 });
 
 test('resizing keeps the character standing on the same spot and inside the work area', () => {
@@ -334,7 +343,9 @@ test('global shortcuts hide and bring back the pets and open the input box', asy
     assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { toggle: true }, '最近碰过的那个弹输入框');
     assert.equal(coco.sent.some((m) => m.channel === 'deskpet:open-input'), false);
     // 语音键：同一个桌宠开始录音（再按一下由页面停下发出去）
-    const voiceKey = prefs.DEFAULT_SETTINGS.shortcuts.voice;
+    assert.equal(prefs.DEFAULT_SETTINGS.shortcuts.voice, '', '语音键默认不占');
+    assert.equal(env.handlers._controls().setShortcut('voice', 'Ctrl+Alt+Shift+V').success, true);
+    const voiceKey = 'CommandOrControl+Alt+Shift+V';
     assert.ok(env.fake.shortcuts.has(voiceKey));
     await env.fake.shortcuts.get(voiceKey)();
     await sleep(5);
