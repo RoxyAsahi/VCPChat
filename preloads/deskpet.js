@@ -95,7 +95,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     touched: () => ipcRenderer.send('deskpet:touched'),
     getMood: () => ipcRenderer.invoke('deskpet:get-mood'),
     onMood,
-    send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
+    send: (text, options) => ipcRenderer.invoke('deskpet:send', String(text || ''), { newTopic: options?.newTopic === true }),
     onStream,
     onCursor,
     onOpenInput,

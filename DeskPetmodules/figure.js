@@ -99,18 +99,18 @@ export function silhouetteAspect(s) {
 }
 
 /**
- * 把轮廓摆进窗口：底边贴窗口底、左右居中，整个塞进角色区（窗口去掉上方留给气泡的高度）。
+ * 把轮廓摆进窗口：底边贴角色区的底、左右居中，整个塞进角色区（窗口去掉上方留给气泡、下方留给小胶囊的高度）。
  * box 是轮廓（任意单位，1 单位画出来是 scale 像素），返回 { scale, x, y }：
  * 把单位坐标 (u, v) 画在 (x + u * scale, y + v * scale)。
  */
-export function fitSilhouette(box, { width, height, topReserve, widthFill = 0.96, heightFill = 0.98 }) {
+export function fitSilhouette(box, { width, height, topReserve, bottomReserve = 0, widthFill = 0.96, heightFill = 0.98 }) {
     const w = box.right - box.left;
     const h = box.bottom - box.top;
     if (!(w > 0) || !(h > 0)) return null;
-    const scale = Math.min((width * widthFill) / w, (Math.max(1, height - topReserve) * heightFill) / h);
+    const scale = Math.min((width * widthFill) / w, (Math.max(1, height - topReserve - bottomReserve) * heightFill) / h);
     return {
         scale,
         x: width / 2 - ((box.left + box.right) / 2) * scale,
-        y: height - box.bottom * scale,
+        y: height - bottomReserve - box.bottom * scale,
     };
 }

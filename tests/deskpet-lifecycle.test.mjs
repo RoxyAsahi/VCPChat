@@ -168,7 +168,7 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     await sleep(500);
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
-    assert.deepEqual([b.width, b.height], [280, 408], '尺寸恢复成桌宠窗口的固定大小');
+    assert.deepEqual([b.width, b.height], [360, 464], '尺寸恢复成桌宠窗口的固定大小');
     handlers.closeAll();
 });
 

@@ -813,7 +813,7 @@ function onFullResponse(messageId, context, response) {
 
 // ---- 从桌宠发消息：交给主窗口按正常流程发送 -----------------------------------
 
-function sendFromPet(agentId, text) {
+function sendFromPet(agentId, text, { newTopic = false } = {}) {
     if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
@@ -827,7 +827,7 @@ function sendFromPet(agentId, text) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
     });
 }
 
@@ -1054,7 +1054,7 @@ function settleReady(pet, error = null) {
 }
 
 /** 设置页预览里输入的话：叫出这个助手的桌宠（没开就打开），由桌宠发出去，回复显示在桌宠头上。 */
-async function talkFromSettings(agentId, text) {
+async function talkFromSettings(agentId, text, { newTopic = false } = {}) {
     if (!pets.has(agentId)) {
         const opened = await openPet(agentId);
         if (!opened?.success) return { success: false, error: '桌宠打不开' };
@@ -1071,7 +1071,7 @@ async function talkFromSettings(agentId, text) {
         return { success: false, error: error.message };
     }
     if (pet.win.isDestroyed()) return { success: false, error: '桌宠已经关了' };
-    pet.win.webContents.send('deskpet:open-input', { submit: text });
+    pet.win.webContents.send('deskpet:open-input', { submit: text, newTopic });
     return { success: true };
 }
 
@@ -1400,11 +1400,11 @@ function registerIpc() {
         const pet = petFromEvent(event);
         return pet ? readMood(pet.agentId) : null;
     });
-    ipcMain.handle('deskpet:send', async (event, text) => {
+    ipcMain.handle('deskpet:send', async (event, text, options) => {
         const pet = petFromEvent(event);
         const message = typeof text === 'string' ? text.trim() : '';
         if (!pet || !message) return { success: false, error: '没有内容' };
-        return sendFromPet(pet.agentId, message.slice(0, 8000));
+        return sendFromPet(pet.agentId, message.slice(0, 8000), { newTopic: options?.newTopic === true });
     });
     // 输入框打开时整窗可点、可聚焦；关上后回到按像素穿透。
     ipcMain.on('deskpet:set-interactive', (event, on) => {

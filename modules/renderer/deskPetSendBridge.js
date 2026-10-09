@@ -10,6 +10,7 @@ export function createDeskPetSendBridge({
     findAgent,
     selectItem,
     sendMessage,
+    startTopic,
     isBusy,
     acceptMs = DESK_PET_SEND_ACCEPT_MS,
     wait = (ms) => new Promise(resolve => setTimeout(resolve, ms)),
@@ -23,7 +24,7 @@ export function createDeskPetSendBridge({
         return run;
     };
 
-    async function sendOne({ agentId, text, deadline } = {}) {
+    async function sendOne({ agentId, text, newTopic = false, deadline } = {}) {
         // 桌宠那边已经按超时报失败了（前面排着的一条切换太慢）：不再发，免得用户重试后发两遍
         const expired = () => Number.isFinite(deadline) && now() > deadline;
         if (typeof agentId !== 'string' || !agentId || typeof text !== 'string' || !text.trim()) {
@@ -41,6 +42,15 @@ export function createDeskPetSendBridge({
         }
         if (isBusy()) return { success: false, error: '上一条还在回复中' };
         if (expired()) return { success: false, error: '主窗口没有响应' };
+        // 桌宠输入条上按了「+」：先像主窗口的「新话题」那样开一个，开成了再发
+        if (newTopic) {
+            const before = getTopicId();
+            await startTopic?.(selected);
+            if (!getTopicId() || getTopicId() === before || getSelectedItem()?.id !== agentId) {
+                return { success: false, error: '没能开新话题' };
+            }
+            if (expired()) return { success: false, error: '主窗口没有响应' };
+        }
         const sending = Promise.resolve().then(() => sendMessage({ content: text, attachments: [], propagateError: true }));
         // 发送要等回复开始流才返回；这里只等校验和落盘这一小段，之后的错误会显示在聊天里，桌宠也会收到出错事件。
         const early = await Promise.race([

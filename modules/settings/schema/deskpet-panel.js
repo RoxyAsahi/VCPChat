@@ -34,9 +34,10 @@ function button(doc, className, text, attrs = {}) {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
-    edit: ['M12 20h9', 'M16.4 3.6a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'],
-    voice: ['M4 10v4', 'M8 7v10', 'M12 4v16', 'M16 8v8', 'M20 11v2'],
-    mic: ['M5 11a7 7 0 0 0 14 0', 'M12 18v3', 'M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Z'],
+    edit: ['M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.4 2.6a2.1 2.1 0 0 1 3 3l-9 9a2 2 0 0 1-.9.5l-2.9.8.8-2.9a2 2 0 0 1 .5-.8Z'],
+    voice: ['M4 10v4', 'M8 7v10', 'M12 4v16', 'M16 7v10', 'M20 10v4'],
+    plus: ['M12 5v14', 'M5 12h14'],
+    collapse: ['m6 9 6 6 6-6'],
     send: ['M12 19V5', 'm5 12 7-7 7 7'],
     refresh: ['M21 12a9 9 0 1 1-2.6-6.4', 'M21 4v5h-5'],
     none: ['M5 5l14 14', 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z'],
@@ -97,17 +98,20 @@ function buildDock(doc) {
     edit.append(icon(doc, 'edit'));
     const voice = button(doc, 'dock-btn', undefined, { title: '说话（本地语音识别）', 'aria-label': '说话' });
     voice.append(icon(doc, 'voice'));
-    pill.append(edit, el(doc, 'i', 'dock-sep'), voice);
+    // 预览里多一个收起钮：点了收成脚边的小横条，光标再进来又撑开（桌面上光标离开就自己收）
+    const collapse = button(doc, 'dock-btn', undefined, { title: '收起', 'aria-label': '收起' });
+    collapse.append(icon(doc, 'collapse'));
+    pill.append(edit, el(doc, 'i', 'dock-sep'), voice, el(doc, 'i', 'dock-sep'), collapse);
     const bar = el(doc, 'form', 'dock-layer dock-bar');
-    const mic = button(doc, 'dock-btn dock-round', undefined, { title: '改成说话', 'aria-label': '说话' });
-    mic.append(icon(doc, 'mic'));
+    const fresh = button(doc, 'dock-btn dock-round', undefined, { title: '开新话题', 'aria-label': '开新话题', 'aria-pressed': 'false' });
+    fresh.append(icon(doc, 'plus'));
     const input = el(doc, 'textarea', 'dock-input');
     input.rows = 1;
     input.maxLength = 8000;
     input.setAttribute('aria-label', '和桌宠说的话');
     const send = button(doc, 'dock-send is-empty', undefined, { title: '发送（Enter）', 'aria-label': '发送' });
     send.append(icon(doc, 'send'));
-    bar.append(mic, input, send);
+    bar.append(fresh, input, send);
     const rec = el(doc, 'div', 'dock-layer dock-rec');
     const recEdit = button(doc, 'dock-btn', undefined, { title: '改成打字', 'aria-label': '打字' });
     recEdit.append(icon(doc, 'edit'));
@@ -115,7 +119,7 @@ function buildDock(doc) {
     stop.append(el(doc, 'span', 'rec-dot'));
     rec.append(recEdit, stop);
     dock.append(pill, bar, rec);
-    return { dock, edit, voice, bar, mic, input, send, recEdit, stop };
+    return { dock, edit, voice, collapse, bar, fresh, input, send, recEdit, stop };
 }
 
 function buildSwitchRow(doc, title, hint) {
@@ -268,6 +272,8 @@ export function buildDeskPetPanel(doc) {
         errors: {},
         drawerOpen: false,
         voice: null,
+        fresh: false, // 输入条上的「+」按下了：下一句开新话题
+        placeholder: '',
         visible: false,
         loadSeq: 0,
         shownOutfit: undefined,
@@ -311,7 +317,8 @@ export function buildDeskPetPanel(doc) {
         stage.dataset.state = !c?.agentId ? 'empty' : item ? (c.visible ? 'shown' : 'hidden') : 'none';
         showFigure(item?.preview || null, item ? `${c.agentId}\n${item.id}` : null);
         const name = c?.name || 'TA';
-        dockParts.input.placeholder = `和 ${name} 说点什么…`;
+        state.placeholder = `和 ${name} 说点什么…`;
+        if (!state.fresh) dockParts.input.placeholder = state.placeholder;
         customBtn.hidden = !c?.agentId;
     }
 
@@ -334,10 +341,18 @@ export function buildDeskPetPanel(doc) {
         }
     }
 
+    // 输入条左边的「+」：这一句开个新话题再发
+    function setFresh(on) {
+        state.fresh = on;
+        dockParts.fresh.setAttribute('aria-pressed', String(on));
+        dockParts.fresh.title = on ? '取消，接着原来的话题说' : '开新话题';
+        dockParts.input.placeholder = on ? '开始新聊天' : state.placeholder || '';
+    }
+
     function fitInput() {
         const input = dockParts.input;
         input.style.height = 'auto';
-        const height = Math.min(96, Math.max(36, input.scrollHeight || 36));
+        const height = Math.min(96, Math.max(40, input.scrollHeight || 40));
         input.style.height = `${height}px`;
         dockParts.dock.style.setProperty('--dock-bar-h', `${height + 12}px`);
         dockParts.send.classList.toggle('is-empty', !input.value.trim());
@@ -348,9 +363,10 @@ export function buildDeskPetPanel(doc) {
         if (!text || !state.catalog?.agentId) return;
         dockParts.send.disabled = true;
         try {
-            const result = await api.talkToDeskPet(state.catalog.agentId, text);
+            const result = await api.talkToDeskPet(state.catalog.agentId, text, { newTopic: state.fresh });
             if (result?.success) {
                 dockParts.input.value = '';
+                setFresh(false);
                 fitInput();
                 setDock('pill');
                 note(`发给桌面上的 ${state.catalog.name} 了，回复显示在 TA 头上`);
@@ -421,7 +437,15 @@ export function buildDeskPetPanel(doc) {
     dockParts.edit.addEventListener('click', () => setDock('bar'));
     dockParts.recEdit.addEventListener('click', () => { cancelVoice(); setDock('bar'); });
     dockParts.voice.addEventListener('click', startVoice);
-    dockParts.mic.addEventListener('click', startVoice);
+    dockParts.fresh.addEventListener('click', () => { setFresh(!state.fresh); dockParts.input.focus({ preventScroll: true }); });
+    dockParts.collapse.addEventListener('click', () => setDock('hidden'));
+    // 收起后光标回到预览里：停一下再撑开，和桌面上一样
+    let reopenTimer = 0;
+    stage.addEventListener('pointerenter', () => {
+        clearTimeout(reopenTimer);
+        if (dockParts.dock.dataset.mode === 'hidden') reopenTimer = setTimeout(() => { if (dockParts.dock.dataset.mode === 'hidden') setDock('pill'); }, 220);
+    });
+    stage.addEventListener('pointerleave', () => clearTimeout(reopenTimer));
     dockParts.stop.addEventListener('click', finishVoice);
     dockParts.send.addEventListener('click', sendFromStage);
     dockParts.bar.addEventListener('submit', (e) => { e.preventDefault(); sendFromStage(); });
@@ -509,7 +533,7 @@ export function buildDeskPetPanel(doc) {
         if (!item) {
             // 「无」：只有一个小胶囊，和桌面上什么都不放时一样
             const mini = el(doc, 'span', 'dps-mini-pill');
-            mini.append(icon(doc, 'edit'), el(doc, 'i'), icon(doc, 'voice'));
+            mini.append(icon(doc, 'edit'), el(doc, 'i'), icon(doc, 'voice'), el(doc, 'i'), icon(doc, 'collapse'));
             art.append(mini);
         } else {
             art.classList.add('is-loading');
