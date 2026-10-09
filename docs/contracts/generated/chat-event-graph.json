@@ -3707,12 +3707,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1430,
-          "kind": "custom-event-listener"
-        },
-        {
-          "file": "modules/event-listeners.js",
-          "line": 1501,
+          "line": 1461,
           "kind": "custom-event-listener"
         },
         {
@@ -5237,13 +5232,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1430,
-          "kind": "custom-event-listener",
-          "match": "deskPetBtn.addEventListener('click'"
-        },
-        {
-          "file": "modules/event-listeners.js",
-          "line": 1501,
+          "line": 1461,
           "kind": "custom-event-listener",
           "match": "voiceChatBtn.addEventListener('click'"
         },
@@ -17412,7 +17401,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1525,
+          "line": 1485,
           "kind": "custom-event-listener"
         },
         {
@@ -17590,7 +17579,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1525,
+          "line": 1485,
           "kind": "custom-event-listener",
           "match": "agentSearchInput.addEventListener('input'"
         },
@@ -18041,7 +18030,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1530,
+          "line": 1490,
           "kind": "custom-event-listener"
         },
         {
@@ -18420,7 +18409,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1530,
+          "line": 1490,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('keydown'"
         },
@@ -24269,14 +24258,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1596,
+          "line": 1556,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1596,
+          "line": 1556,
           "kind": "preload-subscription",
           "match": "chatAPI.onCreateUnlockedTopic("
         }
@@ -24307,14 +24296,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1473,
+          "line": 1433,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1473,
+          "line": 1433,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetOpenTopic("
         }
@@ -24345,14 +24334,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1464,
+          "line": 1424,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1464,
+          "line": 1424,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetSendRequest("
         }
@@ -24383,35 +24372,16 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1486,
+          "line": 1446,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1486,
+          "line": 1446,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetSettingsOpen("
-        }
-      ]
-    },
-    {
-      "name": "onDeskPetStateChanged(",
-      "producers": [],
-      "consumers": [
-        {
-          "file": "modules/event-listeners.js",
-          "line": 1447,
-          "kind": "preload-subscription"
-        }
-      ],
-      "evidence": [
-        {
-          "file": "modules/event-listeners.js",
-          "line": 1447,
-          "kind": "preload-subscription",
-          "match": "chatAPI.onDeskPetStateChanged("
         }
       ]
     },
