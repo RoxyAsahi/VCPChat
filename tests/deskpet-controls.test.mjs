@@ -56,7 +56,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -104,10 +104,14 @@ function fakeElectron({ taken = [] } = {}) {
                 reload: () => { this.reloads = (this.reloads || 0) + 1; },
                 setFrameRate() {},
                 loadURL: (url) => { this.contentsUrl = url; return Promise.resolve(); },
-                // 离屏快照：截到的是一张 40×80 的图
+                // 离屏快照：截到的是一张 40×80 的图；blankFrames 张以内是全透明的（帧还没合成出来）
                 capturePage: async (rect) => {
                     this.captured = rect;
-                    return { isEmpty: () => false, getSize: () => ({ width: 40, height: 80 }), resize: () => this, toPNG: () => Buffer.from('png') };
+                    this.captures = (this.captures || 0) + 1;
+                    const blank = this.blankFrames > 0;
+                    if (blank) this.blankFrames -= 1;
+                    const bitmap = Buffer.alloc(40 * 80 * 4, blank ? 0 : 255);
+                    return { isEmpty: () => false, getSize: () => ({ width: 40, height: 80 }), resize: () => this, toPNG: () => Buffer.from('png'), toBitmap: () => bitmap };
                 },
             });
             windows.push(this);
@@ -427,7 +431,12 @@ test('card snapshots are rendered offscreen once and reused while the files stay
     const assets = await env.fake.handlers.get('deskpet:get-assets')({ sender: offscreen.webContents });
     assert.equal(assets.preview, true);
     assert.equal(assets.outfit.id, 'maid');
-    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 100, y: 200, width: 120, height: 300 }, aspect: 2.5 });
+    const job = new URL(offscreen.contentsUrl).searchParams.get('job');
+    // 上一次渲染（超时了）迟到的报告：不能截成这一套
+    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 0, y: 0, width: 50, height: 50 }, job: `${job}0` });
+    await sleep(20);
+    assert.equal(offscreen.captured, undefined);
+    env.fake.listeners.get('deskpet:preview-ready')({ sender: offscreen.webContents }, { bounds: { x: 100, y: 200, width: 120, height: 300 }, aspect: 2.5, job });
     await sleep(50);
     assert.deepEqual(offscreen.captured, { x: 94, y: 194, width: 132, height: 312 }, '只截角色那一块，四周留一点边');
     const pushed = env.mainWindow.sent.find((m) => m.channel === 'deskpet-settings:preview');
@@ -436,6 +445,41 @@ test('card snapshots are rendered offscreen once and reused while the files stay
     const second = await catalog(fromMain(env), 'Nova');
     assert.equal(second.outfits[0].preview, pushed.payload.url, '文件没变就直接用');
     env.handlers.closeAll();
+});
+
+test('a snapshot taken before the offscreen frame is drawn is retried, and a blank one is never cached', async () => {
+    const env = await loadHandlers();
+    addOutfit(env, 'Nova', 'maid', '女仆');
+    const catalog = env.fake.handlers.get('deskpet-settings:catalog');
+    await catalog(fromMain(env), 'Nova');
+    const offscreen = env.fake.windows.find((w) => w.options.webPreferences?.offscreen);
+    const ready = (win) => env.fake.listeners.get('deskpet:preview-ready')({ sender: win.webContents }, {
+        bounds: { x: 10, y: 10, width: 40, height: 80 }, job: new URL(win.contentsUrl).searchParams.get('job'),
+    });
+    offscreen.blankFrames = 2;
+    ready(offscreen);
+    await sleep(900);
+    assert.equal(offscreen.captures, 3, '前两张是空的，再截一次');
+    const pushed = env.mainWindow.sent.filter((m) => m.channel === 'deskpet-settings:preview');
+    assert.match(pushed.at(-1).payload.url, /^file:.*\.png\?v=/);
+
+    env.handlers.closeAll();
+
+    // 一直截不到东西：这一套不存快照，下次打开设置页还会重画
+    const env2 = await loadHandlers();
+    addOutfit(env2, 'Nova', 'maid', '女仆');
+    await env2.fake.handlers.get('deskpet-settings:catalog')(fromMain(env2), 'Nova');
+    const blankWin = env2.fake.windows.find((w) => w.options.webPreferences?.offscreen);
+    blankWin.blankFrames = 99;
+    env2.fake.listeners.get('deskpet:preview-ready')({ sender: blankWin.webContents }, {
+        bounds: { x: 10, y: 10, width: 40, height: 80 }, job: new URL(blankWin.contentsUrl).searchParams.get('job'),
+    });
+    await sleep(2200);
+    const last = env2.mainWindow.sent.filter((m) => m.channel === 'deskpet-settings:preview').at(-1);
+    assert.equal(last.payload.url, null);
+    const third = await env2.fake.handlers.get('deskpet-settings:catalog')(fromMain(env2), 'Nova');
+    assert.equal(third.outfits[0].preview, null, '空白的没缓存下来');
+    env2.handlers.closeAll();
 });
 
 test('the settings file and the settings page never claim the same channel', () => {

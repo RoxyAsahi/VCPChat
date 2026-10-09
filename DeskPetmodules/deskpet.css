@@ -269,6 +269,7 @@ body.is-preview #dock,
 body.is-preview #uiStack,
 body.is-preview #emotionBadge,
 body.is-preview #dndBadge,
+body.is-preview #throughBadge,
 body.is-preview #lifeFx {
   display: none !important;
 }
@@ -297,6 +298,18 @@ body.is-preview #lifeFx {
 #dndBadge {
   position: absolute;
   left: min(calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.3), calc(100% - 20px));
+  top: calc(var(--pet-head, 150px) - 4px);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.75;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* 只看不点时头顶另一边一个小幽灵：知道为什么点不到它 */
+#throughBadge {
+  position: absolute;
+  left: max(4px, calc(var(--pet-head-x, 50%) - var(--pet-head-w, 80px) * 0.3 - 16px));
   top: calc(var(--pet-head, 150px) - 4px);
   font-size: 16px;
   line-height: 1;
@@ -391,6 +404,37 @@ body.is-paused *::after {
 #lifeBody[data-life-act="annoyed"] { animation-name: life-shake; }
 #lifeBody[data-life-act="dizzy"] { animation-name: life-dizzy; }
 #lifeBody[data-life-act="landed"] { animation-name: life-land; animation-timing-function: ease-out; }
+/* 回复里的动作（gestures.js） */
+#lifeBody[data-life-act="agree"] { animation-name: life-agree; }
+#lifeBody[data-life-act="disagree"] { animation-name: life-disagree; }
+#lifeBody[data-life-act="cheer"] { animation-name: life-cheer; animation-timing-function: ease-out; }
+#lifeBody[data-life-act="bow"] { animation-name: life-bow; }
+
+@keyframes life-agree {
+  0%, 50%, 100% { translate: 0 0; scale: 1 1; }
+  25%, 75% { translate: 0 5px; scale: 1 0.985; }
+}
+
+@keyframes life-disagree {
+  0%, 100% { rotate: 0deg; }
+  15% { rotate: -3deg; }
+  35% { rotate: 3deg; }
+  55% { rotate: -2deg; }
+  75% { rotate: 1.5deg; }
+}
+
+@keyframes life-cheer {
+  0%, 100% { translate: 0 0; scale: 1 1; }
+  12% { translate: 0 2px; scale: 1.02 0.97; }
+  40% { translate: 0 -20px; scale: 0.99 1.03; }
+  70% { translate: 0 0; scale: 1.02 0.98; }
+}
+
+@keyframes life-bow {
+  0%, 100% { translate: 0 0; scale: 1 1; }
+  35%, 65% { translate: 0 8px; scale: 1 0.97; }
+}
+
 
 @keyframes life-look {
   0%, 100% { translate: 0 0; rotate: 0deg; }

@@ -1410,48 +1410,8 @@ export function setupEventListeners(deps) {
         }
     }
 
-    // 桌宠开关：跟随语音聊天按钮的可见性（只对 Agent 显示），按下即打开/关闭当前 Agent 的桌宠。
-    const deskPetBtn = document.getElementById('toggleDeskPetBtn');
-    const voiceChatBtnForPet = document.getElementById('voiceChatBtn');
-    if (deskPetBtn && typeof chatAPI.toggleDeskPet === 'function') {
-        let openPetAgents = new Set();
-        const syncDeskPetBtn = () => {
-            const item = refs.currentSelectedItem.get();
-            const isAgent = item?.type === 'agent' && !!item.id;
-            deskPetBtn.style.display = isAgent && voiceChatBtnForPet?.style.display !== 'none' ? 'inline-flex' : 'none';
-            const open = isAgent && openPetAgents.has(item.id);
-            deskPetBtn.classList.toggle('active', open);
-            deskPetBtn.setAttribute('aria-pressed', String(open));
-        };
-        const applyOpenAgents = (agentIds) => {
-            openPetAgents = new Set(Array.isArray(agentIds) ? agentIds : []);
-            syncDeskPetBtn();
-        };
-        deskPetBtn.addEventListener('click', async () => {
-            const item = refs.currentSelectedItem.get();
-            if (!item?.id || item.type !== 'agent') {
-                uiHelperFunctions.showToastNotification('桌宠只能从 Agent 打开', 'warning');
-                return;
-            }
-            try {
-                const result = await chatAPI.toggleDeskPet(item.id);
-                if (result?.success === false) {
-                    uiHelperFunctions.showToastNotification(`桌宠打开失败: ${result.error}`, 'error');
-                }
-                if (Array.isArray(result?.openAgents)) applyOpenAgents(result.openAgents);
-            } catch (error) {
-                console.error('[DeskPet] toggle failed:', error);
-                uiHelperFunctions.showToastNotification(`桌宠打开失败: ${error.message}`, 'error');
-            }
-        });
-        chatAPI.onDeskPetStateChanged?.((payload) => applyOpenAgents(payload?.openAgents));
-        chatAPI.getDeskPetOpenAgents?.().then(applyOpenAgents).catch(() => {});
-        if (voiceChatBtnForPet) {
-            new MutationObserver(syncDeskPetBtn).observe(voiceChatBtnForPet, { attributes: true, attributeFilter: ['style'] });
-        }
-        const agentNameEl = document.getElementById('currentChatAgentName');
-        if (agentNameEl) new MutationObserver(syncDeskPetBtn).observe(agentNameEl, { childList: true, characterData: true, subtree: true });
-
+    // 桌宠的开关和设置都在全局设置「桌宠」分区里；这里只接桌宠和主窗口之间的往来
+    if (typeof chatAPI.toggleDeskPet === 'function') {
         // 桌宠上说的话：切到那个 Agent，按正常流程发送（历史、话题、流式都照旧）。
         const sendFromPet = createDeskPetSendBridge({
             getSelectedItem: () => refs.currentSelectedItem.get(),
@@ -1461,10 +1421,10 @@ export function setupEventListeners(deps) {
             sendMessage: request => chatManager.handleSendMessage(request),
             isBusy: () => sendMessageBtn.dataset.mode === 'interrupt',
         });
-        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text } = {}) => {
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, deadline } = {}) => {
             let result;
             try {
-                result = await sendFromPet({ agentId, text });
+                result = await sendFromPet({ agentId, text, deadline });
             } catch (error) {
                 result = { success: false, error: error.message };
             }

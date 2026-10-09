@@ -107,7 +107,12 @@ test('the tag prompt is added only while the pet is open and not already present
     await fake.handlers.get('deskpet:toggle')({}, 'Nova');
     const withPrompt = handlers.appendProtocolToMessages(messages, 'Nova');
     assert.match(withPrompt[0].content, /<!--emo:/);
-    const already = [{ role: 'system', content: '我会写 <!--emo:happy--> 标记' }];
+    assert.match(withPrompt[0].content, /【桌宠动作】/);
+    // 角色自己会写情绪标记：不再重复标记说明，只补动作说明
+    const tagsOnly = handlers.appendProtocolToMessages([{ role: 'system', content: '我会写 <!--emo:happy--> 标记' }], 'Nova');
+    assert.match(tagsOnly[0].content, /【桌宠动作】/);
+    assert.equal(tagsOnly[0].content.split('【桌宠动作】')[0].trim(), '我会写 <!--emo:happy--> 标记');
+    const already = [{ role: 'system', content: '我会写 <!--emo:happy/nod--> 标记' }];
     assert.equal(handlers.appendProtocolToMessages(already, 'Nova'), already);
     handlers.closeAll();
 });

@@ -25,6 +25,7 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
+    clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
 });
 
 // VCPChat 自己已经占用的组合键（全局快捷键和菜单），桌宠不能抢。
@@ -41,6 +42,11 @@ const RESERVED_ACCELERATORS = Object.freeze([
 const DEFAULT_SETTINGS = Object.freeze({
     doNotDisturb: false,
     restoreOnLaunch: true,
+    // 别的程序全屏时先躲开（只在 Windows 上做，见 modules/deskpet/fullscreenWatch.js）。
+    // 先默认关着，等 Windows 上的 CI 验证过检测脚本再打开
+    yieldToFullscreen: false,
+    // 只看不点：鼠标整个穿过桌宠，点不到也拖不动；托盘、快捷键关掉
+    clickThrough: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -203,6 +209,8 @@ function normalizeSettings(raw) {
     return {
         doNotDisturb: input.doNotDisturb === true,
         restoreOnLaunch: input.restoreOnLaunch !== false,
+        yieldToFullscreen: input.yieldToFullscreen === true,
+        clickThrough: input.clickThrough === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,

@@ -13,6 +13,7 @@ export function createDeskPetSendBridge({
     isBusy,
     acceptMs = DESK_PET_SEND_ACCEPT_MS,
     wait = (ms) => new Promise(resolve => setTimeout(resolve, ms)),
+    now = () => Date.now(),
 }) {
     // 桌宠的发送一条一条来：两次快速发送不能同时等切换、同时通过「上一条还在回复中」的检查。
     let queue = Promise.resolve();
@@ -22,7 +23,9 @@ export function createDeskPetSendBridge({
         return run;
     };
 
-    async function sendOne({ agentId, text } = {}) {
+    async function sendOne({ agentId, text, deadline } = {}) {
+        // 桌宠那边已经按超时报失败了（前面排着的一条切换太慢）：不再发，免得用户重试后发两遍
+        const expired = () => Number.isFinite(deadline) && now() > deadline;
         if (typeof agentId !== 'string' || !agentId || typeof text !== 'string' || !text.trim()) {
             return { success: false, error: '没有内容' };
         }
@@ -37,6 +40,7 @@ export function createDeskPetSendBridge({
             return { success: false, error: '没能切换到这个助手' };
         }
         if (isBusy()) return { success: false, error: '上一条还在回复中' };
+        if (expired()) return { success: false, error: '主窗口没有响应' };
         const sending = Promise.resolve().then(() => sendMessage({ content: text, attachments: [], propagateError: true }));
         // 发送要等回复开始流才返回；这里只等校验和落盘这一小段，之后的错误会显示在聊天里，桌宠也会收到出错事件。
         const early = await Promise.race([
