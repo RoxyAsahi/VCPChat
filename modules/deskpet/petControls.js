@@ -176,6 +176,7 @@ function createPetControls({ electron, appDataRoot, actions }) {
             if (typeof patch.restoreOnLaunch === 'boolean') allowed.restoreOnLaunch = patch.restoreOnLaunch;
             if (typeof patch.yieldToFullscreen === 'boolean') allowed.yieldToFullscreen = patch.yieldToFullscreen;
             if (typeof patch.clickThrough === 'boolean') allowed.clickThrough = patch.clickThrough;
+            if (typeof patch.wander === 'boolean') allowed.wander = patch.wander;
             update(allowed);
             return snapshot();
         });

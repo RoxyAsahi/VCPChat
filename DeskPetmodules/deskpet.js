@@ -31,6 +31,9 @@ const PREVIEW = new URLSearchParams(location.search).has('preview');
 const FPS = { active: 30, idle: 15, sleep: 10 };
 const FPS_SOFTWARE = { active: 20, idle: 8, sleep: 5 };
 const IDLE_AFTER_MS = 30000;
+// 溜达（设置里打开）：这么久没人理、站在任务栏上才走；走过一次以后隔一阵再走
+const WANDER_AFTER_MS = 60000;
+const WANDER_GAP_MS = [40000, 100000];
 const HIT_ALPHA = 24;
 const CORE_V6 = 0x06000000;
 // 回复结束后气泡停留多久：按字数给时间读完，鼠标停在气泡上时不收
@@ -1635,6 +1638,37 @@ function bindStream(director) {
     });
 }
 
+// ---- 溜达 ----------------------------------------------------------------------
+// 主进程挪窗口，页面只决定什么时候想走、走的时候一颠一颠；有了任何动静就停下（主进程那边也会停）。
+
+let walking = null; // 'left' | 'right' | null
+let nextWanderAt = 0;
+
+function wanderGap() {
+    return WANDER_GAP_MS[0] + Math.random() * (WANDER_GAP_MS[1] - WANDER_GAP_MS[0]);
+}
+
+function wanderTick(ui) {
+    const now = Date.now();
+    const busy = !!ui || !!frame.state || life.phase !== 'awake' || now - lastActivity < WANDER_AFTER_MS;
+    if (walking) {
+        if (busy) api.wander?.({ stop: true });
+        return;
+    }
+    if (prefs.wander !== true || busy || now < nextWanderAt) return;
+    nextWanderAt = now + wanderGap();
+    const figure = figureBounds();
+    if (figure) api.wander?.({ figure });
+}
+
+function bindWalk() {
+    api.onWalk?.(({ dir }) => {
+        walking = dir;
+        if (dir) document.body.dataset.walk = dir;
+        else delete document.body.dataset.walk;
+    });
+}
+
 // ---- 设置：大小、免打扰 -------------------------------------------------------------
 
 function isQuiet() {
@@ -1688,6 +1722,7 @@ async function start() {
     if (!assets) return;
     applyPrefs(await api.getPrefs?.().catch(() => null));
     api.onPrefs?.(applyPrefs);
+    bindWalk();
     document.title = `${assets.name} · 桌宠`;
     // 占位只写一句：窄窗口里也不折行；按键提示放在悬停说明里
     $('composerInput').placeholder = `和 ${assets.name} 说点什么…`;
@@ -1917,6 +1952,7 @@ async function start() {
         if (rect) api.setContentBounds({ x: Math.max(0, rect.x), y: Math.max(0, rect.y), width: rect.width, height: rect.height });
         life.setMood(director.baseline);
         life.tick();
+        wanderTick(ui);
         if (Date.now() - lastActivity > IDLE_AFTER_MS && !frame.state) backend.setActive(life.phase === 'asleep' ? 'sleep' : 'idle');
     }, 250);
 

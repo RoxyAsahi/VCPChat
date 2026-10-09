@@ -294,3 +294,50 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     assert.deepEqual(pet.getPosition(), [-25, 300]);
     handlers.closeAll();
 });
+
+test('wandering: an idle pet on the taskbar strolls a little; touching it stops it in place', async (t) => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    t.after(() => handlers.closeAll());
+    const pet = await open();
+    const figure = { x: 40, y: 100, width: 200, height: 300 };
+    const floorY = 1000 - figure.y - figure.height;
+    pet.setBounds({ x: 600, y: floorY });
+    const walks = () => pet.sent.filter((m) => m.channel === 'deskpet:walk').map((m) => m.payload.dir);
+    // 默认关：页面来问也不走
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    await sleep(60);
+    assert.deepEqual(pet.getPosition(), [600, floorY]);
+    assert.deepEqual(walks(), []);
+    handlers._controls().update({ wander: true });
+    assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.wander, true);
+    // 半空中不走
+    pet.setBounds({ x: 600, y: 200 });
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    assert.deepEqual(walks(), []);
+    // 站在任务栏上：沿着走一段，高度不变，走完停下
+    pet.setBounds({ x: 600, y: floorY });
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    assert.equal(walks().length, 1);
+    await sleep(200);
+    const [x1, y1] = pet.getPosition();
+    assert.notEqual(x1, 600);
+    assert.equal(y1, floorY);
+    // 光标碰到角色：停在原地
+    fake.listeners.get('deskpet:hit')(fromPet(pet), true);
+    assert.equal(walks().at(-1), null);
+    const [x2] = pet.getPosition();
+    await sleep(100);
+    assert.equal(pet.getPosition()[0], x2);
+    fake.listeners.get('deskpet:hit')(fromPet(pet), false);
+    // 再走一次，页面说有动静了：停下；关掉溜达也停
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    await sleep(50);
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { stop: true });
+    assert.equal(walks().at(-1), null);
+    fake.listeners.get('deskpet:wander')(fromPet(pet), { figure });
+    handlers._controls().update({ wander: false });
+    assert.equal(walks().at(-1), null);
+    const [x3] = pet.getPosition();
+    await sleep(100);
+    assert.equal(pet.getPosition()[0], x3);
+});

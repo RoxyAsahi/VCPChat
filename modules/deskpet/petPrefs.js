@@ -47,6 +47,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     yieldToFullscreen: false,
     // 只看不点：鼠标整个穿过桌宠，点不到也拖不动；托盘、快捷键关掉
     clickThrough: false,
+    // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
+    wander: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -211,6 +213,7 @@ function normalizeSettings(raw) {
         restoreOnLaunch: input.restoreOnLaunch !== false,
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
+        wander: input.wander === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
