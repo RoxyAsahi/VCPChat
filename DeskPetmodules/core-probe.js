@@ -2,7 +2,8 @@
 (function probe() {
     const report = (version) => { document.title = `core-version:${version}`; };
     const script = document.createElement('script');
-    script.src = 'vcp-deskpet://pet/core/staged.js';
+    // 每次试加载的都是新文件，地址带上页面给的随机数，不拿缓存里的上一份
+    script.src = `vcp-deskpet://pet/core/staged.js?n=${encodeURIComponent(new URLSearchParams(location.search).get('n') || Date.now())}`;
     script.onload = () => {
         let version = 0;
         try { version = Number(window.Live2DCubismCore?.Version?.csmGetVersion?.()) || 0; } catch { version = 0; }

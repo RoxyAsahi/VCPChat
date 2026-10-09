@@ -182,7 +182,9 @@ async function resolveAssets(agentId, wantedOutfit) {
     const avatar = IMAGE_EXTENSIONS.map((ext) => `avatar.${ext}`);
     const files = (await fs.pathExists(agentRoot)) ? await fs.readdir(agentRoot) : [];
     const avatarFile = avatar.map((wanted) => files.find((f) => f.toLowerCase() === wanted)).find(Boolean);
-    const hasCore = await fs.pathExists(coreFilePath());
+    // 换过 Core 以后（设置页里装、换）页面的缓存里可能还是旧的那份：地址带上修改时间
+    const coreStat = await fs.stat(coreFilePath()).catch(() => null);
+    const hasCore = Boolean(coreStat);
     return {
         agentId,
         name,
@@ -190,7 +192,7 @@ async function resolveAssets(agentId, wantedOutfit) {
         outfits: outfits.map(outfitSummary),
         live2d: outfit?.live2d ? { modelUrl: agentUrl(agentId, outfit.live2d) } : null,
         puppet: outfit?.puppet ? { rigUrl: agentUrl(agentId, outfit.puppet) } : null,
-        coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
+        coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js?v=${Math.round(coreStat.mtimeMs)}` : null,
         corePath: coreFilePath(),
         portraits: portraitUrls(agentId, outfit?.portraits || fallback),
         avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : null,
@@ -372,7 +374,7 @@ function probeCore() {
         });
         win.webContents.on('render-process-gone', () => finish(0));
         win.on('closed', () => finish(0));
-        win.loadURL(`${SCHEME}://pet/app/core-probe.html`).catch(() => finish(0));
+        win.loadURL(`${SCHEME}://pet/app/core-probe.html?n=${Date.now()}`).catch(() => finish(0));
     });
 }
 
