@@ -3,8 +3,7 @@
   "FileReferences": {
     "Moc": "NovaTech.moc3",
     "Textures": [
-      "NovaTech.2048/texture_00.png",
-      "NovaTech.2048/texture_01.png"
+      "NovaTech.2048/texture_00.png"
     ],
     "Physics": "NovaTech.physics3.json",
     "DisplayInfo": "NovaTech.cdi3.json",

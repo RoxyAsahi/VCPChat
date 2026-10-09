@@ -5,15 +5,15 @@
     "distinct_pairs": 66,
     "minimum_parameter_difference": 0.30000000447034836,
     "pixel_difference_counts": {
-      "happy/sad": 131714,
-      "angry/shy": 107835,
-      "happy/excited": 113371,
-      "neutral/calm": 170142
+      "happy/sad": 114711,
+      "angry/shy": 119847,
+      "happy/excited": 151823,
+      "neutral/calm": 173577
     },
     "actual_expression_parameters": {
       "neutral": {
         "ParamMouthForm": 0,
-        "ParamEyeBallForm": -0.00038901070365682244,
+        "ParamEyeBallForm": 9.808536560740322e-05,
         "ParamBrowLY": 0,
         "ParamBrowRY": 0,
         "ParamEyeLSmile": 0,
@@ -24,7 +24,7 @@
       },
       "calm": {
         "ParamMouthForm": 0.4126359224319458,
-        "ParamEyeBallForm": 4.3278038219796144e-07,
+        "ParamEyeBallForm": 4.7079970499908086e-07,
         "ParamBrowLY": -0.05000000074505806,
         "ParamBrowRY": -0.05000000074505806,
         "ParamEyeLSmile": 0.39263591170310974,
@@ -35,7 +35,7 @@
       },
       "happy": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -5.07271264924003e-12,
+        "ParamEyeBallForm": -3.172877793833351e-10,
         "ParamBrowLY": 0.4126359224319458,
         "ParamBrowRY": 0.4126359224319458,
         "ParamEyeLSmile": 1,
@@ -46,20 +46,20 @@
       },
       "excited": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -2.380133308325927e-13,
+        "ParamEyeBallForm": 0.00013118366769049317,
         "ParamBrowLY": 1,
         "ParamBrowRY": 1,
-        "ParamEyeLSmile": 0.6220642328262329,
-        "ParamEyeRSmile": 0.6220642328262329,
+        "ParamEyeLSmile": 0.6220603585243225,
+        "ParamEyeRSmile": 0.6220603585243225,
         "ParamBrowLAngle": 0.10000000149011612,
         "ParamBrowRAngle": 0.10000000149011612,
-        "ParamCheek": 0.8524312973022461
+        "ParamCheek": 0.852428138256073
       },
       "affectionate": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -6.203038266144791e-16,
-        "ParamBrowLY": 0.16961097717285156,
-        "ParamBrowRY": 0.16961097717285156,
+        "ParamEyeBallForm": -0.00030171676189638674,
+        "ParamBrowLY": 0.16961416602134705,
+        "ParamBrowRY": 0.16961416602134705,
         "ParamEyeLSmile": 1,
         "ParamEyeRSmile": 1,
         "ParamBrowLAngle": 0.20000000298023224,
@@ -67,30 +67,30 @@
         "ParamCheek": 1
       },
       "shy": {
-        "ParamMouthForm": 0.7598294019699097,
-        "ParamEyeBallForm": -0.000265700276941061,
+        "ParamMouthForm": 0.7611697912216187,
+        "ParamEyeBallForm": 0.00016814055561553687,
         "ParamBrowLY": 0.18000000715255737,
         "ParamBrowRY": 0.18000000715255737,
-        "ParamEyeLSmile": 0.41469642519950867,
-        "ParamEyeRSmile": 0.41469642519950867,
+        "ParamEyeLSmile": 0.41670045256614685,
+        "ParamEyeRSmile": 0.41670045256614685,
         "ParamBrowLAngle": 0.30000001192092896,
         "ParamBrowRAngle": 0.30000001192092896,
         "ParamCheek": 1
       },
       "curious": {
-        "ParamMouthForm": 0.05983749404549599,
-        "ParamEyeBallForm": 1.5335128409788013e-05,
+        "ParamMouthForm": 0.059842947870492935,
+        "ParamEyeBallForm": 0.00029663124587386847,
         "ParamBrowLY": 1,
         "ParamBrowRY": -0.04754530265927315,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0.15000000596046448,
         "ParamBrowLAngle": 0.5,
         "ParamBrowRAngle": -0.15000000596046448,
-        "ParamCheek": 0.024532895535230637
+        "ParamCheek": 0.024528803303837776
       },
       "concerned": {
         "ParamMouthForm": -0.6401812434196472,
-        "ParamEyeBallForm": -3.685269405195868e-07,
+        "ParamEyeBallForm": -3.431537436426879e-07,
         "ParamBrowLY": -0.00038899522041901946,
         "ParamBrowRY": -0.01508529856801033,
         "ParamEyeLSmile": 0,
@@ -101,7 +101,7 @@
       },
       "sad": {
         "ParamMouthForm": -1,
-        "ParamEyeBallForm": -3.815433956333436e-05,
+        "ParamEyeBallForm": -0.00018418882973492146,
         "ParamBrowLY": -0.09505326300859451,
         "ParamBrowRY": -0.09508124738931656,
         "ParamEyeLSmile": 0,
@@ -112,7 +112,7 @@
       },
       "angry": {
         "ParamMouthForm": -1,
-        "ParamEyeBallForm": 3.969833051087335e-05,
+        "ParamEyeBallForm": -8.25240567792207e-06,
         "ParamBrowLY": -1,
         "ParamBrowRY": -1,
         "ParamEyeLSmile": 0,
@@ -123,7 +123,7 @@
       },
       "surprised": {
         "ParamMouthForm": -0.06228276342153549,
-        "ParamEyeBallForm": -2.2627182261203416e-06,
+        "ParamEyeBallForm": -0.000374522089259699,
         "ParamBrowLY": 1,
         "ParamBrowRY": 1,
         "ParamEyeLSmile": 0,
@@ -133,10 +133,10 @@
         "ParamCheek": 0
       },
       "tired": {
-        "ParamMouthForm": -0.10493277758359909,
-        "ParamEyeBallForm": 0.008026928640902042,
-        "ParamBrowLY": -0.4230591356754303,
-        "ParamBrowRY": -0.4230591356754303,
+        "ParamMouthForm": -0.10493596643209457,
+        "ParamEyeBallForm": 0.0029172806534916162,
+        "ParamBrowLY": -0.4230674207210541,
+        "ParamBrowRY": -0.4230674207210541,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0,
         "ParamBrowLAngle": 0.20000000298023224,
@@ -151,15 +151,15 @@
     "distinct_pairs": 66,
     "minimum_parameter_difference": 0.30000000447034836,
     "pixel_difference_counts": {
-      "happy/sad": 69032,
-      "angry/shy": 63746,
-      "happy/excited": 90017,
-      "neutral/calm": 107050
+      "happy/sad": 63298,
+      "angry/shy": 57972,
+      "happy/excited": 73898,
+      "neutral/calm": 100126
     },
     "actual_expression_parameters": {
       "neutral": {
         "ParamMouthForm": 0,
-        "ParamEyeBallForm": 0.00027957247220911086,
+        "ParamEyeBallForm": -6.18166959611699e-05,
         "ParamBrowLY": 0,
         "ParamBrowRY": 0,
         "ParamEyeLSmile": 0,
@@ -170,7 +170,7 @@
       },
       "calm": {
         "ParamMouthForm": 0.4126359224319458,
-        "ParamEyeBallForm": 7.360744689322019e-07,
+        "ParamEyeBallForm": 4.2916755660371564e-07,
         "ParamBrowLY": -0.05000000074505806,
         "ParamBrowRY": -0.05000000074505806,
         "ParamEyeLSmile": 0.39263591170310974,
@@ -181,7 +181,7 @@
       },
       "happy": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -5.256091673011554e-10,
+        "ParamEyeBallForm": -1.4241301193873568e-10,
         "ParamBrowLY": 0.4126359224319458,
         "ParamBrowRY": 0.4126359224319458,
         "ParamEyeLSmile": 1,
@@ -192,7 +192,7 @@
       },
       "excited": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -1.719345694463359e-13,
+        "ParamEyeBallForm": 6.1811456362192985e-06,
         "ParamBrowLY": 1,
         "ParamBrowRY": 1,
         "ParamEyeLSmile": 0.6220642328262329,
@@ -203,7 +203,7 @@
       },
       "affectionate": {
         "ParamMouthForm": 1,
-        "ParamEyeBallForm": -2.984279383783907e-17,
+        "ParamEyeBallForm": -0.00015472291852347553,
         "ParamBrowLY": 0.16961416602134705,
         "ParamBrowRY": 0.16961416602134705,
         "ParamEyeLSmile": 1,
@@ -213,32 +213,32 @@
         "ParamCheek": 1
       },
       "shy": {
-        "ParamMouthForm": 0.7598280906677246,
-        "ParamEyeBallForm": -0.0003878130519296974,
+        "ParamMouthForm": 0.7598294019699097,
+        "ParamEyeBallForm": -0.0002385154803050682,
         "ParamBrowLY": 0.18000000715255737,
         "ParamBrowRY": 0.18000000715255737,
-        "ParamEyeLSmile": 0.4147002100944519,
-        "ParamEyeRSmile": 0.4147002100944519,
+        "ParamEyeLSmile": 0.4146963953971863,
+        "ParamEyeRSmile": 0.4146963953971863,
         "ParamBrowLAngle": 0.30000001192092896,
         "ParamBrowRAngle": 0.30000001192092896,
         "ParamCheek": 1
       },
       "curious": {
-        "ParamMouthForm": 0.059840042144060135,
-        "ParamEyeBallForm": 8.307999814860523e-05,
+        "ParamMouthForm": 0.05983749404549599,
+        "ParamEyeBallForm": 0.00020704724011011422,
         "ParamBrowLY": 1,
         "ParamBrowRY": -0.04754530265927315,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0.15000000596046448,
         "ParamBrowLAngle": 0.5,
         "ParamBrowRAngle": -0.15000000596046448,
-        "ParamCheek": 0.024530984461307526
+        "ParamCheek": 0.024532895535230637
       },
       "concerned": {
         "ParamMouthForm": -0.6401812434196472,
-        "ParamEyeBallForm": -1.6737734540583915e-06,
-        "ParamBrowLY": -0.0003858087002299726,
-        "ParamBrowRY": -0.015085935592651367,
+        "ParamEyeBallForm": -1.322740388332022e-07,
+        "ParamBrowLY": -0.00038899522041901946,
+        "ParamBrowRY": -0.01508529856801033,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0,
         "ParamBrowLAngle": 1,
@@ -247,9 +247,9 @@
       },
       "sad": {
         "ParamMouthForm": -1,
-        "ParamEyeBallForm": 5.782356311101466e-06,
-        "ParamBrowLY": -0.09505326300859451,
-        "ParamBrowRY": -0.09508124738931656,
+        "ParamEyeBallForm": -4.325074769440107e-05,
+        "ParamBrowLY": -0.09504817426204681,
+        "ParamBrowRY": -0.09507997334003448,
         "ParamEyeLSmile": 0,
         "ParamEyeRSmile": 0,
         "ParamBrowLAngle": 1,
@@ -258,7 +258,7 @@
       },
       "angry": {
         "ParamMouthForm": -1,
-        "ParamEyeBallForm": 0.00021027405455242842,
+        "ParamEyeBallForm": 4.118266951991245e-05,
         "ParamBrowLY": -1,
         "ParamBrowRY": -1,
         "ParamEyeLSmile": 0,
@@ -269,7 +269,7 @@
       },
       "surprised": {
         "ParamMouthForm": -0.06228277087211609,
-        "ParamEyeBallForm": -2.3759130272082984e-06,
+        "ParamEyeBallForm": -0.0006643449305556715,
         "ParamBrowLY": 1,
         "ParamBrowRY": 1,
         "ParamEyeLSmile": 0,
@@ -280,7 +280,7 @@
       },
       "tired": {
         "ParamMouthForm": -0.10493277758359909,
-        "ParamEyeBallForm": 0.007179643027484417,
+        "ParamEyeBallForm": 0.0032320672180503607,
         "ParamBrowLY": -0.4230591356754303,
         "ParamBrowRY": -0.4230591356754303,
         "ParamEyeLSmile": 0,

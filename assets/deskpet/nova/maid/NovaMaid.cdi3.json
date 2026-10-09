@@ -2,31 +2,6 @@
 	"Version": 3,
 	"Parameters": [
 		{
-			"Id": "ParamCheek",
-			"GroupId": "",
-			"Name": "Cheek blush"
-		},
-		{
-			"Id": "ParamBrowRAngle",
-			"GroupId": "",
-			"Name": "ParamBrowRAngle"
-		},
-		{
-			"Id": "ParamEyeRSmile",
-			"GroupId": "",
-			"Name": "ParamEyeRSmile"
-		},
-		{
-			"Id": "ParamBrowLAngle",
-			"GroupId": "",
-			"Name": "ParamBrowLAngle"
-		},
-		{
-			"Id": "ParamEyeLSmile",
-			"GroupId": "",
-			"Name": "ParamEyeLSmile"
-		},
-		{
 			"Id": "ParamAngleX",
 			"GroupId": "ParamGroupFace",
 			"Name": "角度 X"
@@ -125,6 +100,31 @@
 			"Id": "ParamHairBack",
 			"GroupId": "ParamGroupPhysics",
 			"Name": "后发摆动"
+		},
+		{
+			"Id": "ParamEyeLSmile",
+			"GroupId": "ParamGroupEyes",
+			"Name": "左眼笑眼"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "ParamGroupEyes",
+			"Name": "右眼笑眼"
+		},
+		{
+			"Id": "ParamBrowLAngle",
+			"GroupId": "ParamGroupBrows",
+			"Name": "左眉角度"
+		},
+		{
+			"Id": "ParamBrowRAngle",
+			"GroupId": "ParamGroupBrows",
+			"Name": "右眉角度"
+		},
+		{
+			"Id": "ParamCheek",
+			"GroupId": "ParamGroupFace",
+			"Name": "脸红"
 		}
 	],
 	"ParameterGroups": [
@@ -271,14 +271,6 @@
 		{
 			"Id": "ArtMeshMouthOpen_lip_1",
 			"Name": "mouth open / 下唇描边"
-		},
-		{
-			"Id": "ArtMeshFaceDetailR",
-			"Name": "cheek-R"
-		},
-		{
-			"Id": "ArtMeshFaceDetailL",
-			"Name": "cheek-L"
 		},
 		{
 			"Id": "ArtMeshFace",

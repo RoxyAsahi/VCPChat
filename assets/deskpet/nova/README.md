@@ -29,4 +29,6 @@ Q 版已改为模型自带的表情与手势，不再只是立绘差分：
 
 验收：设置 NOVA_CUBISM_CORE_PATH 为自己的 Core 5.x 文件路径，使用 Electron 运行 tools/nova/verify_expressions.cjs OUTPUT_DIR，再运行 python tools/nova/check_expression_results.py OUTPUT_DIR（需要 Pillow）。验收使用隔离数据目录，输出包含完整参数、顶点和截图；不要把其中的 AppData、Core 或 Electron profile 提交到仓库。
 
-本提交与未合并的 PR #94 修改同一批模型资源。#94 包含另一套表情及贴图清理成果，后续需要在原生工程中整合，不能用一侧二进制文件直接覆盖另一侧。当前仍有面部边缘残留、Q 版过渡及肢体细化待处理；本轮不代表完整模型已完工。
+已整合 PR #94 的 66a4659c8：运行模型与单页贴图完整保留其美术清理和 25 参数绑定，十二独立表情映射来自本轮。早期独立作者脚本及双页模型保留在 Git 历史与本机交付包，当前运行资产采用 work-v3 原生工程（科技服 step10、女仆 step7）。当前仍有面部边缘残留、Q 版过渡及肢体细化待处理；本轮不代表完整模型已完工。
+
+当前模型使用 ArtMeshCheek 表达脸红，制作脚本 author_cheek_overlays.py 是之前独立双侧图层实现的复现工具，不用于直接重写当前 work-v3 工程。
