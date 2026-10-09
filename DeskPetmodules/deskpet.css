@@ -175,6 +175,40 @@ html, body {
   animation: deskpet-caret 1s steps(1) infinite;
 }
 
+/* 正在回复：右上角一个停止键 */
+#bubbleStop {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(30, 33, 40, 0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+#bubbleStop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #fff;
+}
+
+#bubbleStop:hover {
+  background: rgba(200, 60, 50, 0.95);
+}
+
+#bubbleStop[hidden] {
+  display: none;
+}
+
 #bubbleState:empty {
   display: none;
 }

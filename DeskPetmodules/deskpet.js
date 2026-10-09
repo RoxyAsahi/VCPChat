@@ -184,6 +184,8 @@ function renderBubble() {
         ? [mode === 'is-reply' ? replyStateLabel() || proactiveLabel() : '', queued].filter(Boolean).join(' · ')
         : '';
     el.classList.toggle('is-alarm', mode === 'is-reply' && bubble.proactive?.kind === 'alarm');
+    // 还在回（或还在念）：右上角能叫停
+    $('bubbleStop').hidden = !((mode === 'is-reply' || mode === 'is-state') && (bubble.replyId || speech.active()));
     if (content) aimBubble(aimedHeadX);
 }
 
@@ -483,6 +485,13 @@ function bindComposer() {
         // 主动开的新话题：直接切到那个话题
         if (bubble.proactive?.topicId && !bubble.replyId) api.openTopic(bubble.proactive.topicId);
         else api.openMainWindow();
+    });
+    // 停止键：回复还在流就让主窗口中止那条请求（和主窗口的停止键一样），在念的也不念了
+    $('bubbleStop').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (bubble.replyId) api.interrupt?.(bubble.replyId);
+        speech.stop();
+        queueRenderBubble();
     });
     bubbleEl.addEventListener('mouseenter', () => {
         bubble.hovered = true;
