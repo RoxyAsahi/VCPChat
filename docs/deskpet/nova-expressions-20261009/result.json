@@ -1,0 +1,2433 @@
+{
+  "cases": [
+    {
+      "preset": "tech",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-tech",
+          "name": "Nova · 科技服",
+          "kind": "live2d",
+          "label": "Nova · 科技服（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/tech/NovaTech.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Calm",
+            "Happy",
+            "Excited",
+            "Affectionate",
+            "Shy",
+            "Curious",
+            "Concerned",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 117.2088600508372,
+        "y": 165.47285083770754,
+        "width": 208.26530206362406,
+        "height": 504.0931549580892
+      }
+    },
+    {
+      "preset": "maid",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-maid",
+          "name": "Nova · 女仆",
+          "kind": "live2d",
+          "label": "Nova · 女仆（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/maid/NovaMaid.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Calm",
+            "Happy",
+            "Excited",
+            "Affectionate",
+            "Shy",
+            "Curious",
+            "Concerned",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 96.12656325192087,
+        "y": 170.98444195135576,
+        "width": 248.7464888238569,
+        "height": 512.1490433630584
+      }
+    },
+    {
+      "preset": "chibi",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-chibi",
+          "name": "Nova · 简洁 Q 版",
+          "kind": "live2d",
+          "label": "Nova · 简洁 Q 版（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/chibi/NovaChibi.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired",
+            "Stars",
+            "Wink",
+            "Smug",
+            "Speechless"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake",
+            "Wave",
+            "Salute",
+            "Heart",
+            "Tea",
+            "Typing",
+            "Shrug",
+            "Akimbo",
+            "Cheer"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 17.0788709304095,
+        "y": 181.65474493333625,
+        "width": 406.7364927247586,
+        "height": 501.6931713885833
+      }
+    }
+  ],
+  "errors": [],
+  "assertions": [
+    {
+      "preset": "tech",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "neutral clears smile brow-angle and blush after all expressions",
+      "values": {
+        "ParamBrowRAngle": 0,
+        "ParamBrowLAngle": 0,
+        "ParamCheek": 0,
+        "ParamEyeRSmile": 0,
+        "ParamEyeLSmile": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -2.1423115730285645,
+        "ParamEyeLOpen": 0.987680196762085,
+        "ParamEyeROpen": 0.987680196762085,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0.002251714002341032,
+        "ParamBrowLY": -0.0037621217779815197,
+        "ParamBrowRY": -0.0037621217779815197,
+        "ParamMouthForm": 0,
+        "ParamMouthOpenY": 0,
+        "ParamBodyAngleX": 3.6666500568389893,
+        "ParamBodyAngleY": 0.10091894119977951,
+        "ParamBodyAngleZ": -1.5517743825912476,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0.46858638525009155,
+        "ParamHairFront": -0.03172232210636139,
+        "ParamHairBack": -0.08152882009744644
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "blink hides both irises and eyewhites while talking",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "five authored expression parameters exist",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "neutral clears smile brow-angle and blush after all expressions",
+      "values": {
+        "ParamBrowRAngle": 0,
+        "ParamBrowLAngle": 0,
+        "ParamCheek": 0,
+        "ParamEyeRSmile": 0,
+        "ParamEyeLSmile": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -1.4892363548278809,
+        "ParamEyeLOpen": 0.9891629219055176,
+        "ParamEyeROpen": 0.9891629219055176,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0.002973252208903432,
+        "ParamBrowLY": -0.003305889666080475,
+        "ParamBrowRY": -0.003305889666080475,
+        "ParamMouthForm": 0,
+        "ParamMouthOpenY": 0,
+        "ParamBodyAngleX": 3.5713138580322266,
+        "ParamBodyAngleY": 0.1345551609992981,
+        "ParamBodyAngleZ": -1.5596760511398315,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0.42659783363342285,
+        "ParamHairFront": -0.025799989700317383,
+        "ParamHairBack": -0.06613219529390335
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "neutral",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "calm",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "happy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "excited",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "shy",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "affectionate",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "curious",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "surprised",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "concerned",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "sad",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "tired",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "normal",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "blink-talk",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "expression only targets actual model parameters",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "emotion": "angry",
+      "pose": "turn",
+      "name": "all rendered geometry remains finite",
+      "passed": true
+    }
+  ]
+}

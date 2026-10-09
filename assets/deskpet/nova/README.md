@@ -2,7 +2,7 @@
 
 三套形象共用一个 Agent，通过桌宠「换装」选择，ID 分别为 `builtin:nova-tech`、`builtin:nova-maid`、`builtin:nova-chibi`。仅从应用目录读取。用户模型继续放在自己的 `Agents/<id>/deskpet/`，选择记录仍由现有 `deskpet/state.json` 管理。
 
-每套包含 Cubism `.moc3`、`model3.json`、2048 贴图、物理配置、Idle/Blink/Nod/Shake 动作，以及七套基础参数表情，映射到系统十二个情绪。口型、呼吸、视线和互动使用现有桌宠运行时。Q 版另附十二情绪和状态立绘，作为无 Core 时的回退。
+每套包含 Cubism `.moc3`、`model3.json`、2048 贴图、物理配置、Idle/Blink/Nod/Shake 动作，科技服与女仆各有十二套独立参数表情，Q 版有十一套表情，映射到系统十二个情绪。口型、呼吸、视线和互动使用现有桌宠运行时。Q 版另附十二情绪和状态立绘，作为无 Core 时的回退。
 
 美术来自本次 Nova 制作：科技服全身、修正颈部阴影的女仆全身、清理刘海和眼周残影的简洁 Q 版。源图、拆层 PSD 和动作差分由独立美术包保存，运行资源不包含编辑器工程。初版使用 PSD2Live 自动绑定，适合功能验证；后续可在 Cubism 编辑器里细化闭眼形状、嘴型与肢体动作。
 
@@ -20,3 +20,15 @@ Q 版已改为模型自带的表情与手势，不再只是立绘差分：
 - 贴图后处理（`fix_chibi_backhair.py`，导出后执行）：清掉后发两侧和头顶的修补残影（歪头时会露出来），两侧保持不透明（之前的渐隐会在身体和侧发之间透出一条半透明竖带）、把中性眼线和闭嘴线加粗 2 px、去掉眼线内圈的青色抗锯齿边，以及头饰图层底边的两个眉尖碎点。
 
 已知未修：眼珠移动幅度很小（D9）、身体转角幅度小（D10）、鞋子接缝（D11）、歪头 ±4° 时内侧头发偶尔有一条很淡的细线（D12 残留）、手势开始和结束时手臂是瞬间切换的（交叉淡化会出现两双手臂，所以保留瞬切）。
+
+## 科技服与女仆：十二套表情（2026-10-09）
+
+两套模型新增左右笑眼、左右眉角和脸红五个真实参数，共 25 个参数。十二情绪各有独立表达：Neutral、Calm、Happy、Excited、Affectionate、Shy、Curious、Concerned、Sad、Angry、Surprised、Tired。表情不绑定 MouthOpenY，说话口型继续由运行时驱动；闭眼和转头组合已通过真实 Core 渲染检查。
+
+制作脚本位于 tools/nova/author_expression_axes.py 与 author_cheek_overlays.py。使用 --help 查看输入要求；依次从 20 参数原生工程制作 24 参数工程，再添加脸红成为 25 参数工程。需要用户自己的 PSD2Live 服务、p2l_mcp/p2l_v2 helper 与对应授权环境变量。输出应选新目录。
+
+验收：设置 NOVA_CUBISM_CORE_PATH 为自己的 Core 5.x 文件路径，使用 Electron 运行 tools/nova/verify_expressions.cjs OUTPUT_DIR，再运行 python tools/nova/check_expression_results.py OUTPUT_DIR（需要 Pillow）。验收使用隔离数据目录，输出包含完整参数、顶点和截图；不要把其中的 AppData、Core 或 Electron profile 提交到仓库。
+
+已整合 PR #94 的 66a4659c8：运行模型与单页贴图完整保留其美术清理和 25 参数绑定，十二独立表情映射来自本轮。早期独立作者脚本及双页模型保留在 Git 历史与本机交付包，当前运行资产采用 work-v3 原生工程（科技服 step10、女仆 step7）。当前仍有面部边缘残留、Q 版过渡及肢体细化待处理；本轮不代表完整模型已完工。
+
+当前模型使用 ArtMeshCheek 表达脸红，制作脚本 author_cheek_overlays.py 是之前独立双侧图层实现的复现工具，不用于直接重写当前 work-v3 工程。
