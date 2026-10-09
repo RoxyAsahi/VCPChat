@@ -3,7 +3,7 @@
 // 显示该 agent 的 Live2D 模型或差分立绘。可以在桌宠上直接和这个 agent 说话（经主窗口发送，
 // 历史照常保存），回复以气泡显示，表情由页面里的情绪导演（modules/emotion）按回复流决定。
 //
-// 资源全部来自用户数据目录，VCPChat 不分发任何 Live2D 文件：
+// Nova 的三套模型来自应用 assets/deskpet/nova/；自定义模型仍来自用户数据目录：
 //   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
 //   AppData/Agents/<id>/deskpet/<套装>/           一套形象（换装）：Live2D、网格立绘或差分立绘，见 modules/deskpet/outfits.js
 //   AppData/Agents/<id>/deskpet/*.model3.json    直接放在 deskpet/ 下的算「默认」那套（以前的单模型布局照旧能用）
@@ -84,6 +84,10 @@ function resolveServedFile(urlString) {
     if (root === 'app') return guard(path.join(paths.projectRoot, 'DeskPetmodules'), segments);
     if (root === 'vendor') return guard(path.join(paths.projectRoot, 'vendor'), segments);
     if (root === 'emotion') return guard(path.join(paths.projectRoot, 'modules', 'emotion'), segments);
+    if (root === 'builtin') {
+        if (segments.shift() !== 'nova') return null;
+        return guard(builtInDirectory(), segments);
+    }
     if (root === 'core') {
         return segments.join('/') === 'live2dcubismcore.min.js' ? coreFilePath() : null;
     }
@@ -109,6 +113,10 @@ function coreFilePath() {
     return path.join(paths.appDataRoot, 'deskpet', 'live2dcubismcore.min.js');
 }
 
+function builtInDirectory() {
+    return path.join(paths.projectRoot, 'assets', 'deskpet', 'nova');
+}
+
 function registerProtocol() {
     protocol.handle(SCHEME, async (request) => {
         const file = resolveServedFile(request.url);
@@ -118,6 +126,10 @@ function registerProtocol() {
 }
 
 function agentUrl(agentId, file) {
+    if (isInside(builtInDirectory(), file)) {
+        const rel = path.relative(builtInDirectory(), file).split(path.sep).map(encodeURIComponent).join('/');
+        return `${SCHEME}://pet/builtin/nova/${rel}`;
+    }
     const rel = path.relative(path.join(paths.agentDir, agentId), file).split(path.sep).map(encodeURIComponent).join('/');
     return `${SCHEME}://pet/agent/${encodeURIComponent(agentId)}/${rel}`;
 }
@@ -128,7 +140,17 @@ function portraitUrls(agentId, portraits) {
 }
 
 async function listAgentOutfits(agentId) {
-    return outfitStore.listOutfits(path.join(paths.agentDir, agentId), { hasCore: await fs.pathExists(coreFilePath()) });
+    const agentRoot = path.join(paths.agentDir, agentId);
+    let preferBuiltIn = false;
+    try {
+        const config = await fs.readJson(path.join(agentRoot, 'config.json'));
+        preferBuiltIn = typeof config.name === 'string' && config.name.trim().toLowerCase() === 'nova';
+    } catch { /* An agent without configuration can still pick a bundled outfit. */ }
+    return outfitStore.listOutfits(agentRoot, {
+        hasCore: await fs.pathExists(coreFilePath()),
+        builtInDir: builtInDirectory(),
+        preferBuiltIn,
+    });
 }
 
 // 菜单和设置窗口只要名字和种类
