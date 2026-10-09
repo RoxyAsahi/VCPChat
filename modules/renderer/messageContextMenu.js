@@ -1144,9 +1144,12 @@ async function handleRegenerateResponse(originalAssistantMessage) {
             );
         }));
 
-        // 和新消息一样：有差分立绘时追加表情标记说明，重新生成的回复也带情绪标签
-        const emotionTagPrompt = await import('../emotion/emotionPrompt.js')
-            .then(module => module.resolveEmotionTagPrompt(electronAPI, currentSelectedItemVal.id, agentConfig))
+        // 和新消息一样：有差分立绘时追加表情标记说明，重新生成的回复也带情绪标签（差分关着时不加）
+        const emotionTagPrompt = await import('../ui-system/side-pane/portrait-features.js')
+            .then(features => (features.PORTRAIT_EXPRESSIONS_ENABLED
+                ? import('../emotion/emotionPrompt.js')
+                    .then(module => module.resolveEmotionTagPrompt(electronAPI, currentSelectedItemVal.id, agentConfig))
+                : ''))
             .catch(() => '');
 
         if (agentConfig.systemPrompt) {
