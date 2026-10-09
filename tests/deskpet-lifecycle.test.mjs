@@ -62,6 +62,7 @@ function fakeElectron() {
         net: {},
         Menu: {},
         screen,
+        powerMonitor: new EventEmitter(),
     };
     return { electron, handlers, listeners, windows, screen };
 }
@@ -169,6 +170,72 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
     assert.deepEqual([b.width, b.height], [360, 464], '尺寸恢复成桌宠窗口的固定大小');
+    handlers.closeAll();
+});
+
+test('after sleep or unlock a pet left off screen comes back', async () => {
+    const { handlers, fake, open } = await loadHandlers();
+    const pet = await open();
+    // 睡眠时拔了扩展坞：系统不一定补发显示器事件
+    pet.setBounds({ x: 2400, y: 300, width: 360, height: 464 });
+    fake.electron.powerMonitor.emit('resume');
+    await sleep(500);
+    const b = pet.getBounds();
+    assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
+    handlers.closeAll();
+});
+
+test('a pet that crashes now and then keeps coming back; one that keeps crashing is closed', async (t) => {
+    const { handlers, open } = await loadHandlers();
+    const pet = await open();
+    let reloads = 0;
+    pet.reload = () => { reloads += 1; };
+    let now = Date.now();
+    t.mock.method(Date, 'now', () => now);
+    const crash = () => pet.webContents.emit('render-process-gone', {}, { reason: 'crashed' });
+    // 一天里零零星星崩了好几次：每次都重载，不会因为攒够次数就关掉
+    for (let i = 0; i < 5; i += 1) {
+        crash();
+        now += 5 * 60 * 1000;
+    }
+    await sleep(300);
+    assert.equal(reloads, 5);
+    assert.equal(pet.isDestroyed(), false);
+    // 一分钟里连着崩：第四次放弃
+    for (let i = 0; i < 4; i += 1) {
+        crash();
+        now += 1000;
+    }
+    assert.equal(pet.isDestroyed(), true);
+    handlers.closeAll();
+});
+
+test('pets opened without a saved spot line up instead of piling into one corner', async () => {
+    const { handlers, open } = await loadHandlers();
+    const first = await open('Nova');
+    const second = await open('Coco');
+    const a = first.getBounds();
+    const b = second.getBounds();
+    const center = (r) => r.x + r.width / 2;
+    assert.ok(Math.abs(center(a) - center(b)) >= a.width * 0.5, `两个人物中心只差 ${Math.abs(center(a) - center(b))}px`);
+    handlers.closeAll();
+});
+
+test('deleting an agent closes its pet and forgets where it stood', async () => {
+    const { handlers, fake, open, root } = await loadHandlers();
+    const pet = await open('Nova');
+    await open('Coco');
+    await sleep(100);
+    const stateFile = path.join(root, 'deskpet', 'state.json');
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(stateFile, JSON.stringify({ Nova: { x: 10, y: 20, outfit: 'tech' }, Coco: { x: 30, y: 40 } }));
+    await handlers.forgetAgent('Nova');
+    assert.equal(pet.isDestroyed(), true);
+    const state = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {};
+    assert.deepEqual(state, { Coco: { x: 30, y: 40 } });
+    const settings = handlers._controls().get();
+    assert.deepEqual(settings.openAgents, ['Coco']);
+    assert.notEqual(settings.lastAgent, 'Nova');
     handlers.closeAll();
 });
 
