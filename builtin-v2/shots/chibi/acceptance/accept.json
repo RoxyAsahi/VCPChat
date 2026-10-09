@@ -1,0 +1,47 @@
+{
+ "info": {
+  "url": "vcp-deskpet://pet/builtin/nova/chibi/NovaChibi.model3.json",
+  "exps": [
+   "Neutral",
+   "Happy",
+   "Shy",
+   "Sad",
+   "Angry",
+   "Surprised",
+   "Tired",
+   "Stars",
+   "Wink",
+   "Smug",
+   "Speechless"
+  ],
+  "groups": [
+   "Idle",
+   "Blink",
+   "Nod",
+   "Shake",
+   "Wave",
+   "Salute",
+   "Heart",
+   "Tea",
+   "Typing",
+   "Shrug",
+   "Akimbo",
+   "Cheer"
+  ],
+  "w": 400,
+  "h": 580,
+  "b": {
+   "x": 30.346467070250227,
+   "y": 158.88443798455697,
+   "width": 341.2664415464382,
+   "height": 420.93848575271306
+  },
+  "fig": {
+   "outfit": "builtin:nova-chibi",
+   "aspect": 1.239457831325301
+  }
+ },
+ "shots": 107,
+ "logs": [],
+ "bounds": "{\"x\":30.346467070250227,\"y\":158.88443798455697,\"width\":341.2664415464382,\"height\":420.93848575271306}"
+}
