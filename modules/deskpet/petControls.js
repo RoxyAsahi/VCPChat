@@ -181,6 +181,8 @@ function createPetControls({ electron, appDataRoot, actions }) {
             if (typeof patch.wander === 'boolean') allowed.wander = patch.wander;
             if (typeof patch.followCursor === 'boolean') allowed.followCursor = patch.followCursor;
             if (typeof patch.hideFromCapture === 'boolean') allowed.hideFromCapture = patch.hideFromCapture;
+            if (typeof patch.idleChat === 'boolean') allowed.idleChat = patch.idleChat;
+            if (typeof patch.idleChatMinutes === 'number') allowed.idleChatMinutes = patch.idleChatMinutes;
             update(allowed);
             return snapshot();
         });

@@ -1432,6 +1432,10 @@ export function setupEventListeners(deps) {
             }
             chatAPI.deskPetSendResult?.({ requestId, result });
         });
+        chatAPI.onDeskPetWhereRequest?.(({ requestId } = {}) => {
+            const item = refs.currentSelectedItem.get();
+            chatAPI.deskPetWhereResult?.({ requestId, where: { itemId: item?.id || null, topicId: refs.currentTopicId.get() || null } });
+        });
         chatAPI.onDeskPetOpenTopic?.(async ({ agentId, topicId } = {}) => {
             try {
                 if (refs.currentSelectedItem.get()?.id !== agentId) {

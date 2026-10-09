@@ -77,7 +77,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        version: prefs.SETTINGS_VERSION, doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, followCursor: true, hideFromCapture: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        version: prefs.SETTINGS_VERSION, doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, followCursor: true, hideFromCapture: false, idleChat: false, idleChatMinutes: 30, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',

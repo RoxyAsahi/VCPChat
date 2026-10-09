@@ -293,7 +293,9 @@ function speakProactive(payload) {
     clearMissed();
     lastActivity = Date.now();
     life?.wake({ startle: true });
-    proactiveDirector?.nudge({ emotion: kind === 'alarm' ? 'excited' : 'happy', intensity: 0.7, source: 'proactive' });
+    // 闲时搭话带着自己写的情绪；别的按种类给个默认
+    const emotion = typeof payload.emotion === 'string' && payload.emotion ? payload.emotion : (kind === 'alarm' ? 'excited' : 'happy');
+    proactiveDirector?.nudge({ emotion, intensity: Number.isFinite(payload.intensity) ? payload.intensity : 0.7, source: 'proactive' });
     backend?.tap?.();
     // 主动说的话也念出来（助手设了音色、没在菜单里关掉朗读时）
     speech.begin(`deskpet-proactive-${Date.now()}`, { silent: isQuiet() && !bubble.own });
