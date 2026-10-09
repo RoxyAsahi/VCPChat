@@ -122,6 +122,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
     interrupt: messageId => ipcRenderer.send('deskpet:interrupt', String(messageId || '')),
+    idleSeconds: () => ipcRenderer.invoke('deskpet:idle-seconds'),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),
