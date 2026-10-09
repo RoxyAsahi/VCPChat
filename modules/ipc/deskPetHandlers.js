@@ -1076,11 +1076,12 @@ function registerIpc() {
             const job = previews?.jobFor(event.sender);
             return job ? { ...(await resolveAssets(job.agentId, job.outfitId)), preview: true } : null;
         }
-        const assets = await resolveAssets(pet.agentId, pet.outfit);
+        const wanted = pet.outfit;
+        const assets = await resolveAssets(pet.agentId, wanted);
         pet.name = assets.name;
         pet.outfits = assets.outfits;
-        // 记着的那套已经删了：换成实际显示的这套
-        pet.outfit = assets.outfit?.id || null;
+        // 记着的那套已经删了：换成实际显示的这套。等待期间又换了装（连点卡片）就别把新选的盖回去
+        if (pet.outfit === wanted) pet.outfit = assets.outfit?.id || null;
         return assets;
     });
     ipcMain.on('deskpet:preview-ready', (event, report) => {
@@ -1091,6 +1092,8 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet) return;
         pet.ready = true;
+        // 藏着的时候重载（换装、崩溃恢复）：新页面默认在跑，告诉它停下
+        if (!pet.win.isDestroyed() && !pet.win.isVisible()) pet.win.webContents.send('deskpet:visibility', false);
         const pending = pet.pendingToggle;
         pet.pendingToggle = null;
         if (pending) openInput(pet, pending);
@@ -1148,9 +1151,15 @@ function registerIpc() {
             if (!USE_SHAPE) setIgnoreMouse(pet, false);
             pet.win.setFocusable(true);
             pet.win.focus();
-        } else if (!PET_FOCUSABLE) {
-            // 输入框收起：回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
-            pet.win.setFocusable(false);
+        } else {
+            // 输入框收起：先回到整窗穿透，页面下一次命中会重新报上来（光标不在角色上时不会再报，
+            // 不回到穿透的话整块透明窗口会一直挡着下面的点击）
+            if (!USE_SHAPE) {
+                pet.ignoringMouse = null;
+                setIgnoreMouse(pet, true);
+            }
+            // 回到不抢焦点的状态，之后点宠物也不会把正在打字的程序挤到后面
+            if (!PET_FOCUSABLE) pet.win.setFocusable(false);
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
