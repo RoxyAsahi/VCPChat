@@ -158,7 +158,7 @@ async function listAgentOutfits(agentId) {
 
 // 菜单和设置窗口只要名字和种类
 function outfitSummary(outfit) {
-    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit) };
+    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit), builtIn: outfit.builtIn === true };
 }
 
 async function resolveAssets(agentId, wantedOutfit) {

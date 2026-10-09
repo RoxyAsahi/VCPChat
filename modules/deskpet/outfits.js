@@ -213,7 +213,8 @@ function pickOutfit(outfits, wanted) {
 /** 设置页卡片上的一句介绍：outfit.json 里写了就用它，没写按种类说。 */
 function outfitDescription(outfit) {
     if (outfit.description) return outfit.description;
-    if (outfit.missingCore) return 'Live2D 模型。还没放 Cubism Core，先用立绘代替';
+    // 有 Live2D 但没放 Core：只有模型时页面退回助手立绘，带了立绘（内置 Nova）时用这套自己的立绘
+    if (outfit.missingCore || (outfit.live2d && outfit.kind === 'portrait')) return 'Live2D 模型。还没放 Cubism Core，先用立绘代替';
     if (outfit.kind === 'live2d') return 'Live2D 模型，会眨眼、跟着光标看、按情绪换表情';
     if (outfit.kind === 'puppet') return '网格立绘，一张图切块做成的，会呼吸、眨眼、对口型';
     const faces = Object.keys(outfit.portraits || {}).filter((key) => PORTRAIT_KEYS.includes(key) && key !== 'talk').length;

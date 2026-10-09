@@ -1674,7 +1674,8 @@ async function start() {
             $('live2dCanvas').hidden = true;
             notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
         }
-    } else if (assets.live2d && !assets.coreUrl && !assets.puppet) {
+    } else if (assets.live2d && !assets.coreUrl && !assets.puppet && !assets.outfit?.builtIn) {
+        // 内置 Nova 自带立绘，Core 本来就要用户自己放：不每次打开都弹红字，设置页卡片上写着
         notice(`找到了 Live2D 模型，但缺少 Cubism Core：请把 5.x 的 live2dcubismcore.min.js 放到 ${assets.corePath}`, { error: true, ms: 12000 });
     }
     if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
