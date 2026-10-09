@@ -1649,7 +1649,9 @@ async function start() {
     applyPrefs(await api.getPrefs?.().catch(() => null));
     api.onPrefs?.(applyPrefs);
     document.title = `${assets.name} · 桌宠`;
-    $('composerInput').placeholder = `和 ${assets.name} 说点什么…（Enter 发送，Esc 收起）`;
+    // 占位只写一句：窄窗口里也不折行；按键提示放在悬停说明里
+    $('composerInput').placeholder = `和 ${assets.name} 说点什么…`;
+    $('composerInput').title = 'Enter 发送，Shift+Enter 换行，Esc 收起';
 
     if (assets.live2d && assets.coreUrl && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
         notice('显卡渲染反复中断，这次先用立绘代替 Live2D。重新打开桌宠会再试。', { error: true, ms: 10000 });
@@ -1747,11 +1749,20 @@ async function start() {
         if (!b) return false;
         return y >= b.y && y <= b.y + b.height * 0.25 && Math.abs(x - (b.x + b.width / 2)) <= b.width * 0.3;
     };
+    // Linux 上主进程不轮询光标（窗口输入区按内容裁过，指针直接进页面）：用页面自己收到的指针判断停在哪
+    if (/Linux/.test(navigator.platform)) {
+        window.addEventListener('pointermove', (e) => {
+            if (e.buttons) return;
+            if (uiAt(e.clientX, e.clientY)) reportHit(true);
+            else backend.probe(e.clientX, e.clientY);
+        });
+        document.documentElement.addEventListener('pointerleave', () => reportHit(false));
+    }
     api.onCursor(({ x, y, outside }) => {
         if (!outside) {
             if (uiAt(x, y)) reportHit(true);
             else backend.probe(x, y);
-        } else dockHover(false);
+        } else reportHit(false); // 出了窗口也算离开：下次直接落在角色身上时胶囊照样冒出来
         life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
         // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
         if (!life.gaze) backend.focus(x, y);
