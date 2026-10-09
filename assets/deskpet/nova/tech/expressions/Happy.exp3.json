@@ -4,13 +4,23 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
-      "Id": "ParamMouthForm",
-      "Value": 0.8,
+      "Id": "ParamEyeLSmile",
+      "Value": 0.35,
       "Blend": "Overwrite"
     },
     {
-      "Id": "ParamEyeBallForm",
-      "Value": 0.2,
+      "Id": "ParamEyeRSmile",
+      "Value": 0.35,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamMouthForm",
+      "Value": 1.0,
+      "Blend": "Overwrite"
+    },
+    {
+      "Id": "ParamCheek",
+      "Value": 0.3,
       "Blend": "Overwrite"
     },
     {
