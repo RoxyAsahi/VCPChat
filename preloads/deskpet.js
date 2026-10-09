@@ -127,6 +127,14 @@ function onLanded(callback) {
     return () => ipcRenderer.removeListener('deskpet:landed', listener);
 }
 
+// 溜达：开始走（dir 是 left / right）和停下（dir 是 null）
+function onWalk(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback({ dir: payload?.dir === 'left' || payload?.dir === 'right' ? payload.dir : null });
+    ipcRenderer.on('deskpet:walk', listener);
+    return () => ipcRenderer.removeListener('deskpet:walk', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
@@ -160,6 +168,13 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
         const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
         ipcRenderer.send('deskpet:drag-end', { figure, free: report?.free === true });
     },
+    // 闲了一阵想溜达（figure 同 dragEnd）；stop：页面有了动静，停下
+    wander: (report) => {
+        const f = report?.figure;
+        const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
+        ipcRenderer.send('deskpet:wander', { figure, stop: report?.stop === true });
+    },
+    onWalk,
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
     interrupt: messageId => ipcRenderer.send('deskpet:interrupt', String(messageId || '')),

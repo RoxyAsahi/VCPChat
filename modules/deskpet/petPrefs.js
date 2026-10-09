@@ -55,6 +55,8 @@ const DEFAULT_SETTINGS = Object.freeze({
     clickThrough: false,
     // 角色的不透明度（气泡、输入框不跟着变淡）
     opacity: 1,
+    // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
+    wander: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -241,6 +243,7 @@ function normalizeSettings(raw) {
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
         opacity: normalizeOpacity(input.opacity),
+        wander: input.wander === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
