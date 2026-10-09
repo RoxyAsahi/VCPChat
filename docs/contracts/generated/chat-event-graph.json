@@ -12094,7 +12094,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/portrait-media.js",
-          "line": 96,
+          "line": 99,
           "kind": "custom-event-listener"
         },
         {
@@ -12435,7 +12435,7 @@
         },
         {
           "file": "modules/ui-system/side-pane/portrait-media.js",
-          "line": 96,
+          "line": 99,
           "kind": "custom-event-listener",
           "match": "node.addEventListener('error'"
         },
@@ -17147,14 +17147,14 @@
       "consumers": [
         {
           "file": "modules/ui-system/side-pane/portrait-media.js",
-          "line": 95,
+          "line": 98,
           "kind": "custom-event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ui-system/side-pane/portrait-media.js",
-          "line": 95,
+          "line": 98,
           "kind": "custom-event-listener",
           "match": "node.addEventListener('loadeddata'"
         }
