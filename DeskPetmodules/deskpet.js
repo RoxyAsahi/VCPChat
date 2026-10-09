@@ -1550,6 +1550,11 @@ function reportHit(hit) {
 
 // 立绘和头像没有参数可调：阶段和动作写成 #lifeBody 上的属性，由样式里的关键帧演；
 // 拖动摆动和跳一下用同一套单摆计算，只在动起来时跑 requestAnimationFrame，停稳就不再占帧。
+// 呼吸（立绘轻轻起伏、头像上下浮）也由页面按档位定时写一个变量，不用无限循环的 CSS 动画：
+// 那种动画让透明置顶窗口每秒合成 60 帧，实测立绘桌宠待机比 8 帧的 Live2D 还多花三倍 GPU。
+const BREATH_FPS = { active: 15, idle: 10, sleep: 6 };
+const BREATH_PERIOD_MS = { awake: 4000, drowsy: 6000, asleep: 7500 };
+
 function createCssLife() {
     const body = $('lifeBody');
     const stage = $('stage');
@@ -1558,6 +1563,28 @@ function createCssLife() {
     let last = 0;
     let paused = false;
     let actTimer = 0;
+    let breathTimer = 0;
+    let breathFps = BREATH_FPS.active;
+    let breathPeriod = BREATH_PERIOD_MS.awake;
+    let breathPhase = 0; // 0–1，换速度时接着当前位置走，不跳
+    let breathAt = 0;
+    const breathe = () => {
+        breathTimer = 0;
+        if (paused) return;
+        const now = performance.now();
+        breathPhase = (breathPhase + (breathAt ? (now - breathAt) / breathPeriod : 0)) % 1;
+        breathAt = now;
+        // 0 → 1 → 0 的缓入缓出，和原来的关键帧一样
+        stage.style.setProperty('--breath', ((1 - Math.cos(breathPhase * 2 * Math.PI)) / 2).toFixed(3));
+        breathTimer = setTimeout(breathe, 1000 / breathFps);
+    };
+    const restartBreath = () => {
+        clearTimeout(breathTimer);
+        breathTimer = 0;
+        breathAt = 0;
+        if (!paused) breathe();
+    };
+    restartBreath();
     const loop = (ts) => {
         raf = 0;
         if (paused) return;
@@ -1574,6 +1601,13 @@ function createCssLife() {
         phase(p) {
             body.dataset.lifePhase = p;
             motion.setPhase(p);
+            breathPeriod = BREATH_PERIOD_MS[p] || BREATH_PERIOD_MS.awake;
+        },
+        setActive(level) {
+            const fps = BREATH_FPS[fpsTier(level)];
+            if (fps === breathFps) return;
+            breathFps = fps;
+            restartBreath();
         },
         act(name, ms) {
             clearTimeout(actTimer);
@@ -1591,6 +1625,7 @@ function createCssLife() {
         setPaused(p) {
             paused = p;
             if (!p) kick();
+            restartBreath();
         },
     };
 }
@@ -1741,7 +1776,7 @@ function createImageBackend(assets) {
             canShow: (emotion) => Boolean(portraits[emotion]),
             apply(f, { changed }) { if (changed) show(urlFor(f), true); },
             setMouth,
-            setActive() {},
+            setActive(level) { cssLife.setActive(level); },
             setPaused(paused) { cssLife.setPaused(paused); },
             life: cssLife,
         };
@@ -1766,7 +1801,7 @@ function createImageBackend(assets) {
             $('avatar').style.setProperty('--deskpet-ring', EMOTION_RING[f.emotion] || EMOTION_RING.neutral);
             $('avatarBadge').textContent = f.state === 'thinking' || f.state === 'tool' ? '💭' : (EMOTION_EMOJI[f.emotion] || '');
         },
-        setActive() {},
+        setActive(level) { cssLife.setActive(level); },
         setPaused(paused) { cssLife.setPaused(paused); },
         life: cssLife,
     };
