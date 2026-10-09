@@ -1,0 +1,21 @@
+{
+  "fixture": {
+    "compressedBytes": 98078,
+    "expandedBytes": 100663296,
+    "declaredEntryBytes": 32,
+    "limitBytes": 1048576
+  },
+  "baseline": {
+    "maxRSSBeforeKiB": 45004,
+    "maxRSSAfterKiB": 158520,
+    "peakIncreaseKiB": 113516,
+    "error": "Bug : uncompressed data size mismatch"
+  },
+  "fixed": {
+    "maxRSSBeforeKiB": 45052,
+    "maxRSSAfterKiB": 49800,
+    "peakIncreaseKiB": 4748,
+    "error": "压缩包解开后太大了，先解压出模型所在的文件夹再导入"
+  },
+  "note": "Separate Node processes with --expose-gc --max-old-space-size=192; maxRSS samples are measurements, not a universal memory ceiling."
+}

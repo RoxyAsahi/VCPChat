@@ -1,0 +1,101 @@
+{
+  "assertions": [
+    {
+      "name": "actual settings IPC rejects forged 384 MiB output at 300 MiB limit",
+      "passed": true,
+      "detail": {
+        "error": "压缩包解开后太大了，先解压出模型所在的文件夹再导入",
+        "peakIncreaseKiB": 43848
+      }
+    },
+    {
+      "name": "rejected import leaves no partial outfit",
+      "passed": true
+    },
+    {
+      "name": "actual settings IPC imports a compressed portrait and selects it",
+      "passed": true,
+      "detail": {
+        "success": true,
+        "outfit": "nova-valid"
+      }
+    },
+    {
+      "name": "fresh profile defaults to scale one using the reduced base size",
+      "passed": true,
+      "detail": {
+        "x": 1910,
+        "y": 448,
+        "width": 364,
+        "height": 466
+      }
+    },
+    {
+      "name": "real renderer runs at 150% display scale",
+      "passed": true,
+      "detail": {
+        "dpr": 1.5,
+        "width": 364,
+        "height": 466,
+        "backend": "portrait"
+      }
+    },
+    {
+      "name": "imported portrait is decoded and placed in the actual renderer",
+      "passed": true,
+      "detail": {
+        "bounds": {
+          "x": 77.99086526630407,
+          "y": 155.16044701875873,
+          "width": 208.00458401279965,
+          "height": 256.752211867337
+        },
+        "images": [
+          {
+            "src": "",
+            "complete": true,
+            "width": 0,
+            "opacity": "0"
+          },
+          {
+            "src": "vcp-deskpet://pet/agent/nova-zip-test/deskpet/nova-valid/neutral.png",
+            "complete": true,
+            "width": 1254,
+            "opacity": "1"
+          },
+          {
+            "src": "",
+            "complete": true,
+            "width": 0,
+            "opacity": "0"
+          },
+          {
+            "src": "",
+            "complete": true,
+            "width": 0,
+            "opacity": "1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "chosen scale persists in actual settings state",
+      "passed": true,
+      "detail": {
+        "liveScale": 1.5,
+        "saved": {
+          "outfit": "nova-valid",
+          "figures": {
+            "nova-valid": 1.23
+          },
+          "x": 2293,
+          "y": 320,
+          "scale": 1.5,
+          "tuck": null,
+          "sizeVersion": 2
+        }
+      }
+    }
+  ],
+  "errors": []
+}
