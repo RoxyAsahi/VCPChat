@@ -100,6 +100,31 @@
 			"Id": "ParamHairBack",
 			"GroupId": "ParamGroupPhysics",
 			"Name": "后发摆动"
+		},
+		{
+			"Id": "ParamEyeLSmile",
+			"GroupId": "ParamGroupEyes",
+			"Name": "左眼笑眼"
+		},
+		{
+			"Id": "ParamEyeRSmile",
+			"GroupId": "ParamGroupEyes",
+			"Name": "右眼笑眼"
+		},
+		{
+			"Id": "ParamBrowLAngle",
+			"GroupId": "ParamGroupBrows",
+			"Name": "左眉角度"
+		},
+		{
+			"Id": "ParamBrowRAngle",
+			"GroupId": "ParamGroupBrows",
+			"Name": "右眉角度"
+		},
+		{
+			"Id": "ParamCheek",
+			"GroupId": "ParamGroupFace",
+			"Name": "脸红"
 		}
 	],
 	"ParameterGroups": [
