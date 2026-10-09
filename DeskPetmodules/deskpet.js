@@ -819,19 +819,23 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     }
     const life = createLifeMotion();
 
-    // 每帧在物理和 pose 之后、model.update 之前叠加情绪参数，平滑逼近目标。
+    // 闲时动作、拖动摆动、情绪参数要在物理之前叠上去：引擎每帧的顺序是 动作 → 表情 → 眨眼 → 视线 →
+    // updateNaturalMovements（呼吸）→ 物理 → pose → beforeModelUpdate，叠在 beforeModelUpdate 里的
+    // 头歪、身体晃不会带动头发和衣服的物理。所以接在 updateNaturalMovements 后面加，嘴和跳一下仍在后面。
     const current = {};
     let target = {};
     let mouthPhase = 0;
-    internal.on('beforeModelUpdate', () => {
-        // 闲时动作、困意、拖动摆动：叠在情绪之上；跳一下改的是模型位置
-        const lifeFrame = life.step(app.ticker.deltaMS / 1000);
+    const naturalMovements = internal.updateNaturalMovements.bind(internal);
+    internal.updateNaturalMovements = (now, dt) => {
+        naturalMovements(now, dt);
+        addLifeAndEmotion();
+    };
+    let lifeFrame = { params: {}, hop: 0 };
+    function addLifeAndEmotion() {
+        // 闲时动作、困意、拖动摆动：叠在情绪之上
+        lifeFrame = life.step(app.ticker.deltaMS / 1000);
         for (const [id, v] of Object.entries(lifeFrame.params)) {
             if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), v);
-        }
-        if (lifeFrame.hop !== hop) {
-            hop = lifeFrame.hop;
-            model.position.y = figure.base().y - hop;
         }
         const keys = new Set([...Object.keys(current), ...Object.keys(target)]);
         for (const id of keys) {
@@ -839,6 +843,13 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             current[id] = (current[id] || 0) + (goal - (current[id] || 0)) * 0.12;
             if (Math.abs(current[id]) < 0.001 && !goal) { delete current[id]; continue; }
             if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), current[id]);
+        }
+    }
+    internal.on('beforeModelUpdate', () => {
+        // 跳一下改的是模型位置
+        if (lifeFrame.hop !== hop) {
+            hop = lifeFrame.hop;
+            model.position.y = figure.base().y - hop;
         }
         // 嘴：朗读时按声音的音量开合；没开朗读时回复流出来就假装在说话。
         if (paramIds.has('ParamMouthOpenY')) {

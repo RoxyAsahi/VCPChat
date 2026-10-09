@@ -593,11 +593,11 @@ export function buildDeskPetPanel(doc) {
     function renderAgents() {
         const c = state.catalog;
         const agents = c?.agents || [];
-        const key = JSON.stringify(agents.map((a) => [a.id, a.name]));
+        const key = JSON.stringify(agents.map((a) => [a.id, a.label || a.name]));
         if (agentSelect.dataset.options !== key) {
             agentSelect.dataset.options = key;
             agentSelect.replaceChildren(...agents.map((agent) => {
-                const option = el(doc, 'option', '', agent.name);
+                const option = el(doc, 'option', '', agent.label || agent.name);
                 option.value = agent.id;
                 return option;
             }));

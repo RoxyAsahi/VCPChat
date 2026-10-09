@@ -534,9 +534,11 @@
   position: absolute;
   top: 10px;
   right: 10px;
+  /* Q 版这种头顶到卡片上沿的快照会盖住角标：角标压在图上面、底色不透明 */
+  z-index: 1;
   padding: 0 7px;
   border-radius: 999px;
-  background: var(--dps-fill);
+  background: linear-gradient(var(--dps-fill), var(--dps-fill)), var(--dps-surface);
   color: var(--dps-ink-3);
   font-size: var(--vcp-ui-font-size-xs);
   line-height: 18px;
