@@ -16,6 +16,10 @@ module.exports = {
         deskPetSendResult: send('deskpet:send-result', 'payload'),
         // 点桌宠上 AI 主动开的新话题：切到那个话题。
         onDeskPetOpenTopic: on('deskpet:open-topic'),
+        // 工具审批：待批的转给桌宠一份，答完（任何一边）告诉桌宠收起；桌宠上点的允许/拒绝回到这里应答。
+        deskPetApprovalOffer: send('deskpet:approval-offer', 'payload'),
+        deskPetApprovalSettled: send('deskpet:approval-settled', 'requestId'),
+        onDeskPetApprovalAnswer: on('deskpet:approval-answer'),
         // 全局设置 → 桌宠（modules/settings/schema/deskpet-panel.js）；主进程：modules/deskpet/settingsPage.js、petControls.js
         onDeskPetSettingsOpen: on('deskpet-settings:open'),
         onDeskPetSettingsChanged: on('deskpet-settings:changed'),

@@ -646,6 +646,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         stopSnap(pet);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
+        for (const [requestId, entry] of pendingApprovals) if (entry.agentId === agentId) pendingApprovals.delete(requestId);
         pets.delete(agentId);
         updateTopmostGuard();
         updateFullscreenWatch();
@@ -1221,6 +1222,52 @@ async function alarmTarget(maid) {
     return visibleAgents()[0] || [...pets.keys()][0] || null;
 }
 
+// ---- 工具审批 ---------------------------------------------------------------------
+// 服务器要人点头的工具调用，主窗口判完自动允许规则后仍待批的，转给发起它的助手的桌宠一份。
+// 应答仍由主窗口发出（它管着去重、过期和理由框），桌宠只是另一个按钮；谁先答都算，答完两边都收起。
+
+const MAX_PENDING_APPROVALS = 50;
+const pendingApprovals = new Map(); // requestId → { agentId, payload }
+
+async function offerApproval(raw) {
+    if (!raw || typeof raw !== 'object') return false;
+    const requestId = typeof raw.requestId === 'string' || typeof raw.requestId === 'number' ? String(raw.requestId) : '';
+    if (!requestId || pendingApprovals.has(requestId)) return false;
+    // 认得出是谁要的就给谁；认不出（没写 maid、名字对不上）就给最近在聊的那个
+    const agentId = (await agentIdByName(raw.maid)) || (lastTalkedAgentId && pets.has(lastTalkedAgentId) ? lastTalkedAgentId : null);
+    const pet = agentId && pets.get(agentId);
+    if (!pet || pet.win.isDestroyed()) return false;
+    const ttl = Number(raw.expiresInMs);
+    const payload = {
+        requestId,
+        toolName: String(raw.toolName || '').slice(0, 120),
+        command: String(raw.command ?? '').slice(0, 2000),
+        expiresAt: Number.isFinite(ttl) && ttl > 0 ? Date.now() + ttl : null,
+    };
+    pendingApprovals.set(requestId, { agentId, payload });
+    if (pendingApprovals.size > MAX_PENDING_APPROVALS) pendingApprovals.delete(pendingApprovals.keys().next().value);
+    if (pet.ready) pet.win.webContents.send('deskpet:approval', payload);
+    return true;
+}
+
+function settleApproval(requestId) {
+    const entry = pendingApprovals.get(String(requestId));
+    if (!entry) return false;
+    pendingApprovals.delete(String(requestId));
+    const pet = pets.get(entry.agentId);
+    if (pet && !pet.win.isDestroyed()) pet.win.webContents.send('deskpet:approval-clear', String(requestId));
+    return true;
+}
+
+// 页面重载（换装、崩溃恢复）后把还在等的审批再给它
+function resendApprovals(pet) {
+    const now = Date.now();
+    for (const [requestId, entry] of pendingApprovals) {
+        if (entry.payload.expiresAt && entry.payload.expiresAt <= now) pendingApprovals.delete(requestId);
+        else if (entry.agentId === pet.agentId) pet.win.webContents.send('deskpet:approval', entry.payload);
+    }
+}
+
 function parsePluginOutput(result) {
     if (result && typeof result === 'object') return result;
     const text = String(result || '');
@@ -1358,6 +1405,7 @@ function registerIpc() {
         const pending = pet.pendingToggle;
         pet.pendingToggle = null;
         if (pending) openInput(pet, pending);
+        resendApprovals(pet);
         settleReady(pet);
     });
     // 页面启动失败：等着交给它的话不再等
@@ -1426,6 +1474,22 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    // 工具审批：主窗口转来、主窗口说答完了；桌宠上点了允许/拒绝交回主窗口
+    ipcMain.on('deskpet:approval-offer', (event, payload) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        offerApproval(payload).catch((error) => console.warn('[DeskPet] approval offer failed:', error?.message || error));
+    });
+    ipcMain.on('deskpet:approval-settled', (event, requestId) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        settleApproval(requestId);
+    });
+    ipcMain.on('deskpet:approval-answer', (event, answer) => {
+        const pet = petFromEvent(event);
+        const requestId = String(answer?.requestId || '');
+        if (!pet || pendingApprovals.get(requestId)?.agentId !== pet.agentId) return;
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('deskpet:approval-answer', { requestId, approved: answer?.approved === true });
+    });
     ipcMain.on('deskpet:open-topic', (event, topicId) => {
         const pet = petFromEvent(event);
         if (!pet) return;
@@ -1680,6 +1744,7 @@ module.exports = {
     _applyFullscreen: applyFullscreen,
     _controls: () => controls,
     _pets: () => pets,
+    _pendingApprovals: () => pendingApprovals,
     _resolveServedFile: (url, testPaths) => {
         const previous = paths;
         paths = testPaths;

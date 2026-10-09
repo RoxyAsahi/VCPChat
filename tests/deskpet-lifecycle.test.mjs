@@ -294,3 +294,45 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     assert.deepEqual(pet.getPosition(), [-25, 300]);
     handlers.closeAll();
 });
+
+test('a pending tool approval reaches the pet of the agent that asked, and only main answers it', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const nova = await open('Nova');
+    const coco = await open('Coco');
+    for (const pet of [nova, coco]) fake.listeners.get('deskpet:page-ready')(fromPet(pet));
+    const sentTo = (win, channel) => win.sent.filter((m) => m.channel === channel).map((m) => m.payload);
+    const offer = async (sender, payload) => {
+        fake.listeners.get('deskpet:approval-offer')({ sender }, payload);
+        await sleep(30);
+    };
+    // 别的窗口冒充主窗口：不理
+    await offer(nova.webContents, { requestId: 'fake', maid: 'Nova', toolName: 'X' });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    await offer(main.webContents, { requestId: 'r1', maid: 'coco', toolName: 'PowerShellExecutor', command: 'dir', expiresInMs: 60000 });
+    assert.deepEqual(sentTo(nova, 'deskpet:approval'), []);
+    const [card] = sentTo(coco, 'deskpet:approval');
+    assert.equal(card.requestId, 'r1');
+    assert.equal(card.toolName, 'PowerShellExecutor');
+    assert.ok(card.expiresAt > Date.now());
+    // 认不出是谁、也没人刚聊过：不往桌宠上放
+    await offer(main.webContents, { requestId: 'r2', maid: 'Someone', toolName: 'X' });
+    assert.equal(handlers._pendingApprovals().has('r2'), false);
+    // 不是这只桌宠的请求，它答不了；是它的就交回主窗口
+    fake.listeners.get('deskpet:approval-answer')(fromPet(nova), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), []);
+    fake.listeners.get('deskpet:approval-answer')(fromPet(coco), { requestId: 'r1', approved: true });
+    assert.deepEqual(sentTo(main, 'deskpet:approval-answer'), [{ requestId: 'r1', approved: true }]);
+    // 页面重载：还在等的再给一次
+    fake.listeners.get('deskpet:page-ready')(fromPet(coco));
+    assert.equal(sentTo(coco, 'deskpet:approval').length, 2);
+    // 主窗口说答完了：桌宠收起
+    fake.listeners.get('deskpet:approval-settled')({ sender: main.webContents }, 'r1');
+    assert.deepEqual(sentTo(coco, 'deskpet:approval-clear'), ['r1']);
+    assert.equal(handlers._pendingApprovals().size, 0);
+    // 桌宠关了：等着的审批不再留
+    await offer(main.webContents, { requestId: 'r3', maid: 'Coco', toolName: 'X' });
+    coco.close();
+    assert.equal(handlers._pendingApprovals().has('r3'), false);
+    handlers.closeAll();
+});

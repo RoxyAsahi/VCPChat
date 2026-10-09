@@ -87,6 +87,21 @@ function onTopicMissing(callback) {
     return () => ipcRenderer.removeListener('deskpet:topic-missing', listener);
 }
 
+// 工具调用等人点头：主窗口转来一张审批卡（approval），在任何一边答完或过期后收起（approval-clear）
+function onApproval(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('deskpet:approval', listener);
+    return () => ipcRenderer.removeListener('deskpet:approval', listener);
+}
+
+function onApprovalClear(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, requestId) => callback(requestId);
+    ipcRenderer.on('deskpet:approval-clear', listener);
+    return () => ipcRenderer.removeListener('deskpet:approval-clear', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
@@ -121,6 +136,9 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     },
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
+    onApproval,
+    onApprovalClear,
+    answerApproval: (requestId, approved) => ipcRenderer.send('deskpet:approval-answer', { requestId: String(requestId || ''), approved: approved === true }),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),

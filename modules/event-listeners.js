@@ -1442,6 +1442,10 @@ export function setupEventListeners(deps) {
                 console.warn('[DeskPet] open topic failed:', error);
             }
         });
+        // 桌宠上点了工具审批的允许/拒绝：按主窗口通知卡的流程应答
+        chatAPI.onDeskPetApprovalAnswer?.(({ requestId, approved } = {}) => {
+            window.notificationRenderer?.answerToolApproval?.(requestId, approved);
+        });
         // 托盘、桌宠右键里的「桌宠设置…」：打开全局设置，切到桌宠分区（导航是异步搭起来的，等它出现）
         chatAPI.onDeskPetSettingsOpen?.(() => {
             const tab = () => document.getElementById('vcpSettingsTab-deskpet');

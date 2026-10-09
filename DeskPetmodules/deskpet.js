@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { createApprovalQueue } from 'vcp-deskpet://pet/app/approvals.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
@@ -542,7 +543,7 @@ function aimBubble(headX) {
     const stack = $('uiStack');
     const room = stack.clientWidth;
     const left = stack.getBoundingClientRect().left;
-    for (const el of [$('bubble'), $('toolCard')]) {
+    for (const el of [$('bubble'), $('toolCard'), $('approvalCard')]) {
         if (el.hidden) continue;
         const width = el.offsetWidth;
         const slack = Math.max(0, (room - width) / 2);
@@ -553,6 +554,57 @@ function aimBubble(headX) {
             el.style.setProperty('--tail-x', `${Math.round(Math.max(16, Math.min(width - 16, headX - bubbleLeft)))}px`);
         }
     }
+}
+
+// ---- 工具审批 ---------------------------------------------------------------------
+// 回复里要调的工具得有人点头时，主窗口除了自己的通知卡，也把它转给这个助手的桌宠。
+// 这里点了允许/拒绝交回主窗口去应答；任何一边答完、过期，主进程都会叫这里收起。
+
+function bindApprovals(director) {
+    const queue = createApprovalQueue();
+    const card = $('approvalCard');
+    let expiryTimer = 0;
+    let answering = '';
+    const render = () => {
+        const item = queue.current;
+        const wasHidden = card.hidden;
+        card.hidden = !item;
+        clearTimeout(expiryTimer);
+        if (item) {
+            $('approvalTitle').textContent = `要用「${item.toolName}」吗？`;
+            $('approvalTitle').title = item.toolName;
+            $('approvalCommand').textContent = item.command;
+            $('approvalCommand').title = item.command;
+            const more = queue.size - 1;
+            $('approvalMore').textContent = more > 0 ? `还有 ${more} 个` : '';
+            for (const id of ['approvalAllow', 'approvalReject']) $(id).disabled = answering === item.requestId;
+            if (item.expiresAt) expiryTimer = setTimeout(render, Math.max(0, item.expiresAt - Date.now()) + 50);
+        }
+        if (wasHidden && item) {
+            // 有事要问：露出担心的样子，从睡着/待机里醒过来
+            lastActivity = Date.now();
+            director.nudge({ emotion: 'concerned', intensity: 0.7, source: 'approval' });
+        }
+        if (wasHidden !== card.hidden) aimBubble(aimedHeadX);
+    };
+    const answer = (approved) => {
+        const item = queue.current;
+        if (!item || answering === item.requestId) return;
+        answering = item.requestId;
+        api.answerApproval(item.requestId, approved);
+        render();
+    };
+    $('approvalAllow').addEventListener('click', (e) => { e.stopPropagation(); answer(true); });
+    $('approvalReject').addEventListener('click', (e) => { e.stopPropagation(); answer(false); });
+    $('approvalDetail').addEventListener('click', (e) => { e.stopPropagation(); api.openMainWindow(); });
+    api.onApproval?.((payload) => {
+        if (queue.add(payload)) render();
+    });
+    api.onApprovalClear?.((requestId) => {
+        if (!queue.remove(String(requestId))) return;
+        if (answering === String(requestId)) answering = '';
+        render();
+    });
 }
 
 // ---- 拖动、点击、双击、右键 -------------------------------------------------------
@@ -1787,6 +1839,7 @@ async function start() {
         notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
     });
     bindComposer();
+    bindApprovals(director);
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {
