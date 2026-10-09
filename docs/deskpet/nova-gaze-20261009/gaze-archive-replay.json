@@ -1,0 +1,56 @@
+[
+  {
+    "outfit": "tech",
+    "archive_reopen": {
+      "nova_tech.moc3": {
+        "original_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "replay_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "equal": true
+      },
+      "nova_tech.2048/texture_00.png": {
+        "original_sha256": "8084144d050f8c7cbf2daff79ba2a03b471c6c5304a7713e9e8711a122cc1e0d",
+        "replay_sha256": "8084144d050f8c7cbf2daff79ba2a03b471c6c5304a7713e9e8711a122cc1e0d",
+        "equal": true
+      }
+    },
+    "portable_author_script_replay": {
+      "nova_tech.moc3": {
+        "original_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "replay_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "equal": true
+      },
+      "nova_tech.2048/texture_00.png": {
+        "original_sha256": "8084144d050f8c7cbf2daff79ba2a03b471c6c5304a7713e9e8711a122cc1e0d",
+        "replay_sha256": "8084144d050f8c7cbf2daff79ba2a03b471c6c5304a7713e9e8711a122cc1e0d",
+        "equal": true
+      }
+    }
+  },
+  {
+    "outfit": "maid",
+    "archive_reopen": {
+      "nova_maid.moc3": {
+        "original_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "replay_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "equal": true
+      },
+      "nova_maid.2048/texture_00.png": {
+        "original_sha256": "aeeac6a3ee2f57ae76c409e32f5fd821ad9e35c013c86cd70a59ecbca0a7c737",
+        "replay_sha256": "aeeac6a3ee2f57ae76c409e32f5fd821ad9e35c013c86cd70a59ecbca0a7c737",
+        "equal": true
+      }
+    },
+    "portable_author_script_replay": {
+      "nova_maid.moc3": {
+        "original_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "replay_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "equal": true
+      },
+      "nova_maid.2048/texture_00.png": {
+        "original_sha256": "aeeac6a3ee2f57ae76c409e32f5fd821ad9e35c013c86cd70a59ecbca0a7c737",
+        "replay_sha256": "aeeac6a3ee2f57ae76c409e32f5fd821ad9e35c013c86cd70a59ecbca0a7c737",
+        "equal": true
+      }
+    }
+  }
+]

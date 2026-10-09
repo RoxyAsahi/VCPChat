@@ -1,0 +1,136 @@
+[
+  {
+    "outfit": "tech",
+    "native_masks_unchanged_and_correct": true,
+    "neutral_vertex_max_abs_delta": 0.0,
+    "interior_vertex_max_abs_delta": 5.960464477539063e-08,
+    "endpoint_measurements": [
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze-1_0",
+        "before_centroid_travel": 0.0031704257129740628,
+        "after_centroid_travel": 0.002060774683011161,
+        "travel_ratio": 0.64999935957434
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze1_0",
+        "before_centroid_travel": 0.003170428590294492,
+        "after_centroid_travel": 0.0020607810480928537,
+        "travel_ratio": 0.650000777308608
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze0_-1",
+        "before_centroid_travel": 0.0027410169258342268,
+        "after_centroid_travel": 0.001781656407544952,
+        "travel_ratio": 0.6499983238894834
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze0_1",
+        "before_centroid_travel": 0.0027410101977597434,
+        "after_centroid_travel": 0.0017816761148901543,
+        "travel_ratio": 0.6500071091841749
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze-1_0",
+        "before_centroid_travel": 0.003390120022878406,
+        "after_centroid_travel": 0.002203579582454174,
+        "travel_ratio": 0.6500004623975552
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze1_0",
+        "before_centroid_travel": 0.0033901138249291967,
+        "after_centroid_travel": 0.0022035750071865475,
+        "travel_ratio": 0.6500003011646872
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze0_-1",
+        "before_centroid_travel": 0.002619209353454479,
+        "after_centroid_travel": 0.001702506768885753,
+        "travel_ratio": 0.6500078990021604
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze0_1",
+        "before_centroid_travel": 0.0026191724093364882,
+        "after_centroid_travel": 0.0017024327304318455,
+        "travel_ratio": 0.6499887996541323
+      }
+    ],
+    "pose_count": 26,
+    "checks_passed": 30,
+    "all_eye_vertices_finite": true
+  },
+  {
+    "outfit": "maid",
+    "native_masks_unchanged_and_correct": true,
+    "neutral_vertex_max_abs_delta": 0.0,
+    "interior_vertex_max_abs_delta": 1.1920928955078125e-07,
+    "endpoint_measurements": [
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze-1_0",
+        "before_centroid_travel": 0.005545172538816021,
+        "after_centroid_travel": 0.0036043689858879227,
+        "travel_ratio": 0.6500012327222393
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze1_0",
+        "before_centroid_travel": 0.005545172472445746,
+        "after_centroid_travel": 0.0036043615789730318,
+        "travel_ratio": 0.649999904760996
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze0_-1",
+        "before_centroid_travel": 0.00488873921021549,
+        "after_centroid_travel": 0.0031776886347195206,
+        "travel_ratio": 0.6500016667036431
+      },
+      {
+        "iris": "ArtMeshIridesL",
+        "pose": "gaze0_1",
+        "before_centroid_travel": 0.004888722035480621,
+        "after_centroid_travel": 0.0031776480759730824,
+        "travel_ratio": 0.649995653856127
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze-1_0",
+        "before_centroid_travel": 0.005529326616579298,
+        "after_centroid_travel": 0.003594063601130153,
+        "travel_ratio": 0.650000235173955
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze1_0",
+        "before_centroid_travel": 0.005529326616579298,
+        "after_centroid_travel": 0.0035940568589091513,
+        "travel_ratio": 0.6499990158173373
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze0_-1",
+        "before_centroid_travel": 0.004759557455526493,
+        "after_centroid_travel": 0.003093720902719224,
+        "travel_ratio": 0.6500017977778573
+      },
+      {
+        "iris": "ArtMeshIridesR",
+        "pose": "gaze0_1",
+        "before_centroid_travel": 0.0047594989955012015,
+        "after_centroid_travel": 0.0030936974460491966,
+        "travel_ratio": 0.6500048532363254
+      }
+    ],
+    "pose_count": 26,
+    "checks_passed": 30,
+    "all_eye_vertices_finite": true
+  }
+]

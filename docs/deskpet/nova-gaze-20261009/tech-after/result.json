@@ -1,0 +1,717 @@
+{
+  "cases": [
+    {
+      "preset": "tech",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-tech",
+          "name": "Nova \u00b7 \u79d1\u6280\u670d",
+          "kind": "live2d",
+          "label": "Nova \u00b7 \u79d1\u6280\u670d\uff08Live2D\uff09",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/tech/NovaTech.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4050 Laptop GPU (0x000028E1) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 116.32344534953435,
+        "y": 165.53058535575866,
+        "width": 209.04241139968238,
+        "height": 505.9740995661418
+      }
+    }
+  ],
+  "errors": [],
+  "assertions": [
+    {
+      "preset": "tech",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze-1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze-1_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze-1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze1_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze-0.35_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -0.3499999940395355,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0.35_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0.3499999940395355,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_-0.35",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": -0.3499999940395355,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_0.35",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0.3499999940395355,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze-0.65_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -0.6499999761581421,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0.65_0",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0.6499999761581421,
+        "ParamEyeBallY": 0,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_-0.65",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": -0.6499999761581421,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "gaze0_0.65",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0.6499999761581421,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn-30-gaze-1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": -30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn-30-gaze-1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": -30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn-30-gaze1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": -30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn-30-gaze1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": -30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn30-gaze-1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn30-gaze-1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": -1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn30-gaze1_-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": -1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn30-gaze1_1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 30,
+        "ParamAngleY": 10,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "blink-gaze",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 0,
+        "ParamEyeROpen": 0,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 1,
+        "ParamEyeBallY": 1,
+        "ParamEyeBallForm": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "iris clipping masks match each eye",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    }
+  ],
+  "camera": {
+    "head": {
+      "x": 139.76734683794467,
+      "y": 156.20000000000005,
+      "width": 60.639920948616606
+    },
+    "zoom": 3,
+    "width": 280,
+    "height": 460,
+    "resolution": 3
+  },
+  "masks": {
+    "ArtMeshIridesL": [
+      "ArtMeshEyewhiteL"
+    ],
+    "ArtMeshIridesR": [
+      "ArtMeshEyewhiteR"
+    ]
+  },
+  "vertex_evidence": {
+    "file": "vertices.json.gz",
+    "encoding": "utf-8 JSON",
+    "uncompressed_sha256": "55b5306ef2029a5d48ded57c5d806e64660f0a41611d7f3c0ba2fa45a49e0bce"
+  }
+}
