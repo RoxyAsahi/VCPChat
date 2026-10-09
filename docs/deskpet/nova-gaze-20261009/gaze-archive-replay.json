@@ -3,8 +3,8 @@
     "outfit": "tech",
     "archive_reopen": {
       "nova_tech.moc3": {
-        "original_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
-        "replay_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "original_sha256": "598e8968498b3180439f82161f8d57fde21aed944acc0b6d1369e381a588f04e",
+        "replay_sha256": "598e8968498b3180439f82161f8d57fde21aed944acc0b6d1369e381a588f04e",
         "equal": true
       },
       "nova_tech.2048/texture_00.png": {
@@ -15,8 +15,8 @@
     },
     "portable_author_script_replay": {
       "nova_tech.moc3": {
-        "original_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
-        "replay_sha256": "c268db341fa8de9e17fa0df5df3c9d683666151b93ebe0c60a79bf326c0deb05",
+        "original_sha256": "598e8968498b3180439f82161f8d57fde21aed944acc0b6d1369e381a588f04e",
+        "replay_sha256": "598e8968498b3180439f82161f8d57fde21aed944acc0b6d1369e381a588f04e",
         "equal": true
       },
       "nova_tech.2048/texture_00.png": {
@@ -30,8 +30,8 @@
     "outfit": "maid",
     "archive_reopen": {
       "nova_maid.moc3": {
-        "original_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
-        "replay_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "original_sha256": "cdf06f13eff0065afa40952dd3678fe4d8b6b196567c95ae6c5446e5f445533b",
+        "replay_sha256": "cdf06f13eff0065afa40952dd3678fe4d8b6b196567c95ae6c5446e5f445533b",
         "equal": true
       },
       "nova_maid.2048/texture_00.png": {
@@ -42,8 +42,8 @@
     },
     "portable_author_script_replay": {
       "nova_maid.moc3": {
-        "original_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
-        "replay_sha256": "49f733b019a9e937a41c12cf79dba8859e2744c0ca6a46790ded9fed647b08b0",
+        "original_sha256": "cdf06f13eff0065afa40952dd3678fe4d8b6b196567c95ae6c5446e5f445533b",
+        "replay_sha256": "cdf06f13eff0065afa40952dd3678fe4d8b6b196567c95ae6c5446e5f445533b",
         "equal": true
       },
       "nova_maid.2048/texture_00.png": {

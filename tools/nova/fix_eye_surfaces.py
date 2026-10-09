@@ -61,16 +61,18 @@ for side in ('l', 'r'):
     state = run(c, 'layer_replace_image', {'layer_id': ids[name], 'path': str(destination), 'rebuild_mesh': False}, pid, state)['state']
     reports.append({'layer': name, 'retained_alpha_fraction': retained, 'canvas_size_unchanged': True})
 changes = []
+grid = (-1., -.65, 0., .65, 1.)
 for side in ('L', 'R'):
-    for x, y in itertools.product((-1., 0., 1.), repeat=2):
+    for x, y in itertools.product(grid, repeat=2):
         if x or y:
-            changes.append({'op': 'seed', 'target': f'warp:DeformEyeGaze{side}', 'key': {'ParamEyeBallX': x * .65, 'ParamEyeBallY': y * .65}})
+            changes.append({'op': 'seed', 'target': f'warp:DeformEyeGaze{side}', 'key': {'ParamEyeBallX': x, 'ParamEyeBallY': y}})
 state = run(c, 'keyform_apply', {'changes': changes}, pid, state)['state']
 changes = []
 for side in ('L', 'R'):
-    for x, y in itertools.product((-1., 0., 1.), repeat=2):
-        if x or y:
-            changes.append({'op': 'copy', 'target': f'warp:DeformEyeGaze{side}', 'from': {'ParamEyeBallX': x * .65, 'ParamEyeBallY': y * .65}, 'key': {'ParamEyeBallX': x, 'ParamEyeBallY': y}})
+    for x, y in itertools.product(grid, repeat=2):
+        if abs(x) == 1. or abs(y) == 1.:
+            cx, cy = min(.65, max(-.65, x)), min(.65, max(-.65, y))
+            changes.append({'op': 'copy', 'target': f'warp:DeformEyeGaze{side}', 'from': {'ParamEyeBallX': cx, 'ParamEyeBallY': cy}, 'key': {'ParamEyeBallX': x, 'ParamEyeBallY': y}})
 state = run(c, 'keyform_apply', {'changes': changes}, pid, state)['state']
 (output / f'{outfit}-eye-surface-report.json').write_text(json.dumps(reports, indent=2), encoding='utf-8')
 print(json.dumps({'outfit': outfit, 'state': state, 'surfaces': reports, 'gaze_endpoint_travel': .65}))
