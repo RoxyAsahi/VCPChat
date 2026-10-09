@@ -254,7 +254,23 @@ export function buildDeskPetPanel(doc) {
     const opacityValue = el(doc, 'span', 'dps-size-value');
     opacityControl.append(opacitySlider, opacityValue);
     opacityRow.append(opacityCopy, opacityControl);
-    options.append(dnd.row, through.row, follow.row, wander.row, opacityRow, hideCapture.row, restore.row, yieldFs.row);
+    const idleRow = el(doc, 'div', 'dps-row');
+    const idleCopy = el(doc, 'span', 'dps-row-copy');
+    idleCopy.append(
+        el(doc, 'span', 'dps-row-title', '闲着时主动搭话'),
+        el(doc, 'span', 'dps-row-hint', '你在电脑前、但这么久没和 TA 说话时，TA 会主动说一句（记在「桌宠闲聊」话题里，点气泡接着聊）。每次会调用一次模型；离开电脑、深夜、免打扰时不说。'),
+    );
+    const idleSelect = el(doc, 'select', 'dps-agent');
+    idleSelect.id = 'deskPetIdleChat';
+    idleSelect.setAttribute('aria-label', '闲着时主动搭话');
+    idleSelect.dataset.vcpTypedPrimitiveMounted = 'true';
+    for (const [value, label] of [['off', '不主动说'], ['10', '每 10 分钟'], ['30', '每 30 分钟'], ['60', '每 60 分钟']]) {
+        const option = el(doc, 'option', '', label);
+        option.value = value;
+        idleSelect.append(option);
+    }
+    idleRow.append(idleCopy, idleSelect);
+    options.append(dnd.row, idleRow, through.row, follow.row, wander.row, opacityRow, hideCapture.row, restore.row, yieldFs.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -976,6 +992,7 @@ export function buildDeskPetPanel(doc) {
         hideCapture.input.checked = settings.hideFromCapture === true;
         // Linux 上 Electron 做不到「截图时不出现」
         hideCapture.row.hidden = state.snapshot.platform !== 'win32' && state.snapshot.platform !== 'darwin';
+        idleSelect.value = settings.idleChat === true ? String(settings.idleChatMinutes || 30) : 'off';
         const opacity = Number(settings.opacity ?? 1);
         if (doc.activeElement !== opacitySlider) opacitySlider.value = String(opacity);
         opacityValue.textContent = `${Math.round(Number(opacitySlider.value) * 100)}%`;
@@ -990,6 +1007,10 @@ export function buildDeskPetPanel(doc) {
     yieldFs.input.addEventListener('change', () => update({ yieldToFullscreen: yieldFs.input.checked }));
     through.input.addEventListener('change', () => update({ clickThrough: through.input.checked }));
     follow.input.addEventListener('change', () => update({ followCursor: follow.input.checked }));
+    idleSelect.addEventListener('change', () => {
+        const value = idleSelect.value;
+        update(value === 'off' ? { idleChat: false } : { idleChat: true, idleChatMinutes: Number(value) });
+    });
     wander.input.addEventListener('change', () => update({ wander: wander.input.checked }));
     hideCapture.input.addEventListener('change', () => update({ hideFromCapture: hideCapture.input.checked }));
     // 拖动时先只改数字，松手再存（拖的过程中桌宠不跟着一下下闪）

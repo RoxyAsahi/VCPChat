@@ -1850,7 +1850,16 @@ if (!gotTheLock) {
         tavernHandlers.initialize({ APP_DATA_ROOT_IN_PROJECT });
         voiceHandlers.initialize({ mainWindow, openChildWindows, settingsManager: appSettingsManager, projectRoot: PROJECT_ROOT });
         localSttHandlers.initialize({ appDataRoot: APP_DATA_ROOT_IN_PROJECT });
-        deskPetHandlers.initialize({ mainWindow, projectRoot: PROJECT_ROOT, appDataRoot: APP_DATA_ROOT_IN_PROJECT, agentDir: AGENT_DIR });
+        deskPetHandlers.initialize({
+            mainWindow,
+            projectRoot: PROJECT_ROOT,
+            appDataRoot: APP_DATA_ROOT_IN_PROJECT,
+            agentDir: AGENT_DIR,
+            // 闲时主动搭话：读服务器设置、写「桌宠闲聊」话题（与插件建话题同一套串行写）
+            readSettings: () => appSettingsManager.readSettings(),
+            historyQueue: () => historyMutationQueue,
+            agentOps: () => pluginAgentOperationService,
+        });
 
         ipcMain.on('minimize-to-tray', () => {
             if (mainWindow) {

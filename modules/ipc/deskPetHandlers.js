@@ -27,6 +27,7 @@ const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const edgeSnap = require('../deskpet/edgeSnap');
 const throwMotion = require('../deskpet/throwMotion');
 const wander = require('../deskpet/wander');
+const idleChat = require('../deskpet/idleChat');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -72,6 +73,12 @@ let lastTouched = null; // 最近一次被点、被叫出来的桌宠，「和�
 let refreshTray = () => {};
 let lastTalkedAgentId = null; // 最近一次发出请求的 agent，闹钟认不出是谁设的时交给它的桌宠
 const alarms = new Map(); // id -> { timer, dueAt, text, maid }
+// 闲时主动搭话（modules/deskpet/idleChat.js）：每个助手最近一次有来往、上次试着说的时间
+const idleState = new Map(); // agentId -> { lastActivityAt, lastAttemptAt, lastFailedAt }
+let idleTimer = null;
+let idleRunning = false;
+const pendingWhere = new Map(); // requestId -> resolve：问主窗口现在开着哪个话题
+let services = {}; // { readSettings, historyQueue, agentOps }：main.js 传进来的聊天记录服务（取值函数）
 const announcedTopics = new Set(); // 已经在桌宠上说过的话题（同一请求重放时结果会重复回来）
 
 function registerSchemes() {
@@ -961,7 +968,10 @@ function forward(agentId, event) {
 }
 
 function onRequestStart(messageId, context) {
-    if (context?.agentId) lastTalkedAgentId = context.agentId;
+    if (context?.agentId) {
+        lastTalkedAgentId = context.agentId;
+        noteActivity(context.agentId);
+    }
     forward(context?.agentId, { type: 'start', messageId: String(messageId) });
 }
 
@@ -1612,6 +1622,183 @@ async function openTopic(agentId, topicId) {
     return true;
 }
 
+// ---- 闲时主动搭话 ------------------------------------------------------------
+// 设置里打开后，每分钟看一眼：人在电脑前、这么久没和助手说话、没开免打扰、桌宠露着，就让助手说一句。
+// 一次只让一个桌宠说（最近聊过的那个优先）。说的话记进这个助手的「桌宠闲聊」话题，点气泡切过去接着聊。
+
+const IDLE_TICK_MS = 60 * 1000;
+const WHERE_TIMEOUT_MS = 1500;
+
+function noteActivity(agentId) {
+    if (!agentId) return;
+    const state = idleState.get(agentId) || { lastActivityAt: 0, lastAttemptAt: 0, lastFailedAt: 0 };
+    state.lastActivityAt = Date.now();
+    state.activity = (state.activity || 0) + 1;
+    idleState.set(agentId, state);
+}
+
+function idleStateFor(agentId) {
+    let state = idleState.get(agentId);
+    if (!state) {
+        // 刚打开的桌宠从现在开始算，不会一开就说
+        state = { lastActivityAt: Date.now(), lastAttemptAt: 0, lastFailedAt: 0 };
+        idleState.set(agentId, state);
+    }
+    return state;
+}
+
+function updateIdleTimer() {
+    const on = controls?.get().idleChat === true;
+    if (on && !idleTimer) {
+        idleTimer = setInterval(() => { idleTick().catch((error) => console.warn('[DeskPet] idle chat failed:', error?.message || error)); }, IDLE_TICK_MS);
+        idleTimer.unref?.();
+    } else if (!on && idleTimer) {
+        clearInterval(idleTimer);
+        idleTimer = null;
+    }
+}
+
+function systemAway() {
+    try {
+        const idleSec = electron.powerMonitor?.getSystemIdleTime?.() ?? 0;
+        const lockState = electron.powerMonitor?.getSystemIdleState?.(idleChat.AWAY_AFTER_SEC);
+        return { idleSec, locked: lockState === 'locked' };
+    } catch {
+        return { idleSec: 0, locked: false };
+    }
+}
+
+// 主窗口现在开着哪个助手的哪个话题：开着「桌宠闲聊」时不往里写（主窗口手里的那份历史会盖掉这一句）
+function mainWhere() {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(null);
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingWhere.delete(requestId);
+            resolve(null);
+        }, WHERE_TIMEOUT_MS);
+        pendingWhere.set(requestId, (where) => {
+            clearTimeout(timer);
+            pendingWhere.delete(requestId);
+            resolve(where && typeof where === 'object' ? where : null);
+        });
+        mainWindow.webContents.send('deskpet:where-request', { requestId });
+    });
+}
+
+// 最近在聊的话题（历史文件最新改过的那个）里的最后几句，给助手接话用
+async function recentHistory(agentId, config) {
+    const queue = services.historyQueue?.();
+    const topics = Array.isArray(config?.topics) ? config.topics.slice(0, 30) : [];
+    if (!queue || !topics.length) return [];
+    let best = null;
+    for (const topic of topics) {
+        if (!topic?.id) continue;
+        let file;
+        try { file = queue.getHistoryPath(agentId, topic.id); } catch { continue; }
+        const stat = await fs.stat(file).catch(() => null);
+        if (stat && (!best || stat.mtimeMs > best.mtimeMs)) best = { id: topic.id, mtimeMs: stat.mtimeMs };
+    }
+    if (!best) return [];
+    return queue.read({ itemId: agentId, itemType: 'agent', topicId: best.id }).catch(() => []);
+}
+
+function idleCandidates() {
+    const visible = visibleAgents().filter((id) => {
+        const pet = pets.get(id);
+        return pet && !pet.win.isDestroyed() && pet.win.isVisible();
+    });
+    if (lastTalkedAgentId && visible.includes(lastTalkedAgentId)) return [lastTalkedAgentId, ...visible.filter((id) => id !== lastTalkedAgentId)];
+    return visible;
+}
+
+async function idleTick({ now = Date.now(), force = false } = {}) {
+    if (idleRunning || shuttingDown) return { spoke: false, reason: 'running' };
+    const settings = controls?.get() || petPrefs.DEFAULT_SETTINGS;
+    const away = systemAway();
+    const agentId = idleCandidates()[0];
+    if (!agentId) return { spoke: false, reason: 'no-pet' };
+    const state = idleStateFor(agentId);
+    const verdict = force ? { ok: true } : idleChat.shouldSpeak({
+        enabled: settings.idleChat === true,
+        minutes: settings.idleChatMinutes,
+        now,
+        ...state,
+        systemIdleSec: away.idleSec,
+        locked: away.locked,
+        doNotDisturb: settings.doNotDisturb === true,
+        visible: true,
+    });
+    if (!verdict.ok) return { spoke: false, reason: verdict.reason };
+    idleRunning = true;
+    state.lastAttemptAt = now;
+    try {
+        return await speakIdle(agentId, state);
+    } finally {
+        idleRunning = false;
+    }
+}
+
+async function speakIdle(agentId, state) {
+    // 生成这段时间里有了来往（用户开始说话了）就不说：按次数比，不按毫秒比
+    const activityBefore = state.activity || 0;
+    const agentOps = services.agentOps?.();
+    const queue = services.historyQueue?.();
+    const appSettings = await services.readSettings?.().catch(() => null);
+    if (!agentOps || !queue || !appSettings?.vcpServerUrl) return { spoke: false, reason: 'no-service' };
+    const fail = (reason) => {
+        state.lastFailedAt = Date.now();
+        return { spoke: false, reason };
+    };
+    let config;
+    try { config = await agentOps.readAgent(agentId); } catch { return fail('no-agent'); }
+    const agentName = config?.name || agentId;
+    const history = await recentHistory(agentId, config);
+    const messages = idleChat.buildMessages({
+        config,
+        agentName,
+        history,
+        promptAppend: getSystemPromptAppend(agentId, promptText(config)),
+        userName: appSettings.userName || '用户',
+    });
+    let line;
+    try {
+        line = idleChat.cleanLine(await idleChat.generate({ url: appSettings.vcpServerUrl, key: appSettings.vcpApiKey, model: config?.model, messages }));
+    } catch (error) {
+        console.warn('[DeskPet] idle chat generate failed:', error?.message || error);
+        return fail('generate');
+    }
+    if (!line) return fail('empty');
+    // 等回复这段时间里用户可能开始说话了、开了免打扰、把桌宠藏了：这句就不说了
+    const pet = pets.get(agentId);
+    if (!pet || pet.win.isDestroyed() || !pet.win.isVisible() || controls?.get().doNotDisturb) return { spoke: false, reason: 'changed' };
+    if ((state.activity || 0) !== activityBefore) return { spoke: false, reason: 'changed' };
+    const where = await mainWhere();
+    const topics = Array.isArray(config?.topics) ? config.topics : [];
+    const idleTopic = topics.find((t) => t?.creatorSource === idleChat.IDLE_TOPIC_SOURCE);
+    if (!where || (idleTopic && where.itemId === agentId && where.topicId === idleTopic.id)) return { spoke: false, reason: 'topic-open' };
+    const tag = line.emotion ? `<!--emo:${line.emotion} ${line.intensity}-->` : '';
+    let topicId;
+    try {
+        topicId = await idleChat.recordLine({
+            agent: { id: agentId, name: agentName, avatarColor: config?.avatarCalculatedColor || config?.avatarColor },
+            text: `${tag}${line.text}`,
+            updateConfig: (id, updater) => agentOps.updateAgent(id, updater),
+            historyQueue: queue,
+        });
+    } catch (error) {
+        console.warn('[DeskPet] idle chat record failed:', error?.message || error);
+        return fail('record');
+    }
+    const spoke = proactive(agentId, { kind: 'topic', title: idleChat.IDLE_TOPIC_NAME, text: line.text, topicId, emotion: line.emotion, intensity: line.intensity });
+    if (spoke) state.lastActivityAt = Date.now();
+    return { spoke, topicId, text: line.text };
+}
+
+function promptText(config) {
+    return String(config?.systemPrompt ?? config?.originalSystemPrompt ?? '');
+}
+
 // ---- 持续心情 ----------------------------------------------------------------
 
 const MOOD_LABEL = {
@@ -1648,6 +1835,10 @@ function registerIpc() {
     ipcMain.handle('deskpet:get-open-agents', () => visibleAgents());
     ipcMain.on('deskpet:send-result', (_e, payload) => {
         pendingSends.get(payload?.requestId)?.(payload?.result);
+    });
+    ipcMain.on('deskpet:where-result', (event, payload) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        pendingWhere.get(payload?.requestId)?.(payload?.where);
     });
 
     ipcMain.handle('deskpet:get-assets', async (event) => {
@@ -1945,6 +2136,11 @@ function initialize(options) {
         appDataRoot: options.appDataRoot,
         agentDir: options.agentDir,
     };
+    services = {
+        readSettings: typeof options.readSettings === 'function' ? options.readSettings : null,
+        historyQueue: typeof options.historyQueue === 'function' ? options.historyQueue : null,
+        agentOps: typeof options.agentOps === 'function' ? options.agentOps : null,
+    };
     registerProtocol();
     registerIpc();
     voice.initialize({ paths, findPet: petFromEvent });
@@ -2018,11 +2214,13 @@ function initialize(options) {
         if (changed.includes('wander') && controls.get().wander !== true) for (const pet of pets.values()) stopWalk(pet);
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
+        if (changed.includes('idleChat')) updateIdleTimer();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
     });
     const settingsReady = controls.load().then(() => {
         controls.applyShortcuts();
         refreshTray();
+        updateIdleTimer();
     });
     // 主窗口载完以后再恢复上次的桌宠
     const scheduleRestore = () => settingsReady.then(() => setTimeout(restoreOpenPets, RESTORE_DELAY_MS));
@@ -2050,6 +2248,8 @@ function closeAll() {
     previews?.dispose();
     for (const { timer } of alarms.values()) clearTimeout(timer);
     alarms.clear();
+    if (idleTimer) clearInterval(idleTimer);
+    idleTimer = null;
 }
 
 // chatHandlers 在主聊天的发送和流式路径上调用这些钩子；桌宠出任何错都不能打断主聊天。
@@ -2081,6 +2281,8 @@ module.exports = {
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _applyFullscreen: applyFullscreen,
+    _idleTick: idleTick,
+    _idleState: () => idleState,
     _controls: () => controls,
     _pets: () => pets,
     _pendingApprovals: () => pendingApprovals,
