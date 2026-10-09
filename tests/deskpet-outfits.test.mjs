@@ -91,13 +91,13 @@ test('outfit ids stored in state.json stay plain folder names', () => {
 // ---- 全身显示：窗口跟着形象的长宽比 ----
 
 test('tall full-body figures get a taller, narrower window, chibi ones a shorter one, unknown stays as before', () => {
-    assert.deepEqual(prefs.windowSizeForScale(1), { width: 280, height: 408 });
+    assert.deepEqual(prefs.windowSizeForScale(1), { width: 360, height: 464 });
     assert.deepEqual(prefs.windowSizeForScale(1, null), prefs.windowSizeForScale(1));
     const full = prefs.windowSizeForScale(1, 2.8);
     const chibi = prefs.windowSizeForScale(1, 1.3);
     assert.ok(full.height > chibi.height, '全身像更高');
     assert.ok(full.width <= chibi.width, '全身像更窄');
-    assert.ok(full.width >= 280, '再窄也放得下气泡');
+    assert.ok(full.width >= 360, '再窄也放得下气泡');
     for (const aspect of [0.5, 1, 1.3, 2.8, 5]) {
         for (const scale of [0.5, 1, 1.35, 2]) {
             const size = prefs.windowSizeForScale(scale, aspect);
@@ -183,6 +183,10 @@ test('fitting puts the feet on the window bottom and the figure under the bubble
     assert.ok(headTop >= 150 - 1e-6, '头顶不进气泡区');
     assert.ok(Math.abs(center - 140) < 1e-6, '左右居中');
     assert.equal(fitSilhouette({ left: 0, right: 0, top: 0, bottom: 0 }, { width: 10, height: 10, topReserve: 0 }), null);
+    // 脚下留出小胶囊的位置：脚底落在留白上沿，头顶照样不进气泡区
+    const lifted = fitSilhouette(box, { width: 280, height: 692, topReserve: 150, bottomReserve: 54 });
+    assert.ok(Math.abs(lifted.y + box.bottom * lifted.scale - (692 - 54)) < 1e-6, '脚底在小胶囊上面');
+    assert.ok(lifted.y + box.top * lifted.scale >= 150 - 1e-6);
 });
 
 // ---- 设置页：卡片介绍、导入 ----

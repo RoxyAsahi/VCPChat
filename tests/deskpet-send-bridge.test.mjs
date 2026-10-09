@@ -5,7 +5,7 @@ import { createDeskPetSendBridge } from '../modules/renderer/deskPetSendBridge.j
 
 // 模拟主窗口的选中事务：选中的 Agent 先变，话题要等列表读回来才定下来。
 function fakeMainWindow({ selectDelayMs = 30 } = {}) {
-    const state = { selected: { id: 'Bob', type: 'agent' }, topicId: 'topic_bob', busy: false };
+    const state = { selected: { id: 'Bob', type: 'agent' }, topicId: 'topic_bob', busy: false, newTopics: 0, failTopic: false };
     const sent = [];
     const bridge = createDeskPetSendBridge({
         getSelectedItem: () => state.selected,
@@ -20,6 +20,11 @@ function fakeMainWindow({ selectDelayMs = 30 } = {}) {
         sendMessage: async (request) => {
             if (!state.topicId) throw new Error('请先选择一个项目和话题。');
             sent.push({ agentId: state.selected.id, topicId: state.topicId, request });
+        },
+        startTopic: async (item) => {
+            if (state.failTopic) return;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            state.topicId = `topic_${item.id.toLowerCase()}_new${++state.newTopics}`;
         },
         isBusy: () => state.busy,
         acceptMs: 50,
@@ -139,4 +144,21 @@ test('files from the pet are stored in the target topic and sent with the messag
     assert.equal(sent.length, 1);
     // 没字也没文件
     assert.equal((await bridge({ agentId: 'Alice', text: '  ', files: [] })).success, false);
+});
+
+test('the pet\'s + opens a new topic first and sends into it', async () => {
+    const { bridge, sent } = fakeMainWindow();
+    assert.deepEqual(await bridge({ agentId: 'Alice', text: '换个话题', newTopic: true }), { success: true });
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].topicId, 'topic_alice_new1');
+    assert.deepEqual(await bridge({ agentId: 'Alice', text: '接着说' }), { success: true });
+    assert.equal(sent[1].topicId, 'topic_alice_new1', '不按 + 就留在刚开的话题里');
+});
+
+test('when the new topic cannot be opened, nothing is sent into the old one', async () => {
+    const { bridge, sent, state } = fakeMainWindow();
+    state.failTopic = true;
+    const result = await bridge({ agentId: 'Bob', text: '换个话题', newTopic: true });
+    assert.equal(result.success, false);
+    assert.equal(sent.length, 0);
 });

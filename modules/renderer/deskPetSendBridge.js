@@ -10,6 +10,7 @@ export function createDeskPetSendBridge({
     findAgent,
     selectItem,
     sendMessage,
+    startTopic,
     isBusy,
     storeFiles = async () => [],
     acceptMs = DESK_PET_SEND_ACCEPT_MS,
@@ -24,7 +25,7 @@ export function createDeskPetSendBridge({
         return run;
     };
 
-    async function sendOne({ agentId, text, files, deadline } = {}) {
+    async function sendOne({ agentId, text, files, newTopic = false, deadline } = {}) {
         // 桌宠那边已经按超时报失败了（前面排着的一条切换太慢）：不再发，免得用户重试后发两遍
         const expired = () => Number.isFinite(deadline) && now() > deadline;
         const dropped = Array.isArray(files) ? files : [];
@@ -44,7 +45,16 @@ export function createDeskPetSendBridge({
         }
         if (isBusy()) return { success: false, error: '上一条还在回复中' };
         if (expired()) return { success: false, error: '主窗口没有响应' };
-        // 桌宠带来的文件按拖进输入框的流程存进这个话题，存好的才带上；一个都没存好就不发
+        // 桌宠输入条上按了「+」：先像主窗口的「新话题」那样开一个，开成了再发
+        if (newTopic) {
+            const before = getTopicId();
+            await startTopic?.(selected);
+            if (!getTopicId() || getTopicId() === before || getSelectedItem()?.id !== agentId) {
+                return { success: false, error: '没能开新话题' };
+            }
+            if (expired()) return { success: false, error: '主窗口没有响应' };
+        }
+        // 桌宠带来的文件按拖进输入框的流程存进这个话题（按了「+」就是刚开的那个），存好的才带上；一个都没存好就不发
         let attachments = [];
         if (dropped.length) {
             const results = await storeFiles(agentId, getTopicId(), dropped).catch(error => [{ error: error?.message || String(error) }]);

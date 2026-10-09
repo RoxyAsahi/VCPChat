@@ -323,10 +323,10 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
             mapping && typeof mapping === 'object' ? mapping : {},
             { save: options?.save === true, emotion: typeof options?.emotion === 'string' ? options.emotion : null },
         ).catch((error) => ({ success: false, error: error.message }))));
-        ipcMain.handle('deskpet-settings:talk', guard(async (agentId, text) => {
+        ipcMain.handle('deskpet-settings:talk', guard(async (agentId, text, options) => {
             const message = typeof text === 'string' ? text.trim().slice(0, 8000) : '';
             if (!message) return { success: false, error: '没有内容' };
-            return pets.talk(String(agentId || ''), message);
+            return pets.talk(String(agentId || ''), message, { newTopic: options?.newTopic === true });
         }));
     }
 

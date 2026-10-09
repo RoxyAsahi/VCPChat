@@ -168,7 +168,7 @@ test('a pet left on an unplugged display comes back to the primary one', async (
     await sleep(500);
     const b = pet.getBounds();
     assert.ok(b.x + b.width <= 1600 && b.x >= 0, `x=${b.x} 应回到主屏`);
-    assert.deepEqual([b.width, b.height], [280, 408], '尺寸恢复成桌宠窗口的固定大小');
+    assert.deepEqual([b.width, b.height], [360, 464], '尺寸恢复成桌宠窗口的固定大小');
     handlers.closeAll();
 });
 
@@ -315,19 +315,19 @@ test('files sent from the pet reach the main window cleaned up', async () => {
     const main = fake.windows[0];
     const pet = await open('Coco');
     const send = fake.handlers.get('deskpet:send');
-    const pending = send(fromPet(pet), '', [
+    const pending = send(fromPet(pet), '', { files: [
         { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
         { path: 'relative/b.txt', name: 'b.txt' },
         { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
         { data: new Uint8Array(0), name: 'empty.png' },
-    ]);
+    ] });
     const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
     assert.equal(request.text, '');
     assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
     fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
     assert.deepEqual(await pending, { success: true });
     // 没字也没文件：不往主窗口发
-    assert.equal((await send(fromPet(pet), ' ', [{ path: 'x' }])).success, false);
+    assert.equal((await send(fromPet(pet), ' ', { files: [{ path: 'x' }] })).success, false);
     handlers.closeAll();
 });
 

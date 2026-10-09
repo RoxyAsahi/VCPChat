@@ -143,7 +143,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     touched: () => ipcRenderer.send('deskpet:touched'),
     getMood: () => ipcRenderer.invoke('deskpet:get-mood'),
     onMood,
-    send: (text, files) => ipcRenderer.invoke('deskpet:send', String(text || ''), cleanFiles(files)),
+    send: (text, options) => ipcRenderer.invoke('deskpet:send', String(text || ''), { files: cleanFiles(options?.files), newTopic: options?.newTopic === true }),
     filePath,
     onStream,
     onCursor,

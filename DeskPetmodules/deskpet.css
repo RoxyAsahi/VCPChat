@@ -79,7 +79,7 @@ body.is-ghost-hover #stage {
 #avatar {
   position: absolute;
   left: 50%;
-  bottom: calc(24px * var(--pet-scale, 1));
+  bottom: calc(54px + 8px * var(--pet-scale, 1));
   width: calc(168px * var(--pet-scale, 1));
   height: calc(168px * var(--pet-scale, 1));
   margin-left: calc(-84px * var(--pet-scale, 1));
@@ -351,7 +351,7 @@ body.is-drop-target #stage {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 10px;
+  bottom: 6px;
   /* 左右 auto 居中：宽度变的时候两边一起收放 */
   margin: 0 auto;
 }
