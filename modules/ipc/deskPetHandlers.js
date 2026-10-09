@@ -1142,32 +1142,66 @@ function trayMenuItems() {
     const hasCandidate = live.length > 0 || settings.openAgents.length > 0 || Boolean(settings.lastAgent);
     // 只显示快捷键，不在菜单里再注册一次（全局快捷键已经注册过了）
     const shortcut = (id) => (settings.shortcuts[id] ? { accelerator: settings.shortcuts[id], registerAccelerator: false } : {});
+    const toggle = () => toggleAllPets().catch(() => {});
+    // 显示 / 隐藏是两项轮流露出来，开关桌宠时只改 visible，不用换文字重建菜单
     return [{
         label: '桌宠',
         submenu: [
-            { label: anyVisible ? '隐藏桌宠' : '显示桌宠', ...shortcut('toggle'), enabled: hasCandidate, click: () => toggleAllPets().catch(() => {}) },
-            { label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
+            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, enabled: hasCandidate, click: toggle },
+            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, enabled: hasCandidate, click: toggle },
+            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
-            { label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
-            { label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
+            { id: 'deskpet-dnd', label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
+            { id: 'deskpet-click-through', label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
             { label: '桌宠设置…', click: () => controls.openSettings() },
         ],
     }];
 }
 
-// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份），
-// 所以只在桌宠那一项真的变了时才重建。
-function trayMenuKey() {
-    return JSON.stringify(trayMenuItems(), (key, value) => (typeof value === 'function' ? undefined : value));
+// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份；同一份菜单再设一次不会）。
+// 所以内容没变不动；只是勾选、可用、显示变了就改现有菜单（applyTrayState）；只有文字、快捷键这些变了才重建。
+const TRAY_STATE_FIELDS = ['checked', 'enabled', 'visible'];
+
+function trayMenuKey(items, { stateOnly = false } = {}) {
+    return JSON.stringify(items, (key, value) => {
+        if (typeof value === 'function') return undefined;
+        if (stateOnly && TRAY_STATE_FIELDS.includes(key)) return undefined;
+        return value;
+    });
 }
 
+function trayStateItems(items, out = []) {
+    for (const item of items) {
+        if (item.id) out.push(item);
+        if (Array.isArray(item.submenu)) trayStateItems(item.submenu, out);
+    }
+    return out;
+}
+
+/** 把桌宠那几项的勾选、可用、显示写进已经建好的菜单；少了哪一项返回 false（要重建）。 */
+function applyTrayState(menu) {
+    const items = trayStateItems(trayMenuItems());
+    const targets = items.map((item) => menu?.getMenuItemById?.(item.id));
+    if (targets.some((target) => !target)) return false;
+    items.forEach((item, index) => {
+        for (const field of TRAY_STATE_FIELDS) if (field in item) targets[index][field] = item[field];
+    });
+    return true;
+}
+
+/** rebuild(structureChanged)：structureChanged 为 false 时只是状态变了，可以用 applyTrayState 改现有菜单。 */
 function refreshWhenChanged(rebuild) {
     let shown = null;
+    let shape = null;
     return () => {
-        const key = trayMenuKey();
+        const items = trayMenuItems();
+        const key = trayMenuKey(items);
         if (key === shown) return;
+        const nextShape = trayMenuKey(items, { stateOnly: true });
+        const structureChanged = nextShape !== shape;
         shown = key;
-        rebuild();
+        shape = nextShape;
+        rebuild(structureChanged);
     };
 }
 
@@ -1679,6 +1713,7 @@ module.exports = {
     closeAll,
     // 托盘：main.js 建菜单时取「桌宠」这一项，并在桌宠状态变了时重建菜单
     trayMenuItems: isolated('trayMenuItems', trayMenuItems, []),
+    applyTrayState: isolated('applyTrayState', applyTrayState, false),
     setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', refreshWhenChanged(fn)) : () => {}; },
     getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
     appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),
