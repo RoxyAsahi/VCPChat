@@ -204,3 +204,25 @@ test('sending to an agent counts as activity, and a freshly opened pet waits a f
         handlers.closeAll();
     }
 });
+
+test('a message sent while the line is being generated cancels it', async () => {
+    const realFetch = globalThis.fetch;
+    let handlersRef;
+    globalThis.fetch = async () => {
+        handlersRef.onRequestStart('m2', { agentId: 'Nova' });
+        return { ok: true, json: async () => ({ choices: [{ message: { content: '嗨' } }] }) };
+    };
+    const { services, histories } = fakeServices();
+    const { handlers, fake, mainWindow } = await loadHandlers(services);
+    handlersRef = handlers;
+    const stop = answerWhere(fake, mainWindow, { itemId: 'Nova', topicId: 'topic_Nova' });
+    try {
+        await openNova(fake);
+        assert.equal((await handlers._idleTick({ force: true })).reason, 'changed');
+        assert.equal(histories.size, 0);
+    } finally {
+        stop();
+        globalThis.fetch = realFetch;
+        handlers.closeAll();
+    }
+});

@@ -1633,6 +1633,7 @@ function noteActivity(agentId) {
     if (!agentId) return;
     const state = idleState.get(agentId) || { lastActivityAt: 0, lastAttemptAt: 0, lastFailedAt: 0 };
     state.lastActivityAt = Date.now();
+    state.activity = (state.activity || 0) + 1;
     idleState.set(agentId, state);
 }
 
@@ -1739,6 +1740,8 @@ async function idleTick({ now = Date.now(), force = false } = {}) {
 }
 
 async function speakIdle(agentId, state) {
+    // 生成这段时间里有了来往（用户开始说话了）就不说：按次数比，不按毫秒比
+    const activityBefore = state.activity || 0;
     const agentOps = services.agentOps?.();
     const queue = services.historyQueue?.();
     const appSettings = await services.readSettings?.().catch(() => null);
@@ -1769,7 +1772,7 @@ async function speakIdle(agentId, state) {
     // 等回复这段时间里用户可能开始说话了、开了免打扰、把桌宠藏了：这句就不说了
     const pet = pets.get(agentId);
     if (!pet || pet.win.isDestroyed() || !pet.win.isVisible() || controls?.get().doNotDisturb) return { spoke: false, reason: 'changed' };
-    if (state.lastActivityAt > state.lastAttemptAt) return { spoke: false, reason: 'changed' };
+    if ((state.activity || 0) !== activityBefore) return { spoke: false, reason: 'changed' };
     const where = await mainWhere();
     const topics = Array.isArray(config?.topics) ? config.topics : [];
     const idleTopic = topics.find((t) => t?.creatorSource === idleChat.IDLE_TOPIC_SOURCE);
