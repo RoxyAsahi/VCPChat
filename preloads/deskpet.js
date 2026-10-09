@@ -48,8 +48,12 @@ function onCursor(callback) {
 
 function onOpenInput(callback) {
     if (typeof callback !== 'function') return () => {};
-    // submit：设置页预览里输入的话，由桌宠直接发出去
-    const listener = (_event, options) => callback({ toggle: options?.toggle === true, submit: typeof options?.submit === 'string' ? options.submit : '' });
+    // submit：设置页预览里输入的话，由桌宠直接发出去；voice：语音快捷键（开始录 / 停下发出去）
+    const listener = (_event, options) => callback({
+        toggle: options?.toggle === true,
+        submit: typeof options?.submit === 'string' ? options.submit : '',
+        voice: options?.voice === true,
+    });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }

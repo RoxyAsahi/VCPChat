@@ -326,7 +326,7 @@ function flashEmotionBadge(emotion, source) {
 const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
-const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null };
+const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
 
 function setDock(mode) {
     if (dock.mode === mode) return;
@@ -389,10 +389,13 @@ function fitComposerInput() {
 
 // ---- 说话：本地语音识别成文字，放进输入条，看一眼再发 ----
 
-async function startVoice() {
+async function startVoice({ autoSend = false } = {}) {
     const voice = dock.voice;
     if (!voice || voice.active || voice.starting || $('recStop').classList.contains('is-busy')) return;
     const from = dock.mode;
+    // 开口就是插话：TA 正在念的先停下，也免得麦克风把 TA 的声音录进去
+    speech.stop();
+    dock.autoSend = autoSend;
     setDock('rec');
     try {
         await voice.start();
@@ -425,10 +428,14 @@ async function finishVoice() {
     }
     if (dock.mode !== 'rec') return; // 识别期间点了打字
     const input = $('composerInput');
+    const autoSend = dock.autoSend;
+    dock.autoSend = false;
     if (text) {
         input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
         setDock('bar');
         fitComposerInput();
+        // 语音快捷键录的：不用再看一眼，直接发（TA 还在说就排到说完再发）
+        if (autoSend) submitComposer();
     } else {
         if (!input.value.trim()) notice('没听到说话', { ms: 3000 });
         setDock(input.value.trim() ? 'bar' : restingDock());
@@ -630,7 +637,13 @@ function bindComposer() {
         if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
     });
     // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）；设置页预览里打的字直接发出去
-    api.onOpenInput(({ toggle, submit } = {}) => {
+    api.onOpenInput(({ toggle, submit, voice } = {}) => {
+        if (voice) {
+            // 语音快捷键：没在录就开始录，正在录就停下发出去
+            if (dock.mode === 'rec') finishVoice();
+            else startVoice({ autoSend: true });
+            return;
+        }
         if (submit) {
             // 不展开输入条、不抢焦点（人还在主窗口的设置页里），也不动桌宠输入条里已经打的字；
             // TA 正在回或上一句还在发：排到这条说完再发，连着来的几句不会互相顶掉

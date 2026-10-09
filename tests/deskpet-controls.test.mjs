@@ -308,6 +308,12 @@ test('global shortcuts hide and bring back the pets and open the input box', asy
     await sleep(5);
     assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { toggle: true }, '最近碰过的那个弹输入框');
     assert.equal(coco.sent.some((m) => m.channel === 'deskpet:open-input'), false);
+    // 语音键：同一个桌宠开始录音（再按一下由页面停下发出去）
+    const voiceKey = prefs.DEFAULT_SETTINGS.shortcuts.voice;
+    assert.ok(env.fake.shortcuts.has(voiceKey));
+    await env.fake.shortcuts.get(voiceKey)();
+    await sleep(5);
+    assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { voice: true });
     env.handlers.closeAll();
     assert.equal(env.fake.shortcuts.size, 0, '退出时只注销自己的快捷键');
 });

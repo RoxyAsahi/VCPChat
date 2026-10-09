@@ -84,6 +84,7 @@ function createPetControls({ electron, appDataRoot, actions }) {
     function handlerFor(actionId) {
         if (actionId === 'toggle') return () => actions.toggleAll();
         if (actionId === 'talk') return () => actions.talk();
+        if (actionId === 'voice') return () => actions.voice?.();
         if (actionId === 'clickThrough') return () => update({ clickThrough: !settings.clickThrough });
         return null;
     }
