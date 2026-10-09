@@ -4,6 +4,11 @@
   "FadeOutTime": 0.25,
   "Parameters": [
     {
+      "Id": "ParamExpShy",
+      "Value": 1,
+      "Blend": "Overwrite"
+    },
+    {
       "Id": "ParamMouthForm",
       "Value": 0.4,
       "Blend": "Overwrite"
@@ -19,8 +24,8 @@
       "Blend": "Overwrite"
     },
     {
-      "Id": "ParamCheek",
-      "Value": 0.7,
+      "Id": "ParamExpNeutralHide",
+      "Value": 1,
       "Blend": "Overwrite"
     }
   ]
