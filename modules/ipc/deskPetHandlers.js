@@ -1007,8 +1007,9 @@ async function toggleAllPets() {
     refreshTray();
 }
 
-/** 快捷键「和桌宠说话」：叫出最近用过的那个桌宠并打开输入框；输入框已经开着就收起。 */
-async function talkToPet() {
+/** 快捷键「和桌宠说话」：叫出最近用过的那个桌宠并打开输入框；输入框已经开着就收起。
+ *  语音那个键（voice）：开始录音；正在录就停下、识别完直接发。 */
+async function talkToPet({ voice = false } = {}) {
     let pet = (lastTouched && pets.get(lastTouched)) || [...pets.values()].find((p) => !p.win.isDestroyed() && p.win.isVisible())
         || [...pets.values()].find((p) => !p.win.isDestroyed());
     if (!pet) {
@@ -1021,7 +1022,7 @@ async function talkToPet() {
         notifyMain(pet.agentId);
     }
     lastTouched = pet.agentId;
-    openInput(pet, { toggle: true });
+    openInput(pet, voice ? { voice: true } : { toggle: true });
 }
 
 // 刚打开的桌宠页面还没准备好（形象还在载入）时先记着，页面报 ready 以后再弹输入框
@@ -1557,6 +1558,7 @@ function initialize(options) {
         actions: {
             toggleAll: () => toggleAllPets().catch((error) => console.warn('[DeskPet] toggle failed:', error.message)),
             talk: () => talkToPet().catch((error) => console.warn('[DeskPet] talk failed:', error.message)),
+            voice: () => talkToPet({ voice: true }).catch((error) => console.warn('[DeskPet] voice failed:', error.message)),
             listPets: listPetsForSettings,
             setScale: (agentId, scale) => setPetScale(agentId, scale),
             sendToSettings: settingsPush.changed,
