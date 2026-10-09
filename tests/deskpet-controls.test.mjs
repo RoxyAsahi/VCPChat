@@ -235,7 +235,8 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     const nova = await env.open('Nova');
     const coco = await env.open('Coco');
     let trayRebuilds = 0;
-    env.handlers.setTrayRefresher(() => { trayRebuilds += 1; });
+    const structure = [];
+    env.handlers.setTrayRefresher((structureChanged) => { trayRebuilds += 1; structure.push(structureChanged); });
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     assert.equal(trayRebuilds, 1, '菜单内容没变就不重建（换下来的旧菜单 Electron 不释放）');
@@ -244,10 +245,36 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     toggle.click({ checked: true });
     for (const pet of [nova, coco]) assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.doNotDisturb, true);
     assert.equal(trayRebuilds, 2);
+    assert.deepEqual(structure, [true, false], '只是勾选变了：改现有菜单，不建新的');
     assert.equal(env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰').checked, true);
     await sleep(300);
     assert.equal(env.readJson(env.settingsFile).doNotDisturb, true, '免打扰写进设置，重启后还在');
     env.handlers.closeAll();
+});
+
+test('tray state is written into the menu already shown instead of a new one', async () => {
+    const env = await loadHandlers();
+    await env.open('Nova');
+    // 假菜单：按 id 找项，跟 Electron 的 Menu.getMenuItemById 一样
+    const fakeMenu = (items) => {
+        const byId = new Map();
+        const walk = (list) => { for (const item of list) { if (item.id) byId.set(item.id, { ...item }); if (Array.isArray(item.submenu)) walk(item.submenu); } };
+        walk(items);
+        return { getMenuItemById: (id) => byId.get(id) || null };
+    };
+    const menu = fakeMenu(env.handlers.trayMenuItems());
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, true);
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, false);
+    env.handlers.closeAll();
+    await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, false, '桌宠都关了：显示「显示桌宠」');
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, true);
+    env.handlers.trayMenuItems()[0].submenu.find((item) => item.id === 'deskpet-click-through').click({ checked: true });
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-click-through').checked, true);
+    // 菜单里没有这几项（比如还没建过）：要重建
+    assert.equal(env.handlers.applyTrayState({ getMenuItemById: () => null }), false);
 });
 
 test('global shortcuts hide and bring back the pets and open the input box', async () => {
