@@ -30,12 +30,18 @@
     <div id="bubble" class="pet-ui" hidden title="点击打开主窗口看完整回复">
       <div id="bubbleText"></div>
       <div id="bubbleState"></div>
+      <button id="bubbleStop" type="button" hidden title="别说了（停止这条回复）" aria-label="停止回复"></button>
     </div>
     <!-- 回复里调工具时：正在做什么 -->
     <div id="toolCard" class="pet-ui" hidden>
       <span class="tool-card-icon"></span>
       <span class="tool-card-text"></span>
       <span class="tool-card-count"></span>
+    </div>
+    <!-- 拖进来、粘贴进来的文件：和下一句话一起发 -->
+    <div id="attachTray" class="pet-ui" hidden>
+      <span id="attachText"></span>
+      <button id="attachClear" type="button" title="不带这些文件了" aria-label="去掉文件">✕</button>
     </div>
   </div>
   <!-- 脚边的小胶囊：光标停在角色上时冒出来（打字 / 说话）；点打字展开成输入条，点说话变成录音按钮；没碰它时收成脚边一道小横条。
@@ -69,6 +75,7 @@
   <div id="emotionBadge" hidden></div>
   <div id="dndBadge" hidden title="免打扰：不主动说话、不出声">🌙</div>
   <div id="throughBadge" hidden title="只看不点：鼠标会穿过桌宠">👻</div>
+  <button id="missedBadge" class="pet-ui" type="button" hidden title="你不在的时候 TA 说了话，点一下再说一遍" aria-label="再说一遍">💬</button>
   <!-- Pixi 8 与 CSP polyfill 用 VCPChat 自带的那份；Live2D 相关脚本按需加载；情绪模块与侧栏立绘共用 modules/emotion。 -->
   <script src="vcp-deskpet://pet/vendor/pixi.min.js"></script>
   <script src="vcp-deskpet://pet/vendor/pixi-unsafe-eval.min.js"></script>

@@ -68,7 +68,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -83,6 +83,17 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.shortcuts.talk, '', '留空表示不用');
     assert.deepEqual(odd.openAgents, ['Nova', 'Coco']);
     assert.equal(odd.lastAgent, null);
+});
+
+test('pet opacity stays between 30% and fully opaque', () => {
+    assert.equal(prefs.normalizeOpacity(undefined), 1);
+    assert.equal(prefs.normalizeOpacity('abc'), 1);
+    assert.equal(prefs.normalizeOpacity(null), 1);
+    assert.equal(prefs.normalizeOpacity(0.6), 0.6);
+    assert.equal(prefs.normalizeOpacity(0.62), 0.6);
+    assert.equal(prefs.normalizeOpacity(0), 0.3, '不能淡到看不见');
+    assert.equal(prefs.normalizeOpacity(5), 1);
+    assert.equal(prefs.normalizeSettings({ opacity: 0.4 }).opacity, 0.4);
 });
 
 // ---- 主进程：大小、免打扰、快捷键、恢复 ----
@@ -248,7 +259,8 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     const nova = await env.open('Nova');
     const coco = await env.open('Coco');
     let trayRebuilds = 0;
-    env.handlers.setTrayRefresher(() => { trayRebuilds += 1; });
+    const structure = [];
+    env.handlers.setTrayRefresher((structureChanged) => { trayRebuilds += 1; structure.push(structureChanged); });
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
     assert.equal(trayRebuilds, 1, '菜单内容没变就不重建（换下来的旧菜单 Electron 不释放）');
@@ -257,9 +269,49 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     toggle.click({ checked: true });
     for (const pet of [nova, coco]) assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.doNotDisturb, true);
     assert.equal(trayRebuilds, 2);
+    assert.deepEqual(structure, [true, false], '只是勾选变了：改现有菜单，不建新的');
     assert.equal(env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰').checked, true);
     await sleep(300);
     assert.equal(env.readJson(env.settingsFile).doNotDisturb, true, '免打扰写进设置，重启后还在');
+    env.handlers.closeAll();
+});
+
+test('tray state is written into the menu already shown instead of a new one', async () => {
+    const env = await loadHandlers();
+    await env.open('Nova');
+    // 假菜单：按 id 找项，跟 Electron 的 Menu.getMenuItemById 一样
+    const fakeMenu = (items) => {
+        const byId = new Map();
+        const walk = (list) => { for (const item of list) { if (item.id) byId.set(item.id, { ...item }); if (Array.isArray(item.submenu)) walk(item.submenu); } };
+        walk(items);
+        return { getMenuItemById: (id) => byId.get(id) || null };
+    };
+    const menu = fakeMenu(env.handlers.trayMenuItems());
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, true);
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, false);
+    env.handlers.closeAll();
+    await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-hide').visible, false, '桌宠都关了：显示「显示桌宠」');
+    assert.equal(menu.getMenuItemById('deskpet-show').visible, true);
+    env.handlers.trayMenuItems()[0].submenu.find((item) => item.id === 'deskpet-click-through').click({ checked: true });
+    assert.equal(env.handlers.applyTrayState(menu), true);
+    assert.equal(menu.getMenuItemById('deskpet-click-through').checked, true);
+    // 菜单里没有这几项（比如还没建过）：要重建
+    assert.equal(env.handlers.applyTrayState({ getMenuItemById: () => null }), false);
+});
+
+test('opacity from the settings page reaches every pet and is saved', async () => {
+    const env = await loadHandlers();
+    const nova = await env.open('Nova');
+    const update = env.fake.handlers.get('deskpet-settings:update');
+    const snap = await update(fromMain(env), { opacity: 0.6 });
+    assert.equal(snap.settings?.opacity ?? snap.opacity, 0.6);
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6);
+    await update(fromMain(env), { opacity: 'x' });
+    assert.equal(nova.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.opacity, 0.6, '不是数字的不理');
+    await sleep(300);
+    assert.equal(env.readJson(env.settingsFile).opacity, 0.6);
     env.handlers.closeAll();
 });
 
@@ -281,6 +333,12 @@ test('global shortcuts hide and bring back the pets and open the input box', asy
     await sleep(5);
     assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { toggle: true }, '最近碰过的那个弹输入框');
     assert.equal(coco.sent.some((m) => m.channel === 'deskpet:open-input'), false);
+    // 语音键：同一个桌宠开始录音（再按一下由页面停下发出去）
+    const voiceKey = prefs.DEFAULT_SETTINGS.shortcuts.voice;
+    assert.ok(env.fake.shortcuts.has(voiceKey));
+    await env.fake.shortcuts.get(voiceKey)();
+    await sleep(5);
+    assert.deepEqual(nova.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { voice: true });
     env.handlers.closeAll();
     assert.equal(env.fake.shortcuts.size, 0, '退出时只注销自己的快捷键');
 });

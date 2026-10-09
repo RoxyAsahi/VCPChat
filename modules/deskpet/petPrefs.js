@@ -32,6 +32,8 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
+    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）
+    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: 'CommandOrControl+Alt+Shift+V' },
     clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
 });
 
@@ -54,6 +56,10 @@ const DEFAULT_SETTINGS = Object.freeze({
     yieldToFullscreen: false,
     // 只看不点：鼠标整个穿过桌宠，点不到也拖不动；托盘、快捷键关掉
     clickThrough: false,
+    // 角色的不透明度（气泡、输入框不跟着变淡）
+    opacity: 1,
+    // 溜达：站在任务栏上闲了一阵会沿着任务栏走一小段（Live2D 模型没有走路动作，默认关）
+    wander: false,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -213,6 +219,15 @@ function isAgentIdLike(value) {
     return typeof value === 'string' && value.length > 0 && value.length < 200 && !/[\\/]/.test(value) && value !== '.' && value !== '..';
 }
 
+const OPACITY_MIN = 0.3;
+
+/** 不透明度：0.3–1，按 0.05 取整；不是数就当 1 */
+function normalizeOpacity(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || value === null || value === '') return 1;
+    return Math.round(Math.min(1, Math.max(OPACITY_MIN, n)) * 20) / 20;
+}
+
 /** 把磁盘上读到的设置（可能缺字段、被手改坏）整理成完整、合法的设置。 */
 function normalizeSettings(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
@@ -230,6 +245,8 @@ function normalizeSettings(raw) {
         restoreOnLaunch: input.restoreOnLaunch !== false,
         yieldToFullscreen: input.yieldToFullscreen === true,
         clickThrough: input.clickThrough === true,
+        opacity: normalizeOpacity(input.opacity),
+        wander: input.wander === true,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
@@ -237,6 +254,8 @@ function normalizeSettings(raw) {
 }
 
 module.exports = {
+    normalizeOpacity,
+    OPACITY_MIN,
     BASE_CHARACTER,
     SIZE_VERSION,
     UI_RESERVE,

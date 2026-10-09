@@ -12,6 +12,7 @@ export function createDeskPetSendBridge({
     sendMessage,
     startTopic,
     isBusy,
+    storeFiles = async () => [],
     acceptMs = DESK_PET_SEND_ACCEPT_MS,
     wait = (ms) => new Promise(resolve => setTimeout(resolve, ms)),
     now = () => Date.now(),
@@ -24,10 +25,12 @@ export function createDeskPetSendBridge({
         return run;
     };
 
-    async function sendOne({ agentId, text, newTopic = false, deadline } = {}) {
+    async function sendOne({ agentId, text, files, newTopic = false, deadline } = {}) {
         // 桌宠那边已经按超时报失败了（前面排着的一条切换太慢）：不再发，免得用户重试后发两遍
         const expired = () => Number.isFinite(deadline) && now() > deadline;
-        if (typeof agentId !== 'string' || !agentId || typeof text !== 'string' || !text.trim()) {
+        const dropped = Array.isArray(files) ? files : [];
+        if (typeof text !== 'string') text = '';
+        if (typeof agentId !== 'string' || !agentId || (!text.trim() && !dropped.length)) {
             return { success: false, error: '没有内容' };
         }
         if (getSelectedItem()?.id !== agentId || !getTopicId()) {
@@ -51,7 +54,24 @@ export function createDeskPetSendBridge({
             }
             if (expired()) return { success: false, error: '主窗口没有响应' };
         }
-        const sending = Promise.resolve().then(() => sendMessage({ content: text, attachments: [], propagateError: true }));
+        // 桌宠带来的文件按拖进输入框的流程存进这个话题，存好的才带上；一个都没存好就不发
+        let attachments = [];
+        if (dropped.length) {
+            const results = await storeFiles(agentId, getTopicId(), dropped).catch(error => [{ error: error?.message || String(error) }]);
+            attachments = (Array.isArray(results) ? results : []).filter(r => r?.success && r.attachment).map(({ attachment: att }) => ({
+                file: { name: att.name, type: att.type, size: att.size },
+                localPath: att.internalPath,
+                originalName: att.name,
+                isLiveReference: att.isLiveReference === true,
+                _fileManagerData: att,
+            }));
+            if (!attachments.length) {
+                const failed = (Array.isArray(results) ? results : []).find(r => r?.error);
+                return { success: false, error: `文件没存上：${failed?.error || '未知原因'}` };
+            }
+            if (expired()) return { success: false, error: '主窗口没有响应' };
+        }
+        const sending = Promise.resolve().then(() => sendMessage({ content: text, attachments, propagateError: true }));
         // 发送要等回复开始流才返回；这里只等校验和落盘这一小段，之后的错误会显示在聊天里，桌宠也会收到出错事件。
         const early = await Promise.race([
             sending.then(() => null, error => error || new Error('发送失败')),

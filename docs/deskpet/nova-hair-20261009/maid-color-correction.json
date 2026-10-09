@@ -1,0 +1,32 @@
+[
+  {
+    "layer": "back hair",
+    "residue_pixels": 60328,
+    "alpha_unchanged": true,
+    "base_color": [
+      80.0,
+      62.0,
+      73.0
+    ]
+  },
+  {
+    "layer": "back hair-r",
+    "residue_pixels": 23538,
+    "alpha_unchanged": true,
+    "base_color": [
+      79.0,
+      65.0,
+      73.0
+    ]
+  },
+  {
+    "layer": "back hair-l",
+    "residue_pixels": 17276,
+    "alpha_unchanged": true,
+    "base_color": [
+      86.0,
+      71.0,
+      77.0
+    ]
+  }
+]

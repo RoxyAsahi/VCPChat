@@ -168,6 +168,8 @@
     "modules/deskpet/petPrefs.js",
     "modules/deskpet/petPreviews.js",
     "modules/deskpet/settingsPage.js",
+    "modules/deskpet/throwMotion.js",
+    "modules/deskpet/wander.js",
     "modules/emoticonManager.js",
     "modules/emotion/emotionDirector.js",
     "modules/emotion/emotionPrompt.js",
@@ -791,14 +793,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1859,
+          "line": 1864,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1859,
+          "line": 1864,
           "kind": "event-listener",
           "match": "app.on('activate'"
         }
@@ -922,7 +924,7 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1560,
+          "line": 1565,
           "kind": "event-send"
         }
       ],
@@ -934,14 +936,14 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 78,
+          "line": 110,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1560,
+          "line": 1565,
           "kind": "event-send",
           "match": "win.webContents.send('agent-mood-changed'"
         },
@@ -953,7 +955,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 78,
+          "line": 110,
           "kind": "event-listener",
           "match": "ipcRenderer.on('agent-mood-changed'"
         }
@@ -1006,14 +1008,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 643,
+          "line": 654,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 643,
+          "line": 654,
           "kind": "event-listener",
           "match": "win.on('always-on-top-changed'"
         }
@@ -1393,25 +1395,25 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1965,
+          "line": 1970,
           "kind": "event-listener"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1643,
+          "line": 1896,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1965,
+          "line": 1970,
           "kind": "event-listener",
           "match": "app.on('before-quit'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1643,
+          "line": 1896,
           "kind": "event-listener",
           "match": "electron.app?.on?.('before-quit'"
         }
@@ -3483,14 +3485,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1696,
+          "line": 1701,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1696,
+          "line": 1701,
           "kind": "event-listener",
           "match": "ipcMain.handle('chat-data-service-reconcile'"
         }
@@ -3502,14 +3504,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1689,
+          "line": 1694,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1689,
+          "line": 1694,
           "kind": "event-listener",
           "match": "ipcMain.handle('chat-data-service-status'"
         }
@@ -3662,7 +3664,7 @@
         },
         {
           "file": "main.js",
-          "line": 1026,
+          "line": 1031,
           "kind": "event-listener"
         },
         {
@@ -3742,7 +3744,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1462,
+          "line": 1479,
           "kind": "custom-event-listener"
         },
         {
@@ -5176,7 +5178,7 @@
         },
         {
           "file": "main.js",
-          "line": 1026,
+          "line": 1031,
           "kind": "event-listener",
           "match": "tray.on('click'"
         },
@@ -5272,7 +5274,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1462,
+          "line": 1479,
           "kind": "custom-event-listener",
           "match": "voiceChatBtn.addEventListener('click'"
         },
@@ -6898,7 +6900,7 @@
         },
         {
           "file": "main.js",
-          "line": 1940,
+          "line": 1945,
           "kind": "event-listener"
         },
         {
@@ -7042,7 +7044,7 @@
         },
         {
           "file": "main.js",
-          "line": 1940,
+          "line": 1945,
           "kind": "event-listener",
           "match": "pythonProcess.on('close'"
         },
@@ -7138,14 +7140,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1150,
+          "line": 1155,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1150,
+          "line": 1155,
           "kind": "event-listener",
           "match": "ipcMain.on('close-app'"
         },
@@ -7341,17 +7343,17 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 414,
+          "line": 417,
           "kind": "event-listener"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 646,
+          "line": 657,
           "kind": "event-listener"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1641,
+          "line": 1894,
           "kind": "event-listener"
         },
         {
@@ -7558,19 +7560,19 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 414,
+          "line": 417,
           "kind": "event-listener",
           "match": "win.on('closed'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 646,
+          "line": 657,
           "kind": "event-listener",
           "match": "win.on('closed'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1641,
+          "line": 1894,
           "kind": "event-listener",
           "match": "mainWindow?.on?.('closed'"
         },
@@ -7847,14 +7849,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2125,
+          "line": 2130,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2125,
+          "line": 2130,
           "kind": "event-listener",
           "match": "ipcMain.on('connect-vcplog'"
         },
@@ -8472,7 +8474,7 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1355,
+          "line": 1360,
           "kind": "event-send"
         }
       ],
@@ -8486,7 +8488,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1355,
+          "line": 1360,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('create-unlocked-topic'"
         },
@@ -8679,12 +8681,12 @@
         },
         {
           "file": "main.js",
-          "line": 1932,
+          "line": 1937,
           "kind": "event-listener"
         },
         {
           "file": "main.js",
-          "line": 1936,
+          "line": 1941,
           "kind": "event-listener"
         },
         {
@@ -8976,13 +8978,13 @@
         },
         {
           "file": "main.js",
-          "line": 1932,
+          "line": 1937,
           "kind": "event-listener",
           "match": "pythonProcess.stdout.on('data'"
         },
         {
           "file": "main.js",
-          "line": 1936,
+          "line": 1941,
           "kind": "event-listener",
           "match": "pythonProcess.stderr.on('data'"
         },
@@ -9288,7 +9290,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 24,
+          "line": 26,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9308,7 +9310,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 24,
+          "line": 26,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:catalog'"
         }
@@ -9319,27 +9321,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 383,
+          "line": 386,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 21,
+          "line": 23,
           "kind": "preload-channel-definition"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 383,
+          "line": 386,
           "kind": "event-send",
           "match": "mainContents()?.send('deskpet-settings:changed'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 21,
+          "line": 23,
           "kind": "preload-channel-definition",
           "match": "on('deskpet-settings:changed'"
         }
@@ -9350,7 +9352,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 26,
+          "line": 28,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9370,7 +9372,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 26,
+          "line": 28,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:choose'"
         }
@@ -9381,7 +9383,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 30,
+          "line": 32,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9401,7 +9403,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 30,
+          "line": 32,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:core-install'"
         }
@@ -9412,7 +9414,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 31,
+          "line": 33,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9432,7 +9434,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 31,
+          "line": 33,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:core-link'"
         }
@@ -9443,27 +9445,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 385,
+          "line": 388,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 32,
+          "line": 34,
           "kind": "preload-channel-definition"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 385,
+          "line": 388,
           "kind": "event-send",
           "match": "mainContents()?.send('deskpet-settings:core-progress'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 32,
+          "line": 34,
           "kind": "preload-channel-definition",
           "match": "on('deskpet-settings:core-progress'"
         }
@@ -9474,7 +9476,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 23,
+          "line": 25,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9494,7 +9496,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 23,
+          "line": 25,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:get'"
         }
@@ -9505,7 +9507,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 28,
+          "line": 30,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9525,7 +9527,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 28,
+          "line": 30,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:import'"
         }
@@ -9536,7 +9538,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 33,
+          "line": 35,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9556,7 +9558,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 33,
+          "line": 35,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:mapping'"
         }
@@ -9567,7 +9569,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 34,
+          "line": 36,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9587,7 +9589,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 34,
+          "line": 36,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:mapping-apply'"
         }
@@ -9598,27 +9600,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 431,
+          "line": 434,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 20,
+          "line": 22,
           "kind": "preload-channel-definition"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 431,
+          "line": 434,
           "kind": "event-send",
           "match": "mainContents()?.send('deskpet-settings:open'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 20,
+          "line": 22,
           "kind": "preload-channel-definition",
           "match": "on('deskpet-settings:open'"
         }
@@ -9629,7 +9631,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 29,
+          "line": 31,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9649,7 +9651,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 29,
+          "line": 31,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:open-folder'"
         }
@@ -9660,27 +9662,27 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 39,
+          "line": 41,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 192,
+          "line": 195,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 192,
+          "line": 195,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet-settings:pause-shortcuts'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 39,
+          "line": 41,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:pause-shortcuts'"
         }
@@ -9691,27 +9693,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 384,
+          "line": 387,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 22,
+          "line": 24,
           "kind": "preload-channel-definition"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 384,
+          "line": 387,
           "kind": "event-send",
           "match": "mainContents()?.send('deskpet-settings:preview'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 22,
+          "line": 24,
           "kind": "preload-channel-definition",
           "match": "on('deskpet-settings:preview'"
         }
@@ -9722,7 +9724,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 25,
+          "line": 27,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9742,7 +9744,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 25,
+          "line": 27,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:refresh'"
         }
@@ -9753,27 +9755,27 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 38,
+          "line": 40,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 187,
+          "line": 190,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 187,
+          "line": 190,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet-settings:reset-shortcuts'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 38,
+          "line": 40,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:reset-shortcuts'"
         }
@@ -9784,27 +9786,27 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 40,
+          "line": 42,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 197,
+          "line": 200,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 197,
+          "line": 200,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet-settings:set-scale'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 40,
+          "line": 42,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:set-scale'"
         }
@@ -9815,27 +9817,27 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 37,
+          "line": 39,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 182,
+          "line": 185,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 182,
+          "line": 185,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet-settings:set-shortcut'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 37,
+          "line": 39,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:set-shortcut'"
         }
@@ -9846,7 +9848,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 27,
+          "line": 29,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9866,7 +9868,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 27,
+          "line": 29,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:set-visible'"
         }
@@ -9877,7 +9879,7 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 35,
+          "line": 37,
           "kind": "preload-channel-definition"
         }
       ],
@@ -9897,7 +9899,7 @@
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 35,
+          "line": 37,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:talk'"
         }
@@ -9908,27 +9910,27 @@
       "producers": [
         {
           "file": "preloads/api/deskPet.js",
-          "line": 36,
+          "line": 38,
           "kind": "preload-channel-definition"
         }
       ],
       "consumers": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 172,
+          "line": 173,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/deskpet/petControls.js",
-          "line": 172,
+          "line": 173,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet-settings:update'"
         },
         {
           "file": "preloads/api/deskPet.js",
-          "line": 36,
+          "line": 38,
           "kind": "preload-channel-definition",
           "match": "invoke('deskpet-settings:update'"
         }
@@ -9939,27 +9941,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 113,
+          "line": 163,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1443,
+          "line": 1666,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1443,
+          "line": 1666,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:content-bounds'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 113,
+          "line": 163,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:content-bounds'"
         }
@@ -9970,27 +9972,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 122,
+          "line": 179,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1492,
+          "line": 1735,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1492,
+          "line": 1735,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:context-menu'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 122,
+          "line": 179,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:context-menu'"
         }
@@ -10001,38 +10003,38 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 547,
+          "line": 550,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 552,
+          "line": 555,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 17,
+          "line": 45,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 547,
+          "line": 550,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:cursor'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 552,
+          "line": 555,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:cursor'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 17,
+          "line": 45,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:cursor'"
         }
@@ -10043,27 +10045,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 120,
+          "line": 170,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1482,
+          "line": 1709,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1482,
+          "line": 1709,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:drag-end'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 120,
+          "line": 170,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:drag-end'"
         }
@@ -10074,27 +10076,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 115,
+          "line": 165,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1458,
+          "line": 1681,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1458,
+          "line": 1681,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:drag-start'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 115,
+          "line": 165,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:drag-start'"
         }
@@ -10105,27 +10107,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 114,
+          "line": 164,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1373,
+          "line": 1576,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1373,
+          "line": 1576,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:figure'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 114,
+          "line": 164,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:figure'"
         }
@@ -10136,27 +10138,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 91,
+          "line": 139,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1336,
+          "line": 1539,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1336,
+          "line": 1539,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:get-assets'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 91,
+          "line": 139,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('deskpet:get-assets'"
         }
@@ -10167,27 +10169,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 96,
+          "line": 144,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1399,
+          "line": 1602,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1399,
+          "line": 1602,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:get-mood'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 96,
+          "line": 144,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('deskpet:get-mood'"
         }
@@ -10205,14 +10207,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1331,
+          "line": 1534,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1331,
+          "line": 1534,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:get-open-agents'"
         },
@@ -10229,27 +10231,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 92,
+          "line": 140,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1379,
+          "line": 1582,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1379,
+          "line": 1582,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:get-prefs'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 92,
+          "line": 140,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('deskpet:get-prefs'"
         }
@@ -10260,29 +10262,153 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 111,
+          "line": 161,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1439,
+          "line": 1655,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1439,
+          "line": 1655,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:hit'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 111,
+          "line": 161,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:hit'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:idle-seconds",
+      "producers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 182,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1645,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1645,
+          "kind": "event-listener",
+          "match": "ipcMain.handle('deskpet:idle-seconds'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 182,
+          "kind": "event-send",
+          "match": "ipcRenderer.invoke('deskpet:idle-seconds'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:interrupt",
+      "producers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 181,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1638,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1638,
+          "kind": "event-listener",
+          "match": "ipcMain.on('deskpet:interrupt'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 181,
+          "kind": "event-send",
+          "match": "ipcRenderer.send('deskpet:interrupt'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:interrupt-request",
+      "producers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1642,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "preloads/api/deskPet.js",
+          "line": 20,
+          "kind": "preload-channel-definition"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1642,
+          "kind": "event-send",
+          "match": "mainWindow.webContents.send('deskpet:interrupt-request'"
+        },
+        {
+          "file": "preloads/api/deskPet.js",
+          "line": 20,
+          "kind": "preload-channel-definition",
+          "match": "on('deskpet:interrupt-request'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:landed",
+      "producers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 711,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 126,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 711,
+          "kind": "event-send",
+          "match": "pet.win.webContents.send('deskpet:landed'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 126,
+          "kind": "event-listener",
+          "match": "ipcRenderer.on('deskpet:landed'"
         }
       ]
     },
@@ -10291,38 +10417,38 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1033,
+          "line": 1191,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1074,
+          "line": 1232,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 25,
+          "line": 57,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1033,
+          "line": 1191,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:open-input'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1074,
+          "line": 1232,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:open-input'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 25,
+          "line": 57,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:open-input'"
         }
@@ -10333,27 +10459,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 123,
+          "line": 180,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1431,
+          "line": 1636,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1431,
+          "line": 1636,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:open-main'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 123,
+          "line": 180,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:open-main'"
         }
@@ -10364,19 +10490,19 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1294,
+          "line": 1497,
           "kind": "event-send"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 124,
+          "line": 185,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1432,
+          "line": 1648,
           "kind": "event-listener"
         },
         {
@@ -10388,13 +10514,13 @@
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1294,
+          "line": 1497,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('deskpet:open-topic'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1432,
+          "line": 1648,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:open-topic'"
         },
@@ -10406,7 +10532,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 124,
+          "line": 185,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:open-topic'"
         }
@@ -10417,27 +10543,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 127,
+          "line": 188,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1367,
+          "line": 1570,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1367,
+          "line": 1570,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:page-failed'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 127,
+          "line": 188,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:page-failed'"
         }
@@ -10448,27 +10574,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 126,
+          "line": 187,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1355,
+          "line": 1558,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1355,
+          "line": 1558,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:page-ready'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 126,
+          "line": 187,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:page-ready'"
         }
@@ -10479,27 +10605,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 873,
+          "line": 1025,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 63,
+          "line": 95,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 873,
+          "line": 1025,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:prefs'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 63,
+          "line": 95,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:prefs'"
         }
@@ -10510,27 +10636,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 129,
+          "line": 190,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1351,
+          "line": 1554,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1351,
+          "line": 1554,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:preview-ready'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 129,
+          "line": 190,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:preview-ready'"
         }
@@ -10541,27 +10667,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1207,
+          "line": 1410,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 70,
+          "line": 102,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1207,
+          "line": 1410,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:proactive'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 70,
+          "line": 102,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:proactive'"
         }
@@ -10572,27 +10698,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1607,
+          "line": 1859,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 33,
+          "line": 65,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1607,
+          "line": 1859,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:profile'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 33,
+          "line": 65,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:profile'"
         }
@@ -10603,27 +10729,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 98,
+          "line": 147,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1403,
+          "line": 1606,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1403,
+          "line": 1606,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:send'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 98,
+          "line": 147,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('deskpet:send'"
         }
@@ -10634,7 +10760,7 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 830,
+          "line": 982,
           "kind": "event-send"
         }
       ],
@@ -10648,7 +10774,7 @@
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 830,
+          "line": 982,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('deskpet:send-request'"
         },
@@ -10672,14 +10798,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1332,
+          "line": 1535,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1332,
+          "line": 1535,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:send-result'"
         },
@@ -10696,27 +10822,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 112,
+          "line": 162,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1410,
+          "line": 1615,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1410,
+          "line": 1615,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:set-interactive'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 112,
+          "line": 162,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:set-interactive'"
         }
@@ -10727,7 +10853,7 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 372,
+          "line": 375,
           "kind": "event-send"
         }
       ],
@@ -10741,7 +10867,7 @@
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 372,
+          "line": 375,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('deskpet:state-changed'"
         },
@@ -10758,27 +10884,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 785,
+          "line": 921,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 10,
+          "line": 38,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 785,
+          "line": 921,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:stream'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 10,
+          "line": 38,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:stream'"
         }
@@ -10796,14 +10922,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1323,
+          "line": 1526,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1323,
+          "line": 1526,
           "kind": "event-listener",
           "match": "ipcMain.handle('deskpet:toggle'"
         },
@@ -10820,27 +10946,27 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1436,
+          "line": 1652,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 86,
+          "line": 118,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1436,
+          "line": 1652,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:topic-missing'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 86,
+          "line": 118,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:topic-missing'"
         }
@@ -10851,27 +10977,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 95,
+          "line": 143,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1394,
+          "line": 1597,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1394,
+          "line": 1597,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:touched'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 95,
+          "line": 143,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:touched'"
         }
@@ -10882,38 +11008,38 @@
       "producers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 639,
+          "line": 650,
           "kind": "event-send"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1360,
+          "line": 1563,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 40,
+          "line": 72,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 639,
+          "line": 650,
           "kind": "event-send",
           "match": "win.webContents.send('deskpet:visibility'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1360,
+          "line": 1563,
           "kind": "event-send",
           "match": "pet.win.webContents.send('deskpet:visibility'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 40,
+          "line": 72,
           "kind": "event-listener",
           "match": "ipcRenderer.on('deskpet:visibility'"
         }
@@ -10924,7 +11050,7 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 106,
+          "line": 156,
           "kind": "event-send"
         }
       ],
@@ -10944,7 +11070,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 106,
+          "line": 156,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('deskpet:voice-begin'"
         }
@@ -10955,7 +11081,7 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 108,
+          "line": 158,
           "kind": "event-send"
         }
       ],
@@ -10975,7 +11101,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 108,
+          "line": 158,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:voice-end'"
         }
@@ -10986,7 +11112,7 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 107,
+          "line": 157,
           "kind": "event-send"
         }
       ],
@@ -11006,9 +11132,113 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 107,
+          "line": 157,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:voice-say'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:walk",
+      "producers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 819,
+          "kind": "event-send"
+        },
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 831,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 134,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 819,
+          "kind": "event-send",
+          "match": "pet.win.webContents.send('deskpet:walk'"
+        },
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 831,
+          "kind": "event-send",
+          "match": "pet.win.webContents.send('deskpet:walk'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 134,
+          "kind": "event-listener",
+          "match": "ipcRenderer.on('deskpet:walk'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:wander",
+      "producers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 176,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1723,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1723,
+          "kind": "event-listener",
+          "match": "ipcMain.on('deskpet:wander'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 176,
+          "kind": "event-send",
+          "match": "ipcRenderer.send('deskpet:wander'"
+        }
+      ]
+    },
+    {
+      "name": "deskpet:want-out",
+      "producers": [
+        {
+          "file": "preloads/deskpet.js",
+          "line": 183,
+          "kind": "event-send"
+        }
+      ],
+      "consumers": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1662,
+          "kind": "event-listener"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/ipc/deskPetHandlers.js",
+          "line": 1662,
+          "kind": "event-listener",
+          "match": "ipcMain.on('deskpet:want-out'"
+        },
+        {
+          "file": "preloads/deskpet.js",
+          "line": 183,
+          "kind": "event-send",
+          "match": "ipcRenderer.send('deskpet:want-out'"
         }
       ]
     },
@@ -11017,27 +11247,27 @@
       "producers": [
         {
           "file": "preloads/deskpet.js",
-          "line": 94,
+          "line": 142,
           "kind": "event-send"
         }
       ],
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1384,
+          "line": 1587,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1384,
+          "line": 1587,
           "kind": "event-listener",
           "match": "ipcMain.on('deskpet:wheel-resize'"
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 94,
+          "line": 142,
           "kind": "event-send",
           "match": "ipcRenderer.send('deskpet:wheel-resize'"
         }
@@ -12619,7 +12849,7 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1633,
+          "line": 1886,
           "kind": "event-listener"
         },
         {
@@ -12679,7 +12909,7 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1633,
+          "line": 1886,
           "kind": "event-listener",
           "match": "mainWindow?.webContents?.once?.('did-finish-load'"
         },
@@ -12757,12 +12987,12 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 623,
+          "line": 634,
           "kind": "event-listener"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1618,
+          "line": 1870,
           "kind": "event-listener"
         },
         {
@@ -12785,13 +13015,13 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 623,
+          "line": 634,
           "kind": "event-listener",
           "match": "win.webContents.on('did-start-loading'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1618,
+          "line": 1870,
           "kind": "event-listener",
           "match": "mainWindow?.webContents?.on?.('did-start-loading'"
         },
@@ -12930,14 +13160,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2136,
+          "line": 2141,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2136,
+          "line": 2141,
           "kind": "event-listener",
           "match": "ipcMain.on('disconnect-vcplog'"
         },
@@ -12955,14 +13185,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1635,
+          "line": 1888,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1635,
+          "line": 1888,
           "kind": "event-listener",
           "match": "screen.on('display-added'"
         }
@@ -12974,14 +13204,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1636,
+          "line": 1889,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1636,
+          "line": 1889,
           "kind": "event-listener",
           "match": "screen.on('display-metrics-changed'"
         }
@@ -12993,14 +13223,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1634,
+          "line": 1887,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 1634,
+          "line": 1887,
           "kind": "event-listener",
           "match": "screen.on('display-removed'"
         }
@@ -13664,14 +13894,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1781,
+          "line": 1786,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1781,
+          "line": 1786,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:activate'"
         },
@@ -13695,14 +13925,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1801,
+          "line": 1806,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1801,
+          "line": 1806,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:cancel'"
         },
@@ -13726,14 +13956,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1789,
+          "line": 1794,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1789,
+          "line": 1794,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:close'"
         },
@@ -13757,14 +13987,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1823,
+          "line": 1828,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1823,
+          "line": 1828,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:close-all'"
         },
@@ -13788,14 +14018,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1770,
+          "line": 1775,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1770,
+          "line": 1775,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:create'"
         },
@@ -13819,14 +14049,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1794,
+          "line": 1799,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1794,
+          "line": 1799,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:detach'"
         },
@@ -13850,14 +14080,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1777,
+          "line": 1782,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1777,
+          "line": 1782,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:list'"
         },
@@ -13881,14 +14111,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1829,
+          "line": 1834,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1829,
+          "line": 1834,
           "kind": "event-listener",
           "match": "ipcMain.on('embedded-vchat-app:request-close'"
         },
@@ -13912,14 +14142,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1785,
+          "line": 1790,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1785,
+          "line": 1790,
           "kind": "event-listener",
           "match": "ipcMain.handle('embedded-vchat-app:set-bounds'"
         },
@@ -14313,7 +14543,7 @@
         },
         {
           "file": "main.js",
-          "line": 1947,
+          "line": 1952,
           "kind": "event-listener"
         },
         {
@@ -14640,7 +14870,7 @@
         },
         {
           "file": "main.js",
-          "line": 1947,
+          "line": 1952,
           "kind": "event-listener",
           "match": "pythonProcess.on('error'"
         },
@@ -14790,14 +15020,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1921,
+          "line": 1926,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1921,
+          "line": 1926,
           "kind": "event-listener",
           "match": "ipcMain.handle('execute-python-code'"
         },
@@ -15038,14 +15268,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2159,
+          "line": 2164,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2159,
+          "line": 2164,
           "kind": "event-listener",
           "match": "ipcMain.handle('export-topic-as-markdown'"
         },
@@ -15773,14 +16003,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1449,
+          "line": 1454,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1449,
+          "line": 1454,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-cached-models'"
         },
@@ -15992,14 +16222,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1465,
+          "line": 1470,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1465,
+          "line": 1470,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-favorite-models'"
         },
@@ -16147,14 +16377,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1454,
+          "line": 1459,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1454,
+          "line": 1459,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-hot-models'"
         },
@@ -16333,25 +16563,25 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1270,
+          "line": 1275,
           "kind": "event-listener"
         },
         {
           "file": "main.js",
-          "line": 1896,
+          "line": 1901,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1270,
+          "line": 1275,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-platform'"
         },
         {
           "file": "main.js",
-          "line": 1896,
+          "line": 1901,
           "kind": "event-listener",
           "match": "ipcMain.handle('get-platform'"
         },
@@ -17231,14 +17461,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 640,
+          "line": 651,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 640,
+          "line": 651,
           "kind": "event-listener",
           "match": "win.on('hide'"
         }
@@ -17299,7 +17529,7 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1673,
+          "line": 1678,
           "kind": "event-send"
         }
       ],
@@ -17313,7 +17543,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1673,
+          "line": 1678,
           "kind": "event-send",
           "match": "sender.send('history-file-updated'"
         },
@@ -17491,7 +17721,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1486,
+          "line": 1503,
           "kind": "custom-event-listener"
         },
         {
@@ -17669,7 +17899,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1486,
+          "line": 1503,
           "kind": "custom-event-listener",
           "match": "agentSearchInput.addEventListener('input'"
         },
@@ -17905,14 +18135,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2194,
+          "line": 2199,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2194,
+          "line": 2199,
           "kind": "event-listener",
           "match": "ipcMain.handle('interrupt-group-request'"
         },
@@ -18029,14 +18259,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1244,
+          "line": 1249,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1244,
+          "line": 1249,
           "kind": "event-listener",
           "match": "ipcMain.handle('jev:decide'"
         },
@@ -18060,14 +18290,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1232,
+          "line": 1237,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1232,
+          "line": 1237,
           "kind": "event-listener",
           "match": "ipcMain.handle('jev:get-status'"
         },
@@ -18120,7 +18350,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1491,
+          "line": 1508,
           "kind": "custom-event-listener"
         },
         {
@@ -18499,7 +18729,7 @@
         },
         {
           "file": "modules/event-listeners.js",
-          "line": 1491,
+          "line": 1508,
           "kind": "custom-event-listener",
           "match": "document.addEventListener('keydown'"
         },
@@ -18932,14 +19162,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1805,
+          "line": 1810,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1805,
+          "line": 1810,
           "kind": "event-listener",
           "match": "ipcMain.handle('lifecycle:get-main-snapshot'"
         },
@@ -19798,7 +20028,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 136,
+          "line": 197,
           "kind": "event-send"
         }
       ],
@@ -19824,7 +20054,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 136,
+          "line": 197,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('local-stt:status'"
         }
@@ -19840,7 +20070,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 137,
+          "line": 198,
           "kind": "event-send"
         }
       ],
@@ -19866,7 +20096,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 137,
+          "line": 198,
           "kind": "event-send",
           "match": "ipcRenderer.invoke('local-stt:transcribe'"
         }
@@ -21194,14 +21424,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1850,
+          "line": 1855,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1850,
+          "line": 1855,
           "kind": "event-listener",
           "match": "ipcMain.on('minimize-to-tray'"
         },
@@ -21629,7 +21859,7 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1444,
+          "line": 1449,
           "kind": "event-send"
         }
       ],
@@ -21637,7 +21867,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1444,
+          "line": 1449,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('models-update-failed'"
         }
@@ -21648,17 +21878,17 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 1439,
+          "line": 1444,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 1498,
+          "line": 1503,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 1502,
+          "line": 1507,
           "kind": "event-send"
         }
       ],
@@ -21672,19 +21902,19 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1439,
+          "line": 1444,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('models-updated'"
         },
         {
           "file": "main.js",
-          "line": 1498,
+          "line": 1503,
           "kind": "event-send",
           "match": "event.sender.send('models-updated'"
         },
         {
           "file": "main.js",
-          "line": 1502,
+          "line": 1507,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('models-updated'"
         },
@@ -24348,14 +24578,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1557,
+          "line": 1574,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1557,
+          "line": 1574,
           "kind": "preload-subscription",
           "match": "chatAPI.onCreateUnlockedTopic("
         }
@@ -24381,19 +24611,38 @@
       ]
     },
     {
-      "name": "onDeskPetOpenTopic(",
+      "name": "onDeskPetInterrupt(",
       "producers": [],
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1434,
+          "line": 1449,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1434,
+          "line": 1449,
+          "kind": "preload-subscription",
+          "match": "chatAPI.onDeskPetInterrupt("
+        }
+      ]
+    },
+    {
+      "name": "onDeskPetOpenTopic(",
+      "producers": [],
+      "consumers": [
+        {
+          "file": "modules/event-listeners.js",
+          "line": 1435,
+          "kind": "preload-subscription"
+        }
+      ],
+      "evidence": [
+        {
+          "file": "modules/event-listeners.js",
+          "line": 1435,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetOpenTopic("
         }
@@ -24424,14 +24673,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1425,
+          "line": 1426,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1425,
+          "line": 1426,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetSendRequest("
         }
@@ -24462,14 +24711,14 @@
       "consumers": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1447,
+          "line": 1464,
           "kind": "preload-subscription"
         }
       ],
       "evidence": [
         {
           "file": "modules/event-listeners.js",
-          "line": 1447,
+          "line": 1464,
           "kind": "preload-subscription",
           "match": "chatAPI.onDeskPetSettingsOpen("
         }
@@ -25694,7 +25943,7 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 409,
+          "line": 412,
           "kind": "event-listener"
         },
         {
@@ -25706,7 +25955,7 @@
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 409,
+          "line": 412,
           "kind": "event-listener",
           "match": "win.webContents.on('page-title-updated'"
         },
@@ -25790,14 +26039,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1517,
+          "line": 1522,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1517,
+          "line": 1522,
           "kind": "event-listener",
           "match": "ipcMain.handle('path:basename'"
         },
@@ -25821,14 +26070,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1510,
+          "line": 1515,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1510,
+          "line": 1515,
           "kind": "event-listener",
           "match": "ipcMain.handle('path:dirname'"
         },
@@ -25852,14 +26101,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1514,
+          "line": 1519,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1514,
+          "line": 1519,
           "kind": "event-listener",
           "match": "ipcMain.handle('path:extname'"
         },
@@ -25953,7 +26202,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 48,
+          "line": 80,
           "kind": "event-listener"
         }
       ],
@@ -25978,7 +26227,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 48,
+          "line": 80,
           "kind": "event-listener",
           "match": "ipcRenderer.on('play-tts-audio'"
         }
@@ -27573,7 +27822,7 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 618,
+          "line": 629,
           "kind": "event-listener"
         },
         {
@@ -27705,7 +27954,7 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 618,
+          "line": 629,
           "kind": "event-listener",
           "match": "win.once('ready-to-show'"
         },
@@ -27868,14 +28117,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1487,
+          "line": 1492,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1487,
+          "line": 1492,
           "kind": "event-listener",
           "match": "ipcMain.handle('refresh-models'"
         },
@@ -28101,12 +28350,12 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 413,
+          "line": 416,
           "kind": "event-listener"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 628,
+          "line": 639,
           "kind": "event-listener"
         },
         {
@@ -28156,13 +28405,13 @@
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 413,
+          "line": 416,
           "kind": "event-listener",
           "match": "win.webContents.on('render-process-gone'"
         },
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 628,
+          "line": 639,
           "kind": "event-listener",
           "match": "win.webContents.on('render-process-gone'"
         },
@@ -29977,14 +30226,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1069,
+          "line": 1074,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1069,
+          "line": 1074,
           "kind": "event-listener",
           "match": "app.on('second-instance'"
         }
@@ -30226,14 +30475,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 2148,
+          "line": 2153,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 2148,
+          "line": 2153,
           "kind": "event-listener",
           "match": "ipcMain.on('send-vcplog-message'"
         },
@@ -30734,14 +30983,14 @@
       "consumers": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 641,
+          "line": 652,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "modules/ipc/deskPetHandlers.js",
-          "line": 641,
+          "line": 652,
           "kind": "event-listener",
           "match": "win.on('show'"
         }
@@ -31328,7 +31577,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 55,
+          "line": 87,
           "kind": "event-listener"
         }
       ],
@@ -31365,7 +31614,7 @@
         },
         {
           "file": "preloads/deskpet.js",
-          "line": 55,
+          "line": 87,
           "kind": "event-listener",
           "match": "ipcRenderer.on('stop-tts-audio'"
         }
@@ -32552,14 +32801,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1476,
+          "line": 1481,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1476,
+          "line": 1481,
           "kind": "event-listener",
           "match": "ipcMain.handle('toggle-favorite-model'"
         },
@@ -33639,17 +33888,17 @@
         },
         {
           "file": "main.js",
-          "line": 2081,
+          "line": 2086,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2096,
+          "line": 2101,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2099,
+          "line": 2104,
           "kind": "event-send"
         }
       ],
@@ -33669,19 +33918,19 @@
         },
         {
           "file": "main.js",
-          "line": 2081,
+          "line": 2086,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
         {
           "file": "main.js",
-          "line": 2096,
+          "line": 2101,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
         {
           "file": "main.js",
-          "line": 2099,
+          "line": 2104,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-message'"
         },
@@ -33698,32 +33947,32 @@
       "producers": [
         {
           "file": "main.js",
-          "line": 2058,
+          "line": 2063,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2071,
+          "line": 2076,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2079,
+          "line": 2084,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2105,
+          "line": 2110,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2118,
+          "line": 2123,
           "kind": "event-send"
         },
         {
           "file": "main.js",
-          "line": 2144,
+          "line": 2149,
           "kind": "event-send"
         }
       ],
@@ -33737,37 +33986,37 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 2058,
+          "line": 2063,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2071,
+          "line": 2076,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2079,
+          "line": 2084,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2105,
+          "line": 2110,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2118,
+          "line": 2123,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
         {
           "file": "main.js",
-          "line": 2144,
+          "line": 2149,
           "kind": "event-send",
           "match": "mainWindow.webContents.send('vcp-log-status'"
         },
@@ -34847,14 +35096,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1653,
+          "line": 1658,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1653,
+          "line": 1658,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:begin'"
         },
@@ -34878,14 +35127,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1660,
+          "line": 1665,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1660,
+          "line": 1665,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:start'"
         },
@@ -34909,14 +35158,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1680,
+          "line": 1685,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1680,
+          "line": 1685,
           "kind": "event-listener",
           "match": "ipcMain.handle('watcher:stop'"
         },
@@ -34934,14 +35183,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1132,
+          "line": 1137,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1132,
+          "line": 1137,
           "kind": "event-listener",
           "match": "app.on('web-contents-created'"
         }
@@ -35404,7 +35653,7 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1986,
+          "line": 1991,
           "kind": "event-listener"
         },
         {
@@ -35416,7 +35665,7 @@
       "evidence": [
         {
           "file": "main.js",
-          "line": 1986,
+          "line": 1991,
           "kind": "event-listener",
           "match": "app.on('will-quit'"
         },
@@ -35453,14 +35702,14 @@
       "consumers": [
         {
           "file": "main.js",
-          "line": 1959,
+          "line": 1964,
           "kind": "event-listener"
         }
       ],
       "evidence": [
         {
           "file": "main.js",
-          "line": 1959,
+          "line": 1964,
           "kind": "event-listener",
           "match": "app.on('window-all-closed'"
         }

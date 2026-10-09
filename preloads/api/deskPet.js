@@ -16,6 +16,8 @@ module.exports = {
         deskPetSendResult: send('deskpet:send-result', 'payload'),
         // 点桌宠上 AI 主动开的新话题：切到那个话题。
         onDeskPetOpenTopic: on('deskpet:open-topic'),
+        // 桌宠上点了停止：中止那条回复
+        onDeskPetInterrupt: on('deskpet:interrupt-request'),
         // 全局设置 → 桌宠（modules/settings/schema/deskpet-panel.js）；主进程：modules/deskpet/settingsPage.js、petControls.js
         onDeskPetSettingsOpen: on('deskpet-settings:open'),
         onDeskPetSettingsChanged: on('deskpet-settings:changed'),

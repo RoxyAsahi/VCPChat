@@ -1,7 +1,35 @@
 'use strict';
 
 // 桌宠窗口专用 preload（DeskPetmodules/deskpet.html）。窗口开着沙箱，这里只用 electron。
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+// 拖进来的文件：真实路径只能在这里由 webUtils 取到。只认这样取到过的路径，
+// 页面不能随手编一个本机路径让主窗口当附件发出去。
+const MAX_FILES = 10;
+const MAX_PASTE_BYTES = 20 * 1024 * 1024;
+const droppedPaths = new Set();
+
+function filePath(file) {
+    try {
+        const resolved = webUtils?.getPathForFile?.(file) || '';
+        if (resolved) droppedPaths.add(resolved);
+        return resolved;
+    } catch {
+        return '';
+    }
+}
+
+function cleanFiles(files) {
+    if (!Array.isArray(files)) return [];
+    const out = [];
+    for (const file of files.slice(0, MAX_FILES)) {
+        const name = String(file?.name || '').slice(0, 255) || '文件';
+        const type = String(file?.type || '').slice(0, 100);
+        if (typeof file?.path === 'string' && droppedPaths.has(file.path)) out.push({ path: file.path, name, type });
+        else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_PASTE_BYTES) out.push({ data: file.data, name, type });
+    }
+    return out;
+}
 
 // 渠道名写成字面量，事件图能静态登记每个订阅。
 function onStream(callback) {
@@ -20,8 +48,12 @@ function onCursor(callback) {
 
 function onOpenInput(callback) {
     if (typeof callback !== 'function') return () => {};
-    // submit：设置页预览里输入的话，由桌宠直接发出去
-    const listener = (_event, options) => callback({ toggle: options?.toggle === true, submit: typeof options?.submit === 'string' ? options.submit : '' });
+    // submit：设置页预览里输入的话，由桌宠直接发出去；voice：语音快捷键（开始录 / 停下发出去）
+    const listener = (_event, options) => callback({
+        toggle: options?.toggle === true,
+        submit: typeof options?.submit === 'string' ? options.submit : '',
+        voice: options?.voice === true,
+    });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
@@ -87,6 +119,22 @@ function onTopicMissing(callback) {
     return () => ipcRenderer.removeListener('deskpet:topic-missing', listener);
 }
 
+// 甩出去以后落到了任务栏上
+function onLanded(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('deskpet:landed', listener);
+    return () => ipcRenderer.removeListener('deskpet:landed', listener);
+}
+
+// 溜达：开始走（dir 是 left / right）和停下（dir 是 null）
+function onWalk(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback({ dir: payload?.dir === 'left' || payload?.dir === 'right' ? payload.dir : null });
+    ipcRenderer.on('deskpet:walk', listener);
+    return () => ipcRenderer.removeListener('deskpet:walk', listener);
+}
+
 contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     getAssets: () => ipcRenderer.invoke('deskpet:get-assets'),
     getPrefs: () => ipcRenderer.invoke('deskpet:get-prefs'),
@@ -95,7 +143,9 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     touched: () => ipcRenderer.send('deskpet:touched'),
     getMood: () => ipcRenderer.invoke('deskpet:get-mood'),
     onMood,
-    send: (text, options) => ipcRenderer.invoke('deskpet:send', String(text || ''), { newTopic: options?.newTopic === true }),
+    // 第三个参数：输入条上按了「+」，这一句先开新话题再发
+    send: (text, files, options) => ipcRenderer.invoke('deskpet:send', String(text || ''), cleanFiles(files), { newTopic: options?.newTopic === true }),
+    filePath,
     onStream,
     onCursor,
     onOpenInput,
@@ -119,8 +169,19 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
         const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
         ipcRenderer.send('deskpet:drag-end', { figure, free: report?.free === true });
     },
+    // 闲了一阵想溜达（figure 同 dragEnd）；stop：页面有了动静，停下
+    wander: (report) => {
+        const f = report?.figure;
+        const figure = f ? { x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height) } : null;
+        ipcRenderer.send('deskpet:wander', { figure, stop: report?.stop === true });
+    },
+    onWalk,
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
+    interrupt: messageId => ipcRenderer.send('deskpet:interrupt', String(messageId || '')),
+    idleSeconds: () => ipcRenderer.invoke('deskpet:idle-seconds'),
+    wantOut: want => ipcRenderer.send('deskpet:want-out', want === true),
+    onLanded,
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),
