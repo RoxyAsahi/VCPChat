@@ -968,6 +968,7 @@ function prefsFor(pet) {
         scale: pet.scale,
         doNotDisturb: settings.doNotDisturb,
         clickThrough: settings.clickThrough === true,
+        opacity: settings.opacity ?? 1,
         // 页面提示里写怎么关：按平台写成 Ctrl / Cmd
         clickThroughKey: key.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl'),
     };
@@ -1203,6 +1204,17 @@ function outfitMenu(pet, outfits) {
         type: 'radio',
         checked: outfit.id === pet.outfit,
         click: () => setPetOutfit(pet.agentId, outfit.id).catch((error) => console.warn('[DeskPet] outfit switch failed:', error.message)),
+    }));
+}
+
+// 角色淡一点，后面的字能透出来；气泡和输入框不变
+function opacityMenu() {
+    const current = controls?.get().opacity ?? 1;
+    return [1, 0.8, 0.6, 0.4].map((value) => ({
+        label: value === 1 ? '不透明' : `${Math.round(value * 100)}%`,
+        type: 'radio',
+        checked: Math.abs(current - value) < 0.001,
+        click: () => controls?.update({ opacity: value }),
     }));
 }
 
@@ -1662,6 +1674,7 @@ function registerIpc() {
             { label: '打开主窗口', click: openMainWindow },
             { type: 'separator' },
             { label: '大小', submenu: scaleMenu(pet) },
+            { label: '透明度', submenu: opacityMenu() },
             {
                 label: '免打扰',
                 type: 'checkbox',
@@ -1764,7 +1777,7 @@ function initialize(options) {
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts')) broadcastPrefs();
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity')) broadcastPrefs();
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();

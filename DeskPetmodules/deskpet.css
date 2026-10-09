@@ -12,6 +12,13 @@ html, body {
 #stage {
   position: absolute;
   inset: 0;
+  opacity: var(--pet-opacity, 1);
+  transition: opacity 180ms ease;
+}
+
+/* 只看不点时光标压在角色上：淡到快看不见，后面的字露出来 */
+body.is-ghost-hover #stage {
+  opacity: calc(var(--pet-opacity, 1) * 0.2);
 }
 
 #live2dCanvas {
