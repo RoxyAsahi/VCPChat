@@ -366,7 +366,7 @@ function renderAgentPortrait(doc) {
         el(doc, 'span', { class: 'agent-portrait-preview-tabs', 'aria-hidden': 'true' }),
         el(doc, 'span', { class: 'agent-portrait-focus-marker', 'aria-hidden': 'true', hidden: true }),
         el(doc, 'span', { class: 'agent-portrait-preview-empty' }, '还没有立绘，首页显示头像和名字'));
-    const themes = el(doc, 'div', { class: 'agent-portrait-preview-themes', role: 'group', 'aria-label': '预览主题' },
+    const themes = el(doc, 'div', { class: 'agent-portrait-segmented', role: 'group', 'aria-label': '预览主题' },
         el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'default', 'aria-pressed': 'true' }, '深色'),
         el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'light', 'aria-pressed': 'false' }, '浅色'));
     const height = el(doc, 'div', { class: 'agent-portrait-height' },
@@ -377,7 +377,7 @@ function renderAgentPortrait(doc) {
     return el(doc, 'div', { class: 'agent-portrait-settings', id: 'agentPortraitSettings' },
         el(doc, 'div', { class: 'agent-portrait-header-choice' },
             el(doc, 'span', { id: 'agentPortraitHeaderLabel', class: 'agent-portrait-header-label' }, '首页顶部显示'),
-            el(doc, 'div', { class: 'agent-portrait-preview-themes', role: 'group', 'aria-labelledby': 'agentPortraitHeaderLabel' },
+            el(doc, 'div', { class: 'agent-portrait-segmented', role: 'group', 'aria-labelledby': 'agentPortraitHeaderLabel' },
                 el(doc, 'button', { type: 'button', 'data-portrait-header': 'portrait', 'aria-pressed': 'false' }, '立绘'),
                 el(doc, 'button', { type: 'button', 'data-portrait-header': 'avatar', 'aria-pressed': 'true' }, '头像'))),
         el(doc, 'p', { class: 'agent-portrait-hint' }, '选「立绘」时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字；选「头像」时立绘留着但不显示。可以用图片、动图（GIF、WebP、APNG）或视频（MP4、WebM，静音循环播放）。改动点保存后生效。'),

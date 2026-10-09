@@ -40,25 +40,42 @@ async function isAnimatedPng(filePath) {
     }
 }
 
+function cachePrefix(filePath) {
+    return `${crypto.createHash('sha1').update(path.resolve(filePath)).digest('hex').slice(0, 20)}-`;
+}
+
 function cacheKey(filePath, stat) {
-    const hash = crypto.createHash('sha1').update(path.resolve(filePath)).digest('hex').slice(0, 20);
-    return { prefix: `${hash}-`, name: `${hash}-${Math.round(stat.mtimeMs)}-${stat.size}.webp` };
+    const prefix = cachePrefix(filePath);
+    return { prefix, name: `${prefix}${Math.round(stat.mtimeMs)}-${stat.size}.webp` };
+}
+
+let sharpModule = null;
+function loadSharp() {
+    if (!sharpModule) {
+        sharpModule = require('sharp');
+        // 只偶尔缩一张图，用不上 libvips 的操作缓存；它还会开着最近读过的原图，
+        // Windows 上开着的文件不能被替换或删除，换立绘、删立绘会失败。
+        sharpModule.cache(false);
+    }
+    return sharpModule;
 }
 
 async function createDisplayImage(filePath, target, prefix) {
     const ext = path.extname(filePath).toLowerCase();
     if (VIDEO_EXTENSIONS.has(ext)) return null;
     if (ext === '.png' && await isAnimatedPng(filePath)) return null;
-    const sharp = require('sharp');
+    const sharp = loadSharp();
     const meta = await sharp(filePath).metadata();
     if (!meta.width || !meta.height || (meta.pages || 1) > 1) return null;
-    const scale = Math.max(DISPLAY_WIDTH / meta.width, DISPLAY_HEIGHT / meta.height);
+    // 手机照片常带 EXIF 方向：方向 5-8 摆正以后宽高对调，要按摆正后的尺寸算，否则缩出来的图被裁歪
+    const [width, height] = (meta.orientation || 1) >= 5 ? [meta.height, meta.width] : [meta.width, meta.height];
+    const scale = Math.max(DISPLAY_WIDTH / width, DISPLAY_HEIGHT / height);
     if (scale >= 1) return null;
     await fs.ensureDir(path.dirname(target));
     const temp = `${target}.${process.pid}.tmp`;
     await sharp(filePath)
         .rotate()
-        .resize(Math.round(meta.width * scale), Math.round(meta.height * scale))
+        .resize(Math.round(width * scale), Math.round(height * scale))
         .webp({ quality: 88, alphaQuality: 100 })
         .toFile(temp);
     await fs.move(temp, target, { overwrite: true });
@@ -93,4 +110,17 @@ async function resolvePortraitDisplayPath(filePath, stat, cacheDir) {
     return (await pending.get(target)) || filePath;
 }
 
-module.exports = { resolvePortraitDisplayPath, DISPLAY_WIDTH, DISPLAY_HEIGHT };
+/** 原图删掉了（删立绘、换了扩展名、删助手）：它的缩小图也删掉，不然缓存目录只增不减 */
+async function forgetPortraitDisplayImages(filePaths, cacheDir) {
+    if (!cacheDir || !filePaths?.length) return;
+    const prefixes = filePaths.map(cachePrefix);
+    for (const name of keepOriginal) {
+        if (prefixes.some(prefix => name.startsWith(prefix))) keepOriginal.delete(name);
+    }
+    const names = await fs.readdir(cacheDir).catch(() => []);
+    await Promise.all(names
+        .filter(name => prefixes.some(prefix => name.startsWith(prefix)))
+        .map(name => fs.remove(path.join(cacheDir, name)).catch(() => {})));
+}
+
+module.exports = { resolvePortraitDisplayPath, forgetPortraitDisplayImages, DISPLAY_WIDTH, DISPLAY_HEIGHT };
