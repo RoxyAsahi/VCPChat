@@ -776,7 +776,7 @@
     "dynamicSites": [
       {
         "file": "modules/ui-system/agent-portrait-settings.js",
-        "line": 58,
+        "line": 59,
         "kind": "custom-event-listener",
         "match": "target.addEventListener(type"
       }

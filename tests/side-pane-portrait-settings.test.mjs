@@ -46,9 +46,10 @@ function setup({ portraits = null } = {}) {
 }
 
 test('portrait display values are clamped and default when missing', () => {
-    assert.deepEqual(normalizePortraitDisplay(null), { ...PORTRAIT_DISPLAY_DEFAULTS });
-    assert.deepEqual(normalizePortraitDisplay({ focusX: -5, focusY: 140, height: 9999 }), { focusX: 0, focusY: 100, height: 360 });
-    assert.deepEqual(normalizePortraitDisplay({ focusX: '40.6', focusY: 'x', height: 100 }), { focusX: 41, focusY: 22, height: 180 });
+    assert.deepEqual(normalizePortraitDisplay(null), { header: 'portrait', ...PORTRAIT_DISPLAY_DEFAULTS });
+    assert.deepEqual(normalizePortraitDisplay({ focusX: -5, focusY: 140, height: 9999 }), { header: 'portrait', focusX: 0, focusY: 100, height: 360 });
+    assert.deepEqual(normalizePortraitDisplay({ header: 'avatar', focusX: '40.6', focusY: 'x', height: 100 }), { header: 'avatar', focusX: 41, focusY: 22, height: 180 });
+    assert.equal(normalizePortraitDisplay({ header: 'banner' }).header, 'portrait');
 });
 
 test('an agent without a portrait stages one, marks the form changed and writes it on commit', async () => {
@@ -117,6 +118,32 @@ test('animated images stay images, videos preview as a muted looping video and s
     t.dom.window.close();
 });
 
+test('the header choice picks portrait or avatar, is saved with the display and survives reset', async () => {
+    const t = setup();
+    const button = mode => t.host.querySelector(`[data-portrait-header="${mode}"]`);
+    await t.owner.load('Coco', {});
+    // 没有立绘：只能是头像
+    assert.equal(button('avatar').getAttribute('aria-pressed'), 'true');
+    assert.equal(button('portrait').disabled, true);
+
+    const n = setup({ portraits: { default: 'file:///default' } });
+    const pick = mode => n.host.querySelector(`[data-portrait-header="${mode}"]`);
+    let formChanges = 0;
+    n.form.addEventListener('change', () => formChanges++);
+    await n.owner.load('Nova', { portraitDisplay: { focusX: 30 } });
+    assert.equal(pick('portrait').getAttribute('aria-pressed'), 'true', '有立绘时默认显示立绘');
+    pick('avatar').click();
+    assert.equal(pick('avatar').getAttribute('aria-pressed'), 'true');
+    assert.equal(n.host.dataset.header, 'avatar');
+    assert.equal(formChanges, 1, '换选项要让表单变成未保存');
+    assert.equal(n.owner.getDisplay().header, 'avatar');
+    assert.match(n.owner.summary(), /首页显示头像/);
+    n.host.querySelector('#agentPortraitResetBtn').click();
+    assert.deepEqual(n.owner.getDisplay(), { header: 'avatar', focusX: 50, focusY: 22, height: 248 }, '重置位置不动显示选项');
+    t.dom.window.close();
+    n.dom.window.close();
+});
+
 test('removing the default portrait also removes the light one, and undo restores both', async () => {
     const t = setup({ portraits: { default: 'file:///default', light: 'file:///light' } });
     await t.owner.load('Nova', {});
@@ -159,7 +186,7 @@ test('focus moves with the arrow keys and height and reset feed the saved displa
     const preview = t.host.querySelector('#agentPortraitPreview');
     const key = k => preview.dispatchEvent(new t.win.KeyboardEvent('keydown', { key: k, bubbles: true }));
     key('ArrowRight'); key('ArrowDown');
-    assert.deepEqual(t.owner.getDisplay(), { focusX: 52, focusY: 22, height: 260 });
+    assert.deepEqual(t.owner.getDisplay(), { header: 'portrait', focusX: 52, focusY: 22, height: 260 });
     assert.equal(preview.style.getPropertyValue('--side-pane-portrait-position'), '52% 22%');
 
     const height = t.host.querySelector('#agentPortraitHeight');
@@ -169,7 +196,7 @@ test('focus moves with the arrow keys and height and reset feed the saved displa
     assert.equal(t.host.querySelector('#agentPortraitHeightValue').textContent, '320px');
 
     t.host.querySelector('#agentPortraitResetBtn').click();
-    assert.deepEqual(t.owner.getDisplay(), { ...PORTRAIT_DISPLAY_DEFAULTS });
+    assert.deepEqual(t.owner.getDisplay(), { header: 'portrait', ...PORTRAIT_DISPLAY_DEFAULTS });
     assert.equal(t.host.querySelector('#agentPortraitResetBtn').disabled, true);
     t.dom.window.close();
 });

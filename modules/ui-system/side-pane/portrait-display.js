@@ -2,12 +2,15 @@
 
 /**
  * Agent 配置里的 portraitDisplay：立绘在首页头部怎么摆。
+ *   header           首页顶部显示什么：'portrait' 立绘（没有立绘时自然是头像）或 'avatar' 头像和名字
  *   focusX / focusY  画面焦点（百分比），窄侧栏裁切时保住这一点
  *   height           立绘头部高度（px）；分类切换条始终落在立绘淡出的位置
  * 读进来的值一律先过 normalizePortraitDisplay，缺的、坏的都回到默认值。
  */
 export const PORTRAIT_DISPLAY_DEFAULTS = Object.freeze({ focusX: 50, focusY: 22, height: 248 });
 export const PORTRAIT_HEIGHT_RANGE = Object.freeze({ min: 180, max: 360 });
+// 「重置位置」只管焦点和高度，所以 header 不在 PORTRAIT_DISPLAY_DEFAULTS 里
+export const PORTRAIT_HEADER_MODES = Object.freeze(['portrait', 'avatar']);
 
 const clamp = (value, min, max, fallback) => {
     const number = Number(value);
@@ -17,6 +20,7 @@ const clamp = (value, min, max, fallback) => {
 export function normalizePortraitDisplay(raw) {
     const source = raw && typeof raw === 'object' ? raw : {};
     return {
+        header: source.header === 'avatar' ? 'avatar' : 'portrait',
         focusX: clamp(source.focusX, 0, 100, PORTRAIT_DISPLAY_DEFAULTS.focusX),
         focusY: clamp(source.focusY, 0, 100, PORTRAIT_DISPLAY_DEFAULTS.focusY),
         height: clamp(source.height, PORTRAIT_HEIGHT_RANGE.min, PORTRAIT_HEIGHT_RANGE.max, PORTRAIT_DISPLAY_DEFAULTS.height)
