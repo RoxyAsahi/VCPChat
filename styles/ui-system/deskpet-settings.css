@@ -435,6 +435,12 @@
   gap: 12px;
 }
 
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-grid.is-drop {
+  border-radius: 12px;
+  outline: 2px dashed var(--dps-accent);
+  outline-offset: 4px;
+}
+
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps.is-busy .dps-grid {
   cursor: progress;
 }

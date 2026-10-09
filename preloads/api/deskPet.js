@@ -34,7 +34,7 @@ module.exports = {
         refreshDeskPetCatalog: invoke('deskpet-settings:refresh', 'agentId'),
         chooseDeskPetOutfit: invoke('deskpet-settings:choose', 'agentId', 'outfitId'),
         setDeskPetsVisible: invoke('deskpet-settings:set-visible', 'visible', 'agentId'),
-        importDeskPetOutfit: invoke('deskpet-settings:import', 'agentId'),
+        importDeskPetOutfit: invoke('deskpet-settings:import', 'agentId', 'files'),
         openDeskPetFolder: invoke('deskpet-settings:open-folder', 'agentId'),
         installDeskPetCore: invoke('deskpet-settings:core-install', 'source', 'agentId'),
         openDeskPetCoreLink: invoke('deskpet-settings:core-link', 'which'),
