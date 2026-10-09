@@ -47,14 +47,16 @@
    <VCPChat>\AppData\Agents\<AgentId>\deskpet\<模型文件夹>\
    ```
    官方示例模型里 Mao、Natori 带表情文件，适合试情绪；Hiyori 没有表情文件，只能靠参数叠加看出变化。
-3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型在设置页「桌宠」分区选中这套形象，下面「表情映射 · 调整」里给每个情绪挑表情和动作，改一项桌宠就当场演一下，保存后写进模型文件夹的 `deskpet.json`（只改这 12 个情绪，文件里别的键保留）。也可以手写：
+3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型在设置页「桌宠」分区选中这套形象，下面「表情映射 · 调整」里给每个情绪挑表情和动作，改一项桌宠就当场演一下，保存后写进模型文件夹的 `deskpet.json`（只改这 12 个情绪和点头、点身体两项，文件里别的键保留）。也可以手写：
    ```json
    {
      "expressions": { "neutral": "Normal", "happy": "Smile", "shy": "Blushing", "sad": "Sad",
                       "angry": "Angry", "surprised": "Surprised" },
-     "motions": { "happy": "TapBody" }
+     "motions": { "happy": "TapBody" },
+     "taps": { "head": { "expression": "Blushing", "motion": "TapHead" }, "body": { "motion": "TapBody" } }
    }
    ```
+   `taps` 是点到头、点到身体时演的表情和动作（看模型的 HitAreas，没有就按头部宽度估），没写的按默认反应：点头害羞、点身体开心。
    情绪键与侧栏差分立绘相同，共 12 个：`neutral calm happy excited shy affectionate curious surprised concerned sad tired angry`。没写的情绪按表情名去猜（含 smile、angry 之类的词）。
 
 本项目附带自有 Nova 模型，不附带 Cubism Core。Core 和第三方示例模型需自行按其许可获取；已有 Core 配置可继续使用。

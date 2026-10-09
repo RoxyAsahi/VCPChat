@@ -857,10 +857,13 @@ export function buildDeskPetPanel(doc) {
     mapToggle.addEventListener('click', () => setMapOpen(!mapping.open));
 
     function draftFrom(data) {
-        const draft = { expressions: {}, motions: {} };
+        const draft = { expressions: {}, motions: {}, taps: {} };
         for (const row of mapModule.describeMapping({ names: data.names, groups: data.groups, profile: data.profile, modelName: mapModule.modelNameOf(data.modelFile) })) {
             if (row.expressionSet) draft.expressions[row.emotion] = row.expression;
             if (row.motionSet) draft.motions[row.emotion] = row.motion ?? '';
+        }
+        for (const tap of mapModule.describeTaps({ names: data.names, groups: data.groups, profile: data.profile })) {
+            if (tap.expression || tap.motion) draft.taps[tap.zone] = { expression: tap.expression, motion: tap.motion };
         }
         return draft;
     }
@@ -899,7 +902,7 @@ export function buildDeskPetPanel(doc) {
         const modelName = mapModule.modelNameOf(data.modelFile);
         const rows = mapModule.describeMapping({ names: data.names, groups: data.groups, profile: mapping.draft, modelName });
         mapHint.textContent = data.editable
-            ? `回复里的情绪换成这个模型的哪个表情、顺带放哪个动作。「自动」按表情名猜。点 ▶ 在桌面上的桌宠身上试一下${data.showing ? '' : '（桌宠要先穿上这一套）'}，满意了再保存，存在模型旁边的 deskpet.json。`
+            ? `回复里的情绪换成这个模型的哪个表情、顺带放哪个动作；最下面两行是点头、点身体时的反应。「自动」按表情名猜。点 ▶ 在桌面上的桌宠身上试一下${data.showing ? '' : '（桌宠要先穿上这一套）'}，满意了再保存，存在模型旁边的 deskpet.json。`
             : '内置形象的映射已经调好，这里只能看；点 ▶ 可以在桌宠身上试。';
         if (!data.names.length && !data.groups.length) {
             mapList.replaceChildren(el(doc, 'p', 'dps-row-hint', '这个模型没有自带表情和动作，情绪只靠参数微调脸部（眉毛、眼睛、嘴角）。'));
@@ -940,6 +943,40 @@ export function buildDeskPetPanel(doc) {
             line.append(el(doc, 'span', 'dps-map-label', row.label), expr, motion, tryBtn);
             list.push(line);
         }
+        // 点头、点身体：默认是原来的反应（点头害羞、点身体开心），也可以自己挑一个表情 / 动作
+        const tapHead = el(doc, 'div', 'dps-map-row dps-map-head');
+        tapHead.append(el(doc, 'span', '', '被点到'), el(doc, 'span', '', '表情'), el(doc, 'span', '', '动作'), el(doc, 'span'));
+        list.push(tapHead);
+        const DEFAULT_TAP = { head: '害羞', body: '开心' };
+        for (const row of mapModule.describeTaps({ names: data.names, groups: data.groups, profile: mapping.draft })) {
+            const line = el(doc, 'div', 'dps-map-row');
+            const expr = el(doc, 'select', 'dps-map-select');
+            expr.dataset.vcpTypedPrimitiveMounted = 'true';
+            expr.setAttribute('aria-label', `${row.label}时的表情`);
+            expr.append(option(AUTO, `默认（${DEFAULT_TAP[row.zone]}）`), ...data.names.map((name) => option(name, name)));
+            expr.value = row.expression ?? AUTO;
+            const motion = el(doc, 'select', 'dps-map-select');
+            motion.dataset.vcpTypedPrimitiveMounted = 'true';
+            motion.setAttribute('aria-label', `${row.label}时的动作`);
+            motion.append(option(AUTO, '默认'), ...data.groups.map((group) => option(group, group)));
+            motion.value = row.motion ?? AUTO;
+            expr.disabled = !data.editable;
+            motion.disabled = !data.editable;
+            const tryBtn = button(doc, 'dps-icon-btn dps-map-try', '▶', { title: `在桌宠身上试试「${row.label}」`, 'aria-label': `试试${row.label}` });
+            const update = () => {
+                const bound = { expression: expr.value === AUTO ? null : expr.value, motion: motion.value === AUTO ? null : motion.value };
+                if (bound.expression || bound.motion) mapping.draft.taps[row.zone] = bound;
+                else delete mapping.draft.taps[row.zone];
+                mapping.dirty = true;
+                mapSaveBtn.disabled = false;
+                tryMapping(`tap:${row.zone}`, row.label);
+            };
+            expr.addEventListener('change', update);
+            motion.addEventListener('change', update);
+            tryBtn.addEventListener('click', () => tryMapping(`tap:${row.zone}`, row.label));
+            line.append(el(doc, 'span', 'dps-map-label', row.label), expr, motion, tryBtn);
+            list.push(line);
+        }
         mapList.replaceChildren(...list);
         mapSaveBtn.disabled = !data.editable || !mapping.dirty;
         mapResetBtn.disabled = !data.editable;
@@ -958,7 +995,7 @@ export function buildDeskPetPanel(doc) {
 
     mapResetBtn.addEventListener('click', () => {
         if (!mapping.data) return;
-        mapping.draft = { expressions: {}, motions: {} };
+        mapping.draft = { expressions: {}, motions: {}, taps: {} };
         mapping.dirty = true;
         renderMapping();
     });

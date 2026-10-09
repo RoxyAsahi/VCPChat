@@ -2196,7 +2196,7 @@ function initialize(options) {
                 const pet = pets.get(agentId);
                 if (!pet || pet.win.isDestroyed() || !pet.ready) return false;
                 pet.win.webContents.send('deskpet:profile', payload);
-                if (payload?.emotion) showPet(pet);
+                if (payload?.emotion || payload?.tap) showPet(pet);
                 return true;
             },
             setVisible: setPetsVisible,

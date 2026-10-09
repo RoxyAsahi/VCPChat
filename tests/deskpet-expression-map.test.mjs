@@ -68,3 +68,29 @@ test('reads expression names and motion groups from model3.json and writes deskp
     assert.deepEqual(await profiles.readProfile(model), { expressions: { happy: 'F_Smile' } });
     assert.deepEqual(fs.readdirSync(dir).sort(), ['deskpet.json', 'm.model3.json']);
 });
+
+test('main process and pet page agree on the tap zones', () => {
+    assert.deepEqual(profiles.TAP_KEYS, map.TAP_KEYS);
+});
+
+test('tap bindings: only names the model has count, an unbound zone keeps the default reaction', () => {
+    const profile = { taps: { head: { expression: 'Blush', motion: 'Missing' }, body: { expression: 'Nope' } } };
+    assert.deepEqual(map.pickTap('head', NAMES, GROUPS, profile), { expression: 'Blush', motion: null });
+    assert.equal(map.pickTap('body', NAMES, GROUPS, profile), null);
+    assert.equal(map.pickTap('head', NAMES, GROUPS, {}), null);
+    assert.equal(map.pickTap('head', NAMES, GROUPS, { taps: { head: 'Blush' } }), null);
+    assert.deepEqual(map.describeTaps({ names: NAMES, groups: GROUPS, profile: { taps: { body: { motion: 'Wave' } } } }), [
+        { zone: 'head', label: '点头', expression: null, motion: null },
+        { zone: 'body', label: '点身体', expression: null, motion: 'Wave' },
+    ]);
+});
+
+test('saving tap bindings keeps valid names per zone and drops empty zones', () => {
+    const catalog = { names: NAMES, groups: GROUPS };
+    const next = profiles.mergeProfile({ taps: { head: { motion: 'Tap' } }, idle: 'Idle' }, {
+        taps: { head: { expression: 'Blush', motion: 'Missing' }, body: { expression: null, motion: 'Wave' } },
+    }, catalog);
+    assert.deepEqual(next, { idle: 'Idle', taps: { head: { expression: 'Blush' }, body: { motion: 'Wave' } } });
+    assert.deepEqual(profiles.mergeProfile({ taps: { head: { motion: 'Tap' } } }, { taps: { head: { expression: null, motion: null } } }, catalog), {});
+    assert.deepEqual(profiles.mergeProfile({ taps: { head: { motion: 'Tap' } } }, {}, catalog), {});
+});
