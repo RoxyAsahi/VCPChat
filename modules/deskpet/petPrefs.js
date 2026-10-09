@@ -251,11 +251,20 @@ function normalizeOpacity(value) {
 }
 
 /** 把磁盘上读到的设置（可能缺字段、被手改坏）整理成完整、合法的设置。 */
+// 设置文件的格式版本。2：语音、只看不点两个快捷键默认不再占键；之前的文件里存着的旧默认键当作没设
+const SETTINGS_VERSION = 2;
+const RETIRED_DEFAULTS = Object.freeze({
+    voice: 'CommandOrControl+Alt+Shift+V',
+    clickThrough: 'CommandOrControl+Alt+Shift+T',
+});
+
 function normalizeSettings(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
+    const legacy = !(Number(input.version) >= SETTINGS_VERSION);
     const shortcuts = {};
     for (const id of Object.keys(SHORTCUT_ACTIONS)) {
-        const given = input.shortcuts && Object.prototype.hasOwnProperty.call(input.shortcuts, id) ? input.shortcuts[id] : undefined;
+        let given = input.shortcuts && Object.prototype.hasOwnProperty.call(input.shortcuts, id) ? input.shortcuts[id] : undefined;
+        if (legacy && given !== undefined && RETIRED_DEFAULTS[id] && normalizeAccelerator(given) === RETIRED_DEFAULTS[id]) given = undefined;
         const normalized = given === undefined ? DEFAULT_SETTINGS.shortcuts[id] : normalizeAccelerator(given);
         shortcuts[id] = normalized === null || isReserved(normalized) ? DEFAULT_SETTINGS.shortcuts[id] : normalized;
     }
@@ -268,6 +277,7 @@ function normalizeSettings(raw) {
     }
     const openAgents = Array.isArray(input.openAgents) ? [...new Set(input.openAgents.filter(isAgentIdLike))].slice(0, 16) : [];
     return {
+        version: SETTINGS_VERSION,
         doNotDisturb: input.doNotDisturb === true,
         restoreOnLaunch: input.restoreOnLaunch !== false,
         yieldToFullscreen: input.yieldToFullscreen === true,
@@ -306,4 +316,5 @@ module.exports = {
     normalizeAccelerator,
     isReserved,
     normalizeSettings,
+    SETTINGS_VERSION,
 };
