@@ -5,7 +5,9 @@
 //        → 差分立绘（portrait.<情绪>.png，与侧栏首页立绘同一套约定）→ 头像加情绪色环。
 //   表情：主进程把这个 agent 的回复流原样转过来，交给与侧栏立绘共用的情绪导演
 //        （modules/emotion），导演给出 { state, emotion, intensity } 帧。
-//   对话：双击角色或右键「和 TA 说话」弹出输入框；话经主窗口按正常流程发送，回复显示在气泡里。
+//   对话：光标停在角色上时脚边冒出小胶囊（打字 / 说话），双击角色或右键「和 TA 说话」直接展开输入条；
+//        话经主窗口按正常流程发送，回复显示在气泡里。说话用本地 SenseVoice 识别成文字放进输入条。
+//   预览：?preview=1 时只画角色，量好位置报给主进程截图（设置页卡片用），不接回复流、不出声。
 import { createEmotionDirector } from 'vcp-deskpet://pet/emotion/emotionDirector.js';
 import { createEmotionTagScanner } from 'vcp-deskpet://pet/emotion/emotionTags.js';
 import { resolvePortrait } from 'vcp-deskpet://pet/emotion/portraitVariants.js';
@@ -16,8 +18,10 @@ import { createMoodOrder } from 'vcp-deskpet://pet/app/moodOrder.js';
 import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette } from 'vcp-deskpet://pet/app/figure.js';
+import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
 
 const api = window.deskPetAPI;
+const PREVIEW = new URLSearchParams(location.search).has('preview');
 // 帧率：有回复、刚被碰过时用 active，空闲一会儿降到 idle，睡着了再降到 sleep；
 // 没有显卡、用软件渲染时整体再降一档。
 const FPS = { active: 30, idle: 15, sleep: 10 };
@@ -32,8 +36,9 @@ const REPLY_HOLD_PER_CHAR_MS = 60;
 const REPLY_HOLD_AFTER_HOVER_MS = 4000;
 const BUBBLE_MAX_CHARS = 600;  // 气泡只留最后这么多字，完整内容在主窗口
 const DOUBLE_TAP_MS = 300;     // 这么短内的第二下算双击；单击的反应等这段时间过了再做
-const TOP_RESERVE = 150;       // 窗口上方留给气泡和输入框的高度（与样式一致）
-const COMPOSER_ROOM = 280;     // 头顶到窗口顶至少这么高，输入框才和气泡一起排在头顶上
+const TOP_RESERVE = 150;       // 窗口上方留给气泡的高度（与样式一致）
+const DOCK_SHOW_MS = 220;      // 光标在角色上停这么久，脚边的小胶囊冒出来
+const DOCK_HIDE_MS = 1400;     // 光标离开这么久，小胶囊收回去
 const FIGURE_MEASURE_MS = 450; // Live2D、网格立绘载入后过这么久（物理和待机动作稳下来）量一次轮廓
 const CONTEXT_LOST_RELOAD_MS = 250;
 const CONTEXT_LOSS_WINDOW_MS = 120000;
@@ -263,19 +268,102 @@ function flashEmotionBadge(emotion, source) {
 
 const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0 };
 
+// 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
+const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null };
+
+function setDock(mode) {
+    if (dock.mode === mode) return;
+    const previous = dock.mode;
+    dock.mode = mode;
+    $('dock').dataset.mode = mode;
+    composer.open = mode === 'bar';
+    // 打字、录音的时候别打瞌睡
+    life?.hold('composer', mode === 'bar' || mode === 'rec');
+    // 输入条要打字：整窗可点、可聚焦；其余时候回到按像素穿透
+    if ((mode === 'bar') !== (previous === 'bar')) api.setInteractive(mode === 'bar');
+    if (mode === 'bar') {
+        fitComposerInput();
+        setTimeout(() => $('composerInput').focus(), 60);
+    }
+}
+
+// 光标进出角色（或小胶囊本身）：停一下才冒出来，离开一会儿才收回去；输入条、录音时不跟着收
+function dockHover(on) {
+    if (on === dock.hover) return;
+    dock.hover = on;
+    clearTimeout(dock.showTimer);
+    clearTimeout(dock.hideTimer);
+    if (dock.mode === 'bar' || dock.mode === 'rec') return;
+    if (on && dock.mode === 'hidden') {
+        dock.showTimer = setTimeout(() => { if (dock.hover && !dock.dragging) setDock('pill'); }, DOCK_SHOW_MS);
+    } else if (!on && dock.mode === 'pill') {
+        dock.hideTimer = setTimeout(() => { if (!dock.hover) setDock('hidden'); }, DOCK_HIDE_MS);
+    }
+}
+
+function restingDock() {
+    return dock.hover && !dock.dragging ? 'pill' : 'hidden';
+}
+
 function openComposer() {
-    composer.open = true;
-    life?.hold('composer', true);
-    $('composer').hidden = false;
-    api.setInteractive(true);
-    setTimeout(() => $('composerInput').focus(), 30);
+    dock.voice?.cancel();
+    setDock('bar');
 }
 
 function closeComposer() {
-    composer.open = false;
-    life?.hold('composer', false);
-    $('composer').hidden = true;
-    api.setInteractive(false);
+    dock.voice?.cancel();
+    setDock(restingDock());
+}
+
+// 输入条跟着字数长高（最多 4 行），外框的高度一起动
+function fitComposerInput() {
+    const input = $('composerInput');
+    input.style.height = 'auto';
+    const height = Math.min(96, Math.max(36, input.scrollHeight));
+    input.style.height = `${height}px`;
+    $('dock').style.setProperty('--dock-bar-h', `${height + 12}px`);
+    $('composerSend').classList.toggle('is-empty', !input.value.trim());
+}
+
+// ---- 说话：本地语音识别成文字，放进输入条，看一眼再发 ----
+
+async function startVoice() {
+    const voice = dock.voice;
+    if (!voice || voice.active || $('recStop').classList.contains('is-busy')) return;
+    const from = dock.mode;
+    setDock('rec');
+    try {
+        await voice.start();
+        voice.onLimit(() => finishVoice());
+    } catch (error) {
+        notice(error.message, { error: true, ms: error.code === 'no-model' ? 8000 : 5000 });
+        setDock(from === 'bar' ? 'bar' : restingDock());
+    }
+}
+
+async function finishVoice() {
+    const voice = dock.voice;
+    const stop = $('recStop');
+    if (!voice?.active || stop.classList.contains('is-busy')) return;
+    stop.classList.add('is-busy');
+    let text = '';
+    try {
+        text = await voice.stop();
+    } catch (error) {
+        notice(error.message, { error: true, ms: 5000 });
+    } finally {
+        stop.classList.remove('is-busy');
+    }
+    if (dock.mode !== 'rec') return; // 识别期间点了打字
+    const input = $('composerInput');
+    if (text) {
+        input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
+        setDock('bar');
+        fitComposerInput();
+    } else {
+        if (!input.value.trim()) notice('没听到说话', { ms: 3000 });
+        setDock(input.value.trim() ? 'bar' : restingDock());
+    }
 }
 
 function shorten(text, max = 16) {
@@ -286,6 +374,7 @@ function shorten(text, max = 16) {
 async function sendText(text) {
     composer.sending = true;
     $('composerSend').disabled = true;
+    fitComposerInput();
     // 先记下发出时间：回复流的开头可能比发送结果先到
     const previousSentAt = composer.lastSentAt;
     composer.lastSentAt = Date.now();
@@ -313,12 +402,14 @@ async function submitComposer() {
         // 连着说了几句就攒在一起，说完一次发出去
         composer.queued = composer.queued ? `${composer.queued}\n${text}` : text;
         input.value = '';
+        fitComposerInput();
         closeComposer();
         renderBubble();
         return;
     }
     if (await sendText(text)) {
         input.value = '';
+        fitComposerInput();
         closeComposer();
     }
 }
@@ -345,8 +436,27 @@ function bindComposer() {
             closeComposer();
         }
     });
+    input.addEventListener('input', fitComposerInput);
+    $('composer').addEventListener('submit', (e) => { e.preventDefault(); submitComposer(); });
     $('composerSend').addEventListener('click', submitComposer);
-    $('composerClose').addEventListener('click', closeComposer);
+    $('dockEdit').addEventListener('click', openComposer);
+    $('recEdit').addEventListener('click', openComposer);
+    $('dockVoice').addEventListener('click', startVoice);
+    $('composerMic').addEventListener('click', startVoice);
+    $('recStop').addEventListener('click', finishVoice);
+    dock.voice = createDictation({
+        status: () => api.sttStatus(),
+        transcribe: (wav, language) => api.transcribe(wav, language),
+        onLevel: (level) => $('recStop').style.setProperty('--level', level.toFixed(2)),
+    });
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dock.mode === 'rec') {
+            e.preventDefault();
+            dock.voice.cancel();
+            setDock(restingDock());
+        }
+    });
+    fitComposerInput();
     // 点气泡打开主窗口看完整回复；鼠标停在气泡上时先不收起，方便读完或往上翻。
     const bubbleEl = $('bubble');
     bubbleEl.addEventListener('click', () => {
@@ -362,9 +472,13 @@ function bindComposer() {
         bubble.hovered = false;
         if (bubble.reply && !bubble.replyId) scheduleReplyHide(REPLY_HOLD_AFTER_HOVER_MS);
     });
-    // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）
-    api.onOpenInput(({ toggle } = {}) => {
-        if (toggle && composer.open && !input.value.trim()) closeComposer();
+    // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）；设置页预览里打的字直接发出去
+    api.onOpenInput(({ toggle, submit } = {}) => {
+        if (submit) {
+            // 不展开输入条、不抢焦点（人还在主窗口的设置页里），直接发
+            input.value = submit;
+            submitComposer();
+        } else if (toggle && composer.open && !input.value.trim()) closeComposer();
         else openComposer();
     });
     // 失焦（点到别的程序）且没写东西时自动收起，回到穿透状态。
@@ -387,7 +501,7 @@ function union(a, b) {
 function uiBounds() {
     let rect = null;
     for (const el of document.querySelectorAll('.pet-ui')) {
-        if (el.hidden) continue;
+        if (el.hidden || el.dataset.mode === 'hidden') continue;
         const r = el.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         rect = rect ? union(rect, r) : { x: r.x, y: r.y, width: r.width, height: r.height };
@@ -1098,6 +1212,7 @@ function reportHit(hit) {
     if (hit !== lastHit) {
         lastHit = hit;
         api.setHit(hit);
+        dockHover(hit);
     }
 }
 
@@ -1547,6 +1662,10 @@ async function start() {
     }
     if (!backend) backend = createImageBackend(assets);
     document.body.dataset.backend = backend.kind;
+    if (PREVIEW) {
+        await renderPreview(assets);
+        return;
+    }
 
     // 朗读时表情跟着念到的句子换（见 speech），导演的新帧先不上脸
     director = createEmotionDirector({ onFrame: (next) => { if (!speech.holdsFrames()) applyFrame(next); } });
@@ -1617,7 +1736,7 @@ async function start() {
         if (!outside) {
             if (uiAt(x, y)) reportHit(true);
             else backend.probe(x, y);
-        }
+        } else dockHover(false);
         life.cursor({ x, y, inside: !outside, onHead: !outside && onHead(x, y) });
         // 光标停着时视线归 petLife 管（游走、犯困低头），动起来再跟光标
         if (!life.gaze) backend.focus(x, y);
@@ -1643,6 +1762,8 @@ async function start() {
         onDrag: (kind, e) => {
             if (kind === 'start') {
                 drag = { x: e.screenX, at: performance.now(), vx: 0 };
+                dock.dragging = true;
+                if (dock.mode === 'pill') setDock('hidden');
                 life.hold('drag', true);
                 backend.life?.held(true);
                 lifeFx.held(true);
@@ -1656,6 +1777,7 @@ async function start() {
                 backend.life?.dragVelocity(drag.vx);
             } else if (kind === 'end' && drag) {
                 drag = null;
+                dock.dragging = false;
                 backend.life?.held(false);
                 lifeFx.held(false);
                 life.hold('drag', false);
@@ -1680,9 +1802,6 @@ async function start() {
     let headY = null; // 第一次量到头就摆上去，之后差得多才挪
     let headX = null;
     let headWidth = null;
-    // 头顶上方放不下气泡加输入框时，输入框改到窗口底部（压在腿上，不挡脸，也不把气泡挤成一行）
-    const placeComposer = () => document.body.classList.toggle('is-cramped', (headY ?? TOP_RESERVE) < COMPOSER_ROOM);
-    placeComposer();
     // 气泡、角标、小符号都跟着头走：全身像的头在窗口上部，Q 版的大头矮矮的在中间，头歪在一边时气泡也挪过去
     const followHead = () => {
         const h = backend.head?.();
@@ -1695,7 +1814,6 @@ async function start() {
         if (headY === null || Math.abs(y - headY) > 16) {
             headY = y;
             root.setProperty('--pet-head', `${y}px`);
-            placeComposer();
         }
         const x = Math.round(Math.max(0, Math.min(window.innerWidth, head.x)));
         const w = Math.round(Math.max(24, Math.min(window.innerWidth, head.width)));
@@ -1734,6 +1852,21 @@ async function start() {
         followHead();
     }).catch(() => {});
     console.log('[DeskPet] ready', JSON.stringify(window.__deskPetReady));
+    api.pageReady?.();
+}
+
+// 设置页卡片的快照：摆好默认表情，等形象量完、物理和待机动作稳下来，把角色的包围盒报给主进程截图
+async function renderPreview(assets) {
+    document.body.classList.add('is-preview');
+    backend.apply({ state: null, emotion: 'neutral', intensity: 0, source: 'idle' }, { changed: true, motion: false });
+    const aspect = await Promise.race([
+        Promise.resolve(backend.figureReady).catch(() => null),
+        new Promise((resolve) => setTimeout(() => resolve(null), 6000)),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const bounds = backend.bounds();
+    window.__deskPetPreview = { outfit: assets.outfit?.id || null, bounds, aspect };
+    api.previewReady?.({ bounds, aspect });
 }
 
 start().catch((error) => {

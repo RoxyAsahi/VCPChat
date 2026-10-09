@@ -171,3 +171,34 @@ test('fitting puts the feet on the window bottom and the figure under the bubble
     assert.ok(Math.abs(center - 140) < 1e-6, '左右居中');
     assert.equal(fitSilhouette({ left: 0, right: 0, top: 0, bottom: 0 }, { width: 10, height: 10, topReserve: 0 }), null);
 });
+
+// ---- 设置页：卡片介绍、导入 ----
+
+test('cards describe each outfit, outfit.json can say it in its own words', async () => {
+    const root = makeAgent({
+        'deskpet/Maid/portrait.png': 'x',
+        'deskpet/Maid/happy.png': 'x',
+        'deskpet/Maid/sad.png': 'x',
+        'deskpet/Q/one.png': 'x',
+        'deskpet/Q/outfit.json': JSON.stringify({ name: 'Q 版', description: '大头小身子' }),
+        'deskpet/Mesh/nova.puppet.json': '{}',
+    });
+    const list = await outfits.listOutfits(root);
+    const by = (id) => list.find((o) => o.id === id);
+    assert.equal(outfits.outfitDescription(by('Q')), '大头小身子');
+    assert.match(outfits.outfitDescription(by('Maid')), /3 张表情/);
+    assert.match(outfits.outfitDescription(by('Mesh')), /网格立绘/);
+    assert.equal((await outfits.inspectFolder(path.join(root, 'deskpet', 'Mesh'))).kind, 'puppet');
+    assert.equal(await outfits.inspectFolder(path.join(root, 'deskpet', 'nothing')), null);
+});
+
+test('importing a model copies its folder, importing pictures copies just those pictures', () => {
+    const { planImport } = require('../modules/deskpet/settingsPage.js');
+    const model = planImport([path.join('C:', 'models', 'Nova', 'nova.model3.json')]);
+    assert.deepEqual(model, { kind: 'folder', source: path.join('C:', 'models', 'Nova'), name: 'Nova' });
+    const pictures = planImport([path.join('D', 'maid.png'), path.join('D', 'happy.webp'), path.join('D', 'notes.txt')]);
+    assert.equal(pictures.kind, 'images');
+    assert.equal(pictures.name, 'maid');
+    assert.equal(pictures.files.length, 2);
+    assert.equal(planImport([path.join('D', 'notes.txt')]), null);
+});

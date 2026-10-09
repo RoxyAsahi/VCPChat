@@ -7,7 +7,8 @@
 //       *.puppet.json          网格立绘
 //       portrait.png、portrait.happy.png …  差分立绘（也可以直接叫 happy.png）
 //       随便一张 png           只有一张图时，那张就是这套的立绘
-//       outfit.json            可选：{ "name": "女仆", "order": 2 }（也认同目录 deskpet.json 里的 name、order）
+//       outfit.json            可选：{ "name": "女仆", "order": 2, "description": "设置页卡片上的一句介绍" }
+//                              （也认同目录 deskpet.json 里的这几项）
 //     *.model3.json / *.puppet.json / portrait.*  直接放在 deskpet/ 下的算一套「默认」（以前的单模型布局）
 //
 // 助手目录里给侧栏用的 portrait.*.png 也算一套「立绘」，排在最后，换回去就是平常的立绘。
@@ -108,11 +109,12 @@ async function readOutfitInfo(dir) {
                 return {
                     name: typeof info.name === 'string' && info.name.trim() ? info.name.trim().slice(0, 40) : null,
                     order: Number.isFinite(info.order) ? info.order : null,
+                    description: typeof info.description === 'string' && info.description.trim() ? info.description.trim().slice(0, 120) : null,
                 };
             }
         } catch { /* 没有或写坏了就当没有 */ }
     }
-    return { name: null, order: null };
+    return { name: null, order: null, description: null };
 }
 
 function kindOf(outfit, hasCore) {
@@ -145,7 +147,7 @@ async function listOutfits(agentRoot, { hasCore = false } = {}) {
     const root = await scanFolder(deskpetDir, { root: true });
     if (root) {
         const info = await readOutfitInfo(deskpetDir);
-        outfits.push({ id: ROOT_ID, name: info.name || '默认', ...root });
+        outfits.push({ id: ROOT_ID, name: info.name || '默认', description: info.description, ...root });
     }
     const folders = (await readDir(deskpetDir)).filter((e) => e.isDirectory() && !e.name.startsWith('.'));
     const found = [];
@@ -154,13 +156,13 @@ async function listOutfits(agentRoot, { hasCore = false } = {}) {
         const scanned = await scanFolder(dir);
         if (!scanned) continue;
         const info = await readOutfitInfo(dir);
-        found.push({ id: entry.name, name: info.name || entry.name, order: info.order, ...scanned });
+        found.push({ id: entry.name, name: info.name || entry.name, order: info.order, description: info.description, ...scanned });
     }
     found.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity) || a.name.localeCompare(b.name, 'zh') || a.id.localeCompare(b.id));
     for (const { order: _order, ...outfit } of found.slice(0, MAX_OUTFITS)) outfits.push(outfit);
     const agentFiles = (await readDir(agentRoot)).filter((e) => e.isFile()).map((e) => e.name);
     const agentPortraits = collectPortraits(agentRoot, agentFiles, { strict: true });
-    if (agentPortraits) outfits.push({ id: PORTRAIT_ID, name: '立绘', live2d: null, puppet: null, portraits: agentPortraits });
+    if (agentPortraits) outfits.push({ id: PORTRAIT_ID, name: '立绘', description: null, live2d: null, puppet: null, portraits: agentPortraits });
     for (const outfit of outfits) {
         outfit.kind = kindOf(outfit, hasCore);
         // 只有 Live2D、又没放 Core：页面会提示缺 Core 并退回立绘
@@ -185,7 +187,24 @@ function pickOutfit(outfits, wanted) {
     return (typeof wanted === 'string' && outfits.find((o) => o.id === wanted)) || defaultOutfit(outfits);
 }
 
-/** 菜单、设置窗口里显示的那一行。 */
+/** 设置页卡片上的一句介绍：outfit.json 里写了就用它，没写按种类说。 */
+function outfitDescription(outfit) {
+    if (outfit.description) return outfit.description;
+    if (outfit.missingCore) return 'Live2D 模型。还没放 Cubism Core，先用立绘代替';
+    if (outfit.kind === 'live2d') return 'Live2D 模型，会眨眼、跟着光标看、按情绪换表情';
+    if (outfit.kind === 'puppet') return '网格立绘，一张图切块做成的，会呼吸、眨眼、对口型';
+    const faces = Object.keys(outfit.portraits || {}).filter((key) => PORTRAIT_KEYS.includes(key) && key !== 'talk').length;
+    return faces ? `差分立绘，${faces + 1} 张表情跟着回复换` : '一张立绘，会呼吸、歪头、打盹';
+}
+
+/** 导入时检查一个文件夹能不能当一套形象：认得出来返回 { kind }，否则 null。 */
+async function inspectFolder(dir) {
+    const scanned = await scanFolder(dir);
+    if (!scanned) return null;
+    return { kind: scanned.live2d ? 'live2d' : scanned.puppet ? 'puppet' : 'portrait' };
+}
+
+/** 菜单、设置页里显示的那一行。 */
 function outfitLabel(outfit) {
     const kind = KIND_LABEL[outfit.kind];
     return kind && outfit.name !== kind ? `${outfit.name}（${kind}）` : outfit.name;
@@ -205,6 +224,8 @@ module.exports = {
     defaultOutfit,
     pickOutfit,
     outfitLabel,
+    outfitDescription,
+    inspectFolder,
     isOutfitId,
     collectPortraits,
     findBySuffix,

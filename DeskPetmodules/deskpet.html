@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; script-src vcp-deskpet:; connect-src vcp-deskpet: data: blob:; img-src vcp-deskpet: blob: data:; style-src vcp-deskpet: 'unsafe-inline'; worker-src blob:">
   <title>VCPChat 桌宠</title>
+  <link rel="stylesheet" href="vcp-deskpet://pet/app/dock.css">
   <link rel="stylesheet" href="vcp-deskpet://pet/app/deskpet.css">
 </head>
 <body>
@@ -36,13 +37,34 @@
       <span class="tool-card-text"></span>
       <span class="tool-card-count"></span>
     </div>
-    <form id="composer" class="pet-ui" hidden>
-      <textarea id="composerInput" rows="2" maxlength="8000"></textarea>
-      <div id="composerActions">
-        <button id="composerClose" type="button" title="收起（Esc）">✕</button>
-        <button id="composerSend" type="button" title="发送（Enter）">发送</button>
-      </div>
+  </div>
+  <!-- 脚边的小胶囊：光标停在角色上时冒出来（打字 / 说话）；点打字展开成输入条，点说话变成录音按钮。
+       三种样子是同一个元素的三个状态（data-mode），宽度和内容之间有过渡动画。 -->
+  <div id="dock" class="pet-ui pet-dock" data-mode="hidden">
+    <div class="dock-layer dock-pill" id="dockPill">
+      <button id="dockEdit" class="dock-btn" type="button" title="打字和 TA 说（双击角色也行）" aria-label="打字">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </button>
+      <i class="dock-sep"></i>
+      <button id="dockVoice" class="dock-btn" type="button" title="说话（本地语音识别）" aria-label="说话">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4"/><path d="M8 7v10"/><path d="M12 4v16"/><path d="M16 8v8"/><path d="M20 11v2"/></svg>
+      </button>
+    </div>
+    <form class="dock-layer dock-bar" id="composer">
+      <button id="composerMic" class="dock-btn dock-round" type="button" title="改成说话" aria-label="说话">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+      </button>
+      <textarea id="composerInput" class="dock-input" rows="1" maxlength="8000"></textarea>
+      <button id="composerSend" class="dock-send" type="button" title="发送（Enter）" aria-label="发送">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+      </button>
     </form>
+    <div class="dock-layer dock-rec" id="dockRec">
+      <button id="recEdit" class="dock-btn" type="button" title="改成打字" aria-label="打字">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </button>
+      <button id="recStop" class="rec-stop" type="button" title="说完了（Esc 取消）" aria-label="说完了"><span class="rec-dot"></span></button>
+    </div>
   </div>
   <div id="emotionBadge" hidden></div>
   <div id="dndBadge" hidden title="免打扰：不主动说话、不出声">🌙</div>

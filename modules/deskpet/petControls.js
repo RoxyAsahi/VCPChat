@@ -1,6 +1,7 @@
 // modules/deskpet/petControls.js
-// 桌宠的全局设置、全局快捷键和设置窗口（主进程）。窗口本身由 modules/ipc/deskPetHandlers.js 管，
-// 这里只通过 actions 回调去动它们。
+// 桌宠的全局设置、全局快捷键和设置页的 IPC（主进程）。窗口本身由 modules/ipc/deskPetHandlers.js 管，
+// 这里只通过 actions 回调去动它们。设置页是主窗口「全局设置 → 桌宠」分区
+// （modules/settings/schema/deskpet-panel.js），只认主窗口发来的请求。
 //
 // 设置存在 AppData/deskpet/settings.json；每个桌宠自己的位置和大小仍在 AppData/deskpet/state.json。
 
@@ -11,10 +12,9 @@ const fs = require('fs-extra');
 const prefs = require('./petPrefs');
 
 const SAVE_DELAY_MS = 200;
-const SETTINGS_WINDOW = { width: 460, height: 640 };
 
-function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, actions }) {
-    const { BrowserWindow, ipcMain, globalShortcut } = electron;
+function createPetControls({ electron, appDataRoot, actions }) {
+    const { ipcMain, globalShortcut } = electron;
     const file = path.join(appDataRoot, 'deskpet', 'settings.json');
     let settings = prefs.normalizeSettings({});
     let loaded = false;
@@ -23,7 +23,6 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
     const registered = new Map(); // actionId -> accelerator（我们自己注册成功的）
     const failures = {}; // actionId -> 失败原因
     let shortcutsPaused = false;
-    let settingsWin = null;
     const listeners = new Set();
 
     // ---- 设置文件 ----
@@ -65,7 +64,7 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         for (const fn of listeners) {
             try { fn(settings, changedKeys); } catch (error) { console.warn('[DeskPet] settings listener:', error.message); }
         }
-        sendToSettingsWindow();
+        sendToSettings();
     }
 
     /** 合并修改并保存；返回整理后的设置。只认识的字段才会生效。 */
@@ -116,11 +115,12 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         }
     }
 
-    /** 设置窗口录新快捷键时先停用现有的，免得按下去直接触发。 */
+    /** 设置页录新快捷键时先停用现有的，免得按下去直接触发。 */
     function pauseShortcuts(paused) {
+        if (shortcutsPaused === !!paused) return;
         shortcutsPaused = !!paused;
         applyShortcuts();
-        sendToSettingsWindow();
+        sendToSettings();
     }
 
     function setShortcut(actionId, value) {
@@ -135,7 +135,7 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         return failure ? { success: false, error: failure, saved: true } : { success: true };
     }
 
-    // ---- 设置窗口 ----
+    // ---- 设置页 ----
 
     function snapshot() {
         return {
@@ -149,44 +149,22 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         };
     }
 
-    function sendToSettingsWindow() {
-        if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('deskpet-settings:changed', snapshot());
+    // 推给设置页；设置页出什么错都不能打断桌宠本身（开关窗口、换装都会走到这里）
+    function sendToSettings() {
+        try {
+            actions.sendToSettings?.(snapshot());
+        } catch (error) {
+            console.warn('[DeskPet] settings push failed:', error.message);
+        }
     }
 
-    function openSettingsWindow() {
-        if (settingsWin && !settingsWin.isDestroyed()) {
-            if (settingsWin.isMinimized()) settingsWin.restore();
-            settingsWin.show();
-            settingsWin.focus();
-            return;
-        }
-        settingsWin = new BrowserWindow({
-            ...SETTINGS_WINDOW,
-            minWidth: 380,
-            minHeight: 420,
-            title: '桌宠设置',
-            autoHideMenuBar: true,
-            show: false,
-            backgroundColor: '#f6f7f9',
-            webPreferences: {
-                preload: path.join(projectRoot, 'preloads', 'deskpetSettings.js'),
-                contextIsolation: true,
-                sandbox: true,
-                nodeIntegration: false,
-            },
-        });
-        settingsWin.setMenu?.(null);
-        settingsWin.once('ready-to-show', () => settingsWin && !settingsWin.isDestroyed() && settingsWin.show());
-        settingsWin.on('closed', () => {
-            settingsWin = null;
-            // 录快捷键录到一半就关了窗口
-            if (shortcutsPaused) pauseShortcuts(false);
-        });
-        settingsWin.loadURL(settingsUrl);
+    /** 托盘、右键菜单里的「桌宠设置…」：打开主窗口的全局设置，切到桌宠分区。 */
+    function openSettings() {
+        actions.openSettingsPage?.();
     }
 
     function fromSettings(event) {
-        return settingsWin && !settingsWin.isDestroyed() && event.sender === settingsWin.webContents;
+        return actions.isSettingsSender?.(event?.sender) === true;
     }
 
     function registerIpc() {
@@ -230,7 +208,6 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         clearTimeout(saveTimer);
         if (saveTimer !== null) flush();
         unregisterOurs();
-        if (settingsWin && !settingsWin.isDestroyed()) settingsWin.close();
     }
 
     return {
@@ -242,13 +219,14 @@ function createPetControls({ electron, appDataRoot, projectRoot, settingsUrl, ac
         applyShortcuts,
         setShortcut,
         failures: () => ({ ...failures }),
-        openSettingsWindow,
-        refreshSettingsWindow: sendToSettingsWindow,
+        openSettings,
+        refreshSettings: sendToSettings,
+        snapshot,
+        fromSettings,
+        pauseShortcuts,
         registerIpc,
         dispose,
         isLoaded: () => loaded,
-        // 测试用
-        _settingsWindow: () => settingsWin,
     };
 }
 

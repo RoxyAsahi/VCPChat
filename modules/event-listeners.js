@@ -1482,6 +1482,17 @@ export function setupEventListeners(deps) {
                 console.warn('[DeskPet] open topic failed:', error);
             }
         });
+        // 托盘、桌宠右键里的「桌宠设置…」：打开全局设置，切到桌宠分区（导航是异步搭起来的，等它出现）
+        chatAPI.onDeskPetSettingsOpen?.(() => {
+            const tab = () => document.getElementById('vcpSettingsTab-deskpet');
+            if (!document.getElementById('globalSettingsModal')?.classList.contains('active')) globalSettingsBtn?.click();
+            let tries = 0;
+            const pick = () => {
+                if (tab()) tab().click();
+                else if (++tries < 60) requestAnimationFrame(pick);
+            };
+            pick();
+        });
     }
 
     // 语音聊天按钮事件处理

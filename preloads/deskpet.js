@@ -20,7 +20,8 @@ function onCursor(callback) {
 
 function onOpenInput(callback) {
     if (typeof callback !== 'function') return () => {};
-    const listener = (_event, options) => callback({ toggle: options?.toggle === true });
+    // submit：设置页预览里输入的话，由桌宠直接发出去
+    const listener = (_event, options) => callback({ toggle: options?.toggle === true, submit: typeof options?.submit === 'string' ? options.submit : '' });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
@@ -107,4 +108,14 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
+    // 页面准备好了（输入框能用了）
+    pageReady: () => ipcRenderer.send('deskpet:page-ready'),
+    // 设置页快照：离屏预览画好了，报上角色的包围盒
+    previewReady: report => ipcRenderer.send('deskpet:preview-ready', {
+        bounds: report?.bounds ? { x: Number(report.bounds.x), y: Number(report.bounds.y), width: Number(report.bounds.width), height: Number(report.bounds.height) } : null,
+        aspect: Number(report?.aspect) || null,
+    }),
+    // 语音输入：和主窗口共用本地 SenseVoice（全局设置 → 语音设置里安装）
+    sttStatus: () => ipcRenderer.invoke('local-stt:status'),
+    transcribe: (wav, language) => ipcRenderer.invoke('local-stt:transcribe', { wav, language: String(language || 'auto') }),
 }));
