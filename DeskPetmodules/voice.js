@@ -3,6 +3,8 @@
 //
 //   createVoicePlayer  播放 play-tts-audio 送来的音频块，接一个 AnalyserNode 量音量
 //   createLipSync      音量 → 张嘴程度（噪声门 + 起音快、收音慢）
+//   vowelWeights       一帧波形 → あいうえお 各占多少（线性预测找前两个共振峰，取最近的元音）
+//   createVowelTracker 元音权重随时间平滑，给有 ParamA～ParamO 的模型用
 //   createSpeech       一条回复的朗读：切句、送 TTS、跟踪念到哪一句、超时放弃
 import { createSpeechChunker } from './speechText.js';
 
@@ -62,6 +64,133 @@ export function createLipSync() {
             return smoothed < 0.002 ? 0 : Math.min(1, smoothed * 1.1);
         },
         reset() { smoothed = 0; },
+    };
+}
+
+// 元音的前两个共振峰（Hz，成年女声的大致位置；日语、汉语的 a i u e o 都落在附近）
+const VOWEL_FORMANTS = Object.freeze({
+    a: [850, 1400],
+    i: [320, 2800],
+    u: [350, 1450],
+    e: [550, 2300],
+    o: [520, 950],
+});
+export const VOWELS = Object.freeze(['a', 'i', 'u', 'e', 'o']);
+const VOWEL_SHARPNESS = 6; // 越大越只认最近的那个
+const VOWEL_RELEASE_S = 0.08;
+const VOWEL_ATTACK_S = 0.05;
+
+// 共振峰用线性预测（LPC）找：把一帧声音降到 12kHz，算 12 阶预测系数，预测滤波器的频响包络上
+// 第一、二个峰就是前两个共振峰。包络本身就把基频的谐波抹平了，不受音高影响。
+const LPC_RATE = 12000;
+const LPC_ORDER = 12;
+const LPC_STEP_HZ = 25;
+
+function lpcCoefficients(x, order) {
+    const r = new Float64Array(order + 1);
+    for (let lag = 0; lag <= order; lag += 1) {
+        let sum = 0;
+        for (let n = lag; n < x.length; n += 1) sum += x[n] * x[n - lag];
+        r[lag] = sum;
+    }
+    if (!(r[0] > 0)) return null;
+    r[0] *= 1.0001; // 轻微加白，免得病态
+    const a = new Float64Array(order + 1);
+    a[0] = 1;
+    let err = r[0];
+    for (let i = 1; i <= order; i += 1) {
+        let acc = r[i];
+        for (let j = 1; j < i; j += 1) acc += a[j] * r[i - j];
+        const k = -acc / err;
+        const prev = a.slice();
+        for (let j = 1; j < i; j += 1) a[j] = prev[j] + k * prev[i - j];
+        a[i] = k;
+        err *= 1 - k * k;
+        if (!(err > 0)) return null;
+    }
+    return a;
+}
+
+/** 一帧波形里前两个共振峰的频率：{ f1, f2 }（Hz），太安静或找不到时返回 null。 */
+export function formants(samples, sampleRate) {
+    if (!samples || !samples.length || !(sampleRate > 0)) return null;
+    const factor = Math.max(1, Math.round(sampleRate / LPC_RATE));
+    const rate = sampleRate / factor;
+    const n = Math.floor(samples.length / factor);
+    if (n < LPC_ORDER * 4) return null;
+    // 降采样（块平均当作粗略的低通）、预加重、加汉明窗
+    const x = new Float64Array(n);
+    let energy = 0;
+    let last = 0;
+    for (let i = 0; i < n; i += 1) {
+        let sum = 0;
+        for (let j = 0; j < factor; j += 1) sum += samples[i * factor + j];
+        const v = sum / factor;
+        const emphasized = v - 0.9 * last;
+        last = v;
+        x[i] = emphasized * (0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (n - 1)));
+        energy += v * v;
+    }
+    if (Math.sqrt(energy / n) < 0.003) return null;
+    const a = lpcCoefficients(x, LPC_ORDER);
+    if (!a) return null;
+    // 包络 1/|A(e^jw)|，按 25Hz 一格看到 4kHz
+    const env = [];
+    for (let hz = 0; hz <= 4000; hz += LPC_STEP_HZ) {
+        const w = (2 * Math.PI * hz) / rate;
+        let re = 0;
+        let im = 0;
+        for (let k = 0; k <= LPC_ORDER; k += 1) {
+            re += a[k] * Math.cos(w * k);
+            im -= a[k] * Math.sin(w * k);
+        }
+        env.push(-Math.log(re * re + im * im));
+    }
+    const peaks = [];
+    for (let i = 1; i < env.length - 1; i += 1) {
+        if (env[i] > env[i - 1] && env[i] >= env[i + 1]) peaks.push(i * LPC_STEP_HZ);
+    }
+    const f1 = peaks.find((hz) => hz >= 200 && hz <= 1100);
+    if (!f1) return null;
+    const f2 = peaks.find((hz) => hz >= f1 + 200 && hz <= 3300);
+    return f2 ? { f1, f2 } : null;
+}
+
+/** 一帧波形 → { a, i, u, e, o }，加起来是 1；找不到共振峰返回 null。 */
+export function vowelWeights(samples, sampleRate) {
+    const found = formants(samples, sampleRate);
+    if (!found) return null;
+    const { f1, f2 } = found;
+    const scores = {};
+    let total = 0;
+    for (const v of VOWELS) {
+        const [t1, t2] = VOWEL_FORMANTS[v];
+        // 按对数频率比远近：F1 差一倍和 F2 差一倍分量一样
+        const d = Math.hypot(Math.log2(f1 / t1), Math.log2(f2 / t2));
+        const score = Math.exp(-VOWEL_SHARPNESS * d);
+        scores[v] = score;
+        total += score;
+    }
+    if (!(total > 0)) return null;
+    for (const v of VOWELS) scores[v] /= total;
+    return scores;
+}
+
+/** 元音权重随时间平滑：有声音时向这一帧靠，没声音时慢慢回零。 */
+export function createVowelTracker() {
+    const current = { a: 0, i: 0, u: 0, e: 0, o: 0 };
+    return {
+        update(weights, dt) {
+            const step = Math.min(0.25, Math.max(0, dt));
+            for (const v of VOWELS) {
+                const goal = weights ? weights[v] : 0;
+                const k = 1 - Math.exp(-step / (goal >= current[v] ? VOWEL_ATTACK_S : VOWEL_RELEASE_S));
+                current[v] += (goal - current[v]) * k;
+                if (current[v] < 0.002) current[v] = 0;
+            }
+            return { ...current };
+        },
+        reset() { for (const v of VOWELS) current[v] = 0; },
     };
 }
 
@@ -164,6 +293,11 @@ export function createVoicePlayer({ onError } = {}) {
             for (let i = 0; i < samples.length; i += 1) sum += samples[i] * samples[i];
             return Math.sqrt(sum / samples.length);
         },
+        /** 刚才量音量的那一帧波形：{ samples, sampleRate }；没在出声返回 null。在 rms() 之后调。 */
+        waveform() {
+            if (!analyser || !samples?.length || !(ctx?.sampleRate > 0)) return null;
+            return { samples, sampleRate: ctx.sampleRate };
+        },
         dispose() {
             stop();
             ctx?.close?.().catch(() => {});
@@ -187,6 +321,8 @@ export function createVoicePlayer({ onError } = {}) {
 export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onError } = {}) {
     const player = createVoicePlayer({ onError });
     const lipSync = createLipSync();
+    const vowelTracker = createVowelTracker();
+    let vowels = null;
     let reply = null; // { messageId, mode: 'pending' | 'voice' | 'off', sentences, sent, heard, ended, waitingSince, lastHeard }
     let timer = 0;
     let lastTick = 0;
@@ -214,6 +350,8 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
         timer = 0;
         mouth = 0;
         lipSync.reset();
+        vowelTracker.reset();
+        vowels = null;
         onLevel?.(0);
     }
 
@@ -262,6 +400,9 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
         lastTick = now;
         const busy = player.busy();
         mouth = busy ? lipSync.update(rmsToLevel(player.rms()), dt) : lipSync.update(0, dt);
+        // 有声音时才认元音；停顿时权重回零，嘴形回到只按张嘴程度
+        const wave = busy && mouth > 0.05 ? player.waveform() : null;
+        vowels = vowelTracker.update(wave ? vowelWeights(wave.samples, wave.sampleRate) : null, dt);
         onLevel?.(mouth);
         if (!reply || reply.mode !== 'voice') {
             if (!busy && mouth === 0) stopTicking();
@@ -392,6 +533,11 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
         mouth() {
             if (reply && reply.mode === 'voice' && reply.anySent) return mouth;
             return player.busy() || mouth > 0 ? mouth : null;
+        },
+        /** 当前的元音权重 { a, i, u, e, o }；没在朗读返回 null。 */
+        vowels() {
+            const voiced = (reply && reply.mode === 'voice' && reply.anySent) || player.busy() || mouth > 0;
+            return voiced ? vowels : null;
         },
         dispose() {
             stopTicking();
