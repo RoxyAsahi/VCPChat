@@ -217,11 +217,14 @@ test('do not disturb reaches every open pet and the tray item reflects it', asyn
     const coco = await env.open('Coco');
     let trayRebuilds = 0;
     env.handlers.setTrayRefresher(() => { trayRebuilds += 1; });
+    await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
+    await env.fake.handlers.get('deskpet:toggle')({}, 'Nope');
+    assert.equal(trayRebuilds, 1, '菜单内容没变就不重建（换下来的旧菜单 Electron 不释放）');
     const toggle = env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰');
     assert.equal(toggle.checked, false);
     toggle.click({ checked: true });
     for (const pet of [nova, coco]) assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.doNotDisturb, true);
-    assert.ok(trayRebuilds > 0);
+    assert.equal(trayRebuilds, 2);
     assert.equal(env.handlers.trayMenuItems()[0].submenu.find((item) => item.label === '免打扰').checked, true);
     await sleep(300);
     assert.equal(env.readJson(env.settingsFile).doNotDisturb, true, '免打扰写进设置，重启后还在');
