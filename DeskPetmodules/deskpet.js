@@ -1675,7 +1675,7 @@ async function start() {
             notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
         }
     } else if (assets.live2d && !assets.coreUrl && !assets.puppet) {
-        notice(`找到了 Live2D 模型，但缺少 Cubism Core：请把 5.x 的 live2dcubismcore.min.js 放到 ${assets.corePath}`, { error: true, ms: 12000 });
+        notice('这套是 Live2D 模型，还缺 Cubism Core，先用立绘代替。右键「桌宠设置…」里的「Live2D 支持」可以一键装好。', { error: true, ms: 12000 });
     }
     if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
         notice('显卡渲染反复中断，这次先用普通立绘。重新打开桌宠会再试。', { error: true, ms: 10000 });

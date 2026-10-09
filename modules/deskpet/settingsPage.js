@@ -12,6 +12,7 @@ const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
 const outfitStore = require('./outfits');
 const petPrefs = require('./petPrefs');
+const cubismCore = require('./cubismCore');
 
 const KIND_LABEL = { live2d: 'Live2D', puppet: '网格立绘', portrait: '立绘' };
 const IMPORT_MAX_FILES = 400;
@@ -54,7 +55,7 @@ async function freeFolderName(base, wanted) {
     return name;
 }
 
-function createSettingsPage({ electron, paths, controls, previews, pets }) {
+function createSettingsPage({ electron, paths, controls, previews, pets, core }) {
     const { ipcMain, dialog, shell } = electron;
     const agentRoot = (agentId) => path.join(paths.agentDir, agentId);
 
@@ -90,7 +91,8 @@ function createSettingsPage({ electron, paths, controls, previews, pets }) {
     async function catalog(requestedId, { force = false } = {}) {
         const agents = await pets.listAgents();
         const agentId = agents.some((a) => a.id === requestedId) ? requestedId : await defaultAgent(agents);
-        if (!agentId) return { agents, agentId: null, outfits: [] };
+        const coreStatus = await core.status().catch(() => null);
+        if (!agentId) return { agents, agentId: null, outfits: [], core: coreStatus };
         const [outfits, saved, name, avatar] = await Promise.all([
             pets.listOutfits(agentId).catch(() => []),
             pets.readState(agentId),
@@ -107,6 +109,7 @@ function createSettingsPage({ electron, paths, controls, previews, pets }) {
             builtIn: outfit.builtIn === true,
             description: outfitStore.outfitDescription(outfit),
             missingCore: outfit.missingCore === true,
+            needsCore: outfit.needsCore === true,
             preview: force ? null : await previews.cached(agentId, outfit),
         })));
         const pending = outfits.filter((outfit, i) => !items[i].preview);
@@ -135,6 +138,7 @@ function createSettingsPage({ electron, paths, controls, previews, pets }) {
             scale,
             maxScale: live?.maxScale ?? petPrefs.SCALE_MAX,
             folder: path.join(agentRoot(agentId), 'deskpet'),
+            core: coreStatus,
         };
     }
 
@@ -200,6 +204,27 @@ function createSettingsPage({ electron, paths, controls, previews, pets }) {
         return { success: true, outfitId: name };
     }
 
+    /** Cubism Core：从 Live2D 官网下载，或选本地的 SDK 压缩包 / Core 文件。装好后让用着 Live2D 形象的桌宠重新载入。 */
+    async function installCore(source) {
+        let result;
+        if (source === 'file') {
+            const picked = await dialog.showOpenDialog(pets.mainWindow() || undefined, {
+                title: '选 Cubism SDK for Web 的压缩包，或者其中的 Core/live2dcubismcore.min.js',
+                properties: ['openFile'],
+                filters: [
+                    { name: 'Cubism SDK 或 Core', extensions: ['zip', 'js'] },
+                    { name: '所有文件', extensions: ['*'] },
+                ],
+            });
+            if (picked.canceled || !picked.filePaths?.length) return { success: false, canceled: true };
+            result = await core.installFromFile(picked.filePaths[0]);
+        } else {
+            result = await core.installOfficial();
+        }
+        if (result.success) await core.afterInstall().catch((error) => console.warn('[DeskPet] reload after Core install failed:', error.message));
+        return result;
+    }
+
     async function openFolder(agentId) {
         if (!pets.isAgentId(agentId)) return { success: false };
         const dir = path.join(agentRoot(agentId), 'deskpet');
@@ -229,6 +254,14 @@ function createSettingsPage({ electron, paths, controls, previews, pets }) {
             return { ...result, catalog: await catalog(String(agentId || '')) };
         }));
         ipcMain.handle('deskpet-settings:open-folder', guard((agentId) => openFolder(String(agentId || ''))));
+        ipcMain.handle('deskpet-settings:core-install', guard(async (source, agentId) => {
+            const result = await installCore(source === 'file' ? 'file' : 'official');
+            return { ...result, catalog: await catalog(idOrNull(agentId)) };
+        }));
+        ipcMain.handle('deskpet-settings:core-link', guard((which) => {
+            const url = cubismCore.LINKS[which === 'download' ? 'download' : 'license'];
+            return shell.openExternal(url).then(() => true, () => false);
+        }));
         ipcMain.handle('deskpet-settings:talk', guard(async (agentId, text) => {
             const message = typeof text === 'string' ? text.trim().slice(0, 8000) : '';
             if (!message) return { success: false, error: '没有内容' };
