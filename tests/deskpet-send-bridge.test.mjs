@@ -106,3 +106,37 @@ test('a pet message whose request already timed out on the pet side is not sent 
     assert.equal(fresh.success, true);
     assert.equal(sent.length, 1);
 });
+
+test('files from the pet are stored in the target topic and sent with the message', async () => {
+    const stored = [];
+    const sent = [];
+    const state = { selected: { id: 'Bob', type: 'agent' }, topicId: 'topic_bob' };
+    const bridge = createDeskPetSendBridge({
+        getSelectedItem: () => state.selected,
+        getTopicId: () => state.topicId,
+        findAgent: (id) => ({ id, type: 'agent', name: id }),
+        selectItem: async (item) => { state.selected = { id: item.id, type: 'agent' }; state.topicId = `topic_${item.id}`; },
+        sendMessage: async (request) => sent.push(request),
+        isBusy: () => false,
+        storeFiles: async (agentId, topicId, files) => {
+            stored.push({ agentId, topicId, names: files.map((f) => f.name) });
+            return files.map((f) => (f.name === 'bad.bin'
+                ? { name: f.name, error: '读不了' }
+                : { success: true, attachment: { name: f.name, type: 'image/png', size: 3, internalPath: `file:///att/${f.name}` } }));
+        },
+        acceptMs: 30,
+    });
+    // 只有文件、没有字也能发
+    const result = await bridge({ agentId: 'Alice', text: '', files: [{ path: '/a.png', name: 'a.png' }, { path: '/bad.bin', name: 'bad.bin' }] });
+    assert.deepEqual(result, { success: true });
+    assert.deepEqual(stored, [{ agentId: 'Alice', topicId: 'topic_Alice', names: ['a.png', 'bad.bin'] }]);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].content, '');
+    assert.deepEqual(sent[0].attachments.map((a) => [a.originalName, a.localPath]), [['a.png', 'file:///att/a.png']]);
+    // 一个都没存上：不发，告诉桌宠为什么
+    const failed = await bridge({ agentId: 'Alice', text: '看看', files: [{ path: '/bad.bin', name: 'bad.bin' }] });
+    assert.deepEqual(failed, { success: false, error: '文件没存上：读不了' });
+    assert.equal(sent.length, 1);
+    // 没字也没文件
+    assert.equal((await bridge({ agentId: 'Alice', text: '  ', files: [] })).success, false);
+});

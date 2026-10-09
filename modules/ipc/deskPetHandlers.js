@@ -810,7 +810,23 @@ function onFullResponse(messageId, context, response) {
 
 // ---- 从桌宠发消息：交给主窗口按正常流程发送 -----------------------------------
 
-function sendFromPet(agentId, text) {
+// 桌宠带过来的文件：拖进来的（本机路径）或粘贴的图片（字节）。主窗口按拖进输入框的流程存成附件。
+const MAX_SEND_FILES = 10;
+const MAX_SEND_FILE_BYTES = 20 * 1024 * 1024;
+
+function cleanSendFiles(files) {
+    if (!Array.isArray(files)) return [];
+    const out = [];
+    for (const file of files.slice(0, MAX_SEND_FILES)) {
+        const name = typeof file?.name === 'string' && file.name ? path.basename(file.name).slice(0, 255) : '文件';
+        const type = typeof file?.type === 'string' ? file.type.slice(0, 100) : '';
+        if (typeof file?.path === 'string' && path.isAbsolute(file.path)) out.push({ path: file.path, name, type });
+        else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_SEND_FILE_BYTES) out.push({ data: Buffer.from(file.data), name, type });
+    }
+    return out;
+}
+
+function sendFromPet(agentId, text, files = []) {
     if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
@@ -824,7 +840,7 @@ function sendFromPet(agentId, text) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
     });
 }
 
@@ -1397,11 +1413,12 @@ function registerIpc() {
         const pet = petFromEvent(event);
         return pet ? readMood(pet.agentId) : null;
     });
-    ipcMain.handle('deskpet:send', async (event, text) => {
+    ipcMain.handle('deskpet:send', async (event, text, files) => {
         const pet = petFromEvent(event);
         const message = typeof text === 'string' ? text.trim() : '';
-        if (!pet || !message) return { success: false, error: '没有内容' };
-        return sendFromPet(pet.agentId, message.slice(0, 8000));
+        const attached = cleanSendFiles(files);
+        if (!pet || (!message && !attached.length)) return { success: false, error: '没有内容' };
+        return sendFromPet(pet.agentId, message.slice(0, 8000), attached);
     });
     // 输入框打开时整窗可点、可聚焦；关上后回到按像素穿透。
     ipcMain.on('deskpet:set-interactive', (event, on) => {

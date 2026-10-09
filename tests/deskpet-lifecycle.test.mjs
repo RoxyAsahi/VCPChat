@@ -294,3 +294,24 @@ test('dropping the pet near a screen edge slides it flush; Alt or a far drop lea
     assert.deepEqual(pet.getPosition(), [-25, 300]);
     handlers.closeAll();
 });
+
+test('files sent from the pet reach the main window cleaned up', async () => {
+    const { handlers, fake, open, fromPet } = await loadHandlers();
+    const main = fake.windows[0];
+    const pet = await open('Coco');
+    const send = fake.handlers.get('deskpet:send');
+    const pending = send(fromPet(pet), '', [
+        { path: '/home/u/a.png', name: '../../a.png', type: 'image/png' },
+        { path: 'relative/b.txt', name: 'b.txt' },
+        { data: new Uint8Array([1, 2, 3]), name: 'p.png', type: 'image/png' },
+        { data: new Uint8Array(0), name: 'empty.png' },
+    ]);
+    const request = main.sent.find((m) => m.channel === 'deskpet:send-request').payload;
+    assert.equal(request.text, '');
+    assert.deepEqual(request.files.map((f) => [f.path || 'bytes', f.name]), [['/home/u/a.png', 'a.png'], ['bytes', 'p.png']]);
+    fake.listeners.get('deskpet:send-result')({}, { requestId: request.requestId, result: { success: true } });
+    assert.deepEqual(await pending, { success: true });
+    // 没字也没文件：不往主窗口发
+    assert.equal((await send(fromPet(pet), ' ', [{ path: 'x' }])).success, false);
+    handlers.closeAll();
+});

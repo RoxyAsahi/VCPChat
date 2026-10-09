@@ -20,6 +20,7 @@ import { createPetLife } from 'vcp-deskpet://pet/app/petLife.js';
 import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
+import { addFiles, describeFiles, pastedName, MAX_FILES, MAX_PASTE_BYTES } from 'vcp-deskpet://pet/app/attachments.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
 import { zoneOf, hasZones } from 'vcp-deskpet://pet/app/hitAreas.js';
 import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
@@ -274,7 +275,7 @@ function flashEmotionBadge(emotion, source) {
 
 // ---- 输入框 ---------------------------------------------------------------------
 
-const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0 };
+const composer = { open: false, sending: false, queued: null, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
 const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null };
@@ -335,7 +336,7 @@ function fitComposerInput() {
     const height = Math.min(96, Math.max(36, input.scrollHeight));
     input.style.height = `${height}px`;
     $('dock').style.setProperty('--dock-bar-h', `${height + 12}px`);
-    $('composerSend').classList.toggle('is-empty', !input.value.trim());
+    $('composerSend').classList.toggle('is-empty', !input.value.trim() && !composer.files.length);
 }
 
 // ---- 说话：本地语音识别成文字，放进输入条，看一眼再发 ----
@@ -391,7 +392,7 @@ function shorten(text, max = 16) {
     return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-async function sendText(text) {
+async function sendText(text, files = []) {
     composer.sending = true;
     $('composerSend').disabled = true;
     fitComposerInput();
@@ -399,7 +400,7 @@ async function sendText(text) {
     const previousSentAt = composer.lastSentAt;
     composer.lastSentAt = Date.now();
     try {
-        const result = await api.send(text);
+        const result = await api.send(text, files);
         if (result?.success) return true;
         composer.lastSentAt = previousSentAt;
         notice(`没发出去：${result?.error || '未知原因'}`, { error: true });
@@ -416,7 +417,13 @@ async function sendText(text) {
 async function submitComposer() {
     const input = $('composerInput');
     const text = input.value.trim();
-    if (!text || composer.sending) return;
+    const files = composer.files;
+    if ((!text && !files.length) || composer.sending) return;
+    // 带着文件的等 TA 说完再发（排队的那句只记文字）
+    if (bubble.replyId && files.length) {
+        notice('TA 说完再发带文件的这条', { ms: 3000 });
+        return;
+    }
     // TA 还在说话：先记下来，这条说完再发，不打断也不报错
     if (bubble.replyId) {
         // 连着说了几句就攒在一起，说完一次发出去
@@ -427,11 +434,82 @@ async function submitComposer() {
         renderBubble();
         return;
     }
-    if (await sendText(text)) {
+    if (await sendText(text, files)) {
         input.value = '';
+        setFiles([]);
         fitComposerInput();
         closeComposer();
     }
+}
+
+// ---- 给桌宠文件：拖到桌宠上、往输入框里粘贴图片 ---------------------------------------
+
+function setFiles(list) {
+    composer.files = list;
+    $('attachText').textContent = describeFiles(list);
+    $('attachText').title = list.map((f) => f.name).join('\n');
+    $('attachTray').hidden = !list.length;
+    $('composerSend').classList.toggle('is-empty', !$('composerInput').value.trim() && !list.length);
+}
+
+function takeFiles(files) {
+    const { list, dropped } = addFiles(composer.files, files);
+    setFiles(list);
+    if (dropped) notice(`一次最多带 ${MAX_FILES} 个文件，有 ${dropped} 个没加上`, { ms: 3500 });
+    if (list.length) {
+        openComposer();
+        requestAnimationFrame(() => $('composerInput').focus());
+    }
+}
+
+function bindFileDrop() {
+    const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+    let depth = 0;
+    const leave = () => { depth = 0; document.body.classList.remove('is-drop-target'); };
+    // 不拦的话，文件掉进来窗口会直接打开这个文件
+    window.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        depth += 1;
+        document.body.classList.add('is-drop-target');
+    });
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = hasFiles(e) ? 'copy' : 'none';
+    });
+    window.addEventListener('dragleave', () => { if (--depth <= 0) leave(); });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        leave();
+        const files = [...(e.dataTransfer?.files || [])].map((file) => ({
+            path: api.filePath?.(file) || '',
+            name: file.name,
+            type: file.type,
+            size: file.size,
+        })).filter((f) => f.path);
+        if (files.length) takeFiles(files);
+    });
+    $('composerInput').addEventListener('paste', async (e) => {
+        const images = [...(e.clipboardData?.items || [])].filter((item) => item.kind === 'file' && item.type.startsWith('image/'));
+        if (!images.length) return;
+        e.preventDefault();
+        const files = [];
+        for (const item of images) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            if (file.size > MAX_PASTE_BYTES) {
+                notice('图片太大了（超过 20 MB），拖文件进来试试', { error: true, ms: 3500 });
+                continue;
+            }
+            const data = new Uint8Array(await file.arrayBuffer());
+            files.push({ data, name: pastedName(file.type), type: file.type, size: data.length });
+        }
+        if (files.length) takeFiles(files);
+    });
+    $('attachClear').addEventListener('click', (e) => {
+        e.stopPropagation();
+        setFiles([]);
+    });
 }
 
 // 回复结束后把排队的那句发出去；发不出去就放回输入框
@@ -1787,6 +1865,7 @@ async function start() {
         notice('这个话题已经不在了（可能被删掉了）', { ms: 4000 });
     });
     bindComposer();
+    bindFileDrop();
     // 头那一块（摸头、点头用）：从头顶往下大约一个头高、头宽以内。
     // 量不出头时退回包围盒上方四分之一、中间六成宽。
     const onHead = (x, y) => {

@@ -37,6 +37,11 @@
       <span class="tool-card-text"></span>
       <span class="tool-card-count"></span>
     </div>
+    <!-- 拖进来、粘贴进来的文件：和下一句话一起发 -->
+    <div id="attachTray" class="pet-ui" hidden>
+      <span id="attachText"></span>
+      <button id="attachClear" type="button" title="不带这些文件了" aria-label="去掉文件">✕</button>
+    </div>
   </div>
   <!-- 脚边的小胶囊：光标停在角色上时冒出来（打字 / 说话）；点打字展开成输入条，点说话变成录音按钮。
        三种样子是同一个元素的三个状态（data-mode），宽度和内容之间有过渡动画。 -->
