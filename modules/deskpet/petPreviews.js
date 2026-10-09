@@ -224,6 +224,11 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
         await Promise.all(files.filter((name) => !keep.has(name.replace(/\.(png|json)$/, ''))).map((name) => fs.remove(path.join(dirOf(agentId), name)).catch(() => {})));
     }
 
+    /** 助手被删掉：整个快照文件夹一起删。 */
+    async function forget(agentId) {
+        await fs.remove(dirOf(agentId)).catch(() => {});
+    }
+
     function dispose() {
         disposed = true;
         clearTimeout(idleTimer);
@@ -232,7 +237,7 @@ function createPetPreviews({ BrowserWindow, cacheRoot, pageUrl, preload, windowS
         if (win && !win.isDestroyed()) win.destroy();
     }
 
-    return { cached, render, jobFor, ready, prune, dispose, isPreviewSender: (sender) => Boolean(win && !win.isDestroyed() && sender === win.webContents) };
+    return { cached, render, jobFor, ready, prune, forget, dispose, isPreviewSender: (sender) => Boolean(win && !win.isDestroyed() && sender === win.webContents) };
 }
 
 module.exports = { createPetPreviews, fingerprintOf };

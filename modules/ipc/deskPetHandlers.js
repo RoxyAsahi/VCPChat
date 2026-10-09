@@ -288,12 +288,21 @@ function savedAspect(saved, outfitId) {
     return petPrefs.normalizeAspect(saved?.figures?.[outfitId]);
 }
 
-function defaultPosition(index, size) {
+// 没有记下位置的桌宠从屏幕右下角往左排：已经有桌宠站着的地方让开（窗口两边是透明的，按中间那段人物算），
+// 不然几个桌宠叠在同一个角落，后开的把前面的整个挡住。index 是第几个位置（显示器变了、要挪回来时用）。
+function defaultPosition(index, size, { avoid = [] } = {}) {
     const area = screen.getPrimaryDisplay().workArea;
-    return {
-        x: area.x + area.width - size.width - 24 - index * 40,
-        y: area.y + area.height - size.height,
-    };
+    const step = Math.max(40, Math.round(size.width * 0.55));
+    const xAt = (slot) => Math.max(area.x, area.x + area.width - size.width - 24 - slot * step);
+    const middle = (x, width) => [x + width * 0.25, x + width * 0.75];
+    const taken = (x) => avoid.some((b) => {
+        const [a1, a2] = middle(x, size.width);
+        const [b1, b2] = middle(b.x, b.width);
+        return a1 < b2 && b1 < a2;
+    });
+    let slot = index;
+    for (let i = 0; i < 12 && taken(xAt(slot)); i += 1) slot += 1;
+    return { x: xAt(slot), y: area.y + area.height - size.height };
 }
 
 function isOnScreen(x, y, size) {
@@ -314,7 +323,8 @@ function hasSavedPosition(saved) {
 }
 
 function initialBounds(saved, size) {
-    const fallback = defaultPosition(pets.size, size);
+    const others = [...pets.values()].filter((p) => !p.win.isDestroyed()).map((p) => p.win.getBounds());
+    const fallback = defaultPosition(0, size, { avoid: others });
     if (!hasSavedPosition(saved)) return { ...size, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
     if (!isOnScreen(saved.x, saved.y, size)) return { ...size, ...fallback };
@@ -681,9 +691,11 @@ async function openPet(agentId, { anchor = null } = {}) {
         if (win.isDestroyed()) return;
         resetInputState(pet);
         if (details.reason === 'clean-exit') return;
-        // 最多自动重载 3 次，避免模型本身有问题时无限崩溃重启。
-        pet.crashes = (pet.crashes || 0) + 1;
-        if (pet.crashes <= 3) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
+        // 一分钟里崩了 3 次以上才放弃（模型本身有问题时别无限崩溃重启）；
+        // 偶尔崩一次（显卡驱动重置、睡眠唤醒）不攒着算，挂一整天的桌宠不会因为第四次偶发崩溃就消失
+        const now = Date.now();
+        pet.crashTimes = [...(pet.crashTimes || []).filter((at) => now - at < CRASH_WINDOW_MS), now];
+        if (pet.crashTimes.length <= CRASH_LIMIT) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
         else win.close();
     });
     // 窗口开着时关了后台节流（主窗口最小化时桌宠照常动），隐藏时页面感觉不到，主动告诉它停下。
@@ -913,10 +925,43 @@ function resetInputState(pet) {
     applyClickThrough(pet);
 }
 
+const CRASH_WINDOW_MS = 60 * 1000;
+const CRASH_LIMIT = 3;
+
 function closePet(agentId) {
     const pet = pets.get(agentId);
     if (pet && !pet.win.isDestroyed()) pet.win.close();
     return { success: true, open: false };
+}
+
+/** 助手被删掉：关掉 TA 的桌宠，state.json、开着的列表、最近用过的、卡片快照里都不再留着 TA。
+ *  在删目录之前调用（Windows 上桌宠页面还开着时，正在用的模型文件可能删不掉）。 */
+async function forgetAgent(agentId) {
+    if (!paths || !isAgentId(agentId)) return; // 桌宠模块没启用
+    const pet = pets.get(agentId);
+    if (pet && !pet.win.isDestroyed()) {
+        const closed = new Promise((resolve) => pet.win.once('closed', resolve));
+        pet.win.close();
+        await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 2000))]);
+    }
+    if (controls) {
+        const settings = controls.get();
+        controls.update({
+            openAgents: settings.openAgents.filter((id) => id !== agentId),
+            ...(settings.lastAgent === agentId ? { lastAgent: null } : {}),
+        });
+    }
+    stateWrites = stateWrites.then(async () => {
+        const state = await readStateFile();
+        if (!(agentId in state)) return;
+        delete state[agentId];
+        const tmp = `${petStatePath()}.tmp`;
+        await fs.outputJson(tmp, state, { spaces: 2 });
+        await fs.move(tmp, petStatePath(), { overwrite: true });
+    }).catch((error) => console.warn('[DeskPet] state save failed:', error.message));
+    await stateWrites;
+    await previews?.forget(agentId);
+    refreshTray();
 }
 
 function petFromEvent(event) {
@@ -982,8 +1027,12 @@ function onStreamPayload(payload) {
     if (payload.type === 'data') {
         const text = extractDeltaText(payload.chunk);
         if (text) forward(agentId, { type: 'data', messageId, text });
-    } else if (payload.type === 'end' || payload.type === 'error') {
-        forward(agentId, { type: payload.type, messageId });
+    } else if (payload.type === 'end') {
+        forward(agentId, { type: 'end', messageId });
+    } else if (payload.type === 'error') {
+        // 出错的原因也带过去（主窗口里显示的那句）：桌宠上只写「出错了」的话，用户不知道是断网、超时还是服务器报错
+        const reason = typeof payload.error === 'string' ? payload.error.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+        forward(agentId, { type: 'error', messageId, ...(reason ? { error: reason } : {}) });
     }
 }
 
@@ -2229,6 +2278,9 @@ function initialize(options) {
     screen.on('display-removed', onDisplaysChanged);
     screen.on('display-added', onDisplaysChanged);
     screen.on('display-metrics-changed', onDisplaysChanged);
+    // 睡眠唤醒、解锁以后：笔记本可能拔了扩展坞、换了分辨率，置顶也可能被系统取消。和显示器变了一样重新摆一遍
+    electron.powerMonitor?.on?.('resume', onDisplaysChanged);
+    electron.powerMonitor?.on?.('unlock-screen', onDisplaysChanged);
     import(pathToFileURL(path.join(paths.projectRoot, 'modules', 'emotion', 'emotionPrompt.js')).href)
         .then((mod) => { emotionPrompt = mod; })
         .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
@@ -2278,6 +2330,7 @@ module.exports = {
     onStreamPayload: isolated('onStreamPayload', onStreamPayload),
     onFullResponse: isolated('onFullResponse', onFullResponse),
     onDistributedToolResult: isolated('onDistributedToolResult', onDistributedToolResult),
+    forgetAgent: (agentId) => Promise.resolve(forgetAgent(agentId)).catch((error) => console.warn('[DeskPet] forget agent failed:', error.message)),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _applyFullscreen: applyFullscreen,
