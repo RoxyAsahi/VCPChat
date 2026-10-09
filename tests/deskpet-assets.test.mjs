@@ -21,6 +21,9 @@ test('desk pet protocol serves only the pet page, vendor, core and agent pet fil
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/deskpet/nova/nova.puppet.json'), path.join(agentRoot, 'deskpet', 'nova', 'nova.puppet.json'));
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/portrait.happy.png'), path.join(agentRoot, 'portrait.happy.png'));
     assert.equal(resolve('vcp-deskpet://pet/agent/Nova/avatar.png'), path.join(agentRoot, 'avatar.png'));
+    // 助手没放头像时用应用的默认头像
+    assert.equal(resolve('vcp-deskpet://pet/default-avatar.png'), path.join(root, 'assets', 'default_avatar.png'));
+    assert.equal(resolve('vcp-deskpet://pet/default-avatar.png/x'), null);
 });
 
 test('desk pet protocol refuses agent config, history and traversal', () => {

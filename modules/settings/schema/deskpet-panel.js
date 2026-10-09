@@ -571,7 +571,7 @@ export function buildDeskPetPanel(doc) {
         if (fresh) {
             grid.replaceChildren();
             if (!c?.agentId) {
-                grid.append(el(doc, 'p', 'dps-empty', '还没有助手。先在左边建一个 Agent。'));
+                grid.append(el(doc, 'p', 'dps-empty', '还没有助手。关掉设置，在「助手」页点「创建助手或群组」建一个；起名叫 Nova 会直接用上内置的 Nova 形象。'));
                 return;
             }
             const cards = [cardFor(null), ...c.outfits.map(cardFor)];
@@ -583,6 +583,13 @@ export function buildDeskPetPanel(doc) {
                 const empty = el(doc, 'p', 'dps-empty', '这个助手还没有形象：现在显示的是头像。点「导入形象」放一个 Live2D 模型或一张立绘进来。');
                 grid.append(empty);
             }
+        }
+        // 没选形象、桌宠却开着（显示桌宠、快捷键打开的）：桌面上是头像，「无」那张卡照实说
+        const none = grid.querySelector('.dps-pet-card[data-outfit=""]');
+        if (none) {
+            const avatarShown = Boolean(c?.open && !c?.outfit);
+            none.querySelector('.dps-pet-name').textContent = avatarShown ? '头像' : '无';
+            none.querySelector('.dps-pet-desc').textContent = avatarShown ? '没选形象，桌面上显示的是头像。点这里收起' : '不放桌宠，只用主窗口';
         }
         for (const card of grid.querySelectorAll('.dps-pet-card')) {
             const id = card.dataset.outfit;
@@ -598,11 +605,13 @@ export function buildDeskPetPanel(doc) {
     async function choose(outfitId) {
         const c = state.catalog;
         if (!c?.agentId || state.choosing) return;
-        if ((c.outfit || '') === outfitId && (outfitId === '' || c.visible)) return;
+        // 「无」只在桌宠真的关着时算已选；开着头像时点它是收起
+        if ((c.outfit || '') === outfitId && (outfitId === '' ? !c.open : c.visible)) return;
         state.choosing = true;
         // 先在界面上换过去（卡片选中、大预览换图），主进程那边慢慢开窗口
         c.outfit = outfitId || null;
         c.visible = Boolean(outfitId);
+        c.open = Boolean(outfitId);
         renderGrid(false);
         renderStage();
         try {
@@ -648,6 +657,7 @@ export function buildDeskPetPanel(doc) {
         const anyVisible = Boolean(state.catalog?.anyVisible);
         visibleBtn.textContent = anyVisible ? '隐藏桌宠' : '显示桌宠';
         visibleBtn.disabled = !state.catalog?.agentId;
+        importBtn.disabled = !state.catalog?.agentId;
     }
 
     function applyCatalog(catalog, { fresh = false } = {}) {

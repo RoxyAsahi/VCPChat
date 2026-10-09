@@ -77,7 +77,7 @@ test('shortcuts need real modifiers and never take what VCPChat already uses', (
 
 test('a hand-edited or broken settings file falls back to safe defaults', () => {
     assert.deepEqual(prefs.normalizeSettings(null), {
-        doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
+        version: prefs.SETTINGS_VERSION, doNotDisturb: false, restoreOnLaunch: true, yieldToFullscreen: false, clickThrough: false, opacity: 1, wander: false, shortcuts: { ...prefs.DEFAULT_SETTINGS.shortcuts }, openAgents: [], lastAgent: null,
     });
     const odd = prefs.normalizeSettings({
         doNotDisturb: 'yes',
@@ -92,6 +92,21 @@ test('a hand-edited or broken settings file falls back to safe defaults', () => 
     assert.equal(odd.shortcuts.talk, '', '留空表示不用');
     assert.deepEqual(odd.openAgents, ['Nova', 'Coco']);
     assert.equal(odd.lastAgent, null);
+});
+
+test('the voice and click-through keys an older version saved as defaults are dropped once', () => {
+    const old = prefs.normalizeSettings({
+        shortcuts: { toggle: 'CommandOrControl+Alt+Shift+P', talk: 'CommandOrControl+Alt+Shift+M', voice: 'CommandOrControl+Alt+Shift+V', clickThrough: 'Ctrl+Alt+Shift+T' },
+    });
+    assert.equal(old.shortcuts.voice, '');
+    assert.equal(old.shortcuts.clickThrough, '');
+    assert.equal(old.shortcuts.toggle, 'CommandOrControl+Alt+Shift+P');
+    // 旧文件里自己录的别的键照留
+    assert.equal(prefs.normalizeSettings({ shortcuts: { voice: 'CommandOrControl+Alt+F9' } }).shortcuts.voice, 'CommandOrControl+Alt+F9');
+    // 新版本保存过以后，同一个组合是用户自己录的，不再清掉
+    const saved = prefs.normalizeSettings({ ...old, shortcuts: { ...old.shortcuts, voice: 'CommandOrControl+Alt+Shift+V' } });
+    assert.equal(saved.version, prefs.SETTINGS_VERSION);
+    assert.equal(prefs.normalizeSettings(JSON.parse(JSON.stringify(saved))).shortcuts.voice, 'CommandOrControl+Alt+Shift+V');
 });
 
 test('pet opacity stays between 30% and fully opaque', () => {
@@ -261,6 +276,29 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     const coco = await again.open('Coco');
     assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [360, 464]);
     again.handlers.closeAll();
+});
+
+test('the first press of the show key brings out Nova, or opens the desk pet settings', async () => {
+    const env = await loadHandlers();
+    const toggleKey = env.fake.shortcuts.get(prefs.DEFAULT_SETTINGS.shortcuts.toggle);
+    // 托盘里「显示桌宠」也能点：从没开过桌宠的人点了才有反应
+    const show = env.handlers.trayMenuItems()[0].submenu.find((item) => item.id === 'deskpet-show');
+    assert.notEqual(show.enabled, false);
+    toggleKey();
+    await sleep(50);
+    assert.equal(env.petWindows().length, 1);
+    assert.match(env.petWindows()[0].url, /agentId=Nova/);
+    const assets = await env.fake.handlers.get('deskpet:get-assets')({ sender: env.petWindows()[0].webContents });
+    assert.equal(assets.avatar, 'vcp-deskpet://pet/default-avatar.png', '没放头像的助手用默认头像');
+
+    const other = await loadHandlers();
+    fs.writeFileSync(path.join(other.root, 'Agents', 'Nova', 'config.json'), JSON.stringify({ name: '小助手' }));
+    other.fake.shortcuts.get(prefs.DEFAULT_SETTINGS.shortcuts.toggle)();
+    await sleep(50);
+    assert.equal(other.petWindows().length, 0, '没有 Nova 就不替用户挑一个');
+    assert.ok(other.mainWindow.sent.some((s) => s.channel === 'deskpet-settings:open'), '打开设置页的桌宠分区');
+    env.handlers.closeAll();
+    other.handlers.closeAll();
 });
 
 test('do not disturb reaches every open pet and the tray item reflects it', async () => {

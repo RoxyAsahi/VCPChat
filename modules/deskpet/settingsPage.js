@@ -78,7 +78,8 @@ function createSettingsPage({ electron, paths, controls, previews, pets, core })
     /** 没指定助手时打开哪一个：最近碰过的桌宠、开着的、上次开的、有形象的、第一个。 */
     async function defaultAgent(agents) {
         const settings = controls.get();
-        const candidates = [pets.lastTouched(), ...pets.openAgents(), settings.lastAgent, ...settings.openAgents].filter(Boolean);
+        // 最近用过的排在开着的前面：几个桌宠都开着时，打开的是刚刚在用的那个
+        const candidates = [pets.lastTouched(), settings.lastAgent, ...pets.openAgents(), ...settings.openAgents].filter(Boolean);
         const known = new Set(agents.map((a) => a.id));
         const hit = candidates.find((id) => known.has(id));
         if (hit) return hit;
