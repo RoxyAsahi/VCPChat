@@ -192,6 +192,24 @@ test('cards describe each outfit, outfit.json can say it in its own words', asyn
     assert.equal(await outfits.inspectFolder(path.join(root, 'deskpet', 'nothing')), null);
 });
 
+test('a Live2D outfit that falls back to its portraits still says it needs Cubism Core', async () => {
+    const root = makeAgent({
+        'deskpet/Tech/nova.model3.json': '{}',
+        'deskpet/Tech/portrait.png': 'x',
+        'deskpet/Plain/portrait.png': 'x',
+    });
+    const without = await outfits.listOutfits(root, { hasCore: false });
+    const tech = without.find((o) => o.id === 'Tech');
+    assert.equal(tech.kind, 'portrait');
+    assert.equal(tech.needsCore, true);
+    assert.match(outfits.outfitDescription(tech), /Cubism Core/);
+    assert.equal(without.find((o) => o.id === 'Plain').needsCore, false);
+    const withCore = (await outfits.listOutfits(root, { hasCore: true })).find((o) => o.id === 'Tech');
+    assert.equal(withCore.kind, 'live2d');
+    assert.equal(withCore.needsCore, false);
+    assert.match(outfits.outfitDescription(withCore), /Live2D 模型，会眨眼/);
+});
+
 test('importing a model copies its folder, importing pictures copies just those pictures', () => {
     const { planImport } = require('../modules/deskpet/settingsPage.js');
     const model = planImport([path.join('C:', 'models', 'Nova', 'nova.model3.json')]);

@@ -570,6 +570,39 @@
   border-top: 1px solid var(--dps-line);
 }
 
+/* ---- Live2D 支持 ---- */
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-core .dps-card-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-core.is-wanted {
+  border-color: color-mix(in srgb, var(--dps-accent) 45%, var(--dps-line));
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-btn.dps-btn-primary {
+  border-color: var(--dps-accent);
+  background: var(--dps-accent);
+  color: var(--vcp-ui-on-accent);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-link {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dps-ink-3);
+  font-size: var(--vcp-ui-text-caption);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-link:hover {
+  color: var(--dps-ink);
+}
+
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-shortcut .dps-row-title {
   flex: 1 1 auto;
 }

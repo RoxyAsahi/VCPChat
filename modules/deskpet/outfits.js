@@ -187,6 +187,8 @@ async function listOutfits(agentRoot, { hasCore = false, builtInDir = null, pref
         outfit.kind = kindOf(outfit, hasCore);
         // 只有 Live2D、又没放 Core：页面会提示缺 Core 并退回立绘
         outfit.missingCore = outfit.kind === 'live2d' && !hasCore;
+        // 有 Live2D 模型但没 Core（不管退回的是网格立绘还是立绘）：设置页提示装 Core
+        outfit.needsCore = Boolean(outfit.live2d) && !hasCore;
     }
     return outfits;
 }
@@ -213,8 +215,7 @@ function pickOutfit(outfits, wanted) {
 /** 设置页卡片上的一句介绍：outfit.json 里写了就用它，没写按种类说。 */
 function outfitDescription(outfit) {
     if (outfit.description) return outfit.description;
-    // 有 Live2D 但没放 Core：只有模型时页面退回助手立绘，带了立绘（内置 Nova）时用这套自己的立绘
-    if (outfit.missingCore || (outfit.live2d && outfit.kind === 'portrait')) return 'Live2D 模型。还没放 Cubism Core，先用立绘代替';
+    if (outfit.needsCore) return 'Live2D 模型。装好 Cubism Core 前先用立绘代替（见下方「Live2D 支持」）';
     if (outfit.kind === 'live2d') return 'Live2D 模型，会眨眼、跟着光标看、按情绪换表情';
     if (outfit.kind === 'puppet') return '网格立绘，一张图切块做成的，会呼吸、眨眼、对口型';
     const faces = Object.keys(outfit.portraits || {}).filter((key) => PORTRAIT_KEYS.includes(key) && key !== 'talk').length;
