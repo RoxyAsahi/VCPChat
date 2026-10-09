@@ -1,0 +1,14 @@
+[
+  {
+    "baseline": "gaze-tech-mixed",
+    "after": "mouth-accept-gaze",
+    "poses": 49,
+    "maximum_vertex_delta": 0
+  },
+  {
+    "baseline": "gaze-tech-physics",
+    "after": "mouth-accept-physics",
+    "poses": 13,
+    "maximum_vertex_delta": 0
+  }
+]

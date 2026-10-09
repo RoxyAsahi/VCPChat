@@ -1,0 +1,2191 @@
+{
+  "stages": {
+    "baseline": {
+      "assertions": 107,
+      "failed_assertions": 0,
+      "errors": [],
+      "poses": 103
+    },
+    "arc-trial": {
+      "assertions": 107,
+      "failed_assertions": 0,
+      "errors": [],
+      "poses": 103
+    }
+  },
+  "non_mouth_max_delta": 0,
+  "closed_fill_max_delta": 0,
+  "closed_lip_max_delta": 9.415671229362488e-07,
+  "new_triangle_flips": [],
+  "lip_comparisons": [
+    {
+      "pose": "interp-open0-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005821878325839844,
+        "mouth_width": 0.017362522892653942,
+        "mouth_height": 0.002144038677215576,
+        "matched_index_gap_fraction_width": 0.03353129243851463,
+        "nearest_centerline_gap_fraction_width": 0.00040804539422328385,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0005821878325839844,
+        "mouth_width": 0.017362522892653942,
+        "mouth_height": 0.002144038677215576,
+        "matched_index_gap_fraction_width": 0.03353129243851463,
+        "nearest_centerline_gap_fraction_width": 0.00040804539422328385,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006130810561579266,
+        "mouth_width": 0.018073756713420153,
+        "mouth_height": 0.002659142017364502,
+        "matched_index_gap_fraction_width": 0.03392106388721614,
+        "nearest_centerline_gap_fraction_width": 0.00030999793568554023,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006130810561579266,
+        "mouth_width": 0.018073756713420153,
+        "mouth_height": 0.002659142017364502,
+        "matched_index_gap_fraction_width": 0.03392106388721614,
+        "nearest_centerline_gap_fraction_width": 0.00030999793568554023,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006467572117616676,
+        "mouth_width": 0.018784991465508938,
+        "mouth_height": 0.0032396316528320312,
+        "matched_index_gap_fraction_width": 0.03442946529675973,
+        "nearest_centerline_gap_fraction_width": 0.00031833241425385745,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006467572117616676,
+        "mouth_width": 0.018784991465508938,
+        "mouth_height": 0.0032396316528320312,
+        "matched_index_gap_fraction_width": 0.03442946529675973,
+        "nearest_centerline_gap_fraction_width": 0.00031833241425385745,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006837252190735829,
+        "mouth_width": 0.01949671469628811,
+        "mouth_height": 0.003849625587463379,
+        "matched_index_gap_fraction_width": 0.035068740027454685,
+        "nearest_centerline_gap_fraction_width": 0.0005809169780434588,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006837252190735829,
+        "mouth_width": 0.01949671469628811,
+        "mouth_height": 0.003849625587463379,
+        "matched_index_gap_fraction_width": 0.035068740027454685,
+        "nearest_centerline_gap_fraction_width": 0.0005809169780434588,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007226549508053016,
+        "mouth_width": 0.02020843792706728,
+        "mouth_height": 0.00448763370513916,
+        "matched_index_gap_fraction_width": 0.035760059902372465,
+        "nearest_centerline_gap_fraction_width": 0.0008596752111486524,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007226549508053016,
+        "mouth_width": 0.02020843792706728,
+        "mouth_height": 0.00448763370513916,
+        "matched_index_gap_fraction_width": 0.035760059902372465,
+        "nearest_centerline_gap_fraction_width": 0.0008596752111486524,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005837666712595938,
+        "mouth_width": 0.017506418749690056,
+        "mouth_height": 0.0029109716415405273,
+        "matched_index_gap_fraction_width": 0.03334586471433109,
+        "nearest_centerline_gap_fraction_width": 0.002783461092325931,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0005819612731121046,
+        "mouth_width": 0.017506418749690056,
+        "mouth_height": 0.002951204776763916,
+        "matched_index_gap_fraction_width": 0.03324273693169873,
+        "nearest_centerline_gap_fraction_width": 0.0057739570328978525,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.1-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006128179610093177,
+        "mouth_width": 0.01821761578321457,
+        "mouth_height": 0.0034986138343811035,
+        "matched_index_gap_fraction_width": 0.0336387575795708,
+        "nearest_centerline_gap_fraction_width": 0.002681474777486403,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006065982771769735,
+        "mouth_width": 0.01821761578321457,
+        "mouth_height": 0.003547966480255127,
+        "matched_index_gap_fraction_width": 0.033297347160866346,
+        "nearest_centerline_gap_fraction_width": 0.005648880868310784,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006451565162159565,
+        "mouth_width": 0.018928811885416508,
+        "mouth_height": 0.004142701625823975,
+        "matched_index_gap_fraction_width": 0.03408330750610978,
+        "nearest_centerline_gap_fraction_width": 0.0025861718343515626,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006367190772983709,
+        "mouth_width": 0.018928811885416508,
+        "mouth_height": 0.0041956305503845215,
+        "matched_index_gap_fraction_width": 0.03363756167860298,
+        "nearest_centerline_gap_fraction_width": 0.005520296339882866,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.1-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006807108574053612,
+        "mouth_width": 0.01964059378951788,
+        "mouth_height": 0.004804074764251709,
+        "matched_index_gap_fraction_width": 0.03465836444154017,
+        "nearest_centerline_gap_fraction_width": 0.0024903336288988726,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006684870428609179,
+        "mouth_width": 0.01964059378951788,
+        "mouth_height": 0.004859626293182373,
+        "matched_index_gap_fraction_width": 0.03403598944231957,
+        "nearest_centerline_gap_fraction_width": 0.005486579427220967,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007186419943589875,
+        "mouth_width": 0.020352371037006378,
+        "mouth_height": 0.005465447902679443,
+        "matched_index_gap_fraction_width": 0.035309988848586375,
+        "nearest_centerline_gap_fraction_width": 0.002401251058937188,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007020300435221061,
+        "mouth_width": 0.020352371037006378,
+        "mouth_height": 0.005523562431335449,
+        "matched_index_gap_fraction_width": 0.034493771867936986,
+        "nearest_centerline_gap_fraction_width": 0.005430450411084479,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.2-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005871743580478447,
+        "mouth_width": 0.017650315538048744,
+        "mouth_height": 0.003862619400024414,
+        "matched_index_gap_fraction_width": 0.03326707427876144,
+        "nearest_centerline_gap_fraction_width": 0.00507526564473349,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0005945254583146177,
+        "mouth_width": 0.017650315538048744,
+        "mouth_height": 0.003963112831115723,
+        "matched_index_gap_fraction_width": 0.03368355976599968,
+        "nearest_centerline_gap_fraction_width": 0.010033579555470172,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.2-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006141497830447196,
+        "mouth_width": 0.018361474387347698,
+        "mouth_height": 0.004396975040435791,
+        "matched_index_gap_fraction_width": 0.033447737915203064,
+        "nearest_centerline_gap_fraction_width": 0.005081333389776572,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006133951970723946,
+        "mouth_width": 0.018361474387347698,
+        "mouth_height": 0.00450366735458374,
+        "matched_index_gap_fraction_width": 0.03340664176157147,
+        "nearest_centerline_gap_fraction_width": 0.009729918124693876,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.2-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006448837686433454,
+        "mouth_width": 0.019072633236646652,
+        "mouth_height": 0.0050737857818603516,
+        "matched_index_gap_fraction_width": 0.03381199442373007,
+        "nearest_centerline_gap_fraction_width": 0.005028795923112411,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006438825544492448,
+        "mouth_width": 0.019072633236646652,
+        "mouth_height": 0.005179643630981445,
+        "matched_index_gap_fraction_width": 0.03375949961707816,
+        "nearest_centerline_gap_fraction_width": 0.00945354088985976,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.2-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006788194113010901,
+        "mouth_width": 0.01978446915745735,
+        "mouth_height": 0.0057585835456848145,
+        "matched_index_gap_fraction_width": 0.034310721500719316,
+        "nearest_centerline_gap_fraction_width": 0.004919651655155845,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000677077119775268,
+        "mouth_width": 0.01978446915745735,
+        "mouth_height": 0.005869626998901367,
+        "matched_index_gap_fraction_width": 0.03422265790336142,
+        "nearest_centerline_gap_fraction_width": 0.009344857581056689,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.2-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007155434656927228,
+        "mouth_width": 0.020496306009590626,
+        "mouth_height": 0.006443440914154053,
+        "matched_index_gap_fraction_width": 0.0349108500506338,
+        "nearest_centerline_gap_fraction_width": 0.004768563224367192,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007122766008206767,
+        "mouth_width": 0.020496306009590626,
+        "mouth_height": 0.0065596699714660645,
+        "matched_index_gap_fraction_width": 0.03475146206772032,
+        "nearest_centerline_gap_fraction_width": 0.009242139225980103,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.3-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005924267783023951,
+        "mouth_width": 0.017794211395084858,
+        "mouth_height": 0.005046248435974121,
+        "matched_index_gap_fraction_width": 0.03329323031792441,
+        "nearest_centerline_gap_fraction_width": 0.006418690768241697,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006191102356769298,
+        "mouth_width": 0.017794211395084858,
+        "mouth_height": 0.00521242618560791,
+        "matched_index_gap_fraction_width": 0.034792788617085964,
+        "nearest_centerline_gap_fraction_width": 0.0130330798545922,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.3-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000617066048164096,
+        "mouth_width": 0.018505332991480827,
+        "mouth_height": 0.005608201026916504,
+        "matched_index_gap_fraction_width": 0.033345309076479215,
+        "nearest_centerline_gap_fraction_width": 0.006594330625165057,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006337638783476524,
+        "mouth_width": 0.018505332991480827,
+        "mouth_height": 0.0057683587074279785,
+        "matched_index_gap_fraction_width": 0.03424763437866338,
+        "nearest_centerline_gap_fraction_width": 0.012739025103647713,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.3-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006459607958843502,
+        "mouth_width": 0.019216451793909073,
+        "mouth_height": 0.006170153617858887,
+        "matched_index_gap_fraction_width": 0.03361498797031284,
+        "nearest_centerline_gap_fraction_width": 0.006725292569330984,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006512092796778935,
+        "mouth_width": 0.019216451793909073,
+        "mouth_height": 0.006328999996185303,
+        "matched_index_gap_fraction_width": 0.03388811247060207,
+        "nearest_centerline_gap_fraction_width": 0.012470423758064005,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.3-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006780833577470361,
+        "mouth_width": 0.019928346388041973,
+        "mouth_height": 0.006732344627380371,
+        "matched_index_gap_fraction_width": 0.034026072436894254,
+        "nearest_centerline_gap_fraction_width": 0.006811727719607468,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006858986060572876,
+        "mouth_width": 0.019928346388041973,
+        "mouth_height": 0.006898939609527588,
+        "matched_index_gap_fraction_width": 0.03441823986303559,
+        "nearest_centerline_gap_fraction_width": 0.012387048431208303,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.3-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007133768782143364,
+        "mouth_width": 0.020640236325562,
+        "mouth_height": 0.007421314716339111,
+        "matched_index_gap_fraction_width": 0.03456243751099164,
+        "nearest_centerline_gap_fraction_width": 0.006816526744603508,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007267470839699227,
+        "mouth_width": 0.020640236325562,
+        "mouth_height": 0.007595658302307129,
+        "matched_index_gap_fraction_width": 0.03521021138066521,
+        "nearest_centerline_gap_fraction_width": 0.01230401277184204,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.4-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005994404084613792,
+        "mouth_width": 0.017938108183443546,
+        "mouth_height": 0.006321907043457031,
+        "matched_index_gap_fraction_width": 0.03341714757940019,
+        "nearest_centerline_gap_fraction_width": 0.0070878233681349575,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006543754594265517,
+        "mouth_width": 0.017938108183443546,
+        "mouth_height": 0.006915748119354248,
+        "matched_index_gap_fraction_width": 0.03647962498244519,
+        "nearest_centerline_gap_fraction_width": 0.015566006985883627,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.4-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006215374905201665,
+        "mouth_width": 0.018649191595613956,
+        "mouth_height": 0.006819605827331543,
+        "matched_index_gap_fraction_width": 0.03332785163011269,
+        "nearest_centerline_gap_fraction_width": 0.0073684569461800395,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006662110854817803,
+        "mouth_width": 0.018649191595613956,
+        "mouth_height": 0.007033109664916992,
+        "matched_index_gap_fraction_width": 0.03572332248645375,
+        "nearest_centerline_gap_fraction_width": 0.015243070113813274,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.4-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006483806605250137,
+        "mouth_width": 0.019360273145139217,
+        "mouth_height": 0.0073999762535095215,
+        "matched_index_gap_fraction_width": 0.03349026409205402,
+        "nearest_centerline_gap_fraction_width": 0.007631143842809367,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006798516587729187,
+        "mouth_width": 0.019360273145139217,
+        "mouth_height": 0.007611691951751709,
+        "matched_index_gap_fraction_width": 0.03511580924898309,
+        "nearest_centerline_gap_fraction_width": 0.014951739180801818,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.4-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006784412287904521,
+        "mouth_width": 0.020072221755981445,
+        "mouth_height": 0.007980644702911377,
+        "matched_index_gap_fraction_width": 0.033800006647907783,
+        "nearest_centerline_gap_fraction_width": 0.007889412990208216,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000734548434386754,
+        "mouth_width": 0.020072221755981445,
+        "mouth_height": 0.008202731609344482,
+        "matched_index_gap_fraction_width": 0.03659527297559182,
+        "nearest_centerline_gap_fraction_width": 0.014883015301338625,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.4-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007121427151744503,
+        "mouth_width": 0.020784170366823673,
+        "mouth_height": 0.008561253547668457,
+        "matched_index_gap_fraction_width": 0.034263706590434526,
+        "nearest_centerline_gap_fraction_width": 0.00809334499944524,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000795370007253547,
+        "mouth_width": 0.020784170366823673,
+        "mouth_height": 0.00879371166229248,
+        "matched_index_gap_fraction_width": 0.03826806618767622,
+        "nearest_centerline_gap_fraction_width": 0.014815747361097264,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.5-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006081750787338239,
+        "mouth_width": 0.018082004971802235,
+        "mouth_height": 0.007860362529754639,
+        "matched_index_gap_fraction_width": 0.033634272287958955,
+        "nearest_centerline_gap_fraction_width": 0.007409530205176443,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006986489453806108,
+        "mouth_width": 0.018082004971802235,
+        "mouth_height": 0.008619189262390137,
+        "matched_index_gap_fraction_width": 0.038637802968758746,
+        "nearest_centerline_gap_fraction_width": 0.018265903362054664,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.5-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006275335405486723,
+        "mouth_width": 0.018793050199747086,
+        "mouth_height": 0.008068442344665527,
+        "matched_index_gap_fraction_width": 0.03339178759588039,
+        "nearest_centerline_gap_fraction_width": 0.007726187581512988,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007091371554960791,
+        "mouth_width": 0.018793050199747086,
+        "mouth_height": 0.008562982082366943,
+        "matched_index_gap_fraction_width": 0.03773401060279308,
+        "nearest_centerline_gap_fraction_width": 0.016765773244070612,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.5-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006521234613107805,
+        "mouth_width": 0.019504093565046787,
+        "mouth_height": 0.00862973928451538,
+        "matched_index_gap_fraction_width": 0.03343520985150771,
+        "nearest_centerline_gap_fraction_width": 0.008047302066587011,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007331481037981229,
+        "mouth_width": 0.019504093565046787,
+        "mouth_height": 0.00889444351196289,
+        "matched_index_gap_fraction_width": 0.037589447638417546,
+        "nearest_centerline_gap_fraction_width": 0.01650272763207381,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.5-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006799530618998245,
+        "mouth_width": 0.020216098986566067,
+        "mouth_height": 0.009228885173797607,
+        "matched_index_gap_fraction_width": 0.03363423686991564,
+        "nearest_centerline_gap_fraction_width": 0.008404572365098032,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007999309724648077,
+        "mouth_width": 0.020216098986566067,
+        "mouth_height": 0.009506523609161377,
+        "matched_index_gap_fraction_width": 0.03956900750220778,
+        "nearest_centerline_gap_fraction_width": 0.01642003934051249,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.5-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007118521526069287,
+        "mouth_width": 0.02092810347676277,
+        "mouth_height": 0.009827911853790283,
+        "matched_index_gap_fraction_width": 0.03401417397411686,
+        "nearest_centerline_gap_fraction_width": 0.008735358435456683,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008680043965322692,
+        "mouth_width": 0.02092810347676277,
+        "mouth_height": 0.010118544101715088,
+        "matched_index_gap_fraction_width": 0.041475540174772445,
+        "nearest_centerline_gap_fraction_width": 0.016342623245065246,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.6-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006190948311209465,
+        "mouth_width": 0.01822609454393387,
+        "mouth_height": 0.009411931037902832,
+        "matched_index_gap_fraction_width": 0.03396749806320948,
+        "nearest_centerline_gap_fraction_width": 0.007563995926121658,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007228527748346736,
+        "mouth_width": 0.01822609454393387,
+        "mouth_height": 0.010115742683410645,
+        "matched_index_gap_fraction_width": 0.03966032180356808,
+        "nearest_centerline_gap_fraction_width": 0.01986448624823487,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.6-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006352069329011068,
+        "mouth_width": 0.01893710158765316,
+        "mouth_height": 0.009406626224517822,
+        "matched_index_gap_fraction_width": 0.033542985971795,
+        "nearest_centerline_gap_fraction_width": 0.00789713077869055,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007433343743988687,
+        "mouth_width": 0.01893710158765316,
+        "mouth_height": 0.010067880153656006,
+        "matched_index_gap_fraction_width": 0.03925280597763265,
+        "nearest_centerline_gap_fraction_width": 0.018134912888382412,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.6-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006569889919587046,
+        "mouth_width": 0.019648111425340176,
+        "mouth_height": 0.009881436824798584,
+        "matched_index_gap_fraction_width": 0.03343776802443138,
+        "nearest_centerline_gap_fraction_width": 0.008240199009968452,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000773615274952684,
+        "mouth_width": 0.019648111425340176,
+        "mouth_height": 0.010201573371887207,
+        "matched_index_gap_fraction_width": 0.03937351830949778,
+        "nearest_centerline_gap_fraction_width": 0.016483491476108003,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.6-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000682485182608338,
+        "mouth_width": 0.020359788089990616,
+        "mouth_height": 0.010477185249328613,
+        "matched_index_gap_fraction_width": 0.03352123212637291,
+        "nearest_centerline_gap_fraction_width": 0.008618094462113347,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008338432698006735,
+        "mouth_width": 0.020359788089990616,
+        "mouth_height": 0.010808110237121582,
+        "matched_index_gap_fraction_width": 0.04095540022887624,
+        "nearest_centerline_gap_fraction_width": 0.01628308853926461,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.6-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007125315884840036,
+        "mouth_width": 0.02107146568596363,
+        "mouth_height": 0.01109457015991211,
+        "matched_index_gap_fraction_width": 0.03381499887587997,
+        "nearest_centerline_gap_fraction_width": 0.0089949960296277,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008947288219913218,
+        "mouth_width": 0.02107146568596363,
+        "mouth_height": 0.011436223983764648,
+        "matched_index_gap_fraction_width": 0.04246163201581791,
+        "nearest_centerline_gap_fraction_width": 0.016125377791483465,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.7-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006315599162041078,
+        "mouth_width": 0.018370187375694513,
+        "mouth_height": 0.01096343994140625,
+        "matched_index_gap_fraction_width": 0.034379612101274534,
+        "nearest_centerline_gap_fraction_width": 0.008665226054409374,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007481013115815713,
+        "mouth_width": 0.018370187375694513,
+        "mouth_height": 0.011612296104431152,
+        "matched_index_gap_fraction_width": 0.04072366254529226,
+        "nearest_centerline_gap_fraction_width": 0.021397307343935513,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.7-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006443011757776458,
+        "mouth_width": 0.019081157632172108,
+        "mouth_height": 0.010944366455078125,
+        "matched_index_gap_fraction_width": 0.033766356748256766,
+        "nearest_centerline_gap_fraction_width": 0.008436569447119156,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007785472625330276,
+        "mouth_width": 0.019081157632172108,
+        "mouth_height": 0.011572837829589844,
+        "matched_index_gap_fraction_width": 0.04080188830998099,
+        "nearest_centerline_gap_fraction_width": 0.019959404644370946,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.7-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006631275715881696,
+        "mouth_width": 0.019792127422988415,
+        "mouth_height": 0.011170744895935059,
+        "matched_index_gap_fraction_width": 0.033504613092676015,
+        "nearest_centerline_gap_fraction_width": 0.008320760001358979,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008152656574242648,
+        "mouth_width": 0.019792127422988415,
+        "mouth_height": 0.01154637336730957,
+        "matched_index_gap_fraction_width": 0.04119141111012349,
+        "nearest_centerline_gap_fraction_width": 0.018514816013364372,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.7-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000686130613370186,
+        "mouth_width": 0.02050347626209259,
+        "mouth_height": 0.011726617813110352,
+        "matched_index_gap_fraction_width": 0.03346411138284505,
+        "nearest_centerline_gap_fraction_width": 0.008690337600195032,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008683398479418548,
+        "mouth_width": 0.02050347626209259,
+        "mouth_height": 0.012110888957977295,
+        "matched_index_gap_fraction_width": 0.042350859768461126,
+        "nearest_centerline_gap_fraction_width": 0.01738430176762464,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.7-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007141459308337628,
+        "mouth_width": 0.021214826963841915,
+        "mouth_height": 0.012361288070678711,
+        "matched_index_gap_fraction_width": 0.033662585702487105,
+        "nearest_centerline_gap_fraction_width": 0.009071962576894504,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009216223950607477,
+        "mouth_width": 0.021214826963841915,
+        "mouth_height": 0.01275414228439331,
+        "matched_index_gap_fraction_width": 0.043442371537205586,
+        "nearest_centerline_gap_fraction_width": 0.01628477309170045,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.8-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006454936837181999,
+        "mouth_width": 0.018514277413487434,
+        "mouth_height": 0.012515008449554443,
+        "matched_index_gap_fraction_width": 0.03486464361001555,
+        "nearest_centerline_gap_fraction_width": 0.009802941885494982,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007743258793411792,
+        "mouth_width": 0.018514277413487434,
+        "mouth_height": 0.013108789920806885,
+        "matched_index_gap_fraction_width": 0.041823175814417246,
+        "nearest_centerline_gap_fraction_width": 0.022848622364727404,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.8-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006547654481262882,
+        "mouth_width": 0.01922521088272333,
+        "mouth_height": 0.012495279312133789,
+        "matched_index_gap_fraction_width": 0.03405764712389662,
+        "nearest_centerline_gap_fraction_width": 0.009536148586107402,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.00081439950272506,
+        "mouth_width": 0.01922521088272333,
+        "mouth_height": 0.013077735900878906,
+        "matched_index_gap_fraction_width": 0.04236101792032446,
+        "nearest_centerline_gap_fraction_width": 0.02175342274624707,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.8-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006705069164016387,
+        "mouth_width": 0.01993614248931408,
+        "mouth_height": 0.012509584426879883,
+        "matched_index_gap_fraction_width": 0.03363273094386416,
+        "nearest_centerline_gap_fraction_width": 0.00927695229608895,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008577990718492254,
+        "mouth_width": 0.01993614248931408,
+        "mouth_height": 0.013046622276306152,
+        "matched_index_gap_fraction_width": 0.043027334516143836,
+        "nearest_centerline_gap_fraction_width": 0.020535798941674715,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.8-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006908546069156202,
+        "mouth_width": 0.02064716350287199,
+        "mouth_height": 0.013031959533691406,
+        "matched_index_gap_fraction_width": 0.03346002499663081,
+        "nearest_centerline_gap_fraction_width": 0.009030671824743913,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009032565783629673,
+        "mouth_width": 0.02064716350287199,
+        "mouth_height": 0.013469576835632324,
+        "matched_index_gap_fraction_width": 0.04374724781141611,
+        "nearest_centerline_gap_fraction_width": 0.019072829126421442,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.8-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007166708600348681,
+        "mouth_width": 0.021358187310397625,
+        "mouth_height": 0.013627946376800537,
+        "matched_index_gap_fraction_width": 0.033554854146539734,
+        "nearest_centerline_gap_fraction_width": 0.009064913255854831,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009487645778651323,
+        "mouth_width": 0.021358187310397625,
+        "mouth_height": 0.014071881771087646,
+        "matched_index_gap_fraction_width": 0.04442158709804241,
+        "nearest_centerline_gap_fraction_width": 0.01767071703018289,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.9-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006607666071992149,
+        "mouth_width": 0.018658370710909367,
+        "mouth_height": 0.014066457748413086,
+        "matched_index_gap_fraction_width": 0.03541394998722322,
+        "nearest_centerline_gap_fraction_width": 0.010921506923885774,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008015132119848613,
+        "mouth_width": 0.018658370710909367,
+        "mouth_height": 0.014605402946472168,
+        "matched_index_gap_fraction_width": 0.042957299134174905,
+        "nearest_centerline_gap_fraction_width": 0.02420354475065266,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.9-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006665424242620998,
+        "mouth_width": 0.01936926506459713,
+        "mouth_height": 0.014046072959899902,
+        "matched_index_gap_fraction_width": 0.03441237558777575,
+        "nearest_centerline_gap_fraction_width": 0.010611827227853013,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008508375602678038,
+        "mouth_width": 0.01936926506459713,
+        "mouth_height": 0.014582633972167969,
+        "matched_index_gap_fraction_width": 0.04392719896342132,
+        "nearest_centerline_gap_fraction_width": 0.02350009380633394,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.9-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006790823008126188,
+        "mouth_width": 0.02008015848696232,
+        "mouth_height": 0.014029383659362793,
+        "matched_index_gap_fraction_width": 0.03381857275944981,
+        "nearest_centerline_gap_fraction_width": 0.010318491737032582,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009011290450395743,
+        "mouth_width": 0.02008015848696232,
+        "mouth_height": 0.01455986499786377,
+        "matched_index_gap_fraction_width": 0.04487659027316248,
+        "nearest_centerline_gap_fraction_width": 0.022538107684443674,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.9-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006966404384227209,
+        "mouth_width": 0.020790851674973965,
+        "mouth_height": 0.014337360858917236,
+        "matched_index_gap_fraction_width": 0.033507065959268514,
+        "nearest_centerline_gap_fraction_width": 0.010030126770888714,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009386638203194586,
+        "mouth_width": 0.020790851674973965,
+        "mouth_height": 0.014828264713287354,
+        "matched_index_gap_fraction_width": 0.04514792539496264,
+        "nearest_centerline_gap_fraction_width": 0.020758231779485707,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open0.9-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007201188345210517,
+        "mouth_width": 0.021501545794308186,
+        "mouth_height": 0.01492530107498169,
+        "matched_index_gap_fraction_width": 0.03349149132857597,
+        "nearest_centerline_gap_fraction_width": 0.00975748084919449,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009760863198798534,
+        "mouth_width": 0.021501545794308186,
+        "mouth_height": 0.015420377254486084,
+        "matched_index_gap_fraction_width": 0.04539609985335285,
+        "nearest_centerline_gap_fraction_width": 0.01905446102767422,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006773214481093862,
+        "mouth_width": 0.018802461214363575,
+        "mouth_height": 0.015618085861206055,
+        "matched_index_gap_fraction_width": 0.03602302062412802,
+        "nearest_centerline_gap_fraction_width": 0.012024322973448347,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000830855423498169,
+        "mouth_width": 0.018802461214363575,
+        "mouth_height": 0.016109585762023926,
+        "matched_index_gap_fraction_width": 0.04418865243362193,
+        "nearest_centerline_gap_fraction_width": 0.025455221406885782,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open1-form-0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000679530872769179,
+        "mouth_width": 0.019513318315148354,
+        "mouth_height": 0.015597105026245117,
+        "matched_index_gap_fraction_width": 0.03482395263555217,
+        "nearest_centerline_gap_fraction_width": 0.0116797374707114,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008878371364859771,
+        "mouth_width": 0.019513318315148354,
+        "mouth_height": 0.016099214553833008,
+        "matched_index_gap_fraction_width": 0.04549903415436736,
+        "nearest_centerline_gap_fraction_width": 0.02519035953790979,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006888168487271961,
+        "mouth_width": 0.02022417262196541,
+        "mouth_height": 0.015585064888000488,
+        "matched_index_gap_fraction_width": 0.034059086698017715,
+        "nearest_centerline_gap_fraction_width": 0.011341866783054082,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009451744539391572,
+        "mouth_width": 0.02022417262196541,
+        "mouth_height": 0.016088902950286865,
+        "matched_index_gap_fraction_width": 0.046734888571540685,
+        "nearest_centerline_gap_fraction_width": 0.024521013186624238,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open1-form0.5",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007034651933220639,
+        "mouth_width": 0.02093453984707594,
+        "mouth_height": 0.01568758487701416,
+        "matched_index_gap_fraction_width": 0.033603088410864755,
+        "nearest_centerline_gap_fraction_width": 0.011011653833595394,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009744099827528349,
+        "mouth_width": 0.02093453984707594,
+        "mouth_height": 0.016186773777008057,
+        "matched_index_gap_fraction_width": 0.04654556488323946,
+        "nearest_centerline_gap_fraction_width": 0.02242764715433861,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "interp-open1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007244709269228492,
+        "mouth_width": 0.021644909866154194,
+        "mouth_height": 0.01624661684036255,
+        "matched_index_gap_fraction_width": 0.03347072967283144,
+        "nearest_centerline_gap_fraction_width": 0.010697459441223692,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0010035698025305597,
+        "mouth_width": 0.021644909866154194,
+        "mouth_height": 0.016792774200439453,
+        "matched_index_gap_fraction_width": 0.04636516431513656,
+        "nearest_centerline_gap_fraction_width": 0.02043379635005352,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.25-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006166029835208979,
+        "mouth_width": 0.01744342432357371,
+        "mouth_height": 0.004680514335632324,
+        "matched_index_gap_fraction_width": 0.035348734977890615,
+        "nearest_centerline_gap_fraction_width": 0.006479525584892999,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006313066725029213,
+        "mouth_width": 0.01744342432357371,
+        "mouth_height": 0.0048195719718933105,
+        "matched_index_gap_fraction_width": 0.036191670900864885,
+        "nearest_centerline_gap_fraction_width": 0.012047864571132888,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.25-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006757989023355855,
+        "mouth_width": 0.018805301981046796,
+        "mouth_height": 0.006045341491699219,
+        "matched_index_gap_fraction_width": 0.035936615270347666,
+        "nearest_centerline_gap_fraction_width": 0.006510679838588944,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006784113434584634,
+        "mouth_width": 0.018805301981046796,
+        "mouth_height": 0.006182074546813965,
+        "matched_index_gap_fraction_width": 0.036075535726159055,
+        "nearest_centerline_gap_fraction_width": 0.010870261266226946,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.25-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.00074863293006794,
+        "mouth_width": 0.020168584771454334,
+        "mouth_height": 0.0075688958168029785,
+        "matched_index_gap_fraction_width": 0.03711876358957619,
+        "nearest_centerline_gap_fraction_width": 0.006259934602087703,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007520626063431847,
+        "mouth_width": 0.020168584771454334,
+        "mouth_height": 0.0077190399169921875,
+        "matched_index_gap_fraction_width": 0.03728881400779388,
+        "nearest_centerline_gap_fraction_width": 0.010906335802261354,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.5-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000635013404611754,
+        "mouth_width": 0.017780703492462635,
+        "mouth_height": 0.008054077625274658,
+        "matched_index_gap_fraction_width": 0.03571362656606588,
+        "nearest_centerline_gap_fraction_width": 0.00829530044051596,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007251742660090799,
+        "mouth_width": 0.017780703492462635,
+        "mouth_height": 0.00881969928741455,
+        "matched_index_gap_fraction_width": 0.04078434052491153,
+        "nearest_centerline_gap_fraction_width": 0.018549650515093757,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.5-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006823450923178992,
+        "mouth_width": 0.019142227014526725,
+        "mouth_height": 0.00909191370010376,
+        "matched_index_gap_fraction_width": 0.035646066249244594,
+        "nearest_centerline_gap_fraction_width": 0.009044653716059791,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007661571036549824,
+        "mouth_width": 0.019142227014526725,
+        "mouth_height": 0.009365379810333252,
+        "matched_index_gap_fraction_width": 0.040024449771364545,
+        "nearest_centerline_gap_fraction_width": 0.016872665297020164,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.5-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000745560420322372,
+        "mouth_width": 0.020505719003267586,
+        "mouth_height": 0.010401487350463867,
+        "matched_index_gap_fraction_width": 0.03635865780680828,
+        "nearest_centerline_gap_fraction_width": 0.009800499412645507,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009061839486844405,
+        "mouth_width": 0.020505719003267586,
+        "mouth_height": 0.01070171594619751,
+        "matched_index_gap_fraction_width": 0.04419176662569306,
+        "nearest_centerline_gap_fraction_width": 0.016751582677516974,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.75-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006649847116001194,
+        "mouth_width": 0.018118419218808413,
+        "mouth_height": 0.01207888126373291,
+        "matched_index_gap_fraction_width": 0.0367021373978261,
+        "nearest_centerline_gap_fraction_width": 0.009607345184398229,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007898423581089934,
+        "mouth_width": 0.018118419218808413,
+        "mouth_height": 0.012712717056274414,
+        "matched_index_gap_fraction_width": 0.043593337176406205,
+        "nearest_centerline_gap_fraction_width": 0.0224976331873146,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.75-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006966716644109993,
+        "mouth_width": 0.019479740411043167,
+        "mouth_height": 0.012314558029174805,
+        "matched_index_gap_fraction_width": 0.035763909051685944,
+        "nearest_centerline_gap_fraction_width": 0.009327674147197288,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008730996804294606,
+        "mouth_width": 0.019479740411043167,
+        "mouth_height": 0.012731373310089111,
+        "matched_index_gap_fraction_width": 0.04482090941697025,
+        "nearest_centerline_gap_fraction_width": 0.0199654188178315,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open0.75-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007489863480084703,
+        "mouth_width": 0.020841869642026722,
+        "mouth_height": 0.013694584369659424,
+        "matched_index_gap_fraction_width": 0.035936619932511814,
+        "nearest_centerline_gap_fraction_width": 0.010208288713696324,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009888263807313858,
+        "mouth_width": 0.020841869642026722,
+        "mouth_height": 0.014126956462860107,
+        "matched_index_gap_fraction_width": 0.04744422634414047,
+        "nearest_centerline_gap_fraction_width": 0.017201691679141567,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007044411703900004,
+        "mouth_width": 0.018456135410815477,
+        "mouth_height": 0.01610541343688965,
+        "matched_index_gap_fraction_width": 0.038168400627207735,
+        "nearest_centerline_gap_fraction_width": 0.012480090649638486,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008671129592510812,
+        "mouth_width": 0.018456135410815477,
+        "mouth_height": 0.0166473388671875,
+        "matched_index_gap_fraction_width": 0.04698236873267328,
+        "nearest_centerline_gap_fraction_width": 0.025753389011496458,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007187631398137809,
+        "mouth_width": 0.019817254738882184,
+        "mouth_height": 0.01620703935623169,
+        "matched_index_gap_fraction_width": 0.03626956151517501,
+        "nearest_centerline_gap_fraction_width": 0.01168503869997309,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000986204327664292,
+        "mouth_width": 0.019817254738882184,
+        "mouth_height": 0.01662611961364746,
+        "matched_index_gap_fraction_width": 0.04976493165470204,
+        "nearest_centerline_gap_fraction_width": 0.02524056944809365,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_-20-open1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007578990627082974,
+        "mouth_width": 0.021178879542276263,
+        "mouth_height": 0.01698756217956543,
+        "matched_index_gap_fraction_width": 0.03578560712786602,
+        "nearest_centerline_gap_fraction_width": 0.010940551968428604,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0010736862581389648,
+        "mouth_width": 0.021178879542276263,
+        "mouth_height": 0.01755201816558838,
+        "matched_index_gap_fraction_width": 0.05069608408677729,
+        "nearest_centerline_gap_fraction_width": 0.020825911017245485,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.25-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006010020212674969,
+        "mouth_width": 0.016865011770278215,
+        "mouth_height": 0.0046468377113342285,
+        "matched_index_gap_fraction_width": 0.035636027383429594,
+        "nearest_centerline_gap_fraction_width": 0.006143364274246983,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006103086990398514,
+        "mouth_width": 0.016865011770278215,
+        "mouth_height": 0.00476759672164917,
+        "matched_index_gap_fraction_width": 0.03618786084190106,
+        "nearest_centerline_gap_fraction_width": 0.011820976485307508,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.25-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006607678662600752,
+        "mouth_width": 0.01818744372576475,
+        "mouth_height": 0.005784094333648682,
+        "matched_index_gap_fraction_width": 0.036330991656843795,
+        "nearest_centerline_gap_fraction_width": 0.006183665418569147,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006636224521537847,
+        "mouth_width": 0.01818744372576475,
+        "mouth_height": 0.005911290645599365,
+        "matched_index_gap_fraction_width": 0.036487945318763065,
+        "nearest_centerline_gap_fraction_width": 0.011301856939822268,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.25-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007324453811913421,
+        "mouth_width": 0.01951126428321004,
+        "mouth_height": 0.00716090202331543,
+        "matched_index_gap_fraction_width": 0.03753961663169264,
+        "nearest_centerline_gap_fraction_width": 0.005992872713781028,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007357243345127969,
+        "mouth_width": 0.01951126428321004,
+        "mouth_height": 0.00730055570602417,
+        "matched_index_gap_fraction_width": 0.03770767100653274,
+        "nearest_centerline_gap_fraction_width": 0.011084783265185845,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.5-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006162175004021301,
+        "mouth_width": 0.017199126537889242,
+        "mouth_height": 0.007635354995727539,
+        "matched_index_gap_fraction_width": 0.03582841832372234,
+        "nearest_centerline_gap_fraction_width": 0.008022709320152612,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006901541355024541,
+        "mouth_width": 0.017199126537889242,
+        "mouth_height": 0.008308351039886475,
+        "matched_index_gap_fraction_width": 0.040127278206952076,
+        "nearest_centerline_gap_fraction_width": 0.018341569417792015,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.5-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006658938791143191,
+        "mouth_width": 0.018521335441619158,
+        "mouth_height": 0.008698225021362305,
+        "matched_index_gap_fraction_width": 0.035952800553355015,
+        "nearest_centerline_gap_fraction_width": 0.008665186674315388,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007387135370360173,
+        "mouth_width": 0.018521335441619158,
+        "mouth_height": 0.008952677249908447,
+        "matched_index_gap_fraction_width": 0.03988446402066989,
+        "nearest_centerline_gap_fraction_width": 0.017294971674642896,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.5-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007293994454837736,
+        "mouth_width": 0.01984550803899765,
+        "mouth_height": 0.009882867336273193,
+        "matched_index_gap_fraction_width": 0.036753881233499215,
+        "nearest_centerline_gap_fraction_width": 0.009323316298442757,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000870150115628234,
+        "mouth_width": 0.01984550803899765,
+        "mouth_height": 0.010162174701690674,
+        "matched_index_gap_fraction_width": 0.043846200052844966,
+        "nearest_centerline_gap_fraction_width": 0.017209816111404062,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.75-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006420857556636412,
+        "mouth_width": 0.017533644568175077,
+        "mouth_height": 0.011316478252410889,
+        "matched_index_gap_fraction_width": 0.036620210542483364,
+        "nearest_centerline_gap_fraction_width": 0.009351958481864589,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007588463182823476,
+        "mouth_width": 0.017533644568175077,
+        "mouth_height": 0.011905908584594727,
+        "matched_index_gap_fraction_width": 0.043279440012130306,
+        "nearest_centerline_gap_fraction_width": 0.022290052959655478,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.75-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006778360692030409,
+        "mouth_width": 0.018855819012969732,
+        "mouth_height": 0.01173478364944458,
+        "matched_index_gap_fraction_width": 0.03594837586936956,
+        "nearest_centerline_gap_fraction_width": 0.009090273318507869,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008379956823464333,
+        "mouth_width": 0.018855819012969732,
+        "mouth_height": 0.012122511863708496,
+        "matched_index_gap_fraction_width": 0.04444228499276689,
+        "nearest_centerline_gap_fraction_width": 0.01964349456745558,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open0.75-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007317786377794605,
+        "mouth_width": 0.02017852943390608,
+        "mouth_height": 0.012936413288116455,
+        "matched_index_gap_fraction_width": 0.03626521150494988,
+        "nearest_centerline_gap_fraction_width": 0.009876844671989628,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009367269727142841,
+        "mouth_width": 0.02017852943390608,
+        "mouth_height": 0.013338625431060791,
+        "matched_index_gap_fraction_width": 0.04642196428547946,
+        "nearest_centerline_gap_fraction_width": 0.017128469346275356,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006764356385368414,
+        "mouth_width": 0.017868162598460913,
+        "mouth_height": 0.015038251876831055,
+        "matched_index_gap_fraction_width": 0.03785703397366144,
+        "nearest_centerline_gap_fraction_width": 0.012182900960492528,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008306169045213358,
+        "mouth_width": 0.017868162598460913,
+        "mouth_height": 0.015503525733947754,
+        "matched_index_gap_fraction_width": 0.046485859972691404,
+        "nearest_centerline_gap_fraction_width": 0.025754455485101465,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006967124653724716,
+        "mouth_width": 0.01919029885903001,
+        "mouth_height": 0.015058755874633789,
+        "matched_index_gap_fraction_width": 0.036305451545619524,
+        "nearest_centerline_gap_fraction_width": 0.011521539102380048,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009426128496904575,
+        "mouth_width": 0.01919029885903001,
+        "mouth_height": 0.015477418899536133,
+        "matched_index_gap_fraction_width": 0.04911923762182111,
+        "nearest_centerline_gap_fraction_width": 0.024683873775809023,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn-30_20-open1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0007391683270392159,
+        "mouth_width": 0.020511863753199577,
+        "mouth_height": 0.016033530235290527,
+        "matched_index_gap_fraction_width": 0.036036136741787565,
+        "nearest_centerline_gap_fraction_width": 0.010879700286914786,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.001004341533794437,
+        "mouth_width": 0.020511863753199577,
+        "mouth_height": 0.01655864715576172,
+        "matched_index_gap_fraction_width": 0.04896393354981081,
+        "nearest_centerline_gap_fraction_width": 0.020592974286097222,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.25-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005305047648275454,
+        "mouth_width": 0.016831109300255775,
+        "mouth_height": 0.005128145217895508,
+        "matched_index_gap_fraction_width": 0.03151929889846794,
+        "nearest_centerline_gap_fraction_width": 0.0065573677840134485,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000535914529214808,
+        "mouth_width": 0.016831109300255775,
+        "mouth_height": 0.00526738166809082,
+        "matched_index_gap_fraction_width": 0.03184071350583315,
+        "nearest_centerline_gap_fraction_width": 0.011250207830813673,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.25-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005930595088907072,
+        "mouth_width": 0.01814227271825075,
+        "mouth_height": 0.006558537483215332,
+        "matched_index_gap_fraction_width": 0.03268937239015824,
+        "nearest_centerline_gap_fraction_width": 0.006768416181812327,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000599917741960951,
+        "mouth_width": 0.01814227271825075,
+        "mouth_height": 0.006695449352264404,
+        "matched_index_gap_fraction_width": 0.03306739741363529,
+        "nearest_centerline_gap_fraction_width": 0.009557000803058194,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.25-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000670578469145019,
+        "mouth_width": 0.019454696215689182,
+        "mouth_height": 0.008111059665679932,
+        "matched_index_gap_fraction_width": 0.03446871961969948,
+        "nearest_centerline_gap_fraction_width": 0.00649431590642041,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006993098810015755,
+        "mouth_width": 0.019454696215689182,
+        "mouth_height": 0.008261382579803467,
+        "matched_index_gap_fraction_width": 0.03594555644809396,
+        "nearest_centerline_gap_fraction_width": 0.009530506979136242,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.5-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000540700968408933,
+        "mouth_width": 0.017161212861537933,
+        "mouth_height": 0.008291542530059814,
+        "matched_index_gap_fraction_width": 0.031507153531133175,
+        "nearest_centerline_gap_fraction_width": 0.007523986150858891,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006994401603064423,
+        "mouth_width": 0.017161212861537933,
+        "mouth_height": 0.008897900581359863,
+        "matched_index_gap_fraction_width": 0.040757035411759394,
+        "nearest_centerline_gap_fraction_width": 0.01838468898730751,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.5-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005900603495973557,
+        "mouth_width": 0.0184721895493567,
+        "mouth_height": 0.009576141834259033,
+        "matched_index_gap_fraction_width": 0.03194317316963136,
+        "nearest_centerline_gap_fraction_width": 0.008477638591137482,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007483639334062428,
+        "mouth_width": 0.0184721895493567,
+        "mouth_height": 0.009850025177001953,
+        "matched_index_gap_fraction_width": 0.040513006398437745,
+        "nearest_centerline_gap_fraction_width": 0.014092070061985283,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.5-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000658665862440209,
+        "mouth_width": 0.01978470291942358,
+        "mouth_height": 0.010911345481872559,
+        "matched_index_gap_fraction_width": 0.0332916731235608,
+        "nearest_centerline_gap_fraction_width": 0.009543668498111696,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000893994108999881,
+        "mouth_width": 0.01978470291942358,
+        "mouth_height": 0.011212050914764404,
+        "matched_index_gap_fraction_width": 0.04518612751684053,
+        "nearest_centerline_gap_fraction_width": 0.013877398545528613,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.75-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005649066862436228,
+        "mouth_width": 0.017491813749074936,
+        "mouth_height": 0.012156426906585693,
+        "matched_index_gap_fraction_width": 0.03229548944136786,
+        "nearest_centerline_gap_fraction_width": 0.010055945078900338,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000778162501069918,
+        "mouth_width": 0.017491813749074936,
+        "mouth_height": 0.01276850700378418,
+        "matched_index_gap_fraction_width": 0.04448723912985133,
+        "nearest_centerline_gap_fraction_width": 0.022825979437355617,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.75-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005961124021223921,
+        "mouth_width": 0.01880239648744464,
+        "mouth_height": 0.012788355350494385,
+        "matched_index_gap_fraction_width": 0.03170406509193911,
+        "nearest_centerline_gap_fraction_width": 0.009532335391690815,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008621434717052479,
+        "mouth_width": 0.01880239648744464,
+        "mouth_height": 0.013205766677856445,
+        "matched_index_gap_fraction_width": 0.04585285031516844,
+        "nearest_centerline_gap_fraction_width": 0.019335920358226184,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open0.75-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006526738037841709,
+        "mouth_width": 0.02011301415041089,
+        "mouth_height": 0.01421511173248291,
+        "matched_index_gap_fraction_width": 0.032450322905522216,
+        "nearest_centerline_gap_fraction_width": 0.009181068395992685,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009728814001598197,
+        "mouth_width": 0.02011301415041089,
+        "mouth_height": 0.014648020267486572,
+        "matched_index_gap_fraction_width": 0.04837074109749705,
+        "nearest_centerline_gap_fraction_width": 0.016105566170268266,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005996141622415672,
+        "mouth_width": 0.017822404392063618,
+        "mouth_height": 0.01613825559616089,
+        "matched_index_gap_fraction_width": 0.03364384227015843,
+        "nearest_centerline_gap_fraction_width": 0.013094506415662052,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008586003863884137,
+        "mouth_width": 0.017822404392063618,
+        "mouth_height": 0.016668081283569336,
+        "matched_index_gap_fraction_width": 0.04817533972973656,
+        "nearest_centerline_gap_fraction_width": 0.02667552369283308,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006113096155537429,
+        "mouth_width": 0.019132591784000397,
+        "mouth_height": 0.01623624563217163,
+        "matched_index_gap_fraction_width": 0.03195121823823941,
+        "nearest_centerline_gap_fraction_width": 0.012361236244886288,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009796265019058699,
+        "mouth_width": 0.019132591784000397,
+        "mouth_height": 0.016709506511688232,
+        "matched_index_gap_fraction_width": 0.05120197582039466,
+        "nearest_centerline_gap_fraction_width": 0.024859377760839754,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_-20-open1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006535352678860034,
+        "mouth_width": 0.020440482534468174,
+        "mouth_height": 0.017518997192382812,
+        "matched_index_gap_fraction_width": 0.03197259491227599,
+        "nearest_centerline_gap_fraction_width": 0.011664855893968566,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0010547834984199536,
+        "mouth_width": 0.020440482534468174,
+        "mouth_height": 0.018084168434143066,
+        "matched_index_gap_fraction_width": 0.05160267115227362,
+        "nearest_centerline_gap_fraction_width": 0.01988147483937867,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.25-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005404067611509625,
+        "mouth_width": 0.0173293799161911,
+        "mouth_height": 0.003992795944213867,
+        "matched_index_gap_fraction_width": 0.031184425741976624,
+        "nearest_centerline_gap_fraction_width": 0.005513499799113377,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0005605842080139437,
+        "mouth_width": 0.0173293799161911,
+        "mouth_height": 0.004163980484008789,
+        "matched_index_gap_fraction_width": 0.03234877478161705,
+        "nearest_centerline_gap_fraction_width": 0.011259089627189208,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.25-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005888182577506846,
+        "mouth_width": 0.01868303306400776,
+        "mouth_height": 0.005040287971496582,
+        "matched_index_gap_fraction_width": 0.031516202735037885,
+        "nearest_centerline_gap_fraction_width": 0.005779023994945612,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000590424453234144,
+        "mouth_width": 0.01868303306400776,
+        "mouth_height": 0.005167484283447266,
+        "matched_index_gap_fraction_width": 0.031602173544914236,
+        "nearest_centerline_gap_fraction_width": 0.010201709383949823,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.25-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006509515763098014,
+        "mouth_width": 0.020038019865751266,
+        "mouth_height": 0.00631946325302124,
+        "matched_index_gap_fraction_width": 0.03248582348310772,
+        "nearest_centerline_gap_fraction_width": 0.005775283853447305,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006538781754748664,
+        "mouth_width": 0.020038019865751266,
+        "mouth_height": 0.0064591169357299805,
+        "matched_index_gap_fraction_width": 0.03263187579689283,
+        "nearest_centerline_gap_fraction_width": 0.010108263786811325,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.5-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005606127264051163,
+        "mouth_width": 0.017670244444161654,
+        "mouth_height": 0.007526695728302002,
+        "matched_index_gap_fraction_width": 0.03172637074584137,
+        "nearest_centerline_gap_fraction_width": 0.006634226602096868,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006582114354962437,
+        "mouth_width": 0.017670244444161654,
+        "mouth_height": 0.008255839347839355,
+        "matched_index_gap_fraction_width": 0.03724970741498261,
+        "nearest_centerline_gap_fraction_width": 0.01785457647637264,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.5-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005967930067293122,
+        "mouth_width": 0.019023756496608257,
+        "mouth_height": 0.007990598678588867,
+        "matched_index_gap_fraction_width": 0.03137093385503091,
+        "nearest_centerline_gap_fraction_width": 0.0073146269064581415,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0006782373520411181,
+        "mouth_width": 0.019023756496608257,
+        "mouth_height": 0.008244931697845459,
+        "matched_index_gap_fraction_width": 0.035652125391851024,
+        "nearest_centerline_gap_fraction_width": 0.014923084841178717,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.5-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006492933749771376,
+        "mouth_width": 0.020378907211124897,
+        "mouth_height": 0.00912696123123169,
+        "matched_index_gap_fraction_width": 0.03186104967506239,
+        "nearest_centerline_gap_fraction_width": 0.008087956458489892,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008066378752253033,
+        "mouth_width": 0.020378907211124897,
+        "mouth_height": 0.009406208992004395,
+        "matched_index_gap_fraction_width": 0.0395819985276226,
+        "nearest_centerline_gap_fraction_width": 0.0146844601241983,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.75-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0005923237468201429,
+        "mouth_width": 0.01801162725314498,
+        "mouth_height": 0.011253833770751953,
+        "matched_index_gap_fraction_width": 0.032885632069513226,
+        "nearest_centerline_gap_fraction_width": 0.009071011926132437,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007209269157760908,
+        "mouth_width": 0.01801162725314498,
+        "mouth_height": 0.011850893497467041,
+        "matched_index_gap_fraction_width": 0.04002564041792565,
+        "nearest_centerline_gap_fraction_width": 0.021665089094164938,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.75-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006125886258673198,
+        "mouth_width": 0.019364804960787296,
+        "mouth_height": 0.011254727840423584,
+        "matched_index_gap_fraction_width": 0.03163412319968,
+        "nearest_centerline_gap_fraction_width": 0.008596224545312833,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.000777646134741444,
+        "mouth_width": 0.019364804960787296,
+        "mouth_height": 0.011780917644500732,
+        "matched_index_gap_fraction_width": 0.04015770550316082,
+        "nearest_centerline_gap_fraction_width": 0.019144782604322605,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open0.75-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000653401636214443,
+        "mouth_width": 0.02071831375360489,
+        "mouth_height": 0.012165725231170654,
+        "matched_index_gap_fraction_width": 0.03153739459615791,
+        "nearest_centerline_gap_fraction_width": 0.00817431671186548,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008679017043237046,
+        "mouth_width": 0.02071831375360489,
+        "mouth_height": 0.012567877769470215,
+        "matched_index_gap_fraction_width": 0.04189055705234186,
+        "nearest_centerline_gap_fraction_width": 0.016485671432856536,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open1-form-1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.000632417944168299,
+        "mouth_width": 0.018353009596467018,
+        "mouth_height": 0.014980912208557129,
+        "matched_index_gap_fraction_width": 0.034458541572933106,
+        "nearest_centerline_gap_fraction_width": 0.011810814847479773,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0007891517496841263,
+        "mouth_width": 0.018353009596467018,
+        "mouth_height": 0.015482008457183838,
+        "matched_index_gap_fraction_width": 0.04299849272873694,
+        "nearest_centerline_gap_fraction_width": 0.02486819535182073,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open1-form0",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006360080806189799,
+        "mouth_width": 0.019705857150256634,
+        "mouth_height": 0.015005946159362793,
+        "matched_index_gap_fraction_width": 0.03227507820489285,
+        "nearest_centerline_gap_fraction_width": 0.011148804443745624,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0008821234979371635,
+        "mouth_width": 0.019705857150256634,
+        "mouth_height": 0.015462100505828857,
+        "matched_index_gap_fraction_width": 0.04476453326597241,
+        "nearest_centerline_gap_fraction_width": 0.024139092819909908,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    },
+    {
+      "pose": "turn30_20-open1-form1",
+      "baseline": {
+        "max_matched_index_centerline_gap": 0.0006635310708462505,
+        "mouth_width": 0.021057394333183765,
+        "mouth_height": 0.015302479267120361,
+        "matched_index_gap_fraction_width": 0.03151059719675811,
+        "nearest_centerline_gap_fraction_width": 0.010530362429640781,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      },
+      "arc-trial": {
+        "max_matched_index_centerline_gap": 0.0009311916865750769,
+        "mouth_width": 0.021057394333183765,
+        "mouth_height": 0.015827417373657227,
+        "matched_index_gap_fraction_width": 0.044221600823024794,
+        "nearest_centerline_gap_fraction_width": 0.019991983824511,
+        "interior_border_samples_inside_lip_triangles": 194,
+        "interior_border_samples_checked": 194
+      }
+    }
+  ],
+  "failures": [],
+  "maximum_nearest_lip_gap_fraction_width": 0.02667552369283308,
+  "baseline_maximum_nearest_lip_gap_fraction_width": 0.013094506415662052,
+  "candidate_lip_border_coverage": 19982,
+  "baseline_lip_border_coverage": 19982,
+  "checked_lip_border_samples": 19982
+}
