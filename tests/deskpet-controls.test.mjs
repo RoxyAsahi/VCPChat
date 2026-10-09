@@ -367,13 +367,31 @@ test('words typed in the settings preview wait until the pet page is ready, then
     const env = await loadHandlers();
     const talk = env.fake.handlers.get('deskpet-settings:talk');
     assert.equal((await talk(fromMain(env), 'Nova', '   ')).success, false);
-    const result = await talk(fromMain(env), 'Nova', '你好');
-    assert.equal(result.success, true);
+    const pending = talk(fromMain(env), 'Nova', '你好');
+    await sleep(30);
     const pet = env.petWindows()[0];
     pet.emit('ready-to-show');
     assert.equal(pet.sent.some((m) => m.channel === 'deskpet:open-input'), false, '页面还没好，先不发');
     env.fake.listeners.get('deskpet:page-ready')({ sender: pet.webContents });
+    assert.equal((await pending).success, true, '交到页面手里才算发出');
     assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').at(-1)?.payload, { submit: '你好' });
+    // 第二句直接交给已经准备好的页面，不会顶掉第一句
+    assert.equal((await talk(fromMain(env), 'Nova', '还在吗')).success, true);
+    assert.deepEqual(pet.sent.filter((m) => m.channel === 'deskpet:open-input').map((m) => m.payload.submit), ['你好', '还在吗']);
+    env.handlers.closeAll();
+});
+
+test('words for a pet whose page fails to start come back as not sent', async () => {
+    const env = await loadHandlers();
+    const talk = env.fake.handlers.get('deskpet-settings:talk');
+    const pending = talk(fromMain(env), 'Coco', '你好');
+    await sleep(30);
+    const pet = env.petWindows()[0];
+    env.fake.listeners.get('deskpet:page-failed')({ sender: pet.webContents }, '模型载不进来');
+    const result = await pending;
+    assert.equal(result.success, false);
+    assert.match(result.error, /模型载不进来/);
+    assert.equal(pet.sent.some((m) => m.channel === 'deskpet:open-input'), false);
     env.handlers.closeAll();
 });
 

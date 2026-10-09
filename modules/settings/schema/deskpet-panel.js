@@ -339,13 +339,14 @@ export function buildDeskPetPanel(doc) {
 
     async function startVoice() {
         const dictation = await voice().catch(() => null);
-        if (!dictation || dictation.active || dockParts.stop.classList.contains('is-busy')) return;
+        if (!dictation || dictation.active || dictation.starting || dockParts.stop.classList.contains('is-busy')) return;
         const from = dockParts.dock.dataset.mode;
         setDock('rec');
         try {
             await dictation.start();
             dictation.onLimit(() => finishVoice());
         } catch (error) {
+            if (error.code === 'cancelled') return; // 打开麦克风前就被收起：界面已经是别的状态了
             note(error.message, { error: true, ms: 6000 });
             setDock(from === 'bar' ? 'bar' : 'pill');
         }
@@ -353,6 +354,12 @@ export function buildDeskPetPanel(doc) {
 
     async function finishVoice() {
         const dictation = state.voice;
+        // 麦克风还没打开就点了停：当作取消
+        if (dictation?.starting) {
+            dictation.cancel();
+            setDock(dockParts.input.value.trim() ? 'bar' : 'pill');
+            return;
+        }
         if (!dictation?.active || dockParts.stop.classList.contains('is-busy')) return;
         dockParts.stop.classList.add('is-busy');
         let text = '';

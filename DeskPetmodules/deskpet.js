@@ -280,8 +280,9 @@ function setDock(mode) {
     composer.open = mode === 'bar';
     // 打字、录音的时候别打瞌睡
     life?.hold('composer', mode === 'bar' || mode === 'rec');
-    // 输入条要打字：整窗可点、可聚焦；其余时候回到按像素穿透
-    if ((mode === 'bar') !== (previous === 'bar')) api.setInteractive(mode === 'bar');
+    // 输入条要打字、录音时要能按 Esc 取消：整窗可点、可聚焦；其余时候回到按像素穿透
+    const focused = (m) => m === 'bar' || m === 'rec';
+    if (focused(mode) !== focused(previous)) api.setInteractive(focused(mode));
     if (mode === 'bar') {
         fitComposerInput();
         setTimeout(() => $('composerInput').focus(), 60);
@@ -330,13 +331,14 @@ function fitComposerInput() {
 
 async function startVoice() {
     const voice = dock.voice;
-    if (!voice || voice.active || $('recStop').classList.contains('is-busy')) return;
+    if (!voice || voice.active || voice.starting || $('recStop').classList.contains('is-busy')) return;
     const from = dock.mode;
     setDock('rec');
     try {
         await voice.start();
         voice.onLimit(() => finishVoice());
     } catch (error) {
+        if (error.code === 'cancelled') return; // 打开麦克风前就被收起：界面已经是别的状态了
         notice(error.message, { error: true, ms: error.code === 'no-model' ? 8000 : 5000 });
         setDock(from === 'bar' ? 'bar' : restingDock());
     }
@@ -345,6 +347,12 @@ async function startVoice() {
 async function finishVoice() {
     const voice = dock.voice;
     const stop = $('recStop');
+    // 麦克风还没打开就点了停：当作取消
+    if (voice?.starting) {
+        voice.cancel();
+        setDock($('composerInput').value.trim() ? 'bar' : restingDock());
+        return;
+    }
     if (!voice?.active || stop.classList.contains('is-busy')) return;
     stop.classList.add('is-busy');
     let text = '';
@@ -476,9 +484,12 @@ function bindComposer() {
     // 快捷键再按一次是收起（输入框里还有字时不收，免得误按丢了）；设置页预览里打的字直接发出去
     api.onOpenInput(({ toggle, submit } = {}) => {
         if (submit) {
-            // 不展开输入条、不抢焦点（人还在主窗口的设置页里），直接发
-            input.value = submit;
-            submitComposer();
+            // 不展开输入条、不抢焦点（人还在主窗口的设置页里），也不动桌宠输入条里已经打的字；
+            // TA 正在回或上一句还在发：排到这条说完再发，连着来的几句不会互相顶掉
+            if (composer.sending || bubble.replyId) {
+                composer.queued = composer.queued ? `${composer.queued}\n${submit}` : submit;
+                renderBubble();
+            } else sendText(submit);
         } else if (toggle && composer.open && !input.value.trim()) closeComposer();
         else openComposer();
     });
@@ -1897,5 +1908,7 @@ async function renderPreview(assets) {
 
 start().catch((error) => {
     console.error('[DeskPet] 启动失败', error);
+    // 告诉主进程别再等这个页面了：等着交给桌宠的话按失败退回去
+    api.pageFailed?.(String(error?.message || error));
     notice(`桌宠启动失败：${error.message}`, { error: true, ms: 60000 });
 });

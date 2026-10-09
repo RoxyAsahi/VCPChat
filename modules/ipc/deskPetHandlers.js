@@ -433,7 +433,7 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
-    const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingInput: null };
+    const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingToggle: null, readyWaiters: [] };
     pets.set(agentId, pet);
     rememberOpen(agentId, true);
 
@@ -468,6 +468,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         voice.release(pet);
         clearInterval(pet.hitPoll);
         stopDrag(pet);
+        settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
         if (lastTouched === agentId) lastTouched = null;
         // 用户关掉的下次不再恢复；退出时一起关掉的照旧恢复
@@ -786,7 +787,26 @@ async function talkToPet() {
 function openInput(pet, options) {
     if (pet.win.isDestroyed()) return;
     if (pet.ready) pet.win.webContents.send('deskpet:open-input', options);
-    else pet.pendingInput = options;
+    else pet.pendingToggle = options;
+}
+
+// 等桌宠页面准备好：页面报 ready 就交出去；页面启动失败、窗口关了或等太久都按失败算
+const PAGE_READY_TIMEOUT_MS = 20000;
+function whenPageReady(pet) {
+    if (pet.ready) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject, timer: setTimeout(() => settleReady(pet, new Error('桌宠还没准备好')), PAGE_READY_TIMEOUT_MS) };
+        pet.readyWaiters.push(waiter);
+    });
+}
+
+function settleReady(pet, error = null) {
+    const waiters = pet.readyWaiters.splice(0);
+    for (const waiter of waiters) {
+        clearTimeout(waiter.timer);
+        if (error) waiter.reject(error);
+        else waiter.resolve();
+    }
 }
 
 /** 设置页预览里输入的话：叫出这个助手的桌宠（没开就打开），由桌宠发出去，回复显示在桌宠头上。 */
@@ -799,8 +819,15 @@ async function talkFromSettings(agentId, text) {
     if (!pet || pet.win.isDestroyed()) return { success: false, error: '桌宠打不开' };
     if (!pet.win.isVisible()) showPet(pet);
     lastTouched = agentId;
-    openInput(pet, { submit: text });
     notifyMain(agentId);
+    // 交到桌宠页面手里才算发出：页面没起来（启动失败、被关）就照实告诉设置页
+    try {
+        await whenPageReady(pet);
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+    if (pet.win.isDestroyed()) return { success: false, error: '桌宠已经关了' };
+    pet.win.webContents.send('deskpet:open-input', { submit: text });
     return { success: true };
 }
 
@@ -1064,9 +1091,16 @@ function registerIpc() {
         const pet = petFromEvent(event);
         if (!pet) return;
         pet.ready = true;
-        const pending = pet.pendingInput;
-        pet.pendingInput = null;
+        const pending = pet.pendingToggle;
+        pet.pendingToggle = null;
         if (pending) openInput(pet, pending);
+        settleReady(pet);
+    });
+    // 页面启动失败：等着交给它的话不再等
+    ipcMain.on('deskpet:page-failed', (event, message) => {
+        const pet = petFromEvent(event);
+        if (!pet) return;
+        settleReady(pet, new Error(`桌宠启动失败：${typeof message === 'string' && message ? message : '未知原因'}`));
     });
     // 页面量出了形象的长宽比：按它改窗口（全身像高、Q 版矮），记下来下次直接用
     ipcMain.on('deskpet:figure', (event, report) => {
@@ -1246,7 +1280,6 @@ function initialize(options) {
             talk: () => talkToPet().catch((error) => console.warn('[DeskPet] talk failed:', error.message)),
             listPets: listPetsForSettings,
             setScale: (agentId, scale) => setPetScale(agentId, scale),
-            setOutfit: (agentId, outfitId) => setPetOutfit(agentId, outfitId),
             sendToSettings: settingsPush.changed,
             openSettingsPage,
             isSettingsSender: (sender) => Boolean(sender && mainWindow && !mainWindow.isDestroyed() && sender === mainWindow.webContents),

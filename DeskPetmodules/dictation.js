@@ -42,6 +42,8 @@ function dictationError(code, message) {
 
 export function createDictation({ status, transcribe, onLevel = () => {}, language = () => 'auto' }) {
     let session = null;
+    // 正在等模型状态、等麦克风授权的那一次：取消时清掉，start 每次 await 回来都对一下
+    let starting = null;
 
     function cleanup(s) {
         cancelAnimationFrame(s.raf);
@@ -52,14 +54,32 @@ export function createDictation({ status, transcribe, onLevel = () => {}, langua
     }
 
     async function start() {
-        if (session) return;
+        if (session || starting) return;
+        const token = {};
+        starting = token;
+        try {
+            await open(token);
+        } finally {
+            if (starting === token) starting = null;
+        }
+    }
+
+    async function open(token) {
+        const cancelled = () => dictationError('cancelled', '已取消');
         const state = await status().catch(() => null);
+        if (starting !== token) throw cancelled();
         if (state?.phase !== 'ready') throw dictationError('no-model', '本地语音包还没装：全局设置 → 语音设置 → 本地语音资源包');
         let stream;
         try {
             stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
         } catch (error) {
+            if (starting !== token) throw cancelled();
             throw dictationError('no-mic', `用不了麦克风：${error.message}`);
+        }
+        // 等授权的时候被取消了：麦克风刚打开就关掉，不留一个没人管的录音
+        if (starting !== token) {
+            for (const track of stream.getTracks()) track.stop();
+            throw cancelled();
         }
         const context = new AudioContext();
         const analyser = context.createAnalyser();
@@ -115,6 +135,7 @@ export function createDictation({ status, transcribe, onLevel = () => {}, langua
     }
 
     function cancel() {
+        starting = null;
         const s = session;
         if (!s) return;
         session = null;
@@ -127,6 +148,7 @@ export function createDictation({ status, transcribe, onLevel = () => {}, langua
         stop,
         cancel,
         get active() { return Boolean(session); },
+        get starting() { return Boolean(starting); },
         onLimit(fn) { if (session) session.onLimit = fn; },
     };
 }

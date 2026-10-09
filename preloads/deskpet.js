@@ -110,6 +110,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),
+    pageFailed: message => ipcRenderer.send('deskpet:page-failed', String(message || '').slice(0, 300)),
     // 设置页快照：离屏预览画好了，报上角色的包围盒
     previewReady: report => ipcRenderer.send('deskpet:preview-ready', {
         bounds: report?.bounds ? { x: Number(report.bounds.x), y: Number(report.bounds.y), width: Number(report.bounds.width), height: Number(report.bounds.height) } : null,
