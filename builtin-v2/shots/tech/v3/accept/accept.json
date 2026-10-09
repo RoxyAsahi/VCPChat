@@ -1,0 +1,37 @@
+{
+ "info": {
+  "url": "vcp-deskpet://pet/builtin/nova/tech/NovaTech.model3.json",
+  "exps": [
+   "Neutral",
+   "Happy",
+   "Shy",
+   "Sad",
+   "Angry",
+   "Surprised",
+   "Tired",
+   "Excited",
+   "Concerned"
+  ],
+  "groups": [
+   "Idle",
+   "Blink",
+   "Nod",
+   "Shake"
+  ],
+  "w": 280,
+  "h": 461,
+  "b": {
+   "x": 77.73700545141955,
+   "y": 157.487812436933,
+   "width": 125.5405001186744,
+   "height": 303.862939014709
+  },
+  "fig": {
+   "outfit": "builtin:nova-tech",
+   "aspect": 2.4046242774566475
+  }
+ },
+ "shots": 68,
+ "logs": [],
+ "bounds": "{\"x\":77.73700545141955,\"y\":157.487812436933,\"width\":125.5405001186744,\"height\":303.862939014709}"
+}

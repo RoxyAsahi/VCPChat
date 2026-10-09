@@ -1,0 +1,37 @@
+{
+ "info": {
+  "url": "vcp-deskpet://pet/builtin/nova/maid/NovaMaid.model3.json",
+  "exps": [
+   "Neutral",
+   "Happy",
+   "Shy",
+   "Sad",
+   "Angry",
+   "Surprised",
+   "Tired",
+   "Excited",
+   "Concerned"
+  ],
+  "groups": [
+   "Idle",
+   "Blink",
+   "Nod",
+   "Shake"
+  ],
+  "w": 282,
+  "h": 444,
+  "b": {
+   "x": 70.110438137632,
+   "y": 156.0610544140635,
+   "width": 139.73066119371583,
+   "height": 287.69420946289034
+  },
+  "fig": {
+   "outfit": "builtin:nova-maid",
+   "aspect": 2.068627450980392
+  }
+ },
+ "shots": 68,
+ "logs": [],
+ "bounds": "{\"x\":70.110438137632,\"y\":156.0610544140635,\"width\":139.73066119371583,\"height\":287.69420946289034}"
+}
