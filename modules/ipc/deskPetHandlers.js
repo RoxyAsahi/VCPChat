@@ -11,7 +11,7 @@
 //   AppData/Agents/<id>/portrait.<ext>           默认立绘；再没有就用头像
 
 const electron = require('electron');
-const { BrowserWindow, ipcMain, protocol, net, screen, Menu } = electron;
+const { BrowserWindow, ipcMain, protocol, net, screen, Menu, dialog, shell } = electron;
 const path = require('path');
 const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
@@ -20,6 +20,8 @@ const voice = require('./deskPetVoice');
 const petPrefs = require('../deskpet/petPrefs');
 const outfitStore = require('../deskpet/outfits');
 const { createPetControls } = require('../deskpet/petControls');
+const { createPetPreviews } = require('../deskpet/petPreviews');
+const { createSettingsPage } = require('../deskpet/settingsPage');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -50,7 +52,8 @@ let initialized = false;
 const pets = new Map(); // agentId -> { win, scale, outfit, aspect, ignoringMouse, interactive, hitPoll, drag, lastShape }
 const pendingSends = new Map(); // requestId -> resolve
 let emotionPrompt = null; // modules/emotion/emotionPrompt.js（ESM，初始化时异步载入）
-let controls = null; // modules/deskpet/petControls.js：全局设置、快捷键、设置窗口
+let controls = null; // modules/deskpet/petControls.js：全局设置、快捷键、设置页的开关和快捷键部分
+let previews = null; // modules/deskpet/petPreviews.js：设置页卡片用的形象快照（离屏渲染）
 let shuttingDown = false; // 退出时关窗口不算用户关掉，下次启动还要恢复
 let lastTouched = null; // 最近一次被点、被叫出来的桌宠，「和桌宠说话」快捷键找它
 let refreshTray = () => {};
@@ -322,6 +325,23 @@ function notifyMain(agentId) {
         const openAgents = visibleAgents();
         mainWindow.webContents.send('deskpet:state-changed', { agentId, open: openAgents.includes(agentId), openAgents });
     }
+    controls?.refreshSettings();
+}
+
+// 设置页（主窗口全局设置 → 桌宠）收到的推送
+function mainContents() {
+    return mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed?.() ? mainWindow.webContents : null;
+}
+
+const settingsPush = {
+    changed: (snapshot) => mainContents()?.send('deskpet-settings:changed', snapshot),
+    preview: (payload) => mainContents()?.send('deskpet-settings:preview', payload),
+};
+
+/** 托盘、右键菜单的「桌宠设置…」：把主窗口叫到前面，打开全局设置的桌宠分区。 */
+function openSettingsPage() {
+    openMainWindow();
+    mainContents()?.send('deskpet-settings:open');
 }
 
 function showPet(pet) {
@@ -413,7 +433,7 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
-    const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0 };
+    const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingToggle: null, readyWaiters: [] };
     pets.set(agentId, pet);
     rememberOpen(agentId, true);
 
@@ -426,6 +446,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     });
     // 第一次载入时状态本来就是初始值；之后的重载（崩溃恢复、刷新）要把主进程这边也清零。
     win.webContents.on('did-start-loading', () => {
+        pet.ready = false;
         resetInputState(pet);
         voice.release(pet);
     });
@@ -447,6 +468,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         voice.release(pet);
         clearInterval(pet.hitPoll);
         stopDrag(pet);
+        settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
         if (lastTouched === agentId) lastTouched = null;
         // 用户关掉的下次不再恢复；退出时一起关掉的照旧恢复
@@ -653,7 +675,7 @@ async function onFigureMeasured(pet, report) {
     if (pet.drag || pet.win.isDestroyed() || report.outfit !== pet.outfit) return;
     if (pet.aspect !== null && petPrefs.sameAspect(aspect, pet.aspect)) return;
     applyAspect(pet, aspect);
-    controls?.refreshSettingsWindow();
+    controls?.refreshSettings();
 }
 
 /** 换装：记住这次的选择，按这套的比例改窗口（脚底不动），再重新载入页面换上新形象。 */
@@ -671,13 +693,19 @@ async function setPetOutfit(agentId, outfitId) {
     // 没量过的形象先按默认比例开，页面量完会再报上来
     applyAspect(pet, savedAspect(saved, outfitId));
     pet.win.webContents.reload();
-    controls?.refreshSettingsWindow();
+    controls?.refreshSettings();
     return true;
 }
 
 /** 改一个桌宠的大小：脚底不动，放不下就缩到当前屏放得下。 */
 function setPetScale(agentId, scale) {
     const pet = pets.get(agentId);
+    if (!pet && isAgentId(agentId)) {
+        // 没开着的桌宠（设置页里调的）：记下来，下次按它开
+        const next = petPrefs.clampScale(scale);
+        savePetState(agentId, { scale: next }).then(() => controls?.refreshSettings());
+        return next;
+    }
     if (!pet || pet.win.isDestroyed() || pet.drag) return null;
     const bounds = pet.win.getBounds();
     const area = workAreaAt(bounds);
@@ -691,7 +719,7 @@ function setPetScale(agentId, scale) {
     resetShape(pet);
     sendPrefs(pet);
     savePetState(agentId, { x: target.x, y: target.y, scale: next });
-    controls?.refreshSettingsWindow();
+    controls?.refreshSettings();
     return next;
 }
 
@@ -752,10 +780,71 @@ async function talkToPet() {
         notifyMain(pet.agentId);
     }
     lastTouched = pet.agentId;
-    const send = () => !pet.win.isDestroyed() && pet.win.webContents.send('deskpet:open-input', { toggle: true });
-    // 刚打开的桌宠页面还没载完，等它准备好再弹输入框
-    if (pet.win.webContents.isLoading?.()) pet.win.webContents.once('did-finish-load', () => setTimeout(send, 300));
-    else send();
+    openInput(pet, { toggle: true });
+}
+
+// 刚打开的桌宠页面还没准备好（形象还在载入）时先记着，页面报 ready 以后再弹输入框
+function openInput(pet, options) {
+    if (pet.win.isDestroyed()) return;
+    if (pet.ready) pet.win.webContents.send('deskpet:open-input', options);
+    else pet.pendingToggle = options;
+}
+
+// 等桌宠页面准备好：页面报 ready 就交出去；页面启动失败、窗口关了或等太久都按失败算
+const PAGE_READY_TIMEOUT_MS = 20000;
+function whenPageReady(pet) {
+    if (pet.ready) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject, timer: setTimeout(() => settleReady(pet, new Error('桌宠还没准备好')), PAGE_READY_TIMEOUT_MS) };
+        pet.readyWaiters.push(waiter);
+    });
+}
+
+function settleReady(pet, error = null) {
+    const waiters = pet.readyWaiters.splice(0);
+    for (const waiter of waiters) {
+        clearTimeout(waiter.timer);
+        if (error) waiter.reject(error);
+        else waiter.resolve();
+    }
+}
+
+/** 设置页预览里输入的话：叫出这个助手的桌宠（没开就打开），由桌宠发出去，回复显示在桌宠头上。 */
+async function talkFromSettings(agentId, text) {
+    if (!pets.has(agentId)) {
+        const opened = await openPet(agentId);
+        if (!opened?.success) return { success: false, error: '桌宠打不开' };
+    }
+    const pet = pets.get(agentId);
+    if (!pet || pet.win.isDestroyed()) return { success: false, error: '桌宠打不开' };
+    if (!pet.win.isVisible()) showPet(pet);
+    lastTouched = agentId;
+    notifyMain(agentId);
+    // 交到桌宠页面手里才算发出：页面没起来（启动失败、被关）就照实告诉设置页
+    try {
+        await whenPageReady(pet);
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+    if (pet.win.isDestroyed()) return { success: false, error: '桌宠已经关了' };
+    pet.win.webContents.send('deskpet:open-input', { submit: text });
+    return { success: true };
+}
+
+/** 设置页的「显示 / 隐藏桌宠」。显示时一个都没开就打开设置页里正在看的那个助手。 */
+async function setPetsVisible(visible, agentId) {
+    const live = [...pets.values()].filter((pet) => !pet.win.isDestroyed());
+    if (!visible) {
+        for (const pet of live) if (pet.win.isVisible()) pet.win.hide();
+    } else if (live.length) {
+        for (const pet of live) showPet(pet);
+    } else if (agentId && isAgentId(agentId)) {
+        await openPet(agentId);
+    } else {
+        await toggleAllPets();
+    }
+    for (const pet of live) notifyMain(pet.agentId);
+    refreshTray();
 }
 
 function listPetsForSettings() {
@@ -813,7 +902,7 @@ function trayMenuItems() {
             { label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
             { label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
-            { label: '桌宠设置…', click: () => controls.openSettingsWindow() },
+            { label: '桌宠设置…', click: () => controls.openSettings() },
         ],
     }];
 }
@@ -982,13 +1071,36 @@ function registerIpc() {
 
     ipcMain.handle('deskpet:get-assets', async (event) => {
         const pet = petFromEvent(event);
-        if (!pet) return null;
+        if (!pet) {
+            // 设置页卡片的快照：离屏窗口按指定的那套形象画一次
+            const job = previews?.jobFor(event.sender);
+            return job ? { ...(await resolveAssets(job.agentId, job.outfitId)), preview: true } : null;
+        }
         const assets = await resolveAssets(pet.agentId, pet.outfit);
         pet.name = assets.name;
         pet.outfits = assets.outfits;
         // 记着的那套已经删了：换成实际显示的这套
         pet.outfit = assets.outfit?.id || null;
         return assets;
+    });
+    ipcMain.on('deskpet:preview-ready', (event, report) => {
+        previews?.ready(event.sender, report && typeof report === 'object' ? report : null);
+    });
+    // 页面准备好了（形象载完、输入框能用了）：补上等着的输入框
+    ipcMain.on('deskpet:page-ready', (event) => {
+        const pet = petFromEvent(event);
+        if (!pet) return;
+        pet.ready = true;
+        const pending = pet.pendingToggle;
+        pet.pendingToggle = null;
+        if (pending) openInput(pet, pending);
+        settleReady(pet);
+    });
+    // 页面启动失败：等着交给它的话不再等
+    ipcMain.on('deskpet:page-failed', (event, message) => {
+        const pet = petFromEvent(event);
+        if (!pet) return;
+        settleReady(pet, new Error(`桌宠启动失败：${typeof message === 'string' && message ? message : '未知原因'}`));
     });
     // 页面量出了形象的长宽比：按它改窗口（全身像高、Q 版矮），记下来下次直接用
     ipcMain.on('deskpet:figure', (event, report) => {
@@ -1110,7 +1222,7 @@ function registerIpc() {
         Menu.buildFromTemplate([
             { label: moodMenuLabel(mood), enabled: false },
             { type: 'separator' },
-            { label: '和 TA 说话', click: () => !pet.win.isDestroyed() && pet.win.webContents.send('deskpet:open-input') },
+            { label: '和 TA 说话', click: () => openInput(pet, {}) },
             {
                 label: '切换助手',
                 enabled: agents.length > 1,
@@ -1132,7 +1244,7 @@ function registerIpc() {
                 checked: controls?.get().doNotDisturb === true,
                 click: (item) => setDoNotDisturb(item.checked),
             },
-            { label: '桌宠设置…', click: () => controls?.openSettingsWindow() },
+            { label: '桌宠设置…', click: () => controls?.openSettings() },
             { type: 'separator' },
             {
                 label: '隐藏桌宠',
@@ -1163,17 +1275,50 @@ function initialize(options) {
     controls = createPetControls({
         electron,
         appDataRoot: paths.appDataRoot,
-        projectRoot: paths.projectRoot,
-        settingsUrl: `${SCHEME}://pet/app/settings.html`,
         actions: {
             toggleAll: () => toggleAllPets().catch((error) => console.warn('[DeskPet] toggle failed:', error.message)),
             talk: () => talkToPet().catch((error) => console.warn('[DeskPet] talk failed:', error.message)),
             listPets: listPetsForSettings,
             setScale: (agentId, scale) => setPetScale(agentId, scale),
-            setOutfit: (agentId, outfitId) => setPetOutfit(agentId, outfitId),
+            sendToSettings: settingsPush.changed,
+            openSettingsPage,
+            isSettingsSender: (sender) => Boolean(sender && mainWindow && !mainWindow.isDestroyed() && sender === mainWindow.webContents),
         },
     });
     controls.registerIpc();
+    previews = createPetPreviews({
+        BrowserWindow,
+        cacheRoot: path.join(paths.appDataRoot, 'deskpet', 'previews'),
+        preload: path.join(paths.projectRoot, 'preloads', 'deskpet.js'),
+        pageUrl: (agentId) => `${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}&preview=1`,
+        windowSize: (aspect) => petPrefs.windowSizeForScale(1, aspect),
+    });
+    createSettingsPage({
+        electron,
+        paths,
+        controls,
+        previews,
+        pets: {
+            listAgents,
+            listOutfits: listAgentOutfits,
+            readState: async (agentId) => (await readPetState())[agentId] || null,
+            saveState: savePetState,
+            isAgentId,
+            info: (agentId) => listPetsForSettings().find((p) => p.agentId === agentId) || null,
+            openAgents: visibleAgents,
+            lastTouched: () => lastTouched,
+            openPet,
+            closePet: (agentId) => { closePet(agentId); refreshTray(); },
+            showPet: (agentId) => { const pet = pets.get(agentId); if (pet && !pet.win.isDestroyed()) { showPet(pet); notifyMain(agentId); } },
+            setOutfit: setPetOutfit,
+            setVisible: setPetsVisible,
+            talk: talkFromSettings,
+            mainWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+            sendPreview: settingsPush.preview,
+        },
+    }).registerIpc();
+    // 主窗口刷新时设置页没了：录快捷键录到一半暂停的全局快捷键要恢复
+    mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     controls.onChange((_settings, changed) => {
         if (changed.includes('doNotDisturb')) broadcastPrefs();
         if (changed.some((key) => key === 'doNotDisturb' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
@@ -1201,6 +1346,7 @@ function closeAll() {
     shuttingDown = true;
     for (const agentId of [...pets.keys()]) closePet(agentId);
     controls?.dispose();
+    previews?.dispose();
     for (const { timer } of alarms.values()) clearTimeout(timer);
     alarms.clear();
 }

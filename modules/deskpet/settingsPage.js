@@ -1,0 +1,242 @@
+// modules/deskpet/settingsPage.js
+// 主窗口「全局设置 → 桌宠」分区的主进程部分：列出某个助手的几套形象（带快照）、选一套就让桌宠换上、
+// 「无」就收起这个助手的桌宠、显示/隐藏、导入形象、打开形象文件夹、在预览里直接跟 TA 说话。
+// 全局开关和快捷键仍在 petControls.js；窗口本身仍归 deskPetHandlers.js，这里通过 pets 回调去动。
+//
+// 只认主窗口发来的请求（controls.fromSettings）。
+
+'use strict';
+
+const path = require('path');
+const fs = require('fs-extra');
+const { pathToFileURL } = require('url');
+const outfitStore = require('./outfits');
+const petPrefs = require('./petPrefs');
+
+const KIND_LABEL = { live2d: 'Live2D', puppet: '网格立绘', portrait: '立绘' };
+const IMPORT_MAX_FILES = 400;
+const IMPORT_MAX_BYTES = 300 * 1024 * 1024;
+const IMAGE_FILTER = outfitStore.IMAGE_EXTENSIONS;
+
+/** 导入：选中的文件决定拷什么。模型文件拷它所在的文件夹；图片拷这几张图。 */
+function planImport(files) {
+    const model = files.find((file) => /\.(model3|puppet)\.json$/i.test(file));
+    if (model) return { kind: 'folder', source: path.dirname(model), name: path.basename(path.dirname(model)) };
+    const images = files.filter((file) => IMAGE_FILTER.includes(path.extname(file).slice(1).toLowerCase()));
+    if (!images.length) return null;
+    return { kind: 'images', files: images, name: path.basename(images[0], path.extname(images[0])) };
+}
+
+async function folderSize(dir, limit) {
+    let files = 0;
+    let bytes = 0;
+    const walk = async (current, depth) => {
+        if (depth > 6 || files > limit.files || bytes > limit.bytes) return;
+        for (const entry of await fs.readdir(current, { withFileTypes: true })) {
+            const full = path.join(current, entry.name);
+            if (entry.isDirectory()) await walk(full, depth + 1);
+            else if (entry.isFile()) {
+                files += 1;
+                bytes += (await fs.stat(full)).size;
+            }
+            if (files > limit.files || bytes > limit.bytes) return;
+        }
+    };
+    await walk(dir, 0);
+    return { files, bytes };
+}
+
+/** 文件夹名：去掉路径里不能用的字符，重名时加 -2、-3。 */
+async function freeFolderName(base, wanted) {
+    const clean = String(wanted || '形象').replace(/[\\/:*?"<>|.]+/g, ' ').trim().slice(0, 40) || '形象';
+    let name = clean;
+    for (let i = 2; await fs.pathExists(path.join(base, name)); i += 1) name = `${clean}-${i}`;
+    return name;
+}
+
+function createSettingsPage({ electron, paths, controls, previews, pets }) {
+    const { ipcMain, dialog, shell } = electron;
+    const agentRoot = (agentId) => path.join(paths.agentDir, agentId);
+
+    async function agentName(agentId) {
+        try {
+            const config = await fs.readJson(path.join(agentRoot(agentId), 'config.json'));
+            return config?.name || agentId;
+        } catch {
+            return agentId;
+        }
+    }
+
+    async function avatarUrl(agentId) {
+        const files = await fs.readdir(agentRoot(agentId)).catch(() => []);
+        const file = IMAGE_FILTER.map((ext) => `avatar.${ext}`).map((wanted) => files.find((f) => f.toLowerCase() === wanted)).find(Boolean);
+        return file ? pathToFileURL(path.join(agentRoot(agentId), file)).href : null;
+    }
+
+    /** 没指定助手时打开哪一个：最近碰过的桌宠、开着的、上次开的、有形象的、第一个。 */
+    async function defaultAgent(agents) {
+        const settings = controls.get();
+        const candidates = [pets.lastTouched(), ...pets.openAgents(), settings.lastAgent, ...settings.openAgents].filter(Boolean);
+        const known = new Set(agents.map((a) => a.id));
+        const hit = candidates.find((id) => known.has(id));
+        if (hit) return hit;
+        for (const agent of agents) {
+            if (await fs.pathExists(path.join(agentRoot(agent.id), 'deskpet'))) return agent.id;
+        }
+        return agents[0]?.id || null;
+    }
+
+    /** 一个助手的设置页数据；没有现成快照的形象在后台渲染，渲染好一张推一张（deskpet-settings:preview）。 */
+    async function catalog(requestedId, { force = false } = {}) {
+        const agents = await pets.listAgents();
+        const agentId = agents.some((a) => a.id === requestedId) ? requestedId : await defaultAgent(agents);
+        if (!agentId) return { agents, agentId: null, outfits: [] };
+        const [outfits, saved, name, avatar] = await Promise.all([
+            pets.listOutfits(agentId).catch(() => []),
+            pets.readState(agentId),
+            agentName(agentId),
+            avatarUrl(agentId),
+        ]);
+        const live = pets.info(agentId);
+        const chosen = live?.outfit || outfitStore.pickOutfit(outfits, saved?.outfit)?.id || null;
+        const items = await Promise.all(outfits.map(async (outfit) => ({
+            id: outfit.id,
+            name: outfit.name,
+            kind: outfit.kind,
+            kindLabel: [outfit.builtIn ? '内置' : '', KIND_LABEL[outfit.kind] || ''].filter(Boolean).join(' · '),
+            builtIn: outfit.builtIn === true,
+            description: outfitStore.outfitDescription(outfit),
+            missingCore: outfit.missingCore === true,
+            preview: force ? null : await previews.cached(agentId, outfit),
+        })));
+        const pending = outfits.filter((outfit, i) => !items[i].preview);
+        // 当前这套排最前面，大预览先出来
+        pending.sort((a, b) => (b.id === chosen) - (a.id === chosen));
+        for (const outfit of pending) {
+            const aspect = saved?.figures?.[outfit.id] ?? null;
+            previews.render(agentId, outfit, { aspect }).then((url) => {
+                pets.sendPreview({ agentId, outfitId: outfit.id, url });
+            }).catch(() => {});
+        }
+        previews.prune(agentId, outfits.map((o) => o.id)).catch(() => {});
+        const scale = live?.scale ?? petPrefs.clampScale(saved?.scale ?? 1);
+        return {
+            agents,
+            agentId,
+            name,
+            avatar,
+            open: Boolean(live),
+            visible: Boolean(live?.visible),
+            anyVisible: pets.openAgents().length > 0,
+            // 关着的桌宠选中的是「无」；lastOutfit 是再打开时会穿的那套
+            outfit: live ? chosen : null,
+            lastOutfit: chosen,
+            outfits: items,
+            scale,
+            maxScale: live?.maxScale ?? petPrefs.SCALE_MAX,
+            folder: path.join(agentRoot(agentId), 'deskpet'),
+        };
+    }
+
+    /** 选一张卡片：outfitId 为空是「无」，收起这个助手的桌宠；否则打开（没开的话）并换上那套。 */
+    async function choose(agentId, outfitId) {
+        if (!pets.isAgentId(agentId)) return { success: false, error: '找不到这个助手' };
+        if (!outfitId) {
+            pets.closePet(agentId);
+            return { success: true };
+        }
+        if (!outfitStore.isOutfitId(outfitId)) return { success: false, error: '没有这套形象' };
+        if (pets.info(agentId)) {
+            await pets.setOutfit(agentId, outfitId);
+            pets.showPet(agentId);
+        } else {
+            // 先记下选择，打开时直接按这套开（省一次换装重载）
+            await pets.saveState(agentId, { outfit: outfitId });
+            const opened = await pets.openPet(agentId);
+            if (!opened?.success) return { success: false, error: opened?.error === 'agent-not-found' ? '找不到这个助手' : '桌宠打不开' };
+        }
+        return { success: true };
+    }
+
+    async function importOutfit(agentId) {
+        if (!pets.isAgentId(agentId)) return { success: false, error: '找不到这个助手' };
+        const picked = await dialog.showOpenDialog(pets.mainWindow() || undefined, {
+            title: '导入形象：选 Live2D 模型（.model3.json）、网格立绘（.puppet.json），或者一张/几张立绘图片',
+            properties: ['openFile', 'multiSelections'],
+            filters: [
+                { name: '形象', extensions: ['json', ...IMAGE_FILTER] },
+                { name: '所有文件', extensions: ['*'] },
+            ],
+        });
+        if (picked.canceled || !picked.filePaths?.length) return { success: false, canceled: true };
+        const plan = planImport(picked.filePaths);
+        if (!plan) return { success: false, error: '没认出来：请选 .model3.json、.puppet.json 或图片' };
+        const base = path.join(agentRoot(agentId), 'deskpet');
+        if (plan.kind === 'folder') {
+            // 模型放在「下载」这种大文件夹里时，别把整个文件夹拷过去
+            const size = await folderSize(plan.source, { files: IMPORT_MAX_FILES, bytes: IMPORT_MAX_BYTES });
+            if (size.files > IMPORT_MAX_FILES || size.bytes > IMPORT_MAX_BYTES) {
+                return { success: false, error: '模型所在的文件夹太大了（会把整个文件夹拷进来）。先把模型单独放进一个文件夹再导入' };
+            }
+            if (path.resolve(plan.source).startsWith(path.resolve(base) + path.sep)) return { success: false, error: '这套已经在形象文件夹里了' };
+        }
+        const name = await freeFolderName(base, plan.name);
+        const target = path.join(base, name);
+        try {
+            if (plan.kind === 'folder') await fs.copy(plan.source, target);
+            else {
+                await fs.ensureDir(target);
+                for (const file of plan.files) await fs.copy(file, path.join(target, path.basename(file)));
+            }
+            if (!(await fs.pathExists(path.join(target, 'outfit.json')))) await fs.writeJson(path.join(target, 'outfit.json'), { name }, { spaces: 2 });
+            if (!(await outfitStore.inspectFolder(target))) {
+                await fs.remove(target);
+                return { success: false, error: '这个文件夹里没找到能用的模型或立绘' };
+            }
+        } catch (error) {
+            await fs.remove(target).catch(() => {});
+            return { success: false, error: `拷贝失败：${error.message}` };
+        }
+        return { success: true, outfitId: name };
+    }
+
+    async function openFolder(agentId) {
+        if (!pets.isAgentId(agentId)) return { success: false };
+        const dir = path.join(agentRoot(agentId), 'deskpet');
+        await fs.ensureDir(dir);
+        const error = await shell.openPath(dir);
+        return { success: !error, error: error || undefined };
+    }
+
+    function registerIpc() {
+        // 不是主窗口发来的一律不理
+        const guard = (fn) => (event, ...args) => (controls.fromSettings(event) ? fn(...args) : null);
+        const idOrNull = (agentId) => (typeof agentId === 'string' ? agentId : null);
+        ipcMain.handle('deskpet-settings:get', guard(() => controls.snapshot()));
+        ipcMain.handle('deskpet-settings:catalog', guard((agentId) => catalog(idOrNull(agentId))));
+        ipcMain.handle('deskpet-settings:refresh', guard((agentId) => catalog(idOrNull(agentId), { force: true })));
+        ipcMain.handle('deskpet-settings:choose', guard(async (agentId, outfitId) => {
+            const result = await choose(String(agentId || ''), typeof outfitId === 'string' ? outfitId : '');
+            return { ...result, catalog: await catalog(String(agentId || '')) };
+        }));
+        ipcMain.handle('deskpet-settings:set-visible', guard(async (visible, agentId) => {
+            await pets.setVisible(visible === true, idOrNull(agentId));
+            return catalog(idOrNull(agentId));
+        }));
+        ipcMain.handle('deskpet-settings:import', guard(async (agentId) => {
+            const result = await importOutfit(String(agentId || ''));
+            if (result.success) await choose(String(agentId), result.outfitId);
+            return { ...result, catalog: await catalog(String(agentId || '')) };
+        }));
+        ipcMain.handle('deskpet-settings:open-folder', guard((agentId) => openFolder(String(agentId || ''))));
+        ipcMain.handle('deskpet-settings:talk', guard(async (agentId, text) => {
+            const message = typeof text === 'string' ? text.trim().slice(0, 8000) : '';
+            if (!message) return { success: false, error: '没有内容' };
+            return pets.talk(String(agentId || ''), message);
+        }));
+    }
+
+    return { catalog, choose, importOutfit, registerIpc };
+}
+
+module.exports = { createSettingsPage, planImport };

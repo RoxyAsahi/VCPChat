@@ -16,5 +16,22 @@ module.exports = {
         deskPetSendResult: send('deskpet:send-result', 'payload'),
         // 点桌宠上 AI 主动开的新话题：切到那个话题。
         onDeskPetOpenTopic: on('deskpet:open-topic'),
+        // 全局设置 → 桌宠（modules/settings/schema/deskpet-panel.js）；主进程：modules/deskpet/settingsPage.js、petControls.js
+        onDeskPetSettingsOpen: on('deskpet-settings:open'),
+        onDeskPetSettingsChanged: on('deskpet-settings:changed'),
+        onDeskPetPreview: on('deskpet-settings:preview'),
+        getDeskPetSettings: invoke('deskpet-settings:get'),
+        getDeskPetCatalog: invoke('deskpet-settings:catalog', 'agentId'),
+        refreshDeskPetCatalog: invoke('deskpet-settings:refresh', 'agentId'),
+        chooseDeskPetOutfit: invoke('deskpet-settings:choose', 'agentId', 'outfitId'),
+        setDeskPetsVisible: invoke('deskpet-settings:set-visible', 'visible', 'agentId'),
+        importDeskPetOutfit: invoke('deskpet-settings:import', 'agentId'),
+        openDeskPetFolder: invoke('deskpet-settings:open-folder', 'agentId'),
+        talkToDeskPet: invoke('deskpet-settings:talk', 'agentId', 'text'),
+        updateDeskPetSettings: invoke('deskpet-settings:update', 'patch'),
+        setDeskPetShortcut: invoke('deskpet-settings:set-shortcut', 'actionId', 'accelerator'),
+        resetDeskPetShortcuts: invoke('deskpet-settings:reset-shortcuts'),
+        pauseDeskPetShortcuts: invoke('deskpet-settings:pause-shortcuts', 'paused'),
+        setDeskPetScale: invoke('deskpet-settings:set-scale', 'agentId', 'scale'),
     },
 };

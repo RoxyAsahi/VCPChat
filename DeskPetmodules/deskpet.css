@@ -147,10 +147,6 @@ html, body {
   border-radius: 0 0 3px 0;
 }
 
-#uiStack:has(#composer:not([hidden])) #bubble::after {
-  display: none;
-}
-
 #bubble.is-state {
   white-space: nowrap;
   cursor: default;
@@ -258,67 +254,23 @@ html, body {
   75% { transform: translateX(3px) rotate(1deg); }
 }
 
-#composer {
-  flex: 0 0 auto;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
-  user-select: text;
-  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+/* 脚边的小胶囊和输入条（样式在 dock.css，和设置页预览共用）：贴着窗口底边，压在小腿上，不挡脸 */
+#dock {
+  --dock-bar-w: min(440px, calc(100vw - 24px));
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  /* 左右 auto 居中：宽度变的时候两边一起收放 */
+  margin: 0 auto;
 }
 
-body.is-cramped #composer {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  width: auto;
-}
-
-body.is-cramped #uiStack:has(#composer) #bubble::after {
-  display: block;
-}
-
-#composerInput {
-  box-sizing: border-box;
-  width: 100%;
-  border: none;
-  outline: none;
-  resize: none;
-  background: transparent;
-  color: #222;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-#composerActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-#composerActions button {
-  border: none;
-  border-radius: 8px;
-  padding: 3px 10px;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  background: #eceef2;
-  color: #333;
-}
-
-#composerSend {
-  background: #c8553d !important;
-  color: #fff !important;
-}
-
-#composerSend:disabled {
-  opacity: 0.6;
+body.is-preview #dock,
+body.is-preview #uiStack,
+body.is-preview #emotionBadge,
+body.is-preview #dndBadge,
+body.is-preview #lifeFx {
+  display: none !important;
 }
 
 /* 角标、月亮、小符号都按头的位置摆（--pet-head 头顶、--pet-head-x 头的中线、--pet-head-w 头宽，页面量出来的），
