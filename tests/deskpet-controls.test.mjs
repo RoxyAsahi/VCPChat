@@ -13,7 +13,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // ---- 尺寸和设置（纯函数） ----
 
 test('pet window sizes stay on a 4px grid so fractional display scaling does not round them up', () => {
-    assert.deepEqual(prefs.windowSizeForScale(1), { width: 360, height: 580 });
+    assert.deepEqual(prefs.windowSizeForScale(1), { width: 280, height: 408 });
     for (let scale = prefs.SCALE_MIN; scale <= prefs.SCALE_MAX + 1e-9; scale += 0.05) {
         const { width, height } = prefs.windowSizeForScale(scale);
         assert.equal(width % 4, 0, `width at ${scale}`);
@@ -26,6 +26,18 @@ test('pet window sizes stay on a 4px grid so fractional display scaling does not
     assert.equal(prefs.clampScale('nope'), 1);
 });
 
+test('the default size is smaller now; a size someone picked before looks the same as it did', () => {
+    // 第一版的 1 倍（360×580 的窗口）太大，现在的 1 倍是它的六成
+    assert.ok(prefs.characterBox().height < 300);
+    assert.equal(prefs.savedScale(null), 1, '没记过：新的默认');
+    assert.equal(prefs.savedScale({ x: 1, y: 2 }), 1);
+    assert.equal(prefs.savedScale({ scale: 1 }), 1, '旧版没调过（1 倍）：也用新的默认');
+    assert.equal(prefs.savedScale({ scale: 1.5 }), 2.5, '旧版调到 1.5 倍：换算成同样的实际大小');
+    assert.equal(prefs.savedScale({ scale: 0.6 }), 1);
+    assert.equal(prefs.savedScale({ scale: 2 }), prefs.SCALE_MAX, '换算后超出上限就到上限');
+    assert.equal(prefs.savedScale({ scale: 1.5, sizeVersion: prefs.SIZE_VERSION }), 1.5, '新版记的原样用');
+});
+
 test('resizing keeps the character standing on the same spot and inside the work area', () => {
     const area = { x: 0, y: 0, width: 1920, height: 1040 };
     const before = { x: 1000, y: 400, width: 360, height: 580 };
@@ -34,7 +46,7 @@ test('resizing keeps the character standing on the same spot and inside the work
     assert.equal(after.y + after.height, before.y + before.height, '脚底高度不动');
     const corner = prefs.resizeAnchored({ x: 1700, y: 600, width: 360, height: 580 }, prefs.windowSizeForScale(1.5), area);
     assert.ok(corner.x + corner.width <= area.width && corner.y + corner.height <= area.height, '放大以后挪回屏幕里');
-    assert.ok(prefs.maxScaleForWorkArea({ height: 600 }) < 1.2, '矮屏放不下的大小要缩');
+    assert.ok(prefs.maxScaleForWorkArea({ height: 400 }) < 1.2, '矮屏放不下的大小要缩');
 });
 
 test('shortcuts need real modifiers and never take what VCPChat already uses', () => {
@@ -212,7 +224,8 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     assert.deepEqual(pet.getBounds(), before);
     wheel(env.fromPet(pet), -60);
     const grown = pet.getBounds();
-    assert.ok(grown.width > before.width && grown.height > before.height, '往上滚放大');
+    // 默认大小下窗口已经是最窄（放得下气泡），放大先长高
+    assert.ok(grown.width >= before.width && grown.height > before.height, '往上滚放大');
     assert.deepEqual(bottomCenter(grown), bottomCenter(before), '脚底不动');
     assert.equal(pet.sent.filter((m) => m.channel === 'deskpet:prefs').at(-1).payload.scale, 1.1);
     await sleep(30);
@@ -226,7 +239,7 @@ test('ctrl+wheel resizes a pet around its feet and the size is remembered per ag
     assert.equal(prefsReply.scale, 1.1);
     // 另一个助手不受影响
     const coco = await again.open('Coco');
-    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [360, 580]);
+    assert.deepEqual([coco.getBounds().width, coco.getBounds().height], [280, 408]);
     again.handlers.closeAll();
 });
 
@@ -309,8 +322,8 @@ test('a smaller display shrinks a pet that no longer fits', async () => {
     const pet = await env.open('Nova');
     env.handlers._controls(); // 已初始化
     await env.fake.handlers.get('deskpet-settings:set-scale')?.({ sender: null }, 'Nova', 2); // 不是设置窗口发的：不理
-    assert.equal(pet.getBounds().width, 360);
-    for (let i = 0; i < 6; i += 1) env.fake.listeners.get('deskpet:wheel-resize')(env.fromPet(pet), -100);
+    assert.equal(pet.getBounds().width, 280);
+    for (let i = 0; i < 16; i += 1) env.fake.listeners.get('deskpet:wheel-resize')(env.fromPet(pet), -100);
     assert.ok(pet.getBounds().height > 800);
     env.fake.screen.displays = [{ workArea: { x: 0, y: 0, width: 1280, height: 680 } }];
     env.fake.screen.emit('display-metrics-changed');
