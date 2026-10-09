@@ -333,7 +333,8 @@ function flashEmotionBadge(emotion, source) {
 const composer = { open: false, sending: false, queued: null, queuedFresh: false, fresh: false, lastSentAt: 0, ownReplyEndedAt: 0, files: [] };
 
 // 脚边的小胶囊（样式在 dock.css）：hidden 收起、pill 小胶囊、bar 输入条、rec 录音。
-const dock = { mode: 'hidden', hover: false, dragging: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
+// tucked：点了胶囊上的「收起」，光标离开之前不再冒出来
+const dock = { mode: 'hidden', hover: false, dragging: false, tucked: false, showTimer: 0, hideTimer: 0, voice: null, autoSend: false };
 
 function setDock(mode) {
     if (dock.mode === mode) return;
@@ -364,8 +365,9 @@ function dockHover(on) {
     dock.hover = on;
     clearTimeout(dock.showTimer);
     clearTimeout(dock.hideTimer);
+    if (!on) dock.tucked = false;
     if (dock.mode === 'bar' || dock.mode === 'rec') return;
-    if (on && dock.mode === 'hidden') {
+    if (on && dock.mode === 'hidden' && !dock.tucked) {
         dock.showTimer = setTimeout(() => { if (dock.hover && !dock.dragging) setDock('pill'); }, DOCK_SHOW_MS);
     } else if (!on && dock.mode === 'pill') {
         dock.hideTimer = setTimeout(() => { if (!dock.hover) setDock('hidden'); }, DOCK_HIDE_MS);
@@ -373,7 +375,7 @@ function dockHover(on) {
 }
 
 function restingDock() {
-    return dock.hover && !dock.dragging ? 'pill' : 'hidden';
+    return dock.hover && !dock.dragging && !dock.tucked ? 'pill' : 'hidden';
 }
 
 function openComposer() {
@@ -649,6 +651,10 @@ function bindComposer() {
     $('dockEdit').addEventListener('click', openComposer);
     $('recEdit').addEventListener('click', openComposer);
     $('dockVoice').addEventListener('click', startVoice);
+    $('dockHide').addEventListener('click', () => {
+        dock.tucked = true;
+        setDock('hidden');
+    });
     $('composerNew').addEventListener('click', () => { setFresh(!composer.fresh); input.focus(); });
     $('recStop').addEventListener('click', finishVoice);
     dock.voice = createDictation({
