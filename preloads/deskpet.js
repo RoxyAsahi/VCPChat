@@ -26,6 +26,14 @@ function onOpenInput(callback) {
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
 
+// 设置页改了 Live2D 表情映射（{ profile, emotion }）
+function onProfile(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('deskpet:profile', listener);
+    return () => ipcRenderer.removeListener('deskpet:profile', listener);
+}
+
 function onVisibility(callback) {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, visible) => callback(!!visible);
@@ -92,6 +100,7 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     onCursor,
     onOpenInput,
     onVisibility,
+    onProfile,
     onPlayTtsAudio,
     onStopTtsAudio,
     voiceBegin: messageId => ipcRenderer.invoke('deskpet:voice-begin', String(messageId || '')),

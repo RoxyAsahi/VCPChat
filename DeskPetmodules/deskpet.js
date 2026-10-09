@@ -21,6 +21,7 @@ import { createLifeMotion } from 'vcp-deskpet://pet/app/lifeMotion.js';
 import { measureSilhouette, silhouetteAspect, fitSilhouette, touchesEdge } from 'vcp-deskpet://pet/app/figure.js';
 import { createDictation } from 'vcp-deskpet://pet/app/dictation.js';
 import { gestureOf, dueGestures } from 'vcp-deskpet://pet/app/gestures.js';
+import { pickExpression as mapExpression, pickMotion as mapMotion, modelNameOf } from 'vcp-deskpet://pet/app/expressionMap.js';
 
 const api = window.deskPetAPI;
 const PREVIEW = new URLSearchParams(location.search).has('preview');
@@ -661,16 +662,6 @@ const STATE_PARAMS = {
     tool: { ParamBrowLY: -0.4, ParamBrowRY: -0.4, ParamEyeBallY: -0.4, ParamAngleY: -8 },
     error: EMOTION_PARAMS.concerned,
 };
-// 换情绪时点缀一个动作；组不存在就跳过。
-const EMOTION_MOTIONS = {
-    happy: ['Tap', 'TapBody', 'Tap@Body'],
-    excited: ['Tap', 'TapBody', 'Tap@Body'],
-    shy: ['Tap@Body', 'Tap', 'TapBody'],
-    affectionate: ['Tap@Body', 'TapBody'],
-    surprised: ['Flick', 'FlickUp'],
-    sad: ['FlickDown'],
-    angry: ['Flick@Body', 'Flick'],
-};
 // 闲时和互动的动作：先看 deskpet.json 的 motions，再按组名找；都没有就只靠参数曲线演（lifeMotion.js）。
 const LIFE_MOTIONS = {
     headTap: ['TapHead', 'Tap@Head', 'Head'],
@@ -690,28 +681,7 @@ const LIFE_MOTIONS = {
 };
 const LIFE_MOTION_WEIGHT = 0.4; // 模型自己有这个动作时，参数曲线只轻轻叠一点
 
-// 官方示例模型的表情映射（按模型文件名认）；其他模型可以在模型旁放 deskpet.json 自己指定。
-const SAMPLE_EXPRESSIONS = {
-    natori: { neutral: 'Normal', calm: 'Normal', happy: 'Smile', excited: 'exp_02', shy: 'Blushing', affectionate: 'Blushing', curious: 'exp_01', surprised: 'Surprised', concerned: 'exp_03', sad: 'Sad', tired: 'exp_05', angry: 'Angry' },
-    mao: { neutral: 'exp_01', calm: 'exp_02', happy: 'exp_02', excited: 'exp_04', shy: 'exp_06', affectionate: 'exp_06', curious: 'exp_07', surprised: 'exp_07', concerned: 'exp_05', sad: 'exp_05', angry: 'exp_08' },
-    haru: { neutral: 'F01', calm: 'F01', happy: 'F05', excited: 'F02', shy: 'F07', affectionate: 'F07', curious: 'F06', surprised: 'F06', concerned: 'F08', sad: 'F04', tired: 'F08', angry: 'F03' },
-    ren: { neutral: 'exp_01', calm: 'exp_01', happy: 'exp_02', tired: 'exp_03', sad: 'exp_04', concerned: 'exp_05' },
-};
-// 其余模型按表情名猜。
-const EXPRESSION_HINTS = {
-    neutral: ['normal', 'neutral', 'default', 'idle', '默认'],
-    calm: ['calm', 'relax'],
-    happy: ['happy', 'smile', 'joy', 'fun', '开心', '笑'],
-    excited: ['excite', 'star', '兴奋'],
-    shy: ['shy', 'blush', 'embarrass', '害羞', '脸红'],
-    affectionate: ['love', 'heart', 'blush', '喜欢'],
-    curious: ['curious', 'question', 'think', '疑问'],
-    surprised: ['surprise', 'shock', '惊'],
-    concerned: ['worry', 'trouble', 'concern', '担心'],
-    sad: ['sad', 'cry', 'tear', '哭', '难过'],
-    tired: ['sleep', 'tired', '困'],
-    angry: ['angry', 'anger', 'annoy', 'mad', '生气', '怒'],
-};
+// 情绪 → 表情 / 动作的映射规则在 expressionMap.js（设置页「表情映射」也用它）。
 
 function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -838,9 +808,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
 
     // 可选的模型配置：<model 同目录>/deskpet.json
     //   { "expressions": { "happy": "exp_02" }, "motions": { "happy": "Tap" } }
-    const profile = (await fetchJson(new URL('deskpet.json', assets.live2d.modelUrl).href)) || {};
-    const modelName = decodeURIComponent(assets.live2d.modelUrl.split('/').pop() || '').replace(/\.model3\.json$/i, '').toLowerCase();
-    const sampleMap = SAMPLE_EXPRESSIONS[modelName] || {};
+    let profile = (await fetchJson(new URL('deskpet.json', assets.live2d.modelUrl).href)) || {};
+    const modelName = modelNameOf(assets.live2d.modelUrl);
     const internal = model.internalModel;
     const coreModel = internal.coreModel;
     const paramIds = new Set(coreModel?._model?.parameters?.ids || coreModel?.getModel?.()?.parameters?.ids || []);
@@ -848,17 +817,8 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         .map((d) => d.Name || d.name).filter(Boolean);
     const motionGroups = Object.keys(internal.motionManager?.definitions || {});
 
-    function pickExpression(emotion) {
-        const configured = profile.expressions?.[emotion] ?? sampleMap[emotion];
-        if (configured && expressionNames.includes(configured)) return configured;
-        const hints = EXPRESSION_HINTS[emotion] || [];
-        return expressionNames.find((n) => hints.some((h) => n.toLowerCase().includes(h))) || null;
-    }
-    function pickMotion(emotion) {
-        const configured = profile.motions?.[emotion];
-        if (configured && motionGroups.includes(configured)) return configured;
-        return (EMOTION_MOTIONS[emotion] || []).find((g) => motionGroups.includes(g)) || null;
-    }
+    const pickExpression = (emotion) => mapExpression(emotion, expressionNames, profile, modelName);
+    const pickMotion = (emotion) => mapMotion(emotion, motionGroups, profile);
     function pickLifeMotion(name) {
         const configured = profile.motions?.[name];
         if (configured && motionGroups.includes(configured)) return configured;
@@ -866,19 +826,23 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
     }
     const life = createLifeMotion();
 
-    // 每帧在物理和 pose 之后、model.update 之前叠加情绪参数，平滑逼近目标。
+    // 闲时动作、拖动摆动、情绪参数要在物理之前叠上去：引擎每帧的顺序是 动作 → 表情 → 眨眼 → 视线 →
+    // updateNaturalMovements（呼吸）→ 物理 → pose → beforeModelUpdate，叠在 beforeModelUpdate 里的
+    // 头歪、身体晃不会带动头发和衣服的物理。所以接在 updateNaturalMovements 后面加，嘴和跳一下仍在后面。
     const current = {};
     let target = {};
     let mouthPhase = 0;
-    internal.on('beforeModelUpdate', () => {
-        // 闲时动作、困意、拖动摆动：叠在情绪之上；跳一下改的是模型位置
-        const lifeFrame = life.step(app.ticker.deltaMS / 1000);
+    const naturalMovements = internal.updateNaturalMovements.bind(internal);
+    internal.updateNaturalMovements = (now, dt) => {
+        naturalMovements(now, dt);
+        addLifeAndEmotion();
+    };
+    let lifeFrame = { params: {}, hop: 0 };
+    function addLifeAndEmotion() {
+        // 闲时动作、困意、拖动摆动：叠在情绪之上
+        lifeFrame = life.step(app.ticker.deltaMS / 1000);
         for (const [id, v] of Object.entries(lifeFrame.params)) {
             if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), v);
-        }
-        if (lifeFrame.hop !== hop) {
-            hop = lifeFrame.hop;
-            model.position.y = figure.base().y - hop;
         }
         const keys = new Set([...Object.keys(current), ...Object.keys(target)]);
         for (const id of keys) {
@@ -886,6 +850,13 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
             current[id] = (current[id] || 0) + (goal - (current[id] || 0)) * 0.12;
             if (Math.abs(current[id]) < 0.001 && !goal) { delete current[id]; continue; }
             if (paramIds.has(id)) coreModel.addParameterValueById(internal.getIdSafe(id), current[id]);
+        }
+    }
+    internal.on('beforeModelUpdate', () => {
+        // 跳一下改的是模型位置
+        if (lifeFrame.hop !== hop) {
+            hop = lifeFrame.hop;
+            model.position.y = figure.base().y - hop;
         }
         // 嘴：朗读时按声音的音量开合；没开朗读时回复流出来就假装在说话。
         if (paramIds.has('ParamMouthOpenY')) {
@@ -960,6 +931,11 @@ async function mountLive2DModel(app, canvas, assets, { Live2DModel, coreVersion,
         setPaused(paused) {
             if (paused) app.ticker.stop();
             else if (!app.ticker.started) app.ticker.start();
+        },
+        // 设置页改了表情映射：不重载，下一次换情绪就按新的来
+        setProfile(next) {
+            profile = next && typeof next === 'object' ? next : {};
+            lastExpression = null;
         },
         info: { coreVersion, expressions: expressionNames, motionGroups, renderer: webgl.renderer, software: webgl.software },
     };
@@ -1693,8 +1669,8 @@ async function start() {
             notice(error.userFacing ? error.message : `Live2D 加载失败：${error.message}`, { error: true, ms: 8000 });
         }
     } else if (assets.live2d && !assets.coreUrl && !assets.puppet && !assets.outfit?.builtIn) {
-        // 内置 Nova 自带立绘，Core 本来就要用户自己放：不每次打开都弹红字，设置页卡片上写着
-        notice(`找到了 Live2D 模型，但缺少 Cubism Core：请把 5.x 的 live2dcubismcore.min.js 放到 ${assets.corePath}`, { error: true, ms: 12000 });
+        // 内置 Nova 自带立绘：不每次打开都弹红字，设置页卡片和「Live2D 支持」上写着
+        notice('这套是 Live2D 模型，还缺 Cubism Core，先用立绘代替。右键「桌宠设置…」里的「Live2D 支持」可以一键装好。', { error: true, ms: 12000 });
     }
     if (!backend && assets.puppet && recentContextLosses().length >= CONTEXT_LOSS_LIMIT) {
         notice('显卡渲染反复中断，这次先用普通立绘。重新打开桌宠会再试。', { error: true, ms: 10000 });
@@ -1726,6 +1702,12 @@ async function start() {
         backend.apply({ ...frame, emotion, intensity: 0.8 }, { changed: true });
         flashTimer = setTimeout(() => backend.apply(shownFrame(frame), { changed: true, motion: false }), ms);
     };
+    // 设置页「表情映射」：换上新映射，emotion 给了就当场演一下这个情绪
+    api.onProfile?.(({ profile, emotion } = {}) => {
+        backend.setProfile?.(profile);
+        if (emotion) flashEmotion(emotion, 3500);
+        else backend.apply(shownFrame(frame), { changed: true, motion: false });
+    });
     life = createPetLife({
         onPhase(phase) {
             document.body.dataset.lifePhase = phase;

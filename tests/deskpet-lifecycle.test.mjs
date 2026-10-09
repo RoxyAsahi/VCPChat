@@ -44,7 +44,7 @@ function fakeElectron() {
         showInactive() { this.visible = true; }
         hide() { this.visible = false; }
         close() { this.destroyed = true; this.emit('closed'); }
-        setAlwaysOnTop() {} moveTop() {} setVisibleOnAllWorkspaces() {} focus() {} loadURL() {} reload() {}
+        setAlwaysOnTop() {} moveTop() { this.raised = (this.raised || 0) + 1; } setVisibleOnAllWorkspaces() {} focus() {} loadURL() {} reload() {}
         setIgnoreMouseEvents(ignore) { this.ignoreMouse.push(ignore); }
         setFocusable(value) { this.focusable = value; }
         getPosition() { return [this.bounds.x, this.bounds.y]; }
@@ -193,4 +193,23 @@ test('agent ids that point at the Agents folder itself are refused', async () =>
     }
     assert.equal(fake.windows.length, 1, '只有主窗口，没有建出桌宠窗口');
     handlers.closeAll();
+});
+
+test('Windows: a pet pushed down by another topmost window comes back on top', async (t) => {
+    t.mock.timers.enable({ apis: ['setInterval', 'setImmediate'] });
+    const { open } = await loadHandlers();
+    const pet = await open();
+    const shown = pet.raised;
+    // 别的程序把置顶取消了：马上补回
+    pet.emit('always-on-top-changed', {}, false);
+    t.mock.timers.tick(0);
+    assert.equal(pet.raised, shown + 1);
+    pet.emit('always-on-top-changed', {}, true);
+    // 隔一阵补一次层级；藏起来时不动
+    t.mock.timers.tick(10000);
+    assert.equal(pet.raised, shown + 2);
+    pet.hide();
+    t.mock.timers.tick(10000);
+    assert.equal(pet.raised, shown + 2);
+    pet.close();
 });

@@ -4,7 +4,7 @@
 // 历史照常保存），回复以气泡显示，表情由页面里的情绪导演（modules/emotion）按回复流决定。
 //
 // Nova 的三套模型来自应用 assets/deskpet/nova/；自定义模型仍来自用户数据目录：
-//   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x，用户自行放入）
+//   AppData/deskpet/live2dcubismcore.min.js     Cubism Core（必须是 5.x；设置页一键下载或用户自行放入）
 //   AppData/Agents/<id>/deskpet/<套装>/           一套形象（换装）：Live2D、网格立绘或差分立绘，见 modules/deskpet/outfits.js
 //   AppData/Agents/<id>/deskpet/*.model3.json    直接放在 deskpet/ 下的算「默认」那套（以前的单模型布局照旧能用）
 //   AppData/Agents/<id>/portrait.<情绪>.<ext>    差分立绘：「立绘」那套，也是 Live2D 用不了时的后备
@@ -22,6 +22,7 @@ const outfitStore = require('../deskpet/outfits');
 const { createPetControls } = require('../deskpet/petControls');
 const { createPetPreviews } = require('../deskpet/petPreviews');
 const { createSettingsPage } = require('../deskpet/settingsPage');
+const { createCoreInstaller } = require('../deskpet/cubismCore');
 const { getAgentMoodStore } = require('../agentMood');
 
 const SCHEME = 'vcp-deskpet';
@@ -45,6 +46,10 @@ const RESTORE_DELAY_MS = 1500;
 const WHEEL_NOTCH = 100;
 // 窗口平时是否可聚焦（见 openPet）；输入框关上或页面重载后回到它。
 const PET_FOCUSABLE = process.platform !== 'win32';
+// Windows 上别的置顶程序（任务管理器、置顶播放器、部分全屏切窗口）弹到前面后，桌宠会被压在下面且不会自己回来；
+// 低频补一次置顶层级。只动 z 序，不抢焦点。
+const TOPMOST_GUARD_MS = 10000;
+const USE_TOPMOST_GUARD = process.platform === 'win32';
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
 let mainWindow = null;
@@ -54,6 +59,7 @@ const pendingSends = new Map(); // requestId -> resolve
 let emotionPrompt = null; // modules/emotion/emotionPrompt.js（ESM，初始化时异步载入）
 let controls = null; // modules/deskpet/petControls.js：全局设置、快捷键、设置页的开关和快捷键部分
 let previews = null; // modules/deskpet/petPreviews.js：设置页卡片用的形象快照（离屏渲染）
+let coreInstaller = null; // modules/deskpet/cubismCore.js：设置页里装 Cubism Core
 let shuttingDown = false; // 退出时关窗口不算用户关掉，下次启动还要恢复
 let lastTouched = null; // 最近一次被点、被叫出来的桌宠，「和桌宠说话」快捷键找它
 let refreshTray = () => {};
@@ -92,7 +98,11 @@ function resolveServedFile(urlString) {
         return guard(builtInDirectory(), segments);
     }
     if (root === 'core') {
-        return segments.join('/') === 'live2dcubismcore.min.js' ? coreFilePath() : null;
+        const name = segments.join('/');
+        if (name === 'live2dcubismcore.min.js') return coreFilePath();
+        // 安装前试加载的暂存文件（modules/deskpet/cubismCore.js）
+        if (name === 'staged.js') return coreInstaller?.stagedPath || null;
+        return null;
     }
     if (root === 'agent') {
         const agentId = segments.shift();
@@ -176,7 +186,9 @@ async function resolveAssets(agentId, wantedOutfit) {
     const avatar = IMAGE_EXTENSIONS.map((ext) => `avatar.${ext}`);
     const files = (await fs.pathExists(agentRoot)) ? await fs.readdir(agentRoot) : [];
     const avatarFile = avatar.map((wanted) => files.find((f) => f.toLowerCase() === wanted)).find(Boolean);
-    const hasCore = await fs.pathExists(coreFilePath());
+    // 换过 Core 以后（设置页里装、换）页面的缓存里可能还是旧的那份：地址带上修改时间
+    const coreStat = await fs.stat(coreFilePath()).catch(() => null);
+    const hasCore = Boolean(coreStat);
     return {
         agentId,
         name,
@@ -184,7 +196,7 @@ async function resolveAssets(agentId, wantedOutfit) {
         outfits: outfits.map(outfitSummary),
         live2d: outfit?.live2d ? { modelUrl: agentUrl(agentId, outfit.live2d) } : null,
         puppet: outfit?.puppet ? { rigUrl: agentUrl(agentId, outfit.puppet) } : null,
-        coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js` : null,
+        coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js?v=${Math.round(coreStat.mtimeMs)}` : null,
         corePath: coreFilePath(),
         portraits: portraitUrls(agentId, outfit?.portraits || fallback),
         avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : null,
@@ -312,7 +324,7 @@ function onDisplaysChanged() {
     clearTimeout(displayTimer);
     displayTimer = setTimeout(() => {
         displayTimer = null;
-        try { fitPetsToDisplays(); } catch (error) { console.warn('[DeskPet] display change:', error.message); }
+        try { fitPetsToDisplays(); for (const pet of pets.values()) reassertTopmost(pet); } catch (error) { console.warn('[DeskPet] display change:', error.message); }
     }, DISPLAY_SETTLE_MS);
 }
 
@@ -336,7 +348,48 @@ function mainContents() {
 const settingsPush = {
     changed: (snapshot) => mainContents()?.send('deskpet-settings:changed', snapshot),
     preview: (payload) => mainContents()?.send('deskpet-settings:preview', payload),
+    coreProgress: (payload) => mainContents()?.send('deskpet-settings:core-progress', payload),
 };
+
+// 在隐藏的沙箱窗口里加载暂存的 Cubism Core，读出版本号（页面写进标题）；加载不了是 0。
+const CORE_PROBE_TIMEOUT_MS = 15000;
+function probeCore() {
+    return new Promise((resolve) => {
+        const win = new BrowserWindow({
+            width: 64,
+            height: 64,
+            show: false,
+            skipTaskbar: true,
+            focusable: false,
+            webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false },
+        });
+        let settled = false;
+        const finish = (version) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (!win.isDestroyed()) win.destroy();
+            resolve(version);
+        };
+        const timer = setTimeout(() => finish(0), CORE_PROBE_TIMEOUT_MS);
+        win.webContents.on('page-title-updated', (_event, title) => {
+            const match = /^core-version:(\d+)$/.exec(title);
+            if (match) finish(Number(match[1]));
+        });
+        win.webContents.on('render-process-gone', () => finish(0));
+        win.on('closed', () => finish(0));
+        win.loadURL(`${SCHEME}://pet/app/core-probe.html?n=${Date.now()}`).catch(() => finish(0));
+    });
+}
+
+// 装好 Core 以后，正在用立绘代替 Live2D 的桌宠重新载入一次，换成真正的 Live2D。
+async function reloadLive2DPets() {
+    for (const pet of pets.values()) {
+        if (pet.win.isDestroyed()) continue;
+        const assets = await resolveAssets(pet.agentId, pet.outfit).catch(() => null);
+        if (assets?.live2d && !pet.win.isDestroyed()) pet.win.webContents.reload();
+    }
+}
 
 /** 托盘、右键菜单的「桌宠设置…」：把主窗口叫到前面，打开全局设置的桌宠分区。 */
 function openSettingsPage() {
@@ -350,6 +403,24 @@ function showPet(pet) {
     // Windows 上透明窗口隐藏再显示后可能丢掉 WS_EX_TOPMOST，每次显示后重新声明。
     pet.win.setAlwaysOnTop(true, TOPMOST_LEVEL);
     pet.win.moveTop();
+}
+
+function reassertTopmost(pet) {
+    if (!pet || pet.win.isDestroyed() || !pet.win.isVisible() || pet.drag) return;
+    pet.win.setAlwaysOnTop(true, TOPMOST_LEVEL);
+    pet.win.moveTop();
+}
+
+let topmostGuard = null;
+function updateTopmostGuard() {
+    const wanted = USE_TOPMOST_GUARD && pets.size > 0;
+    if (wanted && !topmostGuard) {
+        topmostGuard = setInterval(() => { for (const pet of pets.values()) reassertTopmost(pet); }, TOPMOST_GUARD_MS);
+        topmostGuard.unref?.();
+    } else if (!wanted && topmostGuard) {
+        clearInterval(topmostGuard);
+        topmostGuard = null;
+    }
 }
 
 function setIgnoreMouse(pet, ignore) {
@@ -464,12 +535,17 @@ async function openPet(agentId, { anchor = null } = {}) {
     const sendVisibility = (visible) => !win.isDestroyed() && win.webContents.send('deskpet:visibility', visible);
     win.on('hide', () => sendVisibility(false));
     win.on('show', () => sendVisibility(true));
+    // 置顶被系统或别的程序取消时（例如别的程序调用了 SetWindowPos），马上补回来
+    win.on('always-on-top-changed', (_e, onTop) => {
+        if (!onTop && !shuttingDown) setImmediate(() => reassertTopmost(pet));
+    });
     win.on('closed', () => {
         voice.release(pet);
         clearInterval(pet.hitPoll);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
         pets.delete(agentId);
+        updateTopmostGuard();
         if (lastTouched === agentId) lastTouched = null;
         // 用户关掉的下次不再恢复；退出时一起关掉的照旧恢复
         if (!shuttingDown) rememberOpen(agentId, false);
@@ -477,6 +553,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     });
     win.loadURL(`${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}`);
     if (!USE_SHAPE) startHitPoll(pet);
+    updateTopmostGuard();
     notifyMain(agentId);
     return { success: true, open: true };
 }
@@ -616,6 +693,10 @@ async function listAgents() {
             agents.push({ id, name: config?.name || id });
         } catch { /* 不是 agent 目录 */ }
     }
+    // 同名的助手（比如复制出来的两个 Nova）在菜单、设置页下拉里分不清：名字后面带上 id 末尾几位
+    const counts = new Map();
+    for (const agent of agents) counts.set(agent.name, (counts.get(agent.name) || 0) + 1);
+    for (const agent of agents) agent.label = counts.get(agent.name) > 1 ? `${agent.name} · ${agent.id.slice(-4)}` : agent.name;
     return agents;
 }
 
@@ -1260,7 +1341,7 @@ function registerIpc() {
                 label: '切换助手',
                 enabled: agents.length > 1,
                 submenu: agents.map((agent) => ({
-                    label: agent.name,
+                    label: agent.label,
                     type: 'radio',
                     checked: agent.id === pet.agentId,
                     click: () => switchPet(pet.agentId, agent.id).catch((error) => console.warn('[DeskPet] switch failed:', error.message)),
@@ -1326,11 +1407,18 @@ function initialize(options) {
         pageUrl: (agentId) => `${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}&preview=1`,
         windowSize: (aspect) => petPrefs.windowSizeForScale(1, aspect),
     });
+    coreInstaller = createCoreInstaller({ appDataRoot: paths.appDataRoot, fetch: (url, init) => net.fetch(url, init), probe: probeCore });
     createSettingsPage({
         electron,
         paths,
         controls,
         previews,
+        core: {
+            status: () => coreInstaller.status(),
+            installOfficial: () => coreInstaller.installOfficial(settingsPush.coreProgress),
+            installFromFile: (file) => coreInstaller.installFromFile(file),
+            afterInstall: reloadLive2DPets,
+        },
         pets: {
             listAgents,
             listOutfits: listAgentOutfits,
@@ -1344,6 +1432,13 @@ function initialize(options) {
             closePet: (agentId) => { closePet(agentId); refreshTray(); },
             showPet: (agentId) => { const pet = pets.get(agentId); if (pet && !pet.win.isDestroyed()) { showPet(pet); notifyMain(agentId); } },
             setOutfit: setPetOutfit,
+            pushProfile: (agentId, payload) => {
+                const pet = pets.get(agentId);
+                if (!pet || pet.win.isDestroyed() || !pet.ready) return false;
+                pet.win.webContents.send('deskpet:profile', payload);
+                if (payload?.emotion) showPet(pet);
+                return true;
+            },
             setVisible: setPetsVisible,
             talk: talkFromSettings,
             mainWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),

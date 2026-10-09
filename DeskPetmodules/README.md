@@ -37,7 +37,7 @@
 
 ### 1. 放 Live2D 模型（可选）
 
-1. **Cubism Core。** 去 Live2D 官网下载 Cubism SDK for Web（必须是 **5.x**，例如 5-r.4）。从里面拿出 `Core/live2dcubismcore.min.js`，放到：
+1. **Cubism Core。** 最简单：全局设置「桌宠」分区的「Live2D 支持」点「同意并下载」，会从 Live2D 官网下载 Cubism SDK for Web 5-r.4，只取出 Core 装好，正在用立绘代替的 Live2D 桌宠自动换回 Live2D。连不上官网时，自己去官网下载 SDK（必须是 **5.x**），点「选择本地文件…」选压缩包或里面的 `live2dcubismcore.min.js`。装之前会在隐藏页面里试加载一遍，坏文件和 6.x 不会替换已经能用的 Core。也可以手动放到：
    ```
    <VCPChat>\AppData\deskpet\live2dcubismcore.min.js
    ```
@@ -47,7 +47,7 @@
    <VCPChat>\AppData\Agents\<AgentId>\deskpet\<模型文件夹>\
    ```
    官方示例模型里 Mao、Natori 带表情文件，适合试情绪；Hiyori 没有表情文件，只能靠参数叠加看出变化。
-3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型可以在模型文件夹里放一个 `deskpet.json`：
+3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型在设置页「桌宠」分区选中这套形象，下面「表情映射 · 调整」里给每个情绪挑表情和动作，改一项桌宠就当场演一下，保存后写进模型文件夹的 `deskpet.json`（只改这 12 个情绪，文件里别的键保留）。也可以手写：
    ```json
    {
      "expressions": { "neutral": "Normal", "happy": "Smile", "shy": "Blushing", "sad": "Sad",
@@ -133,7 +133,7 @@ AppData\Agents\<AgentId>\deskpet\
 ## 文件
 
 - `modules/ipc/deskPetHandlers.js`：主进程部分，负责窗口、`vcp-deskpet://` 资源协议、提示词注入、把回复流转给桌宠、桌宠发言转给主窗口、右键菜单。
-- `modules/deskpet/`：`petPrefs.js` 是尺寸计算（按形象长宽比定窗口）和设置校验（纯函数），`outfits.js` 找出每个助手有哪几套形象（换装），`petControls.js` 管设置文件和全局快捷键，`settingsPage.js` 是设置页「桌宠」分区的主进程部分（卡片目录、换装、导入），`petPreviews.js` 在一个离屏窗口里给每套形象拍快照。设置页面板在 `modules/settings/schema/deskpet-panel.js`，样式在 `styles/ui-system/deskpet-settings.css`。
+- `modules/deskpet/`：`petPrefs.js` 是尺寸计算（按形象长宽比定窗口）和设置校验（纯函数），`outfits.js` 找出每个助手有哪几套形象（换装），`petControls.js` 管设置文件和全局快捷键，`settingsPage.js` 是设置页「桌宠」分区的主进程部分（卡片目录、换装、导入），`petPreviews.js` 在一个离屏窗口里给每套形象拍快照，`cubismCore.js` 下载、校验、安装 Cubism Core（试加载页面是 `DeskPetmodules/core-probe.html`）。设置页面板在 `modules/settings/schema/deskpet-panel.js`，样式在 `styles/ui-system/deskpet-settings.css`。
 - `DeskPetmodules/dock.css`：桌宠和设置页共用的胶囊 / 输入条 / 录音条；`dictation.js`：录音、重采样成 16 kHz WAV 交给本机 SenseVoice。
 - `DeskPetmodules/figure.js`：按不透明像素量形象的轮廓和头的位置，把脚底摆到窗口底边（纯函数）。
 - 给桌宠加会出声、会主动动的功能时，先看免打扰：页面里读 `window.deskPetPrefs.doNotDisturb`，或者监听 `window` 上的 `deskpet:prefs` 事件（`detail` 是 `{ scale, doNotDisturb }`）。

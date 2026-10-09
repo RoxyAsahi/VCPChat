@@ -23,6 +23,22 @@ const REVEAL_WAIT_MS = 4000;
 // 句与句之间、流式音频块之间的短暂空档不算念完。
 const DRAIN_GRACE_MS = 700;
 
+/**
+ * 助手设了「只念匹配的文字」正则时，这一句有没有能念出来的字（和主进程 SovitsTTS 切分的规则一致：
+ * 只有主正则时只念匹配的部分；有副正则时副正则匹配的部分总会念，其余部分再按主正则筛）。
+ * 一个字都念不出来的句子不送 TTS：TTS 会悄悄丢掉它，气泡就会一直等这句的声音。
+ */
+export function speaksAnything(text, { ttsRegex = '', ttsRegexSecondary = '' } = {}) {
+    if (!text || !text.trim()) return false;
+    try {
+        if (ttsRegexSecondary && new RegExp(ttsRegexSecondary).test(text)) return true;
+        if (!ttsRegex) return true;
+        return (text.match(new RegExp(ttsRegex, 'g')) || []).some((m) => m.trim());
+    } catch {
+        return true; // 正则写坏了：交给 TTS 自己处理
+    }
+}
+
 function clamp01(v) {
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
@@ -220,7 +236,7 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
     }
 
     function sendSentence(sentence) {
-        if (!sentence.text) return;
+        if (!sentence.text || !speaksAnything(sentence.text, reply.filter)) return;
         sentence.sent = true;
         reply.lastSent = sentence.index;
         if (reply.waitingSince == null) reply.waitingSince = Date.now();
@@ -309,6 +325,7 @@ export function createSpeech({ api, onChange, onFrame, onRelease, onLevel, onErr
             Promise.resolve(api.voiceBegin?.(messageId)).then((result) => {
                 if (reply !== current || current.mode !== 'pending') return;
                 current.mode = result?.speaking ? 'voice' : 'off';
+                current.filter = { ttsRegex: result?.ttsRegex || '', ttsRegexSecondary: result?.ttsRegexSecondary || '' };
                 if (current.mode === 'voice') {
                     player.stop();
                     for (const s of current.sentences) sendSentence(s);

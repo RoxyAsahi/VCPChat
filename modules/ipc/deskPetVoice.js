@@ -120,7 +120,8 @@ function registerIpc() {
         pruneClaims();
         claims.set(id, { contents: pet.win.webContents, until: 0 });
         speeches.set(pet, { messageId: id, session: null, options: status.config });
-        return { speaking: true };
+        // 页面按这两个正则跳过念不出字的句子（TTS 会悄悄丢掉它们，页面就会一直等那句的声音）
+        return { speaking: true, ttsRegex: status.config.ttsRegex || '', ttsRegexSecondary: status.config.ttsRegexSecondary || '' };
     });
 
     // 一句话：第一句开始新的朗读（停掉别处的），之后的接在后面

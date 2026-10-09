@@ -534,9 +534,11 @@
   position: absolute;
   top: 10px;
   right: 10px;
+  /* Q 版这种头顶到卡片上沿的快照会盖住角标：角标压在图上面、底色不透明 */
+  z-index: 1;
   padding: 0 7px;
   border-radius: 999px;
-  background: var(--dps-fill);
+  background: linear-gradient(var(--dps-fill), var(--dps-fill)), var(--dps-surface);
   color: var(--dps-ink-3);
   font-size: var(--vcp-ui-font-size-xs);
   line-height: 18px;
@@ -568,6 +570,94 @@
   justify-content: flex-end;
   padding: 10px 16px 12px;
   border-top: 1px solid var(--dps-line);
+}
+
+/* ---- Live2D 支持 ---- */
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-core .dps-card-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-core.is-wanted {
+  border-color: color-mix(in srgb, var(--dps-accent) 45%, var(--dps-line));
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-btn.dps-btn-primary {
+  border-color: var(--dps-accent);
+  background: var(--dps-accent);
+  color: var(--vcp-ui-on-accent);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-link {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dps-ink-3);
+  font-size: var(--vcp-ui-text-caption);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-link:hover {
+  color: var(--dps-ink);
+}
+
+/* ---- 表情映射 ---- */
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px 12px;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 8px;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-head {
+  color: var(--dps-ink-3);
+  font-size: var(--vcp-ui-text-caption);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-label {
+  color: var(--dps-ink);
+  font-size: var(--vcp-ui-text-caption);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-select {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--dps-line);
+  border-radius: 8px;
+  background: var(--dps-fill);
+  color: var(--dps-ink);
+  font-size: var(--vcp-ui-text-caption);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-select:disabled {
+  opacity: 0.7;
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map-try {
+  font-size: var(--vcp-ui-text-caption);
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-map .dps-card-actions {
+  gap: 8px;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .dps-shortcut .dps-row-title {
