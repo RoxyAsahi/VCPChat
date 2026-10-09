@@ -201,9 +201,9 @@ function defaultOutfit(outfits) {
         || choices.find((o) => o.id !== PORTRAIT_ID)
         || choices[0]
         || null;
+    // 内置 Nova 只给 Nova 当默认；其他助手没有自己的素材时仍显示头像，不会默认变成 Nova
     return outfits.find((o) => o.preferred)
-        || choose(outfits.filter((o) => !o.builtIn))
-        || choose(outfits.filter((o) => o.builtIn));
+        || choose(outfits.filter((o) => !o.builtIn));
 }
 
 function pickOutfit(outfits, wanted) {

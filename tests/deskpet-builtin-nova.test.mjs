@@ -84,3 +84,13 @@ test('the shipped three models have complete runtime references and are included
     const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
     assert.ok(pkg.build.files.some((item) => ['assets/', 'assets/**/*'].includes(item)));
 });
+
+test('an agent without its own art keeps its avatar instead of turning into Nova', async (t) => {
+    const { agent, bundle } = fixture(t);
+    fs.rmSync(path.join(agent, 'portrait.png'));
+    const list = await outfits.listOutfits(agent, { hasCore: true, builtInDir: bundle });
+    assert.equal(list.filter((o) => o.builtIn).length, 3, 'Nova stays selectable from the menu');
+    assert.equal(outfits.defaultOutfit(list), null);
+    assert.equal(outfits.pickOutfit(list, 'removed-preset'), null);
+    assert.equal(outfits.pickOutfit(list, 'builtin:nova-maid').id, 'builtin:nova-maid');
+});

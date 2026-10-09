@@ -36,6 +36,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
     let previewImage = find('.agent-portrait-preview-image');
     const focusMarker = find('.agent-portrait-focus-marker');
     const themeButtons = [...(host?.querySelectorAll?.('[data-portrait-preview-theme]') || [])];
+    const headerButtons = [...(host?.querySelectorAll?.('[data-portrait-header]') || [])];
     const heightInput = find('#agentPortraitHeight');
     const heightValue = find('#agentPortraitHeightValue');
     const resetButton = find('#agentPortraitResetBtn');
@@ -136,6 +137,14 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
 
         // 没有立绘时只留上传入口，预览主题、位置和高度都用不上
         host.dataset.hasPortrait = String(Boolean(defaultUrl));
+        // 首页顶部显示什么：没有立绘时只能是头像
+        const header = defaultUrl ? display.header : 'avatar';
+        host.dataset.header = header;
+        headerButtons.forEach(button => {
+            const mode = button.getAttribute('data-portrait-header');
+            button.setAttribute('aria-pressed', String(mode === header));
+            button.disabled = mode === 'portrait' && !defaultUrl;
+        });
         const shownVariant = previewTheme === 'light' && effectiveUrl('light') ? 'light' : 'default';
         const shownUrl = effectiveUrl(shownVariant);
         if (preview) {
@@ -255,6 +264,10 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
     on(doc, 'visibilitychange', syncPreviewPlayback);
     on(reducedMotion, 'change', syncPreviewPlayback);
 
+    headerButtons.forEach(button => on(button, 'click', () => {
+        setDisplay({ header: button.getAttribute('data-portrait-header') });
+    }));
+
     themeButtons.forEach(button => on(button, 'click', () => {
         previewTheme = button.getAttribute('data-portrait-preview-theme') === 'light' ? 'light' : 'default';
         render();
@@ -371,6 +384,7 @@ export function createAgentPortraitSettings({ host, api, win = globalThis.window
         summary() {
             if (!hasPortrait()) return '未设置，首页显示头像';
             const parts = ['已设置'];
+            if (display.header === 'avatar') parts.push('首页显示头像');
             if (effectiveUrl('light')) parts.push('含浅色版');
             if (pendingByAgent.get(agentId)?.size) parts.push('有未保存的图片');
             return parts.join(' · ');

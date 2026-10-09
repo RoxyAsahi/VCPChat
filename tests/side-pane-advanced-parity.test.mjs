@@ -335,6 +335,18 @@ test('Parity: an assistant with a portrait gets the portrait header, others keep
     assert.equal(portrait.hidden, true);
     assert.equal(decodes.length, 0);
 
+    // 助手设置里选了「头像」：有立绘也显示圆头像和名字，切回「立绘」再换上
+    current = { ...current, portraits: { default: 'portrait2.png' }, portraitDisplay: { header: 'avatar' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    current = { ...current, portraitDisplay: { header: 'portrait' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(images().image.getAttribute('src'), 'portrait2.png');
+
     // 快速切换：只有最后选中的那张会被换上
     current = { ...current, portraits: { default: 'first.png' } };
     ctrl.setLauncherProfileProvider(() => current);
