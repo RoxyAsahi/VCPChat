@@ -1,6 +1,6 @@
 # Desk pet integration handoff (#34), 2026-10-09 03:35Z
 ## Current state
-- PR #34 (draft): branch `claude/project-thread-njw5ge`, base #31 (`claude/project-thread-jgqxch`). Head **418fc36b**, pushed; new work branches from here.
+- PR #34 (draft): branch `claude/project-thread-njw5ge`, base #31 (`claude/project-thread-jgqxch`). Head **4f6e5bd8**, pushed; new work branches from here.
 - Last head with CI green: 8d98d89b (#54). Everything after it was merged on local checks only.
 - GitHub Actions has not run on RoxyAsahi/VCPChat since about 02:18Z (disabled or out of quota).
   Once it's back, run CI on the latest head and fix anything red first.
@@ -9,15 +9,11 @@
 - #57 pet comes back on top; #58 expression mapping; #56 / #61 review rounds 2 and 3
 - #59 reply-driven gestures; #60 fullscreen yield; #62 click-through mode
 - #64 header toggle removed, pet opened only from settings; #65 edge snapping
-- #66 head pats from the model's HitAreas; #67 wings no longer count toward head width
+- #66 head pats from the model's HitAreas; #67 wings no longer count toward head width; #63 chibi Nova v2
 - #60 (`yieldToFullscreen`) now **defaults to off**. Its PowerShell detection can only be tested on Windows CI.
   Switch it back on after that passes: petPrefs.js default plus deskpet-panel.js.
 ## Waiting
-- **#63 (chibi Nova v2): on hold.** With a non-neutral expression, lip sync stops.
-  - Cause is the model, not the code. Every exp3 sets `ParamExpNeutralHide=1`, which hides the neutral mouth.
-  - The expression mouths have no `ParamMouthOpenY` keyforms, so they can't open.
-  - The engine adds our mouth value after expressions (beforeModelUpdate), so the code is not overriding it.
-  - Fix belongs to the "Nova 图片转 Live2D" thread. Merge #63 once that's done.
+- Nothing waiting. #63 (chibi Nova v2) was merged at 4f6e5bd8 after the Nova thread fixed the expression mouths (lip sync, blink, grey band) and screenshot QA passed.
 ## How to merge (each PR, one at a time)
 1. Fetch `origin claude/project-thread-njw5ge` and fast-forward, then `git merge --no-ff --no-commit <pr head>`.
 2. Event graph conflict: `git checkout --ours docs/contracts/generated/chat-event-graph.json`,
