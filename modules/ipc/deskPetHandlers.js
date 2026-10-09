@@ -526,6 +526,12 @@ function clickThroughOn() {
     return controls?.get().clickThrough === true;
 }
 
+// 截图、录屏、共享屏幕时不出现在画面里（Linux 上 Electron 不支持，调用也无害）
+function applyCaptureHiding(win) {
+    if (!win || win.isDestroyed()) return;
+    try { win.setContentProtection(controls?.get().hideFromCapture === true); } catch { /* 平台不支持 */ }
+}
+
 function applyClickThrough(pet) {
     if (!pet || pet.win.isDestroyed()) return;
     const through = clickThroughOn() && !pet.interactive;
@@ -630,6 +636,7 @@ async function openPet(agentId, { anchor = null } = {}) {
             backgroundThrottling: false,
         },
     });
+    applyCaptureHiding(win);
     const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingToggle: null, readyWaiters: [] };
     // 上次藏在屏幕边里、位置没被挪过：接着藏，鼠标过来照样探出来
     const savedTuck = saved?.tuck;
@@ -1078,6 +1085,7 @@ function prefsFor(pet) {
         clickThrough: settings.clickThrough === true,
         opacity: settings.opacity ?? 1,
         wander: settings.wander === true,
+        followCursor: settings.followCursor !== false,
         // 页面提示里写怎么关：按平台写成 Ctrl / Cmd
         clickThroughKey: key.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl'),
     };
@@ -1925,7 +1933,8 @@ function initialize(options) {
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander')) broadcastPrefs();
+        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander' || key === 'followCursor')) broadcastPrefs();
+        if (changed.includes('hideFromCapture')) for (const pet of pets.values()) applyCaptureHiding(pet.win);
         if (changed.includes('wander') && controls.get().wander !== true) for (const pet of pets.values()) stopWalk(pet);
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
