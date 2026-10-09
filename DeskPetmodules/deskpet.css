@@ -175,6 +175,40 @@ html, body {
   animation: deskpet-caret 1s steps(1) infinite;
 }
 
+/* 正在回复：右上角一个停止键 */
+#bubbleStop {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(30, 33, 40, 0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+#bubbleStop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #fff;
+}
+
+#bubbleStop:hover {
+  background: rgba(200, 60, 50, 0.95);
+}
+
+#bubbleStop[hidden] {
+  display: none;
+}
+
 #bubbleState:empty {
   display: none;
 }
@@ -236,6 +270,56 @@ html, body {
 #toolCard[data-status="failed"] {
   background: rgba(255, 236, 236, 0.95);
   color: #a02a2a;
+}
+
+/* 要一起发的文件 */
+#attachTray {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: deskpet-bubble-in 160ms cubic-bezier(.25, 1, .5, 1);
+}
+
+#attachTray[hidden] {
+  display: none;
+}
+
+#attachText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#attachClear {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.07);
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#attachClear:hover {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* 文件拖到桌宠上方：角色周围亮一圈，知道松手能收到 */
+body.is-drop-target #stage {
+  filter: drop-shadow(0 0 6px rgba(90, 160, 255, 0.95)) drop-shadow(0 0 2px rgba(90, 160, 255, 0.95));
 }
 
 #bubble.is-alarm {
@@ -304,6 +388,42 @@ body.is-preview #lifeFx {
   opacity: 0.75;
   pointer-events: none;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* 回复说完时人不在（桌宠藏着、一直没碰键盘鼠标）：头边留个小气泡，点一下再说一遍 */
+#missedBadge {
+  position: absolute;
+  left: clamp(4px, calc(var(--pet-head-x, 50%) + var(--pet-head-w, 80px) * 0.5 - 6px), calc(100% - 34px));
+  top: calc(var(--pet-head, 150px) + 22px);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-size: 16px;
+  line-height: 30px;
+  cursor: pointer;
+  animation: deskpet-missed-bob 1.6s ease-in-out infinite;
+}
+
+#missedBadge[hidden] {
+  display: none;
+}
+
+#missedBadge:hover {
+  animation: none;
+  transform: scale(1.1);
+}
+
+body.is-paused #missedBadge {
+  animation: none;
+}
+
+@keyframes deskpet-missed-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 /* 只看不点时头顶另一边一个小幽灵：知道为什么点不到它 */

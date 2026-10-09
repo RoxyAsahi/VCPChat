@@ -17,6 +17,8 @@ Before/after scans use actual application handlers, renderer and privately insta
 - The current desk-pet suite passes 152/152; chat contracts pass 66 contracts / 843 events. No IPC or renderer code changed.
 - Reopening each saved native project and re-exporting produces identical moc3 and texture SHA256. Replaying the portable author script from the saved hair-repair baseline also produces identical moc3 and texture SHA256.
 
+The integration branch advanced during authoring to `929143477` (stop button, tray state, missed replies, attachments, voice shortcut and edge tuck). That base was merged normally into this continuation without changing Nova assets. On this newer code, desk-pet tests pass 166/166, contracts pass 66/848, and a separate real-Electron compatibility run passes 45 assertions across all three outfits, closed-eye expressions and visible reply bubbles. The original pose/pixel measurements above remain recorded against the pre-sync renderer; the newer run verifies application compatibility, not a repeated pixel scan.
+
 `eyes-before-after.png` contains observational eye crops from the actual page renders. Before/after `vertices.json.gz` files retain the full Core vertex arrays; adjacent result JSON records the SHA256 of uncompressed UTF-8 JSON. Pixel and archive reports define their thresholds and hashes.
 
 This remains a draft. Mouth shapes (D5), maid noise/mouth frame (D6), tech skin/edge rectangles (D7), expression authoring (D8), maid chin shading, Q-model details and broader settings/features handoffs still require work. This repair does not claim a complete art or Live2D acceptance.

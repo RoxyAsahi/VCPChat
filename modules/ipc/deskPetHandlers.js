@@ -340,8 +340,9 @@ function fitPetsToDisplays() {
         const next = scaleChanged ? petPrefs.resizeAnchored(previous, size, area)
             : onScreen ? { x: b.x, y: b.y } : defaultPosition(index, size);
         if (scaleChanged || !onScreen || b.width !== size.width || b.height !== size.height) {
+            if (scaleChanged || !onScreen) untuck(pet);
             applyBounds(pet, { ...next, ...size });
-            if (scaleChanged || !onScreen) savePetState(pet.agentId, { x: next.x, y: next.y, ...(scaleChanged ? { scale: fitted } : {}) });
+            if (scaleChanged || !onScreen) savePetState(pet.agentId, { x: next.x, y: next.y, tuck: null, ...(scaleChanged ? { scale: fitted } : {}) });
         }
         if (scaleChanged) {
             resetShape(pet);
@@ -609,6 +610,14 @@ async function openPet(agentId, { anchor = null } = {}) {
         },
     });
     const pet = { win, contents: win.webContents, agentId, scale, outfit: outfitId, aspect, ignoringMouse: true, interactive: false, hitPoll: null, drag: null, lastShape: '', wheel: 0, ready: false, pendingToggle: null, readyWaiters: [] };
+    // 上次藏在屏幕边里、位置没被挪过：接着藏，鼠标过来照样探出来
+    const savedTuck = saved?.tuck;
+    if (!anchor && savedTuck?.tucked && savedTuck?.outPos) {
+        const [atX, atY] = win.getPosition();
+        if (savedTuck.tucked.x === atX && savedTuck.tucked.y === atY) {
+            pet.tuck = { side: savedTuck.side, tucked: savedTuck.tucked, outPos: savedTuck.outPos, isOut: false };
+        }
+    }
     pets.set(agentId, pet);
     rememberOpen(agentId, true);
 
@@ -646,6 +655,7 @@ async function openPet(agentId, { anchor = null } = {}) {
     win.on('closed', () => {
         voice.release(pet);
         clearInterval(pet.hitPoll);
+        clearTimeout(pet.tuckTimer);
         stopSnap(pet);
         stopDrag(pet);
         settleReady(pet, new Error('桌宠已经关了'));
@@ -679,16 +689,28 @@ function stopSnap(pet) {
     pet.snap = null;
 }
 
-function snapToEdge(pet, figure, { free = false } = {}) {
+// 那条边外面还有没有屏幕（扩展屏中间那条边不能藏：藏进去的半个身子会露在另一块屏上）
+function isOuterEdge(area, side, y) {
+    const x = side === 'left' ? area.x - 2 : area.x + area.width + 2;
+    try {
+        return !screen.getAllDisplays().some((d) => {
+            const b = d.bounds || d.workArea;
+            return b && x >= b.x && x < b.x + b.width && y >= b.y && y < b.y + b.height;
+        });
+    } catch {
+        return true;
+    }
+}
+
+// 窗口滑到 to（几帧，先快后慢）；滑完 done
+function slideTo(pet, to, done) {
     stopSnap(pet);
-    if (free || pet.win.isDestroyed()) return false;
     const win = pet.win.getBounds();
-    const inside = figure && figure.x >= -1 && figure.y >= -1
-        && figure.x + figure.width <= win.width + 1 && figure.y + figure.height <= win.height + 1;
-    if (!inside) return false;
-    const target = edgeSnap.snapPosition(win, figure, workAreaAt(win));
-    if (!target || (target.x === win.x && target.y === win.y)) return false;
-    const frames = edgeSnap.snapFrames(win, target);
+    if (to.x === win.x && to.y === win.y) {
+        done?.();
+        return;
+    }
+    const frames = edgeSnap.snapFrames(win, to);
     const size = sizeOf(pet);
     pet.snap = setInterval(() => {
         const next = frames.shift();
@@ -699,10 +721,60 @@ function snapToEdge(pet, figure, { free = false } = {}) {
         applyBounds(pet, { ...next, ...size }, { verify: false });
         if (!frames.length) {
             stopSnap(pet);
-            savePetPosition(pet.agentId, [next.x, next.y]).catch(() => {});
+            done?.();
         }
     }, DRAG_TICK_MS);
+}
+
+function snapToEdge(pet, figure, { free = false } = {}) {
+    stopSnap(pet);
+    pet.tuck = null;
+    if (free || pet.win.isDestroyed()) return false;
+    const win = pet.win.getBounds();
+    const area = workAreaAt(win);
+    // 拖出去一大截：收进边里只露一条，鼠标过来、有话说时探出来（见 setWantOut）
+    const tuck = figure && edgeSnap.tuckPosition(win, figure, area, (side, y) => isOuterEdge(area, side, y));
+    if (tuck) {
+        pet.tuck = { side: tuck.side, tucked: tuck.tucked, outPos: tuck.out, isOut: false };
+        slideTo(pet, tuck.tucked, () => savePetState(pet.agentId, {
+            x: tuck.tucked.x, y: tuck.tucked.y, tuck: { side: tuck.side, tucked: tuck.tucked, outPos: tuck.out },
+        }).catch(() => {}));
+        return true;
+    }
+    savePetState(pet.agentId, { tuck: null }).catch(() => {});
+    const inside = figure && figure.x >= -1 && figure.y >= -1
+        && figure.x + figure.width <= win.width + 1 && figure.y + figure.height <= win.height + 1;
+    if (!inside) return false;
+    const target = edgeSnap.snapPosition(win, figure, area);
+    if (!target || (target.x === win.x && target.y === win.y)) return false;
+    slideTo(pet, target, () => savePetPosition(pet.agentId, [target.x, target.y]).catch(() => {}));
     return true;
+}
+
+// 大小变了、换了屏：窗口整个挪回屏里，藏边作废
+function untuck(pet) {
+    clearTimeout(pet.tuckTimer);
+    pet.tuck = null;
+}
+
+// 藏在边里的桌宠：鼠标停在露出来的那条上、气泡或输入框开着时整只探出来；都没了等一会儿再缩回去。
+const TUCK_BACK_MS = 1200;
+function setWantOut(pet, want) {
+    const tuck = pet.tuck;
+    if (!tuck || pet.drag || pet.win.isDestroyed()) return;
+    clearTimeout(pet.tuckTimer);
+    if (want) {
+        if (!tuck.isOut) {
+            tuck.isOut = true;
+            slideTo(pet, tuck.outPos);
+        }
+    } else if (tuck.isOut) {
+        pet.tuckTimer = setTimeout(() => {
+            if (pet.tuck !== tuck || pet.drag || pet.win.isDestroyed()) return;
+            tuck.isOut = false;
+            slideTo(pet, tuck.tucked);
+        }, TUCK_BACK_MS);
+    }
 }
 
 function stopDrag(pet, { save = false } = {}) {
@@ -813,7 +885,23 @@ function onFullResponse(messageId, context, response) {
 
 // ---- 从桌宠发消息：交给主窗口按正常流程发送 -----------------------------------
 
-function sendFromPet(agentId, text) {
+// 桌宠带过来的文件：拖进来的（本机路径）或粘贴的图片（字节）。主窗口按拖进输入框的流程存成附件。
+const MAX_SEND_FILES = 10;
+const MAX_SEND_FILE_BYTES = 20 * 1024 * 1024;
+
+function cleanSendFiles(files) {
+    if (!Array.isArray(files)) return [];
+    const out = [];
+    for (const file of files.slice(0, MAX_SEND_FILES)) {
+        const name = typeof file?.name === 'string' && file.name ? path.basename(file.name).slice(0, 255) : '文件';
+        const type = typeof file?.type === 'string' ? file.type.slice(0, 100) : '';
+        if (typeof file?.path === 'string' && path.isAbsolute(file.path)) out.push({ path: file.path, name, type });
+        else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_SEND_FILE_BYTES) out.push({ data: Buffer.from(file.data), name, type });
+    }
+    return out;
+}
+
+function sendFromPet(agentId, text, files = []) {
     if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
@@ -827,7 +915,7 @@ function sendFromPet(agentId, text) {
             resolve(result || { success: false });
         });
         // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
     });
 }
 
@@ -898,10 +986,11 @@ function applyAspect(pet, aspect) {
     const size = sizeOf(pet);
     if (size.width === previous.width && size.height === previous.height) return false;
     const target = petPrefs.resizeAnchored(previous, size, area);
+    untuck(pet);
     applyBounds(pet, target);
     resetShape(pet);
     sendPrefs(pet);
-    savePetState(pet.agentId, { x: target.x, y: target.y, scale: pet.scale });
+    savePetState(pet.agentId, { x: target.x, y: target.y, scale: pet.scale, tuck: null });
     return true;
 }
 
@@ -958,10 +1047,11 @@ function setPetScale(agentId, scale) {
     const previous = { ...bounds, ...sizeOf(pet) };
     pet.scale = next;
     const target = petPrefs.resizeAnchored(previous, sizeOf(pet), area);
+    untuck(pet);
     applyBounds(pet, target);
     resetShape(pet);
     sendPrefs(pet);
-    savePetState(agentId, { x: target.x, y: target.y, scale: next });
+    savePetState(agentId, { x: target.x, y: target.y, scale: next, tuck: null });
     controls?.refreshSettings();
     return next;
 }
@@ -1010,8 +1100,9 @@ async function toggleAllPets() {
     refreshTray();
 }
 
-/** 快捷键「和桌宠说话」：叫出最近用过的那个桌宠并打开输入框；输入框已经开着就收起。 */
-async function talkToPet() {
+/** 快捷键「和桌宠说话」：叫出最近用过的那个桌宠并打开输入框；输入框已经开着就收起。
+ *  语音那个键（voice）：开始录音；正在录就停下、识别完直接发。 */
+async function talkToPet({ voice = false } = {}) {
     let pet = (lastTouched && pets.get(lastTouched)) || [...pets.values()].find((p) => !p.win.isDestroyed() && p.win.isVisible())
         || [...pets.values()].find((p) => !p.win.isDestroyed());
     if (!pet) {
@@ -1024,7 +1115,7 @@ async function talkToPet() {
         notifyMain(pet.agentId);
     }
     lastTouched = pet.agentId;
-    openInput(pet, { toggle: true });
+    openInput(pet, voice ? { voice: true } : { toggle: true });
 }
 
 // 刚打开的桌宠页面还没准备好（形象还在载入）时先记着，页面报 ready 以后再弹输入框
@@ -1142,32 +1233,66 @@ function trayMenuItems() {
     const hasCandidate = live.length > 0 || settings.openAgents.length > 0 || Boolean(settings.lastAgent);
     // 只显示快捷键，不在菜单里再注册一次（全局快捷键已经注册过了）
     const shortcut = (id) => (settings.shortcuts[id] ? { accelerator: settings.shortcuts[id], registerAccelerator: false } : {});
+    const toggle = () => toggleAllPets().catch(() => {});
+    // 显示 / 隐藏是两项轮流露出来，开关桌宠时只改 visible，不用换文字重建菜单
     return [{
         label: '桌宠',
         submenu: [
-            { label: anyVisible ? '隐藏桌宠' : '显示桌宠', ...shortcut('toggle'), enabled: hasCandidate, click: () => toggleAllPets().catch(() => {}) },
-            { label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
+            { id: 'deskpet-hide', label: '隐藏桌宠', ...shortcut('toggle'), visible: anyVisible, enabled: hasCandidate, click: toggle },
+            { id: 'deskpet-show', label: '显示桌宠', ...shortcut('toggle'), visible: !anyVisible, enabled: hasCandidate, click: toggle },
+            { id: 'deskpet-talk', label: '和桌宠说话', ...shortcut('talk'), enabled: hasCandidate, click: () => talkToPet().catch(() => {}) },
             { type: 'separator' },
-            { label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
-            { label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
+            { id: 'deskpet-dnd', label: '免打扰', type: 'checkbox', checked: settings.doNotDisturb, click: (item) => setDoNotDisturb(item.checked) },
+            { id: 'deskpet-click-through', label: '只看不点（鼠标穿透）', type: 'checkbox', checked: settings.clickThrough, ...shortcut('clickThrough'), click: (item) => setClickThrough(item.checked) },
             { label: '桌宠设置…', click: () => controls.openSettings() },
         ],
     }];
 }
 
-// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份），
-// 所以只在桌宠那一项真的变了时才重建。
-function trayMenuKey() {
-    return JSON.stringify(trayMenuItems(), (key, value) => (typeof value === 'function' ? undefined : value));
+// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份；同一份菜单再设一次不会）。
+// 所以内容没变不动；只是勾选、可用、显示变了就改现有菜单（applyTrayState）；只有文字、快捷键这些变了才重建。
+const TRAY_STATE_FIELDS = ['checked', 'enabled', 'visible'];
+
+function trayMenuKey(items, { stateOnly = false } = {}) {
+    return JSON.stringify(items, (key, value) => {
+        if (typeof value === 'function') return undefined;
+        if (stateOnly && TRAY_STATE_FIELDS.includes(key)) return undefined;
+        return value;
+    });
 }
 
+function trayStateItems(items, out = []) {
+    for (const item of items) {
+        if (item.id) out.push(item);
+        if (Array.isArray(item.submenu)) trayStateItems(item.submenu, out);
+    }
+    return out;
+}
+
+/** 把桌宠那几项的勾选、可用、显示写进已经建好的菜单；少了哪一项返回 false（要重建）。 */
+function applyTrayState(menu) {
+    const items = trayStateItems(trayMenuItems());
+    const targets = items.map((item) => menu?.getMenuItemById?.(item.id));
+    if (targets.some((target) => !target)) return false;
+    items.forEach((item, index) => {
+        for (const field of TRAY_STATE_FIELDS) if (field in item) targets[index][field] = item[field];
+    });
+    return true;
+}
+
+/** rebuild(structureChanged)：structureChanged 为 false 时只是状态变了，可以用 applyTrayState 改现有菜单。 */
 function refreshWhenChanged(rebuild) {
     let shown = null;
+    let shape = null;
     return () => {
-        const key = trayMenuKey();
+        const items = trayMenuItems();
+        const key = trayMenuKey(items);
         if (key === shown) return;
+        const nextShape = trayMenuKey(items, { stateOnly: true });
+        const structureChanged = nextShape !== shape;
         shown = key;
-        rebuild();
+        shape = nextShape;
+        rebuild(structureChanged);
     };
 }
 
@@ -1400,11 +1525,12 @@ function registerIpc() {
         const pet = petFromEvent(event);
         return pet ? readMood(pet.agentId) : null;
     });
-    ipcMain.handle('deskpet:send', async (event, text) => {
+    ipcMain.handle('deskpet:send', async (event, text, files) => {
         const pet = petFromEvent(event);
         const message = typeof text === 'string' ? text.trim() : '';
-        if (!pet || !message) return { success: false, error: '没有内容' };
-        return sendFromPet(pet.agentId, message.slice(0, 8000));
+        const attached = cleanSendFiles(files);
+        if (!pet || (!message && !attached.length)) return { success: false, error: '没有内容' };
+        return sendFromPet(pet.agentId, message.slice(0, 8000), attached);
     });
     // 输入框打开时整窗可点、可聚焦；关上后回到按像素穿透。
     ipcMain.on('deskpet:set-interactive', (event, on) => {
@@ -1429,6 +1555,17 @@ function registerIpc() {
         }
     });
     ipcMain.on('deskpet:open-main', () => openMainWindow());
+    // 桌宠上点了停止：交给主窗口按它的中止流程停掉那条回复
+    ipcMain.on('deskpet:interrupt', (event, messageId) => {
+        const pet = petFromEvent(event);
+        if (!pet || typeof messageId !== 'string' || !messageId || messageId.length > 200) return;
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('deskpet:interrupt-request', { agentId: pet.agentId, messageId });
+    });
+    // 多久没碰键盘鼠标了（秒）：回复说完时人在不在
+    ipcMain.handle('deskpet:idle-seconds', () => {
+        try { return electron.powerMonitor?.getSystemIdleTime?.() ?? 0; } catch { return 0; }
+    });
     ipcMain.on('deskpet:open-topic', (event, topicId) => {
         const pet = petFromEvent(event);
         if (!pet) return;
@@ -1439,6 +1576,11 @@ function registerIpc() {
     ipcMain.on('deskpet:hit', (event, hit) => {
         const pet = petFromEvent(event);
         if (pet) setIgnoreMouse(pet, !hit);
+    });
+    // 藏在边里时：页面说现在要不要探出来（鼠标在角色上、气泡或输入框开着）
+    ipcMain.on('deskpet:want-out', (event, want) => {
+        const pet = petFromEvent(event);
+        if (pet) setWantOut(pet, want === true);
     });
     ipcMain.on('deskpet:content-bounds', (event, rect) => {
         const pet = petFromEvent(event);
@@ -1462,6 +1604,9 @@ function registerIpc() {
         // 先收掉旧的定时器，否则它会一直跟着光标，drag-end 之后还会每帧抛异常。
         stopDrag(pet);
         stopSnap(pet);
+        // 拿起来了：藏边的状态作废，松手时重新算
+        clearTimeout(pet.tuckTimer);
+        pet.tuck = null;
         const p = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y) ? origin : screen.getCursorScreenPoint();
         const [wx, wy] = pet.win.getPosition();
         const drag = { dx: p.x - wx, dy: p.y - wy, timer: null, startedAt: Date.now() };
@@ -1560,6 +1705,7 @@ function initialize(options) {
         actions: {
             toggleAll: () => toggleAllPets().catch((error) => console.warn('[DeskPet] toggle failed:', error.message)),
             talk: () => talkToPet().catch((error) => console.warn('[DeskPet] talk failed:', error.message)),
+            voice: () => talkToPet({ voice: true }).catch((error) => console.warn('[DeskPet] voice failed:', error.message)),
             listPets: listPetsForSettings,
             setScale: (agentId, scale) => setPetScale(agentId, scale),
             sendToSettings: settingsPush.changed,
@@ -1672,6 +1818,7 @@ module.exports = {
     closeAll,
     // 托盘：main.js 建菜单时取「桌宠」这一项，并在桌宠状态变了时重建菜单
     trayMenuItems: isolated('trayMenuItems', trayMenuItems, []),
+    applyTrayState: isolated('applyTrayState', applyTrayState, false),
     setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', refreshWhenChanged(fn)) : () => {}; },
     getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
     appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),

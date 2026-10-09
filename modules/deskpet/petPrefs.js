@@ -29,6 +29,8 @@ const SIZE_GRID = 4;
 const SHORTCUT_ACTIONS = Object.freeze({
     toggle: { label: '显示/隐藏桌宠', defaultAccelerator: 'CommandOrControl+Alt+Shift+P' },
     talk: { label: '和桌宠说话', defaultAccelerator: 'CommandOrControl+Alt+Shift+M' },
+    // 按一下开始录音，再按一下识别完直接发出去（不用碰鼠标）
+    voice: { label: '对桌宠说话（语音，再按一下发送）', defaultAccelerator: 'CommandOrControl+Alt+Shift+V' },
     clickThrough: { label: '只看不点（鼠标穿透）', defaultAccelerator: 'CommandOrControl+Alt+Shift+T' },
 });
 

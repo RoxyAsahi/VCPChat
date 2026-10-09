@@ -1,7 +1,35 @@
 'use strict';
 
 // 桌宠窗口专用 preload（DeskPetmodules/deskpet.html）。窗口开着沙箱，这里只用 electron。
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+// 拖进来的文件：真实路径只能在这里由 webUtils 取到。只认这样取到过的路径，
+// 页面不能随手编一个本机路径让主窗口当附件发出去。
+const MAX_FILES = 10;
+const MAX_PASTE_BYTES = 20 * 1024 * 1024;
+const droppedPaths = new Set();
+
+function filePath(file) {
+    try {
+        const resolved = webUtils?.getPathForFile?.(file) || '';
+        if (resolved) droppedPaths.add(resolved);
+        return resolved;
+    } catch {
+        return '';
+    }
+}
+
+function cleanFiles(files) {
+    if (!Array.isArray(files)) return [];
+    const out = [];
+    for (const file of files.slice(0, MAX_FILES)) {
+        const name = String(file?.name || '').slice(0, 255) || '文件';
+        const type = String(file?.type || '').slice(0, 100);
+        if (typeof file?.path === 'string' && droppedPaths.has(file.path)) out.push({ path: file.path, name, type });
+        else if (file?.data instanceof Uint8Array && file.data.length > 0 && file.data.length <= MAX_PASTE_BYTES) out.push({ data: file.data, name, type });
+    }
+    return out;
+}
 
 // 渠道名写成字面量，事件图能静态登记每个订阅。
 function onStream(callback) {
@@ -20,8 +48,12 @@ function onCursor(callback) {
 
 function onOpenInput(callback) {
     if (typeof callback !== 'function') return () => {};
-    // submit：设置页预览里输入的话，由桌宠直接发出去
-    const listener = (_event, options) => callback({ toggle: options?.toggle === true, submit: typeof options?.submit === 'string' ? options.submit : '' });
+    // submit：设置页预览里输入的话，由桌宠直接发出去；voice：语音快捷键（开始录 / 停下发出去）
+    const listener = (_event, options) => callback({
+        toggle: options?.toggle === true,
+        submit: typeof options?.submit === 'string' ? options.submit : '',
+        voice: options?.voice === true,
+    });
     ipcRenderer.on('deskpet:open-input', listener);
     return () => ipcRenderer.removeListener('deskpet:open-input', listener);
 }
@@ -95,7 +127,8 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     touched: () => ipcRenderer.send('deskpet:touched'),
     getMood: () => ipcRenderer.invoke('deskpet:get-mood'),
     onMood,
-    send: text => ipcRenderer.invoke('deskpet:send', String(text || '')),
+    send: (text, files) => ipcRenderer.invoke('deskpet:send', String(text || ''), cleanFiles(files)),
+    filePath,
     onStream,
     onCursor,
     onOpenInput,
@@ -121,6 +154,9 @@ contextBridge.exposeInMainWorld('deskPetAPI', Object.freeze({
     },
     openContextMenu: () => ipcRenderer.send('deskpet:context-menu'),
     openMainWindow: () => ipcRenderer.send('deskpet:open-main'),
+    interrupt: messageId => ipcRenderer.send('deskpet:interrupt', String(messageId || '')),
+    idleSeconds: () => ipcRenderer.invoke('deskpet:idle-seconds'),
+    wantOut: want => ipcRenderer.send('deskpet:want-out', want === true),
     openTopic: topicId => ipcRenderer.send('deskpet:open-topic', String(topicId || '')),
     // 页面准备好了（输入框能用了）
     pageReady: () => ipcRenderer.send('deskpet:page-ready'),
