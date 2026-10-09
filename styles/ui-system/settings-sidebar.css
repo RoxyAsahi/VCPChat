@@ -3318,18 +3318,18 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot:not([data-s
     border-style: solid;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb img {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb :is(img, video) {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb img[hidden] {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb :is(img, video)[hidden] {
     display: none;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot[data-state="removing"] .agent-portrait-slot-thumb img {
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot[data-state="removing"] .agent-portrait-slot-thumb :is(img, video) {
     opacity: 0.35;
 }
 

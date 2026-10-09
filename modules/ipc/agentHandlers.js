@@ -39,7 +39,8 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
 
 // 立绘：Agent 目录下的 portrait.<ext> 是默认立绘，portrait.<key>.<ext> 是同一角色的其他版本
 // （light 给浅色主题用；以后的差分立绘也按这个规则取名，不用改读取逻辑）。
-const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp|avif))$/i;
+// 立绘可以是图片、动图或静音循环播放的短视频（mp4、webm）。
+const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp|avif|mp4|webm))$/i;
 
 async function findPortraitUrls(agentDir) {
     let names;
@@ -63,13 +64,18 @@ async function findPortraitUrls(agentDir) {
     return portraits.default ? portraits : null;
 }
 
+// 和设置页（modules/ui-system/side-pane/portrait-media.js）的类型和上限一致
 const PORTRAIT_TYPE_EXTENSIONS = Object.freeze({
     'image/png': '.png',
+    'image/apng': '.png',
     'image/jpeg': '.jpg',
     'image/webp': '.webp',
-    'image/gif': '.gif'
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm'
 });
 const PORTRAIT_MAX_BYTES = 20 * 1024 * 1024;
+const PORTRAIT_VIDEO_MAX_BYTES = 64 * 1024 * 1024;
 
 function normalizePortraitVariant(variant) {
     const key = typeof variant === 'string' ? variant.trim().toLowerCase() : '';
@@ -356,10 +362,12 @@ function initialize(context) {
         const key = normalizePortraitVariant(variant);
         if (!agentDir || !key) return { error: '无效的 Agent 或立绘类型。' };
         const ext = PORTRAIT_TYPE_EXTENSIONS[imageData?.type];
-        if (!ext) return { error: '立绘只支持 PNG、JPEG、WebP 或 GIF 图片。' };
+        if (!ext) return { error: '立绘只支持 PNG、JPEG、WebP、GIF 图片或 MP4、WebM 视频。' };
         const buffer = imageData?.buffer ? Buffer.from(imageData.buffer) : null;
-        if (!buffer?.length) return { error: '立绘图片是空的。' };
-        if (buffer.length > PORTRAIT_MAX_BYTES) return { error: `立绘图片不能超过 ${PORTRAIT_MAX_BYTES / 1024 / 1024}MB。` };
+        if (!buffer?.length) return { error: '立绘文件是空的。' };
+        const video = imageData.type.startsWith('video/');
+        const maxBytes = video ? PORTRAIT_VIDEO_MAX_BYTES : PORTRAIT_MAX_BYTES;
+        if (buffer.length > maxBytes) return { error: `立绘${video ? '视频' : '图片'}不能超过 ${maxBytes / 1024 / 1024}MB。` };
         try {
             if (!(await fs.pathExists(agentDir))) return { error: 'Agent 不存在。' };
             await writePortraitFile(agentDir, key, ext, buffer);
