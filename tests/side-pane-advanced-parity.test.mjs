@@ -41,6 +41,16 @@ function createParityTestDOM() {
             <div class="side-pane-content-container">
                 <section class="side-pane-view active" id="sidePaneViewNotifications" data-tab-id="notifications"></section>
                 <section class="side-pane-view" id="sidePaneViewLauncher" data-tab-id="launcher" hidden>
+                    <div class="side-pane-launcher-portrait" aria-hidden="true" hidden>
+                        <div class="side-pane-launcher-portrait-layer" data-portrait-active>
+                            <img data-portrait-theme="default" alt="">
+                            <img data-portrait-theme="light" alt="" hidden>
+                        </div>
+                        <div class="side-pane-launcher-portrait-layer">
+                            <img data-portrait-theme="default" alt="" hidden>
+                            <img data-portrait-theme="light" alt="" hidden>
+                        </div>
+                    </div>
                     <div class="side-pane-launcher-profile" hidden>
                         <button type="button" class="side-pane-launcher-avatar"><img alt=""></button>
                         <input type="text" class="side-pane-launcher-name" readonly>
@@ -250,6 +260,181 @@ test('Parity: the new tab page shows the current assistant and its avatar edit e
     current = null;
     ctrl.showLauncher();
     assert.equal(profile.hidden, true);
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: an assistant with a portrait gets the portrait header, others keep the avatar', async () => {
+    const dom = createParityTestDOM();
+    const doc = dom.window.document;
+    const view = doc.getElementById('sidePaneViewLauncher');
+    const portrait = view.querySelector('.side-pane-launcher-portrait');
+    const images = () => ({
+        image: portrait.querySelector('[data-portrait-theme="default"]'),
+        lightImage: portrait.querySelector('[data-portrait-theme="light"]')
+    });
+    // jsdom 不解码图片：文件名带 broken 的当作坏图，其余在测试放行时解码完成
+    const decodes = [];
+    dom.window.HTMLImageElement.prototype.decode = function decode() {
+        const src = this.getAttribute('src') || '';
+        return new Promise((resolve, reject) => decodes.push(() => (src.includes('broken') ? reject(new Error('EncodingError')) : resolve())));
+    };
+    const settle = async () => {
+        while (decodes.length) {
+            decodes.splice(0).forEach(run => run());
+            await tick();
+        }
+    };
+    let current = { name: 'Nova', avatarUrl: 'nova.png', portraits: { default: 'portrait.png', light: 'portrait.light.png', smile: 'portrait.smile.png' } };
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+
+    // 解码完之前还是圆头像，不出现空白的立绘区
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, 'themed');
+    assert.equal(portrait.hidden, false);
+    assert.equal(images().image.getAttribute('src'), 'portrait.png');
+    assert.equal(images().lightImage.hidden, false);
+    assert.equal(images().lightImage.getAttribute('src'), 'portrait.light.png');
+
+    // 只有默认立绘：浅色主题也用这一张
+    current = { ...current, portraits: { default: 'portrait.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(images().lightImage.hidden, true);
+    assert.equal(images().lightImage.hasAttribute('src'), false);
+
+    // 换成另一张：新图解码完之前旧图留着，解码完整张换上
+    current = { ...current, portraits: { default: 'portrait2.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(images().image.getAttribute('src'), 'portrait.png');
+    await settle();
+    assert.equal(images().image.getAttribute('src'), 'portrait2.png');
+
+    // 浅色立绘坏了：两个主题都用默认那张
+    current = { ...current, portraits: { default: 'portrait2.png', light: 'broken.light.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(images().image.getAttribute('src'), 'portrait2.png');
+
+    // 默认立绘坏了：退回圆头像，再次打开新标签页也不会把空白的立绘区放出来
+    current = { ...current, portraits: { default: 'broken.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(portrait.hidden, true);
+    assert.equal(decodes.length, 0);
+
+    // 助手设置里选了「头像」：有立绘也显示圆头像和名字，切回「立绘」再换上
+    current = { ...current, portraits: { default: 'portrait2.png' }, portraitDisplay: { header: 'avatar' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    current = { ...current, portraitDisplay: { header: 'portrait' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(images().image.getAttribute('src'), 'portrait2.png');
+
+    // 快速切换：只有最后选中的那张会被换上
+    current = { ...current, portraits: { default: 'first.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    current = { ...current, portraits: { default: 'last.png' } };
+    ctrl.setLauncherProfileProvider(() => current);
+    await settle();
+    assert.equal(images().image.getAttribute('src'), 'last.png');
+
+    // 换到没有立绘的助手
+    current = { name: '主题娘可可', avatarUrl: 'coco.png', portraits: null };
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.equal(view.dataset.launcherPortrait, undefined);
+    assert.equal(portrait.hidden, true);
+    assert.equal(images().image.hasAttribute('src'), false);
+    assert.equal(view.querySelector('.side-pane-launcher-profile img').getAttribute('src'), 'coco.png');
+
+    await ctrl.dispose();
+    dom.window.close();
+});
+
+test('Parity: emotion frames switch the portrait to the matching variant on the other layer', async () => {
+    const dom = createParityTestDOM();
+    const view = dom.window.document.getElementById('sidePaneViewLauncher');
+    const layers = [...view.querySelectorAll('.side-pane-launcher-portrait-layer')];
+    const shownSrc = () => {
+        const active = layers.find(layer => layer.hasAttribute('data-portrait-active'));
+        return [...active.querySelectorAll('img')].filter(img => !img.hidden).map(img => img.getAttribute('src'));
+    };
+    const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+    const current = {
+        name: 'Nova',
+        avatarUrl: 'nova.png',
+        portraits: { default: 'p.png', light: 'p.light.png', happy: 'p.happy.png', 'sad-light': 'p.sad-light.png', thinking: 'p.thinking.png' }
+    };
+    const ctrl = createController(dom, {
+        controller: { openTabEntries: [{ id: 'a', label: 'A', open() {} }, { id: 'b', label: 'B', open() {} }] }
+    });
+    ctrl.setLauncherProfileProvider(() => current);
+    await flush();
+    assert.deepEqual(shownSrc(), ['p.png', 'p.light.png']);
+    assert.ok(layers[0].hasAttribute('data-portrait-active'));
+
+    ctrl.setLauncherPortraitFrame({ state: null, emotion: 'happy' });
+    await flush();
+    // 换到另一层显示；happy 没有浅色版，浅色主题也用这一张
+    assert.ok(layers[1].hasAttribute('data-portrait-active'));
+    assert.ok(!layers[0].hasAttribute('data-portrait-active'));
+    assert.deepEqual(shownSrc(), ['p.happy.png']);
+    assert.equal(view.dataset.launcherPortrait, 'single');
+    assert.equal(view.dataset.launcherPortraitLook, 'happy');
+
+    // excited 没有图：按相近情绪用 happy，画面不变就不换层
+    ctrl.setLauncherPortraitFrame({ state: null, emotion: 'excited' });
+    await flush();
+    assert.ok(layers[1].hasAttribute('data-portrait-active'));
+
+    ctrl.setLauncherPortraitFrame({ state: 'thinking', emotion: 'happy' });
+    await flush();
+    assert.deepEqual(shownSrc(), ['p.thinking.png']);
+
+    // 只有浅色版的 sad：深色主题退回默认立绘
+    ctrl.setLauncherPortraitFrame({ state: null, emotion: 'sad' });
+    await flush();
+    assert.deepEqual(shownSrc(), ['p.png', 'p.sad-light.png']);
+    assert.equal(view.dataset.launcherPortrait, 'themed');
+
+    // 重新渲染资料（例如重新选中同一个助手）时保留当前情绪
+    ctrl.setLauncherProfileProvider(() => current);
+    assert.deepEqual(shownSrc(), ['p.png', 'p.sad-light.png']);
+
+    // 差分坏了：退到下一张能用的图
+    ctrl.setLauncherPortraitFrame({ state: null, emotion: 'happy' });
+    await flush();
+    const happyImage = layers.find(layer => layer.hasAttribute('data-portrait-active')).querySelector('img');
+    happyImage.dispatchEvent(new dom.window.Event('error'));
+    // 新图解码好之前旧的那张留着，解码完原地换上
+    await flush();
+    assert.deepEqual(shownSrc(), ['p.png', 'p.light.png']);
+    assert.equal(view.dataset.launcherPortrait, 'themed');
+
+    // 淡入前在屏幕外解码：解不出来的差分不会露面，直接退到下一张
+    dom.window.HTMLImageElement.prototype.decode = function decode() {
+        return (this.getAttribute('src') || '').includes('thinking') ? Promise.reject(new Error('EncodingError')) : Promise.resolve();
+    };
+    ctrl.setLauncherPortraitFrame({ state: 'thinking', emotion: 'neutral' });
+    await flush();
+    assert.deepEqual(shownSrc(), ['p.png', 'p.light.png']);
+    assert.ok(!view.querySelector('img[src="p.thinking.png"]'));
 
     await ctrl.dispose();
     dom.window.close();
