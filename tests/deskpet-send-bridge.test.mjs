@@ -96,3 +96,13 @@ test('two quick sends from the pet run one after the other', async () => {
     assert.equal(overlap, false, '第二次发送要等第一次的切换做完');
     assert.deepEqual(sent, ['Alice', 'Carol']);
 });
+
+test('a pet message whose request already timed out on the pet side is not sent late', async () => {
+    const { bridge, sent } = fakeMainWindow({ selectDelayMs: 80 });
+    const result = await bridge({ agentId: 'Alice', text: '你好', deadline: Date.now() + 20 });
+    assert.deepEqual(result, { success: false, error: '主窗口没有响应' });
+    assert.equal(sent.length, 0);
+    const fresh = await bridge({ agentId: 'Alice', text: '你好', deadline: Date.now() + 5000 });
+    assert.equal(fresh.success, true);
+    assert.equal(sent.length, 1);
+});

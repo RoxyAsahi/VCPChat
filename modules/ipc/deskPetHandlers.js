@@ -210,17 +210,35 @@ function petStatePath() {
     return path.join(paths.appDataRoot, 'deskpet', 'state.json');
 }
 
-async function readPetState() {
-    try { return await fs.readJson(petStatePath()); } catch { return {}; }
+async function readStateFile() {
+    let text;
+    try { text = await fs.readFile(petStatePath(), 'utf8'); } catch { return {}; }
+    try {
+        const state = JSON.parse(text);
+        return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
+    } catch {
+        // 写坏了（以前的版本写到一半被杀掉）：留一份备份再当空的，不让下一次保存把所有桌宠的位置、大小、形象一起冲掉而无从找回
+        await fs.copy(petStatePath(), `${petStatePath()}.bad`).catch(() => {});
+        return {};
+    }
 }
 
 // 读改写串行：拖动结束和改大小几乎同时保存时，后一次不会拿着旧内容把前一次盖掉。
+// 读也排在写后面，免得读到正在写的那一半。
 let stateWrites = Promise.resolve();
+async function readPetState() {
+    await stateWrites;
+    return readStateFile();
+}
+
 function savePetState(agentId, patch) {
     stateWrites = stateWrites.then(async () => {
-        const state = await readPetState();
+        const state = await readStateFile();
         state[agentId] = { ...(state[agentId] || {}), ...patch };
-        await fs.outputJson(petStatePath(), state, { spaces: 2 });
+        // 先写临时文件再改名：写到一半被杀掉也只丢这一次，不会留下半个文件
+        const tmp = `${petStatePath()}.tmp`;
+        await fs.outputJson(tmp, state, { spaces: 2 });
+        await fs.move(tmp, petStatePath(), { overwrite: true });
     }).catch((error) => console.warn('[DeskPet] state save failed:', error.message));
     return stateWrites;
 }
@@ -269,11 +287,22 @@ function workAreaAt(bounds) {
     }
 }
 
+function hasSavedPosition(saved) {
+    return Boolean(saved && Number.isFinite(saved.x) && Number.isFinite(saved.y));
+}
+
 function initialBounds(saved, size) {
     const fallback = defaultPosition(pets.size, size);
-    if (!saved || !Number.isFinite(saved.x) || !Number.isFinite(saved.y)) return { ...size, ...fallback };
+    if (!hasSavedPosition(saved)) return { ...size, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
-    return { ...size, ...(isOnScreen(saved.x, saved.y, size) ? { x: saved.x, y: saved.y } : fallback) };
+    if (!isOnScreen(saved.x, saved.y, size)) return { ...size, ...fallback };
+    // 在那块屏上放不全（换了分辨率、上次在更大的屏上）：整个挪回屏里
+    const area = workAreaAt({ x: saved.x, y: saved.y, ...size });
+    return {
+        ...size,
+        x: Math.min(Math.max(saved.x, area.x), area.x + area.width - size.width),
+        y: Math.min(Math.max(saved.y, area.y), area.y + area.height - size.height),
+    };
 }
 
 // 窗口位置和大小都从这里设。宽高总用算出来的值，不把 getBounds() 读回来的再写回去：
@@ -544,7 +573,9 @@ async function openPet(agentId, { anchor = null } = {}) {
     if (pets.has(agentId)) return openPet(agentId);
     const outfitId = outfit?.id || null;
     const aspect = outfitId ? savedAspect(saved, outfitId) : null;
-    const scale = petPrefs.fitScale(saved?.scale ?? 1, workAreaAt(anchor || saved || screen.getPrimaryDisplay().workArea), aspect);
+    // 按桌宠所在的那块屏限制大小（getDisplayMatching 要完整的矩形，只给 x/y 会退回主屏）
+    const savedRect = hasSavedPosition(saved) ? { x: saved.x, y: saved.y, ...petPrefs.windowSizeForScale(saved.scale ?? 1, aspect) } : null;
+    const scale = petPrefs.fitScale(saved?.scale ?? 1, workAreaAt(anchor || savedRect || screen.getPrimaryDisplay().workArea), aspect);
     const size = petPrefs.windowSizeForScale(scale, aspect);
     const win = new BrowserWindow({
         ...(anchor ? petPrefs.resizeAnchored(anchor, size, workAreaAt(anchor)) : initialBounds(saved, size)),
@@ -757,7 +788,8 @@ function sendFromPet(agentId, text) {
             pendingSends.delete(requestId);
             resolve(result || { success: false });
         });
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text });
+        // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
+        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, deadline: Date.now() + SEND_TIMEOUT_MS - 500 });
     });
 }
 
@@ -1564,6 +1596,8 @@ function initialize(options) {
         .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
     // 主窗口关掉时桌宠跟着关，否则剩下的透明窗口会让应用无法退出。
     mainWindow?.on?.('closed', closeAll);
+    // 退出时（macOS 上 Cmd+Q 会先关桌宠窗口、后关主窗口）桌宠被一起关掉不算用户关的，恢复列表照旧
+    electron.app?.on?.('before-quit', () => { shuttingDown = true; });
 }
 
 function closeAll() {

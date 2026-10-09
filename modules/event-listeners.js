@@ -1461,10 +1461,10 @@ export function setupEventListeners(deps) {
             sendMessage: request => chatManager.handleSendMessage(request),
             isBusy: () => sendMessageBtn.dataset.mode === 'interrupt',
         });
-        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text } = {}) => {
+        chatAPI.onDeskPetSendRequest?.(async ({ requestId, agentId, text, deadline } = {}) => {
             let result;
             try {
-                result = await sendFromPet({ agentId, text });
+                result = await sendFromPet({ agentId, text, deadline });
             } catch (error) {
                 result = { success: false, error: error.message };
             }
