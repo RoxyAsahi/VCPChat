@@ -254,7 +254,23 @@ export function buildDeskPetPanel(doc) {
     const opacityValue = el(doc, 'span', 'dps-size-value');
     opacityControl.append(opacitySlider, opacityValue);
     opacityRow.append(opacityCopy, opacityControl);
-    options.append(dnd.row, through.row, follow.row, wander.row, opacityRow, hideCapture.row, restore.row, yieldFs.row);
+    const idleRow = el(doc, 'div', 'dps-row');
+    const idleCopy = el(doc, 'span', 'dps-row-copy');
+    idleCopy.append(
+        el(doc, 'span', 'dps-row-title', '闲着时主动搭话'),
+        el(doc, 'span', 'dps-row-hint', '你在电脑前、但这么久没和 TA 说话时，TA 会主动说一句（记在「桌宠闲聊」话题里，点气泡接着聊）。每次会调用一次模型；离开电脑、深夜、免打扰时不说。'),
+    );
+    const idleSelect = el(doc, 'select', 'dps-agent');
+    idleSelect.id = 'deskPetIdleChat';
+    idleSelect.setAttribute('aria-label', '闲着时主动搭话');
+    idleSelect.dataset.vcpTypedPrimitiveMounted = 'true';
+    for (const [value, label] of [['off', '不主动说'], ['10', '每 10 分钟'], ['30', '每 30 分钟'], ['60', '每 60 分钟']]) {
+        const option = el(doc, 'option', '', label);
+        option.value = value;
+        idleSelect.append(option);
+    }
+    idleRow.append(idleCopy, idleSelect);
+    options.append(dnd.row, idleRow, through.row, follow.row, wander.row, opacityRow, hideCapture.row, restore.row, yieldFs.row);
 
     const shortcutsTitle = el(doc, 'h4', 'dps-subtitle', '快捷键');
     const shortcuts = el(doc, 'div', 'dps-card');
@@ -841,10 +857,13 @@ export function buildDeskPetPanel(doc) {
     mapToggle.addEventListener('click', () => setMapOpen(!mapping.open));
 
     function draftFrom(data) {
-        const draft = { expressions: {}, motions: {} };
+        const draft = { expressions: {}, motions: {}, taps: {} };
         for (const row of mapModule.describeMapping({ names: data.names, groups: data.groups, profile: data.profile, modelName: mapModule.modelNameOf(data.modelFile) })) {
             if (row.expressionSet) draft.expressions[row.emotion] = row.expression;
             if (row.motionSet) draft.motions[row.emotion] = row.motion ?? '';
+        }
+        for (const tap of mapModule.describeTaps({ names: data.names, groups: data.groups, profile: data.profile })) {
+            if (tap.expression || tap.motion) draft.taps[tap.zone] = { expression: tap.expression, motion: tap.motion };
         }
         return draft;
     }
@@ -883,7 +902,7 @@ export function buildDeskPetPanel(doc) {
         const modelName = mapModule.modelNameOf(data.modelFile);
         const rows = mapModule.describeMapping({ names: data.names, groups: data.groups, profile: mapping.draft, modelName });
         mapHint.textContent = data.editable
-            ? `回复里的情绪换成这个模型的哪个表情、顺带放哪个动作。「自动」按表情名猜。点 ▶ 在桌面上的桌宠身上试一下${data.showing ? '' : '（桌宠要先穿上这一套）'}，满意了再保存，存在模型旁边的 deskpet.json。`
+            ? `回复里的情绪换成这个模型的哪个表情、顺带放哪个动作；最下面两行是点头、点身体时的反应。「自动」按表情名猜。点 ▶ 在桌面上的桌宠身上试一下${data.showing ? '' : '（桌宠要先穿上这一套）'}，满意了再保存，存在模型旁边的 deskpet.json。`
             : '内置形象的映射已经调好，这里只能看；点 ▶ 可以在桌宠身上试。';
         if (!data.names.length && !data.groups.length) {
             mapList.replaceChildren(el(doc, 'p', 'dps-row-hint', '这个模型没有自带表情和动作，情绪只靠参数微调脸部（眉毛、眼睛、嘴角）。'));
@@ -924,6 +943,40 @@ export function buildDeskPetPanel(doc) {
             line.append(el(doc, 'span', 'dps-map-label', row.label), expr, motion, tryBtn);
             list.push(line);
         }
+        // 点头、点身体：默认是原来的反应（点头害羞、点身体开心），也可以自己挑一个表情 / 动作
+        const tapHead = el(doc, 'div', 'dps-map-row dps-map-head');
+        tapHead.append(el(doc, 'span', '', '被点到'), el(doc, 'span', '', '表情'), el(doc, 'span', '', '动作'), el(doc, 'span'));
+        list.push(tapHead);
+        const DEFAULT_TAP = { head: '害羞', body: '开心' };
+        for (const row of mapModule.describeTaps({ names: data.names, groups: data.groups, profile: mapping.draft })) {
+            const line = el(doc, 'div', 'dps-map-row');
+            const expr = el(doc, 'select', 'dps-map-select');
+            expr.dataset.vcpTypedPrimitiveMounted = 'true';
+            expr.setAttribute('aria-label', `${row.label}时的表情`);
+            expr.append(option(AUTO, `默认（${DEFAULT_TAP[row.zone]}）`), ...data.names.map((name) => option(name, name)));
+            expr.value = row.expression ?? AUTO;
+            const motion = el(doc, 'select', 'dps-map-select');
+            motion.dataset.vcpTypedPrimitiveMounted = 'true';
+            motion.setAttribute('aria-label', `${row.label}时的动作`);
+            motion.append(option(AUTO, '默认'), ...data.groups.map((group) => option(group, group)));
+            motion.value = row.motion ?? AUTO;
+            expr.disabled = !data.editable;
+            motion.disabled = !data.editable;
+            const tryBtn = button(doc, 'dps-icon-btn dps-map-try', '▶', { title: `在桌宠身上试试「${row.label}」`, 'aria-label': `试试${row.label}` });
+            const update = () => {
+                const bound = { expression: expr.value === AUTO ? null : expr.value, motion: motion.value === AUTO ? null : motion.value };
+                if (bound.expression || bound.motion) mapping.draft.taps[row.zone] = bound;
+                else delete mapping.draft.taps[row.zone];
+                mapping.dirty = true;
+                mapSaveBtn.disabled = false;
+                tryMapping(`tap:${row.zone}`, row.label);
+            };
+            expr.addEventListener('change', update);
+            motion.addEventListener('change', update);
+            tryBtn.addEventListener('click', () => tryMapping(`tap:${row.zone}`, row.label));
+            line.append(el(doc, 'span', 'dps-map-label', row.label), expr, motion, tryBtn);
+            list.push(line);
+        }
         mapList.replaceChildren(...list);
         mapSaveBtn.disabled = !data.editable || !mapping.dirty;
         mapResetBtn.disabled = !data.editable;
@@ -942,7 +995,7 @@ export function buildDeskPetPanel(doc) {
 
     mapResetBtn.addEventListener('click', () => {
         if (!mapping.data) return;
-        mapping.draft = { expressions: {}, motions: {} };
+        mapping.draft = { expressions: {}, motions: {}, taps: {} };
         mapping.dirty = true;
         renderMapping();
     });
@@ -976,6 +1029,7 @@ export function buildDeskPetPanel(doc) {
         hideCapture.input.checked = settings.hideFromCapture === true;
         // Linux 上 Electron 做不到「截图时不出现」
         hideCapture.row.hidden = state.snapshot.platform !== 'win32' && state.snapshot.platform !== 'darwin';
+        idleSelect.value = settings.idleChat === true ? String(settings.idleChatMinutes || 30) : 'off';
         const opacity = Number(settings.opacity ?? 1);
         if (doc.activeElement !== opacitySlider) opacitySlider.value = String(opacity);
         opacityValue.textContent = `${Math.round(Number(opacitySlider.value) * 100)}%`;
@@ -990,6 +1044,10 @@ export function buildDeskPetPanel(doc) {
     yieldFs.input.addEventListener('change', () => update({ yieldToFullscreen: yieldFs.input.checked }));
     through.input.addEventListener('change', () => update({ clickThrough: through.input.checked }));
     follow.input.addEventListener('change', () => update({ followCursor: follow.input.checked }));
+    idleSelect.addEventListener('change', () => {
+        const value = idleSelect.value;
+        update(value === 'off' ? { idleChat: false } : { idleChat: true, idleChatMinutes: Number(value) });
+    });
     wander.input.addEventListener('change', () => update({ wander: wander.input.checked }));
     hideCapture.input.addEventListener('change', () => update({ hideFromCapture: hideCapture.input.checked }));
     // 拖动时先只改数字，松手再存（拖的过程中桌宠不跟着一下下闪）

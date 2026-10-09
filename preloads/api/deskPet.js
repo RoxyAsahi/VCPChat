@@ -14,6 +14,9 @@ module.exports = {
         // 桌宠上输入的话由主窗口按正常流程发送；结果回给主进程。
         onDeskPetSendRequest: on('deskpet:send-request'),
         deskPetSendResult: send('deskpet:send-result', 'payload'),
+        // 闲时主动搭话写话题前问一声：主窗口现在开着哪个话题
+        onDeskPetWhereRequest: on('deskpet:where-request'),
+        deskPetWhereResult: send('deskpet:where-result', 'payload'),
         // 点桌宠上 AI 主动开的新话题：切到那个话题。
         onDeskPetOpenTopic: on('deskpet:open-topic'),
         // 工具审批：待批的转给桌宠一份，答完（任何一边）告诉桌宠收起；桌宠上点的允许/拒绝回到这里应答。

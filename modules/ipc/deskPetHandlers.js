@@ -11,7 +11,7 @@
 //   AppData/Agents/<id>/portrait.<ext>           默认立绘；再没有就用头像
 
 const electron = require('electron');
-const { BrowserWindow, ipcMain, protocol, net, screen, Menu, dialog, shell } = electron;
+const { BrowserWindow, ipcMain, protocol, net, screen, Menu } = electron;
 const path = require('path');
 const fs = require('fs-extra');
 const { pathToFileURL } = require('url');
@@ -19,6 +19,10 @@ const crypto = require('crypto');
 const voice = require('./deskPetVoice');
 const petPrefs = require('../deskpet/petPrefs');
 const outfitStore = require('../deskpet/outfits');
+const { createPetAssets, isAgentId, outfitSummary, SCHEME } = require('../deskpet/petAssets');
+const { createPetStateStore, rememberFigure, savedAspect, hasSavedPosition } = require('../deskpet/petState');
+const petTray = require('../deskpet/petTray');
+const { createIdleRunner } = require('../deskpet/idleRunner');
 const { createPetControls } = require('../deskpet/petControls');
 const { createPetPreviews } = require('../deskpet/petPreviews');
 const { createSettingsPage } = require('../deskpet/settingsPage');
@@ -27,9 +31,9 @@ const { createFullscreenWatch } = require('../deskpet/fullscreenWatch');
 const edgeSnap = require('../deskpet/edgeSnap');
 const throwMotion = require('../deskpet/throwMotion');
 const wander = require('../deskpet/wander');
+const idleChat = require('../deskpet/idleChat');
 const { getAgentMoodStore } = require('../agentMood');
 
-const SCHEME = 'vcp-deskpet';
 // 窗口大小随每个桌宠自己的缩放和形象的长宽比走（modules/deskpet/petPrefs.js）；不知道比例时 1 倍是 360×580，
 // 上方留出气泡和输入框的位置。
 // Windows：'pop-up-menu' 压住任务栏，又不像 'screen-saver' 那样和全屏程序抢；
@@ -40,7 +44,6 @@ const DRAG_TICK_MS = 16;
 // X11 上整窗穿透后 Chromium 收不到指针，getCursorScreenPoint() 会停在旧坐标，
 // 光标轮询就再也发现不了宠物；Linux 改为把窗口输入区裁到内容包围盒。
 const USE_SHAPE = process.platform === 'linux';
-const IMAGE_EXTENSIONS = outfitStore.IMAGE_EXTENSIONS;
 const SEND_TIMEOUT_MS = 10000;
 // 主窗口发出后还要等一会儿（最多 1.5 s）确认存进了历史才回结果：截止时间要把这段留出来，
 // 不然发出去了、结果却晚于桌宠的超时，用户再点一次就发了两遍
@@ -59,6 +62,8 @@ const TOPMOST_GUARD_MS = 10000;
 const USE_TOPMOST_GUARD = process.platform === 'win32';
 
 let paths = null; // { projectRoot, appDataRoot, agentDir }
+let assets = null; // modules/deskpet/petAssets.js：协议背后的文件、助手的形象清单
+let stateStore = null; // modules/deskpet/petState.js：AppData/deskpet/state.json
 let mainWindow = null;
 let initialized = false;
 const pets = new Map(); // agentId -> { win, scale, outfit, aspect, ignoringMouse, interactive, hitPoll, drag, lastShape }
@@ -72,6 +77,9 @@ let lastTouched = null; // 最近一次被点、被叫出来的桌宠，「和�
 let refreshTray = () => {};
 let lastTalkedAgentId = null; // 最近一次发出请求的 agent，闹钟认不出是谁设的时交给它的桌宠
 const alarms = new Map(); // id -> { timer, dueAt, text, maid }
+let idle = null; // 闲时主动搭话（modules/deskpet/idleRunner.js）
+const pendingWhere = new Map(); // requestId -> resolve：问主窗口现在开着哪个话题
+let services = {}; // { readSettings, historyQueue, agentOps }：main.js 传进来的聊天记录服务（取值函数）
 const announcedTopics = new Set(); // 已经在桌宠上说过的话题（同一请求重放时结果会重复回来）
 
 function registerSchemes() {
@@ -80,183 +88,22 @@ function registerSchemes() {
     ]);
 }
 
-function isInside(base, file) {
-    const rel = path.relative(base, file);
-    return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
-}
-
-// vcp-deskpet://pet/<root>/<path>：同一个 origin，模型的 XHR 不跨域。
-function resolveServedFile(urlString) {
-    const url = new URL(urlString);
-    let segments;
-    try {
-        segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
-    } catch {
-        return null;
-    }
-    // 每一段都必须是普通文件名：Windows 会把反斜杠当分隔符，'..' 一律拒绝。
-    if (segments.some((s) => s === '..' || s === '.' || /[\\/:]/.test(s))) return null;
-    const root = segments.shift();
-    if (root === 'app') return guard(path.join(paths.projectRoot, 'DeskPetmodules'), segments);
-    if (root === 'vendor') return guard(path.join(paths.projectRoot, 'vendor'), segments);
-    if (root === 'emotion') return guard(path.join(paths.projectRoot, 'modules', 'emotion'), segments);
-    // 助手自己没放头像时用应用的默认头像（和主窗口侧栏里显示的一样）
-    if (root === 'default-avatar.png' && !segments.length) return defaultAvatarPath();
-    if (root === 'builtin') {
-        if (segments.shift() !== 'nova') return null;
-        return guard(builtInDirectory(), segments);
-    }
-    if (root === 'core') {
-        const name = segments.join('/');
-        if (name === 'live2dcubismcore.min.js') return coreFilePath();
-        // 安装前试加载的暂存文件（modules/deskpet/cubismCore.js）
-        if (name === 'staged.js') return coreInstaller?.stagedPath || null;
-        return null;
-    }
-    if (root === 'agent') {
-        const agentId = segments.shift();
-        if (!agentId || agentId.includes('..')) return null;
-        const agentRoot = path.join(paths.agentDir, agentId);
-        const name = segments.join('/');
-        // 只放行 deskpet/ 子目录、立绘和头像，agent 目录里的其他文件（配置、历史）不可见。
-        if (segments[0] === 'deskpet') return guard(path.join(agentRoot, 'deskpet'), segments.slice(1));
-        if (segments.length === 1 && /^(portrait|avatar)(\.[\w-]+)?\.[a-z0-9]+$/i.test(name)) return guard(agentRoot, segments);
-        return null;
-    }
-    return null;
-}
-
-function guard(base, segments) {
-    const file = path.normalize(path.join(base, ...segments));
-    return isInside(base, file) ? file : null;
-}
-
-function coreFilePath() {
-    return path.join(paths.appDataRoot, 'deskpet', 'live2dcubismcore.min.js');
-}
-
-function defaultAvatarPath() {
-    return path.join(paths.projectRoot, 'assets', 'default_avatar.png');
-}
-
-function builtInDirectory() {
-    return path.join(paths.projectRoot, 'assets', 'deskpet', 'nova');
-}
-
 function registerProtocol() {
     protocol.handle(SCHEME, async (request) => {
-        const file = resolveServedFile(request.url);
+        const file = assets.resolveServedFile(request.url);
         if (!file || !(await fs.pathExists(file))) return new Response('not found', { status: 404 });
         return net.fetch(pathToFileURL(file).toString());
     });
 }
 
-function agentUrl(agentId, file) {
-    if (isInside(builtInDirectory(), file)) {
-        const rel = path.relative(builtInDirectory(), file).split(path.sep).map(encodeURIComponent).join('/');
-        return `${SCHEME}://pet/builtin/nova/${rel}`;
-    }
-    const rel = path.relative(path.join(paths.agentDir, agentId), file).split(path.sep).map(encodeURIComponent).join('/');
-    return `${SCHEME}://pet/agent/${encodeURIComponent(agentId)}/${rel}`;
-}
-
-function portraitUrls(agentId, portraits) {
-    if (!portraits) return null;
-    return Object.fromEntries(Object.entries(portraits).map(([key, file]) => [key, agentUrl(agentId, file)]));
-}
-
-async function listAgentOutfits(agentId) {
-    const agentRoot = path.join(paths.agentDir, agentId);
-    let preferBuiltIn = false;
-    try {
-        const config = await fs.readJson(path.join(agentRoot, 'config.json'));
-        preferBuiltIn = typeof config.name === 'string' && config.name.trim().toLowerCase() === 'nova';
-    } catch { /* An agent without configuration can still pick a bundled outfit. */ }
-    return outfitStore.listOutfits(agentRoot, {
-        hasCore: await fs.pathExists(coreFilePath()),
-        builtInDir: builtInDirectory(),
-        preferBuiltIn,
-    });
-}
-
-// 菜单和设置窗口只要名字和种类
-function outfitSummary(outfit) {
-    return { id: outfit.id, name: outfit.name, kind: outfit.kind, label: outfitStore.outfitLabel(outfit), builtIn: outfit.builtIn === true };
-}
-
-async function resolveAssets(agentId, wantedOutfit) {
-    const agentRoot = path.join(paths.agentDir, agentId);
-    let name = agentId;
-    try {
-        const config = await fs.readJson(path.join(agentRoot, 'config.json'));
-        if (config?.name) name = config.name;
-    } catch { /* 没有配置就用 id */ }
-
-    const outfits = await listAgentOutfits(agentId);
-    const outfit = outfitStore.pickOutfit(outfits, wantedOutfit);
-    // 选的这套没有立绘（Live2D、网格立绘）时，Live2D 用不了就退回助手目录的立绘
-    const fallback = outfits.find((o) => o.id === outfitStore.PORTRAIT_ID)?.portraits || null;
-    const avatar = IMAGE_EXTENSIONS.map((ext) => `avatar.${ext}`);
-    const files = (await fs.pathExists(agentRoot)) ? await fs.readdir(agentRoot) : [];
-    const avatarFile = avatar.map((wanted) => files.find((f) => f.toLowerCase() === wanted)).find(Boolean);
-    // 换过 Core 以后（设置页里装、换）页面的缓存里可能还是旧的那份：地址带上修改时间
-    const coreStat = await fs.stat(coreFilePath()).catch(() => null);
-    const hasCore = Boolean(coreStat);
-    return {
-        agentId,
-        name,
-        outfit: outfit ? outfitSummary(outfit) : null,
-        outfits: outfits.map(outfitSummary),
-        live2d: outfit?.live2d ? { modelUrl: agentUrl(agentId, outfit.live2d) } : null,
-        puppet: outfit?.puppet ? { rigUrl: agentUrl(agentId, outfit.puppet) } : null,
-        coreUrl: hasCore ? `${SCHEME}://pet/core/live2dcubismcore.min.js?v=${Math.round(coreStat.mtimeMs)}` : null,
-        corePath: coreFilePath(),
-        portraits: portraitUrls(agentId, outfit?.portraits || fallback),
-        // 新建的助手目录里没有头像文件，主窗口显示的是默认头像：桌宠也用它，不要只剩一个表情符号
-        avatar: avatarFile ? agentUrl(agentId, path.join(agentRoot, avatarFile)) : `${SCHEME}://pet/default-avatar.png`,
-    };
-}
+const listAgentOutfits = (agentId) => assets.listOutfits(agentId);
+const resolveAssets = (agentId, wantedOutfit) => assets.resolveAssets(agentId, wantedOutfit);
+const listAgents = () => assets.listAgents();
 
 // ---- 窗口 ----------------------------------------------------------------
 
-function petStatePath() {
-    return path.join(paths.appDataRoot, 'deskpet', 'state.json');
-}
-
-async function readStateFile() {
-    let text;
-    try { text = await fs.readFile(petStatePath(), 'utf8'); } catch { return {}; }
-    try {
-        const state = JSON.parse(text);
-        return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
-    } catch {
-        // 写坏了（以前的版本写到一半被杀掉）：留一份备份再当空的，不让下一次保存把所有桌宠的位置、大小、形象一起冲掉而无从找回
-        await fs.copy(petStatePath(), `${petStatePath()}.bad`).catch(() => {});
-        return {};
-    }
-}
-
-// 读改写串行：拖动结束和改大小几乎同时保存时，后一次不会拿着旧内容把前一次盖掉。
-// 读也排在写后面，免得读到正在写的那一半。
-let stateWrites = Promise.resolve();
-async function readPetState() {
-    await stateWrites;
-    return readStateFile();
-}
-
-function savePetState(agentId, patch) {
-    stateWrites = stateWrites.then(async () => {
-        const state = await readStateFile();
-        // 记大小、位置时顺带记下是按哪一版的尺寸算的（见 petPrefs.savedScale、legacyPosition）
-        const versioned = patch.scale === undefined && patch.x === undefined ? patch : { ...patch, sizeVersion: petPrefs.SIZE_VERSION };
-        state[agentId] = { ...(state[agentId] || {}), ...versioned };
-        // 先写临时文件再改名：写到一半被杀掉也只丢这一次，不会留下半个文件
-        const tmp = `${petStatePath()}.tmp`;
-        await fs.outputJson(tmp, state, { spaces: 2 });
-        await fs.move(tmp, petStatePath(), { overwrite: true });
-    }).catch((error) => console.warn('[DeskPet] state save failed:', error.message));
-    return stateWrites;
-}
+const readPetState = () => stateStore.read();
+const savePetState = (agentId, patch) => stateStore.save(agentId, patch);
 
 function savePetPosition(agentId, position) {
     return savePetState(agentId, { x: position[0], y: position[1] });
@@ -266,27 +113,21 @@ function sizeOf(pet) {
     return petPrefs.windowSizeForScale(pet.scale, pet.aspect);
 }
 
-// 每套形象量出来的长宽比记在 state.json 里，下次打开（或换回这一套）直接按它开窗口，不用先开再改大小。
-const MAX_REMEMBERED_FIGURES = 24;
-function rememberFigure(saved, outfitId, aspect) {
-    const figures = { ...(saved?.figures && typeof saved.figures === 'object' ? saved.figures : {}) };
-    delete figures[outfitId];
-    figures[outfitId] = aspect;
-    const keys = Object.keys(figures);
-    for (const key of keys.slice(0, Math.max(0, keys.length - MAX_REMEMBERED_FIGURES))) delete figures[key];
-    return figures;
-}
-
-function savedAspect(saved, outfitId) {
-    return petPrefs.normalizeAspect(saved?.figures?.[outfitId]);
-}
-
-function defaultPosition(index, size) {
+// 没有记下位置的桌宠从屏幕右下角往左排：已经有桌宠站着的地方让开（窗口两边是透明的，按中间那段人物算），
+// 不然几个桌宠叠在同一个角落，后开的把前面的整个挡住。index 是第几个位置（显示器变了、要挪回来时用）。
+function defaultPosition(index, size, { avoid = [] } = {}) {
     const area = screen.getPrimaryDisplay().workArea;
-    return {
-        x: area.x + area.width - size.width - 24 - index * 40,
-        y: area.y + area.height - size.height,
-    };
+    const step = Math.max(40, Math.round(size.width * 0.55));
+    const xAt = (slot) => Math.max(area.x, area.x + area.width - size.width - 24 - slot * step);
+    const middle = (x, width) => [x + width * 0.25, x + width * 0.75];
+    const taken = (x) => avoid.some((b) => {
+        const [a1, a2] = middle(x, size.width);
+        const [b1, b2] = middle(b.x, b.width);
+        return a1 < b2 && b1 < a2;
+    });
+    let slot = index;
+    for (let i = 0; i < 12 && taken(xAt(slot)); i += 1) slot += 1;
+    return { x: xAt(slot), y: area.y + area.height - size.height };
 }
 
 function isOnScreen(x, y, size) {
@@ -302,12 +143,9 @@ function workAreaAt(bounds) {
     }
 }
 
-function hasSavedPosition(saved) {
-    return Boolean(saved && Number.isFinite(saved.x) && Number.isFinite(saved.y));
-}
-
 function initialBounds(saved, size) {
-    const fallback = defaultPosition(pets.size, size);
+    const others = [...pets.values()].filter((p) => !p.win.isDestroyed()).map((p) => p.win.getBounds());
+    const fallback = defaultPosition(0, size, { avoid: others });
     if (!hasSavedPosition(saved)) return { ...size, ...fallback };
     // 位置不在任何显示器上（拔了外接屏）就回到默认位置。
     if (!isOnScreen(saved.x, saved.y, size)) return { ...size, ...fallback };
@@ -429,7 +267,7 @@ function probeCore() {
         });
         win.webContents.on('render-process-gone', () => finish(0));
         win.on('closed', () => finish(0));
-        win.loadURL(`${SCHEME}://pet/app/core-probe.html?n=${Date.now()}`).catch(() => finish(0));
+        win.loadURL(assets.appUrl(`core-probe.html?n=${Date.now()}`)).catch(() => finish(0));
     });
 }
 
@@ -576,12 +414,6 @@ function startHitPoll(pet) {
     }, HIT_POLL_MS);
 }
 
-// agent 目录名：单独一段，不能是 . 或 ..（否则会指到 Agents 目录本身或它的上级）。
-function isAgentId(agentId) {
-    return typeof agentId === 'string' && agentId.length > 0 && agentId !== '.' && agentId !== '..'
-        && agentId === path.basename(agentId) && !/[\\/]/.test(agentId);
-}
-
 // anchor：在别的桌宠原来的位置打开（切换助手），按脚底中点对齐。
 async function openPet(agentId, { anchor = null } = {}) {
     if (pets.has(agentId)) {
@@ -589,7 +421,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         notifyMain(agentId);
         return { success: true, open: true };
     }
-    if (!isAgentId(agentId) || !(await fs.pathExists(path.join(paths.agentDir, agentId)))) {
+    if (!(await assets.agentExists(agentId))) {
         return { success: false, error: 'agent-not-found' };
     }
     // 读状态期间同一个助手可能已经被另一次调用打开了（快捷键连按、启动恢复和点按钮撞在一起）
@@ -674,9 +506,11 @@ async function openPet(agentId, { anchor = null } = {}) {
         if (win.isDestroyed()) return;
         resetInputState(pet);
         if (details.reason === 'clean-exit') return;
-        // 最多自动重载 3 次，避免模型本身有问题时无限崩溃重启。
-        pet.crashes = (pet.crashes || 0) + 1;
-        if (pet.crashes <= 3) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
+        // 一分钟里崩了 3 次以上才放弃（模型本身有问题时别无限崩溃重启）；
+        // 偶尔崩一次（显卡驱动重置、睡眠唤醒）不攒着算，挂一整天的桌宠不会因为第四次偶发崩溃就消失
+        const now = Date.now();
+        pet.crashTimes = [...(pet.crashTimes || []).filter((at) => now - at < CRASH_WINDOW_MS), now];
+        if (pet.crashTimes.length <= CRASH_LIMIT) setTimeout(() => !win.isDestroyed() && win.reload(), 250);
         else win.close();
     });
     // 窗口开着时关了后台节流（主窗口最小化时桌宠照常动），隐藏时页面感觉不到，主动告诉它停下。
@@ -704,7 +538,7 @@ async function openPet(agentId, { anchor = null } = {}) {
         if (!shuttingDown) rememberOpen(agentId, false);
         notifyMain(agentId);
     });
-    win.loadURL(`${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}`);
+    win.loadURL(assets.pageUrl(agentId));
     if (!USE_SHAPE) startHitPoll(pet);
     applyClickThrough(pet);
     updateTopmostGuard();
@@ -732,22 +566,33 @@ function throwPet(pet, figure, samples) {
     const frames = throwMotion.throwPath(win, figure, workAreaAt(win), throwMotion.releaseVelocity(samples, Date.now()), DRAG_TICK_MS);
     if (!frames) return false;
     stopSnap(pet);
+    pet.snap = playFrames(pet, frames, {
+        stop: () => stopSnap(pet),
+        done: (last) => {
+            // 甩走了就不再藏在边里（拿起来时 pet.tuck 已清，这里把存下的也清掉）
+            savePetState(pet.agentId, { x: last.x, y: last.y, tuck: null }).catch(() => {});
+            pet.win.webContents.send('deskpet:landed');
+        },
+    });
+    return true;
+}
+
+// 一帧一帧挪窗口（甩出去、滑过去、溜达共用）：窗口没了、被拎起来或 halted() 时 stop()；
+// 走完最后一帧先 stop() 再 done(最后一帧)
+function playFrames(pet, frames, { stop, halted = () => false, done }) {
     const size = sizeOf(pet);
-    pet.snap = setInterval(() => {
+    return setInterval(() => {
         const next = frames.shift();
-        if (!next || pet.win.isDestroyed() || pet.drag) {
-            stopSnap(pet);
+        if (!next || pet.win.isDestroyed() || pet.drag || halted()) {
+            stop();
             return;
         }
         applyBounds(pet, { ...next, ...size }, { verify: false });
         if (!frames.length) {
-            stopSnap(pet);
-            // 甩走了就不再藏在边里（拿起来时 pet.tuck 已清，这里把存下的也清掉）
-            savePetState(pet.agentId, { x: next.x, y: next.y, tuck: null }).catch(() => {});
-            pet.win.webContents.send('deskpet:landed');
+            stop();
+            done?.(next);
         }
     }, DRAG_TICK_MS);
-    return true;
 }
 
 // 贴边（modules/deskpet/edgeSnap.js）：松手时角色离屏幕左右边或任务栏很近，就滑过去贴齐。
@@ -778,20 +623,7 @@ function slideTo(pet, to, done) {
         done?.();
         return;
     }
-    const frames = edgeSnap.snapFrames(win, to);
-    const size = sizeOf(pet);
-    pet.snap = setInterval(() => {
-        const next = frames.shift();
-        if (!next || pet.win.isDestroyed() || pet.drag) {
-            stopSnap(pet);
-            return;
-        }
-        applyBounds(pet, { ...next, ...size }, { verify: false });
-        if (!frames.length) {
-            stopSnap(pet);
-            done?.();
-        }
-    }, DRAG_TICK_MS);
+    pet.snap = playFrames(pet, edgeSnap.snapFrames(win, to), { stop: () => stopSnap(pet), done: () => done?.() });
 }
 
 function snapToEdge(pet, figure, { free = false } = {}) {
@@ -865,18 +697,8 @@ function startWalk(pet, figure) {
     const win = pet.win.getBounds();
     const target = wander.wanderTarget(win, figure, workAreaAt(win));
     if (!target) return false;
-    const frames = wander.walkFrames(win, target, DRAG_TICK_MS);
-    const size = sizeOf(pet);
     pet.win.webContents.send('deskpet:walk', { dir: target.dir });
-    pet.walk = setInterval(() => {
-        const next = frames.shift();
-        if (!next || pet.win.isDestroyed() || pet.drag || !pet.win.isVisible()) {
-            stopWalk(pet);
-            return;
-        }
-        applyBounds(pet, { ...next, ...size }, { verify: false });
-        if (!frames.length) stopWalk(pet);
-    }, DRAG_TICK_MS);
+    pet.walk = playFrames(pet, wander.walkFrames(win, target, DRAG_TICK_MS), { stop: () => stopWalk(pet), halted: () => !pet.win.isVisible() });
     return true;
 }
 
@@ -906,10 +728,41 @@ function resetInputState(pet) {
     applyClickThrough(pet);
 }
 
+const CRASH_WINDOW_MS = 60 * 1000;
+const CRASH_LIMIT = 3;
+
 function closePet(agentId) {
     const pet = pets.get(agentId);
     if (pet && !pet.win.isDestroyed()) pet.win.close();
     return { success: true, open: false };
+}
+
+/** 助手被删掉：关掉 TA 的桌宠，state.json、开着的列表、最近用过的、卡片快照里都不再留着 TA。
+ *  在删目录之前调用（Windows 上桌宠页面还开着时，正在用的模型文件可能删不掉）。 */
+async function forgetAgent(agentId) {
+    if (!paths || !isAgentId(agentId)) return; // 桌宠模块没启用
+    const pet = pets.get(agentId);
+    if (pet && !pet.win.isDestroyed()) {
+        const closed = new Promise((resolve) => pet.win.once('closed', resolve));
+        pet.win.close();
+        await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 2000))]);
+    }
+    if (controls) {
+        const settings = controls.get();
+        controls.update({
+            openAgents: settings.openAgents.filter((id) => id !== agentId),
+            ...(settings.lastAgent === agentId ? { lastAgent: null } : {}),
+        });
+    }
+    await stateStore.remove(agentId);
+    await previews?.forget(agentId);
+    refreshTray();
+}
+
+// 页面报上来的角色包围盒（窗口内坐标）；不是四个有限数就当没有
+function figureFrom(report) {
+    const f = report?.figure;
+    return f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
 }
 
 function petFromEvent(event) {
@@ -961,7 +814,10 @@ function forward(agentId, event) {
 }
 
 function onRequestStart(messageId, context) {
-    if (context?.agentId) lastTalkedAgentId = context.agentId;
+    if (context?.agentId) {
+        lastTalkedAgentId = context.agentId;
+        idle?.noteActivity(context.agentId);
+    }
     forward(context?.agentId, { type: 'start', messageId: String(messageId) });
 }
 
@@ -972,8 +828,12 @@ function onStreamPayload(payload) {
     if (payload.type === 'data') {
         const text = extractDeltaText(payload.chunk);
         if (text) forward(agentId, { type: 'data', messageId, text });
-    } else if (payload.type === 'end' || payload.type === 'error') {
-        forward(agentId, { type: payload.type, messageId });
+    } else if (payload.type === 'end') {
+        forward(agentId, { type: 'end', messageId });
+    } else if (payload.type === 'error') {
+        // 出错的原因也带过去（主窗口里显示的那句）：桌宠上只写「出错了」的话，用户不知道是断网、超时还是服务器报错
+        const reason = typeof payload.error === 'string' ? payload.error.replace(/\s+/g, ' ').trim().slice(0, 160) : '';
+        forward(agentId, { type: 'error', messageId, ...(reason ? { error: reason } : {}) });
     }
 }
 
@@ -1017,38 +877,33 @@ async function checkDroppedFiles(files) {
     return '';
 }
 
-function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
-    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
+// 问主窗口一件事：ask(requestId) 发过去，等它在 pending 里按 requestId 回话；等不到算 timedOut
+function askMain(pending, ask, { timeoutMs, timedOut, answer }) {
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
         const timer = setTimeout(() => {
-            pendingSends.delete(requestId);
-            resolve({ success: false, error: '主窗口没有响应' });
-        }, SEND_TIMEOUT_MS);
-        pendingSends.set(requestId, (result) => {
+            pending.delete(requestId);
+            resolve(timedOut);
+        }, timeoutMs);
+        pending.set(requestId, (value) => {
             clearTimeout(timer);
-            pendingSends.delete(requestId);
-            resolve(result || { success: false });
+            pending.delete(requestId);
+            resolve(answer(value));
         });
-        // 过了这个时间桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
-        mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline: Date.now() + SEND_TIMEOUT_MS - SEND_ACCEPT_MARGIN_MS });
+        ask(requestId);
     });
 }
 
-async function listAgents() {
-    const ids = (await fs.pathExists(paths.agentDir)) ? await fs.readdir(paths.agentDir) : [];
-    const agents = [];
-    for (const id of ids) {
-        try {
-            const config = await fs.readJson(path.join(paths.agentDir, id, 'config.json'));
-            agents.push({ id, name: config?.name || id });
-        } catch { /* 不是 agent 目录 */ }
-    }
-    // 同名的助手（比如复制出来的两个 Nova）在菜单、设置页下拉里分不清：名字后面带上 id 末尾几位
-    const counts = new Map();
-    for (const agent of agents) counts.set(agent.name, (counts.get(agent.name) || 0) + 1);
-    for (const agent of agents) agent.label = counts.get(agent.name) > 1 ? `${agent.name} · ${agent.id.slice(-4)}` : agent.name;
-    return agents;
+function sendFromPet(agentId, text, { files = [], newTopic = false } = {}) {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve({ success: false, error: '主窗口不在了' });
+    // 过了 deadline 桌宠已经报「没有响应」了：主窗口别再发出去，否则用户重试就会发两遍
+    const deadline = Date.now() + SEND_TIMEOUT_MS - SEND_ACCEPT_MARGIN_MS;
+    const ask = (requestId) => mainWindow.webContents.send('deskpet:send-request', { requestId, agentId, text, files, newTopic, deadline });
+    return askMain(pendingSends, ask, {
+        timeoutMs: SEND_TIMEOUT_MS,
+        timedOut: { success: false, error: '主窗口没有响应' },
+        answer: (result) => result || { success: false },
+    });
 }
 
 /** 在同一个位置把桌宠换成另一个 agent（各自保留自己的大小，脚底对齐）。 */
@@ -1071,6 +926,10 @@ async function switchPet(fromId, toId) {
 }
 
 // ---- 大小、免打扰、全部显示隐藏 ------------------------------------------------
+
+// 页面要的设置（prefsFor）和托盘上显示的设置：这些变了才推给页面、才刷新托盘
+const PAGE_PREF_KEYS = ['doNotDisturb', 'clickThrough', 'shortcuts', 'opacity', 'wander', 'followCursor'];
+const TRAY_KEYS = ['doNotDisturb', 'clickThrough', 'shortcuts', 'openAgents', 'lastAgent'];
 
 function sendPrefs(pet) {
     if (!pet || pet.win.isDestroyed()) return;
@@ -1384,53 +1243,6 @@ function trayMenuItems() {
     }];
 }
 
-// 托盘菜单每换一次，Electron 都会留着换下来的旧菜单（Linux 上实测，换多少次留多少份；同一份菜单再设一次不会）。
-// 所以内容没变不动；只是勾选、可用、显示变了就改现有菜单（applyTrayState）；只有文字、快捷键这些变了才重建。
-const TRAY_STATE_FIELDS = ['checked', 'enabled', 'visible'];
-
-function trayMenuKey(items, { stateOnly = false } = {}) {
-    return JSON.stringify(items, (key, value) => {
-        if (typeof value === 'function') return undefined;
-        if (stateOnly && TRAY_STATE_FIELDS.includes(key)) return undefined;
-        return value;
-    });
-}
-
-function trayStateItems(items, out = []) {
-    for (const item of items) {
-        if (item.id) out.push(item);
-        if (Array.isArray(item.submenu)) trayStateItems(item.submenu, out);
-    }
-    return out;
-}
-
-/** 把桌宠那几项的勾选、可用、显示写进已经建好的菜单；少了哪一项返回 false（要重建）。 */
-function applyTrayState(menu) {
-    const items = trayStateItems(trayMenuItems());
-    const targets = items.map((item) => menu?.getMenuItemById?.(item.id));
-    if (targets.some((target) => !target)) return false;
-    items.forEach((item, index) => {
-        for (const field of TRAY_STATE_FIELDS) if (field in item) targets[index][field] = item[field];
-    });
-    return true;
-}
-
-/** rebuild(structureChanged)：structureChanged 为 false 时只是状态变了，可以用 applyTrayState 改现有菜单。 */
-function refreshWhenChanged(rebuild) {
-    let shown = null;
-    let shape = null;
-    return () => {
-        const items = trayMenuItems();
-        const key = trayMenuKey(items);
-        if (key === shown) return;
-        const nextShape = trayMenuKey(items, { stateOnly: true });
-        const structureChanged = nextShape !== shape;
-        shown = key;
-        shape = nextShape;
-        rebuild(structureChanged);
-    };
-}
-
 // 启动时打开上次开着的桌宠（设置里可以关掉）。
 function restoreOpenPets() {
     const settings = controls?.get();
@@ -1612,6 +1424,40 @@ async function openTopic(agentId, topicId) {
     return true;
 }
 
+// ---- 闲时主动搭话（时机和流程在 modules/deskpet/idleRunner.js）-----------------------
+
+const WHERE_TIMEOUT_MS = 1500;
+
+function systemAway() {
+    try {
+        const idleSec = electron.powerMonitor?.getSystemIdleTime?.() ?? 0;
+        const lockState = electron.powerMonitor?.getSystemIdleState?.(idleChat.AWAY_AFTER_SEC);
+        return { idleSec, locked: lockState === 'locked' };
+    } catch {
+        return { idleSec: 0, locked: false };
+    }
+}
+
+// 主窗口现在开着哪个助手的哪个话题：开着「桌宠闲聊」时不往里写（主窗口手里的那份历史会盖掉这一句）
+function mainWhere() {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(null);
+    const ask = (requestId) => mainWindow.webContents.send('deskpet:where-request', { requestId });
+    return askMain(pendingWhere, ask, {
+        timeoutMs: WHERE_TIMEOUT_MS,
+        timedOut: null,
+        answer: (where) => (where && typeof where === 'object' ? where : null),
+    });
+}
+
+function idleCandidates() {
+    const visible = visibleAgents().filter((id) => {
+        const pet = pets.get(id);
+        return pet && !pet.win.isDestroyed() && pet.win.isVisible();
+    });
+    if (lastTalkedAgentId && visible.includes(lastTalkedAgentId)) return [lastTalkedAgentId, ...visible.filter((id) => id !== lastTalkedAgentId)];
+    return visible;
+}
+
 // ---- 持续心情 ----------------------------------------------------------------
 
 const MOOD_LABEL = {
@@ -1648,6 +1494,10 @@ function registerIpc() {
     ipcMain.handle('deskpet:get-open-agents', () => visibleAgents());
     ipcMain.on('deskpet:send-result', (_e, payload) => {
         pendingSends.get(payload?.requestId)?.(payload?.result);
+    });
+    ipcMain.on('deskpet:where-result', (event, payload) => {
+        if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return;
+        pendingWhere.get(payload?.requestId)?.(payload?.where);
     });
 
     ipcMain.handle('deskpet:get-assets', async (event) => {
@@ -1852,8 +1702,7 @@ function registerIpc() {
         moveWithCursor(pet, pet.drag);
         const samples = pet.drag.samples;
         stopDrag(pet, { save: true });
-        const f = report?.figure;
-        const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
+        const figure = figureFrom(report);
         const free = report?.free === true;
         // 拖出屏幕边一大截松手是想藏起来，不当成甩
         const win = pet.win.getBounds();
@@ -1870,8 +1719,7 @@ function registerIpc() {
             stopWalk(pet);
             return;
         }
-        const f = report?.figure;
-        const figure = f && [f.x, f.y, f.width, f.height].every(Number.isFinite) ? { x: f.x, y: f.y, width: f.width, height: f.height } : null;
+        const figure = figureFrom(report);
         if (figure) startWalk(pet, figure);
     });
 
@@ -1945,6 +1793,27 @@ function initialize(options) {
         appDataRoot: options.appDataRoot,
         agentDir: options.agentDir,
     };
+    assets = createPetAssets({ paths, stagedCorePath: () => coreInstaller?.stagedPath });
+    stateStore = createPetStateStore({ file: path.join(paths.appDataRoot, 'deskpet', 'state.json') });
+    services = {
+        readSettings: typeof options.readSettings === 'function' ? options.readSettings : null,
+        historyQueue: typeof options.historyQueue === 'function' ? options.historyQueue : null,
+        agentOps: typeof options.agentOps === 'function' ? options.agentOps : null,
+    };
+    idle = createIdleRunner({
+        settings: () => controls?.get() || petPrefs.DEFAULT_SETTINGS,
+        services,
+        candidates: idleCandidates,
+        isShowing: (agentId) => {
+            const pet = pets.get(agentId);
+            return Boolean(pet && !pet.win.isDestroyed() && pet.win.isVisible());
+        },
+        systemAway,
+        mainWhere,
+        promptAppend: getSystemPromptAppend,
+        speak: proactive,
+        isShuttingDown: () => shuttingDown,
+    });
     registerProtocol();
     registerIpc();
     voice.initialize({ paths, findPet: petFromEvent });
@@ -1967,7 +1836,7 @@ function initialize(options) {
         BrowserWindow,
         cacheRoot: path.join(paths.appDataRoot, 'deskpet', 'previews'),
         preload: path.join(paths.projectRoot, 'preloads', 'deskpet.js'),
-        pageUrl: (agentId) => `${SCHEME}://pet/app/deskpet.html?agentId=${encodeURIComponent(agentId)}&preview=1`,
+        pageUrl: (agentId) => assets.pageUrl(agentId, '&preview=1'),
         // 卡片快照按 2 倍画：比桌面上默认的大，缩进卡片里也清楚
         windowSize: (aspect) => petPrefs.windowSizeForScale(2, aspect),
     });
@@ -2000,7 +1869,7 @@ function initialize(options) {
                 const pet = pets.get(agentId);
                 if (!pet || pet.win.isDestroyed() || !pet.ready) return false;
                 pet.win.webContents.send('deskpet:profile', payload);
-                if (payload?.emotion) showPet(pet);
+                if (payload?.emotion || payload?.tap) showPet(pet);
                 return true;
             },
             setVisible: setPetsVisible,
@@ -2013,16 +1882,18 @@ function initialize(options) {
     mainWindow?.webContents?.on?.('did-start-loading', () => controls?.pauseShortcuts(false));
     fullscreenWatch = createFullscreenWatch({ onChange: applyFullscreen });
     controls.onChange((_settings, changed) => {
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'opacity' || key === 'wander' || key === 'followCursor')) broadcastPrefs();
+        if (changed.some((key) => PAGE_PREF_KEYS.includes(key))) broadcastPrefs();
         if (changed.includes('hideFromCapture')) for (const pet of pets.values()) applyCaptureHiding(pet.win);
         if (changed.includes('wander') && controls.get().wander !== true) for (const pet of pets.values()) stopWalk(pet);
         if (changed.includes('clickThrough')) for (const pet of pets.values()) applyClickThrough(pet);
         if (changed.includes('yieldToFullscreen')) updateFullscreenWatch();
-        if (changed.some((key) => key === 'doNotDisturb' || key === 'clickThrough' || key === 'shortcuts' || key === 'openAgents' || key === 'lastAgent')) refreshTray();
+        if (changed.includes('idleChat')) idle.update();
+        if (changed.some((key) => TRAY_KEYS.includes(key))) refreshTray();
     });
     const settingsReady = controls.load().then(() => {
         controls.applyShortcuts();
         refreshTray();
+        idle.update();
     });
     // 主窗口载完以后再恢复上次的桌宠
     const scheduleRestore = () => settingsReady.then(() => setTimeout(restoreOpenPets, RESTORE_DELAY_MS));
@@ -2031,6 +1902,9 @@ function initialize(options) {
     screen.on('display-removed', onDisplaysChanged);
     screen.on('display-added', onDisplaysChanged);
     screen.on('display-metrics-changed', onDisplaysChanged);
+    // 睡眠唤醒、解锁以后：笔记本可能拔了扩展坞、换了分辨率，置顶也可能被系统取消。和显示器变了一样重新摆一遍
+    electron.powerMonitor?.on?.('resume', onDisplaysChanged);
+    electron.powerMonitor?.on?.('unlock-screen', onDisplaysChanged);
     import(pathToFileURL(path.join(paths.projectRoot, 'modules', 'emotion', 'emotionPrompt.js')).href)
         .then((mod) => { emotionPrompt = mod; })
         .catch((error) => console.warn('[DeskPet] emotion prompt unavailable:', error.message));
@@ -2050,6 +1924,7 @@ function closeAll() {
     previews?.dispose();
     for (const { timer } of alarms.values()) clearTimeout(timer);
     alarms.clear();
+    idle?.stop();
 }
 
 // chatHandlers 在主聊天的发送和流式路径上调用这些钩子；桌宠出任何错都不能打断主聊天。
@@ -2070,23 +1945,23 @@ module.exports = {
     closeAll,
     // 托盘：main.js 建菜单时取「桌宠」这一项，并在桌宠状态变了时重建菜单
     trayMenuItems: isolated('trayMenuItems', trayMenuItems, []),
-    applyTrayState: isolated('applyTrayState', applyTrayState, false),
-    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', refreshWhenChanged(fn)) : () => {}; },
+    // 只是勾选、可用、显示变了：改现有菜单（见 modules/deskpet/petTray.js）
+    applyTrayState: isolated('applyTrayState', (menu) => petTray.applyTrayState(menu, trayMenuItems()), false),
+    setTrayRefresher: (fn) => { refreshTray = typeof fn === 'function' ? isolated('refreshTray', petTray.refreshWhenChanged(trayMenuItems, fn)) : () => {}; },
     getSystemPromptAppend: isolated('getSystemPromptAppend', getSystemPromptAppend, ''),
     appendProtocolToMessages: isolated('appendProtocolToMessages', appendProtocolToMessages, (messages) => messages),
     onRequestStart: isolated('onRequestStart', onRequestStart),
     onStreamPayload: isolated('onStreamPayload', onStreamPayload),
     onFullResponse: isolated('onFullResponse', onFullResponse),
     onDistributedToolResult: isolated('onDistributedToolResult', onDistributedToolResult),
+    forgetAgent: (agentId) => Promise.resolve(forgetAgent(agentId)).catch((error) => console.warn('[DeskPet] forget agent failed:', error.message)),
     // 测试用
     _promptReady: () => Boolean(emotionPrompt),
     _applyFullscreen: applyFullscreen,
+    _idleTick: (options) => idle.tick(options),
+    _idleState: () => idle.states,
     _controls: () => controls,
     _pets: () => pets,
     _pendingApprovals: () => pendingApprovals,
-    _resolveServedFile: (url, testPaths) => {
-        const previous = paths;
-        paths = testPaths;
-        try { return resolveServedFile(url); } finally { paths = previous; }
-    },
+    _resolveServedFile: (url, testPaths) => createPetAssets({ paths: testPaths, stagedCorePath: () => coreInstaller?.stagedPath }).resolveServedFile(url),
 };

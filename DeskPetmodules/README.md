@@ -8,17 +8,15 @@
 - **闲着时：** 光标停住后视线自己四处看；隔十几秒做个小动作（歪头、伸懒腰、哼歌、东张西望）。3 分钟没人理就打哈欠、眼皮发沉、时不时点一下头，再过 1 分钟睡着（闭眼低头，头顶飘 z）。光标在窗口里晃一晃会慢慢醒；单击、拖动、来了回复或主动说话时惊醒。睡着时摸头不会醒，只在梦里笑一下。
 - **互动：** 单击身体是开心，点头顶会害羞；光标在头上来回蹭是摸头；连点三下不耐烦（💢），戳到第六下晕了（💫），连点时第二下打开的空输入框会自己收回去。拖起来会慌，左右拖时身子跟着甩，放下时落地一顿。
 - **心情：** 小动作跟着长期心情走：开心时动得勤、爱哼歌；难过、生气时少动、不哼歌；累了更早犯困（心情很淡时不影响）。
-- **免打扰：** 桌宠设置里开了免打扰时，不自己做小动作、不打哈欠、不冒小符号，只安静地呼吸眨眼、到点打盹；被碰到时照常反应。
 - **省电：** 空闲 30 秒后降帧，睡着再降一档（10 帧，软件渲染 5 帧）；小动作按当前帧率演，被碰到才回到高帧率；隐藏桌宠时完全停止渲染，闲时计时也停；没有显卡、用软件渲染时帧率再降一档并关掉抗锯齿。
-- **出声：** 助手在 Agent 设置里选了音色（和主窗口「朗读」用同一套：音色、语速、正则、导演提示词），桌宠就把回复念出来。回复边流边按句交给 TTS，第一句写完就开口；嘴跟着声音的大小开合（Live2D 和网格立绘动 `ParamMouthOpenY`，差分立绘换 `portrait.talk.png` 张嘴帧，没有就随声音轻轻起伏，头像跟着放大缩小）。气泡只显示到正在念的那一句，表情也跟着这一句的情绪标记换。正在念时单击角色就停下，整段字一下显示完。右键「朗读回复」可以只让这个助手的桌宠闭嘴（记在 `AppData\deskpet\voice.json`）。同一时间只有一个声音：桌宠开口时主窗口的朗读停下，主窗口开始朗读时桌宠停下；桌宠正在念的那条，主窗口的自动朗读插件不再念一遍。免打扰时主窗口里聊天的回复不念，在桌宠上说的话和闹钟照常念。没选音色的助手还是假口型、不出声。
+- **出声：** 助手在 Agent 设置里选了音色（和主窗口「朗读」用同一套：音色、语速、正则、导演提示词），桌宠就把回复念出来。回复边流边按句交给 TTS，第一句写完就开口；嘴跟着声音的大小开合；Live2D 模型带あいうえお口形参数（`ParamA`～`ParamO`，至少 A、I、U）时，还会从声音里认出元音换口形（Live2D 和网格立绘动 `ParamMouthOpenY`，差分立绘换 `portrait.talk.png` 张嘴帧，没有就随声音轻轻起伏，头像跟着放大缩小）。气泡只显示到正在念的那一句，表情也跟着这一句的情绪标记换。正在念时单击角色就停下，整段字一下显示完。右键「朗读回复」可以只让这个助手的桌宠闭嘴（记在 `AppData\deskpet\voice.json`）。同一时间只有一个声音：桌宠开口时主窗口的朗读停下，主窗口开始朗读时桌宠停下；桌宠正在念的那条，主窗口的自动朗读插件不再念一遍。免打扰时主窗口里聊天的回复不念，在桌宠上说的话和闹钟照常念。没选音色的助手还是假口型、不出声。
 - **正在做什么：** 回复里调工具时，气泡下面有一条小卡片，比如「🔍 正在搜索 · 明天上海天气」，做完打勾、失败标红。
 - **主动搭话：** AI 用「AI 主动创建话题」插件开了新话题时，开着的桌宠会把第一句话说出来，点气泡直接切到那个话题；用 VCP 闹钟插件设的闹钟到点时，桌宠（藏起来的也会出来）说出提醒事项。闹钟原本的弹窗照旧。
 - **右键菜单：** 和 TA 说话、切换助手（原位置换成另一个 Agent）、换装、打开主窗口、大小、免打扰、桌宠设置、隐藏桌宠、关闭桌宠。
 - **换装：** 同一个助手可以有好几套形象（比如科技服、女仆、Q 版），右键「换装」或在桌宠设置里选。每个助手记住自己上次穿的那套；换的时候脚底位置不动，大小档位不变。怎么放见下面「2b. 多套形象」。
 - **全身像：** 形象按不透明像素的轮廓摆：图四周的透明边不算，脚底贴着窗口底边。窗口跟着形象的比例走，竖长的全身像窗口更高更窄，Q 版、半身像和以前一样高；量过的比例会记住，下次直接按它开。气泡、情绪角标、头顶小符号都跟着头走，点头、摸头也按头的位置算。
 - **大小：** 鼠标放在角色上按住 Ctrl（macOS 上 Cmd）滚动滚轮，或右键「大小」，或在桌宠设置里拖滑块，50% 到 300%（100% 是默认大小，比第一版小了四成）。脚底位置不动，每个助手的大小分别记住；放不下的屏上会自动缩到放得下。
-- **心情：** 小动作跟着长期心情走：开心时动得勤、爱哼歌；难过、生气时少动、不哼歌；累了更早犯困（心情很淡时不影响）。
-- **免打扰：** 右键、托盘或设置里打开。打开后桌宠不主动开新话题、不出声，主窗口里聊天的回复和情绪角标也不在桌宠头上冒出来；在桌宠上跟 TA 说的话照常回，闹钟照常叫。头顶旁边有个小月亮表示正在免打扰。
+- **免打扰：** 右键、托盘或设置里打开。打开后桌宠不主动开新话题、不出声，主窗口里聊天的回复和情绪角标也不在桌宠头上冒出来；在桌宠上跟 TA 说的话照常回，闹钟照常叫。角色自己也不做小动作、不打哈欠、不冒小符号，只安静地呼吸眨眼、到点打盹；被碰到时照常反应。头顶旁边有个小月亮表示正在免打扰。
 - **全局快捷键：** 在任何程序里都能用，可以在桌宠设置里改或清空：
   - `Ctrl+Alt+Shift+P` 显示/隐藏桌宠（一个都没开时打开上次那个）
   - `Ctrl+Alt+Shift+M` 和桌宠说话（叫出最近用过的桌宠并打开输入框，再按一次收起）
@@ -47,14 +45,16 @@
    <VCPChat>\AppData\Agents\<AgentId>\deskpet\<模型文件夹>\
    ```
    官方示例模型里 Mao、Natori 带表情文件，适合试情绪；Hiyori 没有表情文件，只能靠参数叠加看出变化。
-3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型在设置页「桌宠」分区选中这套形象，下面「表情映射 · 调整」里给每个情绪挑表情和动作，改一项桌宠就当场演一下，保存后写进模型文件夹的 `deskpet.json`（只改这 12 个情绪，文件里别的键保留）。也可以手写：
+3. **表情映射（可选）。** 官方示例 Natori、Mao、Haru、Ren 已内置映射，放进去就能用（推荐 Natori：表情最全）。其他模型在设置页「桌宠」分区选中这套形象，下面「表情映射 · 调整」里给每个情绪挑表情和动作，改一项桌宠就当场演一下，保存后写进模型文件夹的 `deskpet.json`（只改这 12 个情绪和点头、点身体两项，文件里别的键保留）。也可以手写：
    ```json
    {
      "expressions": { "neutral": "Normal", "happy": "Smile", "shy": "Blushing", "sad": "Sad",
                       "angry": "Angry", "surprised": "Surprised" },
-     "motions": { "happy": "TapBody" }
+     "motions": { "happy": "TapBody" },
+     "taps": { "head": { "expression": "Blushing", "motion": "TapHead" }, "body": { "motion": "TapBody" } }
    }
    ```
+   `taps` 是点到头、点到身体时演的表情和动作（看模型的 HitAreas，没有就按头部宽度估），没写的按默认反应：点头害羞、点身体开心。
    情绪键与侧栏差分立绘相同，共 12 个：`neutral calm happy excited shy affectionate curious surprised concerned sad tired angry`。没写的情绪按表情名去猜（含 smile、angry 之类的词）。
 
 本项目附带自有 Nova 模型，不附带 Cubism Core。Core 和第三方示例模型需自行按其许可获取；已有 Core 配置可继续使用。
@@ -132,14 +132,30 @@ AppData\Agents\<AgentId>\deskpet\
 
 ## 文件
 
-- `modules/ipc/deskPetHandlers.js`：主进程部分，负责窗口、`vcp-deskpet://` 资源协议、提示词注入、把回复流转给桌宠、桌宠发言转给主窗口、右键菜单。
-- `modules/deskpet/`：`petPrefs.js` 是尺寸计算（按形象长宽比定窗口）和设置校验（纯函数），`outfits.js` 找出每个助手有哪几套形象（换装），`petControls.js` 管设置文件和全局快捷键，`settingsPage.js` 是设置页「桌宠」分区的主进程部分（卡片目录、换装、导入），`petPreviews.js` 在一个离屏窗口里给每套形象拍快照，`cubismCore.js` 下载、校验、安装 Cubism Core（试加载页面是 `DeskPetmodules/core-probe.html`）。设置页面板在 `modules/settings/schema/deskpet-panel.js`，样式在 `styles/ui-system/deskpet-settings.css`。
-- `DeskPetmodules/dock.css`：桌宠和设置页共用的胶囊 / 输入条 / 录音条；`dictation.js`：录音、重采样成 16 kHz WAV 交给本机 SenseVoice。
-- `DeskPetmodules/figure.js`：按不透明像素量形象的轮廓和头的位置，把脚底摆到窗口底边（纯函数）。
+主进程（`modules/`）：
+
+- `ipc/deskPetHandlers.js`：窗口的一生（打开、摆放、拖动、甩、贴边藏起、溜达、换装、改大小、崩溃恢复、显示器变化）、IPC、右键和托盘菜单、把回复流转给桌宠、桌宠发言转给主窗口、工具审批和闹钟转给桌宠。
+- `deskpet/petAssets.js`：`vcp-deskpet://` 协议放行哪些文件，一个助手有哪几套形象、页面要的资源地址。
+- `deskpet/petState.js`：`AppData\deskpet\state.json`（每个桌宠的位置、大小、形象、长宽比、藏边），读改写串行、先写临时文件再改名。
+- `deskpet/petPrefs.js`：设置的默认值和校验、尺寸计算（按形象长宽比定窗口），纯函数。`petControls.js` 管设置文件和全局快捷键。
+- `deskpet/outfits.js`：找出每个助手有哪几套形象（换装）；`zipImport.js` 导入模型压缩包。
+- `deskpet/settingsPage.js`：设置页「桌宠」分区的主进程部分（卡片目录、换装、导入、表情映射，映射存在模型旁的 `deskpet.json`，读写在 `expressionProfile.js`）；`petPreviews.js` 在一个离屏窗口里给每套形象拍快照；`cubismCore.js` 下载、校验、安装 Cubism Core（试加载页面是 `DeskPetmodules/core-probe.html`）。设置页面板在 `modules/settings/schema/deskpet-panel.js`，样式在 `styles/ui-system/deskpet-settings.css`。
+- `deskpet/idleRunner.js`（时机和流程）、`idleChat.js`（说什么、能不能说）：闲时主动搭话。
+- `deskpet/edgeSnap.js`、`throwMotion.js`、`wander.js`：贴边和藏边、甩出去、溜达的路线（纯函数，主进程按帧挪窗口）。`fullscreenWatch.js`：别的程序全屏时让开。`petTray.js`：托盘菜单只在真变了时才改。
+- `ipc/deskPetVoice.js`：桌宠出声：按助手的 TTS 设置把句子交给 `SovitsTTS`，音频回到桌宠窗口；「朗读回复」开关；桌宠在念的回复不让主窗口再念。`sovitsHandlers.js` 保证同一时间只有一个窗口在出声。
+
+页面（`DeskPetmodules/`）：
+
+- `deskpet.js`：页面主体：气泡、输入条和录音、拖动和点击、回复流接到情绪导演、主动说话、工具审批卡片、按档位降帧和隐藏时暂停。
+- 形象后端，接口相同（`apply`、`probe`、`bounds`、`head`、`life`、`setActive`、`setPaused`…），按 Live2D → 网格立绘 → 差分立绘 → 头像依次退：`live2dBackend.js`、`puppetBackend.js`（网格在 `puppet.js`）、`imageBackend.js`（立绘和头像）。`petStage.js` 是它们共用的帧率档位、WebGL 和 Pixi 舞台、按轮廓摆放、按像素命中；`emotionLook.js` 是情绪的角标文字、色环和参数。
+- `figure.js`：按不透明像素量形象的轮廓和头的位置，把脚底摆到窗口底边（纯函数）。
+- `petLife.js`：闲时的时机（小动作、视线游走、犯困、睡着、醒来、连点、摸头）；`lifeMotion.js`：把阶段和动作变成参数曲线、拖动摆动和跳起高度；`lifeFx.js`：头顶小符号。
+- `voice.js`、`speechText.js`：播放 TTS 音频、用 AnalyserNode 量音量驱动嘴型，按句切回复、跟踪念到哪一句（气泡和表情跟着走）。`dictation.js`：录音、重采样成 16 kHz WAV 交给本机 SenseVoice。
+- `bubbleText.js` 把回复整理成气泡里的纯文字；`toolCard.js`、`toolActivity.js` 是「正在做什么」小卡片；`approvals.js`、`attachments.js`、`missedReply.js`、`gestures.js`、`hitAreas.js`、`expressionMap.js`、`gaze.js`、`moodOrder.js` 各管一件小事（纯函数，有单元测试）。
+- `dock.css`：桌宠和设置页共用的胶囊 / 输入条 / 录音条。
 - 给桌宠加会出声、会主动动的功能时，先看免打扰：页面里读 `window.deskPetPrefs.doNotDisturb`，或者监听 `window` 上的 `deskpet:prefs` 事件（`detail` 是 `{ scale, doNotDisturb }`）。
-- `modules/ipc/deskPetVoice.js`：桌宠出声的主进程部分：按助手的 TTS 设置把句子交给 `SovitsTTS`，音频回到桌宠窗口；「朗读回复」开关；桌宠在念的回复不让主窗口再念。`sovitsHandlers.js` 保证同一时间只有一个窗口在出声。
-- `DeskPetmodules/voice.js`、`speechText.js`：桌宠里播放 TTS 音频、用 AnalyserNode 量音量驱动嘴型，按句切回复、跟踪念到哪一句（气泡和表情跟着走）。
+
+其他：
+
 - `modules/emotion/`：情绪标签、规则兜底、情绪导演和差分挑图（与侧栏立绘共用）。
-- `DeskPetmodules/`：桌宠页面，后端依次是 Live2D、网格立绘（`puppet.js`）、差分立绘、头像；气泡和输入框（`bubbleText.js` 把回复整理成气泡里的纯文字）。
-- `DeskPetmodules/petLife.js`：闲时的时机（小动作、视线游走、犯困、睡着、醒来、连点、摸头）；`lifeMotion.js`：把阶段和动作变成参数曲线、拖动摆动和跳起高度。
 - `vendor/live2d/`：untitled-pixi-live2d-engine 1.4.0（MIT）。

@@ -66,6 +66,9 @@ const DEFAULT_SETTINGS = Object.freeze({
     followCursor: true,
     // 截图、录屏、共享屏幕时桌宠不出现在画面里（Windows、macOS 有效）
     hideFromCapture: false,
+    // 闲时主动搭话：人在电脑前、这么久（分钟）没和助手说话时让 TA 说一句（会调用模型，默认关）
+    idleChat: false,
+    idleChatMinutes: 30,
     shortcuts: Object.freeze(Object.fromEntries(
         Object.entries(SHORTCUT_ACTIONS).map(([id, action]) => [id, action.defaultAccelerator]),
     )),
@@ -102,7 +105,6 @@ function characterBox(aspect) {
     return { width, height };
 }
 
-/** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
 /**
  * 旧版（sizeVersion < 2）记下的窗口位置换到新尺寸下：旧窗口没有脚下的余量、1 倍也更大，
  * 原样用左上角的话脚会离开原来站的地方（站在任务栏上的会悬空）。按角色脚底中点对齐算新的左上角。
@@ -123,6 +125,7 @@ function legacyPosition(saved, aspect, scale) {
     };
 }
 
+/** 某个大小对应的窗口宽高（DIP，4 的倍数）。 */
 function windowSizeForScale(scale, aspect) {
     const s = clampScale(scale);
     const box = characterBox(aspect);
@@ -246,6 +249,8 @@ function isAgentIdLike(value) {
 }
 
 const OPACITY_MIN = 0.3;
+// 闲时主动搭话的间隔可选项（分钟），与 modules/deskpet/idleChat.js 一致
+const IDLE_CHAT_MINUTES = Object.freeze([10, 30, 60]);
 
 /** 不透明度：0.3–1，按 0.05 取整；不是数就当 1 */
 function normalizeOpacity(value) {
@@ -290,6 +295,8 @@ function normalizeSettings(raw) {
         wander: input.wander === true,
         followCursor: input.followCursor !== false,
         hideFromCapture: input.hideFromCapture === true,
+        idleChat: input.idleChat === true,
+        idleChatMinutes: IDLE_CHAT_MINUTES.includes(Number(input.idleChatMinutes)) ? Number(input.idleChatMinutes) : 30,
         shortcuts,
         openAgents,
         lastAgent: isAgentIdLike(input.lastAgent) ? input.lastAgent : null,
@@ -299,6 +306,7 @@ function normalizeSettings(raw) {
 module.exports = {
     normalizeOpacity,
     OPACITY_MIN,
+    IDLE_CHAT_MINUTES,
     BASE_CHARACTER,
     SIZE_VERSION,
     UI_RESERVE,
