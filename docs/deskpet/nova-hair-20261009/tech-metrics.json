@@ -1,0 +1,54 @@
+{
+  "outfit": "tech",
+  "neutral_max_change": 0.0,
+  "rows": [
+    {
+      "pose": "z-30",
+      "before_tip_drift": 0.22648273129170596,
+      "after_tip_drift": 0.1011879556447191,
+      "tip_ratio": 0.4467800042308334,
+      "root_change": 0.0009055258902797698,
+      "finite": true
+    },
+    {
+      "pose": "z-15",
+      "before_tip_drift": 0.11421854821734795,
+      "after_tip_drift": 0.05114324073315233,
+      "tip_ratio": 0.44776651018038854,
+      "root_change": 0.0004527439109447594,
+      "finite": true
+    },
+    {
+      "pose": "z-8",
+      "before_tip_drift": 0.06104126276402437,
+      "after_tip_drift": 0.02735563145616739,
+      "tip_ratio": 0.4481498287792608,
+      "root_change": 0.00024146859980704637,
+      "finite": true
+    },
+    {
+      "pose": "z8",
+      "before_tip_drift": 0.06104124860482166,
+      "after_tip_drift": 0.027391027854519953,
+      "tip_ratio": 0.4487298094416164,
+      "root_change": 0.0002414131509974907,
+      "finite": true
+    },
+    {
+      "pose": "z15",
+      "before_tip_drift": 0.11421853015641542,
+      "after_tip_drift": 0.0512654019045652,
+      "tip_ratio": 0.44883611997423106,
+      "root_change": 0.00045253833643018633,
+      "finite": true
+    },
+    {
+      "pose": "z30",
+      "before_tip_drift": 0.22648275272597065,
+      "after_tip_drift": 0.10163908263924894,
+      "tip_ratio": 0.44877184428354944,
+      "root_change": 0.0009045665973382663,
+      "finite": true
+    }
+  ]
+}
