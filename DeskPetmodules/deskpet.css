@@ -32,7 +32,8 @@ body.is-ghost-hover #stage {
   position: absolute;
   inset: 0;
   transform-origin: 50% 100%;
-  animation: deskpet-breathe 4.2s ease-in-out infinite;
+  /* 呼吸：页面按帧率档位写 --breath（0–1），见 deskpet.js createCssLife */
+  transform: scaleY(calc(1 + 0.006 * var(--breath, 0)));
 }
 
 #portrait img {
@@ -73,7 +74,7 @@ body.is-ghost-hover #stage {
 }
 
 #portrait.is-pop {
-  animation: deskpet-pop 260ms ease-out, deskpet-breathe 4.2s ease-in-out infinite;
+  animation: deskpet-pop 260ms ease-out;
 }
 
 #avatar {
@@ -83,7 +84,7 @@ body.is-ghost-hover #stage {
   width: calc(168px * var(--pet-scale, 1));
   height: calc(168px * var(--pet-scale, 1));
   margin-left: calc(-84px * var(--pet-scale, 1));
-  animation: deskpet-bob 3.6s ease-in-out infinite;
+  transform: translateY(calc(-5px * var(--breath, 0)));
 }
 
 #avatarImg {
@@ -412,7 +413,8 @@ body.is-preview #lifeFx {
   font-size: 16px;
   line-height: 30px;
   cursor: pointer;
-  animation: deskpet-missed-bob 1.6s ease-in-out infinite;
+  /* 跳几下引起注意就停：人不在的时候它可能一直挂着，无限动画会让窗口一直每秒合成 60 帧 */
+  animation: deskpet-missed-bob 1.6s ease-in-out 4;
 }
 
 #missedBadge[hidden] {
@@ -445,10 +447,6 @@ body.is-paused #missedBadge {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
-@keyframes deskpet-breathe {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(1.006); }
-}
 
 @keyframes deskpet-pop {
   0% { transform: translateY(0) scale(1); }
@@ -471,10 +469,6 @@ body.is-paused *::after {
   animation-play-state: paused !important;
 }
 
-@keyframes deskpet-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
 
 [hidden] {
     display: none !important;
@@ -507,9 +501,6 @@ body.is-paused *::after {
   scale: 1 0.99;
 }
 
-#lifeBody[data-life-phase="drowsy"] #portrait { animation-duration: 6s; }
-#lifeBody[data-life-phase="asleep"] #portrait { animation-duration: 7.5s; }
-#lifeBody[data-life-phase="asleep"] #avatar { animation-duration: 7s; }
 
 #lifeBody[data-life-act] {
   animation-duration: var(--life-ms, 1s);

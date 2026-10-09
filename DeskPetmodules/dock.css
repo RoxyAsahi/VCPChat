@@ -266,6 +266,11 @@
   animation: pet-dock-spin 700ms linear infinite;
 }
 
+/* 不在录音时不闪：那一层只是透明着，动画照样每帧在跑 */
+.pet-dock:not([data-mode="rec"]) .rec-dot {
+  animation: none;
+}
+
 @keyframes pet-dock-rec {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
