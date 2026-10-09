@@ -1,0 +1,939 @@
+{
+  "cases": [
+    {
+      "preset": "tech",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-tech",
+          "name": "Nova · 科技服",
+          "kind": "live2d",
+          "label": "Nova · 科技服（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/tech/NovaTech.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 117.2088600508372,
+        "y": 165.47285083770754,
+        "width": 208.26530206362406,
+        "height": 504.0931549580892
+      },
+      "parameters": [
+        "ParamAngleX",
+        "ParamAngleY",
+        "ParamAngleZ",
+        "ParamEyeLOpen",
+        "ParamEyeROpen",
+        "ParamEyeBallX",
+        "ParamEyeBallY",
+        "ParamEyeBallForm",
+        "ParamBrowLY",
+        "ParamBrowRY",
+        "ParamMouthForm",
+        "ParamMouthOpenY",
+        "ParamBodyAngleX",
+        "ParamBodyAngleY",
+        "ParamBodyAngleZ",
+        "ParamBodyLean",
+        "ParamProportion",
+        "ParamBreath",
+        "ParamHairFront",
+        "ParamHairBack"
+      ]
+    },
+    {
+      "preset": "maid",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-maid",
+          "name": "Nova · 女仆",
+          "kind": "live2d",
+          "label": "Nova · 女仆（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/maid/NovaMaid.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 96.12656325192087,
+        "y": 170.98444195135576,
+        "width": 248.7464888238569,
+        "height": 512.1490433630584
+      },
+      "parameters": [
+        "ParamAngleX",
+        "ParamAngleY",
+        "ParamAngleZ",
+        "ParamEyeLOpen",
+        "ParamEyeROpen",
+        "ParamEyeBallX",
+        "ParamEyeBallY",
+        "ParamEyeBallForm",
+        "ParamBrowLY",
+        "ParamBrowRY",
+        "ParamMouthForm",
+        "ParamMouthOpenY",
+        "ParamBodyAngleX",
+        "ParamBodyAngleY",
+        "ParamBodyAngleZ",
+        "ParamBodyLean",
+        "ParamProportion",
+        "ParamBreath",
+        "ParamHairFront",
+        "ParamHairBack"
+      ]
+    },
+    {
+      "preset": "chibi",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-chibi",
+          "name": "Nova · 简洁 Q 版",
+          "kind": "live2d",
+          "label": "Nova · 简洁 Q 版（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/chibi/NovaChibi.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired",
+            "Stars",
+            "Wink",
+            "Smug",
+            "Speechless"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake",
+            "Wave",
+            "Salute",
+            "Heart",
+            "Tea",
+            "Typing",
+            "Shrug",
+            "Akimbo",
+            "Cheer"
+          ],
+          "renderer": "ANGLE (AMD, AMD Radeon 780M Graphics (0x000015BF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 17.0788709304095,
+        "y": 181.65474493333625,
+        "width": 406.7364927247586,
+        "height": 501.6931713885833
+      },
+      "parameters": [
+        "ParamAngleX",
+        "ParamAngleY",
+        "ParamAngleZ",
+        "ParamEyeLOpen",
+        "ParamEyeROpen",
+        "ParamEyeBallX",
+        "ParamEyeBallY",
+        "ParamEyeBallForm",
+        "ParamBrowLY",
+        "ParamBrowRY",
+        "ParamMouthForm",
+        "ParamMouthOpenY",
+        "ParamBodyAngleX",
+        "ParamBodyAngleY",
+        "ParamBodyAngleZ",
+        "ParamBodyLean",
+        "ParamProportion",
+        "ParamBreath",
+        "ParamSimpresetbackhair_1",
+        "ParamSimpresetbackhair_2",
+        "ParamSimpresetbackhair_Y",
+        "ParamSimpresetskirt_1",
+        "ParamSimpresetskirt_2",
+        "ParamSimpresetskirt_Y",
+        "ParamHairFront",
+        "ParamActAkimbo",
+        "ParamActCheer",
+        "ParamActHeart",
+        "ParamActSalute",
+        "ParamActShrug",
+        "ParamActTea",
+        "ParamActTyping",
+        "ParamActWave",
+        "ParamExpAngry",
+        "ParamExpHappy",
+        "ParamExpSad",
+        "ParamExpShy",
+        "ParamExpSleepy",
+        "ParamExpSmug",
+        "ParamExpSpeechless",
+        "ParamExpStars",
+        "ParamExpSurprised",
+        "ParamExpWink",
+        "ParamArmsDefault",
+        "ParamExpNeutralHide"
+      ]
+    }
+  ],
+  "errors": [],
+  "assertions": [
+    {
+      "preset": "tech",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "explicit 150 percent renderer scale",
+      "dpi": 1.5,
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "hover pill contains the three expected actions",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "hide pill stays tucked while cursor remains on the character",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "pill reopens after cursor leaves and returns",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "pointer edit expands the composer within viewport",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "Escape closes the empty composer",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "approval card appears in the composited screenshot",
+      "cardLayout": {
+        "x": 31.666667938232422,
+        "y": 52.645835876464844,
+        "width": 300,
+        "height": 102.35417175292969,
+        "viewport": 361,
+        "display": "flex",
+        "opacity": "1",
+        "visibility": "visible",
+        "background": "rgba(255, 252, 245, 0.97)"
+      },
+      "bright": 61795,
+      "sampled": 68248,
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "approval button is inside the pet viewport",
+      "button": {
+        "x": 295,
+        "y": 132,
+        "inside": true
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "real pointer allow reaches main notification flow and advances queue",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "main window rejection clears pet queue",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "expired request closes in both windows without a tool response",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "neutral",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "blink",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 0,
+        "ParamEyeROpen": 0,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "talk",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 1
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "turn",
+      "actual": {
+        "ParamAngleX": 25,
+        "ParamAngleY": 12,
+        "ParamAngleZ": 10,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Neutral",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Happy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Shy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Sad",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Angry",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Surprised",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "expression": "Tired",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "reply reaches visible bubble through actual handler and preload",
+      "reply": {
+        "text": "Nova integration reply verified.",
+        "hidden": false
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "explicit 150 percent renderer scale",
+      "dpi": 1.5,
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "hover pill contains the three expected actions",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "hide pill stays tucked while cursor remains on the character",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "pill reopens after cursor leaves and returns",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "pointer edit expands the composer within viewport",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "Escape closes the empty composer",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "approval card appears in the composited screenshot",
+      "cardLayout": {
+        "x": 30.666667938232422,
+        "y": 52.645835876464844,
+        "width": 300,
+        "height": 102.35417175292969,
+        "viewport": 361,
+        "display": "flex",
+        "opacity": "1",
+        "visibility": "visible",
+        "background": "rgba(255, 252, 245, 0.97)"
+      },
+      "bright": 61817,
+      "sampled": 68248,
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "approval button is inside the pet viewport",
+      "button": {
+        "x": 294,
+        "y": 132,
+        "inside": true
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "real pointer allow reaches main notification flow and advances queue",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "main window rejection clears pet queue",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "expired request closes in both windows without a tool response",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "neutral",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "blink",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 0,
+        "ParamEyeROpen": 0,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "talk",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 1
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "turn",
+      "actual": {
+        "ParamAngleX": 25,
+        "ParamAngleY": 12,
+        "ParamAngleZ": 10,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Neutral",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Happy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Shy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Sad",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Angry",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Surprised",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Tired",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "reply reaches visible bubble through actual handler and preload",
+      "reply": {
+        "text": "Nova integration reply verified.",
+        "hidden": false
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "explicit 150 percent renderer scale",
+      "dpi": 1.5,
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "hover pill contains the three expected actions",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "hide pill stays tucked while cursor remains on the character",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "pill reopens after cursor leaves and returns",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "pointer edit expands the composer within viewport",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "Escape closes the empty composer",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "approval card appears in the composited screenshot",
+      "cardLayout": {
+        "x": 66.66667175292969,
+        "y": 52.645835876464844,
+        "width": 300,
+        "height": 102.35417175292969,
+        "viewport": 441,
+        "display": "flex",
+        "opacity": "1",
+        "visibility": "visible",
+        "background": "rgba(255, 252, 245, 0.97)"
+      },
+      "bright": 61817,
+      "sampled": 68248,
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "approval button is inside the pet viewport",
+      "button": {
+        "x": 330,
+        "y": 132,
+        "inside": true
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "real pointer allow reaches main notification flow and advances queue",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "main window rejection clears pet queue",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "expired request closes in both windows without a tool response",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "pose": "neutral",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "pose": "blink",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 0,
+        "ParamEyeROpen": 0,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "pose": "talk",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 1
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "pose": "turn",
+      "actual": {
+        "ParamAngleX": 25,
+        "ParamAngleY": 12,
+        "ParamAngleZ": 10,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Neutral",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Happy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Shy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Sad",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Angry",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Surprised",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "expression": "Tired",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    },
+    {
+      "preset": "chibi",
+      "name": "reply reaches visible bubble through actual handler and preload",
+      "reply": {
+        "text": "Nova integration reply verified.",
+        "hidden": false
+      },
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+{
+  "cases": [
+    {
+      "preset": "maid",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-maid",
+          "name": "Nova \u00b7 \u5973\u4ec6",
+          "kind": "live2d",
+          "label": "Nova \u00b7 \u5973\u4ec6\uff08Live2D\uff09",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/maid/NovaMaid.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4050 Laptop GPU (0x000028E1) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 72.70840175943479,
+        "y": 161.35352269756189,
+        "width": 134.58298835619118,
+        "height": 277.0955645061323
+      },
+      "parameters": [
+        "ParamAngleX",
+        "ParamAngleY",
+        "ParamAngleZ",
+        "ParamEyeLOpen",
+        "ParamEyeROpen",
+        "ParamEyeBallX",
+        "ParamEyeBallY",
+        "ParamEyeBallForm",
+        "ParamBrowLY",
+        "ParamBrowRY",
+        "ParamMouthForm",
+        "ParamMouthOpenY",
+        "ParamBodyAngleX",
+        "ParamBodyAngleY",
+        "ParamBodyAngleZ",
+        "ParamBodyLean",
+        "ParamProportion",
+        "ParamBreath",
+        "ParamHairFront",
+        "ParamHairBack"
+      ]
+    }
+  ],
+  "errors": [],
+  "assertions": [
+    {
+      "preset": "maid",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "neutral",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "blink",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 0,
+        "ParamEyeROpen": 0,
+        "ParamMouthOpenY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "talk",
+      "actual": {
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 1
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "pose": "turn",
+      "actual": {
+        "ParamAngleX": 25,
+        "ParamAngleY": 12,
+        "ParamAngleZ": 10,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Neutral",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Happy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Shy",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Sad",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Angry",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Surprised",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "expression": "Tired",
+      "name": "closed iris and eyewhite are invisible during speech",
+      "eyeOpacities": {
+        "ArtMeshIridesL": 0,
+        "ArtMeshIridesR": 0,
+        "ArtMeshEyewhiteL": 0,
+        "ArtMeshEyewhiteR": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "maid",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    }
+  ]
+}

@@ -7,6 +7,11 @@ const { clearTrajectoriesOfOwner } = require('../modelTrajectory');
 const { getAgentMoodStore } = require('../agentMood');
 const { resolvePortraitDisplayPath, forgetPortraitDisplayImages } = require('../services/agentPortraitImages');
 
+// 桌宠模块用时再取：它在主进程里是单例，测试替身的 electron 里不一定载得进来
+function deskPetHandlers() {
+    try { return require('./deskPetHandlers'); } catch { return null; }
+}
+
 let AGENT_DIR_CACHE; // Cache the agent directory path
 let USER_DATA_DIR_CACHE; // Cache the user data directory path
 let AVATAR_IMAGE_DIR; // Centralized avatar storage directory
@@ -599,6 +604,8 @@ function initialize(context) {
             const userDataAgentDir = path.join(USER_DATA_DIR, agentId);
             // 先让心情不再写、等正在写的 mood.json 写完，否则删目录时可能撞上写入
             await getAgentMoodStore()?.forget(agentId);
+            // 开着的桌宠先关掉，记下的位置、形象一起忘掉（不然重启后还想恢复一个已经没了的助手）
+            await deskPetHandlers()?.forgetAgent?.(agentId);
             const portraitFiles = (await fs.readdir(agentDir).catch(() => []))
                 .filter(name => PORTRAIT_FILE_PATTERN.test(name))
                 .map(name => path.join(agentDir, name));

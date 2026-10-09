@@ -1,0 +1,260 @@
+[
+  {
+    "outfit": "tech",
+    "grid_pose_count": 49,
+    "clamp_comparison_count": 24,
+    "maximum_vertex_delta": 0.0011814944446086884,
+    "comparisons": [
+      {
+        "pose": "grid-1_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.65",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0011814944446086884
+      },
+      {
+        "pose": "grid-1_-0.35",
+        "reference_pose": "grid-0.65_-0.35",
+        "max_abs_vertex_delta": 0.0006361920386552811
+      },
+      {
+        "pose": "grid-1_0",
+        "reference_pose": "grid-0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.35",
+        "reference_pose": "grid-0.65_0.35",
+        "max_abs_vertex_delta": 0.0006361901760101318
+      },
+      {
+        "pose": "grid-1_0.65",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0011814925819635391
+      },
+      {
+        "pose": "grid-1_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0009552836418151855
+      },
+      {
+        "pose": "grid-0.65_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0009553432464599609
+      },
+      {
+        "pose": "grid-0.35_-1",
+        "reference_pose": "grid-0.35_-0.65",
+        "max_abs_vertex_delta": 0.0005144476890563965
+      },
+      {
+        "pose": "grid-0.35_1",
+        "reference_pose": "grid-0.35_0.65",
+        "max_abs_vertex_delta": 0.0005143880844116211
+      },
+      {
+        "pose": "grid0_-1",
+        "reference_pose": "grid0_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_1",
+        "reference_pose": "grid0_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_-1",
+        "reference_pose": "grid0.35_-0.65",
+        "max_abs_vertex_delta": 0.0005144476890563965
+      },
+      {
+        "pose": "grid0.35_1",
+        "reference_pose": "grid0.35_0.65",
+        "max_abs_vertex_delta": 0.0005145072937011719
+      },
+      {
+        "pose": "grid0.65_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0009553432464599609
+      },
+      {
+        "pose": "grid0.65_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0009552836418151855
+      },
+      {
+        "pose": "grid1_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.65",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0011814944446086884
+      },
+      {
+        "pose": "grid1_-0.35",
+        "reference_pose": "grid0.65_-0.35",
+        "max_abs_vertex_delta": 0.0006361939013004303
+      },
+      {
+        "pose": "grid1_0",
+        "reference_pose": "grid0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.35",
+        "reference_pose": "grid0.65_0.35",
+        "max_abs_vertex_delta": 0.0006361901760101318
+      },
+      {
+        "pose": "grid1_0.65",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0011814944446086884
+      },
+      {
+        "pose": "grid1_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      }
+    ],
+    "passed": false
+  },
+  {
+    "outfit": "maid",
+    "grid_pose_count": 49,
+    "clamp_comparison_count": 24,
+    "maximum_vertex_delta": 0.0019035451114177704,
+    "comparisons": [
+      {
+        "pose": "grid-1_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_-0.65",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0019035451114177704
+      },
+      {
+        "pose": "grid-1_-0.35",
+        "reference_pose": "grid-0.65_-0.35",
+        "max_abs_vertex_delta": 0.001024983823299408
+      },
+      {
+        "pose": "grid-1_0",
+        "reference_pose": "grid-0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-1_0.35",
+        "reference_pose": "grid-0.65_0.35",
+        "max_abs_vertex_delta": 0.0010249949991703033
+      },
+      {
+        "pose": "grid-1_0.65",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0019035451114177704
+      },
+      {
+        "pose": "grid-1_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid-0.65_-1",
+        "reference_pose": "grid-0.65_-0.65",
+        "max_abs_vertex_delta": 0.0016782283782958984
+      },
+      {
+        "pose": "grid-0.65_1",
+        "reference_pose": "grid-0.65_0.65",
+        "max_abs_vertex_delta": 0.0016782283782958984
+      },
+      {
+        "pose": "grid-0.35_-1",
+        "reference_pose": "grid-0.35_-0.65",
+        "max_abs_vertex_delta": 0.0009036660194396973
+      },
+      {
+        "pose": "grid-0.35_1",
+        "reference_pose": "grid-0.35_0.65",
+        "max_abs_vertex_delta": 0.0009037256240844727
+      },
+      {
+        "pose": "grid0_-1",
+        "reference_pose": "grid0_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0_1",
+        "reference_pose": "grid0_0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid0.35_-1",
+        "reference_pose": "grid0.35_-0.65",
+        "max_abs_vertex_delta": 0.000903785228729248
+      },
+      {
+        "pose": "grid0.35_1",
+        "reference_pose": "grid0.35_0.65",
+        "max_abs_vertex_delta": 0.0009036660194396973
+      },
+      {
+        "pose": "grid0.65_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0016782283782958984
+      },
+      {
+        "pose": "grid0.65_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0016782879829406738
+      },
+      {
+        "pose": "grid1_-1",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_-0.65",
+        "reference_pose": "grid0.65_-0.65",
+        "max_abs_vertex_delta": 0.001903541386127472
+      },
+      {
+        "pose": "grid1_-0.35",
+        "reference_pose": "grid0.65_-0.35",
+        "max_abs_vertex_delta": 0.0010249912738800049
+      },
+      {
+        "pose": "grid1_0",
+        "reference_pose": "grid0.65_0",
+        "max_abs_vertex_delta": 0.0
+      },
+      {
+        "pose": "grid1_0.35",
+        "reference_pose": "grid0.65_0.35",
+        "max_abs_vertex_delta": 0.0010249875485897064
+      },
+      {
+        "pose": "grid1_0.65",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0019035451114177704
+      },
+      {
+        "pose": "grid1_1",
+        "reference_pose": "grid0.65_0.65",
+        "max_abs_vertex_delta": 0.0
+      }
+    ],
+    "passed": false
+  }
+]

@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src deskpet:; connect-src deskpet: data: blob:; img-src deskpet: blob: data:; style-src 'unsafe-inline'; worker-src blob:">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; user-select: none; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <!-- Pixi 8 and its CSP polyfill are the copies VCPChat already ships. -->
+  <script src="deskpet://pet/appvendor/pixi.min.js"></script>
+  <script src="deskpet://pet/appvendor/pixi-unsafe-eval.min.js"></script>
+  <!-- Core defines the Live2DCubismCore global the engine reads at load. -->
+  <script src="deskpet://pet/vendor/live2dcubismcore.min.js"></script>
+  <script src="deskpet://pet/lib/untitled-pixi-live2d-engine/cubism.min.js"></script>
+  <script src="deskpet://pet/app/pet.js"></script>
+</body>
+</html>

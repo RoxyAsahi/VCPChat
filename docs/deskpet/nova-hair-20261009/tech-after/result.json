@@ -1,0 +1,416 @@
+{
+  "cases": [
+    {
+      "preset": "tech",
+      "assets": {
+        "outfit": {
+          "id": "builtin:nova-tech",
+          "name": "Nova · 科技服",
+          "kind": "live2d",
+          "label": "Nova · 科技服（Live2D）",
+          "builtIn": true
+        },
+        "model": "vcp-deskpet://pet/builtin/nova/tech/NovaTech.model3.json"
+      },
+      "ready": {
+        "backend": "live2d",
+        "info": {
+          "coreVersion": 83951616,
+          "expressions": [
+            "Neutral",
+            "Happy",
+            "Shy",
+            "Sad",
+            "Angry",
+            "Surprised",
+            "Tired"
+          ],
+          "motionGroups": [
+            "Idle",
+            "Blink",
+            "Nod",
+            "Shake"
+          ],
+          "renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4050 Laptop GPU (0x000028E1) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "software": false
+        }
+      },
+      "bounds": {
+        "x": 79.48989189545314,
+        "y": 159.0643193340302,
+        "width": 122.0061657611529,
+        "height": 295.3083034642537
+      },
+      "parameters": [
+        "ParamAngleX",
+        "ParamAngleY",
+        "ParamAngleZ",
+        "ParamEyeLOpen",
+        "ParamEyeROpen",
+        "ParamEyeBallX",
+        "ParamEyeBallY",
+        "ParamEyeBallForm",
+        "ParamBrowLY",
+        "ParamBrowRY",
+        "ParamMouthForm",
+        "ParamMouthOpenY",
+        "ParamBodyAngleX",
+        "ParamBodyAngleY",
+        "ParamBodyAngleZ",
+        "ParamBodyLean",
+        "ParamProportion",
+        "ParamBreath",
+        "ParamHairFront",
+        "ParamHairBack"
+      ]
+    }
+  ],
+  "errors": [],
+  "assertions": [
+    {
+      "preset": "tech",
+      "name": "actual outfit menu writes the chosen outfit",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "three selectable Live2D presets",
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "neutral",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z-30",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -30,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z-15",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z-8",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -8,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z8",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 8,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z15",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z30",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 0,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 30,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z-15-sway-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": -1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z-15-sway1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": -15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z0-sway-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": -1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z0-sway1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 0,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z15-sway-1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": -1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "pose": "z15-sway1",
+      "actual": {
+        "ParamBodyAngleX": 0,
+        "ParamBodyAngleY": 0,
+        "ParamBodyAngleZ": 0,
+        "ParamBodyLean": 0,
+        "ParamProportion": 0,
+        "ParamBreath": 0,
+        "ParamHairBack": 1,
+        "ParamHairFront": 0,
+        "ParamEyeLOpen": 1,
+        "ParamEyeROpen": 1,
+        "ParamMouthOpenY": 0,
+        "ParamAngleX": 0,
+        "ParamAngleY": 0,
+        "ParamAngleZ": 15,
+        "ParamEyeBallX": 0,
+        "ParamEyeBallY": 0
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "physical step and sine remain finite and drive hair",
+      "dynamics": {
+        "finite": true,
+        "maxAbs": 0.7371792793273926,
+        "hairMin": -0.7181190848350525,
+        "hairMax": 0.7740777134895325,
+        "frames": 400
+      },
+      "passed": true
+    },
+    {
+      "preset": "tech",
+      "name": "outfit aspect saved in isolated state",
+      "passed": true
+    }
+  ],
+  "geometry_artifact": {
+    "file": "vertices.json.gz",
+    "uncompressed_sha256": "98fffe6715cd367169fa3f0f48247a7bfc2f3083e0f42068da511d8f7582df82",
+    "poses": [
+      "neutral",
+      "z-30",
+      "z-15",
+      "z-8",
+      "z8",
+      "z15",
+      "z30",
+      "z-15-sway-1",
+      "z-15-sway1",
+      "z0-sway-1",
+      "z0-sway1",
+      "z15-sway-1",
+      "z15-sway1"
+    ]
+  }
+}
