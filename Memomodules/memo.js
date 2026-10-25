@@ -888,7 +888,7 @@ function renderMemos(memos) {
     setMemoIntro([
         `${memos.length} 篇日记`,
         folderCount ? `${folderCount} 个文件夹` : '',
-        isBatchMode ? '点击行选择或取消选择' : ''
+        isBatchMode ? '点击卡片选择或取消选择' : ''
     ]);
 
     const gridWidth = memoGridEl.offsetWidth;
@@ -916,15 +916,16 @@ function renderMemos(memos) {
 
         card.innerHTML = `
             <div class="memo-card-copy">
-                <div class="memo-card-head">
-                    <h3 class="memo-title" title="${escapeHtml(memo.name)}">${escapeHtml(getMemoDisplayTitle(memo.name))}</h3>
-                    <span class="memo-card-meta"${modifiedText ? ` title="修改于 ${modifiedText}"` : ''}>${escapeHtml(metaText)}</span>
-                </div>
+                <h3 class="memo-title" title="${escapeHtml(memo.name)}">${escapeHtml(getMemoDisplayTitle(memo.name))}</h3>
                 <p class="preview">${escapeHtml(previewText)}</p>
             </div>
-            <button type="button" class="memo-icon-btn association-btn" title="记忆联想" aria-label="记忆联想">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .52 8.125A5.002 5.002 0 0 0 14 18a5 5 0 0 0 5-5A3 3 0 0 0 12 5Z"/><path d="M12 18v-2a2 2 0 0 0-2-2H8"/><path d="M16 8a2 2 0 0 0-2 2v2"/></svg>
-            </button>
+            <div class="memo-card-foot">
+                <span class="memo-card-meta"${modifiedText ? ` title="修改于 ${modifiedText}"` : ''}>${escapeHtml(metaText)}</span>
+                <button type="button" class="association-btn" title="以这篇日记为起点做记忆联想">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .52 8.125A5.002 5.002 0 0 0 14 18a5 5 0 0 0 5-5A3 3 0 0 0 12 5Z"/><path d="M12 18v-2a2 2 0 0 0-2-2H8"/><path d="M16 8a2 2 0 0 0-2 2v2"/></svg>
+                    联想
+                </button>
+            </div>
         `;
 
         card.onclick = (e) => {

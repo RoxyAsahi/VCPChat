@@ -64,8 +64,9 @@
                             <div id="memo-intro" class="page-intro" aria-live="polite"></div>
                         </div>
                         <div class="header-actions">
-                            <button type="button" id="batch-edit-btn" class="memo-icon-btn" title="批量管理" aria-label="批量管理">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 7 2 2 4-4"></path><path d="m3 17 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg>
+                            <button type="button" id="batch-edit-btn" class="memo-button" title="多选日记，批量移动、删除或送进工作台">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 7 2 2 4-4"></path><path d="m3 17 2 2 4-4"></path><path d="M13 6h8"></path><path d="M13 12h8"></path><path d="M13 18h8"></path></svg>
+                                批量管理
                             </button>
                             <button type="button" id="create-memo-btn" class="memo-button memo-button-primary">新建日记</button>
                         </div>
@@ -87,13 +88,15 @@
                             </div>
                             <span class="toolbar-divider" aria-hidden="true"></span>
                             <div class="memo-popover-anchor">
-                                <button type="button" id="batch-move-btn" class="memo-icon-btn" title="移动到文件夹" aria-label="移动到文件夹" aria-haspopup="menu" aria-expanded="false" aria-controls="batch-move-menu">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"></path><path d="M2 13h10"></path><path d="m9 16 3-3-3-3"></path></svg>
+                                <button type="button" id="batch-move-btn" class="memo-button" title="移动到文件夹" aria-haspopup="menu" aria-expanded="false" aria-controls="batch-move-menu">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"></path><path d="M2 13h10"></path><path d="m9 16 3-3-3-3"></path></svg>
+                                    移动
                                 </button>
                                 <div id="batch-move-menu" class="memo-popover memo-menu" role="menu" aria-label="移动到文件夹" hidden></div>
                             </div>
-                            <button type="button" id="batch-delete-btn" class="memo-icon-btn memo-icon-btn-danger" title="删除所选" aria-label="删除所选">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            <button type="button" id="batch-delete-btn" class="memo-button memo-button-danger-text" title="删除所选日记">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                删除
                             </button>
                             <span class="toolbar-divider" aria-hidden="true"></span>
                             <button type="button" id="batch-workbench-btn" class="memo-button memo-button-primary">进入工作台</button>
@@ -137,10 +140,6 @@
                         <button type="button" class="memo-segment" role="radio" data-view="split" aria-checked="true">分栏</button>
                         <button type="button" class="memo-segment" role="radio" data-view="preview" aria-checked="false">预览</button>
                     </div>
-                    <span class="toolbar-divider" aria-hidden="true"></span>
-                    <button type="button" id="delete-memo-btn" class="memo-icon-btn memo-icon-btn-danger" title="删除这篇日记" aria-label="删除这篇日记">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                    </button>
                     <button type="button" id="close-editor-btn" class="modal-close-btn" title="关闭" aria-label="关闭">&times;</button>
                 </div>
             </div>
@@ -151,6 +150,7 @@
             <div class="editor-footer">
                 <p id="editor-status" class="editor-status"></p>
                 <div class="modal-right-actions">
+                    <button type="button" id="delete-memo-btn" class="memo-button memo-button-danger-text" title="删除这篇日记">删除</button>
                     <button type="button" id="save-memo-btn" class="memo-button memo-button-primary">保存修改</button>
                 </div>
             </div>
