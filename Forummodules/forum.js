@@ -817,8 +817,8 @@ function createPostCard(post, index) {
 
     const avatarHTML = (name) => `<div class="author-avatar loading-avatar" data-tone="${avatarTone(name)}" data-author="${escapeHtml(name)}">${escapeHtml(name.slice(0,1).toUpperCase())}</div>`;
 
-    // One quiet line: author, when it was posted and, if anyone replied, who
-    // replied last. The exact time sits in the tooltip.
+    // One quiet line for the post view: author, when it was posted and, if
+    // anyone replied, who replied last. The exact time sits in the tooltip.
     const postedAt = hasReply ? post.timestamp : displayDate;
     const metaItems = [
         `<span class="post-meta-item post-author">${escapeHtml(post.author)}</span>`,
@@ -828,6 +828,18 @@ function createPostCard(post, index) {
         const replier = hasNewReplier ? `${escapeHtml(lastReplier)} ` : '';
         metaItems.push(`<span class="post-meta-item" title="${escapeHtml(formatFullDate(displayDate))}">${replier}最后回复于 ${formatDate(displayDate)}</span>`);
     }
+
+    // The tile footer: who posted and when, then who replied last and when.
+    const footCell = (name, label, date) => `
+        <div class="post-foot-cell">
+            ${avatarHTML(name)}
+            <div class="post-foot-copy">
+                <span class="post-foot-label"><strong>${escapeHtml(name)}</strong> · ${label}</span>
+                <span class="post-foot-value" title="${escapeHtml(formatFullDate(date))}">${formatDate(date)}</span>
+            </div>
+        </div>`;
+    const footCells = [footCell(post.author, '发帖于', postedAt)];
+    if (hasReply) footCells.push(footCell(lastReplier || post.author, '最后回复', displayDate));
 
     el.setAttribute('role', 'button');
     el.tabIndex = 0;
@@ -843,6 +855,7 @@ function createPostCard(post, index) {
             </div>
         </div>
         <div class="post-preview">点击展开查看详情...</div>
+        <div class="post-card-foot">${footCells.join('')}</div>
     `;
 
     el.addEventListener('click', (e) => expandPost(post, el));
@@ -925,7 +938,7 @@ async function expandPost(post, originalCard) {
     expanded.style.margin = '0 auto';
     expanded.style.cursor = 'default';
 
-    // Header tools: the post menu joins once the body has loaded.
+    // Header tools: the post actions join once the body has loaded.
     const headActions = document.createElement('div');
     headActions.className = 'post-head-actions';
     const closeBtn = document.createElement('button');
@@ -986,11 +999,8 @@ postSizeObserver.observe(activePostOverlay);
 
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && activePostOverlay.classList.contains('active')) {
-        const openMenu = activePostOverlay.querySelector('.post-menu:not([hidden])');
         const activeEditingArea = activePostOverlay.querySelector('.edit-textarea');
-        if (openMenu) {
-            closePostMenu(openMenu, { focusButton: true });
-        } else if (activeEditingArea) {
+        if (activeEditingArea) {
             // If in edit mode, find the corresponding cancel button and trigger it
             const cancelButton = activeEditingArea.parentElement.querySelector('.cancel-edit-btn');
             if (cancelButton) {
@@ -1378,88 +1388,50 @@ function applyBoldFormatting(container) {
 const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>';
 const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"></path></svg>';
 const ICON_COPY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>';
-const ICON_MORE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>';
+const ICON_CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"></path></svg>';
 
-// ========== Post menu ==========
-// Edit, copy ID and delete share one … menu in the post header, ahead of
-// the close button. It is rebuilt on every render because edits and replies
-// re-render the whole post.
-function renderPostMenu(card, previewEl, uid, postUid) {
+// ========== Post actions ==========
+// Copy ID, 编辑正文 and 删除帖子 sit in the post header ahead of the close
+// button, in view rather than behind a menu. They are rebuilt on every render
+// because edits and replies re-render the whole post.
+function renderPostActions(card, previewEl, uid, postUid) {
     const headActions = card.querySelector('.post-head-actions');
     if (!headActions) return;
-    headActions.querySelector('.post-menu-wrap')?.remove();
+    headActions.querySelector('.post-actions')?.remove();
 
     const wrap = document.createElement('div');
-    wrap.className = 'post-menu-wrap';
+    wrap.className = 'post-actions';
     wrap.innerHTML = `
-        <button type="button" class="nav-icon-btn post-menu-btn" title="更多操作" aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">${ICON_MORE}</button>
-        <div class="post-menu" role="menu" aria-label="帖子操作" hidden>
-            <button type="button" class="menu-item edit-btn" role="menuitem">${ICON_EDIT}<span>编辑正文</span></button>
-            <button type="button" class="menu-item copy-uid-btn" role="menuitem" title="${escapeHtml(postUid)}">${ICON_COPY}<span>复制帖子 ID</span></button>
-            <div class="menu-separator" role="separator"></div>
-            <button type="button" class="menu-item menu-item-danger delete-post-btn" role="menuitem">${ICON_TRASH}<span>删除帖子</span></button>
-        </div>
+        <button type="button" class="nav-icon-btn copy-uid-btn" title="复制帖子 ID：${escapeHtml(postUid)}" aria-label="复制帖子 ID">${ICON_COPY}</button>
+        <button type="button" class="jelly-btn edit-btn">${ICON_EDIT}<span>编辑正文</span></button>
+        <button type="button" class="jelly-btn jelly-btn-danger-text delete-post-btn">${ICON_TRASH}<span>删除帖子</span></button>
     `;
     headActions.insertBefore(wrap, headActions.firstChild);
 
-    const menuBtn = wrap.querySelector('.post-menu-btn');
-    const menu = wrap.querySelector('.post-menu');
-    menuBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        if (menu.hidden) openPostMenu(menu);
-        else closePostMenu(menu);
-    });
-    menu.addEventListener('keydown', e => {
-        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-        e.preventDefault();
-        const items = [...menu.querySelectorAll('.menu-item')];
-        const index = items.indexOf(document.activeElement);
-        const next = (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-        items[next].focus();
-    });
-    menu.querySelector('.edit-btn').addEventListener('click', () => {
-        closePostMenu(menu);
+    wrap.querySelector('.edit-btn').addEventListener('click', () => {
         toggleEditMode(card, previewEl, uid);
     });
-    menu.querySelector('.copy-uid-btn').addEventListener('click', async (e) => {
-        const label = e.currentTarget.querySelector('span');
+    const copyBtn = wrap.querySelector('.copy-uid-btn');
+    copyBtn.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(postUid);
-            // Confirm in place, then fold the menu away.
-            label.textContent = '已复制';
+            // Confirm in place with a check, then go back to the copy icon.
+            copyBtn.innerHTML = ICON_CHECK;
+            copyBtn.dataset.copied = '';
+            copyBtn.title = '已复制';
             setTimeout(() => {
-                label.textContent = '复制帖子 ID';
-                if (!menu.hidden) closePostMenu(menu, { focusButton: true });
+                copyBtn.innerHTML = ICON_COPY;
+                delete copyBtn.dataset.copied;
+                copyBtn.title = `复制帖子 ID：${postUid}`;
             }, 900);
         } catch (error) {
-            closePostMenu(menu, { focusButton: true });
             await customAlert(`帖子 ID：${postUid}`, '复制失败');
         }
     });
-    menu.querySelector('.delete-post-btn').addEventListener('click', () => {
-        closePostMenu(menu);
+    wrap.querySelector('.delete-post-btn').addEventListener('click', () => {
         handleDeletePost(uid);
     });
 }
-
-function openPostMenu(menu) {
-    menu.hidden = false;
-    menu.parentElement.querySelector('.post-menu-btn').setAttribute('aria-expanded', 'true');
-    menu.querySelector('.menu-item')?.focus();
-}
-
-function closePostMenu(menu, { focusButton = false } = {}) {
-    const menuBtn = menu.parentElement.querySelector('.post-menu-btn');
-    menu.hidden = true;
-    menuBtn.setAttribute('aria-expanded', 'false');
-    if (focusButton) menuBtn.focus();
-}
-
-document.addEventListener('click', e => {
-    activePostOverlay.querySelectorAll('.post-menu:not([hidden])').forEach(menu => {
-        if (!menu.parentElement.contains(e.target)) closePostMenu(menu);
-    });
-});
 
 // ========== Composer identity ==========
 // Replies are signed with the name from settings. The footer line says which
@@ -1513,7 +1485,7 @@ function renderFullContent(container, markdown, uid) {
     const repliesMd = parts[1] || '';
 
     // The meta block (author, UID, timestamp) repeats the header, so it is
-    // stripped; the UID stays reachable through the post menu.
+    // stripped; the UID stays reachable through the copy button in the header.
     const uidMatch = markdown.match(/\*\*UID[:：]\*\*\s*(.*)/);
     const postUid = uidMatch ? uidMatch[1].trim() : String(uid);
     const postContentMd = mainMd.replace(/^(.|\n)*?---\n?/, '');
@@ -1541,7 +1513,7 @@ function renderFullContent(container, markdown, uid) {
         setupImageViewer(previewEl);
     });
 
-    renderPostMenu(container, previewEl, uid, postUid);
+    renderPostActions(container, previewEl, uid, postUid);
 
 
     if (repliesMd.trim()) {
@@ -1711,7 +1683,7 @@ function toggleEditMode(card, contentEl, uid, floor = null) {
         </div>
     `;
 
-    // The edit buttons live in the post menu and the row header, outside the
+    // The edit buttons live in the post header and the row header, outside the
     // content, so restoring the HTML is all a cancel needs.
     contentEl.querySelector('.cancel-edit-btn').addEventListener('click', () => {
         contentEl.innerHTML = originalHtml;

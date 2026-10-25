@@ -1,10 +1,10 @@
-/* Forum: the same full-window shell as the plugin manager. Boards and
-   actions sit in the navigation column; the framed panel holds the post list
-   and, when a post is open, the post view on top of it. Inside the panel the
-   page follows the settings rhythm: an 18px page title, a 36px search field
-   and a grouped card of hairline-separated rows. Every color comes from the
-   theme variables in styles/themes.css, so the light and dark themes both
-   follow without per-theme overrides. */
+/* Forum: two glass cards over the theme wallpaper. The boards card on the
+   left; the panel on the right holds the post list as a grid of tiles and,
+   when a post is open, the post view on top of it. Each zone has its own
+   tint, primary actions fill with the accent and delete is red, so the page
+   reads at a glance. Every color comes from the theme variables in
+   styles/themes.css, so the light and dark themes both follow without
+   per-theme overrides. */
 body {
     --fm-ink: var(--primary-text);
     --fm-ink-2: var(--secondary-text);
@@ -29,6 +29,17 @@ body {
     --fm-warning: var(--highlight-text);
     --fm-thumb-off: var(--secondary-text);
     --fm-shadow: color-mix(in srgb, var(--tertiary-bg) 72%, transparent);
+    /* Glass cards over the wallpaper, and the tinted zones inside them. */
+    --fm-glass: var(--panel-bg, color-mix(in srgb, var(--secondary-bg) 86%, transparent));
+    --fm-glass-line: color-mix(in srgb, var(--primary-text) 10%, transparent);
+    --fm-glass-filter: blur(var(--vcp-material-blur, 18px)) saturate(var(--vcp-material-saturation, 160%));
+    --fm-card-shadow: 0 8px 28px color-mix(in srgb, var(--tertiary-bg) 36%, transparent);
+    --fm-tile: color-mix(in srgb, var(--secondary-bg) 72%, transparent);
+    --fm-well: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+    --fm-dock: color-mix(in srgb, var(--secondary-bg) 94%, transparent);
+    --fm-on-accent: var(--text-on-accent);
+    --fm-accent-hover: var(--button-hover-bg);
+    --fm-accent-soft: color-mix(in srgb, var(--fm-accent) 16%, transparent);
     --fm-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     /* CJK falls back to the UI sans, not the system's serif monospace. */
     --fm-mono: 'SF Mono', 'JetBrains Mono', Consolas, 'Cascadia Code', 'PingFang SC', 'Microsoft YaHei', monospace;
@@ -41,15 +52,14 @@ body {
     font: 400 13px/20px var(--fm-sans);
     color: var(--fm-ink);
     overflow: hidden;
+    /* Under the wallpaper themes.css gives body, for before it loads. */
     background-color: var(--fm-ground);
-    background-image: none;
 }
 
-/* A reading page sits better on a plain surface than over the wallpaper. */
 body.light-theme {
     --fm-thumb-off: var(--secondary-bg);
     --fm-shadow: color-mix(in srgb, var(--primary-text) 14%, transparent);
-    background-image: none;
+    --fm-card-shadow: 0 8px 24px color-mix(in srgb, var(--primary-text) 10%, transparent);
 }
 
 * {
@@ -168,6 +178,8 @@ button:disabled {
     inset: 42px 0 0;
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
+    gap: 8px;
+    padding: 0 8px 8px;
 }
 
 /* The 42px strip above the shell is the window's drag handle. */
@@ -176,7 +188,19 @@ body::before {
     position: fixed;
     inset: 0 0 auto;
     height: 42px;
+    background: color-mix(in srgb, var(--primary-bg) 28%, transparent);
     -webkit-app-region: drag;
+}
+
+/* The two cards: boards and the post panel. */
+.shell > .sidebar,
+.panel-frame {
+    border: 1px solid var(--fm-glass-line);
+    border-radius: var(--vcp-ui-shell-radius, 14px);
+    background: var(--fm-glass);
+    box-shadow: var(--fm-card-shadow);
+    backdrop-filter: var(--fm-glass-filter);
+    -webkit-backdrop-filter: var(--fm-glass-filter);
 }
 
 .sidebar {
@@ -184,8 +208,7 @@ body::before {
     flex-direction: column;
     gap: 20px;
     min-height: 0;
-    padding: 9px 8px 15px;
-    background: transparent;
+    padding: 10px 8px 12px;
     overflow-y: auto;
 }
 
@@ -230,6 +253,7 @@ body::before {
 }
 
 .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -250,11 +274,27 @@ body::before {
     color: var(--fm-ink);
 }
 
+/* The current board: accent tint and a bar at the row's start. */
 .nav-item[aria-selected="true"],
 .nav-item[aria-current="page"] {
-    background: var(--fm-active);
+    background: var(--fm-accent-soft);
     color: var(--fm-ink);
     font-weight: 500;
+}
+
+.nav-item:is([aria-selected="true"], [aria-current="page"])::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--fm-accent);
+}
+
+.nav-item:is([aria-selected="true"], [aria-current="page"]) :is(.nav-icon, .nav-count) {
+    color: var(--fm-accent);
 }
 
 .nav-icon {
@@ -289,14 +329,12 @@ body:not([data-forum-view="forum"]) .forum-boards-group {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    margin: 0 4px 4px 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--vcp-ui-shell-radius, 14px);
-    background: var(--fm-panel);
     overflow: hidden;
 }
 
-/* Embedded as a tab: the host draws the frame and the window controls. */
+/* Embedded as a tab: the host draws the wallpaper and the window controls.
+   Only the ground colour goes; the background shorthand would drop the
+   wallpaper too. */
 html[data-vcp-embedded-app="true"] body {
     background-color: transparent;
 }
@@ -308,6 +346,7 @@ html[data-vcp-embedded-app="true"] body::before {
 
 html[data-vcp-embedded-app="true"] .shell {
     inset: 0;
+    padding-top: 8px;
 }
 
 /* ========== Page ========== */
@@ -323,9 +362,9 @@ html[data-vcp-embedded-app="true"] .shell {
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 808px;
+    max-width: 1180px;
     margin: 0 auto;
-    padding: 24px 24px 40px;
+    padding: 22px 24px 40px;
 }
 
 .view-container {
@@ -439,14 +478,28 @@ html[data-vcp-embedded-app="true"] .shell {
     background: var(--fm-hover);
 }
 
+/* Primary fills with the accent, delete is red and everything else stays
+   neutral: the colour alone says what a button does. The light theme's
+   accent is red too, so edit stays neutral rather than accent. */
 .jelly-btn-primary {
-    background: var(--fm-ink);
-    border-color: transparent;
-    color: var(--fm-panel);
+    background: var(--fm-accent);
+    border-color: var(--fm-accent);
+    color: var(--fm-on-accent);
+    font-weight: 500;
 }
 
 .jelly-btn-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--fm-ink) 86%, var(--fm-panel));
+    background: var(--fm-accent-hover);
+    border-color: var(--fm-accent-hover);
+}
+
+.jelly-btn-danger-text {
+    border-color: color-mix(in srgb, var(--fm-danger) 45%, transparent);
+    color: var(--fm-danger);
+}
+
+.jelly-btn-danger-text:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fm-danger) 10%, transparent);
 }
 
 .jelly-btn-danger {
@@ -627,7 +680,7 @@ textarea.glass-input {
     padding: 0 12px 0 36px;
     border: 0.5px solid var(--fm-line-3);
     border-radius: var(--fm-radius-md);
-    background: var(--fm-surface);
+    background: var(--fm-well);
     outline: none;
     font-size: 13px;
     line-height: 20px;
@@ -658,14 +711,12 @@ textarea.glass-input {
 }
 
 /* ========== Post list ========== */
+/* A grid of tiles: title and board up top, who posted and who replied last
+   in the footer. */
 .post-list {
-    display: flex;
-    flex-direction: column;
-    padding: 0 20px;
-    border: 1px solid var(--fm-line-1);
-    border-radius: var(--fm-radius-md);
-    background: var(--fm-card);
-    overflow: hidden;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
 }
 
 .post-list:empty {
@@ -677,13 +728,36 @@ textarea.glass-input {
     cursor: pointer;
 }
 
-.post-card + .post-card {
-    border-top: 0.5px solid var(--fm-line-2);
+.post-list > .post-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 16px 12px;
+    border: 1px solid var(--fm-glass-line);
+    border-radius: var(--fm-radius-lg);
+    background: var(--fm-tile);
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--tertiary-bg) 16%, transparent);
+    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    /* forum.js staggers the delay per card. */
+    animation: post-card-in 280ms ease both;
+}
+
+.post-list > .post-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--fm-accent) 45%, transparent);
+    box-shadow: 0 10px 26px color-mix(in srgb, var(--tertiary-bg) 32%, transparent);
+}
+
+@keyframes post-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
 }
 
 .post-card:focus-visible {
-    outline-offset: -2px;
-    border-radius: var(--fm-radius-xs);
+    outline-offset: 2px;
+    border-radius: var(--fm-radius-lg);
 }
 
 .post-card-header {
@@ -708,6 +782,35 @@ textarea.glass-input {
     min-width: 0;
 }
 
+/* In a tile the footer names the author, so the header keeps the title. */
+.post-list .post-card-header {
+    padding: 0;
+}
+
+.post-list .post-card-header > .author-avatar,
+.post-list .post-meta {
+    display: none;
+}
+
+.post-list .post-title-row {
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.post-list .post-title {
+    display: -webkit-box;
+    flex: 1;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 600;
+}
+
 .post-title {
     min-width: 0;
     margin: 0;
@@ -719,17 +822,20 @@ textarea.glass-input {
     font-weight: 500;
 }
 
+/* The board as an accent pill. */
 .post-badge {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    height: 18px;
-    padding: 0 6px;
-    border-radius: var(--fm-radius-xs);
-    background: var(--fm-hover);
-    color: var(--fm-ink-2);
+    height: 20px;
+    margin-top: 2px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--fm-accent);
+    color: var(--fm-on-accent);
     font-size: 11px;
-    line-height: 18px;
+    line-height: 20px;
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -763,7 +869,67 @@ textarea.glass-input {
     color: var(--fm-ink-4);
 }
 
-.post-card:not(.expanded-card) .post-preview {
+.post-list .post-preview {
+    flex: 1;
+    color: var(--fm-ink-4);
+    font-size: 12px;
+    line-height: 18px;
+    font-style: italic;
+}
+
+.post-card-foot {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    padding-top: 10px;
+    border-top: 1px solid var(--fm-line-2);
+}
+
+.post-foot-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.post-foot-cell + .post-foot-cell {
+    margin-left: 12px;
+    padding-left: 12px;
+    border-left: 1px solid var(--fm-line-2);
+}
+
+.post-foot-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.post-foot-label,
+.post-foot-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.post-foot-label {
+    color: var(--fm-ink-4);
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.post-foot-label strong {
+    color: var(--fm-ink-2);
+    font-weight: 500;
+}
+
+.post-foot-value {
+    color: var(--fm-ink-2);
+    font-size: 12px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+.expanded-card .post-card-foot {
     display: none;
 }
 
@@ -835,12 +1001,13 @@ textarea.glass-input {
 }
 
 /* ========== Post view ========== */
-/* Covers the panel while a post is open; the list stays underneath. */
+/* Takes the panel while a post is open. The list stays underneath, hidden,
+   so the post reads straight off the glass and the list keeps its scroll. */
 #active-post-overlay {
     position: absolute;
     inset: 0;
     z-index: 5;
-    background: var(--fm-panel);
+    background: transparent;
     overflow-y: auto;
     scrollbar-gutter: stable;
     /* Focus and scroll-into-view stop above the sticky composer. */
@@ -855,12 +1022,17 @@ textarea.glass-input {
     pointer-events: auto;
 }
 
+.panel-frame:has(#active-post-overlay.active) > .app-container {
+    visibility: hidden;
+}
+
 .expanded-card {
     display: flex;
     flex-direction: column;
     gap: 16px;
     padding: 24px 24px 0;
     cursor: default;
+    animation: none;
 }
 
 .expanded-card .post-card-header {
@@ -891,7 +1063,8 @@ textarea.glass-input {
     margin-top: 4px;
 }
 
-/* Header tools: the … menu, then close. */
+/* Header tools: copy ID, 编辑正文 and 删除帖子 as labelled buttons, then
+   close. */
 .post-head-actions {
     display: flex;
     flex: 0 0 auto;
@@ -900,80 +1073,25 @@ textarea.glass-input {
     margin: -1px -4px 0 0;
 }
 
-.post-menu-wrap {
-    position: relative;
-}
-
-.post-menu-btn[aria-expanded="true"] {
-    background: var(--fm-active);
-    color: var(--fm-ink);
-}
-
-.post-menu {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    z-index: 3;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 176px;
-    padding: 4px;
-    border: 0.5px solid var(--fm-line-3);
-    border-radius: var(--fm-radius-md);
-    background: var(--fm-panel);
-    box-shadow: 0 8px 24px var(--fm-shadow);
-}
-
-.post-menu[hidden] {
-    display: none;
-}
-
-.menu-item {
+.post-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    height: 32px;
-    padding: 0 10px;
-    border: 0;
-    border-radius: var(--fm-radius-sm);
-    background: transparent;
-    color: var(--fm-ink);
-    font-size: 13px;
-    line-height: 20px;
-    text-align: left;
-    white-space: nowrap;
+    gap: 6px;
+    margin-right: 6px;
 }
 
-.menu-item svg {
-    flex: 0 0 16px;
-    color: var(--fm-ink-3);
+.post-actions .jelly-btn {
+    height: 28px;
+    padding: 0 12px;
 }
 
-.menu-item:hover,
-.menu-item:focus-visible {
-    background: var(--fm-hover);
+.post-actions .jelly-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
-.menu-item:focus-visible {
-    outline: none;
-}
-
-.menu-item-danger,
-.menu-item-danger svg {
-    color: var(--fm-danger);
-}
-
-.menu-item-danger:hover,
-.menu-item-danger:focus-visible {
-    background: color-mix(in srgb, var(--fm-danger) 8%, transparent);
-}
-
-.menu-separator {
-    height: 0.5px;
-    margin: 3px 6px;
-    background: var(--fm-line-2);
+.copy-uid-btn[data-copied] {
+    color: var(--fm-success);
 }
 
 .post-loading {
@@ -1056,9 +1174,9 @@ textarea.glass-input {
     display: flex;
     flex-direction: column;
     padding: 0 20px;
-    border: 1px solid var(--fm-line-1);
+    border: 1px solid var(--fm-glass-line);
     border-radius: var(--fm-radius-md);
-    background: var(--fm-card);
+    background: var(--fm-tile);
 }
 
 .reply-item {
@@ -1144,7 +1262,7 @@ textarea.glass-input {
     z-index: 2;
     margin: 0 -24px;
     padding: 12px 24px 16px;
-    background: linear-gradient(to bottom, transparent, var(--fm-panel) 12px);
+    background: linear-gradient(to bottom, transparent, var(--fm-dock) 12px);
 }
 
 .composer {
@@ -1696,7 +1814,7 @@ code {
 /* ========== Narrow windows ========== */
 @media (max-width: 860px) {
     .shell {
-        grid-template-columns: 56px minmax(0, 1fr);
+        grid-template-columns: 60px minmax(0, 1fr);
     }
 
     .sidebar-title {
@@ -1733,14 +1851,20 @@ code {
         padding: 20px 16px 32px;
     }
 
-    .post-list,
     .reply-rows {
         padding: 0 14px;
     }
 
-    .post-card-header,
     .reply-item {
         padding: 12px 0;
+    }
+
+    .post-actions .jelly-btn span {
+        display: none;
+    }
+
+    .post-actions .jelly-btn svg {
+        margin: 0;
     }
 
     .expanded-card {
