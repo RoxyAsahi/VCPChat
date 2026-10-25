@@ -948,7 +948,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // --- Popovers ---
-  // The "+" menu, the filter menu and the toolbar's "…" menu share one
+  // The template menu, the filter menu and the toolbar's "…" menu share one
   // open/close path: a click outside or Escape closes them, and arrow keys
   // move between rows.
   let openPopoverState = null;
@@ -1017,7 +1017,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   noteFilterBtn.addEventListener("click", () =>
     togglePopover(noteFilterMenu, noteFilterBtn)
   );
-  // Every row of the "+" menu creates something, so any click closes it.
+  // Every row of the template menu creates a note, so any click closes it.
   newItemMenu.addEventListener("click", (e) => {
     if (e.target.closest(".popover-item")) closePopover();
   });

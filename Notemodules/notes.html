@@ -86,57 +86,6 @@
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"></path><path d="M12 17h.01"></path></svg>
               </button>
-              <button
-                id="newItemBtn"
-                class="nav-icon-btn"
-                type="button"
-                title="新建"
-                aria-label="新建"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                aria-controls="newItemMenu"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-              </button>
-            </div>
-
-            <div
-              id="newItemMenu"
-              class="notes-popover"
-              role="menu"
-              aria-label="新建"
-              hidden
-            >
-              <button id="newMdBtn" class="popover-item" type="button" role="menuitem">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path><path d="M9 13h6"></path><path d="M9 17h4"></path></svg>
-                <span class="popover-item-label">新建笔记</span>
-                <span class="popover-item-hint">.md</span>
-              </button>
-              <button id="newTxtBtn" class="popover-item" type="button" role="menuitem">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>
-                <span class="popover-item-label">新建文本</span>
-                <span class="popover-item-hint">.txt</span>
-              </button>
-              <button id="newFolderBtn" class="popover-item" type="button" role="menuitem">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg>
-                <span class="popover-item-label">新建文件夹</span>
-              </button>
-              <div class="popover-separator" role="separator"></div>
-              <div class="popover-label" id="newFromTemplateLabel">从模板新建</div>
-              <div role="group" aria-labelledby="newFromTemplateLabel">
-                <button class="popover-item" type="button" role="menuitem" data-note-template="learning">
-                  <span class="popover-item-label">学习笔记</span>
-                </button>
-                <button class="popover-item" type="button" role="menuitem" data-note-template="meeting">
-                  <span class="popover-item-label">会议记录</span>
-                </button>
-                <button class="popover-item" type="button" role="menuitem" data-note-template="project">
-                  <span class="popover-item-label">项目计划</span>
-                </button>
-                <button class="popover-item" type="button" role="menuitem" data-note-template="troubleshooting">
-                  <span class="popover-item-label">问题排查</span>
-                </button>
-              </div>
             </div>
 
             <!-- notes.js 根据下方隐藏的选择框生成这里的单选行 -->
@@ -156,6 +105,71 @@
               placeholder="搜索标题、内容或标签"
               aria-label="搜索笔记"
             />
+          </div>
+          <!-- 常用的新建操作直接可见；模板在“新建笔记”旁的箭头里 -->
+          <div class="sidebar-actions">
+            <div class="split-button">
+              <button
+                id="newMdBtn"
+                class="button button-primary split-button-main"
+                type="button"
+                title="新建 Markdown 笔记（.md）"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                新建笔记
+              </button>
+              <button
+                id="newItemBtn"
+                class="button button-primary split-button-toggle"
+                type="button"
+                title="从模板新建"
+                aria-label="从模板新建"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="newItemMenu"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+            </div>
+            <button
+              id="newTxtBtn"
+              class="button"
+              type="button"
+              title="新建纯文本笔记（.txt）"
+            >
+              文本
+            </button>
+            <button
+              id="newFolderBtn"
+              class="button"
+              type="button"
+              title="新建文件夹"
+            >
+              文件夹
+            </button>
+            <div
+              id="newItemMenu"
+              class="notes-popover"
+              role="menu"
+              aria-label="从模板新建"
+              hidden
+            >
+              <div class="popover-label" id="newFromTemplateLabel">从模板新建</div>
+              <div role="group" aria-labelledby="newFromTemplateLabel">
+                <button class="popover-item" type="button" role="menuitem" data-note-template="learning">
+                  <span class="popover-item-label">学习笔记</span>
+                </button>
+                <button class="popover-item" type="button" role="menuitem" data-note-template="meeting">
+                  <span class="popover-item-label">会议记录</span>
+                </button>
+                <button class="popover-item" type="button" role="menuitem" data-note-template="project">
+                  <span class="popover-item-label">项目计划</span>
+                </button>
+                <button class="popover-item" type="button" role="menuitem" data-note-template="troubleshooting">
+                  <span class="popover-item-label">问题排查</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div id="noteFilterSummary" class="note-filter-summary" hidden>
             <span id="noteFilterSummaryText" class="note-filter-summary-text"></span>
@@ -236,12 +250,10 @@
               </div>
               <button
                 id="deleteNoteBtn"
-                class="nav-icon-btn note-delete-btn"
+                class="button button-danger"
                 type="button"
-                title="删除"
-                aria-label="删除"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V4.5h6V7"></path><path d="m6 7 1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>
+                删除
               </button>
               <button
                 id="saveNoteBtn"

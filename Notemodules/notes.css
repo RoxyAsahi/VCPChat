@@ -1,9 +1,9 @@
-/* Notes: a full-window shell with the note tree in a 260px navigation column
-   and the editor in a framed panel. The column follows the main navigation
-   rhythm (30px title row, quiet group labels, 34px rows); the panel follows
-   the settings rhythm (18px title, underline tabs, 12px-radius wells, 30px
-   buttons). Every color comes from the theme variables in styles/themes.css,
-   so the light and dark themes both follow without per-theme overrides. */
+/* Notes: the theme wallpaper behind two glass cards, the note tree on the
+   left and the editor on the right. Inside the editor card each zone has its
+   own surface: the tool strip, the editor well and the preview well, so the
+   page reads at a glance. Primary actions take the theme accent. Every color
+   comes from the theme variables in styles/themes.css, so the light and dark
+   themes both follow without per-theme overrides. */
 body {
   --nt-ink: var(--primary-text);
   --nt-ink-2: var(--secondary-text);
@@ -25,6 +25,18 @@ body {
   --nt-success: var(--success-color);
   --nt-on-success: var(--text-on-accent);
   --nt-shadow: color-mix(in srgb, var(--tertiary-bg) 72%, transparent);
+  /* Glass cards over the wallpaper. The rail and the editor card share one
+     material; the zones inside the editor card each take their own tint. */
+  --nt-glass: var(--panel-bg, color-mix(in srgb, var(--secondary-bg) 86%, transparent));
+  --nt-glass-line: color-mix(in srgb, var(--primary-text) 10%, transparent);
+  --nt-glass-filter: blur(var(--vcp-material-blur, 18px)) saturate(var(--vcp-material-saturation, 160%));
+  --nt-card-shadow: 0 8px 28px color-mix(in srgb, var(--tertiary-bg) 36%, transparent);
+  --nt-strip: color-mix(in srgb, var(--accent-bg) 72%, transparent);
+  --nt-well: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+  --nt-well-2: color-mix(in srgb, var(--secondary-bg) 54%, transparent);
+  --nt-on-accent: var(--text-on-accent);
+  --nt-accent-hover: var(--button-hover-bg);
+  --nt-accent-soft: color-mix(in srgb, var(--nt-accent) 16%, transparent);
   /* Latin glyphs come from the code faces; CJK falls through to the UI
      sans before the generic monospace, which maps to SimSun on Windows. */
   --nt-mono: 'SF Mono', 'JetBrains Mono', Consolas, 'Cascadia Code', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace;
@@ -38,14 +50,13 @@ body {
   font: 400 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   color: var(--nt-ink);
   overflow: hidden;
+  /* Under the wallpaper themes.css puts on body, for when it has not loaded. */
   background-color: var(--nt-ground);
-  background-image: none;
 }
 
-/* A working page reads better on a plain surface than over the wallpaper. */
 body.light-theme {
   --nt-shadow: color-mix(in srgb, var(--primary-text) 14%, transparent);
-  background-image: none;
+  --nt-card-shadow: 0 8px 24px color-mix(in srgb, var(--primary-text) 10%, transparent);
 }
 
 * {
@@ -84,11 +95,9 @@ code {
 }
 
 /* ---- Window chrome ----
-   The main window has a 42px navigation bar above a 260px sidebar and a
-   rounded workspace with a 4px gutter. The standalone window keeps the same
-   geometry so switching between them does not shift anything. As a tab of
-   the main window, the host bar already sits above the page and its
-   navigation material shows through, so only the workspace is painted. */
+   The standalone window has a 42px bar for the window buttons above the two
+   cards. As a tab of the main window, the host bar already sits above the
+   page, so the cards start at the top. */
 .window-controls {
   position: fixed;
   top: 0;
@@ -154,6 +163,8 @@ code {
   inset: 42px 0 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 8px 8px;
 }
 
 /* The window is frameless, so a strip across the top drags it, like the
@@ -164,6 +175,7 @@ body::before {
   position: fixed;
   inset: 0 0 auto;
   height: 42px;
+  background: color-mix(in srgb, var(--primary-bg) 28%, transparent);
   -webkit-app-region: drag;
 }
 
@@ -178,6 +190,18 @@ html[data-vcp-embedded-app="true"] body::before {
 
 html[data-vcp-embedded-app="true"] .shell {
   inset: 0;
+  padding-top: 8px;
+}
+
+/* The two cards: the rail and the editor. */
+.shell > aside.sidebar,
+.panel-frame {
+  border: 1px solid var(--nt-glass-line);
+  border-radius: var(--vcp-ui-shell-radius, 14px);
+  background: var(--nt-glass);
+  box-shadow: var(--nt-card-shadow);
+  backdrop-filter: var(--nt-glass-filter);
+  -webkit-backdrop-filter: var(--nt-glass-filter);
 }
 
 /* ---- Sidebar ----
@@ -192,16 +216,8 @@ html[data-vcp-embedded-app="true"] .shell {
   min-width: 200px;
   max-width: 420px;
   min-height: 0;
-  padding: 9px 8px 15px;
+  padding: 10px 8px 12px;
   background: transparent;
-}
-
-/* themes.css gives every .sidebar a side shadow (body.light-theme .sidebar
-   in light). Here the sidebar sits on the host ground and must paint
-   nothing of its own; this selector matches that specificity and loads
-   later. */
-.shell > aside.sidebar {
-  box-shadow: none;
 }
 
 .sidebar-header {
@@ -253,6 +269,7 @@ html[data-vcp-embedded-app="true"] .shell {
   width: 100%;
   height: 36px;
   padding: 0 12px 0 36px;
+  background: var(--nt-well);
 }
 
 .search-box input::placeholder,
@@ -275,10 +292,50 @@ html[data-vcp-embedded-app="true"] .shell {
   outline: none;
 }
 
-/* ---- Title-row actions and their popovers ----
-   Filter, help and "+" sit at the end of the title row. "+" opens the menu
-   of new kinds; the filter icon opens radio rows for source, tag and sort.
-   Both popovers hang from the title row's right edge. */
+/* ---- New, filter and their popovers ----
+   新建笔记, 文本 and 文件夹 are buttons under the search box; the arrow
+   beside 新建笔记 opens the templates. Filter and help sit at the end of the
+   title row, and the filter icon opens radio rows for source, tag and
+   sort. */
+.sidebar-actions {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.sidebar-actions .button {
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.split-button {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1px;
+}
+
+.split-button .split-button-main {
+  flex: 1 1 auto;
+  border-radius: var(--nt-radius-md) 0 0 var(--nt-radius-md);
+}
+
+.split-button .split-button-toggle {
+  flex: 0 0 26px;
+  padding: 0;
+  border-radius: 0 var(--nt-radius-md) var(--nt-radius-md) 0;
+}
+
+.split-button-toggle[aria-expanded="true"] {
+  border-color: var(--nt-accent-hover);
+  background: var(--nt-accent-hover);
+}
+
+#newItemMenu {
+  right: auto;
+  left: 0;
+}
+
 .sidebar-title-actions {
   display: flex;
   align-items: center;
@@ -354,11 +411,6 @@ html[data-vcp-embedded-app="true"] .shell {
 .popover-item:focus-visible {
   background: var(--nt-hover);
   outline: none;
-}
-
-/* Template rows carry no icon; indent them to the label column above. */
-.popover-item[data-note-template] {
-  padding-left: 36px;
 }
 
 .popover-item-label {
@@ -442,10 +494,10 @@ html[data-vcp-embedded-app="true"] .shell {
 .resizer {
   position: absolute;
   top: 0;
-  right: -3px;
+  right: -8px;
   bottom: 0;
   z-index: 2;
-  width: 6px;
+  width: 8px;
   cursor: col-resize;
 }
 
@@ -464,7 +516,7 @@ html[data-vcp-embedded-app="true"] .shell {
 
 /* ---- Note tree ----
    Each source is a nav group: a quiet label above 34px rows. The open note
-   takes the active fill, never an accent color. */
+   takes an accent tint with an accent bar at its start. */
 .note-list-panel {
   flex: 1;
   min-height: 0;
@@ -555,9 +607,21 @@ html[data-vcp-embedded-app="true"] .shell {
 
 .note-list-panel .folder-header-row.active,
 .note-list-panel .note-item.active {
-  background: var(--nt-active);
+  background: var(--nt-accent-soft);
   color: var(--nt-ink);
   font-weight: 500;
+}
+
+.note-list-panel .folder-header-row.active::before,
+.note-list-panel .note-item.active::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--nt-accent);
 }
 
 /* Multi-selection keeps a hairline ring so it reads apart from hover. */
@@ -569,7 +633,7 @@ html[data-vcp-embedded-app="true"] .shell {
 
 .note-list-panel .folder-header-row.selected.active,
 .note-list-panel .note-item.selected.active {
-  background: var(--nt-active);
+  background: var(--nt-accent-soft);
   box-shadow: none;
 }
 
@@ -593,7 +657,7 @@ html[data-vcp-embedded-app="true"] .shell {
 }
 
 .note-list-panel .active > .item-icon {
-  color: var(--nt-ink);
+  color: var(--nt-accent);
 }
 
 .note-list-panel .item-name {
@@ -679,23 +743,18 @@ html[data-vcp-embedded-app="true"] .shell {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  margin: 0 4px 4px 0;
-  border: 1px solid var(--border-color);
-  border-radius: var(--vcp-ui-shell-radius, 14px);
-  background: var(--nt-panel);
   overflow: hidden;
 }
 
 /* The editor fills the panel instead of a narrow reading column: a split
-   editor and preview need the width. The 24px gutters and the 16px beat
-   between header, tabs and body match the settings pages. */
+   editor and preview need the width. */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-height: 0;
-  padding: 20px 24px 24px;
+  padding: 16px 18px 18px;
 }
 
 .note-editor-header {
@@ -774,26 +833,19 @@ html[data-vcp-embedded-app="true"] .shell {
   padding-top: 2px;
 }
 
-.note-delete-btn {
-  width: 30px;
-  height: 30px;
-}
-
-.note-delete-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--nt-danger) 10%, transparent);
-  color: var(--nt-danger);
-}
-
-/* ---- Buttons ---- */
+/* ---- Buttons ----
+   Primary actions are filled with the accent, secondary ones sit on a faint
+   fill, and delete is red, so each kind reads from its colour alone. */
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 30px;
   padding: 0 14px;
-  border: 0.5px solid var(--nt-line-3);
+  border: 1px solid var(--nt-line-3);
   border-radius: var(--nt-radius-md);
-  background: transparent;
+  background: color-mix(in srgb, var(--primary-text) 5%, transparent);
   color: var(--nt-ink);
   font-size: 13px;
   line-height: 20px;
@@ -801,26 +853,36 @@ html[data-vcp-embedded-app="true"] .shell {
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
+.button svg {
+  flex: 0 0 auto;
+}
+
 .button:hover:not(:disabled) {
-  background: var(--nt-hover);
+  background: color-mix(in srgb, var(--primary-text) 10%, transparent);
 }
 
 .button-primary {
-  border-color: transparent;
-  background: var(--nt-ink);
-  color: var(--nt-panel);
+  border-color: var(--nt-accent);
+  background: var(--nt-accent);
+  color: var(--nt-on-accent);
+  font-weight: 500;
 }
 
 .button-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--nt-ink) 86%, var(--nt-panel));
+  border-color: var(--nt-accent-hover);
+  background: var(--nt-accent-hover);
 }
 
 .button-danger {
+  border-color: color-mix(in srgb, var(--nt-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--nt-danger) 10%, transparent);
   color: var(--nt-danger);
 }
 
 .button-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--nt-danger) 8%, transparent);
+  border-color: var(--nt-danger);
+  background: var(--nt-danger);
+  color: var(--nt-on-danger);
 }
 
 /* Save and delete feedback swaps the label for a moment and disables the
@@ -864,18 +926,16 @@ html[data-vcp-embedded-app="true"] .shell {
 }
 
 /* ---- Writing surface ----
-   One 12px-radius surface holds the toolbar and the editor and preview,
-   which a hairline resizer splits. The toolbar carries the Markdown tools
-   as icon groups; the view switch lives in the header beside 保存. */
+   Three zones, each with its own surface: the Markdown tool strip, the
+   editor well and the preview well. The resizer between the wells is the
+   gap that splits them. The view switch lives in the header beside 保存. */
 .note-surface {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 8px;
   min-height: 0;
   overflow: hidden;
-  border: 0.5px solid var(--nt-line-3);
-  border-radius: var(--nt-radius-md);
-  background: var(--nt-surface);
 }
 
 .note-workspace-toolbar {
@@ -885,7 +945,9 @@ html[data-vcp-embedded-app="true"] .shell {
   gap: 12px;
   min-width: 0;
   padding: 0 6px;
-  border-bottom: 0.5px solid var(--nt-line-2);
+  border: 1px solid var(--nt-line-2);
+  border-radius: var(--nt-radius-md);
+  background: var(--nt-strip);
   container: note-toolbar / inline-size;
 }
 
@@ -934,7 +996,7 @@ body[data-note-view-mode="preview"] .note-workspace-toolbar {
   border: 0;
   border-radius: var(--nt-radius-sm);
   background: transparent;
-  color: var(--nt-ink-3);
+  color: var(--nt-ink-2);
   line-height: 0;
   transition: background 120ms ease, color 120ms ease;
 }
@@ -984,22 +1046,24 @@ body[data-note-view-mode="preview"] .note-workspace-toolbar {
   color: var(--nt-ink);
 }
 
-/* Segmented view switch: a recessed track with the chosen view raised. */
+/* Segmented view switch: a recessed track with the chosen view in the
+   accent. */
 .view-mode-group {
   flex: 0 0 auto;
   display: flex;
   gap: 2px;
   margin-right: 4px;
   padding: 2px;
-  border-radius: var(--nt-radius-sm);
-  background: var(--nt-hover);
+  border: 1px solid var(--nt-line-2);
+  border-radius: var(--nt-radius-md);
+  background: var(--nt-well);
 }
 
 .view-mode-group .toolbar-button {
   width: auto;
   height: 24px;
-  padding: 0 10px;
-  border-radius: 6px;
+  padding: 0 12px;
+  border-radius: var(--nt-radius-sm);
   color: var(--nt-ink-3);
   font-size: 12px;
   line-height: 18px;
@@ -1013,9 +1077,8 @@ body[data-note-view-mode="preview"] .note-workspace-toolbar {
 
 .view-mode-group .toolbar-button.is-active,
 .view-mode-group .toolbar-button.is-active:hover:not(:disabled) {
-  background: var(--nt-panel);
-  box-shadow: 0 0 0 0.5px var(--nt-line-3);
-  color: var(--nt-ink);
+  background: var(--nt-accent);
+  color: var(--nt-on-accent);
   font-weight: 500;
 }
 
@@ -1040,17 +1103,23 @@ body[data-note-view-mode="preview"] .note-workspace-toolbar {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  border: 1px solid var(--nt-line-2);
+  border-radius: var(--nt-radius-md);
 }
 
+/* The editor is the darker well; the preview reads as paper beside it. */
 .editor-container {
   flex: 0 0 var(--nt-editor-basis, calc(50% - 4.5px));
+  background: var(--nt-well);
 }
 
 .preview-container {
   flex: 0 0 var(--nt-preview-basis, calc(50% - 4.5px));
+  background: var(--nt-well-2);
 }
 
-/* A 9px grab area around a 1px line that brightens while dragging. */
+/* The 9px gap between the wells is the grab area; a line shows in it on
+   hover and while dragging. */
 .editor-preview-resizer {
   position: relative;
   z-index: 3;
@@ -1066,7 +1135,7 @@ body[data-note-view-mode="preview"] .note-workspace-toolbar {
   bottom: 0;
   left: 4px;
   width: 1px;
-  background: var(--nt-line-2);
+  background: transparent;
   transition: background 120ms ease, left 120ms ease, width 120ms ease;
 }
 
