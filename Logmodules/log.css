@@ -1,11 +1,11 @@
-/* Log center: the same full-window shell as the main chat window, with the
-   preset filters in the navigation column and a framed content panel. Inside
-   the panel the page is a reader: an 18px title with a one-line summary, one
-   toolbar row (filter field plus icon buttons) and the log well taking the
-   rest of the height. Settings live in a popover behind the gear in the title
-   row. Every color comes from the theme variables in
-   styles/themes.css, so the light and dark themes both follow without
-   per-theme overrides. */
+/* Log center: two glass cards over the theme wallpaper, the preset filters
+   on the left and the log on the right. Inside the panel the page is a
+   reader: an 18px title with a one-line summary, one toolbar row (filter
+   field, the line limit and the actions) and the log well taking the rest of
+   the height. The well is a darker zone of its own, and warning and error
+   rows are tinted, so the page reads at a glance. Every color comes from the
+   theme variables in styles/themes.css, so the light and dark themes both
+   follow without per-theme overrides. */
 body {
     --log-ink: var(--primary-text);
     --log-ink-2: var(--secondary-text);
@@ -30,6 +30,13 @@ body {
     --log-warning: var(--highlight-text);
     --log-thumb-off: var(--secondary-text);
     --log-shadow: color-mix(in srgb, var(--tertiary-bg) 72%, transparent);
+    /* Glass cards over the wallpaper, and the darker well inside them. */
+    --log-glass: var(--panel-bg, color-mix(in srgb, var(--secondary-bg) 86%, transparent));
+    --log-glass-line: color-mix(in srgb, var(--primary-text) 10%, transparent);
+    --log-glass-filter: blur(var(--vcp-material-blur, 18px)) saturate(var(--vcp-material-saturation, 160%));
+    --log-card-shadow: 0 8px 28px color-mix(in srgb, var(--tertiary-bg) 36%, transparent);
+    --log-well: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+    --log-accent-soft: color-mix(in srgb, var(--log-accent) 16%, transparent);
     --log-mono: 'SF Mono', 'JetBrains Mono', Consolas, 'Cascadia Code', monospace;
     --log-radius-xs: 4px;
     --log-radius-sm: 8px;
@@ -40,11 +47,10 @@ body {
     font: 400 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     color: var(--log-ink);
     overflow: hidden;
+    /* Under the wallpaper themes.css gives body, for before it loads. */
     background-color: var(--log-ground);
-    background-image: none;
 }
 
-/* A log page reads better on a plain surface than over the wallpaper. */
 body.light-theme {
     /* The light theme has no warning yellow (--highlight-text is the danger
        red). Mixing danger and success in oklch lands the hue between them, a
@@ -52,7 +58,7 @@ body.light-theme {
     --log-warning: color-mix(in oklch, var(--danger-color) 70%, var(--success-color));
     --log-thumb-off: var(--secondary-bg);
     --log-shadow: color-mix(in srgb, var(--primary-text) 14%, transparent);
-    background-image: none;
+    --log-card-shadow: 0 8px 24px color-mix(in srgb, var(--primary-text) 10%, transparent);
 }
 
 * {
@@ -165,6 +171,19 @@ button:disabled {
     inset: 42px 0 0;
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
+    gap: 8px;
+    padding: 0 8px 8px;
+}
+
+/* The two cards: presets and the log panel. */
+.shell > .sidebar,
+.panel-frame {
+    border: 1px solid var(--log-glass-line);
+    border-radius: var(--vcp-ui-shell-radius, 14px);
+    background: var(--log-glass);
+    box-shadow: var(--log-card-shadow);
+    backdrop-filter: var(--log-glass-filter);
+    -webkit-backdrop-filter: var(--log-glass-filter);
 }
 
 .sidebar {
@@ -172,8 +191,7 @@ button:disabled {
     flex-direction: column;
     gap: 20px;
     min-height: 0;
-    padding: 9px 8px 15px;
-    background: transparent;
+    padding: 10px 8px 12px;
     overflow-y: auto;
 }
 
@@ -208,6 +226,7 @@ button:disabled {
 }
 
 .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -228,10 +247,26 @@ button:disabled {
     color: var(--log-ink);
 }
 
+/* The current preset: accent tint and a bar at the row's start. */
 .nav-item[aria-current="page"] {
-    background: var(--log-active);
+    background: var(--log-accent-soft);
     color: var(--log-ink);
     font-weight: 500;
+}
+
+.nav-item[aria-current="page"]::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--log-accent);
+}
+
+.nav-item[aria-current="page"] :is(.nav-icon, .nav-count) {
+    color: var(--log-accent);
 }
 
 .nav-icon {
@@ -261,10 +296,6 @@ button:disabled {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    margin: 0 4px 4px 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--vcp-ui-shell-radius, 14px);
-    background: var(--log-panel);
     overflow: hidden;
 }
 
@@ -276,9 +307,13 @@ body::before {
     position: fixed;
     inset: 0 0 auto;
     height: 42px;
+    background: color-mix(in srgb, var(--primary-bg) 28%, transparent);
     -webkit-app-region: drag;
 }
 
+/* Embedded as a tab: the host draws the wallpaper and the window controls.
+   Only the ground colour goes; the background shorthand would drop the
+   wallpaper too. */
 html[data-vcp-embedded-app="true"] body {
     background-color: transparent;
 }
@@ -290,6 +325,7 @@ html[data-vcp-embedded-app="true"] body::before {
 
 html[data-vcp-embedded-app="true"] .shell {
     inset: 0;
+    padding-top: 8px;
 }
 
 /* ---- Page ----
@@ -426,8 +462,23 @@ html[data-vcp-embedded-app="true"] .shell {
     transition: background 120ms ease;
 }
 
+.log-button svg {
+    flex: 0 0 auto;
+    margin: 0 6px 0 -4px;
+}
+
 .log-button:hover:not(:disabled) {
     background: var(--log-hover);
+}
+
+/* Clear is red, so it reads apart from the other actions. */
+.log-button-danger-text {
+    border-color: color-mix(in srgb, var(--log-danger) 45%, transparent);
+    color: var(--log-danger);
+}
+
+.log-button-danger-text:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--log-danger) 10%, transparent);
 }
 
 .log-button-danger {
@@ -440,71 +491,27 @@ html[data-vcp-embedded-app="true"] .shell {
     background: color-mix(in srgb, var(--log-danger) 86%, var(--log-panel));
 }
 
-/* ---- Settings popover ----
-   The line limit is a setting, not content, so it sits behind the gear. It
-   opens to the left of the header tools, centred on the header row: the
-   toolbar starts 16px below the header, so anything dropping from the gear
-   would cover its icons and the first log lines. Only the header's empty
-   right side is overlaid. The width gives way on narrow panels (the text
-   wraps) so the popover never runs past the rail or the sidebar. */
-.settings-anchor {
-    display: flex;
-}
-
-.settings-popover {
-    position: absolute;
-    top: 50%;
-    right: calc(100% + 8px);
-    z-index: 50;
-    width: max-content;
-    max-width: min(360px, calc(100vw - 172px));
-    padding: 10px 14px;
-    transform: translateY(-50%);
-    border-radius: var(--log-radius-md);
-    background: var(--log-panel);
-    box-shadow:
-        0 0 0 0.5px var(--log-line-3),
-        0 12px 36px var(--log-shadow);
-}
-
-.settings-popover[hidden] {
-    display: none;
-}
-
-.settings-row {
-    display: flex;
+/* The line limit sits in the toolbar as a short inline field:
+   "保留 [500] 行". */
+.limit-field {
+    display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
-    gap: 12px;
-}
-
-.settings-copy {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.settings-title {
-    font-size: 14px;
-    line-height: 22px;
-    font-weight: 500;
-}
-
-.settings-description {
+    gap: 6px;
     color: var(--log-ink-3);
-    font-size: 12px;
-    line-height: 18px;
+    font-size: 13px;
+    line-height: 20px;
+    white-space: nowrap;
 }
 
 .log-input {
-    flex: 0 0 88px;
-    width: 88px;
-    height: 30px;
+    flex: 0 0 76px;
+    width: 76px;
+    height: 32px;
     padding: 0 10px;
     border: 0.5px solid var(--log-line-3);
     border-radius: var(--log-radius-sm);
-    background: var(--log-surface);
+    background: var(--log-well);
     outline: none;
     font-size: 13px;
     line-height: 20px;
@@ -514,9 +521,10 @@ html[data-vcp-embedded-app="true"] .shell {
 }
 
 /* ---- Toolbar ----
-   One row: the filter field, then 16px icons in 30px buttons grouped by
-   hairlines (order | copy and scroll | clear). The row wraps on narrow
-   windows, with the icons keeping to the right. */
+   One row: the filter field and the line limit, then the actions grouped by
+   hairlines (order | copy and scroll | clear). Copy and clear are labelled;
+   order and scroll stay icons. The row wraps on narrow windows, with the
+   actions keeping to the right. */
 .log-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -534,6 +542,10 @@ html[data-vcp-embedded-app="true"] .shell {
 .toolbar-actions .nav-icon-btn {
     width: 30px;
     height: 30px;
+}
+
+.toolbar-actions .log-button {
+    margin: 0 2px;
 }
 
 .nav-icon-btn[aria-pressed="true"] {
@@ -570,7 +582,7 @@ html[data-vcp-embedded-app="true"] .shell {
     padding: 0 12px 0 36px;
     border: 0.5px solid var(--log-line-3);
     border-radius: var(--log-radius-md);
-    background: var(--log-surface);
+    background: var(--log-well);
     outline: none;
     font-size: 13px;
     line-height: 20px;
@@ -593,15 +605,15 @@ html[data-vcp-embedded-app="true"] .shell {
 }
 
 /* ---- Log well ----
-   The log itself is the page's one card: a hairline-bordered well that takes
-   the remaining height and scrolls on its own. */
+   The log itself is a darker well sunk into the glass panel. It takes the
+   remaining height and scrolls on its own. */
 .log-shell {
     position: relative;
     flex: 1;
     min-height: 220px;
-    border: 1px solid var(--log-line-1);
+    border: 1px solid var(--log-glass-line);
     border-radius: var(--log-radius-md);
-    background: var(--log-card);
+    background: var(--log-well);
     overflow: hidden;
 }
 
@@ -615,14 +627,25 @@ html[data-vcp-embedded-app="true"] .shell {
     counter-reset: log-line;
 }
 
-/* Rows have no hover fill; the line number is a quiet gutter. */
+/* Rows have no hover fill; the line number is a quiet gutter. Warning and
+   error rows are tinted end to end so they stand out while scrolling. */
 .log-row {
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 12px;
+    border-radius: var(--log-radius-xs);
     color: var(--log-ink-2);
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+.log-row:has(.level-warn, .level-warning) {
+    background: color-mix(in srgb, var(--log-warning) 7%, transparent);
+}
+
+.log-row:has(.level-error, .level-fatal) {
+    background: color-mix(in srgb, var(--log-danger) 9%, transparent);
+    color: var(--log-ink);
 }
 
 .log-row::before {
@@ -861,12 +884,6 @@ html[data-vcp-embedded-app="true"] .shell {
 
     .log-path {
         flex-shrink: 0;
-    }
-
-    /* The description wraps here; tighter padding keeps the popover clear
-       of the toolbar below the header. */
-    .settings-popover {
-        padding: 6px 12px;
     }
 
     .log-meta {

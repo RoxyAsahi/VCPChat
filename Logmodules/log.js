@@ -40,8 +40,6 @@ const elements = {
     clearBtn: document.getElementById('clear-log-btn'),
     orderToggle: document.getElementById('order-toggle-btn'),
     copyBtn: document.getElementById('copy-visible-btn'),
-    settingsBtn: document.getElementById('log-settings-btn'),
-    settingsPopover: document.getElementById('log-settings-popover'),
     pageTitle: document.getElementById('log-page-title'),
     lineLimitInput: document.getElementById('line-limit-input'),
     filterInput: document.getElementById('log-filter-input'),
@@ -122,22 +120,6 @@ function setupEvents() {
     });
 
     elements.copyBtn?.addEventListener('click', copyVisibleLogs);
-
-    elements.settingsBtn?.addEventListener('click', () => {
-        setSettingsOpen(elements.settingsPopover.hidden);
-    });
-
-    document.addEventListener('pointerdown', (event) => {
-        if (elements.settingsPopover.hidden) return;
-        if (event.target.closest('.settings-anchor')) return;
-        setSettingsOpen(false);
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape' || elements.settingsPopover.hidden) return;
-        setSettingsOpen(false);
-        elements.settingsBtn.focus();
-    });
 
     elements.lineLimitInput?.addEventListener('change', () => {
         lineLimit = normalizeLineLimit(parseInt(elements.lineLimitInput.value || '500', 10));
@@ -462,12 +444,6 @@ function updateOrderButton() {
     if (!elements.orderToggle) return;
     elements.orderToggle.setAttribute('aria-pressed', String(isReverseOrder));
     elements.orderToggle.title = isReverseOrder ? '最新的行在上（再点一次改回最早在上）' : '最新的行在上';
-}
-
-function setSettingsOpen(open) {
-    elements.settingsPopover.hidden = !open;
-    elements.settingsBtn.setAttribute('aria-expanded', String(open));
-    if (open) elements.lineLimitInput.focus();
 }
 
 function updatePresetButtons() {
