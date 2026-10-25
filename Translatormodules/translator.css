@@ -1,7 +1,8 @@
 /* Translator: a full-window shell with a navigation column and a framed
    content panel. The sidebar picks the target language; the panel has an
-   18px title row with the one primary action and a model menu, then a single
-   card holding source and result. Every color comes from the theme variables
+   18px title row with the model modes and the one primary action, then a
+   single card holding source and result. Both columns are glass cards over
+   the wallpaper. Every color comes from the theme variables
    in styles/themes.css, so the light and dark themes both follow without
    per-theme overrides. */
 body {
@@ -18,6 +19,14 @@ body {
     --tr-hover: color-mix(in srgb, var(--primary-text) 6%, transparent);
     --tr-active: color-mix(in srgb, var(--primary-text) 10%, transparent);
     --tr-accent: var(--button-bg);
+    --tr-accent-hover: var(--button-hover-bg);
+    --tr-on-accent: var(--text-on-accent);
+    --tr-accent-soft: color-mix(in srgb, var(--tr-accent) 16%, transparent);
+    --tr-glass: var(--panel-bg, color-mix(in srgb, var(--secondary-bg) 86%, transparent));
+    --tr-glass-line: color-mix(in srgb, var(--primary-text) 10%, transparent);
+    --tr-glass-filter: blur(var(--vcp-material-blur, 18px)) saturate(var(--vcp-material-saturation, 160%));
+    --tr-card-shadow: 0 8px 28px color-mix(in srgb, var(--tertiary-bg) 36%, transparent);
+    --tr-well: color-mix(in srgb, var(--primary-bg) 62%, transparent);
     --tr-focus-line: var(--tr-accent);
     --tr-focus-ring: color-mix(in srgb, var(--tr-accent) 18%, transparent);
     --tr-danger: var(--danger-color);
@@ -35,19 +44,18 @@ body {
     font: 400 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     color: var(--tr-ink);
     overflow: hidden;
+    /* Under the wallpaper themes.css gives body, for before it loads. */
     background-color: var(--tr-ground);
-    background-image: none;
 }
 
-/* A working page reads better on a plain surface than over the wallpaper.
-   The light accent is the same red as the danger colour, so focus there is
+/* The light accent is the same red as the danger colour, so focus there is
    drawn in ink instead; otherwise a focused field looks like an error. */
 body.light-theme {
     --tr-thumb-off: var(--secondary-bg);
     --tr-shadow: color-mix(in srgb, var(--primary-text) 14%, transparent);
+    --tr-card-shadow: 0 8px 24px color-mix(in srgb, var(--primary-text) 10%, transparent);
     --tr-focus-line: color-mix(in srgb, var(--primary-text) 36%, transparent);
     --tr-focus-ring: color-mix(in srgb, var(--primary-text) 7%, transparent);
-    background-image: none;
 }
 
 * {
@@ -146,6 +154,19 @@ button:disabled {
     inset: 42px 0 0;
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
+    gap: 8px;
+    padding: 0 8px 8px;
+}
+
+/* The two cards: languages and the translate panel. */
+.shell > .sidebar,
+.panel-frame {
+    border: 1px solid var(--tr-glass-line);
+    border-radius: var(--vcp-ui-shell-radius, 14px);
+    background: var(--tr-glass);
+    box-shadow: var(--tr-card-shadow);
+    backdrop-filter: var(--tr-glass-filter);
+    -webkit-backdrop-filter: var(--tr-glass-filter);
 }
 
 .sidebar {
@@ -153,8 +174,7 @@ button:disabled {
     flex-direction: column;
     gap: 20px;
     min-height: 0;
-    padding: 9px 8px 15px;
-    background: transparent;
+    padding: 10px 8px 12px;
     overflow-y: auto;
 }
 
@@ -189,6 +209,7 @@ button:disabled {
 }
 
 .nav-item {
+    position: relative;
     display: flex;
     flex: 0 0 auto;
     align-items: center;
@@ -210,10 +231,26 @@ button:disabled {
     color: var(--tr-ink);
 }
 
+/* The current language: accent tint and a bar at the row's start. */
 .nav-item[aria-checked="true"] {
-    background: var(--tr-active);
+    background: var(--tr-accent-soft);
     color: var(--tr-ink);
     font-weight: 500;
+}
+
+.nav-item[aria-checked="true"]::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--tr-accent);
+}
+
+.nav-item[aria-checked="true"] :is(.nav-glyph, .nav-icon) {
+    color: var(--tr-accent);
 }
 
 .nav-icon {
@@ -258,10 +295,6 @@ button:disabled {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    margin: 0 4px 4px 0;
-    border: 1px solid var(--border-color);
-    border-radius: var(--vcp-ui-shell-radius, 14px);
-    background: var(--tr-panel);
     overflow: hidden;
 }
 
@@ -273,6 +306,7 @@ body::before {
     position: fixed;
     inset: 0 0 auto;
     height: 42px;
+    background: color-mix(in srgb, var(--primary-bg) 28%, transparent);
     -webkit-app-region: drag;
 }
 
@@ -285,12 +319,16 @@ html[data-vcp-embedded-app="true"] body::before {
     display: none;
 }
 
+/* Embedded as a tab: the host draws the wallpaper and the window controls.
+   Only the ground colour goes; the background shorthand would drop the
+   wallpaper too. */
 html[data-vcp-embedded-app="true"] .shell {
     inset: 0;
+    padding-top: 8px;
 }
 
 /* ---- Page ----
-   The header carries the one primary action, 翻译, next to the model menu.
+   The header carries the model modes and the one primary action, 翻译.
    Below it, source and result share one card: side by side while the page
    is wide enough for two readable columns, stacked once it is not. The card
    takes whatever height the window has, so the text never sits below the
@@ -436,118 +474,54 @@ html[data-vcp-embedded-app="true"] .shell {
     color: var(--tr-warning);
 }
 
-/* ---- Model menu ----
-   The three modes are a choice made now and then, so they live in a menu
-   on the sliders button. Each row shows the model it maps to; the active
-   one is named again only in the intro line. */
-.menu-anchor {
-    position: relative;
-    display: flex;
-}
-
-.menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
+/* ---- Model modes ----
+   Fast, balanced and quality sit in the header as one segmented switch, so
+   the mode in use is always in view and changes with one click. Each option
+   names its model in a tooltip; the intro line names it too. */
+.mode-switch {
+    display: inline-flex;
     gap: 2px;
-    width: max-content;
-    min-width: 248px;
-    max-width: 320px;
-    padding: 6px;
-    border: 0.5px solid var(--tr-line-3);
-    border-radius: var(--tr-radius-md);
-    background: var(--tr-panel);
-    box-shadow: 0 12px 32px var(--tr-shadow);
+    padding: 2px;
+    border: 1px solid var(--tr-glass-line);
+    border-radius: 10px;
+    background: var(--tr-well);
 }
 
-.menu-label {
-    padding: 4px 10px 2px;
-    color: var(--tr-ink-4);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 500;
-}
-
-.menu-item {
-    display: flex;
+.mode-option {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    min-height: 40px;
-    padding: 4px 10px;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px;
     border: 0;
-    border-radius: var(--tr-radius-sm);
+    border-radius: 8px;
     background: transparent;
-    color: var(--tr-ink);
-    text-align: left;
-}
-
-.menu-item:not([data-mode]) {
-    min-height: 34px;
-}
-
-.menu-item:hover,
-.menu-item:focus-visible {
-    background: var(--tr-hover);
-    outline: none;
-}
-
-.menu-icon,
-.menu-check {
-    flex: 0 0 16px;
-    width: 16px;
-    height: 16px;
-}
-
-.menu-icon {
     color: var(--tr-ink-3);
-}
-
-.menu-copy {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.menu-name {
     font-size: 13px;
-    line-height: 18px;
-}
-
-.menu-meta {
-    overflow: hidden;
-    color: var(--tr-ink-4);
-    font-size: 12px;
-    line-height: 16px;
-    text-overflow: ellipsis;
+    line-height: 20px;
     white-space: nowrap;
 }
 
-.menu-meta:empty {
-    display: none;
+.mode-option svg {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
 }
 
-.menu-check {
+.mode-option:hover {
+    background: var(--tr-hover);
+    color: var(--tr-ink);
+}
+
+.mode-option[aria-checked="true"] {
+    background: var(--tr-accent-soft);
     color: var(--tr-accent);
-    visibility: hidden;
-}
-
-.menu-item[aria-checked="true"] .menu-name {
     font-weight: 500;
 }
 
-.menu-item[aria-checked="true"] .menu-check {
-    visibility: visible;
-}
-
-.menu-separator {
-    height: 1px;
-    margin: 4px 6px;
-    background: var(--tr-line-2);
+.mode-option:focus-visible {
+    outline: 2px solid var(--tr-focus-ring);
+    outline-offset: 0;
 }
 
 /* ---- Fields ---- */
@@ -591,8 +565,9 @@ html[data-vcp-embedded-app="true"] .shell {
     flex: 1 1 auto;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     min-height: 360px;
-    border: 0.5px solid var(--tr-line-3);
+    border: 1px solid var(--tr-glass-line);
     border-radius: var(--tr-radius-lg);
+    background: var(--tr-well);
     overflow: hidden;
     transition: border-color 120ms ease, box-shadow 120ms ease;
 }
@@ -750,7 +725,6 @@ html[data-vcp-embedded-app="true"] .shell {
 .title-input[hidden],
 .pane-count[hidden],
 .nav-icon-btn[hidden],
-.menu[hidden],
 .pane-footer[hidden] {
     display: none;
 }
@@ -790,13 +764,15 @@ html[data-vcp-embedded-app="true"] .shell {
 }
 
 .translator-button-primary {
-    background: var(--tr-ink);
-    border-color: transparent;
-    color: var(--tr-panel);
+    border-color: var(--tr-accent);
+    background: var(--tr-accent);
+    color: var(--tr-on-accent);
+    font-weight: 500;
 }
 
 .translator-button-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--tr-ink) 86%, var(--tr-panel));
+    border-color: var(--tr-accent-hover);
+    background: var(--tr-accent-hover);
 }
 
 /* ---- Settings dialog ---- */
@@ -1060,6 +1036,14 @@ html[data-vcp-embedded-app="true"] .shell {
     }
 
     .nav-label {
+        display: none;
+    }
+
+    .mode-option {
+        padding: 0 8px;
+    }
+
+    .mode-label {
         display: none;
     }
 }

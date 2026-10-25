@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const openSettingsBtn = document.getElementById('openSettingsBtn');
 
     // --- Window Control Elements ---
-    const settingsTranslatorBtn = document.getElementById('translator-settings-btn');
     const minimizeTranslatorBtn = document.getElementById('minimize-translator-btn');
     const maximizeTranslatorBtn = document.getElementById('maximize-translator-btn');
     const closeTranslatorBtn = document.getElementById('close-translator-btn');
@@ -151,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const syncRadioGroup = (group, attribute, value) => {
-        group.querySelectorAll('.nav-item').forEach((item) => {
+        group.querySelectorAll('[role="radio"]').forEach((item) => {
             const checked = item.dataset[attribute] === value;
             item.setAttribute('aria-checked', String(checked));
             item.tabIndex = checked ? 0 : -1;
@@ -164,47 +163,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderHeader();
     };
 
-    const modeItems = () => Array.from(modelModeList.querySelectorAll('.menu-item'));
-
     const selectMode = (mode) => {
         activeMode = mode;
-        modelModeList.querySelectorAll('[data-mode]').forEach((item) => {
-            item.setAttribute('aria-checked', String(item.dataset.mode === mode));
-        });
-        const label = `模型：${MODE_LABELS[mode] || mode}`;
-        settingsTranslatorBtn.title = label;
-        settingsTranslatorBtn.setAttribute('aria-label', label);
+        syncRadioGroup(modelModeList, 'mode', mode);
         renderHeader();
     };
 
+    // 每个模式的提示里写上它对应的模型
     const refreshModelModeLabels = () => {
         modelModeList.querySelectorAll('[data-mode]').forEach((item) => {
-            item.querySelector('[data-model-name]').textContent = getModelName(item.dataset.mode);
+            const label = MODE_LABELS[item.dataset.mode];
+            const model = getModelName(item.dataset.mode);
+            item.title = model ? `${label} · ${model}` : label;
         });
         renderHeader();
-    };
-
-    const isModeMenuOpen = () => !modelModeList.hidden;
-
-    const openModeMenu = () => {
-        modelModeList.hidden = false;
-        settingsTranslatorBtn.setAttribute('aria-expanded', 'true');
-        const checked = modelModeList.querySelector('[aria-checked="true"]') || modeItems()[0];
-        checked.focus();
-    };
-
-    const closeModeMenu = ({ restoreFocus = false } = {}) => {
-        if (!isModeMenuOpen()) return;
-        modelModeList.hidden = true;
-        settingsTranslatorBtn.setAttribute('aria-expanded', 'false');
-        if (restoreFocus) settingsTranslatorBtn.focus();
     };
 
     // 方向键在单选组内移动并选中
     const handleRadioKeydown = (group, onSelect) => (event) => {
         const keys = ['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'];
         if (!keys.includes(event.key)) return;
-        const items = Array.from(group.querySelectorAll('.nav-item'));
+        const items = Array.from(group.querySelectorAll('[role="radio"]'));
         const index = items.indexOf(document.activeElement);
         if (index < 0) return;
         event.preventDefault();
@@ -565,48 +544,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         scheduleTargetLanguageSave();
     }));
 
-    // --- Model Menu ---
-    settingsTranslatorBtn.addEventListener('click', () => {
-        if (isModeMenuOpen()) closeModeMenu();
-        else openModeMenu();
-    });
-
-    settingsTranslatorBtn.addEventListener('keydown', (event) => {
-        if (event.key === 'ArrowDown' && !isModeMenuOpen()) {
-            event.preventDefault();
-            openModeMenu();
-        }
-    });
-
+    // --- Model Modes ---
     modelModeList.addEventListener('click', (event) => {
         const item = event.target.closest('[data-mode]');
-        if (!item) return;
-        selectMode(item.dataset.mode);
-        closeModeMenu({ restoreFocus: true });
+        if (item) selectMode(item.dataset.mode);
     });
+    modelModeList.addEventListener('keydown', handleRadioKeydown(modelModeList, (item) => selectMode(item.dataset.mode)));
 
-    modelModeList.addEventListener('keydown', (event) => {
-        const items = modeItems();
-        const index = items.indexOf(document.activeElement);
-        let nextIndex = null;
-        if (event.key === 'ArrowDown') nextIndex = (index + 1) % items.length;
-        else if (event.key === 'ArrowUp') nextIndex = (index - 1 + items.length) % items.length;
-        else if (event.key === 'Home') nextIndex = 0;
-        else if (event.key === 'End') nextIndex = items.length - 1;
-        else if (event.key === 'Tab') closeModeMenu();
-        if (nextIndex === null) return;
-        event.preventDefault();
-        items[nextIndex].focus();
-    });
-
-    document.addEventListener('pointerdown', (event) => {
-        if (isModeMenuOpen() && !event.target.closest('.menu-anchor')) closeModeMenu();
-    });
-
-    openSettingsBtn.addEventListener('click', () => {
-        closeModeMenu();
-        openSettingsModal();
-    });
+    openSettingsBtn.addEventListener('click', openSettingsModal);
 
     // --- Input Listeners ---
     sourceTextarea.addEventListener('input', updateSourceCount);
@@ -661,11 +606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
-        if (isModeMenuOpen()) {
-            closeModeMenu({ restoreFocus: true });
-        } else if (!settingsModal.classList.contains('hidden')) {
-            closeSettingsModal();
-        }
+        if (!settingsModal.classList.contains('hidden')) closeSettingsModal();
     });
 
     // --- Initialization and Theme Handling ---
