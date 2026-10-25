@@ -171,10 +171,10 @@ button:disabled {
 }
 
 /* The 42px strip above the shell is the window's drag handle. */
-.shell::before {
+body::before {
     content: '';
-    position: absolute;
-    inset: -42px 0 auto;
+    position: fixed;
+    inset: 0 0 auto;
     height: 42px;
     -webkit-app-region: drag;
 }
@@ -302,7 +302,7 @@ html[data-vcp-embedded-app="true"] body {
 }
 
 html[data-vcp-embedded-app="true"] .window-controls,
-html[data-vcp-embedded-app="true"] .shell::before {
+html[data-vcp-embedded-app="true"] body::before {
     display: none;
 }
 
