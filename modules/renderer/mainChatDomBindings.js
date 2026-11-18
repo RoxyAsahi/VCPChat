@@ -54,12 +54,15 @@ export function createMainChatDomBindings(document) {
         resizerLeft: byId(document, 'resizerLeft'),
         resizerRight: byId(document, 'resizerRight'),
         agentSearchInput: byId(document, 'agentSearchInput'),
-        notificationTitleElement: byId(document, 'notificationTitle'),
-        digitalClockElement: byId(document, 'digitalClock'),
-        dateDisplayElement: byId(document, 'dateDisplay'),
         toggleAssistantBtn: byId(document, 'toggleAssistantBtn'),
         toggleSidebarModeBtn: byId(document, 'toggleSidebarModeBtn'),
         openModelSelectBtn: byId(document, 'openModelSelectBtn'),
+        vcpSidePane: byId(document, 'vcpSidePane'),
+        sidePaneTabs: document.querySelector('.side-pane-tabs'),
+        sidePaneContentContainer: document.querySelector('.side-pane-content-container'),
+        toggleSidePaneChatBtn: byId(document, 'toggleSidePaneChatBtn'),
+        closeSidePaneBtn: byId(document, 'closeSidePaneBtn'),
+        addSidePaneChatBtn: byId(document, 'addSidePaneChatBtn'),
     };
 
     for (const required of ['itemListUl', 'chatMessagesDiv', 'messageInput', 'sendMessageBtn']) {

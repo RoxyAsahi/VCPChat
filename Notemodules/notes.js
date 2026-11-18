@@ -312,30 +312,8 @@ document.addEventListener("DOMContentLoaded", async () => {
           : "../vendor/atom-one-dark.min.css";
     }
 
-    // Sync mermaid theme so subsequent diagrams match the app theme.
-    const desiredMermaidTheme = currentTheme === "light" ? "default" : "dark";
-    if (
-      window.mermaid &&
-      typeof window.mermaid.initialize === "function" &&
-      desiredMermaidTheme !== currentMermaidTheme
-    ) {
-      try {
-        window.mermaid.initialize({
-          startOnLoad: false,
-          theme: desiredMermaidTheme,
-          securityLevel: "loose",
-        });
-        const previousTheme = currentMermaidTheme;
-        currentMermaidTheme = desiredMermaidTheme;
-        // Re-render the active note so the new mermaid theme takes effect.
-        if (previousTheme !== null && activeNoteId) {
-          const note = findItemById(getCombinedTree(), activeNoteId);
-          if (note) renderMarkdown(note.content);
-        }
-      } catch (e) {
-        console.warn("[Notes] Failed to re-initialize mermaid theme:", e);
-      }
-    }
+    // Pele 图表颜色由 CSS 变量控制，随笔记主题实时自适应，无需重新初始化引擎。
+    currentMermaidTheme = currentTheme;
   }
 
   // --- Markdown & Preview Rendering ---
@@ -603,11 +581,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (window.renderMathInElement) {
       renderMathInElement(previewContentDiv, {
         delimiters: [
-          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: true },
           { left: "\\[", right: "\\]", display: true },
           { left: "\\(", right: "\\)", display: false },
           { left: "$", right: "$", display: false },
         ],
+        ignoredClasses: ["mermaid"],
         throwOnError: false,
       });
     }
@@ -704,34 +683,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     return nodes;
   }
 
-  async function renderMermaidNodes(nodes, renderTokenId) {
-    if (!window.mermaid || nodes.length === 0) return;
-    try {
-      nodes.forEach((node) => node.removeAttribute("data-processed"));
-      if (typeof window.mermaid.run === "function") {
-        await window.mermaid.run({ nodes });
-      } else if (typeof window.mermaid.init === "function") {
-        window.mermaid.init(undefined, nodes);
-      }
-    } catch (error) {
-      console.error("[Notes] Mermaid render error:", error);
-      nodes.forEach((el) => {
-        if (!el.isConnected) return;
-        const originalCode = el.textContent || "";
-        el.innerHTML = `<div class="mermaid-error">Mermaid 渲染错误: ${escapeHtmlForMermaid(
-          error.message || String(error)
-        )}</div><pre>${escapeHtmlForMermaid(originalCode)}</pre>`;
-      });
-    }
-
-    // If the user switched notes while mermaid was rendering, drop the stale output.
-    if (renderTokenId !== activeNoteId) {
-      nodes.forEach((el) => {
-        if (el.isConnected && el.parentNode === previewContentDiv.parentNode) {
-          // No-op; the next renderMarkdown will overwrite previewContentDiv.innerHTML.
+  function renderMermaidNodes(nodes, renderTokenId) {
+    if (!nodes || nodes.length === 0) return;
+    nodes.forEach((el) => {
+      if (!el.isConnected || renderTokenId !== activeNoteId) return;
+      const code = (el.textContent || "").trim();
+      el.classList.add("pele-diagram");
+      try {
+        if (!window.pele || typeof window.pele.render !== "function") {
+          throw new Error("本地 Pele 渲染依赖未加载。");
         }
-      });
-    }
+        if (code.length > 100000) {
+          throw new Error("图表源码超过 100,000 字符限制。");
+        }
+        const { svg } = window.pele.render(code);
+        el.innerHTML = svg;
+      } catch (error) {
+        console.error("[Notes] Pele diagram render error:", error);
+        el.classList.add("mermaid-error");
+        el.innerHTML = `<div class="mermaid-error">Pele 图表渲染失败: ${escapeHtmlForMermaid(
+          error.message || String(error)
+        )}</div><pre>${escapeHtmlForMermaid(code)}</pre>`;
+      }
+    });
   }
 
   function addCopyButtonsToCodeBlocks() {
@@ -1400,11 +1374,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     editorFindNext.disabled = total === 0;
   }
 
-  function collectEditorSearchMatches(query) {
+  function collectEditorSearchMatches(query, preserveIndex = false) {
     editorSearchMatches = [];
-    editorSearchIndex = -1;
+    if (!preserveIndex) {
+      editorSearchIndex = -1;
+    }
 
     if (!query) {
+      editorSearchIndex = -1;
       updateEditorFindStatus();
       return;
     }
@@ -1420,6 +1397,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       editorSearchMatches.push(matchIndex);
       fromIndex = matchIndex + Math.max(lowerQuery.length, 1);
+    }
+
+    if (editorSearchIndex >= editorSearchMatches.length) {
+      editorSearchIndex = editorSearchMatches.length > 0 ? 0 : -1;
     }
 
     updateEditorFindStatus();
@@ -1452,6 +1433,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (focusEditor) {
       noteContentInput.focus();
       noteContentInput.setSelectionRange(matchStart, matchEnd);
+    } else {
+      noteContentInput.setSelectionRange(matchStart, matchEnd);
     }
 
     updateEditorFindStatus();
@@ -1459,27 +1442,50 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function findEditorMatch(direction = 1) {
     const query = editorFindInput.value;
-    collectEditorSearchMatches(query);
+    if (!query) return;
+
+    const prevIndex = editorSearchIndex;
+    collectEditorSearchMatches(query, true);
 
     if (editorSearchMatches.length === 0) return;
 
     const selectionStart = noteContentInput.selectionStart;
-    if (direction >= 0) {
-      const nextIndex = editorSearchMatches.findIndex(
-        (matchIndex) =>
-          matchIndex >= selectionStart + (editorSearchIndex >= 0 ? 1 : 0)
-      );
-      selectEditorSearchMatch(nextIndex === -1 ? 0 : nextIndex);
-    } else {
-      let previousIndex = editorSearchMatches.length - 1;
-      for (let i = editorSearchMatches.length - 1; i >= 0; i--) {
-        if (editorSearchMatches[i] < selectionStart) {
-          previousIndex = i;
-          break;
-        }
+    let targetIndex;
+
+    // 如果当前选区正好对应上次选中的匹配项，按顺序循环切换到下一个或上一个
+    if (
+      prevIndex >= 0 &&
+      prevIndex < editorSearchMatches.length &&
+      editorSearchMatches[prevIndex] === selectionStart
+    ) {
+      if (direction >= 0) {
+        targetIndex = (prevIndex + 1) % editorSearchMatches.length;
+      } else {
+        targetIndex =
+          (prevIndex - 1 + editorSearchMatches.length) %
+          editorSearchMatches.length;
       }
-      selectEditorSearchMatch(previousIndex);
+    } else {
+      // 否则（光标被手动移动，或初次搜索），基于当前光标位置选择最近的匹配项
+      if (direction >= 0) {
+        const found = editorSearchMatches.findIndex(
+          (matchIndex) => matchIndex >= selectionStart
+        );
+        targetIndex = found === -1 ? 0 : found;
+      } else {
+        let found = -1;
+        for (let i = editorSearchMatches.length - 1; i >= 0; i--) {
+          if (editorSearchMatches[i] < selectionStart) {
+            found = i;
+            break;
+          }
+        }
+        targetIndex =
+          found === -1 ? editorSearchMatches.length - 1 : found;
+      }
     }
+
+    selectEditorSearchMatch(targetIndex);
   }
 
   function openEditorFindBar() {

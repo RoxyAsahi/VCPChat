@@ -9,6 +9,10 @@ window.itemListManager = (() => {
     let wasSelectionListenerActive = false; // To store the state of the selection listener before dragging
     let uiHelper;
     let activeLoadItemsToken = 0;
+    let activeUnreadCountsToken = 0;
+    let navigationUnreadRequest = null;
+    let unreadSnapshot = null;
+    const itemElements = new Map();
 
     const OPENHER_PERSONA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
     const OPENHER_PERSONA_CACHE_TTL_MS = 11 * 60 * 1000;
@@ -57,6 +61,10 @@ window.itemListManager = (() => {
     };
     let personaAutoRefreshTimer = null;
 
+    // 流状态独立于列表 DOM 保存，确保列表刷新或切换会话后仍能恢复后台说话标识。
+    const activeStreamOwners = new Map();
+    const activeStreamsByItem = new Map();
+
     /**
      * Initializes the ItemListManager module.
      * @param {object} config - The configuration object.
@@ -92,11 +100,16 @@ window.itemListManager = (() => {
             return;
         }
 
+        activeUnreadCountsToken += 1; // Revoke requests from the previous API or list.
+        navigationUnreadRequest = null;
+        unreadSnapshot = null;
+        itemElements.clear();
         itemListUl = config.elements.itemListUl;
         electronAPI = config.electronAPI;
         currentSelectedItemRef = config.refs.currentSelectedItemRef;
         mainRendererFunctions = config.mainRendererFunctions;
         uiHelper = config.uiHelper; // Store uiHelper
+        bindItemListKeyboard();
 
         ensureOpenHerPersonaAutoRefresh();
         console.log('[ItemListManager] Initialized successfully.');
@@ -109,8 +122,56 @@ window.itemListManager = (() => {
      */
     function highlightActiveItem(itemId, itemType) {
         if (!itemListUl) return;
+        const focusedItem = itemListUl.contains(document.activeElement) ? document.activeElement : null;
         document.querySelectorAll('#agentList li').forEach(item => {
-            item.classList.toggle('active', item.dataset.itemId === itemId && item.dataset.itemType === itemType);
+            const isActive = item.dataset.itemId === itemId && item.dataset.itemType === itemType;
+            item.classList.toggle('active', isActive);
+            if (item.dataset.itemId && !focusedItem) item.tabIndex = isActive ? 0 : -1;
+        });
+        ensureItemTabStop();
+    }
+
+    // Keyboard model of a listbox (as in Radix): one tab stop
+    // (the active item, else the first) that follows focus; arrows, Home and
+    // End move it; Enter or Space selects the focused Agent or group.
+    function ensureItemTabStop() {
+        if (!itemListUl || itemListUl.querySelector('li[data-item-id][tabindex="0"]')) return;
+        const first = itemListUl.querySelector('li[data-item-id]');
+        if (first) first.tabIndex = 0;
+    }
+
+    function bindItemListKeyboard() {
+        if (!itemListUl || itemListUl.dataset.itemKeyboardBound === 'true') return;
+        itemListUl.dataset.itemKeyboardBound = 'true';
+        itemListUl.addEventListener('focusin', event => {
+            const item = event.target;
+            if (!item?.dataset?.itemId || item.parentElement !== itemListUl) return;
+            itemListUl.querySelectorAll('li[data-item-id][tabindex="0"]').forEach(other => {
+                if (other !== item) other.tabIndex = -1;
+            });
+            item.tabIndex = 0;
+        });
+        itemListUl.addEventListener('keydown', event => {
+            const item = event.target;
+            if (!item?.dataset?.itemId || item.parentElement !== itemListUl) return;
+            const items = [...itemListUl.querySelectorAll('li[data-item-id]')]
+                .filter(candidate => candidate.style.display !== 'none' && !candidate.hidden);
+            const index = items.indexOf(item);
+            let next = null;
+            if (event.key === 'ArrowDown') next = items[index + 1];
+            else if (event.key === 'ArrowUp') next = items[index - 1];
+            else if (event.key === 'Home') next = items[0];
+            else if (event.key === 'End') next = items[items.length - 1];
+            else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                const data = item._itemData;
+                if (data) mainRendererFunctions.selectItem(data.id, data.type, data.name, data.avatarUrl, data.config || data);
+                return;
+            } else {
+                return;
+            }
+            event.preventDefault();
+            next?.focus();
         });
     }
 
@@ -148,6 +209,8 @@ window.itemListManager = (() => {
                     wasSelectionListenerActive = false; // Reset state
                 }
 
+                // Dropped back in place: nothing changed, so settings.json is not rewritten.
+                if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
                 const allListItems = Array.from(evt.to.children);
                 const orderedItems = allListItems.map(item => ({
                     id: item.dataset.itemId,
@@ -740,10 +803,134 @@ window.itemListManager = (() => {
         showPersonaCard(li);
     }
 
+    function getStreamItemKey(itemId, itemType) {
+        return itemId && itemType ? `${itemType}:${itemId}` : '';
+    }
+
+    function resolveStreamOwner(event) {
+        const context = event?.context || {};
+        const isGroup = context.isGroupMessage === true || Boolean(context.groupId);
+        const itemId = isGroup ? context.groupId : context.agentId;
+        const itemType = isGroup ? 'group' : 'agent';
+        const operationId = String(event?.streamOperationId || event?.operationId || event?.messageId || '').trim();
+        if (!itemId || !operationId) return null;
+        return { itemId, itemType, operationId, itemKey: getStreamItemKey(itemId, itemType) };
+    }
+
+    function syncSpeakingIndicator(itemId, itemType) {
+        if (!itemListUl) return;
+        const itemKey = getStreamItemKey(itemId, itemType);
+        const activeCount = activeStreamsByItem.get(itemKey)?.size || 0;
+        const li = itemElements.get(itemKey);
+        if (!li) return;
+
+        li.classList.toggle('is-stream-speaking', activeCount > 0);
+        li.dataset.activeStreamCount = String(activeCount);
+        const indicator = li.querySelector('.stream-speaking-indicator');
+        if (indicator) {
+            indicator.hidden = activeCount === 0;
+            indicator.setAttribute('aria-label', activeCount > 0 ? '正在说话' : '');
+        }
+    }
+
+    function setStreamOwnerActive(owner, active) {
+        if (!owner) return;
+        const previousOwner = activeStreamOwners.get(owner.operationId);
+        if (previousOwner && previousOwner.itemKey !== owner.itemKey) {
+            const previousSet = activeStreamsByItem.get(previousOwner.itemKey);
+            previousSet?.delete(owner.operationId);
+            if (previousSet?.size === 0) activeStreamsByItem.delete(previousOwner.itemKey);
+            syncSpeakingIndicator(previousOwner.itemId, previousOwner.itemType);
+        }
+
+        if (active) {
+            activeStreamOwners.set(owner.operationId, owner);
+            let operations = activeStreamsByItem.get(owner.itemKey);
+            if (!operations) {
+                operations = new Set();
+                activeStreamsByItem.set(owner.itemKey, operations);
+            }
+            operations.add(owner.operationId);
+        } else {
+            const effectiveOwner = previousOwner || owner;
+            activeStreamOwners.delete(owner.operationId);
+            const operations = activeStreamsByItem.get(effectiveOwner.itemKey);
+            operations?.delete(owner.operationId);
+            if (operations?.size === 0) activeStreamsByItem.delete(effectiveOwner.itemKey);
+            owner = effectiveOwner;
+        }
+        syncSpeakingIndicator(owner.itemId, owner.itemType);
+    }
+
+    function consumeStreamActivityEvent(event) {
+        const owner = resolveStreamOwner(event);
+        if (!owner) return false;
+
+        if (event.type === 'agent_thinking' || event.type === 'start' || event.type === 'data') {
+            // Chunks do not change membership. Avoid DOM writes for every token.
+            if (activeStreamOwners.get(owner.operationId)?.itemKey === owner.itemKey) return true;
+            setStreamOwnerActive(owner, true);
+            return true;
+        }
+        if (event.type === 'end' || event.type === 'error' || event.type === 'full_response') {
+            setStreamOwnerActive(owner, false);
+            return true;
+        }
+        return false;
+    }
+
+    function createSpeakingIndicator() {
+        const indicator = document.createElement('span');
+        indicator.className = 'stream-speaking-indicator';
+        indicator.hidden = true;
+        indicator.setAttribute('role', 'status');
+        for (let index = 0; index < 3; index += 1) {
+            const bar = document.createElement('span');
+            bar.className = 'stream-speaking-bar';
+            bar.style.setProperty('--stream-bar-index', String(index));
+            indicator.appendChild(bar);
+        }
+        return indicator;
+    }
+
+    const GROUP_COLLAGE_MAX = 4;
+
+    // 没有自定义头像的群组，用前 4 位成员的头像拼成一枚群头像；
+    // 没头像的成员用名字首字母占位。
+    function createGroupCollage(memberPreview) {
+        const collage = document.createElement('div');
+        collage.className = 'group-avatar-collage';
+        collage.dataset.count = String(memberPreview.length);
+        memberPreview.forEach(member => {
+            if (member.avatarUrl) {
+                const img = document.createElement('img');
+                img.className = 'group-avatar-cell';
+                img.src = member.avatarUrl;
+                img.alt = '';
+                img.addEventListener('error', () => {
+                    img.replaceWith(createGroupCollageInitials(member.name));
+                });
+                collage.appendChild(img);
+            } else {
+                collage.appendChild(createGroupCollageInitials(member.name));
+            }
+        });
+        return collage;
+    }
+
+    function createGroupCollageInitials(name) {
+        const cell = document.createElement('span');
+        cell.className = 'group-avatar-cell group-avatar-initials';
+        cell.textContent = String(name || '?').trim().slice(0, 2).toUpperCase();
+        return cell;
+    }
+
     function createItemElement(item) {
         const li = document.createElement('li');
         li.dataset.itemId = item.id;
         li.dataset.itemType = item.type;
+        li._itemData = item;
+        li.tabIndex = -1;
 
         // 创建头像包装器
         const avatarWrapper = document.createElement('div');
@@ -751,12 +938,19 @@ window.itemListManager = (() => {
 
         const avatarImg = document.createElement('img');
         avatarImg.classList.add('avatar');
-        avatarImg.src = item.avatarUrl ? `${item.avatarUrl}${item.avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}` : (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
+        // The main process versions avatar URLs by file mtime, so the URL is
+        // stable until the avatar changes and the browser cache can serve it.
+        avatarImg.src = item.avatarUrl || (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
         avatarImg.alt = `${item.name} 头像`;
         avatarImg.onerror = () => { avatarImg.src = (item.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png'); };
 
-        // 将头像添加到包装器中
-        avatarWrapper.appendChild(avatarImg);
+        // 将头像和顶层说话频谱添加到包装器中。
+        if (item.type === 'group' && item.memberPreview && item.memberPreview.length > 0) {
+            avatarWrapper.appendChild(createGroupCollage(item.memberPreview));
+        } else {
+            avatarWrapper.appendChild(avatarImg);
+        }
+        avatarWrapper.appendChild(createSpeakingIndicator());
 
         const nameSpan = document.createElement('span');
         nameSpan.classList.add('agent-name');
@@ -807,6 +1001,7 @@ window.itemListManager = (() => {
         }
 
         hydratePersonaElement(li, item);
+        syncSpeakingIndicator(item.id, item.type);
 
         // 为每个项目添加独立的状态管理
         li._lastClickTime = 0;
@@ -882,6 +1077,7 @@ window.itemListManager = (() => {
 
     function renderItems(items, fallbackHtml = null) {
         itemListUl.innerHTML = '';
+        itemElements.clear();
 
         if (items.length === 0) {
             itemListUl.innerHTML = fallbackHtml || '<li>没有找到Agent或群组。请创建一个。</li>';
@@ -890,14 +1086,24 @@ window.itemListManager = (() => {
 
         const fragment = document.createDocumentFragment();
         items.forEach(item => {
-            fragment.appendChild(createItemElement(item));
+            const row = createItemElement(item);
+            itemElements.set(getStreamItemKey(item.id, item.type), row);
+            fragment.appendChild(row);
         });
         itemListUl.appendChild(fragment);
+
+        // 新列表节点已挂载，现在从独立流状态中恢复后台说话标识。
+        items.forEach(item => syncSpeakingIndicator(item.id, item.type));
 
         const currentSelectedItem = currentSelectedItemRef.get();
         if (currentSelectedItem && currentSelectedItem.id) {
             highlightActiveItem(currentSelectedItem.id, currentSelectedItem.type);
         }
+        // A rebuild (unread refresh, save, reorder) must not drop an active
+        // search: re-apply the term still in the search box.
+        const activeSearch = document.getElementById('agentSearchInput')?.value;
+        if (activeSearch && activeSearch.trim()) window.uiHelperFunctions?.filterAgentList?.(activeSearch);
+        ensureItemTabStop();
 
         if (typeof Sortable !== 'undefined') {
             initializeItemSortable();
@@ -922,8 +1128,13 @@ window.itemListManager = (() => {
             itemListUl.innerHTML = '<li><div class="loading-spinner-small"></div>加载列表中...</li>';
         }
 
-        const agentsResult = await electronAPI.getAgents();
-        const groupsResult = await electronAPI.getAgentGroups();
+        // A rejected IPC call becomes an error row instead of leaving the
+        // first-load spinner up for good; both reads run together.
+        const asError = error => ({ error: error?.message || String(error) });
+        const [agentsResult, groupsResult] = await Promise.all([
+            Promise.resolve().then(() => electronAPI.getAgents()).catch(asError),
+            Promise.resolve().then(() => electronAPI.getAgentGroups()).catch(asError)
+        ]);
 
         if (loadToken !== activeLoadItemsToken) {
             console.debug('[ItemListManager] Ignoring stale loadItems result.');
@@ -940,7 +1151,20 @@ window.itemListManager = (() => {
         }
 
         if (groupsResult && !groupsResult.error) {
-            items.push(...groupsResult.map(g => ({ ...g, type: 'group', id: g.id, avatarUrl: g.avatarUrl || 'assets/default_group_avatar.png' })));
+            const agentById = new Map(Array.isArray(agentsResult) ? agentsResult.map(a => [a.id, a]) : []);
+            items.push(...groupsResult
+                .filter(g => g.mode !== 'game')
+                .map(g => ({
+                    ...g,
+                    type: 'group',
+                    id: g.id,
+                    avatarUrl: g.avatarUrl || 'assets/default_group_avatar.png',
+                    memberPreview: g.avatarUrl ? null : (Array.isArray(g.members) ? g.members : [])
+                        .map(memberId => agentById.get(memberId))
+                        .filter(Boolean)
+                        .slice(0, GROUP_COLLAGE_MAX)
+                        .map(a => ({ name: a.name, avatarUrl: a.avatarUrl || '' }))
+                })));
         } else if (groupsResult && groupsResult.error) {
             errors.push(`加载群组失败: ${groupsResult.error}`);
         }
@@ -953,6 +1177,13 @@ window.itemListManager = (() => {
             }
         } catch (e) {
             console.warn("[ItemListManager] Could not load combinedItemOrder from settings:", e);
+        }
+
+        // 读取排序设置时也可能已有新一轮加载完成；最后一次 await 后再确认发布权，
+        // 防止旧成功、空列表或错误回退覆盖当前缓存和 DOM。
+        if (loadToken !== activeLoadItemsToken) {
+            console.debug('[ItemListManager] Ignoring stale loadItems result after settings.');
+            return;
         }
 
         if (combinedOrderFromSettings.length > 0 && items.length > 0) {
@@ -982,7 +1213,7 @@ window.itemListManager = (() => {
         } else if (errors.length > 0) {
             console.warn('[ItemListManager] Failed to fully reload items, preserving previous list where possible:', errors.join(' | '));
             if (!hadPreviousItems) {
-                itemListUl.innerHTML = errors.map(error => `<li>${error}</li>`).join('');
+                itemListUl.innerHTML = errors.map(error => `<li>${escapeHtml(String(error))}</li>`).join('');
             }
         } else {
             loadedItemsCache = [];
@@ -997,13 +1228,38 @@ window.itemListManager = (() => {
     /**
      * 仅刷新未读计数，而不重新加载整个列表
      */
-    function refreshUnreadCounts() {
-        if (!electronAPI) return;
-        electronAPI.getUnreadTopicCounts().then(result => {
-            if (result && result.success) {
+    async function refreshUnreadCounts({ isCurrent = () => true, maxAgeMs = 0 } = {}) {
+        if (!electronAPI || !isCurrent()) return;
+        const token = ++activeUnreadCountsToken;
+        try {
+            let result;
+            if (maxAgeMs > 0 && unreadSnapshot && Date.now() - unreadSnapshot.at < maxAgeMs) {
+                result = unreadSnapshot.result;
+            } else {
+                // Explicit mutation/catalog refreshes bypass and invalidate
+                // navigation caches. Only fresh navigation requests may share IO.
+                if (maxAgeMs === 0) {
+                    unreadSnapshot = null;
+                    navigationUnreadRequest = null;
+                }
+                let request = maxAgeMs > 0 && navigationUnreadRequest;
+                if (!request || Date.now() - request.at >= maxAgeMs) {
+                    request = { at: Date.now(), promise: electronAPI.getUnreadTopicCounts() };
+                    if (maxAgeMs > 0) navigationUnreadRequest = request;
+                }
+                try { result = await request.promise; }
+                finally {
+                    if (navigationUnreadRequest === request) navigationUnreadRequest = null;
+                }
+            }
+            if (token !== activeUnreadCountsToken || !isCurrent()) return;
+            if (result?.success) {
+                unreadSnapshot = { result, at: Date.now() };
                 updateUnreadBadges(result.counts);
             }
-        }).catch(err => console.error('[ItemListManager] Failed to fetch unread counts:', err));
+        } catch (err) {
+            console.error('[ItemListManager] Failed to fetch unread counts:', err);
+        }
     }
 
     /**
@@ -1255,10 +1511,25 @@ window.itemListManager = (() => {
             return false;
         }
 
-        matchedItem.config = {
-            ...(matchedItem.config || {}),
-            ...partialConfig
-        };
+        if (matchedItem.config && typeof matchedItem.config === 'object') {
+            Object.assign(matchedItem.config, partialConfig);
+        } else {
+            matchedItem.config = { ...partialConfig };
+        }
+        if ('model' in partialConfig) {
+            matchedItem.model = partialConfig.model;
+        }
+
+        if (itemListUl) {
+            const li = Array.from(itemListUl.querySelectorAll('li[data-item-id][data-item-type]'))
+                .find(candidate => candidate.dataset.itemId === itemId && candidate.dataset.itemType === itemType);
+            if (li && li._itemData) {
+                li._itemData.config = matchedItem.config;
+                if ('model' in partialConfig) {
+                    li._itemData.model = partialConfig.model;
+                }
+            }
+        }
 
         return true;
     }
@@ -1270,8 +1541,10 @@ window.itemListManager = (() => {
         highlightActiveItem,
         resetMouseEventStates,
         findItemById, // Expose the new function
+        getLoadedItems: () => [...loadedItemsCache], // 暴露只读快照供消息自愈渲染查表
         updateLoadedItemConfig,
         updateUnreadBadges, // Part C: 暴露更新徽章函数供外部调用
-        refreshUnreadCounts
+        refreshUnreadCounts,
+        consumeStreamActivityEvent
     };
 })();

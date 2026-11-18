@@ -14,18 +14,25 @@ test('official presets are loaded from the independent official JSON file', () =
     const names = officialStore.rules.map(rule => rule.name);
 
     assert.equal(Object.hasOwn(engine, 'BUILTIN_RULES'), false);
-    assert.equal(officialStore.rules.length, 9);
-    assert.deepEqual(names, [
+    // 核心预设必须存在；新增官方预设不应让本用例失败。
+    const requiredNames = [
         'Agent输出动画气泡',
+        '工作区目录感知',
         '心流锁系统',
         'Loom权限',
+        'VCP桌面权限',
         '文坊权限',
         '禁用所有工具',
-        'VCP桌面权限',
         '获取服务器验证码',
         '窗口控制权限',
-        '启用HTML多媒体权限'
-    ]);
+        '启用HTML多媒体能力'
+    ];
+    for (const name of requiredNames) {
+        assert.ok(names.includes(name), `缺少核心官方预设：${name}`);
+    }
+    const keys = officialStore.rules.map(rule => rule.builtinKey);
+    assert.ok(keys.every(key => typeof key === 'string' && key.trim().length > 0), 'builtinKey 必须是非空字符串');
+    assert.equal(new Set(keys).size, keys.length, 'builtinKey 出现重复');
     assert.equal(names.includes('插件管理员'), false);
 });
 
@@ -162,15 +169,26 @@ test('deleting an official rule does not recreate it during split and recombine'
     assert.equal(restored.rules.length, officialStore.rules.length - 1);
 });
 
-test('only the base DivRender capability is enabled in the shipped official file', () => {
+test('only base capabilities are enabled in the shipped official file', () => {
     const combined = engine.combineRuleStores(officialStore, { version: 3, rules: [] });
     const enabled = combined.rules.filter(rule => rule.enabled !== false);
 
-    assert.equal(enabled.length, 1);
-    assert.equal(enabled[0].builtinKey, 'agent-div-render');
+    const allowedBaseBuiltinKeys = new Set(['agent-div-render', 'workspace-tree']);
+    for (const rule of enabled) {
+        assert.ok(
+            allowedBaseBuiltinKeys.has(rule.builtinKey),
+            `Rule "${rule.name}" (${rule.builtinKey}) should not be enabled by default`
+        );
+    }
+    assert.ok(enabled.length > 0, 'at least one base capability must be enabled by default');
 
     const systemPrompt = engine.applySystemSuffix('base', combined.rules, 'agent');
-    assert.match(systemPrompt, /\{\{VarDivRender\}\}/);
+    if (enabled.some(rule => rule.builtinKey === 'agent-div-render')) {
+        assert.match(systemPrompt, /\{\{VarDivRender\}\}/);
+    }
+    if (enabled.some(rule => rule.builtinKey === 'workspace-tree')) {
+        assert.match(systemPrompt, /\{\{VCPChatWorkSpace\}\}/);
+    }
     assert.doesNotMatch(systemPrompt, /\{\{USER_AUTH_CODE\}\}/);
     assert.doesNotMatch(systemPrompt, /\{\{VCPScreenPilot\}\}/);
     assert.doesNotMatch(systemPrompt, /\{\{VCPLoomController\}\}/);

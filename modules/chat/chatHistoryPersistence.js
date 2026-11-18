@@ -37,6 +37,21 @@ function createHistoryPersistence(repository, { durable, skipTemporaryContexts }
             const projectedHistory = cloneHistory(
                 projected.history.filter(message => !message?.isThinking && !message?.isPendingStream)
             );
+            // Side-chat children have a separate marker-based ownership contract.
+            // Do not route them through the ordinary topic-list validator.
+            if (durable && itemType === 'agent'
+                && !/^sidechat_[0-9]+_[0-9a-f]+$/.test(context.topicId)
+                && typeof repository.persistAssistant === 'function') {
+                const terminal = projectedHistory.find(message => String(message.id) === String(projected.messageId));
+                if (!terminal || terminal.role !== 'assistant') throw new Error('Stream terminal assistant message missing');
+                const result = await repository.persistAssistant(
+                    { itemId, itemType, topicId: context.topicId }, terminal);
+                if (!result?.success) throw new Error(result?.error || 'Failed to persist assistant terminal');
+                return Object.freeze({
+                    messageId: projected.messageId, context,
+                    content: projected.content, finishReason: projected.finishReason,
+                });
+            }
             const durableHistory = await repository.getHistory(itemId, itemType, context.topicId);
             if (!Array.isArray(durableHistory)) {
                 throw new Error('Chat repository returned invalid history during stream commit');
@@ -98,7 +113,13 @@ function createHistoryPersistence(repository, { durable, skipTemporaryContexts }
                 return cleanMessage;
             });
 
-            await repository.saveHistory(itemId, itemType, context.topicId, mergedHistory);
+            const saveResult = await repository.saveHistory(itemId, itemType, context.topicId, mergedHistory);
+            if (saveResult && (saveResult.success === false || saveResult.error)) {
+                const message = typeof saveResult.error === 'string'
+                    ? saveResult.error
+                    : (saveResult.error?.message || 'Failed to save chat history');
+                throw new Error(message);
+            }
             return Object.freeze({
                 messageId: projected.messageId,
                 context,

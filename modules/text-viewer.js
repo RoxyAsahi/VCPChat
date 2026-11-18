@@ -1,5 +1,15 @@
+import { collectToolBatchRanges } from './renderer/toolBatchRegions.js';
+import { splitToolBatchDomains, composeToolBatchHtml } from './renderer/toolBatchDomains.js';
+import { sanitizeToolDataHtml } from './renderer/toolDataHtml.js';
 import { createEmoticonUrlFixer } from './renderer/emoticonUrlFixer.js';
+import { applyMarkdownPolicy } from './renderer/markdownPolicy.js';
 import { replaceMarkdownCodeDomains } from './renderer/markdownCodeDomainScanner.js';
+import {
+    TOOL_RESULT_START_MARKER,
+    TOOL_RESULT_END_MARKER,
+    collectClosedToolResultRanges,
+} from './renderer/toolResultRegions.js';
+import { parseJevToolUse } from './renderer/jevToolUse.js';
 import { domToCanvas, domToBlob } from '../vendor/modern-screenshot.js';
 
 const emoticonFixer = createEmoticonUrlFixer();
@@ -298,9 +308,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         return result;
     };
 
-    function transformSpecialBlocksForViewer(text) {
+    /**
+     * 嵌套感知地替换工具结果块（与主渲染器 toolResultRegions 同一配对规则）。
+     * 工具结果内部成对出现的字面量起止标记（例如读取渲染器源码）被整体包含在外层块中，
+     * 不会在第一个内层结束标记处截断。回调签名与原 String#replace 保持一致：(match, rawContent)。
+     */
+    const replaceToolResultsNested = (source, replacer) => {
+        const ranges = collectClosedToolResultRanges(source);
+        if (ranges.length === 0) return source;
+
+        let result = '';
+        let cursor = 0;
+        for (const range of ranges) {
+            const match = source.slice(range.start, range.end);
+            const rawContent = match.slice(
+                TOOL_RESULT_START_MARKER.length,
+                match.length - TOOL_RESULT_END_MARKER.length
+            );
+            result += source.slice(cursor, range.start) + replacer(match, rawContent);
+            cursor = range.end;
+        }
+        return result + source.slice(cursor);
+    };
+
+    function transformSpecialBlocksForViewer(text, restoreCodeDomains = (value) => value) {
         const noteRegex = /<<<DailyNoteStart>>>(.*?)<<<DailyNoteEnd>>>/gs;
-        const toolResultRegex = /\[\[VCP调用结果信息汇总:(.*?)VCP调用结果结束\]\]/gs;
         const toolCallSummaryRegex = /\[本轮工具调用摘要:\]([\s\S]*?)\[本轮工具调用摘要结束\]/g;
         const thoughtChainRegex = /^[ \t]*\[--- VCP元思考链(?::\s*"([^"]*)")?\s*---\][ \t]*\r?\n([\s\S]*?)^[ \t]*\[--- 元思考链结束 ---\][ \t]*(?:\r?\n|$)/gm;
         const conventionalThoughtRegex = /^[ \t]*<think(?:ing)?>[ \t]*\r?\n([\s\S]*?)^[ \t]*<\/think(?:ing)?>[ \t]*(?:\r?\n|$)/gim;
@@ -341,7 +373,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const renderMarkdownField = (rawText) => {
-            const source = rawText || '';
+            /*
+             * 围栏代码在外层预处理阶段会被占位符保护。特殊块（尤其日记）
+             * 会在外层 Markdown 解析前先独立调用 marked.parse，因此必须在
+             * 此处恢复其字段内的代码域，否则占位符会被固化为普通段落文本。
+             */
+            const source = restoreCodeDomains(rawText || '');
             if (window.marked) {
                 try {
                     return window.marked.parse(source);
@@ -534,7 +571,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // Process VCP Tool Results - Viewer Mode (Full Details)
-        processed = processed.replace(toolResultRegex, (match, rawContent) => {
+        // 嵌套感知配对，避免工具结果内的字面量标记截断外层块。
+        processed = replaceToolResultsNested(processed, (match, rawContent) => {
             const content = rawContent.trim();
             const lines = content.split('\n');
             const markdownFieldKeys = new Set(['返回内容', '内容', 'Result', '返回结果', 'output']);
@@ -579,11 +617,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             flushCurrentField();
 
-            let html = `<div class="vcp-tool-result-bubble collapsible" data-vcp-block-type="tool-result">`;
+            // 阅读模式默认展开工具结果，同时保留点击标题折叠/展开的能力。
+            let html = `<div class="vcp-tool-result-bubble collapsible expanded" data-vcp-block-type="tool-result">`;
             html += `<div class="vcp-tool-result-header">`;
             html += `<span class="vcp-tool-result-label">VCP-ToolResult</span>`;
             html += `<span class="vcp-tool-result-name">${escapeHtml(toolName)}</span>`;
-            html += `<span class="vcp-tool-result-status">${escapeHtml(status)}</span>`;
+            html += `<span class="vcp-tool-result-status">${escapeHtml(status.replace(/[✅❌⚠⏳\uFE0F]/gu, '').trim())}</span>`;
             html += `<span class="vcp-result-toggle-icon"></span>`;
             html += `</div>`;
 
@@ -634,6 +673,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         processed = replaceToolRequestBlocks(processed, (match, content) => {
             const detectedToolName = extractMarkedField(content, /tool_name:\s*/i);
             const detectedCommand = extractMarkedField(content, /command:\s*/i);
+            const detectedJev = parseJevToolUse(extractMarkedField(content, /JEV:\s*/i));
             const normalizedToolName = (detectedToolName || '').trim().toLowerCase();
             const normalizedCommand = (detectedCommand || '').trim().toLowerCase();
 
@@ -677,10 +717,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             toolName = toolName.replace(/[「{](?:始|末)(?:[Ee][Ss][Cc][Aa][Pp][Ee])?[」}]/gi, '').replace(/,$/, '').trim();
 
             const escapedFullContent = escapeHtml(content.trim());
-            return `\n\n<div class="vcp-tool-use-bubble" data-vcp-block-type="tool-use">` +
+            const isJevToolUse = !!detectedJev;
+            const bubbleClass = isJevToolUse
+                ? 'vcp-tool-use-bubble vcp-jev-tool-use-bubble expanded'
+                : 'vcp-tool-use-bubble expanded';
+            const blockType = isJevToolUse ? 'jev-tool-use' : 'tool-use';
+            const displayName = isJevToolUse ? detectedJev.displayName : toolName;
+            const label = isJevToolUse
+                ? (displayName ? 'JEVToolUse:' : 'JEVToolUse')
+                : 'VCP-ToolUse:';
+            const nameHtml = displayName
+                ? ` <span class="vcp-tool-name-highlight">${escapeHtml(displayName)}</span>`
+                : '';
+            // 阅读模式以完整阅读为主，工具调用默认展开；JEV 只是兼容分支。
+            return `\n\n<div class="${bubbleClass}" data-vcp-block-type="${blockType}">` +
                 `<div class="vcp-tool-summary">` +
-                `<span class="vcp-tool-label">VCP-ToolUse:</span> ` +
-                `<span class="vcp-tool-name-highlight">${escapeHtml(toolName)}</span>` +
+                `<span class="vcp-tool-label">${label}</span>` +
+                nameHtml +
                 `</div>` +
                 `<div class="vcp-tool-details"><pre>${escapedFullContent}</pre></div>` +
                 `</div>\n\n`;
@@ -813,7 +866,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function preprocessFullContent(text, scopeId) {
         // Step 1: Ensure any raw HTML documents are properly fenced first. This is critical.
-        let processed = ensureHtmlFenced(text);
+        const batchHtml = new Map();
+        let cursor = 0;
+        let source = '';
+        for (const batch of collectToolBatchRanges(text)) {
+            const placeholder = `<!--VCPVIEWERBATCH${batchHtml.size}TOKEN-->`;
+            const renderRemainder = value => {
+                let html = '', offset = 0;
+                const plain = text => text.trim() ? `<div class="vcp-tool-batch-text">${escapeHtml(text).replace(/\r?\n/g, '<br>')}</div>` : '';
+                for (const match of value.matchAll(/\[本轮工具调用摘要:\]([\s\S]*?)\[本轮工具调用摘要结束\]/g)) {
+                    html += plain(value.slice(offset, match.index));
+                    html += sanitizeToolDataHtml(transformSpecialBlocksForViewer(match[0]), document);
+                    offset = match.index + match[0].length;
+                }
+                return html + plain(value.slice(offset));
+            };
+            let bodyHtml = '';
+            let bodyCursor = batch.contentStart;
+            for (const range of collectClosedToolResultRanges(text.slice(batch.start, batch.end))) {
+                const start = batch.start + range.start;
+                const end = batch.start + range.end;
+                const preceding = text.slice(bodyCursor, start);
+                bodyHtml += renderRemainder(preceding);
+                bodyHtml += sanitizeToolDataHtml(transformSpecialBlocksForViewer(text.slice(start, end)), document);
+                bodyCursor = end;
+            }
+            const remainder = text.slice(bodyCursor, batch.contentEnd);
+            bodyHtml += renderRemainder(remainder);
+            batchHtml.set(placeholder, `<div data-vcp-block-type="tool-batch">${bodyHtml}</div>`);
+            source += text.slice(cursor, batch.start) + `\n\n${placeholder}\n\n`;
+            cursor = batch.end;
+        }
+        source += text.slice(cursor);
+        let processed = ensureHtmlFenced(source);
 
         const codeBlockMap = new Map();
         let placeholderId = 0;
@@ -859,11 +944,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Step 5: Run other pre-processing on the text (which still has placeholders).
         processed = deIndentHtml(processed);
-        processed = transformSpecialBlocksForViewer(processed);
+
+        /*
+         * 仅为特殊块的内嵌 Markdown 字段按需恢复代码域。普通正文仍保留
+         * 占位符直到 Step 7，避免下面的通用文本修正规则改写代码内容。
+         */
+        const restoreCodeDomains = (value) => {
+            let restored = value;
+            for (const [placeholder, block] of codeBlockMap.entries()) {
+                restored = restored.split(placeholder).join(block);
+            }
+            return restored;
+        };
+        processed = transformSpecialBlocksForViewer(processed, restoreCodeDomains);
         
         // Basic content processors from contentProcessor.js
         processed = processed.replace(/^(\s*```)(?![\r\n])/gm, '$1\n'); // ensureNewlineAfterCodeBlock
-        processed = processed.replace(/~(?![\s~])/g, '~ '); // ensureSpaceAfterTilde
+
         processed = processed.replace(/^(\s*)(```.*)/gm, '$2'); // removeIndentationFromCodeBlockMarkers
         processed = processed.replace(/(<img[^>]+>)\s*(```)/g, '$1\n\n<!-- VCP-Renderer-Separator -->\n\n$2'); // ensureSeparatorBetweenImgAndCode
 
@@ -877,7 +974,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        return processed;
+        return { text: processed, batchHtml };
+    }
+
+    function renderViewerContent(text, scopeId, batchDomain = false) {
+        if (!batchDomain && collectToolBatchRanges(text).length) {
+            document.querySelectorAll('style[data-vcp-scope-id]').forEach(node => {
+                if (node.getAttribute('data-vcp-scope-id') === scopeId) node.remove();
+            });
+            return composeToolBatchHtml(splitToolBatchDomains(text),
+                domain => renderViewerContent(domain.source, scopeId, true), document);
+        }
+        const processed = preprocessFullContent(text, scopeId);
+        let html = window.marked.parse(processed.text);
+        for (const [placeholder, batch] of processed.batchHtml) {
+            html = html.split(placeholder).join(batch);
+        }
+        return html;
     }
 
     // --- End: Ported functions ---
@@ -917,11 +1030,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         animeJsPatterns.forEach(pattern => {
             processed = processed.replace(pattern, '../vendor/anime.min.js');
         });
-        
-        // 3. 通用 CDN 域名替换（后备方案）
+
+        // 3. Pixi.js CDN 替换
+        const pixiJsPatterns = [
+            /https?:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/pixi\.js\/[^'"`);\s]*/gi,
+            /https?:\/\/cdn\.jsdelivr\.net\/npm\/pixi\.js[@\/][^'"`);\s]*/gi,
+            /https?:\/\/unpkg\.com\/pixi\.js[@\/][^'"`);\s]*/gi,
+        ];
+
+        pixiJsPatterns.forEach(pattern => {
+            processed = processed.replace(pattern, '../vendor/pixi.min.js');
+        });
+
+        // 4. 通用 CDN 域名替换（后备方案）
         const genericCdnPatterns = [
             { pattern: /https?:\/\/[^'"`);\s]*three[^'"`);\s]*\.js/gi, replacement: '../vendor/three.min.js' },
             { pattern: /https?:\/\/[^'"`);\s]*anime[^'"`);\s]*\.js/gi, replacement: '../vendor/anime.min.js' },
+            { pattern: /https?:\/\/[^'"`);\s]*(?:pixi\.js|pixijs|pixi)[^'"`);\s]*\.js/gi, replacement: '../vendor/pixi.min.js' },
         ];
         
         genericCdnPatterns.forEach(({ pattern, replacement }) => {
@@ -941,6 +1066,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const scripts = Array.from(containerElement.querySelectorAll('script'));
         scripts.forEach(oldScript => {
+            if (oldScript.closest('[data-vcp-block-type="tool-batch"], .vcp-tool-result-bubble')) return;
             try {
                 if (oldScript.type && oldScript.type !== 'text/javascript' && oldScript.type !== 'application/javascript') {
                     return;
@@ -1016,29 +1142,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                     newScript.setAttribute(attr.name, attr.value);
                 });
 
-                // 🔥 关键修复：如果有外部库正在加载，等待它们加载完成后再执行内联脚本
-                if (window.__vcpExternalLibsLoading && window.__vcpExternalLibsLoading.length > 0) {
+                // 所有内联脚本统一在局部包装器中执行：
+                // 1. 等待可能异步加载的外部库；
+                // 2. 注入当前阅读内容根节点 container；
+                // 3. 注入全局 Pixi 的局部别名，兼容 AI 常见脚本写法。
+                const hasPendingExternalLibraries =
+                    window.__vcpExternalLibsLoading && window.__vcpExternalLibsLoading.length > 0;
+                if (hasPendingExternalLibraries) {
                     console.log('[TextViewer] ⏳ Waiting for external libraries to load before executing inline script...');
-                    
-                    // 包装内联脚本，等待所有外部库加载完成
-                    const wrappedContent = `
-                        (async function() {
-                            try {
-                                if (window.__vcpExternalLibsLoading) {
-                                    await Promise.all(window.__vcpExternalLibsLoading);
+                }
+
+                const containerSelector = JSON.stringify(`#${scopeId}`);
+                const wrappedContent = `
+                    (async function() {
+                        try {
+                            if (window.__vcpExternalLibsLoading) {
+                                await Promise.all(window.__vcpExternalLibsLoading);
+                                if (${hasPendingExternalLibraries ? 'true' : 'false'}) {
                                     console.log('[TextViewer] ✅ All external libraries loaded, executing inline script.');
                                 }
-                                ${processedContent}
-                            } catch (error) {
-                                console.error('[TextViewer] ❌ Error in wrapped inline script:', error);
                             }
-                        })();
-                    `;
-                    newScript.textContent = wrappedContent;
-                } else {
-                    // 没有外部库需要等待，直接执行
-                    newScript.textContent = processedContent;
-                }
+                            const container = document.querySelector(${containerSelector});
+                            const PIXI = window.PIXI;
+                            ${processedContent}
+                        } catch (error) {
+                            console.error('[TextViewer] ❌ Error in wrapped inline script:', error);
+                        }
+                    })();
+                `;
+                newScript.textContent = wrappedContent;
                 
                 if (oldScript.parentNode) {
                     oldScript.parentNode.replaceChild(newScript, oldScript);
@@ -1053,8 +1185,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Theme Management ---
     function applyTheme(theme) {
-        const currentTheme = theme || 'dark';
+        const currentTheme = theme === 'light' ? 'light' : 'dark';
+
+        /*
+         * 保留阅读器原有的 light-theme 类，同时同步主消息渲染器使用的
+         * data-vcp-theme 契约。工具块、工具结果和日记组件由此直接复用
+         * messageRenderer.css 的同一套深浅主题样式，不再维护分叉皮肤。
+         */
         document.body.classList.toggle('light-theme', currentTheme === 'light');
+        document.body.dataset.vcpTheme = currentTheme;
+
         const highlightThemeStyle = document.getElementById('highlight-theme-style');
         if (highlightThemeStyle) {
             highlightThemeStyle.href = currentTheme === 'light'
@@ -1074,9 +1214,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[TextViewer] viewer API not found. Theme updates will not be received.');
     }
 
-    mermaid.initialize({ startOnLoad: false }); // 初始化 Mermaid，但不自动渲染
+    // Pele 无需初始化；图表在 enhanceRenderedContent 中同步、逐张渲染。
 
     if (window.marked) {
+        applyMarkdownPolicy(window.marked);
         marked.setOptions({
             gfm: true,
             tables: true,
@@ -1275,7 +1416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 acceptNode: (node) => {
                     const parent = node.parentElement;
                     if (!parent) return NodeFilter.FILTER_REJECT;
-                    if (parent.closest('pre, code, script, style, textarea, .custom-quote-light, .custom-quote-dark')) {
+                    if (parent.closest('pre, code, script, style, textarea, .mermaid, .custom-quote-light, .custom-quote-dark')) {
                         return NodeFilter.FILTER_REJECT;
                     }
                     QUOTE_REGEX.lastIndex = 0;
@@ -1366,8 +1507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 originalRawContent = existingTextarea.value; // Get updated raw content
 
                 // Re-render content using the full pipeline
-                const processedContent = preprocessFullContent(originalRawContent, scopeId);
-                const renderedHtml = window.marked.parse(processedContent);
+                const renderedHtml = renderViewerContent(originalRawContent, scopeId);
                 contentDiv.innerHTML = renderedHtml;
                 enhanceRenderedContent(contentDiv); // This already includes syntax highlighting etc.
 
@@ -1472,6 +1612,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // First pass: Separate Mermaid and Draw.io blocks from regular code blocks
         container.querySelectorAll('pre code').forEach((codeBlock) => {
+            if (codeBlock.closest('[data-vcp-block-type="tool-batch"], .vcp-tool-result-bubble')) {
+                window.hljs?.highlightElement(codeBlock);
+                return;
+            }
             const languageClass = Array.from(codeBlock.classList).find(c => c.startsWith('language-'));
             const language = languageClass ? languageClass.replace('language-', '') : '';
             const code = codeBlock.textContent || '';
@@ -1488,29 +1632,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // --- RENDER MERMAID (ENHANCED) ---
-        if (window.mermaid && mermaidBlocksToRender.length > 0) {
-            const elementsToRender = [];
-            mermaidBlocksToRender.forEach(codeBlock => {
-                const preElement = codeBlock.parentElement;
-                const mermaidContainer = document.createElement('div');
-                mermaidContainer.className = 'mermaid';
-                const code = codeBlock.textContent.trim();
-                mermaidContainer.textContent = code;
-                preElement.parentNode.replaceChild(mermaidContainer, preElement);
-                elementsToRender.push(mermaidContainer);
-            });
+        // --- RENDER MERMAID SYNTAX WITH PELE (VIEWER ONLY) ---
+        mermaidBlocksToRender.forEach(codeBlock => {
+            const preElement = codeBlock.parentElement;
+            const diagramContainer = document.createElement('div');
+            diagramContainer.className = 'mermaid pele-diagram';
+            const code = codeBlock.textContent.trim();
+            preElement.parentNode.replaceChild(diagramContainer, preElement);
 
-            if (elementsToRender.length > 0) {
-                mermaid.run({ nodes: elementsToRender }).catch(error => {
-                    console.error("Error rendering Mermaid diagrams:", error);
-                    elementsToRender.forEach(el => {
-                        const originalCode = el.textContent;
-                        el.innerHTML = `<div class="mermaid-error">Mermaid render error: ${error.message}</div><pre>${escapeHtml(originalCode)}</pre>`;
-                    });
-                });
+            try {
+                if (!window.pele || typeof window.pele.render !== 'function') {
+                    throw new Error('本地 Pele 渲染依赖未加载。');
+                }
+                // 限制不可信图表源码大小，避免超大输入阻塞阅读器。
+                if (code.length > 100000) {
+                    throw new Error('图表源码超过 100,000 字符限制。');
+                }
+                const { svg } = window.pele.render(code);
+                diagramContainer.innerHTML = svg;
+            } catch (error) {
+                console.error('[TextViewer] Pele diagram rendering failed:', error);
+                diagramContainer.classList.add('mermaid-error');
+                const message = document.createElement('div');
+                message.textContent = `Pele 图表渲染失败：${error.message || error}`;
+                const source = document.createElement('pre');
+                source.textContent = code;
+                diagramContainer.replaceChildren(message, source);
             }
-        }
+        });
 
         // --- RENDER DRAW.IO ---
         if (window.GraphViewer && drawioBlocksToRender.length > 0) {
@@ -1626,10 +1775,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                         const bodyStyles = document.body.classList.contains('light-theme')
                             ? 'color: #2c3e50; background-color: #ffffff;'
                             : 'color: #abb2bf; background-color: #282c34;';
-                        finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>HTML Preview</title><script src="../vendor/anime.min.js"><\/script><style>body { font-family: sans-serif; padding: 15px; margin: 0; ${bodyStyles} }</style></head><body>${codeContent}</body></html>`;
+                        finalHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>HTML Preview</title><script src="../vendor/anime.min.js"><\/script><script src="../vendor/pixi.min.js"><\/script><script src="../vendor/pixi-unsafe-eval.min.js"><\/script><style>body { font-family: sans-serif; padding: 15px; margin: 0; ${bodyStyles} }</style></head><body>${codeContent}</body></html>`;
                     } else {
-                        // If it's a full document, inject anime.js before the closing </head> tag
-                        finalHtml = finalHtml.replace('</head>', '<script src="../vendor/anime.min.js"><\/script></head>');
+                        // Inject animation runtimes before user HTML executes.
+                        finalHtml = finalHtml.replace('</head>', '<script src="../vendor/anime.min.js"><\/script><script src="../vendor/pixi.min.js"><\/script><script src="../vendor/pixi-unsafe-eval.min.js"><\/script></head>');
                     }
                     // Use srcdoc for better security and reliability
                     iframe.srcdoc = finalHtml;
@@ -1701,6 +1850,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </head>
                         <body>
                             <script src="../vendor/three.min.js"><\/script>
+                            <script src="../vendor/pixi.min.js"><\/script>
+                            <script src="../vendor/pixi-unsafe-eval.min.js"><\/script>
                             <script>
                                 // Defer execution until three.js is loaded
                                 window.addEventListener('load', () => {
@@ -1783,6 +1934,7 @@ ${codeContent}
                         {left: "\\(", right: "\\)", display: false},
                         {left: "\\[", right: "\\]", display: true}
                     ],
+                    ignoredClasses: ['mermaid'],
                     throwOnError: false
                 });
             } catch (e) {
@@ -1866,11 +2018,10 @@ ${codeContent}
                 }
                 originalRawContent = decodedText;
 
-                const processedContent = preprocessFullContent(originalRawContent, scopeId);
-                const renderedHtml = window.marked.parse(processedContent);
+                const renderedHtml = renderViewerContent(originalRawContent, scopeId);
                 contentDiv.innerHTML = renderedHtml;
 
-                // Wait for async enhancements (Mermaid, etc.) AND image loading to complete.
+                // Wait for content enhancements (including synchronous Pele rendering) and images.
                 await enhanceRenderedContent(contentDiv);
                 await waitForImages(contentDiv);
 

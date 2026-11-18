@@ -31,8 +31,9 @@ test('embedded sessions keep child presentation policy independent from main set
         'unmigrated embedded business pages must keep their explicit Classic policy');
 });
 
-test('embedded session manager enforces a bounded native view pool', async () => {
+test('embedded session manager bounds its view pool and preserves the active native view', async () => {
     const originalLoad = Module._load;
+    const nativeCalls = [];
     class FakeWebContents extends EventEmitter {
         constructor() { super(); this.destroyed = false; }
         isDestroyed() { return this.destroyed; }
@@ -47,8 +48,8 @@ test('embedded session manager enforces a bounded native view pool', async () =>
         static instances = [];
         constructor() { this.webContents = new FakeWebContents(); this.visible = false; FakeView.instances.push(this); }
         setBackgroundColor() {}
-        setVisible(value) { this.visible = value; }
-        setBounds() {}
+        setVisible(value) { this.visible = value; nativeCalls.push(['visible', this, value]); }
+        setBounds(bounds) { this.bounds = { ...bounds }; }
     }
     Module._load = function loadWithElectronMock(request, parent, isMain) {
         if (request === 'electron') return {
@@ -64,11 +65,16 @@ test('embedded session manager enforces a bounded native view pool', async () =>
     let manager;
     let mainWindow;
     try {
+        let contentBounds = { width: 1200, height: 900 };
         mainWindow = new EventEmitter();
         mainWindow.isDestroyed = () => false;
-        mainWindow.getContentBounds = () => ({ width: 1200, height: 900 });
+        mainWindow.getContentBounds = () => ({ ...contentBounds });
         mainWindow.webContents = new FakeWebContents();
-        mainWindow.contentView = { addChildView() {}, removeChildView() {} };
+        mainWindow.webContents.getZoomFactor = () => 1.25;
+        mainWindow.contentView = {
+            addChildView(view) { nativeCalls.push(['add', view]); },
+            removeChildView(view) { nativeCalls.push(['remove', view]); },
+        };
         const { createEmbeddedAppSessionManager, MAX_EMBEDDED_SESSIONS } = require(modulePath);
         const powerMonitor = new EventEmitter();
         manager = createEmbeddedAppSessionManager({
@@ -90,6 +96,26 @@ test('embedded session manager enforces a bounded native view pool', async () =>
         assert.equal((await manager.create(actions[0])).reused, true);
         assert.equal(manager.activate(actions[0]).success, true);
         assert.equal(FakeView.instances[0].visible, true);
+        nativeCalls.length = 0;
+        assert.equal(manager.activate(actions[0]).success, true);
+        assert.deepEqual(nativeCalls.filter(([, view]) => view === FakeView.instances[0]), [
+            ['visible', FakeView.instances[0], true],
+        ], 'repeated activation must neither hide nor detach/re-add the target view');
+        assert.ok(FakeView.instances.slice(1).every(view => view.visible === false));
+        nativeCalls.length = 0;
+        assert.equal(manager.activate(actions[1]).success, true);
+        assert.equal(FakeView.instances[0].visible, false);
+        assert.deepEqual(nativeCalls.filter(([, view]) => view === FakeView.instances[1]), [
+            ['remove', FakeView.instances[1]],
+            ['add', FakeView.instances[1]],
+            ['visible', FakeView.instances[1], true],
+        ], 'switching sessions must reorder the new target without first hiding it');
+        assert.equal(manager.activate(actions[0]).success, true);
+        assert.equal(manager.setBounds(actions[0], { x: 0, y: 35.2, width: 960, height: 684.8 }).success, true);
+        assert.deepEqual(FakeView.instances[0].bounds, { x: 0, y: 44, width: 1200, height: 856 });
+        contentBounds = { width: 1600, height: 1000 };
+        mainWindow.emit('resize');
+        assert.deepEqual(FakeView.instances[0].bounds, { x: 0, y: 44, width: 1600, height: 956 });
         powerMonitor.emit('suspend');
         assert.equal(FakeView.instances[0].visible, false);
         powerMonitor.emit('resume');

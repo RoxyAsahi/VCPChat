@@ -9,6 +9,7 @@ import { createStreamProjection } from '../modules/renderer/streamManager.js';
 import { createStreamTransientHistory } from '../modules/chat/streamTransientHistory.js';
 import { createTtsSurfaceOwner } from '../modules/renderer/ttsSurfaceOwner.js';
 import { createSingleChatRequestOrchestrator } from '../modules/chat/singleChatRequestOrchestrator.js';
+import { createStreamSpeechOwner } from '../modules/renderer/streamSpeechOwner.js';
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -26,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const micIcon = document.getElementById('mic-icon');
     let historyMutationAuthority = null;
     let ttsSurfaceOwner = null;
+    let closing = false;
+    let sendStarting = false;
 
     // Detect user gestures to unlock the shared Web Audio playback surface.
     function detectUserGesture() {
@@ -68,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     closeBtn.addEventListener('click', async () => {
         closeBtn.disabled = true;
+        closing = true;
+        window.electronAPI.voiceChatSessionReady?.(false);
         try {
             if (activeStreamingMessageId) {
                 await window.electronAPI.interruptVcpRequest?.({ messageId: activeStreamingMessageId });
@@ -75,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await saveVoiceChatToHistory();
         } finally {
+            disposeLocalHold();
             await ttsSurfaceOwner?.dispose();
             ttsSurfaceOwner = null;
             await streamRuntime?.dispose();
@@ -171,11 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    sendMessageBtn.addEventListener('click', () => sendMessage(messageInput.value));
+    const sendComposer = () => {
+        if (!messageInput.value.trim()) return;
+        sendMessage(messageInput.value).catch(error => console.warn('[VoiceChat]', error.message));
+    };
+    sendMessageBtn.addEventListener('click', sendComposer);
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage(messageInput.value);
+            sendComposer();
         }
     });
     toggleInputModeBtn.disabled = true;
@@ -207,9 +217,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function getVoiceRuntimeSettings(settings = {}) {
         return {
             voiceMode: settings.voiceMode === 'network' ? 'network' : 'local',
-            voiceInputMode: ['windows_voice_typing', 'right_alt_hold'].includes(settings.voiceInputMode)
+            voiceInputMode: ['windows_voice_typing', 'right_alt_hold', 'local_sensevoice'].includes(settings.voiceInputMode)
                 ? settings.voiceInputMode
                 : 'windows_voice_typing',
+            localSttLanguage: ['auto', 'zh', 'en', 'yue', 'ja', 'ko'].includes(settings.localSttLanguage)
+                ? settings.localSttLanguage
+                : 'auto',
             voiceInputShortcut: settings.voiceInputShortcut || 'F7',
             voiceNetworkSettings: settings.voiceNetworkSettings || { providerUrl: '', providerKey: '' },
             voiceLocalSettings: settings.voiceLocalSettings || { sovitsUrl: '', sovitsKey: '' }
@@ -220,11 +233,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return runtimeSettings.voiceMode === 'network' ? '网络语音模式' : '本地语音模式';
     }
 
+    function isLocalSttMode() {
+        return globalSettings.voiceInputMode === 'local_sensevoice';
+    }
+
+    function getIdlePlaceholder() {
+        return isLocalSttMode()
+            ? `按住 ${globalSettings.voiceInputShortcut || 'F7'} 说话，松开后本地识别并发送...`
+            : '输入消息或使用全局语音快捷键...';
+    }
+
+    // 主界面切换语音输入模式后，主进程会重新配置快捷键并广播注册状态；这里据此重载设置
+    async function refreshVoiceRuntimeSettings() {
+        if (!agentId) return;
+        try {
+            const latest = await window.electronAPI.loadSettings();
+            globalSettings = { ...latest, ...getVoiceRuntimeSettings(latest) };
+            if (agentConfig) {
+                agentNameSpan.textContent = `${agentConfig.name} - ${getVoiceModeLabel(globalSettings)}`;
+            }
+            if (inputMode === 'text') {
+                messageInput.placeholder = getIdlePlaceholder();
+            }
+        } catch (error) {
+            console.warn('[VoiceChat] Failed to refresh voice settings:', error);
+        }
+    }
+
     waitForElectronAPI(() => {
         window.electronAPI.onVoiceChatData(async (data) => {
         console.log('Received voice chat data:', data);
         const { agentId: receivedAgentId, theme } = data;
-        
+
         agentId = receivedAgentId;
         globalSettings = await window.electronAPI.loadSettings();
         globalSettings = {
@@ -255,10 +295,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     error: `快捷键 ${globalSettings.voiceInputShortcut} 未注册`,
                 }
         );
+        if (nativeStatus?.shortcut?.registered && isLocalSttMode()) {
+            renderLocalHoldReady();
+        }
         agentAvatarImg.src = agentConfig.avatarUrl || '../assets/default_avatar.png';
         agentNameSpan.textContent = `${agentConfig.name} - ${getVoiceModeLabel(globalSettings)}`;
+        messageInput.placeholder = getIdlePlaceholder();
 
+        if (closing) return;
         initializeRenderer();
+        window.electronAPI.voiceChatSessionReady?.(true);
         });
     });
 
@@ -372,7 +418,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             ttsSurfaceOwner.mount();
 
+            const speech = createStreamSpeechOwner({
+                document,
+                render: source => markedInstance.parse(source),
+                speak: (text, messageId, options) => playTTS(text, messageId, options),
+                stop: () => window.electronAPI.sovitsStop?.(),
+                resetPlayback: () => ttsSurfaceOwner?.stopPlayback(),
+                subscribeStop: callback => window.electronAPI.onStopTtsAudio(callback),
+            });
             streamRuntime = createWindowStreamRuntime({
+                speech,
                 root: chatMessagesDiv,
                 streamProjection: streamManager,
                 historyPersistence,
@@ -384,10 +439,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }),
                 contextFilter: context => !!context && context.topicId === getVoiceTopicId() && context.agentId === agentId,
                 dispatchTerminal: detail => window.dispatchEvent(new CustomEvent('vcp-chat-stream-terminal', { detail })),
-                afterPersist: ({ terminal, finalized }) => {
-                    if (terminal.kind !== 'completed') return;
-                    if (finalized?.messageId) setTimeout(() => extractTextAndPlayTTS(finalized.messageId, 0), 100);
-                },
                 onSettled: restoreComposerAfterStream,
             });
             console.log('[VoiceChat] Shared messageRenderer initialized.');
@@ -401,12 +452,16 @@ document.addEventListener('DOMContentLoaded', () => {
         keyboardIcon.style.display = active ? 'none' : 'block';
         micIcon.style.display = active ? 'block' : 'none';
         toggleInputModeBtn.setAttribute('aria-pressed', String(active));
-        const voiceInputModeLabel = globalSettings.voiceInputMode === 'right_alt_hold'
-            ? '右 Alt'
-            : 'Win+H';
-        messageInput.placeholder = active
-            ? `正在使用 ${voiceInputModeLabel} 系统听写...`
-            : '输入消息或使用全局语音快捷键...';
+        let activePlaceholder;
+        if (isLocalSttMode()) {
+            activePlaceholder = '正在录音，松开快捷键后本地识别...';
+        } else {
+            const voiceInputModeLabel = globalSettings.voiceInputMode === 'right_alt_hold'
+                ? '右 Alt'
+                : 'Win+H';
+            activePlaceholder = `正在使用 ${voiceInputModeLabel} 系统听写...`;
+        }
+        messageInput.placeholder = active ? activePlaceholder : getIdlePlaceholder();
     }
 
     function renderVoiceInputShortcutStatus(status, state = null) {
@@ -431,7 +486,165 @@ document.addEventListener('DOMContentLoaded', () => {
         voiceInputShortcutStatus.title = error;
     }
 
+    // --- 本地 SenseVoice 按住说话 ---
+    // 主进程在 local_sensevoice 模式下把快捷键的物理按下/松开原样转发过来；
+    // 小窗自行录音，松开后交给本地识别子进程，结果直接发送。
+    const LOCAL_HOLD_MIN_MS = 300;
+    const LOCAL_HOLD_MAX_SECONDS = 180;
+    const localHold = {
+        recorder: null,
+        startPromise: null,
+        startedAt: 0,
+        maxTimer: null,
+        busy: false,
+    };
+
+    function isLocalHoldInProgress() {
+        return Boolean(localHold.startPromise || localHold.busy);
+    }
+
+    function getLocalHoldRecorder() {
+        if (!localHold.recorder) {
+            const RecorderClass = window.VcpVoice?.AudioRecorder;
+            if (RecorderClass) localHold.recorder = new RecorderClass();
+        }
+        return localHold.recorder;
+    }
+
+    function renderLocalHoldStatus(text, state) {
+        if (!voiceInputShortcutStatus) return;
+        voiceInputShortcutStatus.classList.remove('is-ready', 'is-active', 'is-error');
+        voiceInputShortcutStatus.classList.add(`is-${state}`);
+        voiceInputShortcutStatus.textContent = text;
+        voiceInputShortcutStatus.title = text;
+    }
+
+    function renderLocalHoldReady() {
+        renderLocalHoldStatus(`${globalSettings.voiceInputShortcut || 'F7'} 按住说话`, 'ready');
+    }
+
+    function submitVoiceText(text) {
+        // 上一轮回复仍在流式输出：不并发发送，把识别结果留在输入框里
+        if (activeStreamingMessageId) {
+            messageInput.value = messageInput.value ? `${messageInput.value} ${text}` : text;
+            return;
+        }
+        messageInput.value = text;
+        sendMessage(text).catch(error => {
+            console.error('[VoiceChat] Failed to send captured voice text:', error);
+            messageInput.disabled = false;
+            sendMessageBtn.disabled = false;
+            messageInput.value = text;
+        });
+    }
+
+    function beginLocalHold() {
+        if (isLocalHoldInProgress() || !agentConfig) return;
+        const recorder = getLocalHoldRecorder();
+        if (!recorder) {
+            renderLocalHoldStatus('录音组件不可用', 'error');
+            return;
+        }
+
+        // 按住说话即打断正在播放的朗读，也避免把 TTS 录进去
+        window.electronAPI.sovitsStop?.();
+        localHold.startedAt = Date.now();
+        applyNativeCapturePresentation(true);
+        renderLocalHoldStatus('正在录音，松开结束', 'active');
+        localHold.startPromise = recorder.start().then(() => true, error => {
+            console.error('[VoiceChat] Local hold recording failed to start:', error);
+            const isPermission = error?.name === 'NotAllowedError' || /permission/i.test(error?.message || '');
+            renderLocalHoldStatus(isPermission ? '麦克风权限未开启' : '麦克风启动失败', 'error');
+            return false;
+        });
+        clearTimeout(localHold.maxTimer);
+        localHold.maxTimer = setTimeout(() => {
+            endLocalHold().catch(() => {});
+        }, LOCAL_HOLD_MAX_SECONDS * 1000);
+    }
+
+    async function endLocalHold() {
+        const startPromise = localHold.startPromise;
+        if (!startPromise) return;
+        localHold.startPromise = null;
+        clearTimeout(localHold.maxTimer);
+        localHold.maxTimer = null;
+        localHold.busy = true;
+
+        try {
+            // 松开可能早于麦克风就绪，先等启动完成再停止
+            const started = await startPromise;
+            if (!started) return;
+            const heldMs = Date.now() - localHold.startedAt;
+            const wavBlob = await localHold.recorder.stop({
+                speech: true,
+                maxSeconds: LOCAL_HOLD_MAX_SECONDS,
+            });
+            if (heldMs < LOCAL_HOLD_MIN_MS || !wavBlob) {
+                renderLocalHoldStatus('按住时间太短', 'error');
+                return;
+            }
+
+            renderLocalHoldStatus('正在本地识别...', 'active');
+            messageInput.placeholder = '正在本地识别...';
+            const sttStatus = await window.electronAPI.getLocalSttStatus?.();
+            if (sttStatus?.phase !== 'ready') {
+                renderLocalHoldStatus('本地语音资源包未安装', 'error');
+                return;
+            }
+            const wav = new Uint8Array(await wavBlob.arrayBuffer());
+            const result = await window.electronAPI.transcribeLocalStt({
+                wav,
+                language: globalSettings.localSttLanguage || 'auto',
+            });
+            if (!result?.success) {
+                renderLocalHoldStatus(`识别失败：${result?.error || '未知错误'}`, 'error');
+                return;
+            }
+            const text = String(result.text || '').trim();
+            if (!text) {
+                renderLocalHoldStatus('未识别到语音', 'error');
+                return;
+            }
+            renderLocalHoldReady();
+            submitVoiceText(text);
+        } catch (error) {
+            console.error('[VoiceChat] Local hold transcription failed:', error);
+            renderLocalHoldStatus('本地识别失败，请重试', 'error');
+        } finally {
+            localHold.busy = false;
+            applyNativeCapturePresentation(false);
+        }
+    }
+
+    function disposeLocalHold() {
+        clearTimeout(localHold.maxTimer);
+        localHold.maxTimer = null;
+        localHold.startPromise = null;
+        try {
+            localHold.recorder?.dispose();
+        } catch (_) {}
+        localHold.recorder = null;
+    }
+
+    window.electronAPI.onVoiceInputLocalHold?.((payload) => {
+        if (payload?.phase === 'down') {
+            beginLocalHold();
+        } else if (payload?.phase === 'up') {
+            endLocalHold().catch(() => {});
+        }
+    });
+
     window.electronAPI.onVoiceInputShortcutStatus?.((status) => {
+        // 注册类状态（不带 active）意味着快捷键被重新配置，可能是主界面切换了语音输入模式
+        if (status && !('active' in status)) {
+            refreshVoiceRuntimeSettings().then(() => {
+                if (status.success && isLocalSttMode() && !isLocalHoldInProgress()) {
+                    renderLocalHoldReady();
+                }
+            });
+        }
+        if (isLocalHoldInProgress()) return;
         applyNativeCapturePresentation(status?.active === true);
         renderVoiceInputShortcutStatus(status, status?.active === true ? 'active' : null);
         if (status?.success) return;
@@ -446,23 +659,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = String(payload?.text || '').trim();
         applyNativeCapturePresentation(false);
         if (!text) return;
-        messageInput.value = text;
-        sendMessage(text).catch(error => {
-            console.error('[VoiceChat] Failed to send captured voice text:', error);
-            messageInput.disabled = false;
-            sendMessageBtn.disabled = false;
-            messageInput.value = text;
-        });
+        submitVoiceText(text);
     });
 
-    const sendMessage = async (messageContent) => {
-        if (!messageContent.trim() || !agentConfig || !messageRenderer) return;
+    const sendMessage = async (messageContent, options = {}) => {
+        if (closing || !streamRuntime || !agentConfig) throw new Error('语音会话尚未就绪或正在关闭');
+        if (sendStarting || activeStreamingMessageId) throw new Error('语音会话上一条还在回复中');
+        if (!messageContent.trim()) throw new Error('没有内容');
+        sendStarting = true;
+        try {
+            return await performSendMessage(messageContent, options);
+        } catch (error) {
+            restoreComposerAfterStream();
+            throw error;
+        } finally {
+            sendStarting = false;
+        }
+    };
 
+    const performSendMessage = async (messageContent, { onAccepted = () => {}, deadline, preserveDraft = false } = {}) => {
         const userMessage = { role: 'user', content: messageContent, timestamp: Date.now(), id: `user_msg_${Date.now()}` };
         await messageRenderer.renderMessage(userMessage);
+        if (closing || (Number.isFinite(deadline) && Date.now() > deadline)) {
+            throw new Error('语音会话已关闭或消息投递已过期');
+        }
         currentChatHistory.push(userMessage);
+        // 历史接收后立即回执，不等模型首 token；后续失败也不能让桌宠重复投递。
+        onAccepted();
 
-        messageInput.value = '';
+        if (!preserveDraft) messageInput.value = '';
         messageInput.disabled = true;
         sendMessageBtn.disabled = true;
 
@@ -508,95 +733,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const disposePetSend = window.electronAPI.onVoiceChatDeskPetSend?.(async (request = {}) => {
+        const { requestId, text, deadline } = request;
+        const reply = result => window.electronAPI.voiceChatDeskPetResult?.({ requestId, ...result });
+        if (typeof requestId !== 'string' || typeof text !== 'string') return;
+        if (!Number.isFinite(deadline) || Date.now() > deadline) {
+            reply({ success: false, error: '消息投递已过期，请重新发送' });
+            return;
+        }
+        let accepted = false;
+        try {
+            await sendMessage(text, { deadline, preserveDraft: true, onAccepted: () => { accepted = true; reply({ success: true }); } });
+        } catch (error) {
+            if (!accepted) reply({ success: false, error: error.message });
+            console.error('[VoiceChat] 桌宠消息发送失败：', error);
+        }
+    });
+    const disposePetInterrupt = window.electronAPI.onVoiceChatDeskPetInterrupt?.(payload => {
+        interruptActiveVoiceRequest(payload?.messageId).catch(error => console.warn('[VoiceChat]', error));
+    });
+    window.addEventListener('pagehide', () => {
+        closing = true;
+        window.electronAPI.voiceChatSessionReady?.(false);
+        disposePetSend?.();
+        disposePetInterrupt?.();
+    }, { once: true });
+
     window.electronAPI.onVCPStreamEvent((eventData) => {
         if (!streamRuntime || !isEventForCurrentVoiceSession(eventData)) return;
         streamRuntime.accept(eventData);
     });
-    
-    function extractSpeakableTextFallback(contentElement) {
-        if (!contentElement) return '';
 
-        const contentClone = contentElement.cloneNode(true);
-        contentClone.querySelectorAll(
-            '[data-vcp-block-type], .vcp-tool-use-bubble, .vcp-tool-result-bubble, .vcp-tool-call-summary-bubble, .vcp-flowlock-bubble, .maid-diary-bubble, .maid-diary-update-bubble, .vcp-role-divider, .vcp-thought-chain-bubble, .highlighted-tag, .highlighted-alert-tag, style, script'
-        ).forEach(el => el.remove());
-
-        return (contentClone.innerText || contentClone.textContent || '')
-            // 最终 DOM 理论上已将完整工具协议转换为气泡；以下规则覆盖异常
-            // 历史 DOM 或边界粘连后仍残留为纯文本的完整协议块。
-            .replace(/<<<\[TOOL_REQUEST\]>>>[\s\S]*?<{2,4}\[END_TOOL_REQUEST\]>{2,4}/gi, '')
-            .replace(/\[\[VCP调用结果信息汇总:[\s\S]*?VCP调用结果结束\]\]/gi, '')
-            .replace(/\[本轮工具调用摘要:\][\s\S]*?\[本轮工具调用摘要结束\]/gi, '')
-            .replace(/<<<\[(?:END_)?ROLE_DIVIDE_(?:SYSTEM|ASSISTANT|USER)\]>>>/gi, '')
-            .replace(/@!?[\u4e00-\u9fa5A-Za-z0-9_]+/g, '')
-            .replace(/[ \t]+\n/g, '\n')
-            .replace(/[ \t]{2,}/g, ' ')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-    }
-
-    // 新增：智能文本提取和TTS触发函数，包含重试机制
-    function extractTextAndPlayTTS(messageId, retryCount = 0) {
-        const maxRetries = 10;
-        const retryDelay = 100;
-
-        const messageElement = document.getElementById(`message-item-${messageId}`);
-        let textToSpeak = '';
-
-        if (messageElement) {
-            const contentElement = messageElement.querySelector('.md-content');
-            if (contentElement && messageRenderer?.extractSpeakableTextFromContentElement) {
-                textToSpeak = messageRenderer.extractSpeakableTextFromContentElement(contentElement);
-            } else if (contentElement) {
-                textToSpeak = extractSpeakableTextFallback(contentElement);
-            } else {
-                textToSpeak = messageElement.textContent || messageElement.innerText;
-            }
-            console.log(`[VoiceChat] 提取到文本长度: ${textToSpeak.length}`);
-            console.log(`[VoiceChat] 文本内容: ${textToSpeak.substring(0, 50)}...`);
-
-            // 如果提取到文本，调用TTS
-            if (textToSpeak.trim().length > 0) {
-                console.log(`[VoiceChat] 调用playTTS，文本长度: ${textToSpeak.trim().length}`);
-                playTTS(textToSpeak.trim(), messageId);
-            } else {
-                console.warn(`[VoiceChat] 警告：消息内容为空，跳过TTS`);
-            }
-        } else {
-            if (retryCount < maxRetries) {
-                console.log(`[VoiceChat] 消息元素未找到，${retryDelay}ms后重试 (${retryCount + 1}/${maxRetries}): message-item-${messageId}`);
-                setTimeout(() => {
-                    extractTextAndPlayTTS(messageId, retryCount + 1);
-                }, retryDelay);
-            } else {
-                console.error(`[VoiceChat] 错误：${maxRetries}次重试后仍未找到消息元素 message-item-${messageId}`);
-
-                // 最后尝试：直接从DOM中查找
-                const allMessageItems = document.querySelectorAll('.message-item');
-                console.log(`[VoiceChat] 找到 ${allMessageItems.length} 个消息元素，尝试匹配...`);
-
-                allMessageItems.forEach(item => {
-                    const idAttr = item.getAttribute('data-message-id');
-                    if (idAttr && idAttr.includes(messageId)) {
-                        console.log(`[VoiceChat] 找到备用匹配元素: ${idAttr}`);
-                        const contentElement = item.querySelector('.md-content');
-                        if (contentElement) {
-                            const backupText = messageRenderer?.extractSpeakableTextFromContentElement
-                                ? messageRenderer.extractSpeakableTextFromContentElement(contentElement)
-                                : extractSpeakableTextFallback(contentElement);
-                            if (backupText.trim().length > 0) {
-                                console.log(`[VoiceChat] 使用备用元素提取到文本长度: ${backupText.trim().length}`);
-                                playTTS(backupText.trim(), messageId);
-                                return;
-                            }
-                        }
-                    }
-                });
-            }
-        }
-    }
-
-    function playTTS(text, msgId) {
+    function playTTS(text, msgId, streamOptions = {}) {
         if (!text) return;
 
         if (!agentConfig.ttsVoicePrimary || agentConfig.ttsVoicePrimary === "") {
@@ -610,6 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             localSovitsUrl: globalSettings.voiceLocalSettings?.sovitsUrl || ''
         });
         window.electronAPI.sovitsSpeak({
+            ...streamOptions,
             text: text,
             voice: agentConfig.ttsVoicePrimary,
             speed: agentConfig.ttsSpeed,

@@ -49,6 +49,24 @@ box(c,49,76-b,2,12,1,'#b4a1ff');box(c,49,74-b,13,3,1,'#b4a1ff');
 line(c,[[42,105],[80,105],[76,101]],'#a6e8e4',2);
 line(c,[[86,20],[48,20],[52,24]],'#b4baff',2);
 circle(c,44+(Math.sin(t*2)*.5+.5)*35,105,2.5,'#eafffb');
+}else if(type==='chart'){
+// A mint analytics card: breathing columns and a travelling trend highlight.
+box(c,20,25,88,79,14,gradient(c,20,25,108,104,['#c4f7ec','#539eaa']));
+c.shadowBlur=0;box(c,25,30,78,68,10,'#203f50');
+for(let i=0;i<3;i++)line(c,[[33,49+i*18],[96,49+i*18]],'#b5eee51c',1);
+const points=[];
+for(let i=0;i<4;i++){
+const x=35+i*17,h=[21,35,29,49][i]+Math.sin(t*3-i*.8)*e*5;
+box(c,x,91-h,10,h,3,gradient(c,x,91-h,x,91,[i%2?'#9acbff':'#8aedd4',i%2?'#527cb8':'#3d9e99']));
+points.push([x+5,83-h]);
+}
+line(c,points,'#ffe2a5',2.5);
+points.forEach(p=>{circle(c,...p,3,'#fff0c9');circle(c,...p,1.3,'#c79259')});
+const phase=(Math.sin(t*1.8)*.5+.5)*(points.length-1),index=Math.min(points.length-2,Math.floor(phase)),mix=phase-index;
+const px=points[index][0]+(points[index+1][0]-points[index][0])*mix,py=points[index][1]+(points[index+1][1]-points[index][1])*mix;
+c.globalAlpha=e;circle(c,px,py,5,'#fff2c940');circle(c,px,py,2.5,'#fff9e9');c.globalAlpha=1;
+line(c,[[32,39],[32,92],[97,92]],'#b3e4e880',1.5);
+box(c,37,104,54,3,1.5,'#9bd9ce');
 }else if(type==='memo'){
 circle(c,64,65,31,gradient(c,40,35,87,95,['#f7caff','#9451cd','#55379b']));c.shadowBlur=0;
 for(let i=0;i<3;i++){c.save();c.translate(64,65);c.rotate(i*1.04+t*.12*e);c.beginPath();c.ellipse(0,0,44,19,0,0,7);c.strokeStyle=['#e9b8ff','#c199ff','#ffc5e4'][i];c.lineWidth=2;c.stroke();circle(c,44*Math.cos(t*.7+i*2),19*Math.sin(t*.7+i*2),4,'#fff0ff');c.restore()}
@@ -140,6 +158,38 @@ box(c,24,39,81,62,11,gradient(c,24,39,105,101,['#edbd84','#b66e4e']));c.shadowBl
 box(c,24,40,81,22,9,'#f8d6a3');line(c,[[29,65],[100,65]],'#995c43',2);
 box(c,57,56,15,19,4,'#ffedce');
 c.save();c.translate(87,73);c.rotate(.3+b*.05);line(c,[[0,17],[0,-10]],'#d7e8e8',7);line(c,[[-6,-18],[-6,-10],[6,-10],[6,-18]],'#d7e8e8',4);c.restore();
+}else if(type==='forge'){
+// Ember forge card: a branch graph flowing into the trunk, pulsing head node and rising sparks.
+box(c,20,26,88,76,14,gradient(c,20,26,108,102,['#ffc99c','#c4583f']));
+c.shadowBlur=0;box(c,25,31,78,66,10,'#2f2128');
+line(c,[[44,43],[44,86]],'#ffd2a3',3);
+const branch=()=>{c.beginPath();c.moveTo(82,51);c.bezierCurveTo(82,68,64,74,44,76)};
+branch();c.strokeStyle='#ffab77';c.lineWidth=3;c.lineCap='round';c.stroke();
+branch();c.strokeStyle='#fff1d8';c.lineWidth=1.4;c.setLineDash([3,7]);c.lineDashOffset=-t*14;c.stroke();c.setLineDash([]);
+circle(c,44,43,6,'#ffe2bb');circle(c,44,43,2.4,'#8f4a3a');
+circle(c,44,86,6,'#ffe2bb');circle(c,44,86,2.4,'#8f4a3a');
+const pulse=Math.sin(t*4)*e*1.6;
+circle(c,82,51,9+pulse,'#ff9b6a40');circle(c,82,51,6,'#ffc58f');circle(c,82,51,2.4,'#fff5e4');
+box(c,60,80,32,6,3,'#eaa57c');box(c,68,86,16,5,1,'#b86b53');box(c,63,91,26,4,2,'#eaa57c');
+c.globalAlpha=1;
+for(let i=0;i<4;i++){const p=(t*.8+i*.25)%1;c.globalAlpha=e*(1-p);circle(c,82+Math.sin(i*2.3+t*2)*6,43-p*22,1.7,'#ffe6a8')}
+c.globalAlpha=1;
+}else if(type==='game'){
+// Mint arcade controller: floating shell, responsive stick and softly pulsing buttons.
+c.save();c.translate(64,66);c.rotate(-.08+b*.025);
+box(c,-40,-21,80,43,18,gradient(c,-40,-21,40,22,['#c6fae8','#61a99c']));
+box(c,-39,5,24,29,10,'#72b7a5');box(c,15,5,24,29,10,'#72b7a5');
+c.shadowBlur=0;
+box(c,-36,-17,72,34,15,gradient(c,-36,-17,36,17,['#e4fff0','#92d4bd']));
+const sx=-22+s.x*e*2,sy=-1+s.y*e*2;
+box(c,sx-4,sy-11,8,22,2,'#294d55');box(c,sx-11,sy-4,22,8,2,'#294d55');
+circle(c,18,-6,5,'#ec8fa9');circle(c,28,3,5,'#e9c97d');
+circle(c,18,-6,2+Math.sin(t*4)*e*.5,'#ffe3eb');
+circle(c,28,3,2+Math.cos(t*4)*e*.5,'#fff3c5');
+box(c,-5,4,10,3,1.5,'#518b81');circle(c,0,-6,2.5,'#55b8ac');
+c.restore();
+line(c,[[58,40],[58,30],[70,30]],'#96daca',3);
+circle(c,76,28,3,'#edbbdd');
 }else if(type==='plugin'||type==='widgets'){
 const colors=type==='plugin'?['#b5a0f3','#89d9db','#eeb4d2','#f0d099']:['#99c8fa','#cab2f1','#9fe0c3','#ffd2ab'];
 for(let i=0;i<4;i++){const x=29+(i%2)*38,y=28+Math.floor(i/2)*39+(i===3?b*2:0);box(c,x,y,33,33,9,gradient(c,x,y,x+33,y+33,[colors[i],'#817caf']));c.shadowBlur=0;if(type==='plugin'){circle(c,x+16,y,5,colors[i]);circle(c,x+33,y+16,5,colors[i])}else{box(c,x+8,y+9,17,3,1,'#ffffffa0');box(c,x+8,y+16,11,3,1,'#ffffff70')}}

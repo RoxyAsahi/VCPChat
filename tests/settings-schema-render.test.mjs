@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import { quickActionsSection } from '../modules/settings/schema/quick-actions.js';
 import { userIdentitySection } from '../modules/settings/schema/user-identity.js';
 import { serverConnectionSection } from '../modules/settings/schema/server-connection.js';
+import { jevServiceSection } from '../modules/settings/schema/jev-service.js';
 import { renderSettingsSection } from '../modules/settings/schema/render-settings.js';
 import { selectionAssistantSection } from '../modules/settings/schema/selection-assistant.js';
 import { voiceSettingsSection } from '../modules/settings/schema/voice-settings.js';
@@ -41,10 +42,10 @@ function renderIntoForm(sectionDescriptor) {
     return { form, host };
 }
 
-test('八分区全部登记且 schema 编译无异常', () => {
+test('九分区全部登记且 schema 编译无异常', () => {
     const keys = schemaSurfaceSections().map(s => s.key);
-    assert.deepEqual(keys, ['user-identity', 'server-connection', 'appearance-settings', 'render-settings',
-        'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions']);
+    assert.deepEqual(keys, ['user-identity', 'server-connection', 'jev-service', 'appearance-settings', 'render-settings',
+        'selection-assistant', 'voice-settings', 'advanced-features', 'workspace-management', 'quick-actions']);
     for (const sectionDescriptor of schemaSurfaceSections()) {
         const nodes = renderSchemaSection(sectionDescriptor, doc);
         assert.ok(nodes.length > 1, `${sectionDescriptor.key} 应编译出标题与行`);
@@ -70,10 +71,12 @@ test('quick-actions schema 编译产物保留全部业务锚点与行为标记',
         'enableMiddleClickQuickAction && enableMiddleClickAdvanced');
     const textarea = form.querySelector('#continueWritingPrompt');
     assert.equal(textarea.tagName, 'TEXTAREA');
-    assert.equal(textarea.getAttribute('placeholder'), '默认: 请继续');
-    assert.equal(textarea.getAttribute('rows'), '1');
+    assert.equal(textarea.getAttribute('placeholder'), '默认: [系统提示:] 请继续。若当前已无值得继续推进的任务或话题，请输出 [[Flowlock::Stop]] 关闭心流锁心跳。');
+    assert.equal(textarea.getAttribute('rows'), '2');
     assert.equal(textarea.getAttribute('spellcheck'), 'false');
-    assert.equal(textarea.textContent, '请继续');
+    assert.equal(textarea.textContent, '[系统提示:] 请继续。若当前已无值得继续推进的任务或话题，请输出 [[Flowlock::Stop]] 关闭心流锁心跳。');
+    assert.equal(form.querySelector('label[for="continueWritingPrompt"]').textContent, '心流锁续写默认提示词');
+    assert.match(textarea.closest('.vcp-uiux-general-item').textContent, /点击话题顶部 Agent 名称可自动进入或退出心流锁/);
     const delay = form.querySelector('#flowlockContinueDelay');
     assert.equal(delay.getAttribute('min'), '1');
     assert.equal(delay.getAttribute('max'), '300');
@@ -142,6 +145,28 @@ test('server-connection：卡片结构与动态容器锚点', () => {
     assert.equal(form.querySelector('#vcpApiKey').getAttribute('type'), 'password');
     assert.equal(form.querySelector('#addNetworkPathBtn').getAttribute('data-vcp-style'), '6');
     assert.ok(form.querySelector('#addNetworkPathBtn').classList.contains('vcp-settings-card-add-row'));
+});
+
+test('jev-service：全局服务配置控件、默认值与敏感字段形态', () => {
+    const { form } = renderIntoForm(jevServiceSection);
+    for (const id of [
+        'jevEnabled', 'jevProvider', 'jevApiUrl', 'jevApiKey', 'jevModel',
+        'jevTimeoutMs', 'jevMaxRetries', 'jevRetryBaseDelayMs', 'jevProxyUrl',
+        'jevHttpReferer', 'jevAppTitle',
+    ]) {
+        assert.ok(form.querySelector(`#${id}`), `missing #${id}`);
+    }
+    assert.equal(form.querySelector('#jevApiKey').type, 'password');
+    assert.equal(form.querySelector('#jevProvider').value, 'typesafe');
+    assert.deepEqual(
+        [...form.querySelector('#jevProvider').options].map(option => option.value),
+        ['typesafe', 'openrouter']
+    );
+    assert.equal(form.querySelector('#jevTimeoutMs').value, '30000');
+    assert.equal(form.querySelector('#jevMaxRetries').value, '2');
+    assert.equal(form.querySelector('#jevRetryBaseDelayMs').value, '500');
+    assert.equal(form.querySelector('#jevAppTitle').placeholder, 'VCPChat');
+    assert.equal(form.querySelectorAll('.vcp-settings-card').length, 3);
 });
 
 test('render-settings：stepper 内联行、预设行、滑杆与自定义行', () => {
@@ -906,7 +931,7 @@ test('store 快照：多类型现值迁移不丢失', () => {
     form.querySelector('#middleClickQuickAction').value = 'regenerate';
     const snapshot = captureSectionValues(form, quickActionsSection);
     host.replaceChildren(...renderSchemaSection(quickActionsSection, doc));
-    assert.equal(form.querySelector('#continueWritingPrompt').value, '请继续', '重渲染后应回到默认值');
+    assert.equal(form.querySelector('#continueWritingPrompt').value, '[系统提示:] 请继续。若当前已无值得继续推进的任务或话题，请输出 [[Flowlock::Stop]] 关闭心流锁心跳。', '重渲染后应回到默认值');
     restoreSectionValues(form, snapshot);
     assert.equal(form.querySelector('#continueWritingPrompt').value, '自定义提示词');
     assert.equal(form.querySelector('#enableMiddleClickQuickAction').checked, true);

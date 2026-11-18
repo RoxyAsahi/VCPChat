@@ -58,6 +58,11 @@ class DistributedServer {
         this.chatDataService = config.chatDataService || null; // Shared VCP-CDS facade owned by Electron.
         this.loomManager = config.loomManager || null; // Shared VCP Loom manager owned by Electron.
         this.scriptoriumAgentControl = config.scriptoriumAgentControl || null;
+        this.pluginAgentOperationService = config.pluginAgentOperationService || null;
+        this.chartService = config.chartService || null;
+        this.gameService = config.gameService || null;
+        this.workspaceService = config.workspaceService || null; // 工作区只读门面（白名单来源）
+        this.onToolResult = typeof config.onToolResult === 'function' ? config.onToolResult : null; // 工具调用成功后的旁路通知，不影响返回结果
         this.ws = null;
         this.app = express(); // 创建 Express 应用
         this.server = http.createServer(this.app); // 创建 HTTP 服务器
@@ -80,6 +85,7 @@ class DistributedServer {
         this.reconnectTimeoutId = null; // To keep track of the reconnect timeout
         this.stopped = false; // Flag to prevent reconnection when stopped manually
         this.stopPromise = null;
+        this.initializePromise = null;
         this.initialConnection = true; // Flag to handle one-time actions on first connect
         this.staticPlaceholderUpdateInterval = null; // 新增：静态占位符更新定时器
         this.musicPlaylistWatcher = null;
@@ -114,7 +120,15 @@ class DistributedServer {
         }
     }
 
-    async initialize() {
+    initialize() {
+        if (!this.initializePromise) {
+            this.initializePromise = this.initializeInBackground();
+        }
+        return this.initializePromise;
+    }
+
+    async initializeInBackground() {
+        if (this.stopped) return;
         console.log(`[${this.serverName}] Initializing...`);
 
         // Load server-specific config
@@ -137,17 +151,25 @@ class DistributedServer {
         // The base path should be relative to this file's location.
         const basePath = path.dirname(require.resolve('./VCPDistributedServer.js'));
         pluginManager.setProjectBasePath(basePath);
-        await pluginManager.loadPlugins();
+        const startupOptions = { shouldStop: () => this.stopped };
+        await pluginManager.loadPlugins(startupOptions);
+        if (this.stopped) return;
 
         // 初始化服务类插件，并将主进程持有的共享服务依赖注入 direct 模块。
         await pluginManager.initializeServices(this.app, null, basePath, {
             chatDataService: this.chatDataService,
             loomManager: this.loomManager,
             scriptoriumAgentControl: this.scriptoriumAgentControl,
-        });
+            pluginAgentOperationService: this.pluginAgentOperationService,
+            chartService: this.chartService,
+            gameService: this.gameService,
+            workspaceService: this.workspaceService,
+        }, startupOptions);
+        if (this.stopped) return;
         this.registerDiagnosticRoutes();
 
-        const address = await this.bindHttpServer(this.port);
+        await this.bindHttpServer(this.port);
+        if (this.stopped) return;
             this.port = this.server.address().port; // 获取实际监听的端口
             console.log(`[${this.serverName}] HTTP server listening on 0.0.0.0:${this.port}`);
 
@@ -665,6 +687,13 @@ class DistributedServer {
                     ? { ..._vcpContext, requestId }
                     : { requestId }
             });
+            if (this.onToolResult) {
+                try {
+                    this.onToolResult(toolName, toolArgs, result);
+                } catch (hookError) {
+                    console.warn(`[${this.serverName}] onToolResult hook failed:`, hookError?.message || hookError);
+                }
+            }
             let finalResult;
 
             // --- Special Handling for MusicController ---
@@ -685,20 +714,25 @@ class DistributedServer {
                     throw new Error(resultFromMain.message);
                 }
                 
-                // For AI, we want a simple, natural language response.
-                let naturalResponse = `指令 '${commandPayload.command}' 已成功执行。`;
-                if (commandPayload.command === 'play' && commandPayload.target) {
-                    naturalResponse = `已为您播放歌曲: ${commandPayload.target}`;
-                } else if (commandPayload.command === 'play') {
-                    naturalResponse = `已恢复播放。`;
-                } else if (commandPayload.command === 'pause') {
-                    naturalResponse = `已暂停播放。`;
-                } else if (commandPayload.command === 'next') {
-                    naturalResponse = `已切换到下一首。`;
-                } else if (commandPayload.command === 'prev') {
-                    naturalResponse = `已切换到上一首。`;
+                if (commandPayload.command === 'getCurrentLyrics') {
+                    // 与 FileOperator 一致，保留标准 result.content 文本块。
+                    finalResult = resultFromMain.result;
+                } else {
+                    // For AI, we want a simple, natural language response.
+                    let naturalResponse = `指令 '${commandPayload.command}' 已成功执行。`;
+                    if (commandPayload.command === 'play' && commandPayload.target) {
+                        naturalResponse = `已为您播放歌曲: ${commandPayload.target}`;
+                    } else if (commandPayload.command === 'play') {
+                        naturalResponse = `已恢复播放。`;
+                    } else if (commandPayload.command === 'pause') {
+                        naturalResponse = `已暂停播放。`;
+                    } else if (commandPayload.command === 'next') {
+                        naturalResponse = `已切换到下一首。`;
+                    } else if (commandPayload.command === 'prev') {
+                        naturalResponse = `已切换到上一首。`;
+                    }
+                    finalResult = { message: naturalResponse };
                 }
-                finalResult = { message: naturalResponse };
 
             } else if (toolName === 'SuperDice') {
                 if (typeof this.handleDiceControl !== 'function') {
@@ -875,8 +909,14 @@ class DistributedServer {
         }
 
         console.log(`[${this.serverName}] Stopping server...`);
-        this.stopPromise = Promise.resolve().then(async () => {
+        // 立即取消后续启动阶段；等待正在执行的初始化后再释放插件资源。
         this.stopped = true;
+        this.stopPromise = Promise.resolve().then(async () => {
+        if (this.initializePromise) {
+            await this.initializePromise.catch(error => {
+                console.warn(`[${this.serverName}] Initialization ended during shutdown:`, error.message);
+            });
+        }
         
         // 新增：清理静态占位符更新定时器
         this.clearStaticPlaceholderUpdates();
@@ -887,8 +927,8 @@ class DistributedServer {
             this.reconnectTimeoutId = null;
         }
         
-        // 新增：关闭插件管理器 - 使用异步方式，但不等待结果
-        pluginManager.shutdownAllPlugins().catch(err => {
+        // 等待服务资源释放，避免 Electron 退出时留下尚未完成的清理。
+        await pluginManager.shutdownAllPlugins().catch(err => {
             console.error(`[${this.serverName}] Error during plugin shutdown:`, err);
         });
         

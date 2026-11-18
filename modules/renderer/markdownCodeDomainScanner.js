@@ -68,22 +68,44 @@ function findFenceClose(source, contentStart, marker, openingLength) {
     return -1;
 }
 
+// Only recognized complete emoticons are literals; incomplete stream prefixes stay conservative.
+const BACKTICK_EMOTICONS = ['(`・ω・´)ゞ', '(・`ω´・)', '(`・ω・´)', '(`･ω･´)'];
+function isEmoticonBacktick(source, index) {
+    return BACKTICK_EMOTICONS.some(value => {
+        const offset = value.indexOf('`');
+        return source.startsWith(value, index - offset);
+    });
+}
+
+/**
+ * 查找行内代码的闭合反引号。
+ * 返回 { end, bounded }：
+ * - end：闭合后偏移；未闭合为 -1。
+ * - bounded：未闭合时，是否已经遇到段落边界（空行）。
+ *   CommonMark 行内代码不能跨越块边界；一旦段落已结束仍未闭合，
+ *   该反引号就已被证明是普通字面量，不再可能“稍后闭合”。
+ */
 function findInlineClose(source, contentStart, openingLength) {
     let cursor = contentStart;
-
+    let checkedTo = contentStart;
     while (cursor < source.length) {
         const nextBacktick = source.indexOf('`', cursor);
-        if (nextBacktick === -1) return -1;
+        const limit = nextBacktick === -1 ? source.length : nextBacktick;
+        // Check only the newly traversed segment, rather than the whole remaining
+        // document for every short code span. A skipped backtick run is nonblank,
+        // so it cannot be part of a paragraph boundary spanning two segments.
+        const boundary = /\r?\n[ \t]*\r?\n/.test(source.slice(checkedTo, limit));
+        if (boundary) return { end: -1, bounded: true };
+        if (nextBacktick === -1) return { end: -1, bounded: false };
 
         const closingLength = countRun(source, nextBacktick, '`');
         if (closingLength === openingLength) {
-            return nextBacktick + closingLength;
+            return { end: nextBacktick + closingLength, bounded: false };
         }
-
         cursor = nextBacktick + closingLength;
+        checkedTo = cursor;
     }
-
-    return -1;
+    return { end: -1, bounded: false };
 }
 
 /**
@@ -113,9 +135,21 @@ export function replaceMarkdownCodeDomains(source, replacer, options = {}) {
         throw new TypeError('replaceMarkdownCodeDomains requires a replacer');
     }
 
+    return scanMarkdownCodeDomains(source, replacer, options);
+}
+
+function scanMarkdownCodeDomains(source, replacer, options, ranges = null) {
     let result = '';
     let cursor = 0;
     let plainStart = 0;
+    const emit = metadata => {
+        if (ranges) {
+            ranges.push(Object.freeze(metadata));
+        } else {
+            result += source.slice(plainStart, cursor);
+            result += String(replacer(source.slice(cursor, metadata.end), metadata));
+        }
+    };
 
     while (cursor < source.length) {
         const marker = source[cursor];
@@ -134,39 +168,43 @@ export function replaceMarkdownCodeDomains(source, replacer, options = {}) {
             const closingEnd = findFenceClose(source, contentStart, marker, runLength);
             const end = closingEnd === -1 ? source.length : closingEnd;
 
-            result += source.slice(plainStart, cursor);
-            result += String(replacer(source.slice(cursor, end), {
+            emit({
                 kind: 'fence',
                 marker,
                 length: runLength,
                 closed: closingEnd !== -1,
                 start: cursor,
                 end,
-            }));
+            });
             cursor = end;
             plainStart = end;
             continue;
         }
         
         if (marker === '`') {
-            const closingEnd = findInlineClose(source, cursor + runLength, runLength);
-            if (closingEnd === -1 && options.includeUnclosedInline !== true) {
+            if (runLength === 1 && isEmoticonBacktick(source, cursor)) {
+                cursor += 1;
+                continue;
+            }
+            const { end: closingEnd, bounded } = findInlineClose(source, cursor + runLength, runLength);
+            if (closingEnd === -1 && (options.includeUnclosedInline !== true || bounded)) {
                 // 静态/终态 Markdown 中孤立反引号是普通文本，不能让它拥有后续
                 // 整个文档并借此隐藏真实 HTML/style。只有流式中间态显式开启保护。
+                // 流式中，若其所在段落已被空行结束仍未闭合，它同样已被证明是字面量
+                // （例如颜文字 (´；ω；`)），不得冻结后续所有段落的稳定区。
                 cursor += runLength;
                 continue;
             }
             const end = closingEnd === -1 ? source.length : closingEnd;
 
-            result += source.slice(plainStart, cursor);
-            result += String(replacer(source.slice(cursor, end), {
+            emit({
                 kind: 'inline',
                 marker: '`',
                 length: runLength,
                 closed: closingEnd !== -1,
                 start: cursor,
                 end,
-            }));
+            });
             cursor = end;
             plainStart = end;
             continue;
@@ -175,8 +213,7 @@ export function replaceMarkdownCodeDomains(source, replacer, options = {}) {
         cursor += runLength;
     }
 
-    result += source.slice(plainStart);
-    return result;
+    return ranges ? ranges : result + source.slice(plainStart);
 }
 
 /**
@@ -196,9 +233,7 @@ export function replaceMarkdownCodeDomains(source, replacer, options = {}) {
  */
 export function collectMarkdownCodeDomains(source, options = {}) {
     const ranges = [];
-    replaceMarkdownCodeDomains(source, (domain, metadata) => {
-        ranges.push(Object.freeze({ ...metadata }));
-        return domain;
-    }, options);
+    // Collection does not need payload slices or an identical reconstructed source.
+    if (typeof source === 'string' && source.length) scanMarkdownCodeDomains(source, null, options, ranges);
     return Object.freeze(ranges);
 }

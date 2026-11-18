@@ -1,8 +1,22 @@
 import { COMPONENT_MANIFEST } from './component-manifest.js';
 
+const safeUUID = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+};
+
 const COMPONENTS = new Map();
 const ENHANCERS = new Map();
-const VALID_SIZES = new Set(['sm', 'md', 'lg', 'xl']);
 const controllerByElement = new WeakMap();
 
 function updateRangeProgress(element) {
@@ -477,7 +491,7 @@ function settingsSectionEnhancer(element, options = {}, { removeOnDestroy = fals
     const originalExpanded = toggle.getAttribute('aria-expanded');
     const originalControls = toggle.getAttribute('aria-controls');
     const generatedContentId = !content.id;
-    if (generatedContentId) content.id = `vcp-ui-settings-section-${crypto.randomUUID()}`;
+    if (generatedContentId) content.id = `vcp-ui-settings-section-${safeUUID()}`;
     const state = { collapsed: undefined, manageToggle: false, ...options };
     let observer;
     let controller;
@@ -558,7 +572,7 @@ function fieldEnhancer(element, options = {}) {
     const originalDescribedBy = control.getAttribute('aria-describedby');
     const originalHelperText = helper?.textContent || '';
     const generatedHelperId = Boolean(helper && !helper.id);
-    if (generatedHelperId) helper.id = `vcp-ui-field-help-${crypto.randomUUID()}`;
+    if (generatedHelperId) helper.id = `vcp-ui-field-help-${safeUUID()}`;
     const state = { invalid: undefined, error: '', ...options };
     let controller;
 
@@ -1236,7 +1250,7 @@ function fieldFactory(options = {}) {
             if (controlHost.firstChild !== control) controlHost.replaceChildren(control);
             const native = control.matches?.('input, textarea, select') ? control : control.querySelector?.('input, textarea, select');
             if (native) {
-                if (!native.id) native.id = `vcp-ui-field-${crypto.randomUUID()}`;
+                if (!native.id) native.id = `vcp-ui-field-${safeUUID()}`;
                 label.htmlFor = native.id;
                 native.required = Boolean(current.required);
                 native.setAttribute('aria-invalid', String(Boolean(current.error)));
@@ -1538,7 +1552,7 @@ function tooltipFactory(options = {}) {
     const trigger = options.trigger?.element || options.trigger;
     const wa = waControl('tooltip');
     if (wa && trigger) {
-        if (!trigger.id) trigger.id = `vcp-ui-wa-tip-${crypto.randomUUID()}`;
+        if (!trigger.id) trigger.id = `vcp-ui-wa-tip-${safeUUID()}`;
         wa.setAttribute('for', trigger.id);
         const state = { content: '', placement: 'top', open: false, ...options };
         return makeController(wa, state, current => {
@@ -1550,7 +1564,7 @@ function tooltipFactory(options = {}) {
     element.className = 'vcp-ui-tooltip';
     const bubble = document.createElement('span');
     bubble.className = 'vcp-ui-tooltip-bubble';
-    bubble.id = `vcp-ui-tooltip-${crypto.randomUUID()}`;
+    bubble.id = `vcp-ui-tooltip-${safeUUID()}`;
     bubble.setAttribute('role', 'tooltip');
     const state = { content: '', placement: 'top', open: false, ...options };
     let triggerNode = null;
@@ -1918,6 +1932,7 @@ function toastFactory(options = {}) {
             element.append(close.element);
         }
     });
+    controller._listen(element, 'click', () => controller.destroy());
     return controller;
 }
 
@@ -1969,17 +1984,99 @@ function windowControlsFactory(options = {}) {
     element.className = 'vcp-ui-window-controls';
     element.setAttribute('role', 'toolbar');
     element.setAttribute('aria-label', '窗口控制');
-    const state = { onMinimize: null, onMaximize: null, onClose: null, ...options };
+    const state = {
+        pinned: false,
+        onPin: null,
+        onMinimize: null,
+        onMaximize: null,
+        onClose: null,
+        extensions: [],
+        ...options
+    };
+
+    // 同步能力判定（0 CLS 关键）：若环境存在同步 canPin() 且为 false，或用户显式配置 pin: false，则首帧即可确定不展示置顶
+    // 仅在 Windows 且为非嵌入式独立窗口时，canPin 同步返回 true
+    const isPinCapable = options.pin !== false && typeof window !== 'undefined' && Boolean(
+        typeof window.utilityAPI?.canPin === 'function'
+            ? window.utilityAPI.canPin()
+            : window.utilityAPI?.togglePinWindow
+    );
+
+    let pin = null;
+    let unlistenPinned = null;
+
+    if (isPinCapable) {
+        pin = iconButtonFactory({
+            icon: 'push_pin',
+            label: '置顶窗口',
+            size: 'sm',
+            variant: 'ghost'
+        });
+        pin.element.classList.add('vcp-ui-window-control-button', 'vcp-ui-window-control-pin');
+    }
+
     const minimize = iconButtonFactory({ icon: 'remove', label: '最小化窗口', size: 'sm', variant: 'ghost' });
     const maximize = iconButtonFactory({ icon: 'crop_square', label: '最大化窗口', size: 'sm', variant: 'ghost' });
     const close = iconButtonFactory({ icon: 'close', label: '关闭窗口', size: 'sm', variant: 'ghost' });
-    close.element.classList.add('vcp-ui-window-control-close');
-    [minimize.element, maximize.element, close.element].forEach(button => {
+    close.element.classList.add('vcp-ui-window-control-button', 'vcp-ui-window-control-close');
+
+    [minimize.element, maximize.element].forEach(button => {
         button.classList.add('vcp-ui-window-control-button');
     });
+
     const controller = makeController(element, state, current => {
-        element.replaceChildren(minimize.element, maximize.element, close.element);
+        const extensions = Array.isArray(current.extensions) ? current.extensions : [];
+        const buttons = [];
+        if (pin) {
+            pin.element.classList.toggle('is-pinned', Boolean(current.pinned));
+            pin.element.setAttribute('aria-pressed', String(Boolean(current.pinned)));
+            pin.element.title = current.pinned ? '取消置顶' : '置顶窗口';
+            pin.element.setAttribute('aria-label', current.pinned ? '取消置顶' : '置顶窗口');
+            buttons.push(pin.element);
+        }
+        buttons.push(...extensions, minimize.element, maximize.element, close.element);
+        element.replaceChildren(...buttons);
+    }, () => {
+        if (typeof unlistenPinned === 'function') {
+            unlistenPinned();
+            unlistenPinned = null;
+        }
     });
+
+    // 单向事件驱动与防连击：状态由主进程 onWindowPinnedChanged 驱动
+    if (pin) {
+        let isToggling = false;
+        controller._listen(pin.element, 'click', async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof state.onPin === 'function') {
+                state.onPin();
+                return;
+            }
+            if (isToggling) return;
+            isToggling = true;
+            try {
+                await window.utilityAPI?.togglePinWindow?.();
+            } catch (err) {
+                console.warn('[VCPUI][WindowControls] togglePinWindow failed:', err);
+            } finally {
+                setTimeout(() => { isToggling = false; }, 150);
+            }
+        });
+
+        if (typeof window.utilityAPI?.onWindowPinnedChanged === 'function') {
+            unlistenPinned = window.utilityAPI.onWindowPinnedChanged(isPinned => {
+                if (!controller.destroyed) controller.update({ pinned: Boolean(isPinned) });
+            });
+        }
+
+        window.utilityAPI?.isWindowPinned?.().then(isPinned => {
+            if (!controller.destroyed && Boolean(isPinned) !== controller.element.querySelector('.vcp-ui-window-control-pin')?.classList.contains('is-pinned')) {
+                controller.update({ pinned: Boolean(isPinned) });
+            }
+        }).catch(() => {});
+    }
+
     minimize.element.addEventListener('click', () => {
         if (typeof state.onMinimize === 'function') state.onMinimize();
         else window.utilityAPI?.minimizeWindow?.();
@@ -1994,7 +2091,6 @@ function windowControlsFactory(options = {}) {
     });
     return controller;
 }
-
 function appPageShellFactory(options = {}) {
     const element = document.createElement('div');
     element.className = 'vcp-ui-page-shell vcp-ui-scope';
@@ -2111,7 +2207,29 @@ function ensureFeedbackHost() {
     if (feedbackHost?.isConnected) return feedbackHost;
     feedbackHost = document.createElement('div');
     feedbackHost.className = 'vcp-ui-feedback-host vcp-ui-scope';
-    feedbackHost.innerHTML = '<div class="vcp-ui-loading-layer" hidden><span class="vcp-ui-icon vcp-ui-spinner" aria-hidden="true">progress_activity</span><span class="vcp-ui-loading-label">正在处理</span></div><div class="vcp-ui-toast-stack"></div><div class="vcp-ui-dialog-host"></div>';
+
+    const loadingLayer = document.createElement('div');
+    loadingLayer.className = 'vcp-ui-loading-layer';
+    loadingLayer.hidden = true;
+
+    const spinner = document.createElement('span');
+    spinner.className = 'vcp-ui-icon vcp-ui-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    spinner.textContent = 'progress_activity';
+
+    const loadingLabel = document.createElement('span');
+    loadingLabel.className = 'vcp-ui-loading-label';
+    loadingLabel.textContent = '正在处理';
+
+    loadingLayer.append(spinner, loadingLabel);
+
+    const toastStack = document.createElement('div');
+    toastStack.className = 'vcp-ui-toast-stack';
+
+    const dialogHost = document.createElement('div');
+    dialogHost.className = 'vcp-ui-dialog-host';
+
+    feedbackHost.append(loadingLayer, toastStack, dialogHost);
     document.body.append(feedbackHost);
     return feedbackHost;
 }

@@ -1,0 +1,377 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { JSDOM } = require('jsdom');
+
+const source = fs.readFileSync('modules/ui-helpers.js', 'utf8');
+
+function createFixture() {
+    const dom = new JSDOM(
+        '<!doctype html><html><body><div class="chat-messages-container"><div id="chatMessages"></div></div></body></html>',
+        { runScripts: 'outside-only', url: 'https://vcpchat.local/' }
+    );
+    const { window } = dom;
+    const container = window.document.querySelector('.chat-messages-container');
+
+    let scrollHeight = 1000;
+    let clientHeight = 400;
+    let scrollTop = 600;
+    let nextFrameId = 1;
+    const animationFrames = new Map();
+    const resizeObservers = [];
+
+    Object.defineProperties(container, {
+        scrollHeight: {
+            configurable: true,
+            get: () => scrollHeight,
+        },
+        clientHeight: {
+            configurable: true,
+            get: () => clientHeight,
+        },
+        scrollTop: {
+            configurable: true,
+            get: () => scrollTop,
+            set: value => {
+                scrollTop = Number(value);
+            },
+        },
+        offsetWidth: {
+            configurable: true,
+            get: () => 500,
+        },
+        clientWidth: {
+            configurable: true,
+            get: () => 485,
+        },
+    });
+    container.getBoundingClientRect = () => ({
+        left: 0,
+        right: 500,
+        top: 0,
+        bottom: 400,
+        width: 500,
+        height: 400,
+    });
+
+    window.requestAnimationFrame = callback => {
+        const id = nextFrameId++;
+        animationFrames.set(id, callback);
+        return id;
+    };
+    window.cancelAnimationFrame = id => {
+        animationFrames.delete(id);
+    };
+
+    window.ResizeObserver = class ResizeObserver {
+        constructor(callback) {
+            this.callback = callback;
+            this.targets = [];
+            resizeObservers.push(this);
+        }
+
+        observe(target) {
+            this.targets.push(target);
+        }
+
+        disconnect() {
+            this.targets = [];
+        }
+
+        trigger() {
+            this.callback(this.targets.map(target => ({ target })), this);
+        }
+    };
+
+    window.eval(source);
+
+    const flushAnimationFrames = () => {
+        let guard = 0;
+        while (animationFrames.size > 0) {
+            if (++guard > 20) throw new Error('animation frame queue did not settle');
+            const current = [...animationFrames.entries()];
+            animationFrames.clear();
+            current.forEach(([, callback]) => callback(window.performance.now()));
+        }
+    };
+
+    const triggerResize = () => {
+        assert.equal(resizeObservers.length, 1, 'chat state must own exactly one resize observer');
+        resizeObservers[0].trigger();
+    };
+
+    return {
+        dom,
+        window,
+        container,
+        uiHelper: window.uiHelperFunctions,
+        flushAnimationFrames,
+        triggerResize,
+        setGeometry(next) {
+            if (next.scrollHeight !== undefined) scrollHeight = next.scrollHeight;
+            if (next.clientHeight !== undefined) clientHeight = next.clientHeight;
+            if (next.scrollTop !== undefined) scrollTop = next.scrollTop;
+        },
+        geometry: () => ({ scrollHeight, clientHeight, scrollTop }),
+    };
+}
+
+test('async content growth keeps following the bottom without treating layout as user intent', () => {
+    const fixture = createFixture();
+
+    const initial = fixture.uiHelper.captureChatScrollFollow();
+    assert.equal(initial.followBottom, true);
+
+    fixture.setGeometry({ scrollHeight: 1500 });
+    fixture.container.dispatchEvent(new fixture.window.Event('scroll'));
+    assert.equal(
+        fixture.uiHelper.captureChatScrollFollow().followBottom,
+        true,
+        'layout-driven distance from bottom must not revoke follow intent'
+    );
+
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 1100);
+    assert.equal(fixture.uiHelper.isNearChatBottom(), true);
+    fixture.dom.window.close();
+});
+
+test('an upward wheel gesture revokes bottom follow and blocks later async growth compensation', () => {
+    const fixture = createFixture();
+    fixture.uiHelper.captureChatScrollFollow();
+
+    fixture.setGeometry({ scrollTop: 350 });
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: -120 }));
+
+    const interrupted = fixture.uiHelper.captureChatScrollFollow();
+    assert.equal(interrupted.followBottom, false);
+
+    fixture.setGeometry({ scrollHeight: 1600 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+
+    assert.equal(
+        fixture.geometry().scrollTop,
+        350,
+        'content growth must not pull a user who is reading older messages back to the bottom'
+    );
+    fixture.dom.window.close();
+});
+
+test('a small upward wheel step inside the bottom threshold cannot be relocked by its scroll event', () => {
+    const fixture = createFixture();
+    fixture.uiHelper.captureChatScrollFollow();
+
+    // 用户从精确底部向上滚动很小一步，仍落在 50px 的“接近底部”阈值内。
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: -10 }));
+    fixture.setGeometry({ scrollTop: 590 });
+    fixture.container.dispatchEvent(new fixture.window.Event('scroll'));
+
+    assert.equal(
+        fixture.uiHelper.captureChatScrollFollow().followBottom,
+        false,
+        'the wheel unlock intent must win over near-bottom geometry'
+    );
+
+    // 即使这一刻流式文本或图片继续增高，也不能取消刚刚发生的用户上滚。
+    fixture.setGeometry({ scrollHeight: 1400 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 590);
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+    fixture.dom.window.close();
+});
+
+test('returning to the bottom re-enables continuous follow for subsequent async growth', () => {
+    const fixture = createFixture();
+    fixture.uiHelper.captureChatScrollFollow();
+
+    fixture.setGeometry({ scrollTop: 300 });
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: -100 }));
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+
+    fixture.setGeometry({ scrollTop: 600 });
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: 100 }));
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+
+    fixture.setGeometry({ scrollHeight: 1400 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 1000);
+    assert.equal(fixture.uiHelper.isNearChatBottom(), true);
+    fixture.dom.window.close();
+});
+
+test('a stale resize compensation cannot override a newer user scroll generation', () => {
+    const fixture = createFixture();
+    fixture.uiHelper.captureChatScrollFollow();
+
+    fixture.setGeometry({ scrollHeight: 1400 });
+    fixture.triggerResize();
+
+    fixture.setGeometry({ scrollTop: 400 });
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: -100 }));
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 400);
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+    fixture.dom.window.close();
+});
+test('releaseChatScrollFollow cancels a pending bottom scroll and keeps later growth from snapping back', () => {
+    const fixture = createFixture();
+    fixture.uiHelper.captureChatScrollFollow();
+
+    // 跟随中内容增高，已排队一帧回底补偿
+    fixture.setGeometry({ scrollHeight: 1400 });
+    fixture.triggerResize();
+
+    // 程序化跳转（搜索结果、轮次导航）先释放跟随，再自己设置 scrollTop
+    fixture.uiHelper.releaseChatScrollFollow();
+    fixture.setGeometry({ scrollTop: 200 });
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 200);
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+
+    // 跳转途中经过的消息继续增高，也不能把视图拽回底部
+    fixture.setGeometry({ scrollHeight: 1800 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.geometry().scrollTop, 200);
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+    fixture.dom.window.close();
+});
+
+test('follow changes are announced once per flip on the scroll container', () => {
+    const fixture = createFixture();
+    const seen = [];
+    fixture.container.addEventListener(fixture.uiHelper.CHAT_FOLLOW_CHANGE_EVENT, event => {
+        seen.push(event.detail.followBottom);
+    });
+    fixture.uiHelper.captureChatScrollFollow();
+
+    fixture.uiHelper.releaseChatScrollFollow();
+    fixture.uiHelper.releaseChatScrollFollow();
+    assert.deepEqual(seen, [false], 'releasing twice must not announce twice');
+
+    fixture.uiHelper.resetChatScrollFollow();
+    assert.deepEqual(seen, [false, true]);
+
+    fixture.setGeometry({ scrollTop: 300 });
+    fixture.container.dispatchEvent(new fixture.window.WheelEvent('wheel', { deltaY: -100 }));
+    assert.deepEqual(seen, [false, true, false]);
+
+    fixture.uiHelper.scrollToBottom({ force: true });
+    fixture.flushAnimationFrames();
+    assert.deepEqual(seen, [false, true, false, true]);
+    fixture.dom.window.close();
+});
+
+test('after a small upward wheel step, non-forced scrolls cannot pull the reader back until they return', () => {
+    const fixture = createFixture();
+    const { window, container } = fixture;
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+
+    // 回复生成中向上滚一格，仍在 50px 阈值内。
+    container.dispatchEvent(new window.WheelEvent('wheel', { deltaY: -30 }));
+    fixture.setGeometry({ scrollTop: 570 });
+    container.dispatchEvent(new window.Event('scroll'));
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.uiHelper.isNearChatBottom(), true, 'still inside the 50px threshold');
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+
+    // 流式内容增高，随后回复结束时调用一次非强制滚到底。
+    fixture.setGeometry({ scrollHeight: 1010 });
+    fixture.triggerResize();
+    assert.equal(fixture.uiHelper.scrollToBottom(), false);
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.geometry().scrollTop, 570, 'the reader is not pulled back to the bottom');
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+
+    // 用户自己滚回底部后重新跟随。
+    container.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 100 }));
+    fixture.setGeometry({ scrollTop: 610 });
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+    fixture.dom.window.close();
+});
+
+test('a horizontal wheel frame (deltaY === 0) does not settle a pending upward release', () => {
+    const fixture = createFixture();
+    const { window, container } = fixture;
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+
+    container.dispatchEvent(new window.WheelEvent('wheel', { deltaY: -20 }));
+    fixture.setGeometry({ scrollTop: 580 });
+    container.dispatchEvent(new window.Event('scroll'));
+    // 触控板常在同一手势里带出纯横向的滚轮帧。
+    container.dispatchEvent(new window.WheelEvent('wheel', { deltaY: 0, deltaX: 12 }));
+    fixture.flushAnimationFrames();
+
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+    fixture.dom.window.close();
+});
+
+test('an upward scroll without wheel or pointer input (PageUp, inertia) releases follow once off the bottom', () => {
+    const fixture = createFixture();
+    const { window, container } = fixture;
+    fixture.setGeometry({ scrollHeight: 1200, clientHeight: 400, scrollTop: 800 });
+    const before = fixture.uiHelper.captureChatScrollFollow();
+    assert.equal(before.followBottom, true);
+
+    fixture.setGeometry({ scrollTop: 420 });
+    container.dispatchEvent(new window.Event('scroll'));
+
+    const after = fixture.uiHelper.captureChatScrollFollow();
+    assert.equal(after.followBottom, false);
+    assert.ok(after.generation > before.generation, 'a scroll queued before the move is rejected');
+    assert.equal(fixture.uiHelper.scrollToBottom({ expectedGeneration: before.generation }), false);
+    fixture.dom.window.close();
+});
+
+test('expanding a section in a completed message grows downward instead of scrolling to the bottom', () => {
+    const fixture = createFixture();
+    const { window } = fixture;
+    const chatMessages = window.document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="message-item assistant"><div class="md-content">'
+        + '<button type="button" class="vcp-tool-row-toggle">读取文件 · 结果</button></div></div>';
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+
+    chatMessages.querySelector('.vcp-tool-row-toggle')
+        .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, false);
+
+    // 展开后消息增高 300px：按钮和上方内容保持原位。
+    fixture.setGeometry({ scrollHeight: 1300 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.geometry().scrollTop, 600);
+    fixture.dom.window.close();
+});
+
+test('clicking a control inside the message that is still streaming keeps following', () => {
+    const fixture = createFixture();
+    const { window } = fixture;
+    const chatMessages = window.document.getElementById('chatMessages');
+    chatMessages.innerHTML = '<div class="message-item assistant streaming"><div class="md-content">'
+        + '<button type="button" class="vcp-tool-row-toggle">读取文件 · 请求</button></div></div>';
+    fixture.uiHelper.captureChatScrollFollow();
+
+    chatMessages.querySelector('.vcp-tool-row-toggle')
+        .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(fixture.uiHelper.captureChatScrollFollow().followBottom, true);
+
+    fixture.setGeometry({ scrollHeight: 1300 });
+    fixture.triggerResize();
+    fixture.flushAnimationFrames();
+    assert.equal(fixture.geometry().scrollTop, 900);
+    fixture.dom.window.close();
+});

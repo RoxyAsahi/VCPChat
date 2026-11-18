@@ -95,6 +95,27 @@ const settingsManager = (() => {
     let isAgentSettingsDirty = false;
     let agentSettingsRevision = 0;
     let agentSettingsAutosaveTimer = null;
+
+    // Unsaved Agent drafts kept per agent while the shared form shows another
+    // one. Settings save only on the Save button and every Agent reuses one
+    // form, so switching away used to drop the edits (also after a failed
+    // save). Like per-scope composer drafts, the draft comes back when that
+    // Agent is shown again; Save or delete clears it.
+    const unsavedAgentDrafts = new Map();
+    // The Agent whose values the form fully holds. Cleared while a populate is
+    // writing the form, so a half-written form is never kept as a draft.
+    let settledAgentId = '';
+
+    // Edits that live outside the form's own input/change events (the regex
+    // modal, MiMo add/remove buttons) report here so the unsaved-changes dot
+    // shows them like any other field.
+    function markAgentSettingsDirty() {
+        isAgentSettingsDirty = true;
+        ++agentSettingsRevision;
+        if (typeof globalThis.vcpUpdateFormStateDot === 'function') {
+            globalThis.vcpUpdateFormStateDot('warning');
+        }
+    }
     const initializedCollapseStateAgents = new Set();
     const promptModeFallbackLabels = {
         original: '文本',
@@ -113,6 +134,24 @@ const settingsManager = (() => {
         const form = surfaceHost?.querySelector?.('#agentSettingsForm') || document.getElementById('agentSettingsForm');
         if (form) agentSettingsForm = form;
         return agentSettingsForm;
+    }
+
+    // 首页立绘一栏的行为（modules/ui-system/agent-portrait-settings.js）；表单 DOM 换了就重建
+    let portraitSettings = null;
+    let portraitSettingsHost = null;
+    function ensurePortraitSettings() {
+        const host = getAgentControl('agentPortraitSettings');
+        if (!host || !window.VCPAgentPortraitSettings?.create) return null;
+        if (portraitSettings && portraitSettingsHost === host) return portraitSettings;
+        portraitSettings?.dispose?.();
+        portraitSettingsHost = host;
+        portraitSettings = window.VCPAgentPortraitSettings.create({
+            host,
+            api: electronAPI,
+            onChange: () => {},
+            notify: (message, type) => uiHelper?.showToastNotification?.(message, type)
+        });
+        return portraitSettings;
     }
 
     function getAgentControl(id) {
@@ -196,31 +235,32 @@ const settingsManager = (() => {
             currentSelectedItem = refs.currentSelectedItemRef?.get?.() || {};
         }
 
+        // Settings rendering owns a local snapshot, never the borrowed selection.
+        currentSelectedItem = { ...currentSelectedItem, type: currentSelectedItem.type || type || 'agent' };
         const settingsSurface = window.VCPSettingsSidebar;
 
         const agentSettingsExists = agentSettingsContainer && typeof agentSettingsContainer.style !== 'undefined';
         const groupSettingsExists = groupSettingsContainer && typeof groupSettingsContainer.style !== 'undefined';
 
         if (currentSelectedItem.id) {
-            if (!currentSelectedItem.type) {
-                currentSelectedItem.type = type || 'agent';
-            }
             if (selectedItemNameForSettingsSpan) {
                 selectedItemNameForSettingsSpan.textContent = currentSelectedItem.name || currentSelectedItem.id;
             }
 
             if (currentSelectedItem.type === 'agent') {
-                if (!currentSelectedItem.config && electronAPI?.getAgentConfig) {
+                let agentConfig = currentSelectedItem.config;
+                if (!agentConfig && electronAPI?.getAgentConfig) {
                     try {
-                        currentSelectedItem.config = await electronAPI.getAgentConfig(currentSelectedItem.id);
+                        agentConfig = await electronAPI.getAgentConfig(currentSelectedItem.id);
                     } catch (err) {
                         console.warn(`[SettingsManager] Failed to fetch agent config for ${currentSelectedItem.id}:`, err);
                     }
                 }
+                if (displayToken !== settingsDisplayToken) return;
                 const viewToken = settingsSurface?.show?.('agent', { id: currentSelectedItem.id });
                 if (itemSettingsContainerTitle) itemSettingsContainerTitle.textContent = 'Agent 设置: ';
                 if (deleteItemBtn) deleteItemBtn.textContent = '删除此 Agent';
-                await populateAgentSettingsForm(currentSelectedItem.id, (currentSelectedItem.config || currentSelectedItem), viewToken);
+                await populateAgentSettingsForm(currentSelectedItem.id, (agentConfig || currentSelectedItem), viewToken);
             } else if (currentSelectedItem.type === 'group') {
                 settingsSurface?.show?.('group', { id: currentSelectedItem.id });
                 if (itemSettingsContainerTitle) itemSettingsContainerTitle.textContent = '群组设置: ';
@@ -251,6 +291,24 @@ const settingsManager = (() => {
      */
     function populateAgentSettingsForm(agentId, agentConfig, viewToken = null) {
         const populateToken = ++agentSettingsPopulateToken;
+
+        const previousAgentId = editingAgentIdInput?.value;
+        if (previousAgentId && previousAgentId === settledAgentId && isAgentSettingsDirty) {
+            try {
+                const draft = collectAgentDraftConfig(previousAgentId);
+                // 名称框清空时 collectAgentDraftConfig 会回退到 currentSelectedItemRef，切换途中它已经指向新的 Agent，
+                // 草稿里留着就会在恢复后把这个 Agent 存成别人的名字；不记名称，恢复时用磁盘上的
+                if (!agentNameInput?.value?.trim?.()) delete draft.name;
+                unsavedAgentDrafts.set(previousAgentId, draft);
+            } catch (error) {
+                console.warn(`[SettingsManager] Could not keep the unsaved draft for ${previousAgentId}:`, error);
+            }
+        }
+        settledAgentId = '';
+        const retainedDraft = agentConfig && !agentConfig.error ? unsavedAgentDrafts.get(agentId) : null;
+        if (retainedDraft) {
+            agentConfig = { ...agentConfig, ...structuredClone(retainedDraft) };
+        }
 
         // 新增提示词编辑器只是尚未提交到列表的临时草稿，不属于 Agent 配置。
         // 表单 DOM 会被所有 Agent 复用，因此切换 Agent 时必须立即清空，否则 A 的
@@ -284,31 +342,7 @@ const settingsManager = (() => {
                 try { activeEl.blur(); } catch (_) {}
             }
 
-            // Check for uncommitted dirty edits on the previous agent before switching context
-            if (isAgentSettingsDirty && editingAgentIdInput?.value && editingAgentIdInput.value !== agentId) {
-                const prevId = editingAgentIdInput.value;
-                if (agentSettingsAutosaveTimer) {
-                    clearTimeout(agentSettingsAutosaveTimer);
-                    agentSettingsAutosaveTimer = null;
-                }
-                const saveRevision = agentSettingsRevision;
-                let flushResult = null;
-                try {
-                    console.log(`[SettingsManager] Flushing uncommitted dirty changes for previous agent ${prevId} before loading ${agentId}`);
-                    flushResult = await saveCurrentAgentSettings();
-                } catch (e) {
-                    console.warn(`[SettingsManager] Failed to flush dirty edits for ${prevId}:`, e);
-                    flushResult = { success: false, error: e?.message || String(e) };
-                }
-                if (flushResult?.success) {
-                    if (agentSettingsRevision === saveRevision) {
-                        isAgentSettingsDirty = false;
-                    }
-                } else {
-                    console.warn(`[SettingsManager] Failed to flush dirty edits for ${prevId}:`, flushResult?.error);
-                    uiHelper.showToastNotification(`切换前自动保存「${prevId}」失败: ${flushResult?.error || '未知错误'}，未保存的修改未能成功保存`, 'warning');
-                }
-            }
+            // 加载/切换只读，禁止通过保存旧表单来完成上下文交接。
 
             // Initialize PromptManager (Singleton Pattern)
             const systemPromptContainer = getAgentControl('systemPromptContainer');
@@ -319,9 +353,6 @@ const settingsManager = (() => {
                         containerElement: systemPromptContainer,
                         electronAPI: electronAPI
                     });
-                } else if (promptManager.getAgentId?.()) {
-                    // 保存的目标由 PromptManager 自身上下文决定，而不是可变的表单 ID。
-                    await promptManager.saveCurrentModeData();
                 }
 
                 if (populateToken !== agentSettingsPopulateToken) {
@@ -384,6 +415,7 @@ const settingsManager = (() => {
         if (mainRendererFunctions.setCroppedFile) {
             mainRendererFunctions.setCroppedFile('agent', null);
         }
+        void ensurePortraitSettings()?.load(agentId, agentConfig);
 
         // Populate custom style settings.  Programmatic populate writes must
         // signal the mounted presentation primitives (vcp-uiux-sync, matching
@@ -411,6 +443,15 @@ const settingsManager = (() => {
         }
         if (agentCustomCssInput) {
             agentCustomCssInput.value = agentConfig.customCss || '';
+        }
+
+        for (const key of ['toolPresentation', 'toolExpansion']) {
+            const control = getAgentControl(`agent${key[0].toUpperCase()}${key.slice(1)}`);
+            if (control) {
+                control.value = agentConfig[key] || 'inherit';
+                if (!control.value) control.value = 'inherit';
+                signalPresentationSync(control);
+            }
         }
 
         // Load card CSS
@@ -481,8 +522,13 @@ const settingsManager = (() => {
             scheduleStickyButtonsRefresh();
             isAgentSettingsDirty = false;
             agentSettingsRevision = 0;
+            settledAgentId = agentId;
             if (typeof globalThis.vcpUpdateFormStateDot === 'function') {
                 globalThis.vcpUpdateFormStateDot('done');
+            }
+            if (retainedDraft) {
+                markAgentSettingsDirty();
+                uiHelper.showToastNotification(`已恢复 ${agentConfig.name || agentId} 未保存的修改，点击保存后生效。`, 'info');
             }
             document.dispatchEvent(new CustomEvent('vcp-settings-surface-updated', {
                 detail: { kind: 'agent', root: agentSettingsForm }
@@ -507,55 +553,14 @@ const settingsManager = (() => {
         return Number.isFinite(parsedValue) ? parsedValue : null;
     }
 
-    /**
-     * Handles the submission of the agent settings form, saving the changes.
-     * @param {Event} event - The form submission event.
-     */
-    async function saveCurrentAgentSettings(event) {
-        if (event?.preventDefault) {
-            event.preventDefault();
-        }
-        refreshAgentControls();
-        const saveButton = agentSettingsForm?.querySelector?.('button[type="submit"]') || null;
-        const agentId = editingAgentIdInput?.value;
-        if (!agentId) {
-            console.error("[SettingsManager] Cannot save agent settings: agentId is missing.");
-            uiHelper.showToastNotification("保存失败：未指定 Agent ID", 'error');
-            reportSettingsSaveResult(agentSettingsForm, false, 'missing-agent-id');
-            return { success: false, error: 'missing-agent-id' };
-        }
-        if (promptManager?.getAgentId?.() && promptManager.getAgentId() !== agentId) {
-            console.warn(`[SettingsManager] Blocked save for ${agentId}: PromptManager is bound to ${promptManager.getAgentId()}.`);
-            uiHelper.showToastNotification('Agent 正在切换，请稍后再保存。', 'warning');
-            reportSettingsSaveResult(agentSettingsForm, false, 'agent-switching');
-            return { success: false, error: 'agent-switching' };
-        }
-
-        // Get system prompt from PromptManager
-        let systemPromptData = {};
-        if (promptManager) {
-            await promptManager.saveCurrentModeData();
-            if (editingAgentIdInput?.value !== agentId || promptManager.getAgentId?.() !== agentId) {
-                console.debug(`[SettingsManager] Aborting stale save after prompt persistence for ${agentId}.`);
-                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent');
-                return { success: false, error: 'stale-agent' };
-            }
-
-            const currentPrompt = await promptManager.getCurrentSystemPrompt();
-            if (editingAgentIdInput?.value !== agentId || promptManager.getAgentId?.() !== agentId) {
-                console.debug(`[SettingsManager] Aborting stale save after prompt read for ${agentId}.`);
-                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent');
-                return { success: false, error: 'stale-agent' };
-            }
-            systemPromptData.systemPrompt = currentPrompt; // Keep for compatibility
-        }
-
+    // The form's current values as an Agent config patch. Save persists it;
+    // switching away keeps it as the Agent's unsaved draft.
+    function collectAgentDraftConfig(agentId) {
+        const systemPromptData = promptManager ? (promptManager.collectDraft?.() || {}) : {};
         const currentConfig = refs.currentSelectedItemRef?.get?.()?.config;
         const resolvedModelInput = getAgentControl('agentModel') || agentModelInput;
         const resolvedModel = resolvedModelInput ? resolvedModelInput.value.trim() : (currentConfig?.model || 'gemini-pro');
-        const saveRevision = agentSettingsRevision;
-
-        const newConfig = {
+        return {
             name: agentNameInput?.value?.trim?.() || (currentConfig ? currentConfig.name : agentId),
             ...systemPromptData,
             model: resolvedModel || 'gemini-pro',
@@ -571,16 +576,56 @@ const settingsManager = (() => {
             ttsRegexSecondary: agentTtsRegexSecondaryInput?.value?.trim?.() || '',
             ttsDirectorPrompts: [...currentAgentTtsDirectorPrompts],
             ttsSpeed: parseFloat(agentTtsSpeedSlider?.value || 1),
-            stripRegexes: currentAgentRegexes,
+            stripRegexes: structuredClone(currentAgentRegexes),
             avatarBorderColor: agentAvatarBorderColorInput?.value || '',
             nameTextColor: agentNameTextColorInput?.value || '',
             customCss: agentCustomCssInput?.value?.trim?.() || '',
             cardCss: getAgentControl('agentCardCss')?.value?.trim?.() || '',
             chatCss: getAgentControl('agentChatCss')?.value?.trim?.() || '',
+            toolPresentation: getAgentControl('agentToolPresentation')?.value || 'inherit',
+            toolExpansion: getAgentControl('agentToolExpansion')?.value || 'inherit',
             disableCustomColors: getAgentControl('disableCustomColors')?.checked || false,
             useThemeColorsInChat: getAgentControl('useThemeColorsInChat')?.checked || false,
+            ...(portraitSettings ? { portraitDisplay: portraitSettings.getDisplay() } : {}),
             uiCollapseStates: getCurrentCollapseStates()
         };
+    }
+
+    /**
+     * Handles the submission of the agent settings form, saving the changes.
+     * @param {Event} event - The form submission event.
+     */
+    async function saveCurrentAgentSettings(event) {
+        if (event?.preventDefault) {
+            event.preventDefault();
+        }
+        refreshAgentControls();
+        const saveToken = agentSettingsPopulateToken;
+        const saveDisplayToken = settingsDisplayToken;
+        const isSaveContextCurrent = () =>
+            saveToken === agentSettingsPopulateToken && saveDisplayToken === settingsDisplayToken;
+        const saveButton = agentSettingsForm?.querySelector?.('button[type="submit"]') || null;
+        const agentId = editingAgentIdInput?.value;
+        if (!agentId) {
+            console.error("[SettingsManager] Cannot save agent settings: agentId is missing.");
+            uiHelper.showToastNotification("保存失败：未指定 Agent ID", 'error');
+            reportSettingsSaveResult(agentSettingsForm, false, 'missing-agent-id');
+            return { success: false, error: 'missing-agent-id' };
+        }
+        if (promptManager?.getAgentId?.() && promptManager.getAgentId() !== agentId) {
+            console.warn(`[SettingsManager] Blocked save for ${agentId}: PromptManager is bound to ${promptManager.getAgentId()}.`);
+            uiHelper.showToastNotification('Agent 正在切换，请稍后再保存。', 'warning');
+            reportSettingsSaveResult(agentSettingsForm, false, 'agent-switching');
+            return { success: false, error: 'agent-switching' };
+        }
+
+        // Prompt 子模块只维护草稿；统一保存时一次性收集快照。
+        const saveRevision = agentSettingsRevision;
+        const newConfig = collectAgentDraftConfig(agentId);
+        if (editingAgentIdInput?.value !== agentId || (promptManager && promptManager.getAgentId?.() !== agentId)) {
+            reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent');
+            return { success: false, error: 'stale-agent' };
+        }
 
         if (!newConfig.name) {
             uiHelper.showToastNotification("Agent名称不能为空！", 'error');
@@ -622,9 +667,11 @@ const settingsManager = (() => {
                             }
                         });
                     }
-                    if (agentAvatarPreview) agentAvatarPreview.src = avatarResult.avatarUrl;
-                    mainRendererFunctions.setCroppedFile('agent', null);
-                    if (agentAvatarInput) agentAvatarInput.value = '';
+                    if (isSaveContextCurrent() && mainRendererFunctions.getCroppedFile('agent') === croppedFile) {
+                        if (agentAvatarPreview) agentAvatarPreview.src = avatarResult.avatarUrl;
+                        mainRendererFunctions.setCroppedFile('agent', null);
+                        if (agentAvatarInput) agentAvatarInput.value = '';
+                    }
                 }
             } catch (readError) {
                 console.error("读取Agent头像文件失败:", readError);
@@ -632,6 +679,18 @@ const settingsManager = (() => {
                 reportSettingsSaveResult(agentSettingsForm, false, readError.message);
                 return { success: false, error: readError.message }; // 中断保存
             }
+        }
+
+        // 暂存的立绘图片和头像一样，点保存时才写进 Agent 目录
+        let portraitFilesChanged = false;
+        if (portraitSettings?.hasPendingFiles?.(agentId)) {
+            const portraitResult = await portraitSettings.commit(agentId);
+            if (!portraitResult?.success) {
+                uiHelper.showToastNotification(`保存立绘失败: ${portraitResult?.error || '未知错误'}`, 'error');
+                reportSettingsSaveResult(agentSettingsForm, false, portraitResult?.error || 'portrait-save-failed');
+                return { success: false, error: portraitResult?.error || 'portrait-save-failed' };
+            }
+            portraitFilesChanged = portraitResult.changed === true;
         }
 
         let result;
@@ -643,13 +702,17 @@ const settingsManager = (() => {
             reportSettingsSaveResult(agentSettingsForm, false, error.message);
             return { success: false, error: error.message };
         }
-        if (!result.success) {
-            reportSettingsSaveResult(agentSettingsForm, false, result?.error || 'save-failed');
+        if (!isSaveContextCurrent()) {
+            return { success: result?.success === true, stale: true, result };
+        }
+        if (!result?.success) {
+            reportSettingsSaveResult(agentSettingsForm, false, result?.error || result?.message || 'save-failed');
             if (saveButton) uiHelper.showSaveFeedback(saveButton, false, '保存失败', '保存 Agent 设置');
             uiHelper.showToastNotification(`保存Agent设置失败: ${result?.error || '未知错误'}`, 'error');
             return { success: false, error: result?.error || 'save-failed' };
         }
 
+        unsavedAgentDrafts.delete(agentId);
         if (agentSettingsRevision === saveRevision) {
             isAgentSettingsDirty = false;
         }
@@ -662,6 +725,10 @@ const settingsManager = (() => {
             const currentSelectedItem = refs.currentSelectedItemRef?.get?.();
             if (currentSelectedItem && currentSelectedItem.id === agentId && currentSelectedItem.type === 'agent') {
                 const updatedAgentConfig = await electronAPI.getAgentConfig(agentId);
+                const selectedNow = refs.currentSelectedItemRef?.get?.();
+                if (!isSaveContextCurrent() || selectedNow?.id !== agentId || selectedNow?.type !== 'agent') {
+                    return { success: true, stale: true, result };
+                }
 
                 // ⚠️ 检查是否返回错误对象
                 if (updatedAgentConfig && updatedAgentConfig.error) {
@@ -680,6 +747,7 @@ const settingsManager = (() => {
                         ? { ...currentSelectedItem, name: newConfig.name, config: updatedAgentConfig }
                         : { ...currentSelectedItem, ...updatedAgentConfig, name: newConfig.name };
                     refs.currentSelectedItemRef.set(nextSelectedItem);
+                    window.dispatchEvent(new CustomEvent('vcp-tool-presentation-changed'));
 
                     // Update other UI parts via callbacks or direct calls if modules are passed in
                     if (mainRendererFunctions.updateChatHeader) {
@@ -698,8 +766,12 @@ const settingsManager = (() => {
             console.error('[SettingsManager] Agent settings saved, but UI projection failed:', projectionError);
             uiHelper.showToastNotification(`Agent设置已保存，但界面刷新失败: ${projectionError.message || projectionError}`, 'warning');
         }
-        reportSettingsSaveResult(agentSettingsForm, true);
-        return { success: true, result };
+        // 侧栏首页按新的立绘和位置重画（没改立绘时也发：焦点、高度跟着配置走）
+        window.dispatchEvent(new CustomEvent('vcp-agent-portrait-changed', {
+            detail: { agentId, filesChanged: portraitFilesChanged }
+        }));
+        if (isSaveContextCurrent()) reportSettingsSaveResult(agentSettingsForm, true);
+        return { success: true, stale: !isSaveContextCurrent(), result };
     }
 
     /**
@@ -795,6 +867,10 @@ const settingsManager = (() => {
             }
 
             if (result && result.success) {
+                if (currentSelectedItem.type === 'agent') {
+                    unsavedAgentDrafts.delete(currentSelectedItem.id);
+                    if (settledAgentId === currentSelectedItem.id) settledAgentId = '';
+                }
                 reportSettingsDeleteResult(agentSettingsForm, true);
                 // Reset state in renderer via refs
                 refs.currentSelectedItemRef.set({ id: null, type: null, name: null, avatarUrl: null, config: null });
@@ -856,6 +932,12 @@ const settingsManager = (() => {
     async function populateTtsModels(currentPrimaryVoice, currentSecondaryVoice) {
         if (!agentTtsVoicePrimarySelect || !agentTtsVoiceSecondarySelect) return;
 
+        const populateToken = agentSettingsPopulateToken;
+        const primarySelect = agentTtsVoicePrimarySelect;
+        const secondarySelect = agentTtsVoiceSecondarySelect;
+        const isCurrent = () => populateToken === agentSettingsPopulateToken
+            && primarySelect === agentTtsVoicePrimarySelect
+            && secondarySelect === agentTtsVoiceSecondarySelect;
         ensureThemedTtsSelects();
         const globalSettings = getGlobalSettings();
         const isNetworkMode = globalSettings.voiceMode === 'network';
@@ -873,6 +955,10 @@ const settingsManager = (() => {
                 ));
             if (!sameStructure) select.replaceChildren(...options);
             select.value = selectedValue || '';
+            // Property writes do not trigger MutationObserver or change.
+            // Refresh presentation only; loading an Agent must not dirty its form.
+            const EventCtor = select.ownerDocument?.defaultView?.CustomEvent ?? CustomEvent;
+            select.dispatchEvent(new EventCtor('vcp-uiux-sync', { bubbles: true }));
         };
 
         try {
@@ -881,6 +967,7 @@ const settingsManager = (() => {
             // Both local and network modes use the upstream TTS capability.
             // The retired WebIndexTTS2 catalog is no longer part of the runtime.
             const models = await electronAPI.sovitsGetModels();
+            if (!isCurrent()) return;
             if (Array.isArray(models)) {
                 optionList = models;
             } else if (models && typeof models === 'object') {
@@ -956,7 +1043,7 @@ const settingsManager = (() => {
             const primaryOptions = createOptionGroups('不使用语音', currentPrimaryVoice);
             const secondaryOptions = createOptionGroups('不使用', currentSecondaryVoice);
             if (optionList.length === 0) {
-                const emptyLabel = isNetworkMode ? '未找到 MiMo 音色' : '未找到模型,请启动Sovits';
+                const emptyLabel = isNetworkMode ? '未找到 MiMo 音色' : '暂无预设，请在 sovits5cppmanager 创建';
                 primaryOptions.push(createOption('', emptyLabel, { disabled: true }));
                 secondaryOptions.push(createOption('', emptyLabel, { disabled: true }));
             }
@@ -964,6 +1051,7 @@ const settingsManager = (() => {
             commitOptions(agentTtsVoiceSecondarySelect, secondaryOptions, currentSecondaryVoice);
             ensureThemedTtsSelects();
         } catch (error) {
+            if (!isCurrent()) return;
             console.error('Failed to get TTS models:', error);
             const errorLabel = isNetworkMode ? '获取网络音色失败' : '获取模型失败';
             const primaryErrorOption = document.createElement('option');
@@ -977,7 +1065,7 @@ const settingsManager = (() => {
             commitOptions(agentTtsVoicePrimarySelect, [primaryErrorOption]);
             commitOptions(agentTtsVoiceSecondarySelect, [secondaryErrorOption]);
             ensureThemedTtsSelects();
-            uiHelper.showToastNotification(isNetworkMode ? '获取网络音色失败' : '获取Sovits语音模型失败', 'error');
+            uiHelper.showToastNotification(isNetworkMode ? '获取网络音色失败' : '读取 GSV 本地声音预设失败', 'error');
         }
     }
 
@@ -1153,75 +1241,28 @@ const settingsManager = (() => {
 
                 agentSettingsForm.addEventListener('submit', async (ev) => {
                     ev.preventDefault();
+                    const submitToken = agentSettingsPopulateToken;
+                    const submitDisplayToken = settingsDisplayToken;
                     clearTimeout(agentSettingsAutosaveTimer);
                     updateStateDotIndicator('ongoing');
                     try {
                         const saveResult = await saveCurrentAgentSettings(ev);
+                        if (submitToken !== agentSettingsPopulateToken ||
+                            submitDisplayToken !== settingsDisplayToken || saveResult?.stale) return;
                         if (saveResult && saveResult.success) {
-                            updateStateDotIndicator('done');
+                            updateStateDotIndicator(isAgentSettingsDirty ? 'warning' : 'done');
                         } else {
                             updateStateDotIndicator('warning');
                         }
                     } catch (err) {
                         console.error('[SettingsManager] Save submit error:', err);
-                        updateStateDotIndicator('warning');
-                    }
-                });
-                let lastAutosaveError = null;
-                const markDirtyAndDebounceAutosave = () => {
-                    isAgentSettingsDirty = true;
-                    const currentRev = ++agentSettingsRevision;
-                    updateStateDotIndicator('warning');
-                    clearTimeout(agentSettingsAutosaveTimer);
-                    agentSettingsAutosaveTimer = setTimeout(async () => {
-                        if (!isAgentSettingsDirty || !editingAgentIdInput?.value) return;
-                        const targetAgentId = editingAgentIdInput.value;
-                        const saveRevision = agentSettingsRevision;
-                        try {
-                            console.log('[SettingsManager] Autosaving dirty agent settings for:', targetAgentId);
-                            updateStateDotIndicator('ongoing');
-                            const saveResult = await window.settingsManager?.triggerAgentSave(targetAgentId);
-                            if (saveResult?.stale) {
-                                console.debug(`[SettingsManager] Autosave for ${targetAgentId} cancelled due to context switch.`);
-                                updateStateDotIndicator(isAgentSettingsDirty ? 'warning' : 'idle');
-                                return;
-                            }
-                            if (!saveResult || saveResult.error || saveResult.success === false) {
-                                const err = saveResult?.error || 'Save failed';
-                                console.error(`[SettingsManager] Autosave for ${targetAgentId} failed:`, err);
-                                updateStateDotIndicator('warning');
-                                if (lastAutosaveError !== err) {
-                                    lastAutosaveError = err;
-                                    uiHelper.showToastNotification(`自动保存失败: ${err}`, 'warning');
-                                }
-                                return;
-                            }
-                            if (editingAgentIdInput?.value === targetAgentId) {
-                                lastAutosaveError = null;
-                                if (agentSettingsRevision === saveRevision) {
-                                    isAgentSettingsDirty = false;
-                                    updateStateDotIndicator('done');
-                                } else {
-                                    console.log(`[SettingsManager] Autosave finished for rev ${saveRevision}, but dirty state advanced to ${agentSettingsRevision}. Keeping dirty.`);
-                                    updateStateDotIndicator('warning');
-                                    clearTimeout(agentSettingsAutosaveTimer);
-                                    agentSettingsAutosaveTimer = setTimeout(markDirtyAndDebounceAutosave, 500);
-                                }
-                            }
-                        } catch (err) {
-                            console.debug('[SettingsManager] Autosave deferred/error:', err);
+                        if (submitToken === agentSettingsPopulateToken && submitDisplayToken === settingsDisplayToken) {
                             updateStateDotIndicator('warning');
                         }
-                    }, 500);
-                };
-                agentSettingsForm.addEventListener('input', (ev) => {
-                    if (ev.target?.type === 'file') return;
-                    markDirtyAndDebounceAutosave();
+                    }
                 });
-                agentSettingsForm.addEventListener('change', (ev) => {
-                    if (ev.target?.type === 'file') return;
-                    markDirtyAndDebounceAutosave();
-                });
+                agentSettingsForm.addEventListener('input', markAgentSettingsDirty);
+                agentSettingsForm.addEventListener('change', markAgentSettingsDirty);
             }
             if (deleteItemBtn) {
                 deleteItemBtn.addEventListener('click', handleDeleteCurrentItem);
@@ -1441,9 +1482,13 @@ const settingsManager = (() => {
         // slot owns rows, shortcuts and editor geometry.
         getTtsDirectorPrompts: () => [...currentAgentTtsDirectorPrompts],
         setTtsDirectorPrompts: (prompts) => {
-            currentAgentTtsDirectorPrompts = Array.isArray(prompts)
+            const nextPrompts = Array.isArray(prompts)
                 ? prompts.map(prompt => String(prompt ?? '').trim()).filter(Boolean)
                 : [];
+            const changed = nextPrompts.length !== currentAgentTtsDirectorPrompts.length
+                || nextPrompts.some((prompt, index) => prompt !== currentAgentTtsDirectorPrompts[index]);
+            currentAgentTtsDirectorPrompts = nextPrompts;
+            if (changed) markAgentSettingsDirty();
             updateSectionSummary('tts');
         },
         getTtsDirectorTemplate: () => TTS_DIRECTOR_TEMPLATE,
@@ -1465,98 +1510,18 @@ const settingsManager = (() => {
             }
         },
         handleImportRegex: () => handleImportRegex(),
-        triggerAgentSave: async (overrideAgentId) => {
-            refreshAgentControls();
-            const formAgentId = editingAgentIdInput?.value;
-            const agentId = overrideAgentId || formAgentId;
-            if (!agentId) return;
-            if (agentId !== formAgentId || (promptManager?.getAgentId?.() && promptManager.getAgentId() !== agentId)) {
-                console.debug(`[SettingsManager] Skipping stale triggerAgentSave for ${agentId}; current form is ${formAgentId || 'none'}.`);
-                return { success: false, stale: true };
-            }
-
-            let systemPromptData = {};
-            if (promptManager) {
-                await promptManager.saveCurrentModeData();
-                if (editingAgentIdInput?.value !== agentId || promptManager.getAgentId?.() !== agentId) {
-                    console.debug(`[SettingsManager] Aborting stale triggerAgentSave after prompt persistence for ${agentId}.`);
-                    return { success: false, stale: true };
-                }
-
-                const currentPrompt = await promptManager.getCurrentSystemPrompt();
-                if (editingAgentIdInput?.value !== agentId || promptManager.getAgentId?.() !== agentId) {
-                    console.debug(`[SettingsManager] Aborting stale triggerAgentSave after prompt read for ${agentId}.`);
-                    return { success: false, stale: true };
-                }
-                systemPromptData.systemPrompt = currentPrompt;
-            }
-
-            const currentConfig = refs.currentSelectedItemRef?.get?.()?.config;
-            const resolvedModelInput = getAgentControl('agentModel') || agentModelInput;
-            const resolvedModel = resolvedModelInput ? resolvedModelInput.value.trim() : (currentConfig?.model || 'gemini-pro');
-
-            const newConfig = {
-                name: agentNameInput?.value?.trim() || (currentConfig ? currentConfig.name : agentId),
-                ...systemPromptData,
-                model: resolvedModel || 'gemini-pro',
-                temperature: parseOptionalNumberInput(agentTemperatureInput, Number.parseFloat),
-                contextTokenLimit: parseOptionalNumberInput(agentContextTokenLimitInput, value => Number.parseInt(value, 10)),
-                maxOutputTokens: parseOptionalNumberInput(agentMaxOutputTokensInput, value => Number.parseInt(value, 10)),
-                top_p: parseOptionalNumberInput(agentTopPInput, Number.parseFloat),
-                top_k: parseOptionalNumberInput(agentTopKInput, value => Number.parseInt(value, 10)),
-                streamOutput: getAgentControl('agentStreamOutputTrue')?.checked ?? true,
-                ttsVoicePrimary: agentTtsVoicePrimarySelect?.value || '',
-                ttsRegexPrimary: agentTtsRegexPrimaryInput?.value?.trim?.() || '',
-                ttsVoiceSecondary: agentTtsVoiceSecondarySelect?.value || '',
-                ttsRegexSecondary: agentTtsRegexSecondaryInput?.value?.trim?.() || '',
-                ttsDirectorPrompts: [...currentAgentTtsDirectorPrompts],
-                ttsSpeed: parseFloat(agentTtsSpeedSlider?.value || 1),
-                stripRegexes: currentAgentRegexes,
-                avatarBorderColor: agentAvatarBorderColorInput?.value || '',
-                nameTextColor: agentNameTextColorInput?.value || '',
-                customCss: agentCustomCssInput?.value?.trim?.() || '',
-                cardCss: getAgentControl('agentCardCss')?.value?.trim?.() || '',
-                chatCss: getAgentControl('agentChatCss')?.value?.trim?.() || '',
-                disableCustomColors: getAgentControl('disableCustomColors')?.checked || false,
-                useThemeColorsInChat: getAgentControl('useThemeColorsInChat')?.checked || false,
-                uiCollapseStates: getCurrentCollapseStates()
-            };
-
-            let result;
-            try {
-                result = await electronAPI.saveAgentConfig(agentId, newConfig);
-            } catch (err) {
-                result = { error: err?.message || String(err) };
-            }
-            if (!result || result.error || result.success === false) {
-                const errorMsg = result?.error || result?.message || 'Save failed';
-                console.error(`[SettingsManager] triggerAgentSave failed for ${agentId}:`, errorMsg);
-                return { success: false, error: errorMsg };
-            }
-            return { success: true, result };
-        },
+        // 兼容旧扩展调用，但禁止绕过保存按钮持久化共享表单。
+        triggerAgentSave: async () => ({
+            success: false,
+            skipped: true,
+            reason: 'manual-save-only',
+            error: '请点击保存 Agent 设置按钮提交更改。'
+        }),
 
         /**
-         * 强制将未保存的设置立即写入磁盘（用于切 Tab 或关闭前）
+         * 切 Tab 或关闭前不隐式提交设置，保留旧生命周期接口。
          */
-        flushPendingSave: async () => {
-            if (!isAgentSettingsDirty || !editingAgentIdInput?.value) return { skipped: true };
-            if (agentSettingsAutosaveTimer) {
-                clearTimeout(agentSettingsAutosaveTimer);
-                agentSettingsAutosaveTimer = null;
-            }
-            const targetAgentId = editingAgentIdInput.value;
-            if (window.settingsManager) window.settingsManager.isFlushing = true;
-            try {
-                const saveResult = await saveCurrentAgentSettings();
-                return saveResult;
-            } catch (err) {
-                console.warn(`[SettingsManager] Failed to flush pending save for ${targetAgentId}:`, err);
-                return { success: false, error: err?.message || String(err) };
-            } finally {
-                if (window.settingsManager) window.settingsManager.isFlushing = false;
-            }
-        },
+        flushPendingSave: async () => ({ skipped: true, reason: 'manual-save-only' }),
 
         /**
          * 重新加载当前 Agent 的设置（用于外部触发刷新）
@@ -1954,7 +1919,7 @@ function resolveRegexSlots() {
         editBtn.className = 'btn-edit-regex';
         editBtn.title = '编辑规则';
         editBtn.setAttribute('aria-label', `编辑规则: ${rule.title || '未命名'}`);
-        editBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 2.5a1.8 1.8 0 0 1 2.5 2.5L5 14H2v-3L11.5 2.5z"/></svg>`;
+        editBtn.innerHTML = window.VCPIcons?.markup('pencil', { size: 15 }) || '<span class="vcp-ui-icon" aria-hidden="true">pencil</span>';
         editBtn.addEventListener('click', () => openRegexModal(rule));
 
         const deleteBtn = document.createElement('button');
@@ -1962,11 +1927,12 @@ function resolveRegexSlots() {
         deleteBtn.className = 'btn-delete-regex';
         deleteBtn.title = '删除规则';
         deleteBtn.setAttribute('aria-label', `删除规则: ${rule.title || '未命名'}`);
-        deleteBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 001 .9h4.6a1 1 0 001-.9L12 4M6.5 6.8v4.4M9.5 6.8v4.4"/></svg>`;
+        deleteBtn.innerHTML = window.VCPIcons?.markup('trash-2', { size: 15 }) || '<span class="vcp-ui-icon" aria-hidden="true">trash-2</span>';
         deleteBtn.addEventListener('click', async () => {
             if (await uiHelper.showConfirmDialog(`确定要删除规则 "${rule.title}" 吗？`, '删除确认', '删除', '取消', true)) {
                 currentAgentRegexes = currentAgentRegexes.filter(r => r.id !== rule.id);
                 renderRegexList();
+                markAgentSettingsDirty();
             }
         });
 
@@ -2074,6 +2040,7 @@ function resolveRegexSlots() {
         }
 
         renderRegexList();
+        markAgentSettingsDirty();
         closeRegexModal();
     }
 
@@ -2082,6 +2049,7 @@ function resolveRegexSlots() {
      */
     async function handleImportRegex() {
         const agentId = editingAgentIdInput.value;
+        const populateToken = agentSettingsPopulateToken;
         if (!agentId) {
             uiHelper.showToastNotification('请先选择一个Agent。', 'warning');
             return;
@@ -2089,11 +2057,20 @@ function resolveRegexSlots() {
 
         try {
             const result = await electronAPI.importRegexRules(agentId);
+            if (editingAgentIdInput?.value !== agentId ||
+                agentSettingsPopulateToken !== populateToken) return;
 
             if (result.success) {
-                currentAgentRegexes = result.rules;
+                const existingKeys = new Set(currentAgentRegexes.map(rule => rule.id || rule.title));
+                for (const rule of result.rules || []) {
+                    const key = rule.id || rule.title;
+                    if (existingKeys.has(key)) continue;
+                    currentAgentRegexes.push(structuredClone(rule));
+                    existingKeys.add(key);
+                }
                 renderRegexList();
-                uiHelper.showToastNotification('正则规则导入成功！', 'success');
+                agentSettingsForm?.dispatchEvent(new CustomEvent('input', { bubbles: true }));
+                uiHelper.showToastNotification('正则规则已导入草稿，请点击保存 Agent 设置以生效。', 'info');
             } else if (!result.canceled) {
                 // Don't show an error if the user just canceled the dialog
                 uiHelper.showToastNotification(`导入失败: ${result.error}`, 'error');
@@ -2342,6 +2319,7 @@ function resolveRegexSlots() {
         sectionControllers.clear();
 
         createSectionController('identity', buildIdentitySummary);
+        ensurePortraitSettings();
         createSectionController('prompt', buildPromptSummary);
         createSectionController('model', buildModelSummary);
         createSectionController('params', buildParamsSummary);
@@ -2474,27 +2452,8 @@ function resolveRegexSlots() {
     }
 
     async function persistCollapseStatesForCurrentSelection() {
-        const currentSelectedItem = refs.currentSelectedItemRef?.get?.();
-        const agentId = editingAgentIdInput?.value || currentSelectedItem?.id;
-        if (!agentId || !electronAPI?.updateAgentConfig) {
-            return;
-        }
-
-        const collapseStates = getCurrentCollapseStates();
-        const signature = `${agentId}:${JSON.stringify(collapseStates)}`;
-        if (signature === lastPersistedCollapseStateSignature) {
-            return;
-        }
-
-        syncCollapseStatesToCurrentSelection(collapseStates);
-        lastPersistedCollapseStateSignature = signature;
-
-        try {
-            await electronAPI.updateAgentConfig(agentId, { uiCollapseStates: collapseStates });
-        } catch (error) {
-            console.error('[SettingsManager] Failed to persist collapse states:', error);
-            lastPersistedCollapseStateSignature = '';
-        }
+        // 兼容展示层命令名称；折叠状态随保存按钮提交，不单独写配置。
+        return { skipped: true, reason: 'manual-save-only' };
     }
 
     /**

@@ -1,7 +1,7 @@
 /**
  * uiManager.js
  *
- * Manages general UI functionalities like the title bar, resizers, theme, and clock.
+ * Manages general UI functionalities like resizers, theme, and sidebar navigation.
  */
 const uiManager = (() => {
     // --- Private Variables ---
@@ -10,8 +10,7 @@ const uiManager = (() => {
     const themeChannel = window.VCPStateChannels?.create('theme', Object.freeze({ ready: false, effective: 'light' })) || null;
 
     // DOM Elements (will be initialized in init)
-    let leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight;
-    let digitalClockElement, dateDisplayElement, notificationTitleElement;
+    let leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight, vcpSidePane;
     let sidebarTabButtons, sidebarTabContents;
     let lifecycleOwner = null;
     let settingsManagerCapability = null;
@@ -25,6 +24,11 @@ const uiManager = (() => {
     let themeDisposer = null;
     const tasks = new Set();
     const fallbackTimers = new Set();
+    const resizers = new Set();
+    const disposeResizers = () => {
+        for (const resizer of resizers) resizer.dispose();
+        resizers.clear();
+    };
     const isCurrent = token => !disposed && token === generation;
     const track = value => {
         const task = Promise.resolve(value);
@@ -49,6 +53,7 @@ const uiManager = (() => {
      * Initializes the resizable sidebars.
      */
     function initializeResizers() {
+        disposeResizers();
         const getWidthConstraints = (element, fallbackMin) => {
             const computed = getComputedStyle(element);
             return {
@@ -56,45 +61,113 @@ const uiManager = (() => {
                 max: parseFloat(computed.maxWidth) || 600
             };
         };
-        const createResizer = (handle, element, fallbackMin, direction, settingKey, beforeBegin) => {
+        const createResizer = (handle, element, fallbackMin, direction, settingKey, label, beforeBegin) => {
             if (!handle || !element || !window.VCPSidebarResizer) return null;
-            return window.VCPSidebarResizer.create({
+            let dragStyles = null;
+            // A focusable separator, like the side pane's handle, so the keyboard
+            // handler below can actually run.
+            const syncAria = (width) => {
+                const bounds = getWidthConstraints(element, fallbackMin);
+                handle.setAttribute('aria-valuemin', String(Math.round(bounds.min)));
+                handle.setAttribute('aria-valuemax', String(Math.round(bounds.max)));
+                handle.setAttribute('aria-valuenow', String(Math.round(width)));
+            };
+            handle.setAttribute('role', 'separator');
+            handle.setAttribute('aria-orientation', 'vertical');
+            handle.setAttribute('aria-label', label);
+            if (!handle.hasAttribute('tabindex')) handle.setAttribute('tabindex', '0');
+            syncAria(element.getBoundingClientRect().width);
+            const persistWidth = async (width) => {
+                if (disposed) return;
+                const currentSettings = globalSettingsRef.get();
+                const roundedWidth = Math.round(width);
+                if (currentSettings[settingKey] === roundedWidth) return;
+                const nextSettings = { ...currentSettings, [settingKey]: roundedWidth };
+                globalSettingsRef.set(nextSettings);
+                try {
+                    await track(saveSettingPatch({ [settingKey]: roundedWidth }));
+                    console.log('Sidebar width saved to settings.');
+                } catch (error) {
+                    console.error('Failed to save sidebar width:', error);
+                }
+            };
+            // Arrow keys resize at once; the setting is written once the keys
+            // stop (or focus leaves), not once per key press.
+            let keyboardCommit = null;
+            const flushKeyboardCommit = () => {
+                if (!keyboardCommit) return;
+                const { timer, width } = keyboardCommit;
+                keyboardCommit = null;
+                clearTimeout(timer);
+                void persistWidth(width);
+            };
+            const resizer = window.VCPSidebarResizer.create({
                 handle,
                 getValue: () => element.getBoundingClientRect().width,
                 getBounds: () => getWidthConstraints(element, fallbackMin),
-                applyValue: (width) => { element.style.width = `${width}px`; },
+                applyValue: (width) => {
+                    element.style.width = `${width}px`;
+                    syncAria(width);
+                },
                 direction,
-                step: 1,
+                step: 20,
                 beforeBegin,
                 onActiveChange: (active) => {
-                    document.body.style.cursor = active ? 'col-resize' : '';
-                    document.body.style.userSelect = active ? 'none' : '';
-                    document.body.classList.toggle('vcp-sidebar-resizing', active);
-                    element.style.transition = active ? 'none' : '';
-                },
-                onCommit: async (width) => {
-                    const currentSettings = globalSettingsRef.get();
-                    const roundedWidth = Math.round(width);
-                    if (currentSettings[settingKey] === roundedWidth) return;
-                    const nextSettings = { ...currentSettings, [settingKey]: roundedWidth };
-                    globalSettingsRef.set(nextSettings);
-                    try {
-                        await saveSettingPatch({ [settingKey]: roundedWidth });
-                        console.log('Sidebar width saved to settings.');
-                    } catch (error) {
-                        console.error('Failed to save sidebar width:', error);
+                    if (active) {
+                        const body = document.body;
+                        dragStyles = {
+                            body,
+                            resizing: body.classList.contains('vcp-sidebar-resizing'),
+                            declarations: [[body.style, 'cursor'], [body.style, 'user-select'], [element.style, 'transition']]
+                                .map(([style, property]) => [style, property, style.getPropertyValue(property), style.getPropertyPriority(property)])
+                        };
+                        body.style.cursor = 'col-resize';
+                        body.style.userSelect = 'none';
+                        body.classList.add('vcp-sidebar-resizing');
+                        element.style.transition = 'none';
+                    } else if (dragStyles) {
+                        for (const [style, property, value, priority] of dragStyles.declarations) {
+                            if (value) style.setProperty(property, value, priority);
+                            else style.removeProperty(property);
+                        }
+                        dragStyles.body.classList.toggle('vcp-sidebar-resizing', dragStyles.resizing);
+                        dragStyles = null;
                     }
                 },
+                onCommit: (width, event) => {
+                    if (event?.type !== 'keydown') {
+                        if (keyboardCommit) {
+                            clearTimeout(keyboardCommit.timer);
+                            keyboardCommit = null;
+                        }
+                        void persistWidth(width);
+                        return;
+                    }
+                    if (keyboardCommit) clearTimeout(keyboardCommit.timer);
+                    keyboardCommit = { width, timer: setTimeout(flushKeyboardCommit, 400) };
+                },
             });
+            handle.addEventListener('blur', flushKeyboardCommit);
+            const owner = {
+                dispose() {
+                    flushKeyboardCommit();
+                    handle.removeEventListener('blur', flushKeyboardCommit);
+                    resizer.dispose();
+                }
+            };
+            resizers.add(owner);
+            return owner;
         };
 
-        createResizer(resizerLeft, leftSidebar, 180, 1, 'sidebarWidth');
-        createResizer(resizerRight, rightNotificationsSidebar, 220, -1, 'notificationsSidebarWidth', (event, resume) => {
-            if (rightNotificationsSidebar.classList.contains('active')) return true;
-            electronAPI.sendToggleNotificationsSidebar();
-            requestAnimationFrame(resume);
-            return false;
-        });
+        createResizer(resizerLeft, leftSidebar, 180, 1, 'sidebarWidth', '调节左侧栏宽度');
+        if (!vcpSidePane && resizerRight && rightNotificationsSidebar) {
+            createResizer(resizerRight, rightNotificationsSidebar, 220, -1, 'notificationsSidebarWidth', '调节通知栏宽度', (event, resume) => {
+                if (rightNotificationsSidebar.classList.contains('active')) return true;
+                electronAPI?.sendToggleNotificationsSidebar?.();
+                requestAnimationFrame(resume);
+                return false;
+            });
+        }
     }
 
     /**
@@ -202,49 +275,6 @@ const uiManager = (() => {
                     applyTheme('light'); // Final fallback
                 }
             }
-        }
-    }
-
-    /**
-     * Updates the digital clock and date display.
-     */
-    function updateDateTimeDisplay() {
-        const now = new Date();
-        if (digitalClockElement) {
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            if (!digitalClockElement.querySelector('.colon')) {
-                digitalClockElement.innerHTML = `<span class="hours">${hours}</span><span class="colon">:</span><span class="minutes">${minutes}</span>`;
-            } else {
-                const hoursSpan = digitalClockElement.querySelector('.hours');
-                const minutesSpan = digitalClockElement.querySelector('.minutes');
-                if (hoursSpan) hoursSpan.textContent = hours;
-                if (minutesSpan) minutesSpan.textContent = minutes;
-            }
-        }
-        if (dateDisplayElement) {
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const dayOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
-            dateDisplayElement.textContent = `${month}-${day} ${dayOfWeek}`;
-        }
-    }
-
-    /**
-     * Initializes the digital clock display.
-     */
-    function initializeDigitalClock() {
-        if (digitalClockElement && notificationTitleElement && dateDisplayElement) {
-            notificationTitleElement.style.display = 'none';
-            updateDateTimeDisplay();
-            // 每分钟更新一次时间显示，减少不必要的每秒刷新
-            const scheduleClock = () => {
-                updateDateTimeDisplay();
-                scheduleTimeout(scheduleClock, 60000);
-            };
-            scheduleTimeout(scheduleClock, 60000);
-        } else {
-            console.error('Digital clock, notification title, or date display element not found.');
         }
     }
 
@@ -358,6 +388,7 @@ const uiManager = (() => {
             leftSidebar.classList.remove('compact-topics-open');
             topicsPanel.classList.remove('compact-drawer-open');
             topicsPanel.setAttribute('aria-hidden', 'true');
+            window.topicListManager?.syncSurfaceVisibility?.();
             compactItems.forEach(item => {
                 item.classList.toggle('active', item.dataset.compactAction === 'agents');
             });
@@ -373,7 +404,8 @@ const uiManager = (() => {
                 item.classList.toggle('active', item.dataset.compactAction === 'topics');
             });
 
-            window.topicListManager?.loadTopicList?.();
+            if (window.topicListManager?.syncSurfaceVisibility) window.topicListManager.syncSurfaceVisibility();
+            else window.topicListManager?.loadTopicList?.();
             window.topicListManager?.setupTopicSearch?.();
             refreshUnreadCounts();
             setCompactMenuOpen(false);
@@ -496,7 +528,9 @@ const uiManager = (() => {
                 if (isActive) {
                     if (targetTab === 'topics') {
                         if (window.topicListManager) {
-                            window.topicListManager.loadTopicList(); // This might create/re-render the topic list and search input
+                            // The surface owner restores its bounded window, reloading
+                            // only when mutations invalidated the hidden snapshot.
+                            if (!window.topicListManager.syncSurfaceVisibility) window.topicListManager.loadTopicList();
                             window.topicListManager.setupTopicSearch(); // Explicitly set up search listeners after the tab is active and list loaded
                         }
                         // 刷新计数
@@ -534,6 +568,7 @@ const uiManager = (() => {
                 }
             });
         }
+        window.topicListManager?.syncSurfaceVisibility?.();
     }
 
     /**
@@ -541,14 +576,10 @@ const uiManager = (() => {
      */
     async function refreshUnreadCounts() {
         const token = generation;
+        if (!isCurrent(token)) return;
         try {
-            const result = await electronAPI.getUnreadTopicCounts();
-            if (!isCurrent(token)) return;
-            if (result && result.success) {
-                if ((itemListManagerCapability || window.itemListManager)?.updateUnreadBadges) {
-                    (itemListManagerCapability || window.itemListManager).updateUnreadBadges(result.counts);
-                }
-            }
+            const manager = itemListManagerCapability || window.itemListManager;
+            await manager?.refreshUnreadCounts?.({ isCurrent: () => isCurrent(token), maxAgeMs: 2000 });
         } catch (error) {
             console.error('[UIManager][refreshUnreadCounts] Error:', error);
         }
@@ -570,11 +601,9 @@ const uiManager = (() => {
             // Assign DOM elements from options.elements
             leftSidebar = options.elements.leftSidebar;
             rightNotificationsSidebar = options.elements.rightNotificationsSidebar;
+            vcpSidePane = options.elements.vcpSidePane || null;
             resizerLeft = options.elements.resizerLeft;
             resizerRight = options.elements.resizerRight;
-            digitalClockElement = options.elements.digitalClockElement;
-            dateDisplayElement = options.elements.dateDisplayElement;
-            notificationTitleElement = options.elements.notificationTitleElement;
             sidebarTabButtons = options.elements.sidebarTabButtons;
             sidebarTabContents = options.elements.sidebarTabContents;
 
@@ -584,7 +613,6 @@ const uiManager = (() => {
                 initializeResizers();
                 await track(initializeTheme(token)); // Replaces loadAndApplyThemePreference
                 if (!isCurrent(token)) return false;
-                initializeDigitalClock();
                 setupSidebarTabs();
                 setupCompactSidebarNavigation();
                 if (!document.querySelector('.sidebar-tab-button.active[data-tab="settings"]')) {
@@ -604,6 +632,7 @@ const uiManager = (() => {
             if (disposed) return;
             disposed = true;
             generation += 1;
+            disposeResizers();
             themeDisposer?.();
             themeDisposer = null;
             for (const timer of fallbackTimers) clearTimeout(timer);
@@ -613,8 +642,7 @@ const uiManager = (() => {
             settingsManagerCapability = null;
             itemListManagerCapability = null;
             uiHelperCapability = null;
-            leftSidebar = rightNotificationsSidebar = resizerLeft = resizerRight = null;
-            digitalClockElement = dateDisplayElement = notificationTitleElement = null;
+            leftSidebar = rightNotificationsSidebar = resizerLeft = resizerRight = vcpSidePane = null;
             sidebarTabButtons = sidebarTabContents = null;
         }
     };

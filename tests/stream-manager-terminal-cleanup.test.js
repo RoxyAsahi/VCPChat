@@ -750,6 +750,42 @@ test('thinking and streaming messages opt out of content-visibility clipping', (
     );
 });
 
+test('chat presentation surfaces retain frosted backdrops without nested card captures', () => {
+    const chatCss = fs.readFileSync('styles/chat.css', 'utf8');
+    const messageRendererCss = fs.readFileSync('styles/messageRenderer.css', 'utf8');
+
+    assert.match(
+        chatCss,
+        /\.message-item \.md-content\s*\{[^}]*backdrop-filter:\s*blur\(12px\);[^}]*-webkit-backdrop-filter:\s*blur\(12px\);[^}]*\}/,
+        'ordinary bubbles must retain their frosted backdrop'
+    );
+    assert.match(
+        chatCss,
+        /body\.chat-presentation-panel \.chat-messages-container,\s*body\.chat-presentation-immersive \.chat-messages-container\s*\{[^}]*background:\s*var\(--chat-presentation-surface\);[^}]*backdrop-filter:\s*var\(--chat-presentation-surface-filter\);[^}]*-webkit-backdrop-filter:\s*var\(--chat-presentation-surface-filter\);[^}]*\}/,
+        'panel and immersive modes must retain a shared frosted message surface'
+    );
+
+    for (const mode of ['panel', 'immersive']) {
+        assert.match(
+            chatCss,
+            new RegExp(`body\\.chat-presentation-${mode} \\.message-item \\.md-content,[^{}]*\\{[^}]*background:\\s*transparent !important;[^}]*backdrop-filter:\\s*none;[^}]*-webkit-backdrop-filter:\\s*none;[^}]*\\}`),
+            `${mode} message bodies must not stack blur over the shared surface`
+        );
+    }
+
+    for (const selector of [
+        '\\.vcp-tool-call-summary-bubble',
+        '\\.vcp-desktop-push-placeholder',
+        '\\.vcp-flowlock-bubble',
+    ]) {
+        assert.match(
+            messageRendererCss,
+            new RegExp(`${selector}\\s*\\{[\\s\\S]*?backdrop-filter:\\s*none;[\\s\\S]*?-webkit-backdrop-filter:\\s*none;[\\s\\S]*?\\}`),
+            `${selector} must remain a paint-only translucent card`
+        );
+    }
+});
+
 
 test('a live stream frame reclaims the final message floor after a late history batch mounts', async () => {
     const createStreamProjection = await loadFactory();
@@ -824,4 +860,122 @@ test('a live stream frame reclaims the final message floor after a late history 
 
     await projection.dispose();
     dom.window.close();
+});
+
+
+function terminalGate() {
+    let resolve;
+    let reject;
+    const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+    return { promise, resolve, reject };
+}
+
+test('concurrent terminal callers share initialization replay and the same final result', async () => {
+    const factory = await loadFactory();
+    const dom = new JSDOM('<!doctype html><div id="chat"></div>');
+    const prepared = terminalGate();
+    let finalizations = 0;
+    const projection = factory();
+    projection.attachStreamProjection(createDependencies(dom, {
+        viewAuthority: { isCurrent: () => false },
+        transientStreamHistory: {
+            prepare: () => prepared.promise,
+            async finalize({ messageId, content }) {
+                finalizations++;
+                assert.equal(content, 'buffered');
+                return { message: { id: messageId }, history: [] };
+            },
+            discard() {}, dispose() {},
+        },
+    }));
+    try {
+        const message = { id: 'pending-terminal', agentId: 'a', topicId: 't', streamOperationId: 'op', content: '' };
+        const starting = projection.startStreamingMessage(message);
+        projection.appendStreamChunk(message.id, { content: 'buffered' }, message, 'op');
+        const first = projection.projectStreamTerminal(message.id, 'completed', message);
+        const second = projection.projectStreamTerminal(message.id, 'completed', message);
+        await Promise.resolve();
+        prepared.resolve();
+        await starting;
+        const results = await Promise.all([first, second]);
+        assert.equal(results[0], results[1]);
+        assert.equal(finalizations, 1);
+        assert.deepEqual(normalizeDiagnostics(projection), emptyDiagnostics);
+    } finally {
+        await projection.dispose();
+        dom.window.close();
+    }
+});
+
+test('a rejected old terminal cannot discard the retry operation', async () => {
+    const factory = await loadFactory();
+    const dom = new JSDOM('<!doctype html><div id="chat"></div>');
+    const gate = terminalGate();
+    const entered = terminalGate();
+    const projection = factory();
+    projection.attachStreamProjection(createDependencies(dom, {
+        viewAuthority: { isCurrent: () => false },
+        transientStreamHistory: {
+            async prepare() {},
+            finalize() { entered.resolve(); return gate.promise; },
+            discard() {}, dispose() {},
+        },
+    }));
+    try {
+        const message = { id: 'terminal-retry', agentId: 'a', topicId: 't', content: '' };
+        await projection.startStreamingMessage({ ...message, streamOperationId: 'old' });
+        const terminal = projection.projectStreamTerminal(message.id, 'completed', { ...message, streamOperationId: 'old' });
+        await entered.promise;
+        await projection.startStreamingMessage({ ...message, streamOperationId: 'new' });
+        gate.reject(new Error('controlled old finalize rejection'));
+        await terminal;
+        projection.appendStreamChunk(message.id, { content: 'new text' }, message, 'new');
+        const snapshots = projection.snapshotConversation({ itemType: 'agent', itemId: 'a', topicId: 't' });
+        assert.equal(snapshots.length, 1);
+        assert.equal(snapshots[0].streamOperationId, 'new');
+        assert.equal(snapshots[0].accumulatedText, 'new text');
+    } finally {
+        await projection.dispose();
+        dom.window.close();
+    }
+});
+
+test('navigation during terminal history await releases runtime without writing the new view', async () => {
+    const factory = await loadFactory();
+    const dom = new JSDOM('<!doctype html><div id="chat"></div>');
+    const gate = terminalGate();
+    const entered = terminalGate();
+    let visible = true;
+    let renders = 0;
+    const projection = factory();
+    projection.attachStreamProjection(createDependencies(dom, {
+        viewAuthority: { isCurrent: () => visible },
+        renderMessage: () => { renders++; return null; },
+        transientStreamHistory: {
+            async prepare() {},
+            async finalize() {
+                entered.resolve();
+                await gate.promise;
+                return { message: { id: 'navigate-terminal' }, history: [] };
+            },
+            discard() {}, dispose() {},
+        },
+    }));
+    try {
+        // Start offscreen to avoid requiring an initial DOM projection.
+        visible = false;
+        const message = { id: 'navigate-terminal', agentId: 'a', topicId: 't', content: '', streamOperationId: 'op' };
+        await projection.startStreamingMessage(message);
+        visible = true;
+        const terminal = projection.projectStreamTerminal(message.id, 'completed', message, { fullResponse: 'done' });
+        await entered.promise;
+        visible = false;
+        gate.resolve();
+        await terminal;
+        assert.equal(renders, 0);
+        assert.deepEqual(normalizeDiagnostics(projection), emptyDiagnostics);
+    } finally {
+        await projection.dispose();
+        dom.window.close();
+    }
 });

@@ -12,7 +12,10 @@ module.exports = Object.freeze({
     TRANSLATOR: 'translator',
     MUSIC: 'music',
     THEMES: 'themes',
+    GAME: 'game-hall',
     TASK: 'task',
     PLUGIN_MANAGER: 'plugin-manager',
+    PROJECT_FORGE: 'project-forge',
+    CHART: 'chart-workbench',
     DOCX: 'docx-editor',
 });

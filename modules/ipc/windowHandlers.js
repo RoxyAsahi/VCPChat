@@ -3,6 +3,7 @@ const { ipcMain, app, BrowserWindow, clipboard } = require('electron');
 const crypto = require('crypto');
 const path = require('path');
 const { PRELOAD_ROLES, resolveAppPreload } = require('../services/preloadPaths');
+const windowPinService = require('../services/windowPinService');
 
 /**
  * Initializes window control IPC handlers.
@@ -13,7 +14,6 @@ let ipcHandlersRegistered = false;
 let forumWindowInstance = null;
 let memoWindowInstance = null;
 let logWindowInstance = null;
-let taskWindowInstance = null;
 
 /**
  * 大体积 payload（如截图 dataURL/Blob）通过 token 在主进程内一次性缓存，
@@ -61,6 +61,33 @@ function initialize(mainWindow, openChildWindows) {
         if (win) {
             win.unmaximize();
         }
+    });
+
+    ipcMain.handle('supports-pin-window', (event) => {
+        if (!windowPinService.WindowPinDriver?.isSupported?.()) return false;
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win || win === mainWindow) return false;
+        if (event.sender !== win.webContents) return false;
+        if (windowPinService.isExcludedWindow?.(win, mainWindow)) return false;
+        return true;
+    });
+
+    ipcMain.handle('toggle-pin-window', (event) => {
+        if (!windowPinService.WindowPinDriver?.isSupported?.()) return false;
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win || win === mainWindow) return false;
+        if (event.sender !== win.webContents) return false;
+        if (windowPinService.isExcludedWindow?.(win, mainWindow)) return false;
+        return windowPinService.togglePin(win);
+    });
+
+    ipcMain.handle('is-window-pinned', (event) => {
+        if (!windowPinService.WindowPinDriver?.isSupported?.()) return false;
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win || win === mainWindow) return false;
+        if (event.sender !== win.webContents) return false;
+        if (windowPinService.isExcludedWindow?.(win, mainWindow)) return false;
+        return windowPinService.isPinned(win);
     });
 
     ipcMain.on('close-window', (event) => {
@@ -128,7 +155,7 @@ function initialize(mainWindow, openChildWindows) {
      * 拿到一个一次性 token，用于在打开图片预览窗口时跨进程取数据，
      * 避免把超长字符串塞到 BrowserWindow.loadURL 的 query 参数里。
      */
-    ipcMain.handle('image-viewer:register-payload', (event, payload = {}) => {
+    ipcMain.handle('image-viewer:register-payload', (_event, payload = {}) => {
         cleanupExpiredImagePayloads();
         const { src, title = '图片预览', theme = 'dark' } = payload || {};
         if (typeof src !== 'string' || !src) {
@@ -147,7 +174,7 @@ function initialize(mainWindow, openChildWindows) {
     /**
      * 图片预览窗口加载完毕后通过此通道一次性拉走 payload，主进程随即清理引用。
      */
-    ipcMain.handle('image-viewer:consume-payload', (event, token) => {
+    ipcMain.handle('image-viewer:consume-payload', (_event, token) => {
         if (!token || typeof token !== 'string') return null;
         const payload = imageViewerPayloads.get(token);
         if (!payload) return null;
@@ -163,7 +190,7 @@ function initialize(mainWindow, openChildWindows) {
      * Chromium 的 Async Clipboard API 在部分版本中不接受 image/gif。
      * 将原始 GIF 字节交给 Electron 主进程写入原生剪贴板格式，保留全部动画帧。
      */
-    ipcMain.handle('image-viewer:copy-gif', (event, gifBytes) => {
+    ipcMain.handle('image-viewer:copy-gif', (_event, gifBytes) => {
         const buffer = Buffer.from(gifBytes || []);
         const isGif = buffer.length >= 6
             && (buffer.subarray(0, 6).toString('ascii') === 'GIF87a'
@@ -183,7 +210,7 @@ function initialize(mainWindow, openChildWindows) {
         return { success: true, format, size: buffer.length };
     });
 
-    ipcMain.on('open-image-viewer', (event, payload = {}) => {
+    ipcMain.on('open-image-viewer', (_event, payload = {}) => {
         const { src, title, theme } = payload || {};
         if (!src) {
             console.error('[WindowHandlers] open-image-viewer received empty src.');
@@ -217,6 +244,7 @@ function initialize(mainWindow, openChildWindows) {
             ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }), // 隐藏标题栏
             webPreferences: {
                 preload: resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
             },
@@ -258,7 +286,7 @@ function initialize(mainWindow, openChildWindows) {
         });
     });
 
-    ipcMain.on('open-forum-window', (event) => {
+    ipcMain.on('open-forum-window', (_event) => {
         if (forumWindowInstance && !forumWindowInstance.isDestroyed()) {
             if (!forumWindowInstance.isVisible()) {
                 forumWindowInstance.show();
@@ -278,6 +306,7 @@ function initialize(mainWindow, openChildWindows) {
             ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
             webPreferences: {
                 preload: resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
             },
@@ -315,7 +344,7 @@ function initialize(mainWindow, openChildWindows) {
         });
     });
 
-    ipcMain.on('open-memo-window', (event) => {
+    ipcMain.on('open-memo-window', (_event) => {
         if (memoWindowInstance && !memoWindowInstance.isDestroyed()) {
             if (!memoWindowInstance.isVisible()) {
                 memoWindowInstance.show();
@@ -335,6 +364,7 @@ function initialize(mainWindow, openChildWindows) {
             ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
             webPreferences: {
                 preload: resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
             },
@@ -372,7 +402,7 @@ function initialize(mainWindow, openChildWindows) {
         });
     });
 
-    ipcMain.on('open-log-window', (event) => {
+    ipcMain.on('open-log-window', (_event) => {
         if (logWindowInstance && !logWindowInstance.isDestroyed()) {
             if (!logWindowInstance.isVisible()) {
                 logWindowInstance.show();
@@ -392,6 +422,7 @@ function initialize(mainWindow, openChildWindows) {
             ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
             webPreferences: {
                 preload: resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
             },
@@ -427,11 +458,13 @@ function initialize(mainWindow, openChildWindows) {
         });
     });
 
-    ipcMain.on('open-task-window', async (event) => {
+    ipcMain.on('open-task-window', async (_event) => {
         const windowService = require('../services/windowService');
         const WINDOW_APP_IDS = require('../services/windowAppIds');
         await windowService.open(WINDOW_APP_IDS.TASK);
     });
+
+    windowPinService.setupGlobalWindowPinObserver(app, mainWindow);
 
     ipcHandlersRegistered = true;
 }

@@ -1,4 +1,6 @@
 // modules/renderer/messageContextMenu.js
+import { effectiveContextHistory, isContextCheckpoint } from '../chat/contextCompactionState.js';
+import { assembleRequestMessages } from '../chat/chatContextPipeline.js';
 
 /** Creates one context-menu state owner for one MessageRenderer instance. */
 export function createMessageContextMenu() {
@@ -69,8 +71,61 @@ function showContextMenu(event, messageItem, message) {
     menu.id = 'chatContextMenu';
     menu.classList.add('context-menu');
 
+    const activeSel = ownerWindow?.getSelection ? ownerWindow.getSelection() : null;
+    let selectedTextSnapshot = '';
+    if (activeSel && !activeSel.isCollapsed && activeSel.rangeCount > 0) {
+        try {
+            const range = activeSel.getRangeAt(0);
+            if (messageItem.contains(range.commonAncestorContainer) || messageItem.contains(range.startContainer)) {
+                selectedTextSnapshot = activeSel.toString().trim();
+            }
+        } catch {
+            // ignore range errors
+        }
+    }
+
     const isThinkingOrStreaming = message.isThinking || messageItem.classList.contains('streaming');
     const isError = message.finishReason === 'error';
+
+    const createInterruptGroupQueueOption = () => {
+        if (currentSelectedItemVal.type !== 'group') return null;
+        const interruptGroupQueueOption = ownerDocument.createElement('div');
+        interruptGroupQueueOption.classList.add('context-menu-item', 'danger-item');
+        interruptGroupQueueOption.innerHTML = `<i class="fas fa-stop"></i> 中止群聊`;
+        interruptGroupQueueOption.onclick = async () => {
+            closeContextMenu();
+
+            if (!currentSelectedItemVal.id || !currentTopicIdVal) {
+                uiHelper.showToastNotification('无法中止群聊队列：群组或话题上下文不完整。', 'error');
+                return;
+            }
+
+            if (typeof ownerWindow.GroupRenderer?.interruptGroupChatQueue === 'function') {
+                await ownerWindow.GroupRenderer.interruptGroupChatQueue(
+                    currentSelectedItemVal.id,
+                    currentTopicIdVal
+                );
+                return;
+            }
+
+            if (typeof electronAPI?.interruptGroupChatQueue === 'function') {
+                const result = await electronAPI.interruptGroupChatQueue(
+                    currentSelectedItemVal.id,
+                    currentTopicIdVal
+                );
+                uiHelper.showToastNotification(
+                    result?.success
+                        ? '已中止群聊队列。'
+                        : `中止群聊队列失败：${result?.error || '未知错误'}`,
+                    result?.success ? 'success' : 'error'
+                );
+                return;
+            }
+
+            uiHelper.showToastNotification('无法中止群聊队列：接口不可用。', 'error');
+        };
+        return interruptGroupQueueOption;
+    };
 
     if (isThinkingOrStreaming) {
         const interruptOption = ownerDocument.createElement('div');
@@ -100,7 +155,18 @@ function showContextMenu(event, messageItem, message) {
                     uiHelper.showToastNotification("无法发送群聊中止信号 (API不存在)。", "error");
                 }
             } else {
-                // --- 普通单聊中止逻辑 ---
+                // Explicit user Stop; automatic tool-return interruption never enters here.
+                contextMenuDependencies.cancelStreamAdmissionRelay?.(activeMessageId);
+                if (typeof electronAPI?.topicAdmissionCancelPending === 'function') {
+                    const scope = {
+                        itemType: 'agent',
+                        itemId: message.context?.agentId || message.agentId || currentSelectedItemVal.id,
+                        topicId: message.context?.topicId || message.topicId || currentTopicIdVal,
+                    };
+                    Promise.resolve(electronAPI.topicAdmissionCancelPending(scope)).then(receipt => {
+                        if (!receipt?.success) throw new Error(receipt?.error || receipt?.code || '取消未确认');
+                    }).catch(error => uiHelper.showToastNotification(`后续队列取消未确认：${error.message}`, 'error'));
+                }
                 console.log(`[ContextMenu] Attempting to interrupt AGENT message: ${activeMessageId}`);
                 if (contextMenuDependencies.interruptHandler && typeof contextMenuDependencies.interruptHandler.interrupt === 'function') {
                     const result = await contextMenuDependencies.interruptHandler.interrupt(activeMessageId);
@@ -109,10 +175,10 @@ function showContextMenu(event, messageItem, message) {
                     } else {
                         console.warn(`[ContextMenu] Interrupt failed: ${result.error}`);
                         uiHelper.showToastNotification(`中止失败: ${result.error}`, "error");
-                        
+
                         // 中止失败时手动finalize消息
                         await cancelOwnedStream(activeMessageId, result.error || 'agent-interrupt-failed');
-                        
+
                         // Flowlock 不在此处直接恢复。中止/错误后的重试由对应 Agent Session
                         // 基于 messageId/context 的最终事件统一调度，避免读取其他 Agent 的输入框。
                     }
@@ -124,8 +190,13 @@ function showContextMenu(event, messageItem, message) {
             }
         };
         menu.appendChild(interruptOption);
+
+        const interruptGroupQueueOption = createInterruptGroupQueueOption();
+        if (interruptGroupQueueOption) {
+            menu.appendChild(interruptGroupQueueOption);
+        }
     }
-    
+
     // For non-thinking/non-streaming messages (including errors and completed messages)
     if (!isThinkingOrStreaming) {
         const isEditing = messageItem.classList.contains('message-item-editing');
@@ -142,6 +213,37 @@ function showContextMenu(event, messageItem, message) {
             menu.appendChild(editOption);
         }
 
+        if (currentSelectedItemVal.type === 'agent' && contextMenuDependencies.compactContext) {
+            const compactOption = ownerDocument.createElement('div');
+            compactOption.className = 'context-menu-item';
+            compactOption.innerHTML = '<i class="fas fa-compress-alt" aria-hidden="true"></i> 压缩前文';
+            compactOption.title = '压缩截至本楼层（含本条）的前文，在本楼层后插入压缩点，后续消息保持不变';
+            compactOption.onclick = async () => {
+                closeContextMenu();
+                try {
+                    if (!message.id) throw new Error('该楼层缺少消息标识，无法定位压缩点');
+                    await contextMenuDependencies.compactContext({
+                        scope: { itemId: currentSelectedItemVal.id, itemType: currentSelectedItemVal.type, topicId: currentTopicIdVal },
+                        throughMessageId: message.id,
+                    });
+                }
+                catch (error) {
+                    uiHelper.showToastNotification(`压缩失败：${error.message}`, 'error');
+                    if (error.compactionDiagnostic && typeof electronAPI?.openTextInNewWindow === 'function') {
+                        try {
+                            await electronAPI.openTextInNewWindow(
+                                error.compactionDiagnostic,
+                                '上下文压缩失败：模型返回原文',
+                                ownerDocument.body.classList.contains('light-theme') ? 'light' : 'dark'
+                            );
+                        } catch (diagnosticError) {
+                            console.error('[ContextCompaction] Failed to open response diagnostic:', diagnosticError);
+                        }
+                    }
+                }
+            };
+            menu.appendChild(compactOption);
+        }
         const copyOption = ownerDocument.createElement('div');
         copyOption.classList.add('context-menu-item');
         copyOption.innerHTML = `<i class="fas fa-copy"></i> 复制文本`;
@@ -169,7 +271,7 @@ function showContextMenu(event, messageItem, message) {
                 }
                 textToCopy = contentToProcess.replace(/<img[^>]*>/g, '').trim();
             }
-            
+
             navigator.clipboard.writeText(textToCopy);
             uiHelper.showToastNotification("已复制渲染后的文本。", "success");
             closeContextMenu();
@@ -217,6 +319,23 @@ function showContextMenu(event, messageItem, message) {
             menu.appendChild(createBranchOption);
         }
 
+        if (currentSelectedItemVal.type === 'agent' && typeof ownerWindow?.openSideChatWithSelection === 'function') {
+            const sideChatOption = ownerDocument.createElement('div');
+            sideChatOption.classList.add('context-menu-item');
+            sideChatOption.innerHTML = `<i class="fas fa-columns"></i> 侧栏提问`;
+            sideChatOption.onclick = async () => {
+                closeContextMenu();
+                if (typeof ownerWindow?.openSideChatWithSelection === 'function') {
+                    await ownerWindow.openSideChatWithSelection({
+                        messageItem,
+                        message,
+                        selectedText: selectedTextSnapshot || null
+                    });
+                }
+            };
+            menu.appendChild(sideChatOption);
+        }
+
         const forwardOption = ownerDocument.createElement('div');
         forwardOption.classList.add('context-menu-item');
         forwardOption.innerHTML = `<i class="fas fa-share"></i> 转发消息`;
@@ -248,7 +367,7 @@ function showContextMenu(event, messageItem, message) {
 
                 try {
                     const agentConfig = await electronAPI.getAgentConfig(agentId);
-                    
+
                     // 检查是否获取配置失败
                     if (agentConfig && agentConfig.error) {
                         console.error('[MessageContextMenu] Failed to get agent config for TTS:', agentConfig.error);
@@ -256,7 +375,7 @@ function showContextMenu(event, messageItem, message) {
                         closeContextMenu();
                         return;
                     }
-                    
+
                     if (agentConfig && agentConfig.ttsVoicePrimary) {
                         const contentDiv = messageItem.querySelector('.md-content');
                         const textToRead = contextMenuDependencies.extractSpeakableTextFromContentElement
@@ -319,10 +438,10 @@ function showContextMenu(event, messageItem, message) {
                     // The content from history can be a string or an object like { text: "..." }
                     const rawContent = result.content;
                     const contentString = (typeof rawContent === 'string') ? rawContent : (rawContent?.text || '');
-                    
+
                     const windowTitle = `阅读: ${message.id.substring(0, 10)}...`;
                     const currentTheme = ownerDocument.body.classList.contains('light-theme') ? 'light' : 'dark';
-                    
+
                     if (electronAPI && typeof electronAPI.openTextInNewWindow === 'function') {
                         electronAPI.openTextInNewWindow(contentString, windowTitle, currentTheme);
                     }
@@ -351,47 +470,96 @@ function showContextMenu(event, messageItem, message) {
             } else {
                 textForConfirm = '[消息内容无法预览]';
             }
-            
+
             if (await uiHelper.showConfirmDialog(`确定要删除此消息吗？\n"${textForConfirm.substring(0, 50)}${textForConfirm.length > 50 ? '...' : ''}"`, '删除确认', '删除', '取消', true)) {
                 contextMenuDependencies.removeMessageById(message.id, true); // Pass true to save history
             }
             closeContextMenu();
         };
-        
+
         // Regenerate option should be here to maintain order
         if (message.role === 'assistant' && !message.isGroupMessage && currentSelectedItemVal.type === 'agent') {
             const regenerateOption = ownerDocument.createElement('div');
             regenerateOption.classList.add('context-menu-item', 'regenerate-text');
             regenerateOption.innerHTML = `<i class="fas fa-sync-alt"></i> 重新回复`;
             regenerateOption.onclick = () => {
-                handleRegenerateResponse(message);
                 closeContextMenu();
+                handleRegenerateResponse(message);
             };
             menu.appendChild(regenerateOption);
         }
-        
+
         // 新增：群聊中的“重新回复”功能
         if (message.role === 'assistant' && message.isGroupMessage) {
             const redoGroupOption = ownerDocument.createElement('div');
             redoGroupOption.classList.add('context-menu-item', 'regenerate-text');
             redoGroupOption.innerHTML = `<i class="fas fa-sync-alt"></i> 重新回复`;
-            redoGroupOption.onclick = () => {
+            redoGroupOption.onclick = async () => {
+                closeContextMenu();
                 const { electronAPI, uiHelper } = mainRefs;
                 const currentSelectedItem = mainRefs.currentSelectedItemRef.get();
                 const currentTopicId = mainRefs.currentTopicIdRef.get();
 
                 if (currentSelectedItem.type === 'group' && currentTopicId && message.id && message.agentId) {
+                    const historySnapshot = mainRefs.currentChatHistoryRef?.get?.() || [];
+                    const tailState = evaluateRegenerateTailState(historySnapshot, message.id);
+                    const enableConfirmation = mainRefs.globalSettingsRef?.get?.()?.enableRegenerateConfirmation !== false;
+
+                    if (enableConfirmation && tailState.found && !tailState.isLatestSubstantive) {
+                        const confirmed = await uiHelper.showConfirmDialog(
+                            `该消息后已有 ${tailState.subsequentCount} 条后续发言，重新回复将移除当前消息并在群聊末尾重新生成。是否继续？`,
+                            '重新回复确认',
+                            '继续',
+                            '取消',
+                            false
+                        );
+                        if (!confirmed) return;
+
+                        const activeItem = mainRefs.currentSelectedItemRef?.get?.();
+                        const activeTopicId = mainRefs.currentTopicIdRef?.get?.();
+                        if (
+                            !activeItem
+                            || activeItem.type !== 'group'
+                            || activeItem.id !== currentSelectedItem.id
+                            || activeTopicId !== currentTopicId
+                        ) {
+                            return;
+                        }
+                    }
+
                     // 调用新的IPC接口
                     electronAPI.redoGroupChatMessage(currentSelectedItem.id, currentTopicId, message.id, message.agentId);
                 } else {
                     uiHelper.showToastNotification("无法重新回复：缺少群聊上下文信息。", "error");
                 }
-                closeContextMenu();
             };
             menu.appendChild(redoGroupOption);
         }
 
+        // 这条回复对应的模型调用：在侧栏「调用轨迹」里定位到发出它的那次请求
+        const ownerCommands = ownerWindow?.VCPContributions?.commands;
+        if (message.role === 'assistant' && message.id && ownerCommands?.get('sidepane.open-trajectory')) {
+            const trajectoryOption = ownerDocument.createElement('div');
+            trajectoryOption.classList.add('context-menu-item');
+            trajectoryOption.innerHTML = `<i class="fas fa-route"></i> 调用轨迹`;
+            trajectoryOption.onclick = () => {
+                closeContextMenu();
+                ownerCommands.execute('sidepane.open-trajectory', { requestId: message.id });
+            };
+            menu.appendChild(trajectoryOption);
+        }
+
+        const interruptGroupQueueOption = createInterruptGroupQueueOption();
+        if (interruptGroupQueueOption) {
+            menu.appendChild(interruptGroupQueueOption);
+        }
+
         menu.appendChild(deleteOption);
+    }
+
+    // 超过 8 个选项时使用双列布局，先应用布局再测量，确保边缘避让尺寸正确。
+    if (menu.querySelectorAll('.context-menu-item').length > 8) {
+        menu.classList.add('context-menu--two-columns');
     }
 
     menu.style.visibility = 'hidden';
@@ -423,7 +591,10 @@ function showContextMenu(event, messageItem, message) {
 
 function toggleEditMode(messageItem, message) {
     const { electronAPI, markedInstance, uiHelper } = mainRefs;
-    const currentChatHistoryArray = mainRefs.currentChatHistoryRef.get();
+    if (isContextCheckpoint(message)) {
+        uiHelper.showToastNotification('压缩快照为只读状态，请通过阅读模式查看原文', 'info');
+        return;
+    }
     const currentSelectedItemVal = mainRefs.currentSelectedItemRef.get();
     const currentTopicIdVal = mainRefs.currentTopicIdRef.get();
 
@@ -442,7 +613,7 @@ function toggleEditMode(messageItem, message) {
         } else {
             textToDisplay = '[内容错误]';
         }
-        
+
         // 🟢 修复：使用 updateMessageContent 确保正则规则被应用
         if (contextMenuDependencies.updateMessageContent) {
             contextMenuDependencies.updateMessageContent(message.id, textToDisplay);
@@ -479,7 +650,7 @@ function toggleEditMode(messageItem, message) {
 
         const textarea = ownerDocument.createElement('textarea');
         textarea.classList.add('message-edit-textarea');
-        
+
         let textForEditing = "";
         if (typeof message.content === 'string') {
             textForEditing = message.content;
@@ -498,36 +669,48 @@ function toggleEditMode(messageItem, message) {
         const saveButton = ownerDocument.createElement('button');
         saveButton.innerHTML = `<i class="fas fa-save"></i> 保存`;
         saveButton.onclick = async () => {
-            // 🔧 关键修复：添加防御性编程和错误处理
             const newContent = textarea.value;
-            
-            // Get original content for comparison
+
+            // 编辑器打开后，删除操作、JEV 投影或文件同步都可能原子替换历史数组。
+            // 只要原气泡仍连接在当前 Surface，它就继续拥有编辑权；历史暂时缺少
+            // 该 ID 时使用气泡模型恢复，而不是把同步空窗误判成“消息已变化”。
+            const latestHistory = mainRefs.currentChatHistoryRef.get();
+            const liveMessage = latestHistory.find(msg => msg.id === message.id)
+                || messageItem._vcpMessageModel
+                || message;
+
+            if (!messageItem.isConnected || !liveMessage?.id) {
+                uiHelper.showToastNotification("该消息已离开当前聊天，无法保存编辑。", "warning");
+                return;
+            }
+
+            const visibleItems = Array.from(
+                mainRefs.chatMessagesDiv?.querySelectorAll?.('.message-item[data-message-id]') || []
+            );
+            const visibleIndex = visibleItems.indexOf(messageItem);
+            const previousMessageId = visibleIndex > 0
+                ? visibleItems[visibleIndex - 1]?.dataset?.messageId
+                : null;
+            const nextMessageId = visibleIndex >= 0 && visibleIndex < visibleItems.length - 1
+                ? visibleItems[visibleIndex + 1]?.dataset?.messageId
+                : null;
+
             let originalTextContent = "";
-            if (typeof message.content === 'string') {
-                originalTextContent = message.content;
-            } else if (message.content && typeof message.content.text === 'string') {
-                originalTextContent = message.content.text;
+            if (typeof liveMessage.content === 'string') {
+                originalTextContent = liveMessage.content;
+            } else if (liveMessage.content && typeof liveMessage.content.text === 'string') {
+                originalTextContent = liveMessage.content.text;
             }
 
             // If content hasn't changed, just exit edit mode without saving.
             if (newContent === originalTextContent) {
-                toggleEditMode(messageItem, message);
+                toggleEditMode(messageItem, liveMessage);
                 return;
             }
 
-            const messageIndex = currentChatHistoryArray.findIndex(msg => msg.id === message.id);
-            
-            if (messageIndex === -1) {
-                uiHelper.showToastNotification("无法找到要编辑的消息，编辑失败。", "error");
-                return;
-            }
-
-            // 🔧 保存原始状态以便回滚
-            const originalContent = currentChatHistoryArray[messageIndex].content;
-            const originalMessageContent = message.content;
-            const originalUpdatedAt = currentChatHistoryArray[messageIndex].updatedAt;
-            const originalMessageUpdatedAt = message.updatedAt;
             let watcherLeaseToken = null;
+            let committedHistory = null;
+            let committedMessage = null;
 
             // Watching is ancillary to the edit transaction. Failure to pause
             // or resume it must not turn a durable save into an apparent
@@ -550,31 +733,61 @@ function toggleEditMode(messageItem, message) {
                 console.warn('[EditMode] Failed to pause history watcher; continuing with edit:', watcherError);
             }
 
-            currentChatHistoryArray[messageIndex].content = newContent;
-            message.content = newContent;
-            const updatedAt = Date.now();
-            currentChatHistoryArray[messageIndex].updatedAt = updatedAt;
-            message.updatedAt = updatedAt;
-
             try {
                 if (currentSelectedItemVal.id && currentTopicIdVal) {
                     if (!mainRefs.historyMutationAuthority) throw new Error('History mutation authority is required for message edits');
-                    await mainRefs.historyMutationAuthority.replace({
+                    const updatedAt = Date.now();
+                    const commit = await mainRefs.historyMutationAuthority.mutate({
                         itemId: currentSelectedItemVal.id,
                         itemType: currentSelectedItemVal.type,
                         topicId: currentTopicIdVal,
                         category: 'message-edit',
-                    }, currentChatHistoryArray);
+                    }, historyForSave => {
+                        const nextHistory = [...historyForSave];
+                        let liveIndex = nextHistory.findIndex(entry => entry?.id === message.id);
+
+                        if (liveIndex === -1) {
+                            // 可见气泡仍在，但 JEV/删除写盘竞态使持久历史暂时漏掉它。
+                            // 依据当前 DOM 邻居恢复原楼层；邻居也已变化时按时间戳插入。
+                            const restoredMessage = {
+                                ...liveMessage,
+                                id: message.id
+                            };
+                            const previousIndex = previousMessageId
+                                ? nextHistory.findIndex(entry => entry?.id === previousMessageId)
+                                : -1;
+                            const nextIndex = nextMessageId
+                                ? nextHistory.findIndex(entry => entry?.id === nextMessageId)
+                                : -1;
+
+                            if (previousIndex >= 0) {
+                                liveIndex = previousIndex + 1;
+                            } else if (nextIndex >= 0) {
+                                liveIndex = nextIndex;
+                            } else {
+                                const restoredTimestamp = Number(restoredMessage.timestamp) || 0;
+                                liveIndex = nextHistory.findIndex(entry => (
+                                    (Number(entry?.timestamp) || 0) > restoredTimestamp
+                                ));
+                                if (liveIndex < 0) liveIndex = nextHistory.length;
+                            }
+                            nextHistory.splice(liveIndex, 0, restoredMessage);
+                        }
+
+                        nextHistory[liveIndex] = {
+                            ...nextHistory[liveIndex],
+                            content: newContent,
+                            updatedAt
+                        };
+                        return nextHistory;
+                    });
+                    committedHistory = [...commit.history];
+                    committedMessage = committedHistory.find(entry => entry?.id === message.id) || null;
                 }
             } catch (error) {
-                console.error('[EditMode] Save failed, rolling back:', error);
-                currentChatHistoryArray[messageIndex].content = originalContent;
-                message.content = originalMessageContent;
-                currentChatHistoryArray[messageIndex].updatedAt = originalUpdatedAt;
-                message.updatedAt = originalMessageUpdatedAt;
-                mainRefs.currentChatHistoryRef.set([...currentChatHistoryArray]);
-                
-                // 🔧 重新启动文件监控（即使保存失败）
+                console.error('[EditMode] Save failed:', error);
+
+                // 重新启动文件监控（即使保存失败）
                 if (electronAPI.watcherStart && currentSelectedItemVal.config?.agentDataPath) {
                     try {
                         const historyFilePath = `${currentSelectedItemVal.config.agentDataPath}\\topics\\${currentTopicIdVal}\\history.json`;
@@ -583,14 +796,27 @@ function toggleEditMode(messageItem, message) {
                         console.error('[EditMode] Failed to restart watcher after save failure:', watcherError);
                     }
                 }
-                
+
                 if (uiHelper && typeof uiHelper.showToastNotification === 'function') {
                     uiHelper.showToastNotification(`编辑保存失败: ${error.message}`, "error");
                 }
-                return; // 不退出编辑模式，让用户重试
+                return; // 保存错误保留编辑模式，让用户重试
             }
 
-            mainRefs.currentChatHistoryRef.set([...currentChatHistoryArray]);
+            const activeItem = mainRefs.currentSelectedItemRef.get();
+            if (
+                committedHistory
+                && activeItem?.id === currentSelectedItemVal.id
+                && activeItem?.type === currentSelectedItemVal.type
+                && mainRefs.currentTopicIdRef.get() === currentTopicIdVal
+            ) {
+                mainRefs.currentChatHistoryRef.set(committedHistory);
+            }
+            if (committedMessage) {
+                message.content = committedMessage.content;
+                message.updatedAt = committedMessage.updatedAt;
+                messageItem._vcpMessageModel = committedMessage;
+            }
 
             if (contextMenuDependencies.updateMessageContent) {
                 contextMenuDependencies.updateMessageContent(message.id, newContent);
@@ -623,8 +849,8 @@ function toggleEditMode(messageItem, message) {
                 uiHelper.showToastNotification("消息编辑已保存。", "success");
             }
 
-            // 🔧 只有在保存成功后才退出编辑模式
-            toggleEditMode(messageItem, message);
+            // 只有在保存成功后才退出编辑模式，并使用最新提交模型恢复显示。
+            toggleEditMode(messageItem, committedMessage || message);
         };
 
         const cancelButton = ownerDocument.createElement('button');
@@ -638,9 +864,13 @@ function toggleEditMode(messageItem, message) {
 
         messageItem.appendChild(textarea);
         messageItem.appendChild(controlsDiv);
-         
+
         if (uiHelper.autoResizeTextarea) uiHelper.autoResizeTextarea(textarea);
-        textarea.focus();
+        try {
+            textarea.focus({ preventScroll: true });
+        } catch {
+            textarea.focus();
+        }
         textarea.addEventListener('input', () => uiHelper.autoResizeTextarea(textarea));
         textarea.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
@@ -656,23 +886,81 @@ function toggleEditMode(messageItem, message) {
     }
 }
 
-function attachTimestampMetaToVcpMessage(vcpMessage, historyMessage) {
-    if (!vcpMessage || !historyMessage || !historyMessage.id || typeof historyMessage.timestamp !== 'number') {
-        return vcpMessage;
+// 实时引用上下文标签（与 singleChatRequestOrchestrator.describeLiveReference 同构）。
+function describeLiveReferenceForContext(data) {
+    const ref = data?.workspaceRef;
+    if (data?.liveSource === 'workspace' || ref) {
+        const location = ref?.alias && ref?.relPath ? ` ${ref.alias}: ${ref.relPath}` : '';
+        return `工作区${location}，实时文件，可直接修改`;
     }
+    return '笔记区实时文件，可直接修改';
+}
+
+
+function evaluateRegenerateTailState(historyArray, targetMessageId) {
+    if (!Array.isArray(historyArray) || !targetMessageId) {
+        return { found: false, index: -1, isLatestSubstantive: true, subsequentCount: 0 };
+    }
+    const index = historyArray.findIndex(msg => msg && msg.id === targetMessageId);
+    if (index === -1) {
+        return { found: false, index: -1, isLatestSubstantive: true, subsequentCount: 0 };
+    }
+
+    let subsequentCount = 0;
+    for (let i = index + 1; i < historyArray.length; i++) {
+        const msg = historyArray[i];
+        if (!msg) continue;
+        subsequentCount++;
+    }
+
     return {
-        ...vcpMessage,
-        __vcpchatTimestampMeta: {
-            messageId: historyMessage.id,
-            role: historyMessage.role,
-            timestamp: historyMessage.timestamp
-        }
+        found: true,
+        index,
+        isLatestSubstantive: subsequentCount === 0,
+        subsequentCount,
     };
 }
 
 async function handleRegenerateResponse(originalAssistantMessage) {
     const { electronAPI, uiHelper } = mainRefs;
-    const currentChatHistoryArray = mainRefs.currentChatHistoryRef.get();
+    const selected = mainRefs.currentSelectedItemRef.get();
+    const topicId = mainRefs.currentTopicIdRef.get();
+    if (!selected?.id || selected.type !== 'agent' || !topicId) return;
+    const scope = { itemType: 'agent', itemId: selected.id, topicId };
+    const token = typeof electronAPI.topicAdmissionAcquire === 'function'
+        ? `regen_${Date.now()}_${Math.random().toString(36).slice(2)}` : null;
+    if (token) {
+        const acquired = await electronAPI.topicAdmissionAcquire(scope, token);
+        if (!acquired?.success) {
+            uiHelper.showToastNotification(`话题暂不可重新回复：${acquired?.error || acquired?.code || '占用中'}`, 'info');
+            return;
+        }
+    }
+    const lifecycle = { dispatched: false, streamOwned: false, saved: false };
+    try {
+        const active = mainRefs.currentSelectedItemRef.get();
+        if (active?.id !== scope.itemId || active.type !== scope.itemType
+            || mainRefs.currentTopicIdRef.get() !== scope.topicId) return;
+        return await handleRegenerateResponseOwned(originalAssistantMessage, token, lifecycle);
+    } finally {
+        if (token) {
+            if (!lifecycle.dispatched || lifecycle.saved) {
+                const result = await electronAPI.topicAdmissionRelease(scope, token, { saved: true });
+                if (!result?.success) console.error('[Regenerate] lease release failed', result);
+            } else if (!lifecycle.streamOwned) {
+                await electronAPI.topicAdmissionUncertain(scope, token, '重新回复已派发，终稿保存未确认');
+            }
+        }
+    }
+}
+
+async function handleRegenerateResponseOwned(originalAssistantMessage, admissionToken, lifecycle) {
+    const { electronAPI, uiHelper } = mainRefs;
+    if (contextMenuDependencies.isContextCompacting?.()) {
+        uiHelper.showToastNotification('上下文正在压缩，请稍候', 'warning');
+        return;
+    }
+    let currentChatHistoryArray = mainRefs.currentChatHistoryRef.get();
     const currentSelectedItemVal = mainRefs.currentSelectedItemRef.get();
     const currentTopicIdVal = mainRefs.currentTopicIdRef.get();
     const globalSettingsVal = mainRefs.globalSettingsRef.get();
@@ -685,29 +973,92 @@ async function handleRegenerateResponse(originalAssistantMessage) {
         return;
     }
 
-    const originalMessageIndex = currentChatHistoryArray.findIndex(msg => msg.id === originalAssistantMessage.id);
+    // Visible stream projections carry UI-only fields and may omit durable metadata.
+    // Start from the authoritative history; only changes AFTER this read are conflicts.
+    if (typeof electronAPI.getChatHistory === 'function') {
+        const latest = await electronAPI.getChatHistory(currentSelectedItemVal.id, currentTopicIdVal);
+        if (!Array.isArray(latest)) {
+            uiHelper.showToastNotification('无法读取话题历史，重新回复未启动', 'error');
+            return;
+        }
+        currentChatHistoryArray = latest;
+    }
+    if (mainRefs.currentSelectedItemRef.get()?.id !== currentSelectedItemVal.id
+        || mainRefs.currentTopicIdRef.get() !== currentTopicIdVal) return;
+    let originalMessageIndex = currentChatHistoryArray.findIndex(msg => msg.id === originalAssistantMessage.id);
     if (originalMessageIndex === -1) return;
 
-    const historyForRegeneration = currentChatHistoryArray.slice(0, originalMessageIndex);
-    
-    // Remove original and subsequent messages from DOM and history
-    const messagesToRemove = currentChatHistoryArray.splice(originalMessageIndex);
-    mainRefs.currentChatHistoryRef.set([...currentChatHistoryArray]);
-    messagesToRemove.forEach(msg => contextMenuDependencies.removeMessageById(msg.id, false)); // false = don't save history again
+    let effectiveHistory = effectiveContextHistory(currentChatHistoryArray);
+    if (!effectiveHistory.includes(currentChatHistoryArray[originalMessageIndex])) {
+        uiHelper.showToastNotification('该回复已归入压缩快照；如需重新回复，请先从该消息创建分支', 'warning');
+        return;
+    }
+
+    const tailState = evaluateRegenerateTailState(currentChatHistoryArray, originalAssistantMessage.id);
+    const enableConfirmation = globalSettingsVal?.enableRegenerateConfirmation !== false;
+    if (enableConfirmation && tailState.found && !tailState.isLatestSubstantive) {
+        const confirmed = await uiHelper.showConfirmDialog(
+            `该消息后还有 ${tailState.subsequentCount} 条对话记录，重新回复将一并清除后续内容并重新生成。是否继续？`,
+            '重新回复确认',
+            '继续',
+            '取消',
+            false
+        );
+        if (!confirmed) return;
+
+        if (contextMenuDependencies.isContextCompacting?.()) {
+            uiHelper.showToastNotification('上下文正在压缩，请稍候', 'warning');
+            return;
+        }
+        const activeItem = mainRefs.currentSelectedItemRef?.get?.();
+        const activeTopicId = mainRefs.currentTopicIdRef?.get?.();
+        if (
+            !activeItem
+            || activeItem.type !== 'agent'
+            || activeItem.id !== currentSelectedItemVal.id
+            || activeTopicId !== currentTopicIdVal
+        ) {
+            return;
+        }
+
+        // Keep the authoritative snapshot that the user just confirmed.
+        originalMessageIndex = currentChatHistoryArray.findIndex(msg => msg.id === originalAssistantMessage.id);
+        if (originalMessageIndex === -1) return;
+
+        effectiveHistory = effectiveContextHistory(currentChatHistoryArray);
+        if (!effectiveHistory.includes(currentChatHistoryArray[originalMessageIndex])) {
+            uiHelper.showToastNotification('该回复已归入压缩快照；如需重新回复，请先从该消息创建分支', 'warning');
+            return;
+        }
+    }
+
+    const historyForRegeneration = effectiveContextHistory(currentChatHistoryArray.slice(0, originalMessageIndex));
+    const regenerationBaseline = structuredClone(currentChatHistoryArray);
+    const messagesToRemove = currentChatHistoryArray.slice(originalMessageIndex);
 
     if (currentSelectedItemVal.id && currentTopicIdVal) {
         try {
             if (!mainRefs.historyMutationAuthority) throw new Error('History mutation authority is required for regeneration');
-            await mainRefs.historyMutationAuthority.replace({
+            const commit = await mainRefs.historyMutationAuthority.mutate({
                 itemId: currentSelectedItemVal.id,
                 itemType: currentSelectedItemVal.type,
                 topicId: currentTopicIdVal,
                 category: 'regeneration-truncate',
-            }, currentChatHistoryArray);
+            }, latest => {
+                if (JSON.stringify(latest) !== JSON.stringify(regenerationBaseline)) {
+                    throw new Error('确认期间有新消息或历史修改，请重新点击“重新回复”');
+                }
+                return latest.slice(0, originalMessageIndex);
+            });
+            currentChatHistoryArray = [...commit.history];
         } catch (saveError) {
-            console.error("ContextMenu: Failed to save chat history after splice in regenerate:", saveError);
+            console.error('ContextMenu: Failed to commit regeneration truncation:', saveError);
+            uiHelper.showToastNotification(`重新生成未启动：${saveError.message}`, 'error');
+            return;
         }
     }
+    mainRefs.currentChatHistoryRef.set([...currentChatHistoryArray]);
+    messagesToRemove.forEach(msg => contextMenuDependencies.removeMessageById(msg.id, false));
 
     const regenerationThinkingMessage = {
         role: 'assistant',
@@ -754,7 +1105,7 @@ async function handleRegenerateResponse(originalAssistantMessage) {
 
     try {
         const agentConfig = await electronAPI.getAgentConfig(currentSelectedItemVal.id);
-        
+
         // 检查是否获取配置失败
         if (agentConfig && agentConfig.error) {
             console.error('[MessageContextMenu] Failed to get agent config for regeneration:', agentConfig.error);
@@ -770,19 +1121,12 @@ async function handleRegenerateResponse(originalAssistantMessage) {
             return;
         }
 
-        // VCPChatTarven (高级回复) - 收集当前生效的规则,
-        // 让"重新回复"与正常发送消息保持完全一致的注入行为
-        const tavernRules = (ownerWindow.TavernManager && typeof ownerWindow.TavernManager.getActiveRulesForScope === 'function')
-            ? (ownerWindow.TavernManager.getActiveRulesForScope('agent') || [])
-            : [];
-        const tavernEngine = ownerWindow.TavernRulesEngine;
-
-        const messagesForVCP = await Promise.all(historyForRegeneration.map(async (msg, index) => {
+        const buildRegenerationContent = async ({ message: msg, index }) => {
             let vcpImageAttachmentsPayload = [];
             let vcpAudioAttachmentsPayload = [];
             let vcpVideoAttachmentsPayload = [];
             let currentMessageTextContent;
- 
+
             let originalText = (typeof msg.content === 'string') ? msg.content : (msg.content?.text || '');
 
             // Check if this is the last user message in the history for regeneration
@@ -801,7 +1145,7 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                     originalText = originalText.replace(/\{\{VCPChatCanvas\}\}/g, '\n[Error loading canvas content]\n');
                 }
             }
- 
+
             if (msg.attachments && msg.attachments.length > 0) {
                 let historicalAppendedText = "";
                 for (const att of msg.attachments) {
@@ -839,8 +1183,17 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                         }
                     }
 
-                    if (effectiveImageFrames && effectiveImageFrames.length > 0) {
-                         historicalAppendedText += `\n\n[附加文件: ${filePathForContext} (扫描版PDF，已转换为图片)]`;
+                    const isLiveReference = fileManagerData.isLiveReference === true || att.isLiveReference === true;
+                    if (isLiveReference) {
+                        // 与单聊主路径一致：实时引用始终带来源标签，告知 AI 可直接修改真实文件。
+                        const liveLabel = describeLiveReferenceForContext({ ...att, ...fileManagerData });
+                        historicalAppendedText += `\n\n[附加文件: ${filePathForContext} (${liveLabel})]\n${effectiveExtractedText || ''}\n[/附加文件结束: ${att.name || '未知文件'}]`;
+                    } else if (effectiveImageFrames && effectiveImageFrames.length > 0) {
+                        const totalPages = fileManagerData?.pdfMeta?.totalPages;
+                        const pageHint = totalPages
+                            ? `(扫描版/图像型PDF，已内联 ${effectiveImageFrames.length} 页高清多模态图像/共 ${totalPages} 页)`
+                            : `(扫描版/图像型PDF，已提供 ${effectiveImageFrames.length} 页多模态图像)`;
+                        historicalAppendedText += `\n\n[附加文件: ${filePathForContext} ${pageHint}]\n${effectiveExtractedText || ''}`;
                     } else if (effectiveExtractedText) {
                         historicalAppendedText += `\n\n[附加文件: ${filePathForContext}]\n${effectiveExtractedText}\n[/附加文件结束: ${att.name || '未知文件'}]`;
                     } else {
@@ -852,14 +1205,6 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                 currentMessageTextContent = originalText;
             }
 
-            // VCPChatTarven: 仅在最后一条 user 消息尾部追加 user_suffix(只作用于本次 VCP 提交,不写入历史)
-            if (isLastUserMessage && tavernEngine) {
-                currentMessageTextContent = tavernEngine.applyUserSuffix(
-                    currentMessageTextContent || '',
-                    tavernRules,
-                    'agent'
-                );
-            }
 
             if (msg.attachments && msg.attachments.length > 0) {
                 // --- IMAGE PROCESSING ---
@@ -967,66 +1312,22 @@ async function handleRegenerateResponse(originalAssistantMessage) {
             if (finalContentPartsForVCP.length === 0 && msg.role === 'user') {
                  finalContentPartsForVCP.push({ type: 'text', text: '(用户发送了附件，但无文本或图片内容)' });
             }
-            
-            return attachTimestampMetaToVcpMessage(
-                { role: msg.role, content: finalContentPartsForVCP.length > 0 ? finalContentPartsForVCP : msg.content },
-                msg
-            );
-        }));
 
-        if (agentConfig.systemPrompt) {
-            let systemPromptContent = agentConfig.systemPrompt.replace(/\{\{AgentName\}\}/g, agentConfig.name);
-            const prependedContent = [];
+            return finalContentPartsForVCP.length > 0 ? finalContentPartsForVCP : msg.content;
+        };
 
-            // 注入聊天记录文件路径
-            if (agentConfig.agentDataPath && currentTopicIdVal) {
-                const historyPath = `${agentConfig.agentDataPath}\\topics\\${currentTopicIdVal}\\history.json`;
-                prependedContent.push(`当前聊天记录文件路径: ${historyPath}`);
-            }
-
-            // 注入话题创建时间
-            if (agentConfig.topics && currentTopicIdVal) {
-                const currentTopicObj = agentConfig.topics.find(t => t.id === currentTopicIdVal);
-                if (currentTopicObj && currentTopicObj.createdAt) {
-                    const date = new Date(currentTopicObj.createdAt);
-                    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-                    prependedContent.push(`当前话题创建于: ${formattedDate}`);
-                }
-            }
-
-            if (prependedContent.length > 0) {
-                systemPromptContent = prependedContent.join('\n') + '\n\n' + systemPromptContent;
-            }
-
-            // VCPChatTarven: 在系统提示词尾部追加 system_suffix
-            if (tavernEngine) {
-                systemPromptContent = tavernEngine.applySystemSuffix(systemPromptContent, tavernRules, 'agent');
-            }
-
-            messagesForVCP.unshift({ role: 'system', content: systemPromptContent });
-        } else if (tavernEngine) {
-            // 没有 systemPrompt,但仍可能存在 system_suffix 规则
-            const tavernSysOnly = tavernEngine.applySystemSuffix('', tavernRules, 'agent');
-            if (tavernSysOnly && tavernSysOnly.trim()) {
-                messagesForVCP.unshift({ role: 'system', content: tavernSysOnly });
-            }
-        }
-
-        // VCPChatTarven: 应用 context_inject 规则(按深度插入消息;system 不参与深度计算)
-        if (tavernEngine && Array.isArray(tavernRules) && tavernRules.some(r => r.type === 'context_inject' && r.enabled !== false)) {
-            const systemMsgs = messagesForVCP.filter(m => m.role === 'system');
-            const nonSystemMsgs = messagesForVCP.filter(m => m.role !== 'system');
-            const injected = tavernEngine.applyContextInject(nonSystemMsgs, tavernRules, 'agent', {
-                makeMessage: (role, text) => ({
-                    role,
-                    content: [{ type: 'text', text }],
-                    __tavernInjected: true
-                })
-            });
-            messagesForVCP.length = 0;
-            messagesForVCP.push(...systemMsgs, ...injected);
-        }
-
+        const context = {
+            agentId: currentSelectedItemVal.id,
+            topicId: currentTopicIdVal,
+            isGroupMessage: false,
+            ...(admissionToken ? { admissionToken } : {}),
+        };
+        const { messagesForVCP } = await assembleRequestMessages({
+            electronAPI, tavernEngine: ownerWindow.TavernRulesEngine, agentConfig,
+            history: historyForRegeneration, context,
+            currentUserMessage: [...historyForRegeneration].reverse().find(msg => msg.role === 'user'),
+            buildMessageContent: buildRegenerationContent,
+        });
         const modelConfigForVCP = {
             model: agentConfig.model,
             temperature: parseFloat(agentConfig.temperature),
@@ -1035,12 +1336,6 @@ async function handleRegenerateResponse(originalAssistantMessage) {
             top_p: agentConfig.top_p ? parseFloat(agentConfig.top_p) : undefined,
             top_k: agentConfig.top_k ? parseInt(agentConfig.top_k) : undefined,
             stream: agentConfig.streamOutput === true || String(agentConfig.streamOutput) === 'true'
-        };
-        
-        const context = {
-            agentId: currentSelectedItemVal.id,
-            topicId: currentTopicIdVal,
-            isGroupMessage: false
         };
         streamingRequested = modelConfigForVCP.stream;
         streamContext = context;
@@ -1061,7 +1356,9 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                 isThinking: true
             }, regenerationThinkingItem);
         }
-        
+
+        lifecycle.streamOwned = streamingRequested && typeof startStreamFn === 'function';
+        lifecycle.dispatched = true;
         const vcpResult = await electronAPI.sendToVCP(
             globalSettingsVal.vcpServerUrl,
             globalSettingsVal.vcpApiKey,
@@ -1085,8 +1382,9 @@ async function handleRegenerateResponse(originalAssistantMessage) {
             }
         } else {
             // 非流式处理逻辑 - 参考 chatManager.js 的健壮实现
-            const { response, context } = vcpResult; // 【修复1】正确解构返回结果
-            const isForActiveChat = context && context.agentId === currentSelectedItemVal.id && context.topicId === currentTopicIdVal;
+            const response = vcpResult.response ?? vcpResult;
+            const isForActiveChat = mainRefs.currentSelectedItemRef.get()?.id === currentSelectedItemVal.id
+                && mainRefs.currentTopicIdRef.get() === currentTopicIdVal;
 
             if (isForActiveChat) {
                 contextMenuDependencies.removeMessageById(regenerationThinkingMessage.id, false); // 从UI和内存中移除"思考中"
@@ -1094,7 +1392,7 @@ async function handleRegenerateResponse(originalAssistantMessage) {
 
             if (response.error) {
                 if (isForActiveChat) {
-                    contextMenuDependencies.renderMessage({ role: 'system', content: `VCP错误 (重新生成): ${response.error}`, timestamp: Date.now() });
+                    contextMenuDependencies.renderMessage({ role: 'system', notice: 'error', content: `VCP错误 (重新生成): ${response.error}`, timestamp: Date.now() });
                 }
             } else if (response.choices && response.choices.length > 0) {
                 const assistantMessageContent = response.choices[0].message.content;
@@ -1108,7 +1406,21 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                     id: response.id || `msg_${Date.now()}_assistant_${Math.random().toString(36).substring(2, 9)}`
                 };
 
-                // 【修复2】采用更健壮的“读-改-写”模式
+                if (admissionToken && typeof electronAPI.topicAdmissionPersistAssistant === 'function') {
+                    assistantMessage.admissionToken = admissionToken;
+                    const saved = await electronAPI.topicAdmissionPersistAssistant({
+                        itemId: currentSelectedItemVal.id, itemType: 'agent', topicId: currentTopicIdVal,
+                    }, assistantMessage);
+                    if (!saved?.success) throw new Error(saved?.error || '重新回复终稿保存失败');
+                    lifecycle.saved = true;
+                    if (mainRefs.currentSelectedItemRef.get()?.id === currentSelectedItemVal.id
+                        && mainRefs.currentTopicIdRef.get() === currentTopicIdVal) {
+                        mainRefs.currentChatHistoryRef.set([...saved.history]);
+                        contextMenuDependencies.renderMessage(assistantMessage);
+                    }
+                    return;
+                }
+                // Legacy hosts keep their existing history mutation contract.
                 if (!mainRefs.historyMutationAuthority) throw new Error('History mutation authority is required for regeneration');
                 const commit = await mainRefs.historyMutationAuthority.mutate({
                     itemId: context.agentId,
@@ -1121,6 +1433,7 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                     return finalHistory;
                 });
                 const finalHistory = [...commit.history];
+                lifecycle.saved = true;
 
                 if (isForActiveChat) {
                     mainRefs.currentChatHistoryRef.set(finalHistory);
@@ -1133,6 +1446,7 @@ async function handleRegenerateResponse(originalAssistantMessage) {
         }
 
     } catch (error) {
+        if (lifecycle.saved) throw error;
         if (streamingRequested && streamContext) {
             contextMenuDependencies.acceptStreamEvent?.({
                 type: 'error',
@@ -1141,21 +1455,26 @@ async function handleRegenerateResponse(originalAssistantMessage) {
                 context: streamContext,
             });
         } else {
-            const failedHistory = currentChatHistoryArray.filter(message => message.id !== regenerationThinkingMessage.id);
-            mainRefs.currentChatHistoryRef.set(failedHistory);
-            contextMenuDependencies.removeMessageById(regenerationThinkingMessage.id, false);
-            contextMenuDependencies.renderMessage({
-                role: 'system',
-                content: `客户端错误 (重新生成): ${error.message}`,
-                timestamp: Date.now(),
-            });
+            const isStillSelected = mainRefs.currentSelectedItemRef.get()?.id === currentSelectedItemVal.id
+                && mainRefs.currentTopicIdRef.get() === currentTopicIdVal;
+            if (isStillSelected) {
+                // Retract only our placeholder, never restore a stale snapshot over new messages.
+                mainRefs.currentChatHistoryRef.set(mainRefs.currentChatHistoryRef.get()
+                    .filter(message => message.id !== regenerationThinkingMessage.id));
+                contextMenuDependencies.removeMessageById(regenerationThinkingMessage.id, false);
+                contextMenuDependencies.renderMessage({
+                    role: 'system',
+                    content: `客户端错误 (重新生成): ${error.message}`,
+                    timestamp: Date.now(),
+                });
+            }
             if (currentSelectedItemVal.id && currentTopicIdVal && mainRefs.historyMutationAuthority) {
-                await mainRefs.historyMutationAuthority.replace({
+                await mainRefs.historyMutationAuthority.mutate({
                     itemId: currentSelectedItemVal.id,
                     itemType: currentSelectedItemVal.type,
                     topicId: currentTopicIdVal,
                     category: 'regeneration-failure-cleanup',
-                }, failedHistory);
+                }, latest => latest.filter(message => message.id !== regenerationThinkingMessage.id));
             }
         }
         uiHelper.scrollToBottom();

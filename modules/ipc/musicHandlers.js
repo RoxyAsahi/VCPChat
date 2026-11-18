@@ -10,9 +10,21 @@ const windowService = require('../services/windowService');
 const WINDOW_APP_IDS = require('../services/windowAppIds');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPaths');
 const AUDIO_ENGINE_URL = 'http://127.0.0.1:63789';
+const musicGrooveBus = require('../services/musicGrooveBus');
+const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
+const { randomUUID } = require('crypto');
 let fetch;
 
 let musicWindow = null;
+let musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
+let musicInfoInjectionEnabled = true;
+let settingsManager = null;
+const getMusicCapsuleSnapshot = () => ({ ...musicCapsuleState, musicInfoInjectionEnabled });
+function publishMusicCapsule() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('music-capsule-state', getMusicCapsuleSnapshot());
+    }
+}
 let currentSongInfo = null; // 保持这个变量，用于可能的UI状态同步
 let mainWindow = null; // To be initialized
 let openChildWindows = []; // To be initialized
@@ -22,7 +34,7 @@ let LYRIC_DIR;
 let startAudioEngine; // To hold the function from main.js
 let stopAudioEngine; // To hold the function from main.js
 let musicWindowPromise = null; // To handle concurrent window creation requests
-let pendingTrackForNewWindow = null; // 用于在新窗口创建时传递待播放的曲目
+let pendingPlaybackForNewWindow = null; // 用于在新窗口创建时传递待播放曲目及可选演出模式
 let ipcHandlersRegistered = false;
 
 // --- Singleton Music Window Creation Function ---
@@ -36,6 +48,8 @@ function createOrFocusMusicWindow() {
         let readyHandler = null;
         let timeoutId = null;
 
+        let isSettled = false;
+
         const cleanupWindowCreationWaiters = () => {
             if (readyHandler) {
                 ipcMain.removeListener('music-renderer-ready', readyHandler);
@@ -48,14 +62,19 @@ function createOrFocusMusicWindow() {
         };
 
         const resolveWindowCreation = (win) => {
+            if (isSettled) return;
+            isSettled = true;
             cleanupWindowCreationWaiters();
             musicWindowPromise = null;
             resolve(win);
         };
 
         const rejectWindowCreation = (error) => {
+            if (isSettled) return;
+            isSettled = true;
             cleanupWindowCreationWaiters();
             musicWindowPromise = null;
+            pendingPlaybackForNewWindow = null; // 窗口创建失败或夭折，及时清理暂存请求避免脏残留
             reject(error);
         };
         try {
@@ -95,6 +114,7 @@ function createOrFocusMusicWindow() {
             modal: false,
             webPreferences: {
                 preload: resolveProjectPreload(path.join(__dirname, '..', '..'), PRELOAD_ROLES.UTILITY),
+                sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
                 contextIsolation: true,
                 nodeIntegration: false,
                 devTools: true
@@ -111,13 +131,15 @@ function createOrFocusMusicWindow() {
 
         musicWindow.once('ready-to-show', () => {
             musicWindow.show();
+            musicCapsuleState = { ...musicCapsuleState, open: true };
+            publishMusicCapsule();
         });
 
         // Wait for the renderer to signal that it's ready
         readyHandler = (event) => {
             if (musicWindow && !musicWindow.isDestroyed() && event.sender === musicWindow.webContents) {
                 console.log('[Music] Received "music-renderer-ready" signal. Resolving promise.');
-                // pendingTrackForNewWindow 由前端通过 music-get-pending-track 主动拉取
+                // pendingPlaybackForNewWindow 由前端通过 music-get-pending-track 主动拉取
                 // 不在这里发送，避免时序问题
                 resolveWindowCreation(musicWindow);
             }
@@ -142,7 +164,15 @@ function createOrFocusMusicWindow() {
 
         musicWindow.on('closed', () => {
             console.log('[Music] Music window closed. Stopping playback.');
-            cleanupWindowCreationWaiters();
+            // 若窗口在 ready 之前就被用户强行关闭，立即 reject 挂起的 Promise，避免调用方永久超时死锁
+            if (!isSettled) {
+                console.warn('[Music] Music window closed before renderer signal was received. Rejecting creation promise.');
+                rejectWindowCreation(new Error('Music window was closed before initialization completed.'));
+            } else {
+                cleanupWindowCreationWaiters();
+                musicWindowPromise = null;
+            }
+
             // We don't stop the engine when the music window closes anymore,
             // as it's managed by the main app lifecycle now (pre-warmed).
             // We just stop the playback.
@@ -151,6 +181,10 @@ function createOrFocusMusicWindow() {
             openChildWindows = openChildWindows.filter(win => win !== musicWindow);
             musicWindow = null;
             currentSongInfo = null; // 清理歌曲信息
+            musicCapsuleState = { open: false, title: '', trackKey: '', playing: false };
+            publishMusicCapsule();
+            musicGrooveBus.publish({ playing: false });
+            pendingPlaybackForNewWindow = null; // 清理未消费的待播放请求
         });
 
         musicWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
@@ -196,13 +230,72 @@ async function audioEngineApi(endpoint, method = 'POST', body = null) {
 }
 
 
+// 从当前渲染端读取，兼容 gapless 切歌、手动换词以及 LRC/逐字歌词。
+// 不创建窗口、不联网、不依赖可能滞后的 currentSongInfo。
+async function getCurrentLyrics() {
+    const win = musicWindow;
+    let snapshot = null;
+    if (win && !win.isDestroyed()) {
+        snapshot = await new Promise((resolve, reject) => {
+            const requestId = randomUUID();
+            const cleanup = () => {
+                clearTimeout(timer);
+                ipcMain.removeListener('music-current-lyrics-response', onResponse);
+                win.removeListener('closed', onClosed);
+            };
+            const onClosed = () => { cleanup(); resolve(null); };
+            const onResponse = (event, payload) => {
+                if (event.sender !== win.webContents || payload?.requestId !== requestId) return;
+                cleanup();
+                resolve(payload.snapshot);
+            };
+            const timer = setTimeout(() => {
+                cleanup();
+                reject(new Error('读取当前歌词超时，请稍后重试。'));
+            }, 5000);
+            ipcMain.on('music-current-lyrics-response', onResponse);
+            win.once('closed', onClosed);
+            try {
+                win.webContents.send('music-current-lyrics-request', { requestId });
+            } catch (error) {
+                cleanup();
+                reject(error);
+            }
+        });
+    }
+    return {
+        status: 'success',
+        result: { content: [{ type: 'text', text: formatCurrentLyrics(snapshot) }] }
+    };
+}
+
 // --- Music Control Handler (Legacy, for distributed server) ---
 // 这个函数统一通过前端 renderer 来控制播放，避免竞态问题
 async function handleMusicControl(args) {
-    const { command, target } = args;
-    console.log(`[MusicControl] Received command: ${command}, Target: ${target}`);
+    const { command, target, stageMode } = args;
+    const supportedStageModes = new Set([
+        'luminous',
+        'partita',
+        'cadenza',
+        'tempera',
+        'sonnet',
+        'diorama',
+        'fume',
+        'starborn'
+    ]);
+    const normalizedStageMode = typeof stageMode === 'string' && stageMode.trim()
+        ? stageMode.trim().toLowerCase()
+        : null;
+
+    if (normalizedStageMode && !supportedStageModes.has(normalizedStageMode)) {
+        return { status: 'error', message: `Unknown music stage mode: ${stageMode}` };
+    }
+
+    console.log(`[MusicControl] Received command: ${command}, Target: ${target}, Stage mode: ${normalizedStageMode || 'regular'}`);
 
     switch (command.toLowerCase()) {
+        case 'getcurrentlyrics':
+            return getCurrentLyrics();
         case 'play':
             if (target) {
                 // 从播放列表中找到目标曲目
@@ -218,22 +311,33 @@ async function handleMusicControl(args) {
                 // 判断窗口是否已经存在且 ready
                 const windowAlreadyExists = musicWindow && !musicWindow.isDestroyed();
 
+                const playbackRequest = {
+                    track,
+                    stageMode: normalizedStageMode
+                };
+
                 if (windowAlreadyExists) {
-                    // 窗口已存在，直接发送 music-set-track 让前端处理
+                    // 窗口已存在，直接发送完整播放请求让前端处理
                     console.log('[MusicControl] Window exists, sending music-set-track to renderer.');
-                    musicWindow.webContents.send('music-set-track', track);
+                    musicWindow.webContents.send('music-set-track', playbackRequest);
                     if (!musicWindow.isVisible()) {
                         musicWindow.show();
                     }
                     musicWindow.focus();
                     return { status: 'success', message: `Playing: ${track.title}` };
                 } else {
-                    // 窗口不存在，需要创建。将 track 存入 pending，
-                    // 等窗口 ready 后由 readyHandler 发送给前端
-                    console.log('[MusicControl] Window does not exist, storing pending track and creating window.');
-                    pendingTrackForNewWindow = track;
-                    await createOrFocusMusicWindow();
-                    return { status: 'success', message: `Playing: ${track.title}` };
+                    // 窗口不存在，需要创建。将完整播放请求存入 pending，
+                    // 窗口初始化时由前端主动拉取，避免 ready 信号时序竞争。
+                    console.log('[MusicControl] Window does not exist, storing pending playback request and creating window.');
+                    pendingPlaybackForNewWindow = playbackRequest;
+                    try {
+                        await createOrFocusMusicWindow();
+                        return { status: 'success', message: `Playing: ${track.title}` };
+                    } catch (createErr) {
+                        console.error('[MusicControl] Failed to create music window for playback:', createErr);
+                        pendingPlaybackForNewWindow = null;
+                        return { status: 'error', message: `Music window creation aborted or failed: ${createErr.message}` };
+                    }
                 }
             } else {
                 // 无目标，简单恢复播放
@@ -285,6 +389,14 @@ function initialize(options) {
         return;
     }
 
+    settingsManager = options.settingsManager;
+    const applyInjectionSetting = settings => {
+        musicInfoInjectionEnabled = settings?.musicInfoInjectionEnabled !== false;
+        publishMusicCapsule();
+    };
+    settingsManager?.on('settings-updated', applyInjectionSetting);
+    settingsManager?.on('settings-external-updated', payload => applyInjectionSetting(payload?.settings));
+
     const registerIpcHandlers = () => {
         console.log('[Music] registerIpcHandlers called');
         ipcMain.on('open-music-window', async () => {
@@ -295,14 +407,56 @@ function initialize(options) {
             }
         });
 
-        // --- 前端初始化时拉取待播放曲目（解决新窗口点歌竞态问题）---
-        ipcMain.handle('music-get-pending-track', () => {
-            const track = pendingTrackForNewWindow;
-            pendingTrackForNewWindow = null; // 取出后清空，只消费一次
-            if (track) {
-                console.log('[Music] Pending track consumed by renderer:', track.title);
+        // --- 前端初始化时拉取待播放请求（解决新窗口点歌竞态问题）---
+        ipcMain.handle('music-capsule-get-state', async () => {
+            if (settingsManager) applyInjectionSetting(await settingsManager.readSettings());
+            return getMusicCapsuleSnapshot();
+        });
+        ipcMain.handle('music-info-injection-toggle', async event => {
+            if (!mainWindow || event.sender !== mainWindow.webContents) {
+                throw new Error('仅主聊天窗口可以切换音乐信息注入。');
             }
-            return track; // 返回 null 或 track 对象
+            if (!settingsManager) throw new Error('设置管理器未初始化。');
+            const result = await settingsManager.updateSettings(current => ({
+                ...current,
+                musicInfoInjectionEnabled: current.musicInfoInjectionEnabled === false
+            }));
+            if (!result.success) throw new Error(result.error || '保存音乐信息注入状态失败。');
+            applyInjectionSetting(result.settings);
+            return getMusicCapsuleSnapshot();
+        });
+        ipcMain.on('music-groove-publish', (event, payload) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return;
+            musicGrooveBus.publish(payload);
+        });
+        ipcMain.on('music-capsule-publish', (event, state) => {
+            if (!musicWindow || musicWindow.isDestroyed() || event.sender !== musicWindow.webContents) return;
+            musicCapsuleState = {
+                open: true,
+                title: typeof state?.title === 'string' ? state.title.slice(0, 512) : '',
+                trackKey: typeof state?.trackKey === 'string' ? state.trackKey.slice(0, 4096) : '',
+                playing: state?.playing === true
+            };
+            publishMusicCapsule();
+            if (!musicCapsuleState.playing) musicGrooveBus.publish({ playing: false });
+        });
+        ipcMain.on('music-capsule-command', (event, command) => {
+            if (!mainWindow || event.sender !== mainWindow.webContents) return;
+            if (!['previous', 'next', 'play', 'pause'].includes(command)) return;
+            if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send('music-control', command);
+        });
+
+        ipcMain.handle('music-get-pending-track', () => {
+            const playbackRequest = pendingPlaybackForNewWindow;
+            pendingPlaybackForNewWindow = null; // 取出后清空，只消费一次
+            if (playbackRequest?.track) {
+                console.log(
+                    '[Music] Pending playback request consumed by renderer:',
+                    playbackRequest.track.title,
+                    playbackRequest.stageMode || 'regular'
+                );
+            }
+            return playbackRequest; // 返回 null 或 { track, stageMode }
         });
 
         ipcMain.handle('music-load', async (event, track) => {
@@ -691,14 +845,38 @@ function initialize(options) {
             }
         });
 
-        // --- 跨窗口音乐控制命令（桌面/分布式 → 音乐窗口） ---
-        ipcMain.on('music-remote-command', (event, command) => {
-            if (musicWindow && !musicWindow.isDestroyed()) {
-                console.log(`[Music] Forwarding remote command to music window: ${command}`);
-                // 音乐窗口监听的是 'music-control' 通道 (music.js line 574)
-                musicWindow.webContents.send('music-control', command);
-            } else {
-                console.warn(`[Music] music-remote-command: music window not available, command: ${command}`);
+        // --- 跨窗口音乐控制命令（桌面/分布式 → 音乐窗口）：高瞻远瞩智能路由 ---
+        ipcMain.on('music-remote-command', async (event, command) => {
+            try {
+                // 1. 若命令携带目标曲目（支持对象形式或 play:曲目名 前缀），走权威 handleMusicControl 模糊匹配点播
+                if (typeof command === 'object' && command && command.target) {
+                    console.log(`[Music] Remote track targeted play: ${command.target}`);
+                    await handleMusicControl({ command: 'play', target: command.target });
+                    return;
+                }
+                if (typeof command === 'string' && command.startsWith('play:')) {
+                    const target = command.substring(5).trim();
+                    console.log(`[Music] Remote track targeted play by prefix: ${target}`);
+                    await handleMusicControl({ command: 'play', target });
+                    return;
+                }
+
+                // 2. 基础播控命令（next/previous/play/pause）：窗口存在则直通转发
+                if (musicWindow && !musicWindow.isDestroyed()) {
+                    console.log(`[Music] Forwarding remote command to music window: ${command}`);
+                    musicWindow.webContents.send('music-control', command);
+                } else {
+                    // 窗口不存在时自动唤醒并延迟派发
+                    console.log(`[Music] Music window offline for command '${command}', auto-spawning window...`);
+                    await createOrFocusMusicWindow();
+                    setTimeout(() => {
+                        if (musicWindow && !musicWindow.isDestroyed()) {
+                            musicWindow.webContents.send('music-control', command);
+                        }
+                    }, 600);
+                }
+            } catch (err) {
+                console.error('[Music] Error in music-remote-command handler:', err);
             }
         });
 
@@ -711,21 +889,41 @@ function initialize(options) {
             }
         });
 
-        ipcMain.handle('music-get-lyrics', async (event, { artist, title }) => {
+        ipcMain.handle('music-get-lyrics', async (event, { artist, title, rawObject }) => {
             if (!title) return null;
 
-            // A simple sanitizer to remove characters that are invalid in file paths.
-            const sanitize = (str) => str.replace(/[\\/:"*?<>|]/g, '_');
+            const sanitize = (str) => (str || '').replace(/[\\/:"*?<>|]/g, '_').trim();
             const sanitizedTitle = sanitize(title);
+            const sanitizedArtist = artist ? sanitize(artist) : '';
 
-            const possiblePaths = [];
-            if (artist) {
-                const sanitizedArtist = sanitize(artist);
-                possiblePaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.lrc`));
+            // Check JSON first if rawObject requested or available
+            const possibleJsonPaths = [];
+            if (sanitizedArtist) {
+                possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.json`));
+            } else {
+                possibleJsonPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.json`));
             }
-            possiblePaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.lrc`));
 
-            for (const lrcPath of possiblePaths) {
+            for (const jsonPath of possibleJsonPaths) {
+                try {
+                    if (await fs.pathExists(jsonPath)) {
+                        const data = await fs.readJson(jsonPath);
+                        return data;
+                    }
+                } catch (err) {
+                    console.warn(`[Music] Error reading JSON lyric cache ${jsonPath}:`, err.message);
+                }
+            }
+
+            // Fallback to LRC text cache
+            const possibleLrcPaths = [];
+            if (sanitizedArtist) {
+                possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedArtist} - ${sanitizedTitle}.lrc`));
+            } else {
+                possibleLrcPaths.push(path.join(LYRIC_DIR, `${sanitizedTitle}.lrc`));
+            }
+
+            for (const lrcPath of possibleLrcPaths) {
                 try {
                     if (await fs.pathExists(lrcPath)) {
                         const content = await fs.readFile(lrcPath, 'utf-8');
@@ -739,17 +937,61 @@ function initialize(options) {
             return null;
         });
 
-        ipcMain.handle('music-fetch-lyrics', async (event, { artist, title }) => {
+        ipcMain.handle('music-fetch-lyrics', async (event, { artist, title, duration, durationMs, album, rawObject }) => {
             if (!title) return null;
             console.log(`[Music] IPC: Received request to fetch lyrics for "${title}" by "${artist}"`);
             try {
-                // Ensure the lyric directory exists before fetching
                 await fs.ensureDir(LYRIC_DIR);
-                const lrcContent = await lyricFetcher.fetchAndSaveLyrics(artist, title, LYRIC_DIR);
-                return lrcContent;
+                const result = await lyricFetcher.fetchAndSaveLyrics(artist, title, LYRIC_DIR, {
+                    duration,
+                    durationMs,
+                    album,
+                    rawObject: rawObject !== undefined ? rawObject : true
+                });
+                return result;
             } catch (error) {
                 console.error(`[Music] Error fetching lyrics via IPC for "${title}":`, error);
                 return null;
+            }
+        });
+
+        ipcMain.handle('music-search-lyrics-candidates', async (event, options = {}) => {
+            const title = typeof options.title === 'string' ? options.title.trim() : '';
+            if (!title) return { success: false, message: '缺少歌曲标题', candidates: [] };
+
+            try {
+                const candidates = await lyricFetcher.searchLyricsCandidates({
+                    title,
+                    artist: typeof options.artist === 'string' ? options.artist.trim() : '',
+                    album: typeof options.album === 'string' ? options.album.trim() : '',
+                    durationMs: Number.isFinite(Number(options.durationMs))
+                        ? Math.max(0, Number(options.durationMs))
+                        : 0
+                });
+                return { success: true, candidates };
+            } catch (error) {
+                console.error(`[Music] Error searching lyric candidates for "${title}":`, error);
+                return { success: false, message: error.message || '搜索歌词失败', candidates: [] };
+            }
+        });
+
+        ipcMain.handle('music-apply-lyrics-candidate', async (event, options = {}) => {
+            const title = typeof options.title === 'string' ? options.title.trim() : '';
+            const candidateKey = typeof options.candidateKey === 'string' ? options.candidateKey : '';
+            if (!title || !candidateKey) {
+                return { success: false, message: '缺少歌曲或歌词候选信息' };
+            }
+
+            try {
+                return await lyricFetcher.saveSelectedLyrics({
+                    candidateKey,
+                    title,
+                    artist: typeof options.artist === 'string' ? options.artist.trim() : '',
+                    lyricDir: LYRIC_DIR
+                });
+            } catch (error) {
+                console.error(`[Music] Error applying lyric candidate for "${title}":`, error);
+                return { success: false, message: error.message || '覆盖歌词失败' };
             }
         });
 

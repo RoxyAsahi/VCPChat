@@ -38,7 +38,7 @@ function initializeInputEnhancer(refs) {
 
     void inputEnhancerDispose();
     const ownedDisposers = [];
-    const lifecycle = { active: true, tasks: new Set() };
+    const lifecycle = { active: true, tasks: new Set(), disposal: null };
     const isActive = () => lifecycle.active;
     const track = value => {
         const task = Promise.resolve(value);
@@ -56,17 +56,22 @@ function initializeInputEnhancer(refs) {
                 console.error(`[InputEnhancer] ${type} listener failed:`, error);
             }
         };
-        if (refs.listenerOwner?.add?.(target, type, ownedHandler, options)) return;
-        target?.addEventListener?.(type, ownedHandler, options);
+        if (!refs.listenerOwner?.add?.(target, type, ownedHandler, options)) {
+            target?.addEventListener?.(type, ownedHandler, options);
+        }
         ownedDisposers.push(() => target?.removeEventListener?.(type, ownedHandler, options));
     };
-    inputEnhancerDispose = async () => {
-        if (!lifecycle.active) return;
+    inputEnhancerDispose = () => {
+        if (lifecycle.disposal) return lifecycle.disposal;
         lifecycle.active = false;
+        try {
+            window.chatVoiceComposer?.dispose?.();
+        } catch (_) {}
         ownedDisposers.splice(0).reverse().forEach(dispose => dispose());
         noteSuggestionPopup?.remove?.();
         noteSuggestionPopup = null;
-        await Promise.allSettled([...lifecycle.tasks]);
+        lifecycle.disposal = Promise.allSettled([...lifecycle.tasks]).then(() => {});
+        return lifecycle.disposal;
     };
     const messageInput = refs.messageInput;
     const dropTargetElement = refs.dropTargetElement || messageInput;
@@ -129,8 +134,19 @@ function initializeInputEnhancer(refs) {
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                // Always try to read the file as a Buffer/ArrayBuffer, regardless of 'path' property.
-                // This is more robust for drag-and-drop in Electron.
+                // 本地文件优先传真实路径：主进程据此识别工作区文件并建立实时引用，
+                // 非工作区文件也由主进程按路径读取，无需在渲染进程整份读入内存。
+                const realPath = getDroppedFilePath(localElectronAPI, file);
+                if (realPath) {
+                    filesToProcess.push(Promise.resolve({
+                        name: file.name,
+                        type: file.type || 'application/octet-stream',
+                        size: file.size,
+                        path: realPath
+                    }));
+                    continue;
+                }
+                // 无本地路径（例如从浏览器拖入的数据）时回退为读取内容。
                 filesToProcess.push(new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -192,14 +208,8 @@ function initializeInputEnhancer(refs) {
                 if (results && results.length > 0) {
                     results.forEach(result => {
                         if (result.success && result.attachment) {
-                            const att = result.attachment;
-                            attachedFilesRef.append({
-                                file: { name: att.name, type: att.type, size: att.size },
-                                localPath: att.internalPath,
-                                originalName: att.name,
-                                _fileManagerData: att
-                            });
-                            console.log(`[InputEnhancer] Successfully attached dropped file: ${att.name}`);
+                            appendAttachment(result.attachment);
+                            console.log(`[InputEnhancer] Successfully attached dropped file: ${result.attachment.name}`);
                         } else if (result.error) {
                             console.error(`[InputEnhancer] Error processing dropped file ${result.name || 'unknown'}: ${result.error}`);
                             alert('处理拖拽的文件 ' + (result.name || '未知文件') + ' 失败: ' + result.error);
@@ -324,84 +334,429 @@ function initializeInputEnhancer(refs) {
         if (!isActive()) return;
         return track(consumeSharedFile(filePath));
     });
-    refs.listenerOwner?.own?.(sharedFileSubscription);
+    // Either the instance or its renderer owner may retire first; release once.
+    let sharedFileReleased = false;
+    const releaseSharedFile = () => {
+        if (sharedFileReleased) return;
+        sharedFileReleased = true;
+        sharedFileSubscription?.();
+    };
+    ownedDisposers.push(releaseSharedFile);
+    refs.listenerOwner?.own?.(releaseSharedFile);
 
-    // --- @note Mention Functionality ---
+    // --- @ 提及：笔记 + 工作区文件 ---
+    // 语法：
+    //   @关键词           同时搜索笔记与全部启用工作区的文件（只有一个工作区时即直接搜索它）；
+    //   @别名/路径片段     限定在某个工作区内按文件名或相对路径搜索（多工作区时先补全别名）。
     let noteSuggestionPopup = null;
     let activeSuggestionIndex = -1;
+    let currentSuggestions = [];
+    let mentionSequence = 0;
+    let workspaceCache = { at: 0, list: [], activeAlias: null };
+    const getOwner = () => refs.getConversationOwner?.() || null;
+    const ownerKey = owner => owner ? `${owner.type}:${owner.id}` : '';
+    const readWorkspaceState = async (owner = getOwner()) => {
+        if (localElectronAPI.resolveConversationContext) {
+            const result = await localElectronAPI.resolveConversationContext(owner);
+            if (!result?.success) throw new Error(result?.error || '读取工作区失败');
+            return result;
+        }
+        return localElectronAPI.listWorkspaces();
+    };
+    const channel = window.VCPStateChannels?.get?.('conversation.current')
+        || window.VCPStateChannels?.create?.('conversation.current', { itemId: null, itemType: null, topicId: null, historyRevision: 0 });
+    if (channel?.subscribe) {
+        let selectionKey = ownerKey(getOwner());
+        ownedDisposers.push(channel.subscribe(value => {
+            const nextKey = value?.itemId ? `${value.itemType}:${value.itemId}` : '';
+            if (selectionKey === nextKey) return;
+            selectionKey = nextKey;
+            workspaceCache = { at: 0, list: [], activeAlias: null };
+            mentionSequence++;
+            closeWorkspaceMenu();
+            void refreshWorkspacePicker();
+            window.TavernManager?.hidePopover?.();
+        }, { immediate: false }));
+    }
+    addListener(window, 'vcp-conversation-overrides-changed', () => {
+        workspaceCache = { at: 0, list: [], activeAlias: null };
+        void refreshWorkspacePicker();
+    });
+    // 输入框工作区按钮切换后立即失效缓存，下一次 @ 使用新的搜索范围。
+    addListener(window, 'vcp-active-workspace-changed', () => {
+        workspaceCache = { at: 0, list: [], activeAlias: null };
+        void refreshWorkspacePicker();
+    });
+    const WORKSPACE_CACHE_MS = 5000;
+    const MAX_SUGGESTIONS = 50;
+    // @ 前必须是行首、空白或常见标点，避免把邮箱 a@b.com 当成提及。
+    const MENTION_PATTERN = /(?:^|[\s(（\[【"'“‘，。、；：,;:])@([^\s@]*)$/;
+
+    function getMentionMatch() {
+        const cursorPos = messageInput.selectionStart;
+        const before = messageInput.value.substring(0, cursorPos);
+        const match = before.match(MENTION_PATTERN);
+        if (!match) return null;
+        const query = match[1];
+        return { query, start: cursorPos - query.length - 1, end: cursorPos };
+    }
+
+    async function loadWorkspaces() {
+        if (typeof localElectronAPI.listWorkspaces !== 'function') return [];
+        const owner = getOwner();
+        const key = ownerKey(owner);
+        if (workspaceCache.owner === key && Date.now() - workspaceCache.at < WORKSPACE_CACHE_MS) return workspaceCache.list;
+        try {
+            const result = await readWorkspaceState(owner);
+            if (key !== ownerKey(getOwner())) return [];
+            const list = Array.isArray(result?.workspaces)
+                ? result.workspaces.filter(ws => ws && ws.enabled !== false && typeof ws.alias === 'string')
+                : [];
+            const active = list.find(ws => ws.id === result?.activeWorkspaceId);
+            workspaceCache = { at: Date.now(), owner: key, list, activeAlias: active ? active.alias : null };
+        } catch (error) {
+            console.warn('[InputEnhancer] Failed to list workspaces:', error);
+            workspaceCache = { at: Date.now(), list: [], activeAlias: null };
+        }
+        return workspaceCache.list;
+    }
+
+    async function searchWorkspaceSafe(query, alias) {
+        if (typeof localElectronAPI.searchWorkspaceFiles !== 'function') return [];
+        try {
+            const result = await localElectronAPI.searchWorkspaceFiles(query, { alias, limit: 30 });
+            return Array.isArray(result?.results) ? result.results : [];
+        } catch (error) {
+            console.warn('[InputEnhancer] Failed to search workspace files:', error);
+            return [];
+        }
+    }
+
+    async function searchNotesSafe(query) {
+        if (!query || typeof localElectronAPI.searchNotes !== 'function') return [];
+        try {
+            const notes = await localElectronAPI.searchNotes(query);
+            return Array.isArray(notes) ? notes : [];
+        } catch (error) {
+            console.warn('[InputEnhancer] Failed to search notes:', error);
+            return [];
+        }
+    }
+
+    function toNoteSuggestion(note) {
+        return {
+            kind: 'note',
+            name: note.name,
+            path: note.path,
+            detail: String(note.path || '').replace(/\\/g, '/').split('/').slice(-3, -1).join('/'),
+            badge: '笔记',
+        };
+    }
+
+    function toWorkspaceSuggestion(file) {
+        const dir = file.relPath.includes('/') ? file.relPath.slice(0, file.relPath.lastIndexOf('/')) : '';
+        return {
+            kind: 'workspace',
+            name: file.name,
+            path: file.path,
+            alias: file.alias,
+            relPath: file.relPath,
+            detail: dir ? `${file.alias}/${dir}` : file.alias,
+            badge: file.alias,
+        };
+    }
+
+    async function buildSuggestions(query) {
+        const workspaces = await loadWorkspaces();
+        const slash = query.indexOf('/');
+        if (slash > 0) {
+            const head = query.slice(0, slash).toLowerCase();
+            const scoped = workspaces.find(ws => ws.alias === head);
+            if (scoped) {
+                const files = await searchWorkspaceSafe(query.slice(slash + 1), scoped.alias);
+                return files.slice(0, MAX_SUGGESTIONS).map(toWorkspaceSuggestion);
+            }
+        }
+
+        // 选定了当前工作区：@关键词 只搜笔记 + 当前工作区；@别名/ 仍可显式跨项目。
+        const activeAlias = workspaceCache.activeAlias;
+        if (activeAlias) {
+            const [notes, files] = await Promise.all([
+                searchNotesSafe(query),
+                query ? searchWorkspaceSafe(query, activeAlias) : Promise.resolve([]),
+            ]);
+            return [...notes.map(toNoteSuggestion), ...files.map(toWorkspaceSuggestion)].slice(0, MAX_SUGGESTIONS);
+        }
+
+        const lower = query.toLowerCase();
+        const aliasItems = workspaces.length > 1
+            ? workspaces
+                .filter(ws => ws.alias.startsWith(lower) && !query.includes('/'))
+                .map(ws => ({ kind: 'alias', name: `${ws.alias}/`, alias: ws.alias, detail: ws.path, badge: '工作区' }))
+            : [];
+        const [notes, files] = await Promise.all([
+            searchNotesSafe(query),
+            query ? searchWorkspaceSafe(query, null) : Promise.resolve([]),
+        ]);
+        return [
+            ...aliasItems,
+            ...notes.map(toNoteSuggestion),
+            ...files.map(toWorkspaceSuggestion),
+        ].slice(0, MAX_SUGGESTIONS);
+    }
 
     addListener(messageInput, 'input', async () => {
-        const text = messageInput.value;
-        const cursorPos = messageInput.selectionStart;
-        const atMatch = text.substring(0, cursorPos).match(/@([\w\u4e00-\u9fa5]*)$/);
-
-        if (atMatch) {
-            const query = atMatch[1];
-        try {
-            console.log('[inputEnhancer] Searching notes for query:', query);
-            const notes = await localElectronAPI.searchNotes(query);
-            if (!isActive()) return;
-            console.log('[inputEnhancer] Search results:', notes);
-            
-            if (notes && notes.length > 0) {
-                showNoteSuggestions(notes, query);
-            } else {
-                hideNoteSuggestions();
-            }
-        } catch (error) {
-            if (!isActive()) return;
-            console.error('[inputEnhancer] Failed to search notes:', error);
+        const mention = getMentionMatch();
+        const sequence = ++mentionSequence;
+        if (!mention) {
             hideNoteSuggestions();
+            return;
         }
+        const suggestions = await buildSuggestions(mention.query);
+        // 丢弃过期结果：用户在异步搜索期间已继续输入。
+        if (!isActive() || sequence !== mentionSequence) return;
+        if (suggestions.length > 0) {
+            showNoteSuggestions(suggestions);
         } else {
             hideNoteSuggestions();
         }
     });
 
     addListener(messageInput, 'keydown', (e) => {
-        if (noteSuggestionPopup && noteSuggestionPopup.style.display === 'block') {
-            const items = noteSuggestionPopup.querySelectorAll('.suggestion-item');
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
-                updateSuggestionHighlight();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
-                updateSuggestionHighlight();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (activeSuggestionIndex > -1) {
-                    items[activeSuggestionIndex].click();
-                }
-            } else if (e.key === 'Escape') {
-                hideNoteSuggestions();
-            }
+        if (e.isComposing || !noteSuggestionPopup || noteSuggestionPopup.style.display !== 'block') {
+            return;
         }
-    });
 
-    function showNoteSuggestions(notes, query) {
+        const items = noteSuggestionPopup.querySelectorAll('.suggestion-item');
+        if (items.length === 0) {
+            hideNoteSuggestions();
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
+            updateSuggestionHighlight();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
+            updateSuggestionHighlight();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            // While the note picker is open, Enter/Tab confirm the highlighted
+            // note instead of sending the message or moving focus out of input.
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            const selectedIndex = activeSuggestionIndex > -1 ? activeSuggestionIndex : 0;
+            items[selectedIndex]?.click();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            hideNoteSuggestions();
+        }
+    }, true);
+
+    // --- 当前对象的工作区选择：决定 @ 默认搜索范围和无名占位符目标 ---
+    const workspacePickerBtn = document.getElementById('workspacePickerBtn');
+    let workspaceMenu = null;
+
+    function closeWorkspaceMenu({ restoreFocus = false } = {}) {
+        if (!workspaceMenu) return;
+        workspaceMenu.remove();
+        workspaceMenu = null;
+        workspacePickerBtn?.setAttribute('aria-expanded', 'false');
+        if (restoreFocus) workspacePickerBtn?.focus();
+    }
+    ownedDisposers.push(() => closeWorkspaceMenu());
+
+    function renderWorkspacePickerLabel(workspaces, activeId) {
+        if (!workspacePickerBtn) return;
+        const active = workspaces.find(ws => ws.id === activeId);
+        const label = workspacePickerBtn.querySelector('.workspace-picker-label');
+        if (label) label.textContent = active ? active.alias : '';
+        workspacePickerBtn.classList.toggle('has-active-workspace', Boolean(active));
+        const title = active ? `当前工作区：${active.alias}（${active.path}）` : '当前工作区：全部';
+        workspacePickerBtn.title = title;
+        workspacePickerBtn.setAttribute('aria-label', `选择当前工作区，${title}`);
+    }
+
+    async function refreshWorkspacePicker() {
+        if (!workspacePickerBtn || typeof localElectronAPI.listWorkspaces !== 'function') return null;
+        try {
+            const owner = getOwner();
+            const result = await readWorkspaceState(owner);
+            if (!isActive() || ownerKey(owner) !== ownerKey(getOwner())) return null;
+            const workspaces = Array.isArray(result?.workspaces) ? result.workspaces.filter(ws => ws.enabled !== false) : [];
+            renderWorkspacePickerLabel(workspaces, result?.activeWorkspaceId || null);
+            if (result.workspaceInvalid) workspacePickerBtn.title = '绑定的工作区已删除或停用，请重新选择';
+            return { ...result, owner, workspaces, activeWorkspaceId: result?.activeWorkspaceId || null };
+        } catch (error) {
+            console.warn('[InputEnhancer] Failed to refresh workspace picker:', error);
+            return null;
+        }
+    }
+
+    function openWorkspaceSettings() {
+        document.getElementById('globalSettingsBtn')?.click();
+        // 设置模态异步挂载，下一帧再切到"工作区管理"分区。
+        setTimeout(() => {
+            const tab = document.getElementById('vcpSettingsTab-workspace-management')
+                || document.querySelector('[data-section="workspace-management"]');
+            tab?.click();
+        }, 150);
+    }
+
+    async function selectActiveWorkspace(workspaceId, owner = getOwner()) {
+        closeWorkspaceMenu({ restoreFocus: true });
+        if (typeof localElectronAPI.setActiveWorkspace !== 'function') return;
+        const result = owner && localElectronAPI.updateConversationOverride
+            ? await localElectronAPI.updateConversationOverride(owner, { kind: 'workspace', value: workspaceId })
+            : await localElectronAPI.setActiveWorkspace(workspaceId);
+        if (!isActive() || ownerKey(owner) !== ownerKey(getOwner())) return;
+        if (result?.success === false) {
+            refs.uiHelper?.showToastNotification?.(result.error || '保存失败', 'error');
+            return;
+        }
+
+        const workspaces = Array.isArray(result?.workspaces) ? result.workspaces.filter(ws => ws.enabled !== false) : [];
+        renderWorkspacePickerLabel(workspaces, result?.activeWorkspaceId || null);
+        window.dispatchEvent(new CustomEvent('vcp-active-workspace-changed', {
+            detail: { activeWorkspaceId: result?.activeWorkspaceId || null },
+        }));
+    }
+
+    async function openWorkspaceMenu() {
+        const state = await refreshWorkspacePicker();
+        if (!state || !isActive()) return;
+        closeWorkspaceMenu();
+
+        const menu = document.createElement('div');
+        menu.id = 'workspace-picker-menu';
+        menu.className = 'workspace-picker-menu';
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', '当前工作区');
+
+        const addItem = (label, detail, { checked = null, onSelect }) => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'workspace-picker-item';
+            item.setAttribute('role', checked === null ? 'menuitem' : 'menuitemradio');
+            if (checked !== null) item.setAttribute('aria-checked', checked ? 'true' : 'false');
+            item.tabIndex = -1;
+            const name = document.createElement('span');
+            name.className = 'workspace-picker-item-name';
+            name.textContent = label;
+            item.append(name);
+            if (detail) {
+                const sub = document.createElement('span');
+                sub.className = 'workspace-picker-item-detail';
+                sub.textContent = detail;
+                item.append(sub);
+            }
+            item.addEventListener('click', onSelect);
+            menu.append(item);
+            return item;
+        };
+
+
+        addItem('全部工作区', '@ 搜索全部；无名占位符不指定工作区', {
+            checked: !state.activeWorkspaceId,
+            onSelect: () => selectActiveWorkspace(null, state.owner),
+        });
+        for (const ws of state.workspaces) {
+            addItem(ws.alias, ws.path, {
+                checked: ws.id === state.activeWorkspaceId,
+                onSelect: () => selectActiveWorkspace(ws.id, state.owner),
+            });
+        }
+        const separator = document.createElement('div');
+        separator.className = 'workspace-picker-separator';
+        separator.setAttribute('role', 'separator');
+        menu.append(separator);
+        addItem(state.workspaces.length ? '管理工作区…' : '添加工作区…', null, {
+            onSelect: () => {
+                closeWorkspaceMenu();
+                openWorkspaceSettings();
+            },
+        });
+
+        menu.addEventListener('keydown', event => {
+            const items = [...menu.querySelectorAll('.workspace-picker-item')];
+            const index = items.indexOf(document.activeElement);
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const delta = event.key === 'ArrowDown' ? 1 : -1;
+                items[(index + delta + items.length) % items.length]?.focus();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                closeWorkspaceMenu({ restoreFocus: true });
+            } else if (event.key === 'Tab') {
+                closeWorkspaceMenu();
+            }
+        });
+
+        document.body.appendChild(menu);
+        const rect = workspacePickerBtn.getBoundingClientRect();
+        menu.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+        menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+        workspaceMenu = menu;
+        workspacePickerBtn.setAttribute('aria-expanded', 'true');
+        (menu.querySelector('[aria-checked="true"]') || menu.querySelector('.workspace-picker-item'))?.focus();
+    }
+
+    if (workspacePickerBtn) {
+        addListener(workspacePickerBtn, 'click', event => {
+            event.preventDefault();
+            if (workspaceMenu) {
+                closeWorkspaceMenu();
+                return;
+            }
+            return openWorkspaceMenu();
+        });
+        addListener(document, 'mousedown', event => {
+            if (!workspaceMenu) return;
+            if (workspaceMenu.contains(event.target) || workspacePickerBtn.contains(event.target)) return;
+            closeWorkspaceMenu();
+        }, true);
+        // 设置页增删 / 重命名工作区后，按钮标签可能过期；聚焦窗口时顺手刷新。
+        addListener(window, 'focus', () => refreshWorkspacePicker());
+        void refreshWorkspacePicker();
+    }
+
+    function showNoteSuggestions(suggestions) {
         if (!noteSuggestionPopup) {
             noteSuggestionPopup = document.createElement('div');
             noteSuggestionPopup.id = 'note-suggestion-popup';
+            noteSuggestionPopup.setAttribute('role', 'listbox');
+            noteSuggestionPopup.setAttribute('aria-label', '笔记与工作区文件');
             document.body.appendChild(noteSuggestionPopup);
         }
 
-        noteSuggestionPopup.innerHTML = '';
-        notes.forEach((note, index) => {
+        currentSuggestions = suggestions;
+        noteSuggestionPopup.replaceChildren();
+        suggestions.forEach(suggestion => {
             const item = document.createElement('div');
-            item.className = 'suggestion-item';
-            
-            // 閹绘劕褰囬惄绋款嚠鐠侯垰绶? 
-            const relativePath = note.path.replace(/\\/g, '/').split('/').slice(-3, -1).join('/');  
-            
-            item.innerHTML = `  
-                <span class="suggestion-name">${note.name}</span>  
-                <span class="suggestion-path">${relativePath}</span>  
-            `;  
-            
-            item.dataset.filePath = note.path;
-        addListener(item, 'click', () => selectNoteSuggestion(note));
+            item.className = `suggestion-item suggestion-kind-${suggestion.kind}`;
+            item.setAttribute('role', 'option');
+
+            // 文件名来自磁盘，一律用 textContent，避免文件名中的 HTML 被解析。
+            const badge = document.createElement('span');
+            badge.className = 'suggestion-source';
+            badge.textContent = suggestion.badge;
+            const name = document.createElement('span');
+            name.className = 'suggestion-name';
+            name.textContent = suggestion.name;
+            const detail = document.createElement('span');
+            detail.className = 'suggestion-path';
+            detail.textContent = suggestion.detail || '';
+            item.append(badge, name, detail);
+
+            if (suggestion.path) item.dataset.filePath = suggestion.path;
+            item.title = suggestion.relPath ? `${suggestion.alias}/${suggestion.relPath}` : (suggestion.path || suggestion.detail || '');
+            // mousedown 阻止默认行为，保持输入框焦点与光标位置。
+            addListener(item, 'mousedown', event => event.preventDefault());
+            addListener(item, 'click', () => selectSuggestion(suggestion));
             noteSuggestionPopup.appendChild(item);
         });
 
@@ -418,65 +773,113 @@ function initializeInputEnhancer(refs) {
             noteSuggestionPopup.style.display = 'none';
         }
         activeSuggestionIndex = -1;
+        currentSuggestions = [];
     }
 
     function updateSuggestionHighlight() {
         const items = noteSuggestionPopup.querySelectorAll('.suggestion-item');
         items.forEach((item, index) => {
-            item.classList.toggle('active', index === activeSuggestionIndex);
+            const active = index === activeSuggestionIndex;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
+            if (active) item.scrollIntoView?.({ block: 'nearest' });
         });
     }
 
-    async function selectNoteSuggestion(note) {
-        const agentId = currentAgentIdRef();
-        const topicId = currentTopicIdRef();
-        if (!agentId || !topicId) {
-            alert('请先选择一个 Agent 和话题，才能附加笔记。');
+    function replaceMention(replacement) {
+        const mention = getMentionMatch();
+        if (!mention) return;
+        const text = messageInput.value;
+        messageInput.value = text.substring(0, mention.start) + replacement + text.substring(mention.end);
+        const cursor = mention.start + replacement.length;
+        messageInput.selectionStart = cursor;
+        messageInput.selectionEnd = cursor;
+    }
+
+    async function selectSuggestion(suggestion) {
+        if (suggestion.kind === 'alias') {
+            // 补全工作区别名后继续在该工作区内搜索。
+            replaceMention(`@${suggestion.alias}/`);
+            messageInput.dispatchEvent(new Event('input', { bubbles: true }));
             return;
         }
 
-        // Replace the @mention text
-        const text = messageInput.value;
-        const cursorPos = messageInput.selectionStart;
-        const textBeforeCursor = text.substring(0, cursorPos);
-        const atMatch = textBeforeCursor.match(/@([\w\u4e00-\u9fa5]*)$/);
-        if (atMatch) {
-            const mentionLength = atMatch[0].length;
-            const newText = text.substring(0, cursorPos - mentionLength) + text.substring(cursorPos);
-            messageInput.value = newText;
+        const agentId = currentAgentIdRef();
+        const topicId = currentTopicIdRef();
+        const label = suggestion.kind === 'note' ? '笔记' : '工作区文件';
+        if (!agentId || !topicId) {
+            alert(`请先选择一个 Agent 和话题，才能附加${label}。`);
+            return;
         }
 
+        replaceMention('');
         hideNoteSuggestions();
+        messageInput.dispatchEvent(new Event('input', { bubbles: true }));
 
-        // Attach the file using existing logic
+        // 以"实时引用"方式附加：主进程不复制文件，附件路径直接指向真实文件，
+        // AI 可以看到并修改该文件；文件更新后，上下文也会重新读取最新内容。
+        // 工作区文件由主进程按路径自动识别归属，笔记显式标记 liveReference。
         try {
             const results = await localElectronAPI.handleFileDrop(agentId, topicId, [{
-                path: note.path, // Pass the full path
-                name: note.name
-                // No need to specify type or data, main process will handle it
+                path: suggestion.path,
+                name: suggestion.name,
+                liveReference: suggestion.kind === 'note'
             }]);
             if (!isActive()) return;
 
             if (results && results.length > 0 && results[0].success && results[0].attachment) {
-                const att = results[0].attachment;
-                attachedFilesRef.append({
-                    file: { name: att.name, type: att.type, size: att.size },
-                    localPath: att.internalPath,
-                    originalName: att.name,
-                    _fileManagerData: att
-                });
+                appendAttachment(results[0].attachment);
                 updateAttachmentPreviewRef();
-                console.log(`[InputEnhancer] Successfully attached note: ${att.name}`);
+                console.log(`[InputEnhancer] Successfully attached ${suggestion.kind}: ${results[0].attachment.name}`);
             } else {
-                const errorMsg = results && results.length > 0 && results[0].error ? results[0].error : '閺堫亞鐓￠柨娆掝嚖';
-                alert('附加笔记 "' + note.name + '" 失败: ' + errorMsg);
+                const errorMsg = results && results.length > 0 && results[0].error ? results[0].error : '未知错误';
+                alert(`附加${label} "${suggestion.name}" 失败: ${errorMsg}`);
             }
         } catch (err) {
             if (!isActive()) return;
-            console.error('[InputEnhancer] Error attaching note file:', err);
-            alert('附加笔记 "' + note.name + '" 时发生意外错误。');
+            console.error('[InputEnhancer] Error attaching mention file:', err);
+            alert(`附加${label} "${suggestion.name}" 时发生意外错误。`);
         }
     }
+
+    if (typeof window !== 'undefined' && window.chatVoiceComposer?.init) {
+        try {
+            window.chatVoiceComposer.init({
+                messageInput,
+                electronAPI: localElectronAPI,
+                attachedFiles: attachedFilesRef,
+                updateAttachmentPreview: updateAttachmentPreviewRef,
+                sendMessageBtn: typeof document !== 'undefined' ? document.getElementById('sendMessageBtn') : null,
+                getCurrentAgentId: refs.getCurrentAgentId,
+                getCurrentTopicId: refs.getCurrentTopicId,
+                listenerOwner: refs.listenerOwner,
+            });
+        } catch (voiceInitErr) {
+            console.warn('[InputEnhancer] chatVoiceComposer 初始化警告:', voiceInitErr);
+        }
+    }
+}
+
+// 渲染进程附件记录统一入口：实时引用标记同时写在顶层，供预览与上下文构建识别。
+function appendAttachment(att) {
+    attachedFilesRef.append({
+        file: { name: att.name, type: att.type, size: att.size },
+        localPath: att.internalPath,
+        originalName: att.name,
+        isLiveReference: att.isLiveReference === true,
+        _fileManagerData: att
+    });
+}
+
+// Electron 32+ 移除了 File.path，只能经由 preload 的 webUtils.getPathForFile 取真实路径。
+function getDroppedFilePath(api, file) {
+    try {
+        const resolved = typeof api?.getPathForFile === 'function' ? api.getPathForFile(file) : '';
+        if (typeof resolved === 'string' && resolved) return resolved;
+    } catch (error) {
+        console.warn('[InputEnhancer] getPathForFile failed:', error);
+    }
+    return typeof file?.path === 'string' && file.path ? file.path : '';
 }
 
 // --- Helper functions for paste handling ---

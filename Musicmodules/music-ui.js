@@ -69,11 +69,37 @@ function setupUI(app) {
         app.playlistEl.appendChild(frag); app.updateAllCount();
     };
 
+    app.scrollCurrentTrackToSidebarTop = () => {
+        const playlist = app.playlistEl;
+        if (!playlist || playlist.style.display === 'none') return false;
+
+        const activeItem = Array.from(playlist.children).find(
+            item => Number(item.dataset.index) === app.currentTrackIndex
+        );
+        if (!activeItem) return false;
+
+        // Place the active row around 1/4 of the visible list instead of directly
+        // against the top edge. This leaves tolerance for restored layout/rounded
+        // panel clipping while preserving useful context above and below the track.
+        const playlistRect = playlist.getBoundingClientRect();
+        const itemRect = activeItem.getBoundingClientRect();
+        const viewportHeight = playlist.clientHeight || playlistRect.height || 0;
+        const targetOffset = viewportHeight * 0.25;
+        const desiredScrollTop = playlist.scrollTop
+            + itemRect.top
+            - playlistRect.top
+            - targetOffset;
+        const maxScrollTop = Math.max(0, playlist.scrollHeight - viewportHeight);
+        playlist.scrollTop = Math.min(maxScrollTop, Math.max(0, desiredScrollTop));
+        return true;
+    };
+
     app.createSilentAudio = () => {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const buf = ctx.createBuffer(1, 44100 * 60, 44100);
-        const getWav = (b) => {
-            const ds = b.length * 2, view = new DataView(new ArrayBuffer(44 + ds));
+        // The WAV only needs a known sample count. Creating an AudioContext here
+        // left a native audio graph alive for the entire renderer lifetime.
+        const sampleCount = 44100 * 60;
+        const getWav = (length) => {
+            const ds = length * 2, view = new DataView(new ArrayBuffer(44 + ds));
             let o = 0; const w = (s) => { for(let i=0;i<s.length;i++) view.setUint8(o++, s.charCodeAt(i)); };
             w('RIFF'); view.setUint32(o, 36+ds, true); o+=4; w('WAVEfmt '); view.setUint32(o, 16, true); o+=4;
             view.setUint16(o, 1, true); o+=2; view.setUint16(o, 1, true); o+=2;
@@ -82,11 +108,16 @@ function setupUI(app) {
             w('data'); view.setUint32(o, ds, true); o+=4;
             return view.buffer;
         };
-        return URL.createObjectURL(new Blob([getWav(buf)], { type: 'audio/wav' }));
+        const url = URL.createObjectURL(new Blob([getWav(sampleCount)], { type: 'audio/wav' }));
+        app.silentAudioUrl = url;
+        return url;
     };
 
     app.applyTheme = (theme) => {
         app.currentTheme = theme; document.body.classList.toggle('light-theme', theme === 'light');
+        // CSS variables are immediately readable after changing the theme class.
+        // Notify the stage even while paused; no playback restart is necessary.
+        app.stageHost?.updateTheme?.();
         requestAnimationFrame(() => requestAnimationFrame(() => {
             const rgb = app.hexToRgb(getComputedStyle(document.body).getPropertyValue('--music-highlight'));
             if (rgb) app.visualizerColor = rgb;
@@ -102,15 +133,39 @@ function setupUI(app) {
 
 class WebNowPlayingAdapter {
     constructor(app) {
-        this.app = app; this.ws = null; this.connect();
+        this.app = app;
+        this.ws = null;
+        this.reconnectTimer = null;
+        this.destroyed = false;
+        this.connect();
+    }
+    scheduleReconnect() {
+        if (this.destroyed || this.reconnectTimer) return;
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect();
+        }, 5000);
     }
     connect() {
+        if (this.destroyed) return;
         try {
-            this.ws = new WebSocket('ws://127.0.0.1:8974');
-            this.ws.onopen = () => this.sendUpdate();
-            this.ws.onerror = () => { this.ws = null; };
-            this.ws.onclose = () => { this.ws = null; setTimeout(() => this.connect(), 5000); };
-        } catch (e) { setTimeout(() => this.connect(), 5000); }
+            const socket = new WebSocket('ws://127.0.0.1:8974');
+            this.ws = socket;
+            socket.onopen = () => {
+                if (this.destroyed || this.ws !== socket) {
+                    socket.close();
+                    return;
+                }
+                this.sendUpdate();
+            };
+            socket.onerror = () => socket.close();
+            socket.onclose = () => {
+                if (this.ws === socket) this.ws = null;
+                this.scheduleReconnect();
+            };
+        } catch (e) {
+            this.scheduleReconnect();
+        }
     }
     sendUpdate() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
@@ -125,5 +180,22 @@ class WebNowPlayingAdapter {
             shuffle: this.app.playModes[this.app.currentPlayMode] === 'shuffle' ? 1 : 0
         };
         try { this.ws.send(JSON.stringify(data)); } catch (e) {}
+    }
+    destroy() {
+        if (this.destroyed) return;
+        this.destroyed = true;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        const socket = this.ws;
+        this.ws = null;
+        if (socket) {
+            socket.onopen = null;
+            socket.onerror = null;
+            socket.onclose = null;
+            try { socket.close(); } catch (error) {}
+        }
+        this.app = null;
     }
 }

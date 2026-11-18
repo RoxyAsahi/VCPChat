@@ -148,8 +148,15 @@ class FlowlockManager {
 
     /**
      * 停止指定 Agent 的心流锁
+     * @param {string} [agentId]
+     * @param {Object} [options] - { silent?: boolean }
      */
-    async stop(agentId) {
+    async stop(agentId, options = {}) {
+        if (typeof agentId === 'object' && agentId !== null) {
+            options = agentId;
+            agentId = null;
+        }
+
         // 兼容旧插件 stop()：优先停止当前可见 Agent，不再错误地停止其他并发 Session。
         const resolvedAgentId = agentId || window.VCPMainChatState?.snapshot?.()?.selectedItem?.id;
         const session = this.sessions.get(resolvedAgentId);
@@ -179,7 +186,7 @@ class FlowlockManager {
         // 显示通知。优先使用 Session 启动时缓存的名称，确保后台 Agent
         // 不会因当前界面已切换而退化成 UUID。
         const agentName = await this.resolveAgentDisplayName(agentId, session.agentName);
-        if (this.uiHelper?.showToastNotification) {
+        if (!options.silent && this.uiHelper?.showToastNotification) {
             this.uiHelper.showToastNotification(`Agent "${agentName}" 心流锁已停止`, 'info');
         }
 
@@ -201,9 +208,29 @@ class FlowlockManager {
      * 在最终回复边界认领 TopicSponsor 创建的请求，并原子交接唯一 Session。
      * 主进程是请求状态真源；前端只消费主进程返回的可信 claim。
      */
+    /**
+     * 检查目标 Agent 当前是否正处于生成中或上下文压缩/中继挂起期。
+     * 若跨主体派单完结时目标 Agent 正忙，则礼让延后认领，待目标 Agent 自身当前轮完结后再安全交接。
+     */
+    isAgentBusyForHandoff(agentId, completingMessageId = null) {
+        const existing = this.sessions.get(agentId);
+        if (!existing || existing.status !== 'active') return false;
+        if (existing.contextCompactionLease || existing.relayAdmissionToken) return true;
+        if (existing.activeMessageId && existing.activeMessageId !== completingMessageId) return true;
+        return false;
+    }
+
     async claimAndHandoffPendingTopic(agentId, constraints = {}) {
         if (!agentId || !this.electronAPI?.claimPendingFlowlockTopic) {
             return { success: false, code: 'UNAVAILABLE' };
+        }
+
+        const completingMessageId = typeof constraints?.completingMessageId === 'string'
+            ? constraints.completingMessageId
+            : null;
+        if (this.isAgentBusyForHandoff(agentId, completingMessageId)) {
+            console.log(`[Flowlock] Deferring pending topic claim for busy agent ${agentId}.`);
+            return { success: false, code: 'AGENT_BUSY_DEFERRED' };
         }
 
         const result = await this.electronAPI.claimPendingFlowlockTopic(agentId, constraints);
@@ -258,15 +285,18 @@ class FlowlockManager {
             created.nextPrompt = prompt || null;
             created.nextDelaySeconds = heartbeatSeconds;
             this.scheduleNextRound(agentId, heartbeatSeconds * 1000);
+            this.refreshTopicListIfSelected(agentId);
             return;
         }
 
-        // 最终消息已经落盘后才调用本方法，因此可以安全结束本轮并迁移。
+        // 最终消息已经落盘且通过忙碌守卫后才调用本方法，因此可以安全结束本轮并迁移。
         if (existing.pendingTimer) {
             clearTimeout(existing.pendingTimer);
             existing.pendingTimer = null;
         }
         existing.generation++;
+        existing.contextCompactionLease = null;
+        existing.relayAdmissionToken = null;
         existing.topicId = topicId;
         existing.status = 'active';
         existing.activeMessageId = null;
@@ -283,16 +313,100 @@ class FlowlockManager {
         this.updateSidebarIndicator(agentId, true);
         this.updateCurrentHeaderIndicator(agentId, true);
         this.scheduleNextRound(agentId, heartbeatSeconds * 1000);
+        this.refreshTopicListIfSelected(agentId);
 
+        const displayName = await this.resolveAgentDisplayName(agentId, existing.agentName);
         console.log(`[Flowlock] Agent ${agentId} handed off to topic ${topicId}, request ${requestId}.`);
         this.uiHelper?.showToastNotification?.(
-            `Agent "${agentId}" 心流锁已交接到新话题`,
+            `Agent "${displayName}" 心流锁已交接到新话题`,
             'success'
         );
     }
 
+    refreshTopicListIfSelected(agentId) {
+        try {
+            const currentSelected = window.VCPMainChatState?.snapshot?.()?.selectedItem;
+            if (currentSelected?.type === 'agent' && currentSelected.id === agentId) {
+                window.topicListManager?.loadTopicList?.();
+            }
+        } catch (refreshError) {
+            console.warn('[Flowlock] Failed to refresh topic list after claim:', refreshError);
+        }
+    }
+
     /**
-     * 页面重载后显式恢复 pending 请求。每个 Agent 仍由主进程执行唯一候选校验。
+     * 扫描并认领所有待处理的 TopicSponsor 心流请求（支持群聊派发与单聊跨伙伴派发）。
+     * 优先通过单次 listPendingFlowlockTopics 内存缓存探测，避免日常无 pending 时的双重 IPC 开销。
+     * @param {string|null} preferredAgentId - 当前完结消息所属的 Agent ID
+     * @param {string|null} completingMessageId - 当前完结的消息 ID
+     */
+    async claimAllPendingTopics(preferredAgentId = null, completingMessageId = null) {
+        let directClaimed = false;
+        let anyClaimed = false;
+
+        if (!this.electronAPI?.listPendingFlowlockTopics) {
+            if (preferredAgentId) {
+                const direct = await this.claimAndHandoffPendingTopic(preferredAgentId, { completingMessageId });
+                if (direct?.success) {
+                    directClaimed = true;
+                    anyClaimed = true;
+                }
+            }
+            return { success: anyClaimed, directClaimed };
+        }
+
+        try {
+            const result = await this.electronAPI.listPendingFlowlockTopics();
+            if (!result?.success || !Array.isArray(result.requests) || result.requests.length === 0) {
+                return { success: false, directClaimed: false };
+            }
+
+            const orderedAgents = [];
+            const seenAgents = new Set();
+            if (preferredAgentId && result.requests.some(req => req?.agentId === preferredAgentId)) {
+                orderedAgents.push(preferredAgentId);
+                seenAgents.add(preferredAgentId);
+            }
+            for (const req of result.requests) {
+                if (req?.agentId && req?.requestId && !this.claimedRequestIds.has(req.requestId) && !seenAgents.has(req.agentId)) {
+                    orderedAgents.push(req.agentId);
+                    seenAgents.add(req.agentId);
+                }
+            }
+
+            for (const targetAgentId of orderedAgents) {
+                const constraints = targetAgentId === preferredAgentId && completingMessageId
+                    ? { completingMessageId }
+                    : {};
+                const handoff = await this.claimAndHandoffPendingTopic(targetAgentId, constraints);
+                if (handoff?.success) {
+                    anyClaimed = true;
+                    if (targetAgentId === preferredAgentId) {
+                        directClaimed = true;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[Flowlock] Failed to scan cross-agent pending topics:', error);
+        }
+        return { success: anyClaimed, directClaimed };
+    }
+
+    /**
+     * 当用户手动切换到指定 Agent 的指定 Topic 时，若该话题存在未消费的 pending 心流请求，则按 topicId 精准认领点火。
+     */
+    async claimPendingTopicForSelection(agentId, topicId) {
+        if (!agentId || !topicId) {
+            return { success: false, code: 'INVALID_ARGS' };
+        }
+        if (this.isTopicLocked(agentId, topicId)) {
+            return { success: true, alreadyLocked: true };
+        }
+        return this.claimAndHandoffPendingTopic(agentId, { topicId });
+    }
+
+    /**
+     * 页面重载后显式恢复 pending 请求。若同一 Agent 存在多个历史积压请求，自动认领最新创建的一条并归档旧残留。
      */
     async recoverPendingRequests() {
         if (!this.electronAPI?.listPendingFlowlockTopics) return;
@@ -307,11 +421,11 @@ class FlowlockManager {
         }
 
         for (const [agentId, requests] of byAgent) {
-            if (requests.length !== 1) {
-                console.warn(`[Flowlock] Recovery conflict for ${agentId}: ${requests.length} pending requests.`);
-                continue;
+            if (requests.length === 1) {
+                await this.claimAndHandoffPendingTopic(agentId, { requestId: requests[0].requestId });
+            } else if (requests.length > 1) {
+                await this.claimAndHandoffPendingTopic(agentId);
             }
-            await this.claimAndHandoffPendingTopic(agentId, { requestId: requests[0].requestId });
         }
     }
 
@@ -321,29 +435,50 @@ class FlowlockManager {
      * @param {Object} event - { type, messageId, context, content, finishReason, error }
      */
     async handleFinalizedMessage(event) {
-        const { type, messageId, context, content, finishReason, error } = event;
+        const { type, messageId, context, content, finishReason, error } = event || {};
 
-        if (!context || !context.agentId || !context.topicId || context.isGroupMessage) {
+        if (!context || !context.topicId) {
             return;
         }
 
-        // TopicSponsor 请求只能在当前 assistant 最终回复完整落盘后认领。
-        // 错误完成不消费请求，保留为 pending 供后续明确恢复。
-        if (type !== 'error' && finishReason !== 'error') {
-            const handoff = await this.claimAndHandoffPendingTopic(context.agentId);
-            if (handoff?.success) {
+        if (!context.isGroupMessage && context.agentId) {
+            const suspendedSession = this.sessions.get(context.agentId);
+            if (suspendedSession?.contextCompactionLease && suspendedSession.topicId === context.topicId) {
+                if (!suspendedSession.activeMessageId || suspendedSession.activeMessageId === messageId) {
+                    suspendedSession.lastCompletedAt = Date.now();
+                    suspendedSession.activeMessageId = null;
+                }
                 return;
             }
         }
 
-        const protocol = type !== 'error' && typeof content === 'string'
+        const isUpstreamError = typeof content === 'string' && /^\s*\[ERROR\]/i.test(content);
+
+        // TopicSponsor 请求只能在当前 assistant 最终回复完整落盘后认领。
+        // 支持单聊自建、单聊跨伙伴派发以及群聊向私聊派发；错误完成不消费请求，保留为 pending 供后续恢复。
+        if (type !== 'error' && finishReason !== 'error' && !isUpstreamError) {
+            const handoff = await this.claimAllPendingTopics(
+                context.isGroupMessage ? null : context.agentId,
+                messageId || null
+            );
+            if (!context.isGroupMessage && handoff?.directClaimed) {
+                return;
+            }
+        }
+
+        if (context.isGroupMessage || !context.agentId) {
+            return;
+        }
+
+        const protocol = type !== 'error' && finishReason !== 'error' && !isUpstreamError && typeof content === 'string'
             ? window.flowlockProtocol?.parse(content)
             : null;
 
         let session = this.sessions.get(context.agentId);
 
         // AI 可在普通回复末尾自主进入心流锁；消息 context 是唯一可信身份来源。
-        if ((!session || session.status !== 'active') && protocol?.shouldStart) {
+        // 若为上游报错则绝不启动心流锁。
+        if (!isUpstreamError && (!session || session.status !== 'active') && protocol?.shouldStart) {
             await this.start(context.agentId, context.topicId, { startImmediately: false });
             session = this.sessions.get(context.agentId);
         }
@@ -365,6 +500,25 @@ class FlowlockManager {
 
         session.lastCompletedAt = Date.now();
         session.activeMessageId = null;
+
+        // 如果收到类似 [ERROR] 开头的上游回复报错（如代理服务器连接上游API失败、达到重试上限等）
+        // 自动中断心流锁，避免无休止重试刷屏
+        if (isUpstreamError) {
+            const errorSummary = content.trim();
+            console.error(`[Flowlock] Agent ${context.agentId} received upstream error reply, aborting flowlock:`, errorSummary.substring(0, 100));
+            session.completionReason = 'upstream_error';
+            session.lastError = errorSummary;
+
+            const agentName = await this.resolveAgentDisplayName(context.agentId, session.agentName);
+            if (this.uiHelper?.showToastNotification) {
+                this.uiHelper.showToastNotification(
+                    `Agent "${agentName}" 收到上游回复报错，心流锁已自动中断`,
+                    'error'
+                );
+            }
+            await this.stop(context.agentId, { silent: true });
+            return;
+        }
 
         // 如果是错误完成
         if (type === 'error' || finishReason === 'error') {
@@ -449,13 +603,70 @@ class FlowlockManager {
     }
 
     /**
+     * Compression owns scheduling priority without releasing the Agent/topic lock.
+     * A lease is tied to session identity and generation, so stop/restart/handoff
+     * cannot be undone by a late compression response.
+     */
+    suspendForContextCompaction(agentId, topicId) {
+        const session = this.sessions.get(agentId);
+        if (!session || session.status !== 'active' || session.topicId !== topicId) return null;
+        if (session.contextCompactionLease) return session.contextCompactionLease;
+        if (session.pendingTimer) clearTimeout(session.pendingTimer);
+        session.pendingTimer = null;
+        session.nextHeartbeatAt = null;
+        session.generation++;
+        const lease = Object.freeze({ session, agentId, topicId, generation: session.generation });
+        session.contextCompactionLease = lease;
+        session.relayAdmissionToken = null;
+        return lease;
+    }
+
+    markRelaySuspension(lease, token) {
+        const session = lease && this.sessions.get(lease.agentId);
+        if (!session || session.contextCompactionLease !== lease
+            || session.generation !== lease.generation || session.status !== 'active') return false;
+        session.relayAdmissionToken = token;
+        return true;
+    }
+
+    adoptRelayMessage(agentId, topicId, messageId, relayFrom) {
+        const session = this.sessions.get(agentId);
+        const lease = session?.contextCompactionLease;
+        if (!relayFrom || session?.relayAdmissionToken !== relayFrom
+            || !lease || session.status !== 'active' || session.topicId !== topicId
+            || lease.session !== session || lease.generation !== session.generation) return false;
+        if (typeof messageId !== 'string' || !messageId) return false;
+        session.activeMessageId = messageId;
+        session.relayAdmissionToken = null;
+        session.contextCompactionLease = null;
+        session.lastError = null;
+        return true;
+    }
+
+    resumeAfterContextCompaction(lease) {
+        if (!lease) return false;
+        const session = this.sessions.get(lease.agentId);
+        if (session !== lease.session || session.status !== 'active'
+            || session.topicId !== lease.topicId || session.generation !== lease.generation
+            || session.contextCompactionLease !== lease) return false;
+        session.contextCompactionLease = null;
+        session.relayAdmissionToken = null;
+        session.lastError = null;
+        if (!session.activeMessageId) {
+            this.scheduleNextRound(session.agentId,
+                (session.nextDelaySeconds ?? session.defaultDelaySeconds) * 1000);
+        }
+        return true;
+    }
+
+    /**
      * 安排下一轮续写
      * @param {string} agentId
      * @param {number} delayMs - 延迟毫秒
      */
     scheduleNextRound(agentId, delayMs) {
         const session = this.sessions.get(agentId);
-        if (!session || session.status !== 'active') return;
+        if (!session || session.status !== 'active' || session.contextCompactionLease) return;
 
         // 取消已有的定时器
         if (session.pendingTimer) {
@@ -484,7 +695,7 @@ class FlowlockManager {
      */
     async triggerRound(agentId) {
         const session = this.sessions.get(agentId);
-        if (!session || session.status !== 'active') return;
+        if (!session || session.status !== 'active' || session.contextCompactionLease) return;
 
         // 检查续写函数是否可用
         if (!this.continueWritingForContext) {
@@ -523,22 +734,45 @@ class FlowlockManager {
                 agentId: session.agentId,
                 topicId: session.topicId,
                 prompt: prompt || '',
-                messageId: messageId
+                messageId: messageId,
+                isCurrent: () => this.sessions.get(agentId) === session
+                    && session.status === 'active' && session.activeMessageId === messageId
+                    && !session.contextCompactionLease
             });
         } catch (error) {
-            console.error(`[Flowlock] Agent ${agentId} continue writing failed:`, error);
-            session.lastError = error.message;
+            if (this.sessions.get(agentId) !== session || session.status !== 'active') return;
+            if (['TOPIC_BUSY', 'MESSAGES_PENDING'].includes(error?.code)) {
+                session.activeMessageId = null;
+                session.nextPrompt = prompt;
+                session.round = Math.max(0, session.round - 1);
+                this.scheduleNextRound(agentId, session.defaultDelaySeconds * 1000);
+                return;
+            }
+            console.error(`[Flowlock] Agent ${agentId} continue writing failed (topic=${session.topicId}, round=${session.round}, messageId=${messageId}):`, error);
+            session.lastError = error?.message || String(error);
             session.activeMessageId = null;
+
+            if (session.contextCompactionLease) {
+                session.nextPrompt = prompt;
+                this.uiHelper?.showToastNotification?.('上下文压缩未完成，心流心跳保持挂起，请重试压缩后恢复', 'warning');
+                return;
+            }
 
             // 走错误重试逻辑
             session.retryCount++;
             if (session.retryCount >= session.maxRetries) {
                 session.completionReason = 'max_retries_exceeded';
-                await this.stop(agentId);
+                console.error(`[Flowlock] Agent ${agentId} max retries reached (${session.retryCount}/${session.maxRetries}), stopping:`, session.lastError);
+                this.uiHelper?.showToastNotification?.(
+                    `Agent "${session.agentName || agentId}" 心流锁续写失败次数过多，已自动停止，请查看控制台错误`,
+                    'error'
+                );
+                await this.stop(agentId, { silent: true });
                 return;
             }
 
-            // 重试
+            // 重试：保留原始异常，并记录重试次数，避免心跳失败无迹可查。
+            console.warn(`[Flowlock] Agent ${agentId} heartbeat retry ${session.retryCount}/${session.maxRetries} in ${session.defaultDelaySeconds}s:`, error);
             this.scheduleNextRound(agentId, session.defaultDelaySeconds * 1000);
         }
     }
@@ -635,6 +869,7 @@ class FlowlockManager {
             nextHeartbeatAt: session.nextHeartbeatAt,
             lastError: session.lastError,
             completionReason: session.completionReason,
+            contextCompactionSuspended: Boolean(session.contextCompactionLease),
             hasCustomPrompt: session.nextPrompt !== null,
             nextDelaySeconds: session.nextDelaySeconds
         };

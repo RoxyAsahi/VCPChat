@@ -333,6 +333,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function restoreFormState(toolName) {
         const state = formStateCache.get(toolName);
         if (!state) return;
+        // 先恢复操作并重建参数，避免下拉框已恢复为 A/B，但仍使用 query 的表单。
+        const commandSelect = toolForm.querySelector('#command-select');
+        if (commandSelect && state.command !== undefined && commandSelect.value !== state.command) {
+            commandSelect.value = state.command;
+            commandSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         const inputs = toolForm.querySelectorAll('input, textarea, select');
         inputs.forEach(el => {
             if (!el.name) return;
@@ -379,46 +385,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             commandSelect.addEventListener('change', (e) => {
                 renderFormParams(tool.commands[e.target.value].params, paramsContainer, toolName, e.target.value);
-                setupCommandSpecificForm(toolName, e.target.value);
             });
             renderFormParams(tool.commands[commandSelect.value].params, paramsContainer, toolName, commandSelect.value);
-            setupCommandSpecificForm(toolName, commandSelect.value);
         } else {
             toolForm.appendChild(paramsContainer);renderFormParams(tool.params, paramsContainer, toolName);
         }
 
         // 添加按钮容器
         const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;';
+        buttonContainer.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-top: 15px; flex-wrap: wrap;';
         
         const submitButton = document.createElement('button');
         submitButton.type = 'submit';
+        submitButton.className = 'tool-ui-btn';
         submitButton.textContent = '执行';
-        submitButton.style.cssText = `
-            background-color: var(--success-color);
-            color: var(--text-on-accent);
-            border: none;
-            padding: 12px 25px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.2s;`;
         buttonContainer.appendChild(submitButton);
         
         // 添加全部清空按钮
         const clearAllButton = document.createElement('button');
         clearAllButton.type = 'button';
+        clearAllButton.className = 'tool-ui-btn tool-ui-btn-warning';
         clearAllButton.innerHTML = '🗑️ 全部清空';
-        clearAllButton.style.cssText = `
-            background-color: var(--warning-color, #f59e0b);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        `;
         
         clearAllButton.addEventListener('click', () => {
             clearAllFormData(toolName);
@@ -431,7 +418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const settingsButton = document.createElement('button');
             settingsButton.type = 'button';
             settingsButton.textContent = '⚙️ 设置';
-            settingsButton.className = 'back-btn';
+            settingsButton.className = 'tool-ui-btn tool-ui-btn-secondary';
             settingsButton.style.cssText = 'margin-left: auto;';
             settingsButton.addEventListener('click', () => openComfyUISettings());
             buttonContainer.appendChild(settingsButton);
@@ -441,17 +428,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toolName === 'NanoBananaGen') {
             const filenameSettingsButton = document.createElement('button');
             filenameSettingsButton.type = 'button';
+            filenameSettingsButton.className = 'tool-ui-btn tool-ui-btn-secondary';
             filenameSettingsButton.innerHTML = '⚙️ 设置';
-            filenameSettingsButton.style.cssText = `
-                background-color: var(--secondary-color, #6b7280);
-                color: white;
-                border: none;
-                padding: 12px 20px;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 14px;
-                transition: all 0.2s;
-            `;
             
             filenameSettingsButton.addEventListener('click', () => {
                 showFilenameSettings();
@@ -469,27 +447,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 恢复缓存的表单状态
         setTimeout(() => restoreFormState(toolName), 0);
-    }
-
-    function setupCommandSpecificForm(toolName, commandName) {
-        if (toolName !== 'LightMemo' || commandName !== 'tagmemo_ab') return;
-
-        const kInput = toolForm.querySelector('[name="k"]');
-        const topLInput = toolForm.querySelector('[name="top_l"]');
-        if (!kInput || !topLInput) return;
-
-        let topLManuallyEdited = false;
-        const updateTopLDefault = () => {
-            if (topLManuallyEdited) return;
-            const k = Math.max(1, Number.parseInt(kInput.value, 10) || 5);
-            topLInput.value = String(Math.max(20, k * 4));
-        };
-
-        topLInput.addEventListener('input', () => {
-            topLManuallyEdited = true;
-        });
-        kInput.addEventListener('input', updateTopLDefault);
-        updateTopLDefault();
     }
 
     function renderFormParams(params, container, toolName = '', commandName = '') {
@@ -566,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             input = document.createElement('select');param.options.forEach(opt => {
                 const option = document.createElement('option');
                 option.value = opt;
-                option.textContent = opt || `(${param.name})`;
+                option.textContent = param.optionLabels?.[opt] || opt || `(${param.name})`;
                 input.appendChild(option);
             });
         } else if (param.type === 'radio') {
@@ -605,7 +562,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.name = param.name;
-            checkbox.checked = param.default || false;
+            checkbox.checked = param.default === true || param.default === 'true';
+            checkbox.defaultChecked = checkbox.checked;
             
             const checkboxText = document.createElement('span');
             checkboxText.textContent = param.description || param.name;
@@ -669,11 +627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (param.name === 'maid' && !input.value) input.value = USER_NAME;
             }
             if (param.required) input.required = true;
-        } else if (param.type !== 'checkbox_group') {
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = param.name;
-            paramGroup.appendChild(hiddenInput);}
+        }
 
         paramGroup.appendChild(label);
         paramGroup.appendChild(input);
@@ -804,28 +758,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         const translateButton = document.createElement('button');
         translateButton.type = 'button';
+        translateButton.className = 'tool-ui-btn tool-ui-btn-compact';
         translateButton.innerHTML = '🌍 翻译';
-        translateButton.style.cssText = `
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;`;
+        translateButton.style.background = 'var(--primary-color)';
         
         const useOriginalButton = document.createElement('button');
         useOriginalButton.type = 'button';
+        useOriginalButton.className = 'tool-ui-btn tool-ui-btn-compact tool-ui-btn-warning';
         useOriginalButton.innerHTML = '⬅️ 使用原文';
-        useOriginalButton.style.cssText = `
-            background: var(--warning-color, #f59e0b);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        `;
         
         translateButton.addEventListener('click', async () => {
             const promptTextarea = toolForm.querySelector('textarea[name="prompt"]');
@@ -1019,9 +959,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <input type="number" id="filename-length-input" value="${MAX_FILENAME_LENGTH}" min="50" max="1000" style="width: 100%; padding: 8px; margin-top: 5px; background: var(--input-bg); color: var(--primary-text); border: 1px solid var(--border-color); border-radius: 4px;">
             </div>
             <p style="font-size: 12px; color: var(--secondary-text);">建议范围：50-1000 字符，默认为 400</p>
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-                <button id="cancel-btn" style="padding: 8px 16px; background: var(--secondary-color, #6b7280); color: white; border: none; border-radius: 4px; cursor: pointer;">取消</button>
-                <button id="save-btn" style="padding: 8px 16px; background: var(--success-color); color: white; border: none; border-radius: 4px; cursor: pointer;">保存</button>
+            <div style="display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button id="cancel-btn" class="tool-ui-btn tool-ui-btn-compact tool-ui-btn-secondary">取消</button>
+                <button id="save-btn" class="tool-ui-btn tool-ui-btn-compact">保存</button>
             </div>
         `;
         
@@ -1086,13 +1026,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        const lightMemoExplicitScopeCommands = new Set([
-            'tagmemo_ab',
-            'tagmemo_v10',
-            'tagmemo_v10_ab'
-        ]);
+        // FormData 不包含未勾选项；必须显式提交 false，不能让后端回退到默认开启。
+        // 直接读取复选框，不按名称查找，避免同名字段遮蔽真实控件。
+        toolForm.querySelectorAll('input[type="checkbox"]:not([data-checkbox-group])').forEach(input => {
+            if (input.name && !input.disabled) args[input.name] = input.checked;
+        });
+
         const requiresExplicitScope = toolName === 'LightMemo'
-            && lightMemoExplicitScopeCommands.has(args.command);
+            && args.command === 'memory_ab';
 
         if (
             requiresExplicitScope
@@ -1100,19 +1041,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             && !String(args.folder || '').trim()
             && args.search_all_knowledge_bases !== true
         ) {
-            const commandLabels = {
-                tagmemo_ab: 'TagMemo V9.1 对照测试',
-                tagmemo_v10: 'TagMemo V10 Alpha 实验',
-                tagmemo_v10_ab: 'TagMemo 统一寻址具名 A/B 评审'
-            };
             renderResult({
                 status: 'error',
-                error: `${commandLabels[args.command]}必须选择作用域：填写 folder、填写 maid，或启用全库搜索。`
+                error: '记忆 A/B 对比必须选择作用域：填写 folder、填写 maid，或启用全库搜索。'
             }, toolName);
             return;
         }
 
-        // maid 兜底：普通工具未填写时使用默认值；TagMemo 实验命令保留显式作用域语义。
+        if (requiresExplicitScope) {
+            const k = Number(args.k ?? 5);
+            const candidateK = Number(args.candidate_k ?? 30);
+            let error = '';
+            if (!String(args.query || '').trim()) {
+                error = '记忆 A/B 对比必须填写 query。';
+            } else if (!Number.isInteger(k) || k < 1 || k > 100) {
+                error = '记忆 A/B 对比的 k 必须是 1-100 的整数。';
+            } else if (!Number.isInteger(candidateK) || candidateK < 1 || candidateK > 100 || candidateK < k) {
+                error = '记忆 A/B 对比的 candidate_k 必须是 1-100 的整数，且不得小于 k。';
+            }
+            if (error) {
+                renderResult({ status: 'error', error }, toolName);
+                return;
+            }
+        }
+
+        // maid 兜底：普通工具未填写时使用默认值；记忆 A/B 对比保留显式作用域语义。
         if (!args.maid && !requiresExplicitScope) {
             args.maid = USER_NAME;
         }
@@ -1231,12 +1184,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 重试按钮
             const retryBtn = document.createElement('button');
             retryBtn.type = 'button';
+            retryBtn.className = 'tool-ui-btn tool-ui-btn-compact';
             retryBtn.innerHTML = '🔄 重试';
             retryBtn.style.cssText = `
-                margin-top: 10px; padding: 8px 16px; border-radius: 5px;
-                border: 1px solid var(--danger-color); background: transparent;
-                color: var(--danger-color); cursor: pointer; font-size: 14px;
-                transition: all 0.2s;
+                margin-top: 10px; border-color: var(--danger-color); background: transparent;
+                color: var(--danger-color);
             `;
             retryBtn.addEventListener('click', () => executeTool(toolName));
             retryBtn.addEventListener('mouseenter', () => {
@@ -1355,13 +1307,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (textContent && textContent.length > 10) {
             const copyBtn = document.createElement('button');
             copyBtn.type = 'button';
+            copyBtn.className = 'tool-ui-btn tool-ui-btn-compact tool-ui-btn-outline';
             copyBtn.innerHTML = '📋 复制结果';
-            copyBtn.style.cssText = `
-                margin-top: 12px; padding: 6px 14px; border-radius: 5px;
-                border: 1px solid var(--border-color); background: transparent;
-                color: var(--secondary-text); cursor: pointer; font-size: 12px;
-                transition: all 0.2s;
-            `;
+            copyBtn.style.marginTop = '12px';
             copyBtn.addEventListener('click', async () => {
                 try {
                     await navigator.clipboard.writeText(textContent);
@@ -1450,14 +1398,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.target === viewer) closeModal();
         };
 
-        resultContainer.addEventListener('click', (e) => {
-            let target = e.target;
-            if (target.tagName === 'IMG' && target.parentElement.tagName === 'A') {
-                target = target.parentElement;
+        resultContainer.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+
+            const link = target.closest('a');
+            if (!link?.href) return;
+
+            const isImageLink = /\.(?:jpe?g|png|gif|webp)(?:[?#].*)?$/i.test(link.href)
+                || link.href.startsWith('data:image');
+
+            event.preventDefault();
+
+            if (isImageLink) {
+                openModal(link.href);
+                return;
             }
-            if (target.tagName === 'A' && target.href && (target.href.match(/\.(jpeg|jpg|gif|png|webp)$/i) || target.href.startsWith('data:image'))) {
-                e.preventDefault();
-                openModal(target.href);
+
+            try {
+                const url = new URL(link.href);
+                if (url.protocol === 'http:' || url.protocol === 'https:') {
+                    window.electronAPI.send('open-external-link', url.href);
+                }
+            } catch (error) {
+                console.warn('[VCPHumanToolBox] Ignored invalid result URL:', link.href);
             }
         });
     }

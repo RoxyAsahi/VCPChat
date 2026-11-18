@@ -4,6 +4,8 @@ const nodeFs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
+const { normalizePromptSettings } = require('../services/workspacePromptPlaceholders');
+const { replaceFile } = require('./atomicReplace');
 
 class SettingsValidator {
     static validate(settings, defaultSettings) {
@@ -35,14 +37,23 @@ class SettingsValidator {
             hasIssues = true;
         }
 
-        const allowedChatPresentationModes = new Set(['bubble', 'panel', 'immersive']);
+        const allowedChatPresentationModes = new Set(['bubble', 'panel', 'immersive', 'messenger']);
         if (!allowedChatPresentationModes.has(validated.chatPresentationMode)) {
             validated.chatPresentationMode = 'bubble';
             hasIssues = true;
             console.log('Fixed invalid chatPresentationMode');
         }
 
-        const allowedVoiceInputModes = new Set(['windows_voice_typing', 'right_alt_hold']);
+        if (validated.chatHeaderStyle !== 'classic' && validated.chatHeaderStyle !== 'capsule') {
+            validated.chatHeaderStyle = 'classic';
+            hasIssues = true;
+        }
+
+        if (!['auto', 'zh', 'en', 'yue', 'ja', 'ko'].includes(validated.localSttLanguage)) {
+            validated.localSttLanguage = 'auto';
+        }
+
+        const allowedVoiceInputModes = new Set(['windows_voice_typing', 'right_alt_hold', 'local_sensevoice']);
         if (!allowedVoiceInputModes.has(validated.voiceInputMode)) {
             validated.voiceInputMode = 'windows_voice_typing';
             hasIssues = true;
@@ -55,6 +66,30 @@ class SettingsValidator {
             console.log('Fixed invalid voiceInputShortcut');
         } else {
             validated.voiceInputShortcut = validated.voiceInputShortcut.trim().toUpperCase();
+        }
+
+        const initialIdle = Number(validated.mainChatVoiceInitialIdleTimeout);
+        validated.mainChatVoiceInitialIdleTimeout = Number.isFinite(initialIdle)
+            ? Math.min(12, Math.max(1, initialIdle))
+            : 5.5;
+
+        const quietTimeout = Number(validated.mainChatVoiceQuietTimeout);
+        validated.mainChatVoiceQuietTimeout = Number.isFinite(quietTimeout)
+            ? Math.min(15, Math.max(0.5, quietTimeout))
+            : 2.5;
+
+        if (typeof validated.mainChatVoiceClearPhrase !== 'string') {
+            validated.mainChatVoiceClearPhrase = '';
+            hasIssues = true;
+        } else {
+            validated.mainChatVoiceClearPhrase = validated.mainChatVoiceClearPhrase.trim();
+        }
+
+        if (typeof validated.mainChatVoiceSendPhrase !== 'string') {
+            validated.mainChatVoiceSendPhrase = '';
+            hasIssues = true;
+        } else {
+            validated.mainChatVoiceSendPhrase = validated.mainChatVoiceSendPhrase.trim();
         }
 
         if (
@@ -102,6 +137,9 @@ class SettingsValidator {
         const appearanceDefaults = defaultSettings.appearanceProfile;
         const appearanceOptions = {
             density: new Set(['compact', 'comfortable', 'relaxed']),
+            toolPresentation: new Set(['legacy', 'compact', 'grouped', 'inline', 'process']),
+            toolExpansion: new Set(['attention', 'none', 'all']),
+
             radius: new Set(['square', 'small', 'medium', 'round', 'custom']),
             typography: new Set(['system', 'humanist', 'serif']),
             fontScale: new Set(['small', 'normal', 'large']),
@@ -159,6 +197,27 @@ class SettingsValidator {
             hasIssues = true;
         }
 
+        // 工作区列表：只保留带有效 path 的条目，其余字段由 WorkspaceIndex 规范化。
+        if (!Array.isArray(validated.workspaces)) {
+            validated.workspaces = [];
+            hasIssues = true;
+        } else {
+            const cleaned = validated.workspaces.filter(item => (
+                item && typeof item === 'object' && typeof item.path === 'string' && item.path.trim()
+            ));
+            if (cleaned.length !== validated.workspaces.length) {
+                validated.workspaces = cleaned;
+                hasIssues = true;
+            }
+        }
+
+        // {{VCPChatWorkSpace}} 占位符行为设置：非法字段回落默认值并钳制范围。
+        const normalizedPromptSettings = normalizePromptSettings(validated.workspacePromptSettings);
+        if (JSON.stringify(normalizedPromptSettings) !== JSON.stringify(validated.workspacePromptSettings)) {
+            validated.workspacePromptSettings = normalizedPromptSettings;
+            hasIssues = true;
+        }
+
         if (!Array.isArray(validated.combinedItemOrder)) {
             validated.combinedItemOrder = [];
             hasIssues = true;
@@ -183,15 +242,19 @@ class SettingsValidator {
     }
 }
 
+const SESSION_KEYS = Object.freeze(['lastOpenItemId', 'lastOpenItemType', 'lastOpenTopicId']);
+
 class SettingsManager extends EventEmitter {
     constructor(settingsPath) {
         super();
         this.settingsPath = settingsPath;
+        this.sessionPath = path.join(path.dirname(settingsPath), 'session.json');
         this.queue = [];
         this.processing = false;
         this.cache = null;
         this.cacheTimestamp = 0;
         this.lockFile = settingsPath + '.lock';
+        this.backupPath = settingsPath + '.backup';
         this.externalWatcher = null;
         this.externalWatchTimer = null;
         this.internalRevisions = new Set();
@@ -209,7 +272,15 @@ class SettingsManager extends EventEmitter {
             // Keep the settings-page default aligned with both topic-summary
             // request paths and the model picker placeholder.
             topicSummaryModel: 'gemini-2.5-flash-preview-05-20',
+            enableContextCompaction: false,
+            contextCompactionModel: '',
+            contextCompactionPrompt: '',
+            contextCompactionSendPrompt: '',
+            contextCompactionMainPrompt: '',
             networkNotesPaths: [],
+            workspaces: [],
+            activeWorkspaceId: null,
+            workspacePromptSettings: { enabled: true, maxChars: 20000, maxDepth: 6 },
             filterEnabled: false,
             filterRules: [],
             toolAutoApprovalEnabled: false,
@@ -223,6 +294,9 @@ class SettingsManager extends EventEmitter {
             showHomeVisualTagline: true,
             homeVisualTagline: '语义级打穿 AI、UI/UX、APP 与人类想象力的边界',
             appearanceProfile: {
+                toolPresentation: 'legacy',
+                toolExpansion: 'attention',
+
                 density: 'comfortable',
                 radius: 'small',
                 typography: 'system',
@@ -247,6 +321,7 @@ class SettingsManager extends EventEmitter {
                 cardRadius: 'tuned'
             },
             enableWideChatLayout: false,
+            chatHeaderStyle: 'classic',
             chatPresentationMode: 'bubble',
             chatBubbleMaxWidthDefault: 82,
             chatBubbleMaxWidthNotifications: 90,
@@ -264,12 +339,18 @@ class SettingsManager extends EventEmitter {
             chatToolFontCustom: '',
             enableUserChatBubbleUi: true,
             showUserMetaInChatBubbleUi: true,
+            enableTurnNavigator: true,
             minChunkBufferSize: 1,
             smoothStreamIntervalMs: 25,
             assistantAgent: '',
             voiceMode: 'local',
             voiceInputMode: 'windows_voice_typing',
+            localSttLanguage: 'auto',
             voiceInputShortcut: 'F7',
+            mainChatVoiceInitialIdleTimeout: 5.5,
+            mainChatVoiceQuietTimeout: 2.5,
+            mainChatVoiceClearPhrase: '',
+            mainChatVoiceSendPhrase: '',
             voiceLocalSettings: {
                 sovitsUrl: '',
                 sovitsKey: ''
@@ -287,8 +368,10 @@ class SettingsManager extends EventEmitter {
             DeepMemoUseCentralSearch: false,
             DeepMemoLegacyFallback: true,
             agentMusicControl: false,
+            musicInfoInjectionEnabled: true,
             enableDistributedServerLogs: false,
             enableVcpToolInjection: false,
+            enableThoughtChainInjection: false,
             ragOverlaySettings: {
                 enabled: true,
                 passThrough: true,
@@ -348,6 +431,40 @@ class SettingsManager extends EventEmitter {
         if (current === token) await fs.remove(this.lockFile).catch(() => {});
     }
 
+    parseSettings(text) {
+        const settings = JSON.parse(text);
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+            throw new TypeError('Settings root must be an object.');
+        }
+        if (settings.topicSummaryModel === undefined || settings.topicSummaryModel === null) {
+            settings.topicSummaryModel = this.defaultSettings.topicSummaryModel;
+        }
+        return settings;
+    }
+
+    async readSessionState() {
+        try {
+            return JSON.parse(await fs.readFile(this.sessionPath, 'utf8'));
+        } catch {
+            return null;
+        }
+    }
+
+    async writeSessionState(sessionData) {
+        if (!sessionData || typeof sessionData !== 'object') return;
+        try {
+            await replaceFile(this.sessionPath, `${JSON.stringify(sessionData, null, 2)}\n`);
+        } catch (err) {
+            console.warn('[SettingsManager] Failed to persist session.json:', err.message);
+        }
+    }
+
+    // Any parseable backup is a real earlier config; always better than defaults.
+    async readBackup() {
+        try { return this.parseSettings(await fs.readFile(this.backupPath, 'utf8')); }
+        catch { return null; }
+    }
+
     async readSettings({ fresh = false } = {}) {
         try {
             // 使用缓存机制减少文件读取
@@ -355,101 +472,111 @@ class SettingsManager extends EventEmitter {
             if (!fresh && stats && this.cache && stats.mtimeMs <= this.cacheTimestamp) {
                 return { ...this.cache };
             }
-
-            const content = await fs.readFile(this.settingsPath, 'utf8');
-            const settings = JSON.parse(content);
-            if (settings.topicSummaryModel === undefined || settings.topicSummaryModel === null) {
-                settings.topicSummaryModel = this.defaultSettings.topicSummaryModel;
-            }
-
-            // 更新缓存
-            this.cache = settings;
-            this.cacheTimestamp = stats ? stats.mtimeMs : Date.now();
-
-            return { ...settings };
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                return { ...this.defaultSettings };
-            }
-
-            console.error('Error reading settings, attempting recovery:', error);
-
-            // 尝试从备份恢复
-            const backupPath = this.settingsPath + '.backup';
-            if (await fs.pathExists(backupPath)) {
-                try {
-                    const backupContent = await fs.readFile(backupPath, 'utf8');
-                    const backupSettings = JSON.parse(backupContent);
-
-                    // 验证备份数据是否有效且包含用户自定义数据（例如 Agent 列表顺序或非默认用户名）
-                    const isNonDefault = backupSettings && (
-                        (Array.isArray(backupSettings.combinedItemOrder) && backupSettings.combinedItemOrder.length > 0) ||
-                        (backupSettings.userName && backupSettings.userName !== '用户') ||
-                        backupSettings.vcpServerUrl
-                    );
-
-                    if (isNonDefault) {
-                        console.log('Recovered settings from valid backup');
-                        return { ...backupSettings };
-                    } else {
-                        console.warn('Backup exists but appears to be default or empty, skipping recovery to prevent overwrite');
-                    }
-                } catch (backupError) {
-                    console.error('Backup also corrupted:', backupError);
+            const settings = this.parseSettings(await fs.readFile(this.settingsPath, 'utf8'));
+            const session = await this.readSessionState();
+            if (session && typeof session === 'object') {
+                for (const key of SESSION_KEYS) {
+                    if (key in session) settings[key] = session[key];
                 }
             }
-
-            // 如果主文件损坏且没有有效的备份，抛出错误以防止覆盖
+            this.cache = settings;
+            this.cacheTimestamp = stats ? stats.mtimeMs : Date.now();
+            return { ...settings };
+        } catch (error) {
+            const recovered = await this.readBackup();
+            if (recovered) {
+                console.warn(`Settings unreadable (${error.code || error.message}); recovered from backup.`);
+                const session = await this.readSessionState();
+                if (session && typeof session === 'object') {
+                    for (const key of SESSION_KEYS) {
+                        if (key in session) recovered[key] = session[key];
+                    }
+                }
+                return { ...recovered };
+            }
+            // Read-only callers may display defaults; updates are guarded by readForUpdate().
+            if (error.code === 'ENOENT') return { ...this.defaultSettings };
+            console.error('Error reading settings and no valid backup:', error);
             throw new Error(`Settings file corrupted and no valid backup found: ${error.message}`);
         }
     }
 
-    async writeSettings(settings) {
-        // Use a unique exclusively-created sibling. A shared `.tmp` path lets
-        // overlapping callers delete one another's temporary file when a
-        // write or verification step fails.
-        const tempFile = `${this.settingsPath}.${crypto.randomBytes(8).toString('hex')}.tmp`;
-        const backupFile = this.settingsPath + '.backup';
-
-        try {
-            // 验证设置
-            const { validated } = SettingsValidator.validate(settings, this.defaultSettings);
-
-            // 写入临时文件
-            await fs.writeJson(tempFile, validated, { spaces: 2 });
-
-            // 验证临时文件
-            const verifyContent = await fs.readFile(tempFile, 'utf8');
-            JSON.parse(verifyContent);
-
-            // 创建备份（如果原文件存在）
-            if (await fs.pathExists(this.settingsPath)) {
-                await fs.copy(this.settingsPath, backupFile, { overwrite: true });
+    // Called under the settings lock. Never hands defaults to an updater unless this is a true first run.
+    async readForUpdate() {
+        let mainError;
+        let base = null;
+        try { base = this.parseSettings(await fs.readFile(this.settingsPath, 'utf8')); }
+        catch (error) { mainError = error; }
+        if (!base) {
+            const recovered = await this.readBackup();
+            if (recovered) {
+                base = recovered;
+            } else {
+                const missing = mainError?.code === 'ENOENT';
+                if (missing && !await fs.pathExists(this.backupPath)) {
+                    base = { ...this.defaultSettings };
+                } else {
+                    const refused = new Error(missing
+                        ? '主配置缺失且备份不可用，拒绝基于默认设置写入。'
+                        : `主配置损坏且无有效备份，拒绝覆盖：${mainError?.message}`);
+                    refused.code = missing ? 'SETTINGS_MISSING' : 'SETTINGS_CORRUPT';
+                    throw refused;
+                }
             }
-
-            // 原子性替换
-            await fs.move(tempFile, this.settingsPath, { overwrite: true });
-
-            // 更新缓存 - 确保原子性
-            const newTimestamp = Date.now();
-            this.cache = { ...validated };
-            this.cacheTimestamp = newTimestamp;
-            const internalRevision = this.getRevision(validated);
-            this.internalRevisions.add(internalRevision);
-            if (this.internalRevisions.size > 32) this.internalRevisions.delete(this.internalRevisions.values().next().value);
-
-            // 触发更新事件
-            this.emit('settings-updated', validated);
-
-            return true;
-        } catch (error) {
-            console.error('Error writing settings:', error);
-
-            // 清理临时文件
-            await fs.remove(tempFile).catch(() => {});
-
-            throw error;
         }
+        const session = await this.readSessionState();
+        if (session && typeof session === 'object') {
+            for (const key of SESSION_KEYS) {
+                if (key in session) base[key] = session[key];
+            }
+        }
+        return base;
+    }
+
+    async writeSettings(settings) {
+        const { validated } = SettingsValidator.validate(settings, this.defaultSettings);
+
+        // 分离会话瞬态状态（写入独立 session.json，避免高频写入污染 settings.json 及 CAS 版本）
+        const currentSession = (await this.readSessionState()) || {};
+        const sessionPayload = { ...currentSession };
+        let sessionChanged = false;
+        for (const key of SESSION_KEYS) {
+            if (key in validated && validated[key] !== undefined) {
+                if (sessionPayload[key] !== validated[key]) {
+                    sessionPayload[key] = validated[key];
+                    sessionChanged = true;
+                }
+            }
+        }
+        if (sessionChanged || !await fs.pathExists(this.sessionPath)) {
+            await this.writeSessionState(sessionPayload);
+        }
+
+        // 仅将持久偏好设置写入 settings.json
+        const durableSettings = { ...validated };
+        for (const key of SESSION_KEYS) {
+            delete durableSettings[key];
+        }
+
+        // Back up the exact previous bytes, but only if they still parse:
+        // a corrupt main file must never replace a valid backup.
+        const previous = await fs.readFile(this.settingsPath, 'utf8').catch(() => null);
+        if (previous !== null) {
+            let valid = false;
+            try { this.parseSettings(previous); valid = true; } catch {}
+            if (valid) await replaceFile(this.backupPath, previous);
+        }
+        // Single rename over the target: old bytes or complete new bytes, never a missing file.
+        await replaceFile(this.settingsPath, `${JSON.stringify(durableSettings, null, 2)}\n`);
+
+        this.cache = { ...validated };
+        this.cacheTimestamp = Date.now();
+        const internalRevision = this.getRevision(validated);
+        this.internalRevisions.add(internalRevision);
+        if (this.internalRevisions.size > 32) this.internalRevisions.delete(this.internalRevisions.values().next().value);
+
+        this.emit('settings-updated', validated);
+        return true;
     }
 
     async updateSettings(updater, options = {}) {
@@ -474,7 +601,7 @@ class SettingsManager extends EventEmitter {
 
             // CAS must compare against the bytes currently protected by this
             // lock, never a renderer/process cache that may be stale.
-            currentSettings = await this.readSettings({ fresh: true });
+            currentSettings = await this.readForUpdate();
             const currentRevision = this.getRevision(currentSettings);
             if (options.expectedRevision !== undefined && options.expectedRevision !== currentRevision) {
                 const conflict = new Error(`Settings changed since it was read (expected ${options.expectedRevision}, current ${currentRevision})`);
@@ -525,12 +652,17 @@ class SettingsManager extends EventEmitter {
     }
 
     getRevision(settings) {
+        const durable = { ...(settings || {}) };
+        for (const key of SESSION_KEYS) {
+            delete durable[key];
+        }
+        delete durable.__vcpSettingsRevision;
         const stable = value => {
             if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
             if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;
             return JSON.stringify(value);
         };
-        return crypto.createHash('sha256').update(stable(settings || {})).digest('hex');
+        return crypto.createHash('sha256').update(stable(durable)).digest('hex');
     }
 
     mergePatch(current, patch) {
@@ -595,11 +727,34 @@ class SettingsManager extends EventEmitter {
         }, 5000);
     }
 
+    _resolveWatchDir(dirPath) {
+        try {
+            if (typeof nodeFs.realpathSync?.native === 'function') {
+                return nodeFs.realpathSync.native(dirPath);
+            }
+            if (typeof nodeFs.realpathSync === 'function') {
+                return nodeFs.realpathSync(dirPath);
+            }
+        } catch {
+            // Fall back to the original path if canonical resolution fails.
+        }
+        return dirPath;
+    }
+
     startExternalWatcher() {
         if (this.externalWatcher || !nodeFs.watch) return;
         try {
-            this.externalWatcher = nodeFs.watch(path.dirname(this.settingsPath), (_event, filename) => {
-                if (filename && String(filename) !== path.basename(this.settingsPath)) return;
+            const watchDir = this._resolveWatchDir(path.dirname(this.settingsPath));
+            const targetBase = process.platform === 'win32'
+                ? path.basename(this.settingsPath).toLowerCase()
+                : path.basename(this.settingsPath);
+            const watcher = nodeFs.watch(watchDir, (_event, filename) => {
+                if (filename) {
+                    const normalized = process.platform === 'win32'
+                        ? String(filename).toLowerCase()
+                        : String(filename);
+                    if (normalized !== targetBase) return;
+                }
                 clearTimeout(this.externalWatchTimer);
                 this.externalWatchTimer = setTimeout(async () => {
                     try {
@@ -619,6 +774,10 @@ class SettingsManager extends EventEmitter {
                     }
                 }, 80);
             });
+            watcher.on?.('error', (error) => {
+                this.emit('settings-external-error', error);
+            });
+            this.externalWatcher = watcher;
         } catch (error) {
             console.warn('Unable to watch settings file:', error?.message || error);
         }
@@ -627,8 +786,17 @@ class SettingsManager extends EventEmitter {
     stopExternalWatcher() {
         clearTimeout(this.externalWatchTimer);
         this.externalWatchTimer = null;
-        this.externalWatcher?.close?.();
-        this.externalWatcher = null;
+        if (this.externalWatcher) {
+            try {
+                this.externalWatcher.removeAllListeners?.('change');
+                this.externalWatcher.removeAllListeners?.('error');
+                this.externalWatcher.on?.('error', () => {});
+                this.externalWatcher.close?.();
+            } catch {
+                // Ignore watcher close failures during teardown.
+            }
+            this.externalWatcher = null;
+        }
     }
 
     // 自动备份机制

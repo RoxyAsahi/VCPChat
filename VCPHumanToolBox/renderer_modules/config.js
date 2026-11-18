@@ -1,4 +1,4 @@
-﻿// renderer_modules/config.js
+// renderer_modules/config.js
 // VCPHumanToolBox工具定义
 // author:lionsky & infinite-vector
 
@@ -893,42 +893,44 @@ export const tools = {
         ]
     },
     'LightMemo': {
-        displayName: '快速回忆 / 生产构型 A/B 对比',
-        description: '检索日记或 TDB 冷知识库，并支持 KNN、TagMemo V9 与 RiverMemo Topology V3 生产构型 A/B 对比。[后端插件: LightMemo]',
+        displayName: '快速回忆 / 记忆 A/B 对比',
+        description: '检索日记或独立路由的 TDB 冷知识库，默认使用 RiverMemo，支持纯向量 KNN、Rerank/Jev 精排及 AIMemo 总结；记忆 A/B 对比基于同一原生快照与过滤后的共同候选池，比较 TDB 原始向量余弦排序、外部 Rerank、Jev 与 RiverMemo V3，外部 Rerank 和 Jev 默认开启且可独立关闭。TagMemo 模式已退休，后端拒绝旧模式。[后端插件: LightMemo]',
         commands: {
             'query': {
                 description: '快速回忆 — 检索日记或 TDB 冷知识库',
                 params: [
                     { name: 'query', type: 'textarea', required: true, placeholder: '检索内容；可嵌入 [日期~日期]、[音乐检索] 或 [知识库:库名] 语法' },
-                    { name: 'enginemode', type: 'select', required: false, options: ['rivermemo', 'tagmemo', 'knn'], optionLabels: { rivermemo: 'RiverMemo — 固定 Topology V3 生产管线（默认）', tagmemo: 'TagMemo — V9.1 向量增强', knn: 'KNN — 纯向量 / BM25 混合检索' }, default: 'rivermemo', description: '普通回忆内核；冷知识库检索时忽略' },
+                    { name: 'enginemode', type: 'select', required: false, options: ['rivermemo', 'knn'], optionLabels: { rivermemo: 'RiverMemo — 记忆检索（默认）', knn: 'KNN — 纯向量检索' }, default: 'rivermemo', description: '日记回忆内核：RiverMemo（默认）或纯向量 KNN；TagMemo 已退休；TDB 冷知识库路由独立' },
                     { name: 'maid', type: 'text', required: false, placeholder: '署名，或使用 [文件夹1,文件夹2]署名 限定作用域', description: '非全库日记检索的署名及作用域；可与 folder 合并目标文件夹' },
                     { name: 'folder', type: 'text', required: false, placeholder: '一个或多个日记文件夹，以逗号、中文逗号或 | 分隔' },
                     { name: 'knowledge_base', type: 'text', required: false, placeholder: '一个或多个 TDB 冷知识库名称，以逗号分隔', description: '显式检索 knowledge/ 下的冷知识库；也可在 query 中使用 [知识库] 语法' },
                     { name: 'k', type: 'number', required: false, default: 5, min: 1, step: 1, description: '返回结果数量' },
-                    { name: 'rerank', type: 'text', required: false, default: 'false', placeholder: 'false / true / rrf / rrf0.7 / 0.7', description: 'Rerank 精排或 RRF 融合；数字表示 Reranker 权重' },
-                    { name: 'BM25', type: 'checkbox', required: false, default: true, description: '启用日记检索的 BM25 初筛与混合打分；冷知识库检索时忽略' },
+                    { name: 'rerank', type: 'text', required: false, default: 'false', placeholder: 'false / true / rrf / rrf0.7 / 0.7', description: '传统 Rerank 精排或 RRF 融合；仅消费前 2×K 候选，数字表示 Reranker 权重' },
+                    { name: 'jev', type: 'text', required: false, default: 'false', placeholder: 'false / true / rrf / rrf0.7 / 0.7', description: 'Jev 决策精排：由扩散神经网络输出确认概率；取值语义与 rerank 相同，仅消费前 2×K 候选。与 rerank 同时启用时仅执行 Jev，避免双重费用' },
+                    { name: 'BM25', type: 'checkbox', required: false, default: true, description: '仅用于 RiverMemo 的 BM25 检索；KNN 保持纯向量检索，TDB 冷知识库忽略' },
                     { name: 'search_all_knowledge_bases', type: 'checkbox', required: false, default: false, description: '搜索所有未屏蔽的日记本；关闭时按 maid/folder 定位' },
-                    { name: 'tag_boost', type: 'text', required: false, default: '0.5', placeholder: '0.5 或 0.6+', description: 'RiverMemo：V9 降噪源强度；TagMemo：V9.1 增强，+ 后缀开启势能场；KNN 与冷知识库忽略' },
-                    { name: 'core_tags', type: 'textarea', required: false, placeholder: 'JSON 字符串数组，例如 ["TagMemo","RAG"]', description: 'TagMemo 优先聚焦的核心标签' },
-                    { name: 'core_boost_factor', type: 'number', required: false, default: 1.33, min: 0, step: 0.01, description: '核心标签额外加权因子' },
+                    { name: 'tag_boost', type: 'number', required: false, default: 0.5, min: 0, max: 1, step: 0.05, placeholder: '例如 0.6，仅支持数值', description: 'RiverMemo 共享感知强度；+ 后缀已退休；KNN 与 TDB 冷知识库忽略' },
+                    { name: 'core_tags', type: 'textarea', required: false, placeholder: 'JSON 字符串数组，例如 ["RiverMemo","RAG"]', description: 'RiverMemo 共享感知优先聚焦的核心标签' },
+                    { name: 'core_boost_factor', type: 'number', required: false, default: 1.33, min: 0, step: 0.01, description: 'RiverMemo 共享感知的核心标签额外加权因子' },
                     { name: 'aimemo', type: 'text', required: false, default: 'false', placeholder: 'false / true / aimemo+ / 预设名', description: '对最终候选执行 AI 总结；非布尔字符串可作为 MoreAIMemoPresets 预设名' },
                     { name: 'aimemo_preset', type: 'text', required: false, placeholder: 'RAGDiaryPlugin AIMemo 预设名', description: '显式指定预设并自动开启 AIMemo，优先于 aimemo 中的预设名' }
                 ]
             },
-            'tagmemo_ab': {
-                description: '生产构型 A/B 对比 — 在同一 SQL 权限作用域、查询向量和候选事实域中固定比较原始 KNN、标准 TagMemo V9、Rust/Rayon RiverMemo Topology V3，并默认增加独立 Rerank。输出包含重合率和统一排名表的紧凑 Markdown；不运行任何 V10 实验构型。',
+            'memory_ab': {
+                description: '记忆 A/B 对比 — 必须提供查询与显式作用域；在同一原生快照、同一过滤后的共同候选池上，比较 TDB 原始向量余弦排序、外部 Rerank、Jev 与 RiverMemo V3。外部 Rerank 和 Jev 默认开启且可独立关闭，均使用完整的有界共同候选池，而非共识 2×K 池；Jev 候选数量仍受 JevRerankMaxChoices 限制。外部轨道未配置或执行失败时，不会将回退分数作为外部评分展示。本实验衡量排序与读出，不代表精确的全库召回率。BM25 仅为过渡性的候选池内子串词频证据，并非独立词法召回通道。',
                 params: [
-                    { name: 'query', type: 'textarea', required: true, placeholder: '输入生产构型对比查询，例如：TagMemo 如何恢复连续记忆中的逻辑链' },
+                    { name: 'query', type: 'textarea', required: true, placeholder: '输入记忆对比查询，例如：RiverMemo 如何恢复连续记忆中的逻辑链' },
                     { name: 'folder', type: 'text', required: false, advanced: false, placeholder: '日记文件夹，例如：VCP开发', description: '作用域：必须提供 folder/maid，或显式开启全库搜索；可与 maid 同时使用' },
                     { name: 'maid', type: 'text', required: false, advanced: false, placeholder: '按署名限定作用域', description: '作用域：必须提供 maid/folder，或显式开启全库搜索；可与 folder 同时使用' },
                     { name: 'search_all_knowledge_bases', type: 'checkbox', required: false, advanced: false, default: false, description: '显式开启全库对比；启用后可不填 folder/maid' },
-                    { name: 'k', type: 'number', required: false, default: 5, min: 1, step: 1, description: '每条轨道展示的 Top-K 数量' },
-                    { name: 'candidate_k', type: 'number', required: false, min: 1, step: 1, placeholder: '留空使用 max(30, k×5)', description: 'TagMemo V9、Rust V3 与 Rerank 共用的对称候选窗口；后端也兼容 candidateK' },
-                    { name: 'tag_boost', type: 'number', required: false, default: 0.6, min: 0, max: 1, step: 0.05, description: 'V9 增强及 Rust V3 共享 V9 观测源的强度' },
-                    { name: 'core_tags', type: 'textarea', required: false, placeholder: 'JSON 数组或逗号、空格分隔的核心 Tag', description: '核心 Tag' },
-                    { name: 'core_boost_factor', type: 'number', required: false, default: 1.33, min: 0, step: 0.01, description: '核心 Tag 额外增强系数' },
-                    { name: 'BM25', type: 'checkbox', required: false, default: true, description: '向 Rust V3 候选超集提供 BM25 来源；后端也兼容 bm25/use_bm25' },
-                    { name: 'compare_rerank', type: 'checkbox', required: false, default: true, description: '增加独立 Rerank 轨道；未配置服务时报告会明确标记不可用' }
+                    { name: 'k', type: 'number', required: false, default: 5, min: 1, max: 100, step: 1, description: '每条轨道展示的 Top-K 数量，默认 5，最大 100' },
+                    { name: 'candidate_k', type: 'number', required: false, default: 30, min: 1, max: 100, step: 1, placeholder: '默认 30，必须不小于 k', description: '过滤后的共同候选池大小，默认 30，最大 100，且不得小于 k；外部 Rerank 和 Jev 使用完整共同候选池，Jev 仍受 JevRerankMaxChoices 限制' },
+                    { name: 'tag_boost', type: 'number', required: false, default: 0.6, min: 0, max: 1, step: 0.05, description: 'RiverMemo 共享感知强度，仅支持数值；+ 后缀已退休' },
+                    { name: 'core_tags', type: 'textarea', required: false, placeholder: 'JSON 数组或逗号、空格分隔的核心 Tag', description: 'RiverMemo 共享感知的核心标签' },
+                    { name: 'core_boost_factor', type: 'number', required: false, default: 1.33, min: 0, step: 0.01, description: 'RiverMemo 共享感知的核心标签额外增强系数' },
+                    { name: 'BM25', type: 'checkbox', required: false, default: true, description: 'RiverMemo 的过渡性候选池内子串词频证据，并非独立词法召回通道；TDB 原始向量轨道保持余弦排序' },
+                    { name: 'compare_rerank', type: 'checkbox', required: false, default: true, description: '增加独立外部 Rerank 轨道（默认开启，可独立关闭；兼容 compareRerank），使用完整的有界共同候选池；未配置或失败时不将回退分数作为外部评分展示' },
+                    { name: 'compare_jev', type: 'checkbox', required: false, default: true, description: '增加独立 Jev 轨道（默认开启，可独立关闭；兼容 compareJev），使用完整的有界共同候选池，候选数量仍受 JevRerankMaxChoices 限制；未配置或失败时不将回退分数作为外部评分展示' }
                 ]
             },
         }
@@ -983,12 +985,27 @@ export const tools = {
     },
     'TopicSponsor': {
         displayName: '话题发起人 (TopicSponsor)',
-        description: '发起、查询和管理聊天话题。[前端分布式插件: TopicSponsor]',
+        description: '单聊与群聊地址簿发现、话题创建、历史审阅及跨话题留言协同。[宿主直连服务: TopicSponsor]',
         commands: {
+            'ListAgents': {
+                description: '列出所有单聊伙伴 (Agent) 的标准名称与 ID',
+                params: []
+            },
+            'ListGroups': {
+                description: '列出所有群组 (Group) 的标准名称与 ID',
+                params: []
+            },
+            'ListRecentTopics': {
+                description: '按 Agent 或群组名称/ID查询最新 5 个话题',
+                params: [
+                    { name: 'query', type: 'text', required: true, placeholder: '如：小克 或 开发讨论组' },
+                    { name: 'target_type', type: 'select', options: ['', 'agent', 'group'], description: '可选限定类型' }
+                ]
+            },
             'CreateTopic': {
                 description: '创建新话题并发起对话',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
+                    { name: 'maid', type: 'text', required: true, placeholder: '目标 Agent 完整名称或ID (如：小克)' },
                     { name: 'topic_name', type: 'text', required: true, placeholder: '话题名称' },
                     { name: 'initial_message', type: 'textarea', required: true, placeholder: '第一句话' }
                 ]
@@ -996,51 +1013,52 @@ export const tools = {
             'ReadUnlockedTopics': {
                 description: '读取未锁定话题及消息历史',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
+                    { name: 'maid', type: 'text', required: true, placeholder: '目标 Agent 或群组完整名称/ID (如：小克)' },
                     { name: 'include_read', type: 'select', options: ['false', 'true'], description: '是否包含已读' }
                 ]
             },
             'CheckNewTopics': {
                 description: '检查最近几天的新话题',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
+                    { name: 'maid', type: 'text', required: true, placeholder: '目标 Agent 或群组完整名称/ID (如：小克)' },
                     { name: 'days', type: 'number', required: false, placeholder: '3' }
                 ]
             },
             'CheckUnreadMessages': {
                 description: '检查未读消息',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' }
+                    { name: 'maid', type: 'text', required: true, placeholder: '目标 Agent 或群组完整名称/ID (如：小克)' }
                 ]
             },
             'ReplyToTopic': {
-                description: '在话题中回复消息',
+                description: '向指定单聊或群聊话题投递回复',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
-                    { name: 'topic_id', type: 'text', required: true, placeholder: 'topic_xxx' },
-                    { name: 'message', type: 'textarea', required: true },
-                    { name: 'sender_name', type: 'text', required: true, placeholder: '发送者名' }
+                    { name: 'topic_id', type: 'text', required: true, placeholder: '目标话题 topic_xxx' },
+                    { name: 'message', type: 'textarea', required: true, placeholder: '要投递的发言内容' },
+                    { name: 'sender_name', type: 'text', required: true, placeholder: '发言者名称 (如：小克)' },
+                    { name: 'source_topic_id', type: 'text', required: false, placeholder: '可选：来源话题ID，附带回信座标' }
                 ]
             },
             'CheckTopicOwnership': {
-                description: '验证话题所有权',
+                description: '验证单聊或群聊话题所有权',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
                     { name: 'topic_id', type: 'text', required: true, placeholder: 'topic_xxx' },
-                    { name: 'caller_name', type: 'text', required: true, placeholder: '调用者名' }
+                    { name: 'caller_name', type: 'text', required: true, placeholder: '调用者名' },
+                    { name: 'maid', type: 'text', required: false, placeholder: '可选：目标 Agent 或群组名（省略则自动寻址）' }
                 ]
             },
             'ListUnlockedTopics': {
                 description: '列出所有未锁定话题',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' }
+                    { name: 'maid', type: 'text', required: true, placeholder: '目标 Agent 或群组完整名称/ID (如：小克)' }
                 ]
             },
             'ReadTopicContent': {
-                description: '读取话题完整内容',
+                description: '读取单聊或群聊话题完整内容',
                 params: [
-                    { name: 'maid', type: 'text', required: true, placeholder: '你的名字' },
-                    { name: 'topic_id', type: 'text', required: true, placeholder: 'topic_xxx' }
+                    { name: 'topic_id', type: 'text', required: true, placeholder: 'topic_xxx 或 group_topic_xxx' },
+                    { name: 'maid', type: 'text', required: false, placeholder: '可选：目标 Agent 或群组名（省略则自动反查）' },
+                    { name: 'format', type: 'select', options: ['markdown', 'json', 'raw'], description: '返回格式' }
                 ]
             }
         }

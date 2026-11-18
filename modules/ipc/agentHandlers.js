@@ -3,6 +3,11 @@ const { ipcMain } = require('electron');
 const fs = require('fs-extra');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { clearTrajectoriesOfOwner } = require('../modelTrajectory');
+const { getAgentMoodStore } = require('../agentMood');
+const { resolvePortraitDisplayPath, forgetPortraitDisplayImages } = require('../services/agentPortraitImages');
+const { hostHooks } = require('../hostHooks');
+const { optimizePortraitBuffer, withPortraitLock, migratePortraitsUnlocked } = require('../services/portraitOptimizer');
 
 let AGENT_DIR_CACHE; // Cache the agent directory path
 let USER_DATA_DIR_CACHE; // Cache the user data directory path
@@ -23,10 +28,115 @@ async function findAvatarUrl(agentDir, cacheBust = false) {
         const avatarPath = path.join(agentDir, `avatar${ext}`);
         if (await fs.pathExists(avatarPath)) {
             const url = pathToFileURL(avatarPath).toString();
-            return cacheBust ? `${url}?t=${Date.now()}` : url;
+            // Version by modification time: the URL changes when the avatar
+            // does, so lists can reuse the cached image instead of
+            // re-downloading every avatar on every refresh.
+            const stat = await fs.stat(avatarPath).catch(() => null);
+            const version = stat ? Math.round(stat.mtimeMs) : (cacheBust ? Date.now() : null);
+            return version === null ? url : `${url}?v=${version}`;
         }
     }
     return null;
+}
+
+// 立绘：Agent 目录下的 portrait.<ext> 是默认立绘，portrait.<key>.<ext> 是同一角色的其他版本
+// （light 给浅色主题用；以后的差分立绘也按这个规则取名，不用改读取逻辑）。
+// 立绘可以是图片、动图或静音循环播放的短视频（mp4、webm）。
+const PORTRAIT_FILE_PATTERN = /^portrait(?:\.([a-z0-9_-]{1,32}))?(\.(?:png|jpe?g|gif|webp|avif|mp4|webm))$/i;
+
+function portraitCacheDir() {
+    return AGENT_DIR_CACHE ? path.join(path.dirname(AGENT_DIR_CACHE), 'PortraitCache') : null;
+}
+
+async function findPortraitUrls(agentDir) {
+    return withPortraitLock(agentDir, async () => {
+        await migratePortraitsUnlocked(agentDir);
+        return findPortraitUrlsUnlocked(agentDir);
+    });
+}
+
+async function findPortraitUrlsUnlocked(agentDir) {
+    let names;
+    try {
+        names = await fs.readdir(agentDir);
+    } catch {
+        return null;
+    }
+    const portraits = {};
+    for (const name of names.sort()) {
+        const match = PORTRAIT_FILE_PATTERN.exec(name);
+        if (!match) continue;
+        const key = (match[1] || 'default').toLowerCase();
+        if (portraits[key]) continue;
+        const filePath = path.join(agentDir, name);
+        const stat = await fs.stat(filePath).catch(() => null);
+        if (!stat?.isFile()) continue;
+        const displayPath = await resolvePortraitDisplayPath(filePath, stat, portraitCacheDir());
+        portraits[key] = `${pathToFileURL(displayPath).toString()}?v=${Math.round(stat.mtimeMs)}`;
+    }
+    return portraits.default ? portraits : null;
+}
+
+// 和设置页（modules/ui-system/side-pane/portrait-media.js）的类型和上限一致
+const PORTRAIT_TYPE_EXTENSIONS = Object.freeze({
+    'image/png': '.png',
+    'image/apng': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm'
+});
+const PORTRAIT_MAX_BYTES = 20 * 1024 * 1024;
+const PORTRAIT_VIDEO_MAX_BYTES = 64 * 1024 * 1024;
+
+function normalizePortraitVariant(variant) {
+    const key = typeof variant === 'string' ? variant.trim().toLowerCase() : '';
+    return /^[a-z0-9_-]{1,32}$/.test(key) ? key : null;
+}
+
+function portraitBaseName(key) {
+    return key === 'default' ? 'portrait' : `portrait.${key}`;
+}
+
+// keepPath 是刚写好的那张：不区分大小写的磁盘上 portrait.PNG 和 portrait.png 是同一个文件，按 inode 认出来留着
+async function removePortraitFiles(agentDir, key, keepPath = null) {
+    const names = await fs.readdir(agentDir).catch(() => []);
+    const keep = keepPath ? await fs.stat(keepPath).catch(() => null) : null;
+    const removed = [];
+    for (const name of names) {
+        const match = PORTRAIT_FILE_PATTERN.exec(name);
+        if (!match || (match[1] || 'default').toLowerCase() !== key) continue;
+        const filePath = path.join(agentDir, name);
+        if (keep && name.toLowerCase() === path.basename(keepPath).toLowerCase()) {
+            const stat = await fs.stat(filePath).catch(() => null);
+            if (stat && stat.ino === keep.ino && stat.dev === keep.dev) continue;
+        }
+        await fs.remove(filePath);
+        removed.push(filePath);
+    }
+    await forgetPortraitDisplayImages(removed, portraitCacheDir());
+}
+
+// 先写临时文件再改名换上，换上以后才删同一版本的其他扩展名：写盘失败（磁盘满、文件被占用）时原来的立绘还在
+async function writePortraitFile(agentDir, key, ext, buffer) {
+    const target = path.join(agentDir, `${portraitBaseName(key)}${ext}`);
+    const temp = `${target}.${process.pid}-${Date.now().toString(36)}.tmp`;
+    try {
+        await fs.writeFile(temp, buffer);
+        await fs.rename(temp, target);
+    } catch (error) {
+        await fs.remove(temp).catch(() => {});
+        throw error;
+    }
+    await removePortraitFiles(agentDir, key, target);
+}
+
+// Agent id 只能是 Agents 下的一层目录名
+function resolveAgentDir(agentId) {
+    const id = typeof agentId === 'string' ? agentId : '';
+    if (!AGENT_DIR_CACHE || !id || id !== path.basename(id) || id === '.' || id === '..') return null;
+    return path.join(AGENT_DIR_CACHE, id);
 }
 
 async function getAgentConfigById(agentId) {
@@ -245,10 +355,73 @@ function initialize(context) {
         return getAgentConfigById(agentId);
     });
 
+    // 侧栏首页的立绘：没有默认立绘时返回 null，界面保持圆头像
+    ipcMain.handle('get-agent-portraits', async (event, agentId) => {
+        const agentDir = resolveAgentDir(agentId);
+        return agentDir ? findPortraitUrls(agentDir) : null;
+    });
+
+    // 助手的长期心情（modules/agentMood.js）：侧栏立绘等助手形象在回复的情绪过去以后回到它；读不到时为 null
+    ipcMain.handle('get-agent-mood', async (event, agentId) => {
+        try {
+            return (await getAgentMoodStore()?.get(agentId)) ?? null;
+        } catch (error) {
+            console.warn(`读取 Agent ${agentId} 心情失败:`, error.message);
+            return null;
+        }
+    });
+
+    // 设置页上传立绘：variant 为 default 写 portrait.<ext>，其他键写 portrait.<key>.<ext>；
+    // 新图换上以后删掉同一个版本的旧文件（不同扩展名），保证每个版本只有一张图
+    ipcMain.handle('save-agent-portrait', async (event, agentId, variant, imageData) => {
+        const agentDir = resolveAgentDir(agentId);
+        const key = normalizePortraitVariant(variant);
+        if (!agentDir || !key) return { error: '无效的 Agent 或立绘类型。' };
+        const ext = PORTRAIT_TYPE_EXTENSIONS[imageData?.type];
+        if (!ext) return { error: '立绘只支持 PNG、JPEG、WebP、GIF 图片或 MP4、WebM 视频。' };
+        const buffer = imageData?.buffer ? Buffer.from(imageData.buffer) : null;
+        if (!buffer?.length) return { error: '立绘文件是空的。' };
+        const video = imageData.type.startsWith('video/');
+        const maxBytes = video ? PORTRAIT_VIDEO_MAX_BYTES : PORTRAIT_MAX_BYTES;
+        if (buffer.length > maxBytes) return { error: `立绘${video ? '视频' : '图片'}不能超过 ${maxBytes / 1024 / 1024}MB。` };
+        try {
+            if (!(await fs.pathExists(agentDir))) return { error: 'Agent 不存在。' };
+            await withPortraitLock(agentDir, async () => {
+                let optimized = null;
+                if (['.png', '.jpg', '.webp'].includes(ext)) {
+                    try {
+                        optimized = await optimizePortraitBuffer(buffer);
+                    } catch (error) {
+                        // Keep the existing import fallback if the codec is unavailable or the file is unreadable.
+                        console.warn('[AgentPortrait] 无法优化导入图片，保留原格式:', error.message);
+                    }
+                }
+                await writePortraitFile(agentDir, key, optimized ? '.webp' : ext, optimized || buffer);
+            });
+            return { success: true, portraits: await findPortraitUrls(agentDir) };
+        } catch (error) {
+            console.error(`保存 Agent ${agentId} 立绘失败:`, error);
+            return { error: `保存立绘失败: ${error.message}` };
+        }
+    });
+
+    ipcMain.handle('remove-agent-portrait', async (event, agentId, variant) => {
+        const agentDir = resolveAgentDir(agentId);
+        const key = normalizePortraitVariant(variant);
+        if (!agentDir || !key) return { error: '无效的 Agent 或立绘类型。' };
+        try {
+            await withPortraitLock(agentDir, () => removePortraitFiles(agentDir, key));
+            return { success: true, portraits: await findPortraitUrls(agentDir) };
+        } catch (error) {
+            console.error(`删除 Agent ${agentId} 立绘失败:`, error);
+            return { error: `删除立绘失败: ${error.message}` };
+        }
+    });
+
     ipcMain.handle('save-agent-config', async (event, agentId, config) => {
         try {
             const agentDir = path.join(AGENT_DIR, agentId);
-            await fs.ensureDir(agentDir);
+            if (!await fs.pathExists(path.join(agentDir, 'config.json'))) throw new Error('AGENT_DELETED');
             const regexPath = path.join(agentDir, 'regex_rules.json');
 
             // Handle stripRegexes separately if the property exists in the incoming config
@@ -279,6 +452,7 @@ function initialize(context) {
             // CRITICAL: Always remove stripRegexes from the object to be saved to config.json
             const configToSave = { ...config };
             delete configToSave.stripRegexes;
+            delete configToSave.conversationOverrides;
 
             if (agentConfigManager) {
                 // 使用AgentConfigManager进行安全的配置更新
@@ -299,28 +473,9 @@ function initialize(context) {
         }
     });
 
-    // 新增：更新Agent配置（部分更新）
-    ipcMain.handle('update-agent-config', async (event, agentId, updates) => {
-        try {
-            if (agentConfigManager) {
-                const result = await agentConfigManager.updateAgentConfig(agentId, existingConfig => ({
-                    ...existingConfig,
-                    ...updates
-                }));
-                invalidateCaches();
-                return { success: true, message: `Agent ${agentId} 配置已更新。` };
-            } else {
-                // AgentConfigManager 不可用，报错而非静默 fallback
-                console.error(`AgentConfigManager not available, cannot safely update config for agent ${agentId}`);
-                return { error: 'AgentConfigManager 未初始化，无法安全更新配置。' };
-            }
-        } catch (error) {
-            console.error(`更新Agent ${agentId} 配置失败:`, error);
-            return { error: error.message };
-        }
-    });
-
     ipcMain.handle('save-avatar', async (event, agentId, avatarData) => {
+        if (!agentConfigManager?.runAgentOperation) return { error: 'Agent对象队列不可用' };
+        return agentConfigManager.runAgentOperation(agentId, async () => {
         const listenerWasActive = context.getSelectionListenerStatus();
         if (listenerWasActive) context.stopSelectionListener();
         try {
@@ -329,7 +484,7 @@ function initialize(context) {
             }
 
             const agentDir = path.join(AGENT_DIR_CACHE, agentId);
-            await fs.ensureDir(agentDir);
+            if (!await fs.pathExists(path.join(agentDir, 'config.json'))) throw new Error('AGENT_DELETED');
 
             // 1. 获取 Agent 配置（用于重命名头像文件）
             let agentConfig = {};
@@ -403,12 +558,17 @@ function initialize(context) {
         } finally {
             if (listenerWasActive) context.startSelectionListener();
         }
+        });
     });
 
     ipcMain.handle('create-agent', async (event, agentName, initialConfig = null) => {
         try {
-            const baseName = agentName.replace(/[^a-zA-Z0-9_-]/g, '_');
-            const agentId = `${baseName}_${Date.now()}`;
+            const now = Date.now();
+            const rawSanitized = String(agentName || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const hasAlnum = /[a-zA-Z0-9]/.test(rawSanitized);
+            const agentId = hasAlnum
+                ? `_Agent_${rawSanitized.replace(/^_+|_+$/g, '')}_${now}`
+                : `_Agent_${now}_${now + 1}`;
             const agentDir = path.join(AGENT_DIR, agentId);
 
             if (await fs.pathExists(agentDir)) {
@@ -462,17 +622,31 @@ function initialize(context) {
     });
 
     ipcMain.handle('delete-agent', async (event, agentId) => {
+        if (!agentConfigManager?.runAgentOperation) return { error: 'Agent对象队列不可用' };
+        if (!context.historyMutationQueue?.runOwner) return { error: '历史删除屏障不可用' };
+        return agentConfigManager.runAgentOperation(agentId, async () => {
         try {
             const agentDir = path.join(AGENT_DIR, agentId);
             const userDataAgentDir = path.join(USER_DATA_DIR, agentId);
+            // 先让心情不再写、等正在写的 mood.json 写完，否则删目录时可能撞上写入
+            await getAgentMoodStore()?.forget(agentId);
+            // 记着这个助手的功能（例如开着的窗口）先收尾
+            await hostHooks.emitAsync('agent:removed', agentId);
+            const portraitFiles = (await fs.readdir(agentDir).catch(() => []))
+                .filter(name => PORTRAIT_FILE_PATTERN.test(name))
+                .map(name => path.join(agentDir, name));
             if (await fs.pathExists(agentDir)) await fs.remove(agentDir);
-            if (await fs.pathExists(userDataAgentDir)) await fs.remove(userDataAgentDir);
+            await forgetPortraitDisplayImages(portraitFiles, portraitCacheDir());
+            await context.historyMutationQueue.runOwner(agentId, () => fs.remove(userDataAgentDir));
+            await clearTrajectoriesOfOwner({ agentId }); // 侧栏「调用轨迹」按话题落盘的请求记录，助手没了就一起删
+            agentConfigManager.clearCache(agentId);
             invalidateCaches();
             return { success: true, message: `Agent ${agentId} 已删除。` };
         } catch (error) {
             console.error(`删除Agent ${agentId} 失败:`, error);
             return { error: error.message };
         }
+        });
     });
 
     ipcMain.handle('save-user-avatar', async (event, avatarData) => {

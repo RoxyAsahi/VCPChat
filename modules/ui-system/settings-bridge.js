@@ -25,6 +25,7 @@ import { mountGlobalLanguageRows } from './settings/global-language-rows.js';
 import { mountGlobalChoices, mountGlobalSteppers, mountVoiceShortcutInput, mountGlobalTextInputs } from './settings/global-input-upgrades.js';
 import { mountForumCredentialInputs } from './settings/forum-controls.js';
 import { applySchemaSurface } from '../settings/schema-surface.js';
+import { settingsSectionExtensions, takeRequestedSettingsSection, onSettingsExtensionChange } from '../settings/extensions.js';
 import { renderAgentSettingsSurface } from '../settings/schema/sidebar-surfaces.js';
 import { ensureSettingsSidebarSurface } from './settings/settings-sidebar-surface.js';
 import { mountSettingsSidebarForm } from './settings/settings-sidebar-runtime.js';
@@ -216,11 +217,13 @@ function mountGlobalSettingsPathAction(root) {
 const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'user-identity': 'user',
     'server-connection': 'server',
+    'jev-service': 'brain-circuit',
     'appearance-settings': 'palette',
     'render-settings': 'activity',
     'selection-assistant': 'mouse-pointer-click',
     'voice-settings': 'mic',
     'advanced-features': 'layers',
+    'workspace-management': 'folder-git-2',
     'quick-actions': 'zap',
 });
 
@@ -495,6 +498,7 @@ function bindIdentityNameEditor(form) {
         }, 'identity-name-cancel');
     }
     listenIdentity(nameInput, 'input', syncName, 'identity-name-input');
+    listenIdentity(nameInput, 'vcp-uiux-sync', syncName, 'identity-name-sync');
     listenIdentity(nameInput, 'keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); setEditing(false); }
         if (event.key === 'Escape') { event.preventDefault(); syncName(); setEditing(false); }
@@ -505,6 +509,17 @@ function bindIdentityNameEditor(form) {
         delete nameEdit.dataset.vcpIdentityNameEditing;
         delete nameEdit.dataset.vcpIdentityNameOriginal;
     }, 'identity-name-editor-markers', 'ui-presentation');
+}
+
+// Settings chrome icons come from the shared Lucide adapter; the span
+// fallback is picked up by the adapter's observer once it loads.
+function createSettingsIcon(name, className) {
+    if (window.VCPIcons?.create) return window.VCPIcons.create(name, { className });
+    const icon = document.createElement('span');
+    icon.className = `vcp-ui-icon ${className}`;
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = name;
+    return icon;
 }
 
 // SettingsShell build: assemble a live Uiux SettingsRoot primitive tree.
@@ -533,12 +548,19 @@ function mountSettingsShell(root) {
     try {
         const sourceMeta = JSON.parse(nav.dataset.settingsSections || '[]');
         meta = sourceMeta.map(item => ({ ...item, icon: GLOBAL_CATEGORY_ICONS[item.value] || 'circle', selected: item.value === 'user-identity' }));
+        // 可选功能注册进来的分区排在核心分区后面（分区壳已由 applySchemaSurface 补好）
+        for (const extension of settingsSectionExtensions()) {
+            if (!meta.some(item => item.value === extension.key)) meta.push({ value: extension.key, label: extension.label, icon: extension.icon, selected: false });
+        }
     } catch (error) {
         console.error('[VCPUI SettingsBridge] Invalid settings section metadata', error);
         return;
     }
     if (!meta.length) return;
-    const initial = meta.find(item => item.selected)?.value || meta[0]?.value;
+    // 设置还没打开时就有人要求切到某个分区（requestSettingsSection），挂载时直接切过去
+    const requested = takeRequestedSettingsSection();
+    const initial = (requested && meta.some(item => item.value === requested) ? requested : null)
+        || meta.find(item => item.selected)?.value || meta[0]?.value;
     if (!initial || !document.getElementById(`section-${initial}`)) {
         return;
     }
@@ -605,11 +627,7 @@ function mountSettingsShell(root) {
     searchButton.className = 'vcp-uiux-settings-search-button';
     searchButton.setAttribute('aria-label', '搜索设置');
     searchButton.title = '搜索设置';
-    const searchIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    searchIcon.dataset.vcpIcon = 'search-outline-16';
-    searchIcon.setAttribute('class', 'vcp-icon vcp-uiux-settings-search-icon');
-    window.VcpIcons?.render(searchIcon, 'search-outline-16');
-    searchButton.append(searchIcon);
+    searchButton.append(createSettingsIcon('search', 'vcp-icon vcp-uiux-settings-search-icon'));
     const searchInput = document.createElement('input');
     searchInput.type = 'search';
     searchInput.className = 'vcp-uiux-settings-search-input';
@@ -642,10 +660,7 @@ function mountSettingsShell(root) {
     // seat. Replace the legacy text glyph once, while preserving the same
     // business button and close listener.
     if (!close.dataset.vcpUiuxClose) {
-        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        icon.dataset.vcpIcon = 'close-outline-16';
-        icon.setAttribute('class', 'vcp-icon vcp-uiux-settings-close-icon');
-        window.VcpIcons?.render(icon, 'close-outline-16');
+        const icon = createSettingsIcon('x', 'vcp-icon vcp-uiux-settings-close-icon');
         const hiddenLabel = document.createElement('span');
         hiddenLabel.className = 'vcp-uiux-settings-close-label';
         hiddenLabel.textContent = close.getAttribute('aria-label') || '关闭';
@@ -698,7 +713,7 @@ function mountSettingsShell(root) {
     // business nodes can be restored atomically by teardown.
     panel.replaceChildren(nav, content);
 
-    const rows = state.meta.map(item => {
+    const createRow = item => {
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'vcp-uiux-settings-nav-cell';
@@ -733,7 +748,8 @@ function mountSettingsShell(root) {
         }
         state.listHost.append(row);
         return row;
-    });
+    };
+    const rows = state.meta.map(createRow);
     const renderList = () => {
         state.listHost.setAttribute('aria-label', '全局设置分类');
         rows.forEach(row => {
@@ -791,9 +807,39 @@ function mountSettingsShell(root) {
         }
         renderList();
     };
+    state.activate = activateSection;
+    // 壳挂载以后才注册进来的分区：分区壳收进 bank，导航补一行
+    state.addExtension = extension => {
+        if (state.meta.some(item => item.value === extension.key)) return;
+        const section = form.querySelector(`#section-${extension.key}`);
+        if (!section) return;
+        const item = { value: extension.key, label: extension.label, icon: extension.icon, selected: false };
+        state.meta.push(item);
+        state.sections.set(item.value, section);
+        section.classList.remove('active');
+        sectionBank.append(section);
+        rows.push(createRow(item));
+        renderList();
+    };
 
     renderList();
 }
+
+// 可选功能的分区和「切到某分区」请求（modules/settings/extensions.js）接到已挂载的设置壳上；
+// 没挂载的等 mountSettingsShell 自己读
+const offSettingsExtensions = onSettingsExtensionChange(change => {
+    for (const root of shellRoots) {
+        const state = shellState.get(root);
+        if (!state?.form) continue;
+        if (change.type === 'section') {
+            applySchemaSurface(state.form);
+            state.addExtension?.(change.extension);
+        } else if (change.type === 'request' && state.meta.some(item => item.value === change.key)) {
+            takeRequestedSettingsSection();
+            state.activate?.(change.key);
+        }
+    }
+});
 
 // Reconcile a previously mounted shell after modal reopen or section-bank
 // churn.  The form remains canonical; this only restores the active section's
@@ -994,6 +1040,7 @@ window.VCPUISettingsBridge = Object.freeze({
             }
             markPresentationDestroyed();
             disposeTypedSettings();
+            offSettingsExtensions();
             if (!bridgeScope) {
                 document.removeEventListener('modal-visibility-changed', handleModalVisibility);
                 document.removeEventListener('modal-ready', handleModalVisibility);

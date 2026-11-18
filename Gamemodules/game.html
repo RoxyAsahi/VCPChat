@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'">
+<title>VCPgame 游戏大厅</title>
+<link rel="stylesheet" href="../styles/themes.css">
+<link rel="stylesheet" href="game.css">
+<script defer src="game.js"></script>
+</head>
+<body>
+<header id="top-nav-bar">
+<strong>VCPgame <span>游戏大厅</span></strong>
+<nav aria-label="窗口控制">
+<button id="minimize-btn" type="button" aria-label="最小化">−</button>
+<button id="maximize-btn" type="button" aria-label="最大化或还原">□</button>
+<button id="close-btn" type="button" aria-label="关闭">×</button>
+</nav>
+</header>
+<main>
+<p class="eyebrow">YOUR LOCAL GAME LIBRARY</p>
+<h1>选个游戏，开玩。</h1>
+<p class="intro">VCP 自研小游戏目录 · 每款游戏独立运行</p>
+<section class="game-grid" aria-label="游戏目录">
+<button class="game-card blade" type="button" data-game="blade" aria-describedby="blade-desc">
+<span class="cover" aria-hidden="true">⚔</span>
+<span class="tag">回合制 · 剑术对决</span>
+<strong>华山论剑</strong>
+<span id="blade-desc" class="description">蓄势、出剑、见招拆招。打开已有游戏窗口，不重置对局。</span>
+<span class="launch">打开游戏 ↗</span>
+</button>
+<button class="game-card neon" type="button" data-game="neon" aria-describedby="neon-desc">
+<span class="cover" aria-hidden="true">✦</span>
+<span class="tag">单人 · 弹幕肉鸽</span>
+<strong>VCP Neon Striker</strong>
+<span id="neon-desc" class="description">自动射击，专心走位。三选一构筑与融合技能，挑战霓虹生存。</span>
+<span class="launch">打开游戏 ↗</span>
+</button>
+<button class="game-card blade" type="button" data-game="forgeTax" aria-describedby="forge-tax-desc">
+<span class="cover" aria-hidden="true">⚒</span>
+<span class="tag">单人 · 赌徒锻造肉鸽</span>
+<strong>ForgeTax 锻造模拟器</strong>
+<span id="forge-tax-desc" class="description">免费挥锤，押上你的剑。八槽遗物构筑，挑战魔王贡金，锻造+99圣剑。</span>
+<span class="launch">打开游戏 ↗</span>
+</button>
+<button class="game-card blade" type="button" data-game="doudizhu" aria-describedby="doudizhu-desc">
+<span class="cover" aria-hidden="true">♠</span>
+<span class="tag">用户 + 两位 Agent · 三人牌桌</span>
+<strong>斗地主</strong>
+<span id="doudizhu-desc" class="description">选两位伙伴开桌。叫地主、出牌与可选台词，全部由游戏规则裁决。</span>
+<span class="launch">打开牌桌 ↗</span>
+</button>
+<button class="game-card neon" type="button" data-game="vtrade" aria-describedby="vtrade-desc">
+<span class="cover" aria-hidden="true">↗</span>
+<span class="tag">单练 · 观战 · 与 Agent 同场</span>
+<strong>VTrade 对决</strong>
+<span id="vtrade-desc" class="description">在一段真实历史行情上逐日决定仓位，与随机操作者和 Agent 比较。需 VCP 服务器启用 VTrade 插件。</span>
+<span class="launch">打开对决 ↗</span>
+</button>
+<button class="game-card blade" type="button" data-game="srpg" aria-describedby="srpg-desc">
+<span class="cover" aria-hidden="true">♟</span>
+<span class="tag">战棋沙盘 · 悔棋回溯 · Agent 协同</span>
+<strong>Tavern-SRPG 战棋沙盘</strong>
+<span id="srpg-desc" class="description">内置《万缕千丝》凯伊线首战沙盘。支持网格寻路、韧性招架、手动改盘、天刻回溯与 Agent 实时同步。</span>
+<span class="launch">打开沙盘 ↗</span>
+</button>
+</section>
+<p id="game-status" role="status" aria-live="polite">点击游戏图标即可打开，无需 AI 发起启动。</p>
+<section class="game-history" aria-label="游戏资源管理">
+<div class="history-heading"><h2>游戏存档管理</h2><button id="refresh-resources" type="button">刷新管理器</button></div>
+<p>按后台游戏会话清理：同桌所有局的存档、后台群配置和群历史一起删除。不修改主配置；正在运行的会话不可删除。</p>
+<p id="resources-status" role="status" aria-live="polite"></p>
+<div id="game-resources"></div>
+<button id="select-resources" type="button">选择全部可清理会话</button>
+<button id="prepare-remove" type="button">删除所选…</button>
+<div id="remove-confirmation" hidden>
+<p id="remove-summary"></p>
+<button id="confirm-remove" type="button">确认永久删除</button>
+<button id="cancel-remove" type="button">取消</button>
+</div>
+</section>
+<section class="game-history" aria-label="斗地主记录">
+<div class="history-heading"><h2>斗地主记录</h2><button id="refresh-records" type="button">刷新记录</button></div>
+<p id="records-status" role="status" aria-live="polite">正在读取记录…</p>
+<div id="game-records"></div>
+<section id="record-detail" hidden aria-label="公开牌局记录">
+<h3 id="record-title"></h3>
+<p>仅显示公开动作和台词，不显示其他玩家暗牌。记录为只读，不会自动启动 Agent。</p>
+<div id="record-events"></div>
+</section>
+</section>
+</main>
+</body>
+</html>

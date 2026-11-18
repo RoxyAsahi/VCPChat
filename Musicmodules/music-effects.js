@@ -55,6 +55,7 @@ function setupEffects(app) {
         }
     };
 
+    let eqSyncQueue = Promise.resolve();
     app.sendEqSettings = async () => {
         if (!app.api?.setMusicEq) return;
         const newBands = {};
@@ -62,8 +63,33 @@ function setupEffects(app) {
             const slider = document.getElementById(`eq-${band}`);
             newBands[band] = parseInt(slider.value, 10);
         }
-        app.eqEnabled = app.eqSwitch.checked;
-        await app.api.setMusicEq({ bands: newBands, enabled: app.eqEnabled });
+        const enabled = app.eqSwitch.checked;
+        const eqType = app.eqTypeSelect?.value;
+        const firTaps = parseInt(app.firTapsSelect?.value, 10) || 1023;
+        app.eqEnabled = enabled;
+        // Snapshot each gesture and serialize type/enable/bands. A slider event
+        // must not duplicate an in-flight FIR rebuild or race an older type.
+        const operation = eqSyncQueue.then(async () => {
+            if (app.api?.setMusicEqType && eqType !== undefined) {
+                if (app._syncedEqType !== eqType || app._syncedFirTaps !== firTaps) {
+                    const typeResult = await app.api.setMusicEqType({ type: eqType, fir_taps: firTaps });
+                    // IPC represents transport/engine failures as status:error.
+                    // Do not advance successful sync markers on those failures.
+                    if (typeResult?.status === 'error') return typeResult;
+                    app._syncedEqType = eqType;
+                    app._syncedFirTaps = firTaps;
+                }
+            }
+            // Type changes can enable/unload filters; apply the captured toggle last.
+            const result = await app.api.setMusicEq({ bands: newBands, enabled });
+            if (result?.status === 'error') return result;
+            app.saveSettings?.();
+            return result;
+        });
+        // One rejected operation must not poison subsequent retries. The caller
+        // still receives the original result/rejection, never a false success.
+        eqSyncQueue = operation.catch(() => {});
+        return operation;
     };
 
     // --- IR Convolver ---
@@ -178,10 +204,12 @@ function setupEffects(app) {
         app.noiseShaperCurve = app.noiseShaperCurveSelect.value;
         await app.api.configureMusicOutputBits({ bits: app.outputBits });
         await app.api.setMusicNoiseShaperCurve({ curve: app.noiseShaperCurve });
+        app.saveSettings();
     };
 
     app.updateOptimizations = async () => {
         if (!app.api?.configureMusicOptimizations) return;
         await app.api.configureMusicOptimizations({ dither_enabled: app.ditherSwitch.checked });
+        app.saveSettings();
     };
 }

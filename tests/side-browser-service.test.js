@@ -1,0 +1,149 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
+const { SideBrowserService, webUrl, resolveBrowserOpenRequest } = require('../modules/loom/sideBrowserService');
+const { sanitizeBrowserUserAgent } = require('../modules/ipc/browserHandlers');
+const protocol = require('../modules/loom/webcore/web-agent-protocol');
+
+function fixture() {
+    const sender = new EventEmitter();
+    sender.isDestroyed = () => false;
+    sender.send = () => {};
+    const win = { webContents: sender, isDestroyed: () => false,
+        isMinimized: () => false, isVisible: () => true };
+    const calls = [];
+    const manager = {
+        normalizeLoomActionId: id => protocol.resolveCommand(id).canonical,
+        ensureWebAgentRuntime: async i => { i.webAgentReady = true; return i; },
+        executeIsolatedPageOperation: async (i, action, params) => {
+            calls.push([i.tabId, action, params]);
+            if (action === 'page_prepare_action') return {
+                status: 'success', code: 'ACTION_PREPARED',
+                result: { handleId: 'vcp-h-1-0-1-test', isTopFrame: true,
+                    point: { x: 20, y: 20 }, beforeState: {}, targetResolution: {} },
+            };
+            return { status: 'success', result: { verified: true } };
+        },
+    };
+    const service = new SideBrowserService({ manager, getMainWindow: () => win, timeoutMs: 20 });
+    function guest(id) {
+        const wc = new EventEmitter();
+        const debuggerApi = new EventEmitter();
+        debuggerApi.isAttached = () => true;
+        debuggerApi.sendCommand = async () => ({});
+        return Object.assign(wc, { id, debugger: debuggerApi, isDestroyed: () => false,
+            getTitle: () => `Page ${id}`, getURL: () => `https://example.com/${id}`,
+            isLoadingMainFrame: () => false,
+            executeJavaScriptInIsolatedWorld: async () => ({ markdown: 'page', snapshotId: 1 }) });
+    }
+    service.register(sender, 'browser:1', guest(1));
+    service.register(sender, 'browser:2', guest(2));
+    service.activeId = 'browser:2';
+    return { service, sender, calls, guest };
+}
+
+test('explicit target is isolated from the user-selected active page', async () => {
+    const h = fixture();
+    await h.service.execute('click', { targetId: 'browser:1', target: '#button' });
+    assert.equal(h.calls[0][0], 'browser:1');
+    assert.equal((await h.service.execute('list_tabs')).response.result.result.count, 2);
+    await assert.rejects(h.service.execute('click', { targetId: 'browser:missing' }), { code: 'TARGET_NOT_FOUND' });
+});
+
+test('assistance pauses writes, cancellation stays paused, only matching user completion resumes', async () => {
+    const h = fixture();
+    h.service.request = async () => ({});
+    const result = await h.service.requestAssistance('browser:1', '请手动完成验证');
+    await assert.rejects(h.service.execute('type', { targetId: 'browser:1' }), { code: 'USER_ASSISTANCE_PENDING' });
+    await h.service.pageInfo('browser:1');
+    assert.throws(() => h.service.completeAssistance({}, 'browser:1', result.assistance.requestId), { code: 'INVALID_REQUEST' });
+    h.service.completeAssistance(h.sender, 'browser:1', result.assistance.requestId, true);
+    await assert.rejects(h.service.execute('click', { targetId: 'browser:1' }), { code: 'USER_ASSISTANCE_PENDING' });
+    const retry = await h.service.requestAssistance('browser:1', '请确认继续');
+    h.service.completeAssistance(h.sender, 'browser:1', retry.assistance.requestId);
+    await h.service.execute('click', { targetId: 'browser:1' });
+    assert.deepEqual(h.calls.map(call => call[1]), ['page_prepare_action', 'page_verify_action']);
+});
+
+test('old disposal cannot unregister a replacement page with the same tab ID', () => {
+    const h = fixture();
+    h.service.register(h.sender, 'browser:1', h.guest(3));
+    assert.equal(h.service.unregister(h.sender, 'browser:1', 1), false);
+    assert.equal(h.service.resolve('browser:1').view.webContents.id, 3);
+});
+
+test('navigation invalidates runtime and stale document identity', async () => {
+    const h = fixture();
+    const i = h.service.resolve('browser:1');
+    i.webAgentReady = true;
+    i.view.webContents.emit('did-start-navigation', {}, 'https://example.com/next', false, true);
+    assert.equal(i.webAgentReady, false);
+    assert.equal(i.documentGeneration, 2);
+    i.view.webContents.emit('dom-ready');
+    await i.documentReadyPromise;
+    assert.equal(i.loading, false);
+});
+
+test('host responses require the exact owner and timeouts are explicit', async () => {
+    const h = fixture();
+    let payload;
+    h.sender.send = (_channel, p) => { payload = p; };
+    const pending = h.service.request('activate');
+    assert.equal(h.service.respond({}, { requestId: payload.requestId, success: true }), false);
+    assert.equal(h.service.respond(h.sender, { requestId: payload.requestId, success: true, data: 42 }), true);
+    assert.equal(await pending, 42);
+    await assert.rejects(h.service.request('open'), { code: 'BROWSER_HOST_TIMEOUT' });
+    assert.equal(h.service.pending.size, 0);
+});
+
+test('agent navigation rejects privileged protocols', () => {
+    for (const url of ['file:///C:/Windows/win.ini', 'javascript:alert(1)', 'data:text/html,x']) {
+        assert.throws(() => webUrl(url), { code: 'INVALID_REQUEST' });
+    }
+    assert.equal(webUrl('https://example.com'), 'https://example.com/');
+});
+
+test('pageInfo synchronizes adapter snapshot identity before strict actions', async () => {
+    const h = fixture();
+    const instance = h.service.resolve('browser:1');
+    let snapshotId = 0;
+    instance.view.webContents.executeJavaScriptInIsolatedWorld = async () => ({
+        markdown: 'page',
+        runtimeInstanceId: instance.webAgentAdapter.runtimeInstanceId,
+        documentGeneration: 1,
+        snapshotId: ++snapshotId,
+    });
+    const first = await h.service.pageInfo('browser:1');
+    assert.equal(instance.webAgentAdapter.snapshotId, first.snapshotId);
+    await h.service.execute('click', {
+        targetId: 'browser:1', target: '#button',
+        runtimeInstanceId: first.runtimeInstanceId,
+        documentGeneration: first.documentGeneration, snapshotId: first.snapshotId,
+    }, { strict: true });
+    const second = await h.service.pageInfo('browser:1');
+    assert.equal(instance.webAgentAdapter.snapshotId, second.snapshotId);
+    const before = h.calls.length;
+    await assert.rejects(h.service.execute('click', {
+        targetId: 'browser:1', target: '#button', snapshotId: first.snapshotId,
+    }, { strict: true }), { code: 'SNAPSHOT_MISMATCH' });
+    assert.equal(h.calls.length, before, 'stale context must fail before page dispatch');
+    await h.service.execute('click', {
+        targetId: 'browser:1', target: '#button', snapshotId: second.snapshotId,
+    }, { strict: true });
+});
+
+test('resolveBrowserOpenRequest supports flexible engine/query and sanitizeBrowserUserAgent strips Electron tokens', () => {
+    assert.deepEqual(resolveBrowserOpenRequest({}), { url: 'https://www.bing.com/', usePreferredEngine: true });
+    assert.deepEqual(resolveBrowserOpenRequest({ engine: 'google' }), { url: 'https://www.google.com/', engine: 'google' });
+    assert.deepEqual(resolveBrowserOpenRequest({ engine: 'google', query: 'vcp loom' }), {
+        url: 'https://www.google.com/search?q=vcp%20loom',
+        engine: 'google',
+        query: 'vcp loom',
+    });
+    assert.throws(() => resolveBrowserOpenRequest({ engine: 'unknown' }), { code: 'INVALID_REQUEST' });
+
+    const rawUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) vcp-chat-desktop/1.0.0 Chrome/152.0.7977.167 Electron/44.9.3 Safari/537.36';
+    const cleanUa = sanitizeBrowserUserAgent(rawUa);
+    assert.equal(cleanUa, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.167 Safari/537.36');
+});

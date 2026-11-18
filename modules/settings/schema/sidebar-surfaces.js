@@ -4,6 +4,8 @@
 // the DOM contract: every field has a descriptor, every view is rendered from
 // a descriptor, and dynamic business modules receive stable ids/slots.
 
+import { PORTRAIT_EXPRESSIONS_ENABLED } from '../../ui-system/side-pane/portrait-features.js';
+
 const SVG_TOGGLE = '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>';
 
 const field = (id, type, label, options = {}) => Object.freeze({
@@ -13,6 +15,18 @@ const field = (id, type, label, options = {}) => Object.freeze({
     ...options,
 });
 
+const toolStyleFields = kind => [
+    field(`${kind}ToolPresentation`, 'select', '工具调用渲染样式', {
+        name: 'toolPresentation',
+        options: [['inherit', '跟随全局'], ['legacy', '原有卡片'], ['compact', '紧凑单行'], ['grouped', '分组折叠'], ['inline', '单行合并'], ['process', '整轮折叠']],
+        tooltip: '仅覆盖此会话的工具呈现；群聊以群组设置为准，不使用成员的个人设置。'
+    }),
+    field(`${kind}ToolExpansion`, 'select', '工具默认展开', {
+        name: 'toolExpansion',
+        options: [['inherit', '跟随全局'], ['attention', '失败与待确认'], ['none', '全部收起'], ['all', '全部展开']],
+        tooltip: '可独立于渲染样式跟随全局。手动展开或收起的选择仍会保留。'
+    })
+];
 const agentFields = Object.freeze([
     field('agentNameInput', 'text', 'Agent 名称', { name: 'name', placeholder: 'Agent 名称', required: true, tooltip: '列表和聊天中显示的助手名称。', validation: { required: true } }),
     field('agentModel', 'text', 'Agent 模型', { name: 'model', placeholder: '例如 gemini-2.5-flash-preview-05-20', tooltip: '留空时使用服务端默认模型。' }),
@@ -29,15 +43,27 @@ const agentFields = Object.freeze([
     field('agentCustomCss', 'textarea', '列表项自定义CSS', { name: 'customCss', rows: 3, tooltip: '此CSS将应用于【助手】页面的Agent列表项容器。' }),
     field('agentCardCss', 'textarea', '名片样式CSS', { name: 'cardCss', rows: 3, tooltip: '此CSS将应用于【设置】页面中Agent的名片区域（头像和名称）。' }),
     field('agentChatCss', 'textarea', '会话样式CSS', { name: 'chatCss', rows: 4, tooltip: '此CSS将应用于【聊天会话】中Agent的头像和名称。可使用 .message-avatar 控制头像，.sender-name 控制名称。' }),
+    ...toolStyleFields('agent'),
 ]);
 
 const groupFields = Object.freeze([
     field('groupNameInput', 'text', '群组名称', { placeholder: '群组名称', required: true, tooltip: '列表和聊天中显示的群组名称。', validation: { required: true } }),
-    field('groupChatMode', 'select', '群聊模式', { options: [['sequential', '顺序发言'], ['naturerandom', '自然随机'], ['invite_only', '邀请发言']], tooltip: '决定群组如何选择下一位发言者：顺序发言、自然随机或仅受邀请。' }),
+    field('groupChatMode', 'select', '群聊模式', { options: [['sequential', '顺序发言'], ['naturerandom', '自然随机'], ['invite_only', '邀请发言'], ['jev', 'JEV 智能群聊']], tooltip: '决定群组如何选择下一位发言者。JEV 智能群聊会按成员权重截断并自主推进话题。' }),
     field('tagMatchMode', 'select', 'Tag 触发模式', { options: [['strict', '严格模式'], ['natural', '自然模式']], tooltip: '自然模式会区分 Tag 来源，尽量避免 Agent 因引用自身历史发言而重复触发。', dependsOn: { field: 'groupChatMode', equals: 'naturerandom' } }),
     field('groupUnifiedModelInput', 'text', '群组统一模型', { placeholder: '选择群组统一模型', tooltip: '启用统一模型后，群组成员共享此模型。', dependsOn: { field: 'groupUseUnifiedModel', equals: true } }),
     field('groupPrompt', 'textarea', 'GroupPrompt', { rows: 4, tooltip: '注入群聊上下文的系统提示词，作为群组整体对话指导。' }),
     field('invitePrompt', 'textarea', 'InvitePrompt', { rows: 4, tooltip: '邀请某个成员发言时使用的提示词。可使用 {{VCPChatAgentName}} 作为被邀请发言的 Agent 名称占位符。' }),
+    field('jevNavigatorPrompt', 'textarea', 'JEV 导航员提示词', { rows: 5, tooltip: '指导 JEV 根据群聊上下文、成员风格和结束必要性分配发言权重。' }),
+    field('jevSpeakerThreshold', 'number', '发言权重截断阈值', { min: 0, max: 1, step: 0.01, tooltip: '概率低于此值的成员不会进入本轮 K 队列。' }),
+    field('jevContinueThreshold', 'number', '继续讨论阈值', { min: 0, max: 1, step: 0.01, tooltip: 'JEV 判断继续讨论的概率低于此值时智能结束。' }),
+    field('jevStopThreshold', 'number', '结束选项阈值', { min: 0, max: 1, step: 0.01, tooltip: '结束选项达到此值且权重最高时智能结束。' }),
+    field('jevMaxSpeakersPerRound', 'number', '单轮最大回复人数 K', { min: 1, max: 32, step: 1, tooltip: '每次裁决最多选取多少位成员依次发言。' }),
+    field('jevMaxAutonomousRounds', 'number', '最大自治裁决轮数', { min: 1, max: 100, step: 1, tooltip: '一次自治运行最多连续裁决轮数，用于防止无限对话。' }),
+    field('jevHistoryWindow', 'number', 'JEV 历史窗口消息数', { min: 1, max: 200, step: 1, tooltip: '发送给 JEV 裁判的最近消息数量，默认 12。适当减小可减少输入 Token 和裁决费用，但窗口过小可能削弱上下文判断。' }),
+    field('jevContinueDebounceMs', 'number', '继续群聊防抖 (ms)', { min: 0, max: 10000, step: 100, tooltip: '防止重复点击继续群聊产生多次运行。' }),
+    field('groupEnableContextMessageWindow', 'checkbox', '启用上下文楼层窗口', { tooltip: '默认关闭。开启后仅把最近指定数量的消息发送给群成员模型；完整聊天记录仍会保存和显示。' }),
+    field('groupContextMessageWindowSize', 'number', '最多保留楼层数', { min: 1, max: 10000, step: 1, tooltip: '发送给群成员模型的最近消息条数（包括用户和 Agent 消息）。不影响历史记录、瀑布流显示和话题总结。', dependsOn: { field: 'groupEnableContextMessageWindow', equals: true } }),
+    ...toolStyleFields('group'),
 ]);
 
 export const settingsSidebarSchema = Object.freeze({
@@ -159,15 +185,25 @@ function renderField(doc, spec, className = 'settings-schema-field') {
     return row;
 }
 
+// Section header icons: Lucide names, turned into SVG by the shared adapter.
 const SECTION_ICONS = {
-    identity: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M11.0307 5.46369C11.0305 3.78995 9.6734 2.43357 7.99961 2.43357C6.32601 2.43379 4.96972 3.79009 4.96949 5.46369C4.96949 7.13748 6.32587 8.49455 7.99961 8.49477C9.67354 8.49477 11.0307 7.13762 11.0307 5.46369ZM12.3163 5.46369C12.3163 7.84777 10.3837 9.78042 7.99961 9.78042C5.61572 9.7802 3.68288 7.84763 3.68288 5.46369C3.6831 3.07993 5.61586 1.14718 7.99961 1.14695C10.3836 1.14695 12.3161 3.0798 12.3163 5.46369Z" fill="currentColor"/><path d="M8.00002 10.3316C11.7343 10.3316 14.1864 11.8997 15.0387 14.4445L14.4292 14.6483L13.8197 14.8531C13.1955 12.9893 11.3673 11.6182 8.00002 11.6182C4.63277 11.6182 2.80455 12.9893 2.18031 14.8531L1.5708 14.6483L0.961304 14.4445C1.81368 11.8997 4.26579 10.3316 8.00002 10.3316Z" fill="currentColor"/></svg>',
-    prompt: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.94076 1.34942C10.7047 0.90231 11.6503 0.902415 12.4143 1.34942C12.7061 1.52015 12.9688 1.79118 13.3104 2.13284C13.6521 2.47448 13.9231 2.73721 14.0939 3.02894C14.5408 3.79294 14.5409 4.73856 14.0939 5.50251C13.9231 5.79415 13.652 6.05704 13.3104 6.39861L6.65932 13.0497C6.28068 13.4284 6.00695 13.7108 5.66543 13.9097C5.32391 14.1085 4.94315 14.2074 4.42705 14.3498L3.24394 14.6761C2.77527 14.8054 2.34538 14.9262 2.00131 14.9684C1.65196 15.0112 1.17964 15.0013 0.810764 14.6325C0.441921 14.2637 0.432107 13.7913 0.47486 13.442C0.517035 13.0979 0.6379 12.668 0.767181 12.1993L1.09352 11.0162C1.23588 10.5001 1.33481 10.1193 1.5336 9.77784C1.7325 9.43632 2.0149 9.1626 2.39355 8.78395L9.04466 2.13284C9.38625 1.79126 9.64911 1.52016 9.94076 1.34942ZM15.5427 14.8398H7.55223L8.96707 13.425H15.5427V14.8398ZM3.39382 9.78422C2.965 10.213 2.84244 10.3436 2.75709 10.49C2.67183 10.6366 2.61862 10.8079 2.45733 11.3925L2.13099 12.5756C2.00183 13.0439 1.92194 13.3419 1.88863 13.5536C2.10041 13.5204 2.39872 13.4416 2.86764 13.3123L4.05075 12.9859C4.63544 12.8246 4.80669 12.7715 4.95323 12.6862C5.09968 12.6008 5.23022 12.4783 5.65905 12.0494L10.721 6.98644L8.45577 4.72121L3.39382 9.78422ZM11.7 2.57079C11.3774 2.38198 10.9777 2.38198 10.6551 2.57079C10.5602 2.62647 10.4487 2.72931 10.0449 3.13311L9.45604 3.72094L11.7213 5.98617L12.3102 5.39833C12.7139 4.99457 12.8168 4.88307 12.8725 4.78818C13.0613 4.46561 13.0612 4.06585 12.8725 3.74326C12.8169 3.64827 12.7146 3.53752 12.3102 3.13311C11.9057 2.72863 11.795 2.6264 11.7 2.57079Z" fill="currentColor"/></svg>',
-    model: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="2"></rect><path d="M6 1v2M10 1v2M6 13v2M10 13v2M1 6h2M1 10h2M13 6h2M13 10h2"></path></svg>',
-    params: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14.0861 5.51366C13.8717 5.0575 13.588 4.58542 13.2889 4.18108C13.208 4.07172 13.1596 4.04373 13.0243 4.03054C12.4277 3.97255 11.8245 4.05527 11.2269 3.9972C10.7224 3.94816 10.3133 3.71661 10.0115 3.30919C9.66986 2.84777 9.43973 2.31343 9.09824 1.85234C9.01771 1.74365 8.96805 1.71589 8.83354 1.70282C8.29432 1.65044 7.70402 1.65061 7.16656 1.70282C7.03205 1.71589 6.98239 1.74365 6.90186 1.85234C6.56067 2.31303 6.33025 2.84774 5.98855 3.30919C5.68681 3.71661 5.27774 3.94816 4.77317 3.9972C4.17564 4.05527 3.57239 3.97255 2.97585 4.03054C2.84046 4.04373 2.79208 4.07172 2.71115 4.18108C2.41212 4.58542 2.12835 5.0575 1.91403 5.51366C1.85299 5.64359 1.85286 5.7018 1.91403 5.8319C2.14865 6.33077 2.49748 6.76892 2.73237 7.26854C2.9594 7.7515 2.96041 8.24717 2.73338 8.73044C2.49837 9.23061 2.14891 9.66837 1.91403 10.1681C1.85291 10.2982 1.85299 10.3564 1.91403 10.4863C2.12856 10.9429 2.41185 11.4142 2.71115 11.8189C2.79208 11.9283 2.84046 11.9563 2.97585 11.9694C3.57239 12.0274 4.17564 11.9447 4.77317 12.0028C5.27774 12.0518 5.68681 12.2834 5.98855 12.6908C6.33024 13.1522 6.56037 13.6866 6.90186 14.1476C6.98239 14.2563 7.03205 14.2841 7.16656 14.2972C7.70402 14.3494 8.29432 14.3495 8.83354 14.2972C8.96805 14.2841 9.01771 14.2563 9.09824 14.1476C9.43944 13.687 9.66985 13.1522 10.0115 12.6908C10.3133 12.2834 10.7224 12.0518 11.2269 12.0028C11.8244 11.9447 12.4271 12.0275 13.0243 11.9694C13.1596 11.9563 13.208 11.9283 13.2889 11.8189C13.5891 11.4131 13.872 10.942 14.0861 10.4863C14.1471 10.3564 14.1472 10.2982 14.0861 10.1681C13.8513 9.66861 13.5017 9.23061 13.2667 8.73044C13.0397 8.24717 13.0407 7.7515 13.2677 7.26854C13.5026 6.7689 13.8513 6.33106 14.0861 5.8319C14.1472 5.7018 14.1471 5.64359 14.0861 5.51366ZM9.13764 7.99999C9.13764 7.3715 8.62855 6.8624 8.00005 6.8624C7.37155 6.8624 6.86246 7.3715 6.86246 7.99999C6.86246 8.62849 7.37155 9.13759 8.00005 9.13759C8.62855 9.13759 9.13764 8.62849 9.13764 7.99999ZM10.4834 7.99999C10.4834 9.37126 9.37132 10.4833 8.00005 10.4833C6.62878 10.4833 5.51674 9.37126 5.51674 7.99999C5.51674 6.62873 6.62878 5.51669 8.00005 5.51669C9.37132 5.51669 10.4834 6.62873 10.4834 7.99999Z" fill="currentColor"/></svg>',
-    tts: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.33333 2.66667L4 5.33333H1.33333V10.6667H4L7.33333 13.3333V2.66667Z" fill="currentColor"/><path d="M10.3333 5C11.1667 5.83333 11.6667 7 11.6667 8C11.6667 9 11.1667 10.1667 10.3333 11M12.6667 2.66667C14.1667 4.16667 15 6 15 8C15 10 14.1667 11.8333 12.6667 13.3333" stroke="currentColor" stroke-width="1.33" stroke-linecap="round"/></svg>',
-    regex: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 2.5H14.5L9.5 8.5V13.5L6.5 15V8.5L1.5 2.5Z"/></svg>',
-    mode: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM11.5 6a2 2 0 100-4 2 2 0 000 4zM6 7c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zM11.5 8c-.37 0-.77.03-1.19.09 1.02.73 1.69 1.7 1.69 2.91v2H16v-2c0-1.63-2.9-2.9-4.5-3z" fill="currentColor"/></svg>',
+    identity: 'user-round',
+    portrait: 'image',
+    prompt: 'square-pen',
+    model: 'cpu',
+    params: 'sliders-horizontal',
+    tts: 'volume-2',
+    regex: 'regex',
+    mode: 'users',
 };
+
+function sectionIconHtml(key) {
+    const name = SECTION_ICONS[key];
+    if (!name) return '';
+    const icons = typeof window !== 'undefined' ? window.VCPIcons : null;
+    return icons?.markup?.(name, { size: 15 })
+        || `<span class="vcp-ui-icon" style="--vcp-ui-icon-size: 15px" aria-hidden="true">${name}</span>`;
+}
 
 function renderSection(doc, { kind, key, title, tooltip, summaryId, content, contentId, sectionClass }) {
     const prefix = kind === 'agent' ? 'agent' : 'group';
@@ -180,23 +216,26 @@ function renderSection(doc, { kind, key, title, tooltip, summaryId, content, con
     const headerId = kind === 'agent'
         ? `${key}ToggleHeader`
         : `group${key[0].toUpperCase()}${key.slice(1)}ToggleHeader`;
+    // The header is a mouse target only. The chevron button is the one
+    // keyboard and screen-reader control, as with a Radix Accordion trigger;
+    // a role=button wrapper around a real button nested two controls.
     const header = el(doc, 'div', {
         class: `${prefix}-settings-section-header`,
         id: headerId,
-        role: 'button',
-        tabindex: '0',
         'aria-expanded': 'false',
     });
     const summary = el(doc, 'span', { class: `${prefix}-settings-section-summary`, id: summaryId }, '');
+    const resolvedContentId = contentId || (kind === 'agent' ? `${key}Content` : `group${key[0].toUpperCase()}${key.slice(1)}Content`);
     const toggle = el(doc, 'button', {
         type: 'button',
         id: kind === 'agent' ? `${key}ToggleBtn` : `group${key[0].toUpperCase()}${key.slice(1)}ToggleBtn`,
         class: `${prefix}-settings-toggle-btn ${prefix}-settings-section-toggle`,
         'aria-label': `切换${title}`,
         'aria-expanded': 'false',
+        'aria-controls': resolvedContentId,
     });
     toggle.innerHTML = SVG_TOGGLE;
-    const iconHtml = SECTION_ICONS[key] || '';
+    const iconHtml = sectionIconHtml(key);
     const titleChildren = [];
     if (iconHtml) {
         const iconWrapper = el(doc, 'span', { class: 'section-title-icon-wrapper', 'aria-hidden': 'true' });
@@ -211,7 +250,7 @@ function renderSection(doc, { kind, key, title, tooltip, summaryId, content, con
     header.append(titleRow, summary, toggle);
     const contentNode = el(doc, 'div', {
         class: `${prefix}-settings-section-content`,
-        id: contentId || (kind === 'agent' ? `${key}Content` : `group${key[0].toUpperCase()}${key.slice(1)}Content`)
+        id: resolvedContentId
     });
     contentNode.append(content(doc));
     section.append(header, contentNode);
@@ -281,6 +320,10 @@ function renderAgentIdentity(doc) {
         }
     });
     const controls = el(doc, 'div', { class: 'agent-style-controls', id: 'agentStyleControls' });
+    // 首页立绘放在自定义样式里、颜色开关前面：它和头像、名字一样是助手的外观
+    controls.append(el(doc, 'div', { class: 'style-control-item full-width agent-portrait-style-item' },
+        el(doc, 'span', { class: 'agent-portrait-style-title' }, '首页立绘'),
+        renderAgentPortrait(doc)));
     [['disableCustomColors', '助手页面中使用主题默认颜色'], ['useThemeColorsInChat', '会话界面中使用主题默认颜色']].forEach(([id, text]) => {
         const checkbox = el(doc, 'input', { id, type: 'checkbox', name: id });
         controls.append(el(doc, 'div', { class: 'style-control-item full-width' },
@@ -297,9 +340,73 @@ function renderAgentIdentity(doc) {
     const customCss = renderField(doc, agentFields[12]);
     const cardCss = renderField(doc, agentFields[13]);
     const chatCss = renderField(doc, agentFields[14]);
+    controls.append(...agentFields.slice(15).map(spec => renderField(doc, spec, 'style-control-item full-width')));
     controls.append(customCss, cardCss, chatCss);
     style.append(styleHeader, controls);
     return el(doc, 'div', { class: 'agent-identity-container' }, identityMain, style);
+}
+
+// 首页立绘：行为在 modules/ui-system/agent-portrait-settings.js；
+// [data-portrait-variants-slot] 留给差分立绘接入同样的「缩略图 + 上传 / 移除」行（差分暂时关着，不渲染）
+// 差分立绘的键和情绪源（modules/emotion/emotionVocabulary.js 的 EMOTIONS、STATES）一一对应，
+// 文件存成 Agent 目录里的 portrait.<键>.<扩展名>
+const PORTRAIT_VARIANT_SLOTS = Object.freeze([
+    ['neutral', '平常'], ['calm', '平静'], ['happy', '开心'], ['excited', '兴奋'],
+    ['shy', '害羞'], ['affectionate', '亲昵'], ['curious', '好奇'], ['surprised', '惊讶'],
+    ['concerned', '担心'], ['sad', '难过'], ['tired', '疲惫'], ['angry', '生气'],
+    ['thinking', '思考中（状态）'], ['tool', '调用工具（状态）'], ['error', '出错（状态）'],
+]);
+
+function renderAgentPortrait(doc) {
+    const slot = (variant, title, hint) => {
+        const inputId = `agentPortrait${variant[0].toUpperCase()}${variant.slice(1)}Input`;
+        return el(doc, 'div', { class: 'agent-portrait-slot', 'data-portrait-variant': variant, 'data-state': 'empty' },
+            el(doc, 'span', { class: 'agent-portrait-slot-thumb', 'aria-hidden': 'true' }, el(doc, 'img', { alt: '', draggable: 'false', hidden: true })),
+            el(doc, 'span', { class: 'agent-portrait-slot-text' },
+                el(doc, 'span', { class: 'agent-portrait-slot-title' }, title),
+                el(doc, 'span', { class: 'agent-portrait-slot-status', title: hint }, '未设置')),
+            el(doc, 'span', { class: 'agent-portrait-slot-actions' },
+                el(doc, 'button', { type: 'button', class: 'small-button', 'data-portrait-action': 'pick', 'aria-controls': inputId }, '上传'),
+                el(doc, 'button', { type: 'button', class: 'small-button agent-portrait-remove-btn', 'data-portrait-action': 'remove', hidden: true }, '移除')),
+            el(doc, 'input', { id: inputId, type: 'file', hidden: true, 'aria-label': `选择${title}图片` }));
+    };
+    const preview = el(doc, 'div', {
+        class: 'agent-portrait-preview',
+        id: 'agentPortraitPreview',
+        role: 'group',
+        'aria-label': '立绘预览，点按或拖动设置焦点，方向键微调',
+        'data-empty': 'true',
+    },
+        el(doc, 'img', { class: 'agent-portrait-preview-image', alt: '', draggable: 'false', hidden: true }),
+        el(doc, 'span', { class: 'agent-portrait-preview-tabs', 'aria-hidden': 'true' }),
+        el(doc, 'span', { class: 'agent-portrait-focus-marker', 'aria-hidden': 'true', hidden: true }),
+        el(doc, 'span', { class: 'agent-portrait-preview-empty' }, '还没有立绘，首页显示头像和名字'));
+    const themes = el(doc, 'div', { class: 'agent-portrait-segmented', role: 'group', 'aria-label': '选择预览和位置编辑的主题' },
+        el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'default', 'aria-pressed': 'true' }, '深色'),
+        el(doc, 'button', { type: 'button', 'data-portrait-preview-theme': 'light', 'aria-pressed': 'false' }, '浅色'));
+    const height = el(doc, 'div', { class: 'agent-portrait-height' },
+        el(doc, 'label', { for: 'agentPortraitHeight' }, '立绘渲染高度'),
+        el(doc, 'div', { class: 'slider-container' },
+            el(doc, 'input', { id: 'agentPortraitHeight', type: 'range', min: 180, max: 360, step: 4, value: 248 }),
+            el(doc, 'span', { id: 'agentPortraitHeightValue', class: 'slider-value-pill' }, '248px')));
+    return el(doc, 'div', { class: 'agent-portrait-settings', id: 'agentPortraitSettings' },
+        el(doc, 'div', { class: 'agent-portrait-header-choice' },
+            el(doc, 'span', { id: 'agentPortraitHeaderLabel', class: 'agent-portrait-header-label' }, '首页顶部显示'),
+            el(doc, 'div', { class: 'agent-portrait-segmented', role: 'group', 'aria-labelledby': 'agentPortraitHeaderLabel' },
+                el(doc, 'button', { type: 'button', 'data-portrait-header': 'portrait', 'aria-pressed': 'false' }, '立绘'),
+                el(doc, 'button', { type: 'button', 'data-portrait-header': 'avatar', 'aria-pressed': 'true' }, '头像'))),
+        el(doc, 'p', { class: 'agent-portrait-hint' }, '选「立绘」时，侧栏首页顶部是一张向下渐隐的立绘，不显示头像和名字；选「头像」时立绘留着但不显示。可以用图片、动图（GIF、WebP、APNG）或视频（MP4、WebM，静音循环播放）。改动点保存后生效。'),
+        preview,
+        el(doc, 'div', { class: 'agent-portrait-preview-toolbar' }, themes,
+            el(doc, 'button', { type: 'button', id: 'agentPortraitResetBtn', class: 'small-button' }, '重置当前主题位置')),
+        el(doc, 'p', { class: 'agent-portrait-hint' }, '深色、浅色的位置分别保存：先切换上方主题，再点按、拖动或用方向键调整位置。未上传浅色版时也可单独调整浅色位置。立绘渲染高度两种主题共用，只改变立绘本身，不移动下方组件；重置只恢复当前主题的位置和共用高度。'),
+        slot('default', '立绘', '深色主题和没有浅色版时都用这张'),
+        slot('light', '浅色主题立绘（可选）', '浅色主题优先用这张'),
+        PORTRAIT_EXPRESSIONS_ENABLED && el(doc, 'details', { class: 'agent-portrait-variants', 'data-portrait-variants-slot': '' },
+            el(doc, 'summary', { class: 'agent-portrait-variants-summary' }, '表情差分（可选）'),
+            el(doc, 'p', { class: 'agent-portrait-hint' }, '对话时立绘会跟着回复的情绪换成对应的差分；缺哪张就用相近情绪的图，都没有就用默认立绘。思考、调用工具、出错时优先显示对应的状态图。'),
+            ...PORTRAIT_VARIANT_SLOTS.map(([variant, title]) => slot(variant, title, '没有这张时用相近情绪的差分或默认立绘'))),
+        height);
 }
 
 function renderAgentParams(doc) {
@@ -413,17 +520,53 @@ function renderGroupSectionContent(doc, key) {
             el(doc, 'div', { class: 'agent-identity-main group-identity-main' },
                 el(doc, 'div', { class: 'agent-avatar-wrapper group-avatar-wrapper' }, el(doc, 'img', { id: 'groupAvatarPreview', src: 'assets/default_group_avatar.png', alt: '群组头像预览', class: 'agent-avatar-display group-avatar-display', width: 60, height: 60 }), el(doc, 'label', { for: 'groupAvatarInput', class: 'avatar-upload-overlay', 'aria-label': '更换群组头像' }, buildCameraIcon(doc)), el(doc, 'input', { id: 'groupAvatarInput', type: 'file', accept: 'image/*', hidden: true })),
                 renderField(doc, groupFields[0], 'agent-name-wrapper group-name-wrapper')),
-            el(doc, 'div', { class: 'group-settings-field-shell' }, el(doc, 'label', { for: 'groupMembersList' }, '群组成员', makeHelpBadge(doc, '勾选要加入此群聊的助手成员。')), el(doc, 'div', { id: 'groupMembersList', class: 'group-members-list-container' })));
+            el(doc, 'details', { class: 'group-settings-field-shell' },
+                el(doc, 'summary', {}, '自定义样式设置'),
+                ...groupFields.slice(16).map(spec => renderField(doc, spec, 'group-settings-field-shell'))),
+            el(doc, 'div', { class: 'group-settings-field-shell' }, el(doc, 'label', { id: 'groupMembersListLabel' }, '群组成员', makeHelpBadge(doc, '勾选要加入此群聊的助手成员。')), el(doc, 'div', { id: 'groupMembersList', class: 'group-members-list-container', role: 'group', 'aria-labelledby': 'groupMembersListLabel' })));
     }
     if (key === 'mode') {
         const mode = renderField(doc, groupFields[1], 'group-settings-field-shell');
         const tags = renderField(doc, groupFields[2], 'group-settings-field-shell');
-        tags.append(el(doc, 'div', { class: 'group-settings-field-shell group-member-tags-shell' }, el(doc, 'label', { class: 'group-settings-field-label', for: 'memberTagsInputs' }, '成员 Tags', makeHelpBadge(doc, '为成员配置触发标签（逗号分隔），在自然随机模式下匹配。')), el(doc, 'div', { id: 'memberTagsInputs' })));
-        const seqLabel = el(doc, 'label', { class: 'group-settings-field-label', for: 'sequentialSpeakerOrderList' }, '顺序发言次序', makeHelpBadge(doc, '拖拽成员或点击上下箭头调整发言顺序。新加入且尚未排序的成员会自动追加到末尾。'));
-        return el(doc, 'div', { class: 'group-settings-card-shell' }, mode, el(doc, 'div', { id: 'sequentialOrderContainer', class: 'group-settings-field-shell', hidden: true }, seqLabel, el(doc, 'div', { id: 'sequentialSpeakerOrderList', class: 'sequential-speaker-order-list', role: 'list', 'aria-label': '顺序发言次序' })), el(doc, 'div', { id: 'memberTagsContainer', class: 'group-settings-field-shell', hidden: true }, tags));
+        tags.append(el(doc, 'div', { class: 'group-settings-field-shell group-member-tags-shell' }, el(doc, 'label', { class: 'group-settings-field-label', id: 'memberTagsInputsLabel' }, '成员 Tags', makeHelpBadge(doc, '为成员配置触发标签（逗号分隔），在自然随机模式下匹配。')), el(doc, 'div', { id: 'memberTagsInputs', role: 'group', 'aria-labelledby': 'memberTagsInputsLabel' })));
+        const seqLabel = el(doc, 'label', { class: 'group-settings-field-label' }, '顺序发言次序', makeHelpBadge(doc, '拖拽成员或点击上下箭头调整发言顺序。新加入且尚未排序的成员会自动追加到末尾。'));
+        const jevSettings = el(doc, 'div', { id: 'jevModeSettingsContainer', class: 'group-settings-field-shell', hidden: true },
+            renderField(doc, groupFields[6], 'group-settings-field-shell'),
+            el(doc, 'div', { class: 'group-settings-grid' },
+                ...groupFields.slice(7, 14).map(spec => renderField(doc, spec, 'group-settings-field-shell'))),
+            el(doc, 'div', { class: 'group-settings-field-shell' },
+                el(doc, 'label', { class: 'group-settings-field-label', id: 'jevMemberStylesInputsLabel' }, '成员发言触发事件风格', makeHelpBadge(doc, '为每位成员填写自然语言描述，告诉 JEV 在什么话题和情境下应提高其发言权重。')),
+                el(doc, 'div', { id: 'jevMemberStylesInputs', role: 'group', 'aria-labelledby': 'jevMemberStylesInputsLabel' })));
+        return el(doc, 'div', { class: 'group-settings-card-shell' }, mode, el(doc, 'div', { id: 'sequentialOrderContainer', class: 'group-settings-field-shell', hidden: true }, seqLabel, el(doc, 'div', { id: 'sequentialSpeakerOrderList', class: 'sequential-speaker-order-list', role: 'list', 'aria-label': '顺序发言次序' })), el(doc, 'div', { id: 'memberTagsContainer', class: 'group-settings-field-shell', hidden: true }, tags), jevSettings);
     }
     if (key === 'model') {
-        return el(doc, 'div', { class: 'group-settings-card-shell' }, el(doc, 'div', { class: 'group-settings-switch-row' }, el(doc, 'label', { for: 'groupUseUnifiedModel' }, '启用群组统一模型'), el(doc, 'label', { class: 'switch', for: 'groupUseUnifiedModel', 'aria-label': '启用群组统一模型' }, el(doc, 'input', { id: 'groupUseUnifiedModel', type: 'checkbox' }), el(doc, 'span', { class: 'slider round' }))), el(doc, 'div', { id: 'groupUnifiedModelContainer', class: 'group-settings-field-shell', hidden: true, 'data-schema-field': groupFields[3].id, 'data-schema-depends-on': JSON.stringify(groupFields[3].dependsOn) }, el(doc, 'div', { class: 'model-input-container' }, renderControl(doc, groupFields[3]), el(doc, 'button', { type: 'button', id: 'openGroupModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '打开模型选择器' }, el(doc, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more')))));
+        const contextWindowToggleSpec = groupFields[14];
+        const contextWindowSizeSpec = groupFields[15];
+        return el(doc, 'div', { class: 'group-settings-card-shell' },
+            el(doc, 'div', { class: 'group-settings-switch-row' },
+                el(doc, 'label', { for: 'groupUseUnifiedModel' }, '启用群组统一模型'),
+                el(doc, 'label', { class: 'switch', for: 'groupUseUnifiedModel', 'aria-label': '启用群组统一模型' },
+                    el(doc, 'input', { id: 'groupUseUnifiedModel', type: 'checkbox' }),
+                    el(doc, 'span', { class: 'slider round' }))),
+            el(doc, 'div', { id: 'groupUnifiedModelContainer', class: 'group-settings-field-shell', hidden: true, 'data-schema-field': groupFields[3].id, 'data-schema-depends-on': JSON.stringify(groupFields[3].dependsOn) },
+                el(doc, 'div', { class: 'model-input-container' },
+                    renderControl(doc, groupFields[3]),
+                    el(doc, 'button', { type: 'button', id: 'openGroupModelSelectBtn', class: 'small-button model-picker-toggle-btn', title: '选择模型', 'aria-label': '打开模型选择器' },
+                        el(doc, 'span', { class: 'vcp-ui-icon', 'aria-hidden': 'true' }, 'expand_more')))),
+            el(doc, 'div', { class: 'group-settings-switch-row', 'data-schema-field': contextWindowToggleSpec.id },
+                el(doc, 'label', { for: contextWindowToggleSpec.id },
+                    contextWindowToggleSpec.label,
+                    makeHelpBadge(doc, contextWindowToggleSpec.tooltip)),
+                el(doc, 'label', { class: 'switch', for: contextWindowToggleSpec.id, 'aria-label': contextWindowToggleSpec.label },
+                    renderControl(doc, contextWindowToggleSpec),
+                    el(doc, 'span', { class: 'slider round' }))),
+            el(doc, 'div', {
+                id: 'groupContextMessageWindowContainer',
+                class: 'group-settings-field-shell',
+                hidden: true,
+                'data-schema-field': contextWindowSizeSpec.id,
+                'data-schema-depends-on': JSON.stringify(contextWindowSizeSpec.dependsOn)
+            }, labelFor(doc, contextWindowSizeSpec), renderControl(doc, contextWindowSizeSpec)));
     }
     const groupPrompt = renderField(doc, groupFields[4]);
     groupPrompt.querySelector('textarea')?.setAttribute('placeholder', '例如：这里是用户家的聊天空间，成员应保持协作与角色分工。');
@@ -459,7 +602,11 @@ export function renderGroupSettingsSurface(host, doc = host?.ownerDocument || do
     const form = el(doc, 'form', { id: 'groupSettingsForm' });
     form.append(el(doc, 'input', { type: 'hidden', id: 'editingGroupId' }));
     [['identity', '基础信息', 'groupIdentitySummary'], ['mode', '群聊模式', 'groupModeSummary'], ['model', '模型设置', 'groupModelSummary'], ['prompt', '系统提示词', 'groupPromptSummary']].forEach(([key, title, summaryId]) => form.append(renderSection(doc, { kind: 'group', key, title, summaryId, content: d => renderGroupSectionContent(d, key) })));
-    form.append(el(doc, 'div', { class: 'form-actions' }, el(doc, 'button', { type: 'submit' }, '保存群组设置'), el(doc, 'div', { class: 'delete-button-container' }, el(doc, 'button', { type: 'button', id: 'deleteGroupBtn', class: 'danger-button' }, '删除此群组'))));
+    form.append(el(doc, 'div', { class: 'form-actions' },
+        el(doc, 'div', { id: 'groupFormSaveStateIndicator', class: 'form-save-state-indicator', 'data-state': 'done' },
+            el(doc, 'span', { class: 'form-state-dot-host' }),
+            el(doc, 'span', { class: 'form-state-dot-label' }, '已保存')),
+        el(doc, 'button', { type: 'submit' }, '保存群组设置'), el(doc, 'div', { class: 'delete-button-container' }, el(doc, 'button', { type: 'button', id: 'deleteGroupBtn', class: 'danger-button' }, '删除此群组'))));
     form.addEventListener('change', () => {
         syncSchemaDependencies(form);
     });

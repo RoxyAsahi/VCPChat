@@ -856,7 +856,7 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .gr
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .group-settings-section)[data-section-key="identity"]:not(.collapsed) :is(.agent-identity-container .agent-style-collapsible-container, .group-settings-identity-shell .group-settings-field-shell) {
-    max-height: 600px;
+    max-height: 4000px;
     opacity: 1;
     margin-top: 6px;
     padding-top: 6px;
@@ -869,6 +869,12 @@ html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-settings-section, .gr
                 margin-top 220ms ease,
                 padding-top 220ms ease,
                 visibility 0s 0s;
+}
+
+/* The group member picker expands to its natural height so every Agent remains
+   visible; the settings sidebar itself owns scrolling for the complete form. */
+html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-section[data-section-key="identity"]:not(.collapsed) .group-settings-identity-shell .group-settings-field-shell {
+    max-height: none;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface :is(.agent-identity-container, .group-settings-identity-shell)::before {
@@ -1164,7 +1170,8 @@ html .vcp-ui-scope .vcp-settings-schema-surface .agent-style-collapsible-contain
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 600px;
+    /* 里面有首页立绘（预览和图片槽），给足高度只为保留展开动画 */
+    max-height: 4000px;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -1948,8 +1955,8 @@ html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-item .tts-director
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .tts-director-item .tts-director-action-button svg {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     display: block;
     flex-shrink: 0;
     pointer-events: none;
@@ -2041,6 +2048,71 @@ html .vcp-ui-scope .vcp-settings-schema-surface .group-settings-card-shell {
     gap: var(--vcp-settings-gap);
     min-width: 0;
     padding: 4px 0 6px;
+}
+
+/* JEV group mode uses a deliberately vertical form in the narrow settings
+   sidebar. Do not inherit generic multi-column grid geometry here. */
+html .vcp-ui-scope .vcp-settings-schema-surface #jevModeSettingsContainer {
+    width: 100%;
+    min-width: 0;
+    gap: 10px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface #jevModeSettingsContainer > .group-settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface #jevModeSettingsContainer > .group-settings-grid > .group-settings-field-shell {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface #jevModeSettingsContainer input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface #jevMemberStylesInputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item.jev-member-style-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    min-height: 0;
+    padding: 8px;
+    gap: 5px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item.jev-member-style-item label {
+    max-width: none;
+    padding: 0;
+    border-right: 0;
+    white-space: normal;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .member-tag-input-item.jev-member-style-item textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 76px;
+    margin: 0;
+    padding: 6px 8px;
+    border: 0.5px solid var(--vcp-settings-border);
+    background: var(--vcp-settings-input);
+    resize: vertical;
+    box-sizing: border-box;
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .group-members-list-container,
@@ -2318,8 +2390,8 @@ html .vcp-ui-scope .vcp-settings-schema-surface .sequential-order-move-btn:activ
 }
 
 html .vcp-ui-scope .vcp-settings-schema-surface .sequential-order-move-btn svg {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     display: block;
     flex-shrink: 0;
     pointer-events: none;
@@ -2484,90 +2556,75 @@ html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button {
         transform 0.2s ease;
 }
 
-html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
-    border: none;
-    background: var(--vcp-settings-accent, var(--highlight-text));
-    color: var(--vcp-ui-on-accent);
-    font-weight: 600;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, var(--vcp-ui-on-accent) 12%);
-    background-image: none;
-    color: var(--vcp-ui-on-accent);
-    border: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-    transform: translateY(-0.5px);
-    filter: none;
-}
-
-html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, var(--vcp-ui-bg-primary) 12%);
-    border: none;
-    color: var(--vcp-ui-on-accent);
-    box-shadow: none;
-    transform: translateY(0) scale(0.985);
-}
-
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
-    border: none;
-    background: var(--vcp-settings-accent, var(--highlight-text));
-    color: var(--vcp-ui-on-accent);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-}
-
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, var(--vcp-ui-bg-primary) 12%);
-    border: none;
-    color: var(--vcp-ui-on-accent);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
-    transform: translateY(-0.5px);
-}
-
-:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 78%, var(--vcp-ui-bg-primary) 22%);
-    border: none;
-    color: var(--vcp-ui-on-accent);
-    box-shadow: none;
-    transform: translateY(0) scale(0.985);
-}
-
+/* The floating save control is a navigation-material consumer. Keep these
+   declarations wired to the same outputs as the Next shell so Theme/Solid and
+   the Vibrancy/Mica/Acrylic/Liquid recipes update it without a parallel skin. */
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"],
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"],
 :is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"] {
-    border: none;
-    background: var(--vcp-settings-accent, var(--highlight-text));
-    color: var(--vcp-ui-on-accent);
+    border: 1px solid color-mix(
+        in srgb,
+        var(--next-border, var(--vcp-settings-border)) 72%,
+        var(--vcp-settings-accent, var(--highlight-text)) 28%
+    );
+    background-color: var(
+        --next-shell-bg,
+        color-mix(in srgb, var(--vcp-settings-surface) var(--vcp-material-opacity, 68%), transparent)
+    );
+    background-image: var(--next-material-sheen, none);
+    color: var(--vcp-settings-accent, var(--highlight-text));
     font-weight: 600;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
+    backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    -webkit-backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    box-shadow:
+        0 6px 16px color-mix(in srgb, var(--vcp-ui-bg-primary) var(--vcp-material-shadow-color, 7%), transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--vcp-ui-on-accent) var(--vcp-material-sheen-soft, 6%), transparent);
 }
 
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover,
 :is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:hover {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, var(--vcp-ui-on-accent) 12%);
-    background-image: none;
-    color: var(--vcp-ui-on-accent);
-    border: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    box-shadow: none;
+    border-color: color-mix(
+        in srgb,
+        var(--vcp-settings-accent, var(--highlight-text)) 52%,
+        var(--next-border, var(--vcp-settings-border))
+    );
+    background-color: color-mix(
+        in srgb,
+        var(--vcp-settings-accent, var(--highlight-text)) 12%,
+        var(--next-shell-bg, var(--vcp-settings-surface))
+    );
+    background-image: var(--next-material-sheen, none);
+    color: var(--vcp-settings-accent, var(--highlight-text));
+    backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    -webkit-backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    box-shadow:
+        0 8px 20px color-mix(in srgb, var(--vcp-ui-bg-primary) var(--vcp-material-shadow-color, 7%), transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--vcp-ui-on-accent) var(--vcp-material-sheen-soft, 6%), transparent);
     transform: translateY(-0.5px);
     filter: none;
 }
 
+html .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active,
+:is(html, body, html body):is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active,
 :is(html, body, html body):is([data-vcp-theme="dark"], .dark-theme) .vcp-ui-scope .vcp-settings-schema-surface .form-actions button[type="submit"]:active {
-    background: color-mix(in srgb, var(--vcp-settings-accent, var(--highlight-text)) 88%, var(--vcp-ui-bg-primary) 12%);
-    border: none;
-    color: var(--vcp-ui-on-accent);
-    box-shadow: none;
+    border-color: color-mix(
+        in srgb,
+        var(--vcp-settings-accent, var(--highlight-text)) 62%,
+        var(--next-border, var(--vcp-settings-border))
+    );
+    background-color: color-mix(
+        in srgb,
+        var(--vcp-settings-accent, var(--highlight-text)) 18%,
+        var(--next-shell-bg, var(--vcp-settings-surface))
+    );
+    background-image: var(--next-material-sheen, none);
+    color: var(--vcp-settings-accent, var(--highlight-text));
+    backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    -webkit-backdrop-filter: var(--next-backdrop-filter, blur(18px) saturate(128%));
+    box-shadow:
+        0 3px 10px color-mix(in srgb, var(--vcp-ui-bg-primary) var(--vcp-material-shadow-color, 7%), transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--vcp-ui-on-accent) var(--vcp-material-sheen-soft, 6%), transparent);
     transform: translateY(0) scale(0.985);
 }
 
@@ -3049,6 +3106,33 @@ html .vcp-ui-scope .invite-agent-button img {
     flex-shrink: 0;
 }
 
+html .vcp-ui-scope .jev-group-control-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 13px 6px 7px;
+    line-height: 1;
+    text-align: center;
+}
+
+html .vcp-ui-scope .jev-group-control-button .jev-group-control-icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    margin: 0;
+    flex: 0 0 16px;
+    transform: translateX(2px);
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .jev-group-control-button span {
+    flex: 0 1 auto;
+    line-height: 16px;
+}
+
 html .vcp-ui-scope .invite-agent-button span {
     white-space: nowrap;
     overflow: hidden;
@@ -3067,3 +3151,293 @@ html:is([data-vcp-theme="light"], .light-theme) .vcp-ui-scope .invite-agent-butt
     border-color: var(--accent-bg-light, var(--highlight-text));
 }
 
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-style-title {
+    font-size: var(--vcp-settings-font-sub);
+    font-weight: 500;
+    color: var(--secondary-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-style-item {
+    gap: 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* --- 助手设置「首页立绘」：预览模拟侧栏首页头部（同样的渐隐），点按或拖动设置焦点 --- */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-hint {
+    margin: 0;
+    font-size: var(--vcp-settings-font-helper, 12px);
+    line-height: 1.5;
+    color: var(--vcp-settings-muted);
+}
+
+/* 宽高比按 360px 宽的侧栏算，高度跟着「立绘高度」走 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 360 / var(--side-pane-portrait-height-value, 248);
+    border: 0.5px solid var(--vcp-settings-border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--vcp-settings-input);
+    touch-action: none;
+    cursor: crosshair;
+    outline: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview[data-empty="true"] {
+    aspect-ratio: auto;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-style: dashed;
+    cursor: default;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vcp-settings-accent) 60%, transparent);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: var(--side-pane-portrait-position, 50% 22%);
+    pointer-events: none;
+    user-select: none;
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 48%, color-mix(in srgb, black 55%, transparent) 72%, color-mix(in srgb, black 16%, transparent) 88%, transparent calc((1 - 8 / var(--side-pane-portrait-height-value, 248)) * 100%));
+    mask-image: linear-gradient(to bottom, black 0%, black 48%, color-mix(in srgb, black 55%, transparent) 72%, color-mix(in srgb, black 16%, transparent) 88%, transparent calc((1 - 8 / var(--side-pane-portrait-height-value, 248)) * 100%));
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-image[hidden],
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-focus-marker[hidden] {
+    display: none;
+}
+
+/* 首页分类切换条固定在原 200px 立绘时的位置，不随渲染高度移动（按预览比例缩放）。 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-tabs {
+    position: absolute;
+    left: 50%;
+    top: calc(124 / var(--side-pane-portrait-height-value, 248) * 100%);
+    width: 42%;
+    height: calc(30 / var(--side-pane-portrait-height-value, 248) * 100%);
+    border-radius: 999px;
+    transform: translateX(-50%);
+    background: color-mix(in srgb, var(--vcp-settings-text) 14%, transparent);
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview[data-empty="true"] .agent-portrait-preview-tabs {
+    display: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-focus-marker {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--vcp-ui-on-accent);
+    left: var(--side-pane-portrait-focus-x, 50%);
+    top: var(--side-pane-portrait-focus-y, 22%);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px color-mix(in srgb, black 45%, transparent);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-empty {
+    padding: 0 12px;
+    font-size: var(--vcp-settings-font-helper, 12px);
+    color: var(--vcp-settings-muted);
+    text-align: center;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview:not([data-empty="true"]) .agent-portrait-preview-empty {
+    display: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* 设置侧栏很窄：按钮文字不折行，放不下时整组换到下一行 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-preview-toolbar > .small-button {
+    flex: none;
+    white-space: nowrap;
+}
+
+/* 分段按钮（首页顶部显示立绘还是头像、预览主题）：选中的那一格用强调色实底，深浅主题下都一眼看得出 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented {
+    display: inline-flex;
+    flex: none;
+    gap: 2px;
+    padding: 2px;
+    border: 0.5px solid var(--vcp-settings-border);
+    border-radius: 7px;
+    background: var(--vcp-settings-input);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button {
+    min-height: 22px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 8px;
+    line-height: 22px;
+    white-space: nowrap;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--vcp-settings-muted);
+    font: inherit;
+    font-size: var(--vcp-settings-font-meta, 12px);
+    cursor: pointer;
+    transition: background-color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard), color var(--vcp-motion-duration-fast) var(--vcp-motion-ease-standard);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button:not([aria-pressed="true"]):not(:disabled):hover {
+    color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button[aria-pressed="true"] {
+    background: var(--vcp-settings-accent);
+    color: var(--vcp-ui-on-accent);
+    font-weight: 600;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-segmented button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--vcp-settings-accent) 60%, transparent);
+    outline-offset: 1px;
+}
+
+/* 首页顶部显示立绘还是头像 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-choice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-header-label {
+    font-size: var(--vcp-settings-font-sub);
+    color: var(--vcp-settings-text);
+}
+
+/* 选了头像：立绘还留着、还能调，预览淡一点表示首页现在不用它 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings[data-header="avatar"][data-has-portrait="true"] .agent-portrait-preview {
+    opacity: 0.5;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas: "thumb text" "thumb actions";
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 4px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb {
+    grid-area: thumb;
+    width: 40px;
+    height: 40px;
+    border: 0.5px dashed var(--vcp-settings-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--vcp-settings-input);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot:not([data-state="empty"]) .agent-portrait-slot-thumb {
+    border-style: solid;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb :is(img, video) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-thumb :is(img, video)[hidden] {
+    display: none;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot[data-state="removing"] .agent-portrait-slot-thumb :is(img, video) {
+    opacity: 0.35;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-text {
+    grid-area: text;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-title {
+    overflow: hidden;
+    color: var(--vcp-settings-text);
+    font-size: var(--vcp-settings-font-sub, 13px);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-status {
+    color: var(--vcp-settings-muted);
+    font-size: var(--vcp-settings-font-meta, 12px);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot:is([data-state="staged"], [data-state="removing"]) .agent-portrait-slot-status {
+    color: var(--vcp-settings-accent);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-actions {
+    grid-area: actions;
+    display: flex;
+    gap: 6px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-slot-actions [hidden],
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants[hidden] {
+    display: none;
+}
+
+/* 表情差分：默认收起，展开后是和默认立绘同样的一排排上传行 */
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--vcp-settings-border);
+    padding-top: 8px;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-variants-summary {
+    color: var(--vcp-settings-text);
+    font-size: var(--vcp-settings-font-meta, 12px);
+    cursor: pointer;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings button:disabled,
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings input:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-height label {
+    font-size: var(--vcp-settings-font-sub, 13px);
+    color: var(--vcp-settings-text);
+}
+
+html .vcp-ui-scope .vcp-settings-schema-surface .agent-portrait-settings[data-has-portrait="false"] :is(.agent-portrait-preview-toolbar, .agent-portrait-height) {
+    display: none;
+}

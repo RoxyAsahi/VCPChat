@@ -26,11 +26,15 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
     const networkNotesPaths = Array.from(pathInputs).map(input => input.value.trim()).filter(path => path);
 
     const voiceMode = getElementById('voiceModeNetwork')?.checked ? 'network' : 'local';
-    const allowedVoiceInputModes = new Set(['windows_voice_typing', 'right_alt_hold']);
+    const allowedVoiceInputModes = new Set(['windows_voice_typing', 'right_alt_hold', 'local_sensevoice']);
     const selectedVoiceInputMode = getElementById('voiceInputMode')?.value;
     const voiceInputMode = allowedVoiceInputModes.has(selectedVoiceInputMode)
         ? selectedVoiceInputMode
         : 'windows_voice_typing';
+    const selectedLocalSttLanguage = getElementById('localSttLanguage')?.value;
+    const localSttLanguage = ['auto', 'zh', 'en', 'yue', 'ja', 'ko'].includes(selectedLocalSttLanguage)
+        ? selectedLocalSttLanguage
+        : 'auto';
     const voiceInputShortcut = (
         getElementById('voiceInputShortcut')?.value.trim()
         || 'F7'
@@ -46,6 +50,15 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
         : 500;
     const streamAnimationCustomCss = (getElementById('streamAnimationCustomCss')?.value || '').slice(0, 4000);
 
+    const rawInitialIdle = Number(getElementById('mainChatVoiceInitialIdleTimeout')?.value);
+    const mainChatVoiceInitialIdleTimeout = Number.isFinite(rawInitialIdle)
+        ? Math.min(12, Math.max(1, rawInitialIdle))
+        : 5.5;
+    const rawQuiet = Number(getElementById('mainChatVoiceQuietTimeout')?.value);
+    const mainChatVoiceQuietTimeout = Number.isFinite(rawQuiet)
+        ? Math.min(15, Math.max(0.5, rawQuiet))
+        : 2.5;
+
     const newSettings = {
         userName: getElementById('userName').value.trim() || '用户',
         userAvatarBorderColor: getElementById('userAvatarBorderColor')?.value || '#3d5a80',
@@ -60,6 +73,21 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
         enableRegenerateConfirmation: getElementById('enableRegenerateConfirmation').checked,
         vcpServerUrl: settingsManager.completeVcpUrl(getElementById('vcpServerUrl').value.trim()),
         vcpApiKey: getElementById('vcpApiKey').value,
+        jevEnabled: getElementById('jevEnabled').checked,
+        jevProvider: ['typesafe', 'openrouter'].includes(getElementById('jevProvider').value)
+            ? getElementById('jevProvider').value
+            : 'typesafe',
+        jevApiUrl: getElementById('jevApiUrl').value.trim(),
+        jevApiKey: getElementById('jevApiKey').value.trim(),
+        jevModel: getElementById('jevModel').value.trim(),
+        jevTimeoutMs: Math.min(300000, Math.max(1000, parseInt(getElementById('jevTimeoutMs').value, 10))) || 30000,
+        jevMaxRetries: Number.isFinite(parseInt(getElementById('jevMaxRetries').value, 10))
+            ? Math.min(10, Math.max(0, parseInt(getElementById('jevMaxRetries').value, 10)))
+            : 2,
+        jevRetryBaseDelayMs: Math.min(30000, Math.max(1, parseInt(getElementById('jevRetryBaseDelayMs').value, 10))) || 500,
+        jevProxyUrl: getElementById('jevProxyUrl').value.trim(),
+        jevHttpReferer: getElementById('jevHttpReferer').value.trim(),
+        jevAppTitle: getElementById('jevAppTitle').value.trim() || 'VCPChat',
         fileKey: getElementById('fileKey')?.value || '',
         vcpLogUrl: getElementById('vcpLogUrl').value.trim(),
         vcpLogKey: getElementById('vcpLogKey').value.trim(),
@@ -121,6 +149,7 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
         ),
         enableUserChatBubbleUi: getElementById('enableUserChatBubbleUi')?.checked !== false,
         showUserMetaInChatBubbleUi: getElementById('showUserMetaInChatBubbleUi')?.checked !== false,
+        enableTurnNavigator: getElementById('enableTurnNavigator')?.checked !== false,
         chatBubbleMaxWidthDefault: clampBubbleWidthPercent(currentSettings.chatBubbleMaxWidthDefault, 82),
         chatBubbleMaxWidthNotifications: clampBubbleWidthPercent(currentSettings.chatBubbleMaxWidthNotifications, 90),
         chatBubbleMaxWidthNarrow: clampBubbleWidthPercent(currentSettings.chatBubbleMaxWidthNarrow, 85),
@@ -135,10 +164,16 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
         assistantAgent: getElementById('assistantAgent').value,
         voiceMode,
         voiceInputMode,
+        localSttLanguage,
         voiceInputShortcut,
+        mainChatVoiceInitialIdleTimeout,
+        mainChatVoiceQuietTimeout,
+        mainChatVoiceClearPhrase: getElementById('mainChatVoiceClearPhrase')?.value.trim() || '',
+        mainChatVoiceSendPhrase: getElementById('mainChatVoiceSendPhrase')?.value.trim() || '',
         voiceLocalSettings: {
             sovitsUrl: getElementById('voiceLocalSovitsUrl')?.value.trim() || '',
-            sovitsKey: getElementById('voiceLocalSovitsKey')?.value || ''
+            sovitsKey: getElementById('voiceLocalSovitsKey')?.value || '',
+            cacheEnabled: getElementById('voiceLocalCacheEnabled')?.checked !== false
         },
         voiceNetworkSettings: {
             providerUrl: getElementById('voiceNetworkProviderUrl')?.value.trim() || '',
@@ -155,7 +190,7 @@ function legacyCollect({ doc, currentSettings, settingsManager, getAppearance, n
     return newSettings;
 }
 
-// —— 测试环境：八分区渲染进同一张表单 —— //
+// —— 测试环境：九分区渲染进同一张表单 —— //
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://localhost/' });
 global.document = dom.window.document;
 global.CustomEvent = dom.window.CustomEvent;
@@ -275,6 +310,20 @@ function baseCurrentSettings() {
 
 const form = renderAllSections();
 
+// These opt-in fields did not exist in the historical collector. Keep its
+// oracle unchanged and compare every pre-existing field without them.
+function historicalPayload(payload) {
+    const profile = {...payload.appearanceProfile};
+    delete profile.toolPresentation;
+    delete profile.toolExpansion;
+    delete profile.toolBubbleMotion;
+    const historical = {...payload, appearanceProfile: profile};
+    for (const key of ['enableContextCompaction', 'contextCompactionModel', 'contextCompactionPrompt', 'contextCompactionSendPrompt', 'contextCompactionMainPrompt']) {
+        delete historical[key];
+    }
+    return historical;
+}
+
 test('金测：随机灌值五轮，新收集器与旧收集器载荷逐键等价', () => {
     for (const seed of [11, 2024, 33333, 777777, 909090909]) {
         const rng = mulberry32(seed);
@@ -296,7 +345,7 @@ test('金测：随机灌值五轮，新收集器与旧收集器载荷逐键等�
         const scope = makeScope(currentSettings);
         const legacy = legacyCollect({ ...scope });
         const collected = collectSettings(schemaSurfaceSections(), { form, ...scope });
-        assert.deepStrictEqual(collected, legacy, `seed=${seed} 载荷不一致`);
+        assert.deepStrictEqual(historicalPayload(collected), legacy, `seed=${seed} 载荷不一致`);
     }
 });
 
@@ -306,7 +355,7 @@ test('金测：未灌值的新渲染表单与旧收集器等价（schema 默认�
     const scope = makeScope(currentSettings);
     const legacy = legacyCollect({ ...scope });
     const collected = collectSettings(schemaSurfaceSections(), { form, ...scope });
-    assert.deepStrictEqual(collected, legacy);
+    assert.deepStrictEqual(historicalPayload(collected), legacy);
 });
 
 test('值语义特例：parseInt||fallback 的 0 兜底、钳位顺序、白名单', () => {
@@ -318,11 +367,17 @@ test('值语义特例：parseInt||fallback 的 0 兜底、钳位顺序、白名�
     form.querySelector('#middleClickAdvancedDelay').value = '0';
     form.querySelector('#streamAnimationDurationMs').value = '0';
     form.querySelector('#contextSanitizerDepth').value = '0';
+    form.querySelector('#jevTimeoutMs').value = '500';
+    form.querySelector('#jevMaxRetries').value = '99';
+    form.querySelector('#jevRetryBaseDelayMs').value = '0';
     let payload = run();
     assert.equal(payload.flowlockContinueDelay, 5);
     assert.equal(payload.middleClickAdvancedDelay, 1000);
     assert.equal(payload.streamAnimationDurationMs, 100); // Number('0')=0 有限 → 取整钳位，不走兜底
     assert.equal(payload.contextSanitizerDepth, 0);       // 0||0 === 0，兜底不改变结果
+    assert.equal(payload.jevTimeoutMs, 1000);
+    assert.equal(payload.jevMaxRetries, 10);
+    assert.equal(payload.jevRetryBaseDelayMs, 1);
 
     form.querySelector('#streamAnimationDurationMs').value = 'abc';
     form.querySelector('#middleClickAdvancedDelay').value = '-20';
@@ -440,4 +495,20 @@ test('值语义通道：rust/论坛/头像字段不进全量载荷，通道清�
     assert.ok(SAVE_CHANNEL_MANIFEST.rust.fields.includes('rustRuleMode'));
     assert.ok(SAVE_CHANNEL_MANIFEST.forum.fields.includes('adminUsername'));
     assert.ok(SAVE_CHANNEL_MANIFEST.avatar.fields.includes('userAvatarInput'));
+});
+
+
+test('上下文压缩设置独立保存模型、引擎提示词与两类发送提示词', () => {
+    form.querySelector('#enableContextCompaction').checked = true;
+    form.querySelector('#contextCompactionModel').value = '  compressor-model  ';
+    const values = {
+        contextCompactionPrompt: '  引擎职责\n只输出快照  ',
+        contextCompactionSendPrompt: '  压缩模型专用 {{conversation_history}}  ',
+        contextCompactionMainPrompt: '  主AI接续 {{context_checkpoint}} {{latest_diaries}}  ',
+    };
+    for (const [key, value] of Object.entries(values)) form.querySelector(`#${key}`).value = value;
+    const payload = collectSettings(schemaSurfaceSections(), { form, ...makeScope(baseCurrentSettings()) });
+    assert.equal(payload.enableContextCompaction, true);
+    assert.equal(payload.contextCompactionModel, 'compressor-model');
+    for (const [key, value] of Object.entries(values)) assert.equal(payload[key], value);
 });

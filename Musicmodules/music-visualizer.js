@@ -98,20 +98,44 @@ function setupVisualizer(app) {
     };
 
     // --- WebSocket for Visualization ---
-    app.connectWebSocket = () => {
-        app.ws = new WebSocket("ws://127.0.0.1:63789/ws");
+    app.visualizerDestroyed = false;
+    app.visualizerReconnectTimer = null;
 
-        app.ws.onopen = () => {
+    app.connectWebSocket = () => {
+        if (app.visualizerDestroyed) return;
+        if (app.visualizerReconnectTimer) {
+            clearTimeout(app.visualizerReconnectTimer);
+            app.visualizerReconnectTimer = null;
+        }
+        if (app.ws && (
+            app.ws.readyState === WebSocket.OPEN
+            || app.ws.readyState === WebSocket.CONNECTING
+        )) return;
+
+        const socket = new WebSocket("ws://127.0.0.1:63789/ws");
+        app.ws = socket;
+
+        socket.onopen = () => {
+            if (app.visualizerDestroyed || app.ws !== socket) {
+                socket.close();
+                return;
+            }
             console.log('[Music.js] Connected to Rust Audio Engine via WebSocket.');
             if (!app.animationFrameId) {
                 app.startVisualizerAnimation();
             }
         };
 
-        app.ws.onmessage = (event) => {
+        socket.onmessage = (event) => {
+            if (app.visualizerDestroyed || app.ws !== socket) return;
             try {
                 const message = JSON.parse(event.data);
                 if (message.type === 'spectrum_data') {
+                    app.api?.publishMusicGroove?.({
+                        playing: app.isPlaying === true && !app.isTrackLoading,
+                        trackKey: app.playlist?.[app.currentTrackIndex]?.path || '',
+                        data: message.data
+                    });
                     if (app.isPlaying) {
                         app.targetVisualizerData = message.data;
                         if (app.currentVisualizerData.length === 0) {
@@ -160,14 +184,50 @@ function setupVisualizer(app) {
             }
         };
 
-        app.ws.onclose = () => {
-            setTimeout(app.connectWebSocket, 5000);
+        socket.onclose = () => {
+            if (app.ws === socket) {
+                app.ws = null;
+                app.api?.publishMusicGroove?.({ playing: false });
+            }
+            if (app.visualizerDestroyed || app.visualizerReconnectTimer) return;
+            app.visualizerReconnectTimer = setTimeout(() => {
+                app.visualizerReconnectTimer = null;
+                app.connectWebSocket();
+            }, 5000);
         };
 
-        app.ws.onerror = (err) => {
-            console.error('[Music.js] WebSocket error:', err);
-            app.ws.close();
+        socket.onerror = (err) => {
+            if (!app.visualizerDestroyed) console.error('[Music.js] WebSocket error:', err);
+            socket.close();
         };
+    };
+
+    app.destroyVisualizer = () => {
+        if (app.visualizerDestroyed) return;
+        app.visualizerDestroyed = true;
+        app.api?.publishMusicGroove?.({ playing: false });
+        if (app.visualizerReconnectTimer) {
+            clearTimeout(app.visualizerReconnectTimer);
+            app.visualizerReconnectTimer = null;
+        }
+        if (app.animationFrameId) {
+            cancelAnimationFrame(app.animationFrameId);
+            app.animationFrameId = null;
+        }
+        const socket = app.ws;
+        app.ws = null;
+        if (socket) {
+            socket.onopen = null;
+            socket.onmessage = null;
+            socket.onerror = null;
+            socket.onclose = null;
+            try { socket.close(); } catch (error) {}
+        }
+        app.targetVisualizerData.length = 0;
+        app.currentVisualizerData.length = 0;
+        app.particles.length = 0;
+        app.visualizerCanvas.width = app.visualizerCanvas.height = 1;
+        if (app.vocalCanvas) app.vocalCanvas.width = app.vocalCanvas.height = 1;
     };
 
     app.drawVisualizer = (data) => {
@@ -222,13 +282,21 @@ function setupVisualizer(app) {
     };
 
     app.startVisualizerAnimation = () => {
-        const draw = () => {
-            if (app.isPlaying) {
+        if (app.visualizerDestroyed || app.animationFrameId) return;
+        const draw = (timestamp) => {
+            if (app.visualizerDestroyed) {
+                app.animationFrameId = null;
+                return;
+            }
+            const isStageActive = Boolean(app.isStageActive && app.stageHost?.active);
+
+            if (app.isPlaying && !isStageActive) {
                 app.animateLyrics();
             }
 
             // --- Cover Pulse Animation Logic ---
-            if (app.isPlaying && app.currentVisualizerData.length > 0 && app.albumArtWrapper) {
+            // 沉浸舞台拥有自己的封面与音频响应，普通封面在舞台期间停止写入 transform。
+            if (!isStageActive && app.isPlaying && app.currentVisualizerData.length > 0 && app.albumArtWrapper) {
                 const startBin = Math.max(0, Math.floor(app.currentVisualizerData.length * app.COVER_MID_START_RATIO));
                 const endBin = Math.min(
                     app.currentVisualizerData.length,
@@ -259,7 +327,12 @@ function setupVisualizer(app) {
             }
 
             if (app.targetVisualizerData.length === 0) {
-                app.visualizerCtx.clearRect(0, 0, app.visualizerCanvas.width, app.visualizerCanvas.height);
+                if (isStageActive) {
+                    app.stageHost.updateFrame(timestamp);
+                } else {
+                    app.updateAmbientPixi?.(0.016);
+                    app.visualizerCtx.clearRect(0, 0, app.visualizerCanvas.width, app.visualizerCanvas.height);
+                }
                 app.animationFrameId = requestAnimationFrame(draw);
                 return;
             }
@@ -272,6 +345,14 @@ function setupVisualizer(app) {
                 app.currentVisualizerData[i] += (app.targetVisualizerData[i] - app.currentVisualizerData[i]) * app.easingFactor;
             }
 
+            if (isStageActive) {
+                app.stageHost.updateFrame(timestamp);
+                app.visualizerCtx.clearRect(0, 0, app.visualizerCanvas.width, app.visualizerCanvas.height);
+                app.animationFrameId = requestAnimationFrame(draw);
+                return;
+            }
+
+            app.updateAmbientPixi?.(0.016);
             app.drawVisualizer(app.currentVisualizerData);
             app.drawVocalVisualizer();
 

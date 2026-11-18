@@ -4,6 +4,9 @@
 
 import { handleSaveGlobalSettings } from './global-settings-manager.js';
 import { syncDependentRows } from './ui-system/settings/dependent-rows.js';
+import { assembleRequestMessages } from './chat/chatContextPipeline.js';
+import { shouldCompactContext } from './chat/contextCompactionService.js';
+import { installAppFeatures } from './renderer/appFeatures.js';
 
 let eventListenersBound = false;
 
@@ -31,7 +34,7 @@ export function setupEventListeners(deps) {
         // Modules and helper functions
         uiHelperFunctions, chatManager, messageRenderer, historyMutationAuthority, itemListManager, settingsManager, uiManager, topicListManager,
         getCroppedFile, setCroppedFile, updateAttachmentPreview, filterAgentList,
-        addNetworkPathInput, sendButtonAction, listenerOwner, syncSettingsToUI
+        addNetworkPathInput, sendButtonAction, notifySendStateChanged, listenerOwner, syncSettingsToUI
     } = deps;
     const addListener = (target, type, handler, options) => listenerOwner?.add(target, type, handler, options) || target?.addEventListener?.(type, handler, options);
     const setOwnedTimeout = (callback, delay) => listenerOwner?.timeout?.(callback, delay) ?? setTimeout(callback, delay);
@@ -181,12 +184,62 @@ export function setupEventListeners(deps) {
      * @param {string} additionalPrompt - Additional prompt text from the input box.
      */
     async function handleContinueWriting(additionalPrompt = '') {
+        if (typeof chatAPI.topicAdmissionAcquire !== 'function') {
+            return handleContinueWritingOwned(additionalPrompt);
+        }
+        const selected = refs.currentSelectedItem.get();
+        const topicId = refs.currentTopicId.get();
+        if (!selected?.id || selected.type !== 'agent' || !topicId) return;
+        if (chatManager.isContextCompacting?.()) {
+            uiHelperFunctions.showToastNotification('上下文正在压缩，请稍候', 'warning');
+            return;
+        }
+        const scope = { itemType: 'agent', itemId: selected.id, topicId };
+        const token = `manual_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const acquired = await chatAPI.topicAdmissionAcquire(scope, token);
+        if (!acquired?.success) {
+            uiHelperFunctions.showToastNotification(`话题暂不可续写：${acquired?.error || acquired?.code || '占用中'}`, 'info');
+            return;
+        }
+        // Navigation during IPC must not transfer the lease to the new selection.
+        if (refs.currentSelectedItem.get()?.id !== scope.itemId || refs.currentTopicId.get() !== scope.topicId) {
+            await chatAPI.topicAdmissionRelease(scope, token, { saved: true });
+            return;
+        }
+        let dispatched = false;
+        let saved = false;
+        try {
+            const result = await handleContinueWritingOwned(additionalPrompt, token, () => { dispatched = true; });
+            saved = result?.nonStreamingSaved === true;
+        } catch (error) {
+            if (dispatched && !saved && typeof chatAPI.topicAdmissionUncertain === 'function') {
+                try {
+                    const reported = await chatAPI.topicAdmissionUncertain(scope, token, error.message);
+                    if (!reported?.success) console.error('[ContinueWriting] uncertainty journal failed', reported);
+                } catch (reportError) {
+                    console.error('[ContinueWriting] uncertainty journal failed', reportError);
+                }
+            }
+            throw error;
+        } finally {
+            if (!dispatched || saved) {
+                const released = await chatAPI.topicAdmissionRelease(scope, token, { saved: true });
+                if (!released?.success) console.error('[ContinueWriting] lease release failed', released);
+            }
+        }
+    }
+
+    async function handleContinueWritingOwned(additionalPrompt = '', admissionToken = null, onDispatch = () => {}) {
+        if (chatManager.isContextCompacting?.()) {
+            uiHelperFunctions.showToastNotification('上下文正在压缩，请稍候', 'warning');
+            return;
+        }
         console.log('[ContinueWriting] 开始执行续写功能，附加提示词:', additionalPrompt);
 
         const currentSelectedItem = refs.currentSelectedItem.get();
         const currentTopicId = refs.currentTopicId.get();
         const globalSettings = refs.globalSettings.get();
-        const currentChatHistory = refs.currentChatHistory.get();
+        let currentChatHistory = refs.currentChatHistory.get();
 
         if (!currentSelectedItem.id || !currentTopicId) {
             uiHelperFunctions.showToastNotification('请先选择一个项目和话题', 'warning');
@@ -217,7 +270,20 @@ export function setupEventListeners(deps) {
             temporaryPrompt = additionalPrompt || '';
         } else {
             // 有AI消息时，使用续写逻辑：优先使用附加提示词，否则使用默认续写提示词
-            temporaryPrompt = additionalPrompt || globalSettings.continueWritingPrompt || '请继续';
+            temporaryPrompt = additionalPrompt || globalSettings.continueWritingPrompt || '[系统提示:] 请继续。若当前已无值得继续推进的任务或话题，请输出 [[Flowlock::Stop]] 关闭心流锁心跳。';
+        }
+
+        if (globalSettings.enableContextCompaction === true
+            && shouldCompactContext(currentChatHistory, currentSelectedItem.config || currentSelectedItem, temporaryPrompt)) {
+            try {
+                await chatManager.compactContext();
+                if (refs.currentSelectedItem.get()?.id !== currentSelectedItem.id
+                    || refs.currentTopicId.get() !== currentTopicId) return;
+                currentChatHistory = refs.currentChatHistory.get();
+            } catch (error) {
+                uiHelperFunctions.showToastNotification(`自动压缩失败，已取消续写：${error.message}`, 'error');
+                return;
+            }
         }
 
         const thinkingMessageId = `regen_${Date.now()}`;
@@ -233,59 +299,17 @@ export function setupEventListeners(deps) {
         };
 
         currentChatHistory.push(thinkingMessage);
+        await messageRenderer?.renderMessage(thinkingMessage, false);
+        notifySendStateChanged?.();
 
         try {
             const agentConfig = currentSelectedItem.config || currentSelectedItem;
-            let historySnapshotForVCP = currentChatHistory.filter(msg => msg.id !== thinkingMessage.id && !msg.isThinking);
-
-            // 只有当有提示词时才添加临时用户消息
-            // 如果 temporaryPrompt 为空，说明是无AI消息且无输入的情况，让AI基于现有上下文自然开始
-            if (temporaryPrompt && temporaryPrompt.trim()) {
-                const temporaryUserMessage = { role: 'user', content: temporaryPrompt };
-                historySnapshotForVCP = [...historySnapshotForVCP, temporaryUserMessage];
-            }
-
-            const messagesForVCP = await Promise.all(historySnapshotForVCP.map(async msg => {
-                let currentMessageTextContent = '';
-                if (typeof msg.content === 'string') {
-                    currentMessageTextContent = msg.content;
-                } else if (msg.content && typeof msg.content === 'object') {
-                    if (typeof msg.content.text === 'string') {
-                        currentMessageTextContent = msg.content.text;
-                    } else if (Array.isArray(msg.content)) {
-                        currentMessageTextContent = msg.content
-                            .filter(item => item.type === 'text' && item.text)
-                            .map(item => item.text)
-                            .join('\n');
-                    }
-                }
-                return { role: msg.role, content: currentMessageTextContent };
-            }));
-
-            if (agentConfig && agentConfig.systemPrompt) {
-                let systemPromptContent = agentConfig.systemPrompt.replace(/\{\{AgentName\}\}/g, agentConfig.name || currentSelectedItem.id);
-                const prependedContent = [];
-
-                if (agentConfig.agentDataPath && currentTopicId) {
-                    const historyPath = `${agentConfig.agentDataPath}\\topics\\${currentTopicId}\\history.json`;
-                    prependedContent.push(`当前聊天记录文件路径: ${historyPath}`);
-                }
-
-                if (agentConfig.topics && currentTopicId) {
-                    const currentTopicObj = agentConfig.topics.find(t => t.id === currentTopicId);
-                    if (currentTopicObj && currentTopicObj.createdAt) {
-                        const date = new Date(currentTopicObj.createdAt);
-                        const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-                        prependedContent.push(`当前话题创建于: ${formattedDate}`);
-                    }
-                }
-
-                if (prependedContent.length > 0) {
-                    systemPromptContent = prependedContent.join('\n') + '\n\n' + systemPromptContent;
-                }
-
-                messagesForVCP.unshift({ role: 'system', content: systemPromptContent });
-            }
+            const { messagesForVCP } = await assembleRequestMessages({
+                electronAPI: chatAPI, agentConfig,
+                history: currentChatHistory.filter(msg => msg.id !== thinkingMessage.id),
+                context: { agentId: currentSelectedItem.id, topicId: currentTopicId },
+                temporaryPrompt,
+            });
 
             const useStreaming = (agentConfig?.streamOutput !== false);
             const modelConfigForVCP = {
@@ -297,6 +321,7 @@ export function setupEventListeners(deps) {
             };
 
             const context = {
+                admissionToken,
                 agentId: currentSelectedItem.id,
                 agentName: currentSelectedItem.name || currentSelectedItem.id,
                 topicId: currentTopicId,
@@ -305,6 +330,7 @@ export function setupEventListeners(deps) {
                 avatarColor: (currentSelectedItem.config || currentSelectedItem)?.avatarCalculatedColor
             };
 
+            onDispatch();
             const vcpResponse = await chatAPI.sendToVCP(
                 globalSettings.vcpServerUrl,
                 globalSettings.vcpApiKey,
@@ -316,63 +342,85 @@ export function setupEventListeners(deps) {
             );
 
             if (!useStreaming) {
-                const { response, context } = vcpResponse;
-                const isForActiveChat = context && context.agentId === currentSelectedItem.id && context.topicId === currentTopicId;
-
-                if (isForActiveChat) {
-                    messageRenderer?.removeMessageById(thinkingMessage.id);
+                // Never use response-supplied context to choose the persistence target.
+                const response = vcpResponse?.response || vcpResponse;
+                if (response?.error) throw new Error(`VCP错误: ${response.error}`);
+                const choice = response?.choices?.[0];
+                if (!choice?.message || typeof choice.message.content !== 'string') {
+                    throw new Error('续写未返回完整 assistant 终稿');
                 }
-
-                if (response.error) {
-                    if (isForActiveChat && messageRenderer) {
-                        messageRenderer.renderMessage({ role: 'system', content: `VCP错误: ${response.error}`, timestamp: Date.now() });
-                    }
-                    console.error(`[ContinueWriting] VCP Error:`, response.error);
-                } else if (response.choices && response.choices.length > 0) {
-                    const assistantMessageContent = response.choices[0].message.content;
-                    const assistantMessage = {
-                        role: 'assistant',
-                        name: context.agentName || context.agentId || 'AI',
-                        avatarUrl: currentSelectedItem.avatarUrl,
-                        avatarColor: (currentSelectedItem.config || currentSelectedItem)?.avatarCalculatedColor,
-                        content: assistantMessageContent,
-                        timestamp: Date.now(),
-                        id: response.id || `regen_nonstream_${Date.now()}`
-                    };
-
-                    const historyForSave = await chatAPI.getChatHistory(context.agentId, context.topicId);
-                    if (historyForSave && !historyForSave.error) {
-                        const finalHistory = historyForSave.filter(msg => msg.id !== thinkingMessage.id && !msg.isThinking);
-                        finalHistory.push(assistantMessage);
-                        await historyMutationAuthority.replace({
-                            itemId: context.agentId, itemType: 'agent', topicId: context.topicId,
-                            category: 'flowlock-non-stream-terminal',
-                        }, finalHistory);
-
-                        if (isForActiveChat) {
-                            currentChatHistory.length = 0;
-                            currentChatHistory.push(...finalHistory);
-                            messageRenderer?.renderMessage(assistantMessage);
-                            await chatManager.attemptTopicSummarizationIfNeeded();
+                const scope = { itemType: 'agent', itemId: currentSelectedItem.id, topicId: currentTopicId };
+                const assistantMessage = {
+                    role: 'assistant',
+                    name: context.agentName || context.agentId || 'AI',
+                    agentId: scope.itemId,
+                    avatarUrl: context.avatarUrl,
+                    avatarColor: context.avatarColor,
+                    content: choice.message.content,
+                    timestamp: Date.now(),
+                    id: thinkingMessage.id,
+                    admissionToken,
+                    admissionTerminal: true,
+                    isThinking: false,
+                    finishReason: choice.finish_reason || 'completed'
+                };
+                let finalHistory;
+                if (typeof chatAPI.topicAdmissionPersistAssistant === 'function') {
+                    const persisted = await chatAPI.topicAdmissionPersistAssistant(scope, assistantMessage);
+                    if (!persisted?.success) throw new Error(persisted?.error || '续写终稿保存失败');
+                    finalHistory = persisted.history;
+                } else {
+                    if (admissionToken) throw new Error('中央续写缺少原子终稿保存能力');
+                    // Legacy hosts only; never fall back after a rejected atomic commit.
+                    const latest = await chatAPI.getChatHistory(scope.itemId, scope.topicId);
+                    if (!Array.isArray(latest)) throw new Error('续写历史读取失败');
+                    finalHistory = latest.filter(msg => msg.id !== thinkingMessage.id);
+                    finalHistory.push(assistantMessage);
+                    await historyMutationAuthority.replace({
+                        ...scope, category: 'manual-continue-non-stream-terminal',
+                    }, finalHistory);
+                }
+                // UI failures cannot invalidate an already saved terminal.
+                try {
+                    if (refs.currentSelectedItem.get()?.id === scope.itemId
+                        && refs.currentTopicId.get() === scope.topicId) {
+                        if (Array.isArray(finalHistory)) {
+                            const activeHistory = refs.currentChatHistory.get();
+                            activeHistory.splice(0, activeHistory.length, ...finalHistory);
                         }
+                        messageRenderer?.removeMessageById(thinkingMessage.id);
+                        await messageRenderer?.renderMessage(assistantMessage);
+                        await chatManager.attemptTopicSummarizationIfNeeded();
                     }
+                } catch (uiError) {
+                    console.error('[ContinueWriting] post-commit UI failed', uiError);
                 }
-            } else {
-                if (vcpResponse && vcpResponse.streamError) {
-                    console.error("[ContinueWriting] Streaming setup failed:", vcpResponse.errorDetail || vcpResponse.error);
+                try { notifySendStateChanged?.(); } catch (uiError) {
+                    console.error('[ContinueWriting] post-commit state notification failed', uiError);
                 }
+                return { nonStreamingSaved: true };
             }
-
+            if (vcpResponse?.streamError) {
+                throw new Error(vcpResponse.errorDetail || vcpResponse.error || '续写流式请求启动失败');
+            }
         } catch (error) {
             console.error('[ContinueWriting] 续写时出错:', error);
-            messageRenderer?.removeMessageById(thinkingMessage.id);
-            messageRenderer?.renderMessage({ role: 'system', content: `错误: ${error.message}`, timestamp: Date.now() });
-            if (currentSelectedItem.id && currentTopicId) {
-                await historyMutationAuthority.replace({
-                    itemId: currentSelectedItem.id, itemType: currentSelectedItem.type, topicId: currentTopicId,
-                    category: 'flowlock-failure-cleanup',
-                }, currentChatHistory.filter(msg => !msg.isThinking));
+            // The placeholder is local only; cleanup must not overwrite newer history.
+            const placeholderIndex = currentChatHistory.findIndex(msg => msg.id === thinkingMessage.id);
+            if (placeholderIndex >= 0) currentChatHistory.splice(placeholderIndex, 1);
+            try {
+                if (refs.currentSelectedItem.get()?.id === currentSelectedItem.id
+                    && refs.currentTopicId.get() === currentTopicId) {
+                    messageRenderer?.removeMessageById(thinkingMessage.id);
+                    await messageRenderer?.renderMessage({
+                        role: 'system', notice: 'error', content: `错误: ${error.message}`, timestamp: Date.now()
+                    });
+                }
+                notifySendStateChanged?.();
+            } catch (uiError) {
+                console.error('[ContinueWriting] failure UI failed', uiError);
             }
+            throw error;
         }
     }
 
@@ -431,7 +479,7 @@ export function setupEventListeners(deps) {
         chatManager.handleSendMessage();
     });
 
-    // 发送按钮右键 - 打开「高级回复」(VCPChatTarven) 浮窗
+    // 高级回复主入口在输入框左侧加号；发送按钮右键保留为快捷入口。
     addListener(sendMessageBtn, 'contextmenu', (e) => {
         e.preventDefault();
         if (window.TavernManager && typeof window.TavernManager.togglePopover === 'function') {
@@ -441,6 +489,7 @@ export function setupEventListeners(deps) {
         }
     });
     addListener(messageInput, 'keydown', (e) => {
+        if (e.defaultPrevented || e.isComposing) return;
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             chatManager.handleSendMessage();
@@ -467,7 +516,9 @@ export function setupEventListeners(deps) {
             }
 
             const currentInputText = messageInput.value.trim();
-            await handleContinueWriting(currentInputText);
+            await handleContinueWriting(currentInputText).catch(error => {
+                console.error('[ContinueWriting] button request failed', error);
+            });
         }
     });
 
@@ -892,6 +943,23 @@ export function setupEventListeners(deps) {
         showNewTopicButtonMenu(e, currentSelectedItem);
     });
 
+    const chatAgentPill = document.getElementById('chatAgentPill');
+    if (chatAgentPill) {
+        chatAgentPill.addEventListener('click', () => {
+            // 原版标题栏里这只是一行标题，只有胶囊样式才可点击。
+            // 胶囊点一下就展开 / 收起侧栏：复用标题栏右侧的展开按钮，它在侧栏已展开时会收起侧栏。
+            if (!window.vcpChatHeader?.isCapsule?.()) return;
+            document.getElementById('toggleSidePaneChatBtn')?.click();
+        });
+        chatAgentPill.addEventListener('keydown', (e) => {
+            if (e.target !== chatAgentPill) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                chatAgentPill.click();
+            }
+        });
+    }
+
     /**
      * 显示【新建话题】按钮的右键菜单
      */
@@ -1173,7 +1241,12 @@ export function setupEventListeners(deps) {
 
             toggleNotificationsBtn.classList.toggle('notification-panel-active', isActive);
             toggleNotificationsBtn.setAttribute('aria-expanded', String(isActive));
-            toggleNotificationsBtn.setAttribute('aria-label', isActive ? '关闭通知面板' : '打开通知面板');
+            // 待审批角标由 notificationCenter 维护，这里切换面板时别把「N 项待审批」覆盖掉
+            const pendingCount = Number(toggleNotificationsBtn.dataset.pendingCount) || 0;
+            const baseLabel = isActive ? '关闭通知面板' : '打开通知面板';
+            toggleNotificationsBtn.setAttribute('aria-label', pendingCount > 0
+                ? `${baseLabel}（${pendingCount > 99 ? '99+' : pendingCount} 项待审批）`
+                : baseLabel);
             toggleNotificationsBtn.title = `${isActive ? '左键关闭通知面板' : '左键打开通知面板'}/右键监控面板`;
         };
 
@@ -1192,15 +1265,21 @@ export function setupEventListeners(deps) {
         });
 
         listenerOwner?.own(chatAPI.onDoToggleNotificationsSidebar(() => {
-            const isActive = notificationsSidebar.classList.toggle('active');
-            const mainContent = document.querySelector('.main-content');
-            if (mainContent) {
-                mainContent.classList.toggle('notifications-sidebar-active', isActive);
+            // 有工作区侧栏时由它负责开合与通知按钮的位置（它登记了 notifications.toggle）
+            const commands = globalThis.VCPContributions?.commands;
+            if (commands?.get('notifications.toggle')) {
+                commands.execute('notifications.toggle');
+            } else {
+                const isActive = notificationsSidebar.classList.toggle('active');
+                const mainContent = document.querySelector('.main-content');
+                if (mainContent) {
+                    mainContent.classList.toggle('notifications-sidebar-active', isActive);
+                }
+                if (isActive && refs.globalSettings.get().notificationsSidebarWidth) {
+                    notificationsSidebar.style.width = `${refs.globalSettings.get().notificationsSidebarWidth}px`;
+                }
+                syncNotificationTogglePlacement(isActive);
             }
-            if (isActive && refs.globalSettings.get().notificationsSidebarWidth) {
-                notificationsSidebar.style.width = `${refs.globalSettings.get().notificationsSidebarWidth}px`;
-            }
-            syncNotificationTogglePlacement(isActive);
         }));
 
         syncNotificationTogglePlacement();
@@ -1235,6 +1314,9 @@ export function setupEventListeners(deps) {
             const target = leftSidebar;
             if (!target) return false;
 
+            if (enabled && !document.getElementById('tabContentAgents')?.classList.contains('active')) {
+                uiManager?.switchToTab?.('agents');
+            }
             const agentsTabIsActive = document.getElementById('tabContentAgents')?.classList.contains('active');
             if (enabled && !agentsTabIsActive) return false;
 
@@ -1357,23 +1439,17 @@ export function setupEventListeners(deps) {
                 }
                 clearSidebarLongPress();
 
-                const agentsTabIsActive = document.getElementById('tabContentAgents')?.classList.contains('active');
-                if (!leftSidebar || !agentsTabIsActive) {
-                    uiHelperFunctions.showToastNotification('请先切换到助手列表。', 'info');
-                    return;
-                }
+                if (!leftSidebar) return;
 
                 const enableAvatarOnly = !leftSidebar.classList.contains('avatar-only');
-                if (setAvatarOnlyMode(enableAvatarOnly)) {
-                    uiHelperFunctions.showToastNotification(
-                        enableAvatarOnly ? '侧栏已切换为仅头像模式' : '侧栏已恢复完整模式',
-                        'info'
-                    );
-                }
+                setAvatarOnlyMode(enableAvatarOnly);
             });
             toggleSidebarModeBtn.addEventListener('contextmenu', e => e.preventDefault());
         }
     }
+
+    // 应用功能模块在主窗口这一侧的入口（feature.json 的 renderer）
+    installAppFeatures({ chatAPI, refs, itemListManager, chatManager, sendMessageBtn, globalSettingsBtn });
 
     // 语音聊天按钮事件处理
     const voiceChatBtn = document.getElementById('voiceChatBtn');
@@ -1437,7 +1513,9 @@ export function setupEventListeners(deps) {
                 return;
             }
             const currentInputText = messageInput ? messageInput.value.trim() : '';
-            handleContinueWriting(currentInputText);
+            void handleContinueWriting(currentInputText).catch(error => {
+                console.error('[ContinueWriting] shortcut request failed', error);
+            });
         }
 
         if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {

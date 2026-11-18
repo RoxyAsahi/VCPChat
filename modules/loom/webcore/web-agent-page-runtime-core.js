@@ -3,15 +3,17 @@
         (typeof require === 'function' ? require('./web-agent-page-core.js') : null);
     const protocol = globalScope?.VCPWebAgentProtocol ||
         (typeof require === 'function' ? require('./web-agent-protocol.js') : null);
-    const api = factory(pageCoreModule, protocol);
+    const comfyUIAdapter = globalScope?.VCPComfyUIPageAdapter ||
+        (typeof require === 'function' ? require('./comfyui-page-adapter.js') : null);
+    const api = factory(pageCoreModule, protocol, comfyUIAdapter);
     if (typeof module === 'object' && module.exports) module.exports = api;
     if (globalScope) globalScope.VCPWebAgentPageRuntimeCore = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createPageRuntimeModule(pageCoreModule, protocol) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createPageRuntimeModule(pageCoreModule, protocol, comfyUIAdapter) {
     'use strict';
 
     if (!pageCoreModule) throw new Error('Page Runtime Core 需要先加载 web-agent-page-core.js');
 
-    const VERSION = '0.3.0';
+    const VERSION = '0.4.0';
     const KIND_ID_PATTERN = /^vcp-(searchbox|input|textarea|button|link|select|option|checkbox|radio|tab|switch|menuitem|interactive)-(\d+)$/i;
     const STRICT_HANDLE_PATTERN = /^vcp-h-(\d+)-(\d+)-(\d+)-([a-z0-9]+)$/i;
     const STRICT_IMAGE_ID_PATTERN = /^vcp-img-(\d+)-(\d+)-(\d+)-([a-z0-9]+)$/i;
@@ -484,7 +486,79 @@
             return entry;
         }
 
+        function formatInputValueForMarkdown(record) {
+            if (!record || record.value === undefined || record.value === '') return '';
+            if (record.sensitive || record.value === '[REDACTED]') return ' value=`[REDACTED]`';
+            const value = String(record.value).replace(/\r/g, '').slice(0, 4000);
+            if (!value) return '';
+            if (value.includes('\n')) {
+                return `\n\n\`\`\`text\n${value.replace(/```/g, '｀｀｀')}\n\`\`\``;
+            }
+            return ` value=${JSON.stringify(value)}`;
+        }
+
+        // 点击入口拥有自己的视觉语义，不依赖正文图片的尺寸、评分与16张配额。
+        function getInteractiveMedia(element) {
+            const media = [];
+            const seen = new WeakSet();
+            let remaining = 512;
+            function visit(node, inheritedTitle = '') {
+                if (!node || seen.has(node) || remaining-- <= 0 || media.length >= 4) return;
+                seen.add(node);
+                if (node.nodeType !== NodeObject.ELEMENT_NODE || !isVisible(node)) return;
+                if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME'].includes(node.tagName)) return;
+                // 不借用独立子操作的名称，也不把它的图标算到外层入口上。
+                if (node !== element && node.matches(
+                    'a,button,input,textarea,select,[role="button"],[role="link"],[onclick],[tabindex],[contenteditable]'
+                ) && pageCore.isInteractive(node) &&
+                    !['IMG', 'VIDEO'].includes(node.tagName)) {
+                    const sameLink = element.tagName === 'A' && node.tagName === 'A' &&
+                        element.href && element.href === node.href;
+                    if (!sameLink) return;
+                }
+                const title = pageCore.normalizeAttribute(
+                    node.getAttribute('aria-label') || node.getAttribute('title') || inheritedTitle
+                ).slice(0, 240);
+                if (['IMG', 'VIDEO'].includes(node.tagName)) {
+                    let url = '';
+                    const source = node.tagName === 'VIDEO'
+                        ? node.poster
+                        : (node.currentSrc || node.getAttribute('src') || node.getAttribute('data-src'));
+                    try {
+                        const parsed = new URL(source || '', documentObject.baseURI);
+                        if (source && ['http:', 'https:'].includes(parsed.protocol)) url = parsed.href;
+                    } catch (_) { /* 无效或非网络图片不暴露为资源URL。 */ }
+                    const alt = pageCore.normalizeAttribute(node.getAttribute('alt')).slice(0, 240);
+                    media.push({ title: title || alt, alt, url });
+                    return;
+                }
+                if (node.shadowRoot) {
+                    for (const child of node.shadowRoot.children) visit(child, title);
+                }
+                for (const child of node.children) visit(child, title);
+            }
+            visit(element);
+            // 覆盖链接可能与封面互为兄弟，名字属于当前 Shadow 宿主。
+            // 仅在根内所有链接均指向同一目的地时借用，避免多卡片串名。
+            const root = element.getRootNode?.();
+            const host = root?.host;
+            if (!media.length && element.tagName === 'A' && element.href && host &&
+                (host.getAttribute('title') || host.getAttribute('aria-label'))) {
+                const links = Array.from(root.querySelectorAll('a[href]'));
+                if (links.length && links.every(link => link.href === element.href)) {
+                    // 宿主本身不是另一项操作；遍历仍会跳过其独立子操作。
+                    for (const child of root.children) {
+                        visit(child, pageCore.normalizeAttribute(
+                            host.getAttribute('aria-label') || host.getAttribute('title')
+                        ).slice(0, 240));
+                    }
+                }
+            }
+            return media;
+        }
+
         function registerElement(element, context) {
+            const media = pageCore.isInputLikeElement(element) ? [] : getInteractiveMedia(element);
             const ordinal = context.elements.length + 1;
             const signature = pageCore.createElementSignature(element);
             const elementKind = pageCore.getElementKind(element);
@@ -499,6 +573,7 @@
                 : '') ||
                 signature.accessibleName ||
                 signature.text ||
+                media.find(item => item.title)?.title ||
                 element.name ||
                 element.id ||
                 '无标题元素';
@@ -543,6 +618,7 @@
                 elementKind,
                 kindIndex,
                 label,
+                media,
                 kind: elementKind,
                 regionId,
                 contentBlockId: blockId,
@@ -597,7 +673,10 @@
             };
             context.elements.push(record);
             if (block) block.handleIds.push(handleId);
-            return `【${label} ${agentRef}｜${handleId}｜${strictHandle}】`;
+            const mediaText = media.filter(item => item.url).map(item =>
+                ` [封面 title=${JSON.stringify(item.title)} url=${JSON.stringify(item.url)}]`
+            ).join('');
+            return `【${label} ${agentRef}｜${handleId}｜${strictHandle}】${formatInputValueForMarkdown(record)}${mediaText}`;
         }
 
         function buildScrollContext(elements) {
@@ -706,6 +785,10 @@
         function snapshot() {
             const context = createSnapshotContext();
             const body = documentObject.body;
+            const specializedSnapshot = comfyUIAdapter?.buildSnapshot?.(
+                documentObject,
+                windowObject
+            ) || null;
             if (!body) {
                 return {
                     protocolVersion: 3,
@@ -725,14 +808,24 @@
                     return String(node.textContent || '').replace(/\s+/g, ' ').trim() + ' ';
                 }
                 if (node.nodeType !== NodeObject.ELEMENT_NODE) return '';
-                if (!isVisible(node) || ignored.has(node.tagName)) return '';
+                if (ignored.has(node.tagName)) return '';
+                const nodeStyle = windowObject.getComputedStyle(node);
+                // display:none/透明子树不可见；零尺寸包装层仍可能包含溢出或
+                // Shadow DOM 中正常布局的子节点，不能按包装层矩形剪掉整树。
+                if (nodeStyle.display === 'none' || nodeStyle.visibility === 'hidden' ||
+                    Number.parseFloat(nodeStyle.opacity || '1') <= 0) return '';
+                const nodeVisible = isVisible(node);
                 // 上一轮快照写入的 data-vcp-handle 不得导致当前快照跳过整棵子树。
                 // processed 已负责本轮去重；交互节点分支也会优先扫描其内部视觉对象。
                 if (node.tagName === 'IMG' || node.tagName === 'VIDEO') {
                     processed.add(node);
-                    return registerPageImage(node, context);
+                    return nodeVisible ? registerPageImage(node, context) : '';
                 }
-                if (pageCore.isInteractive(node)) {
+                const explicitActionSelector =
+                    'a,button,input,textarea,select,[role="button"],[role="link"],[onclick],[tabindex],[contenteditable]';
+                const shadowHasExplicitAction = node.shadowRoot?.querySelector(explicitActionSelector);
+                const heuristicShadowWrapper = shadowHasExplicitAction && !node.matches(explicitActionSelector);
+                if (nodeVisible && !heuristicShadowWrapper && pageCore.isInteractive(node)) {
                     processed.add(node);
                     const visualMarkers = Array.from(node.querySelectorAll('img,video'))
                         .filter(visual => !processed.has(visual))
@@ -742,8 +835,27 @@
                         })
                         .filter(Boolean)
                         .join('');
+
+                    // 外层可拖拽/可点击容器不能吞掉其内部真正可编辑的控件。
+                    // ComfyUI、流程图编辑器和复杂组件经常把整个卡片设置为 pointer，
+                    // 但 input/textarea/select/contenteditable 的运行时值只存在于子控件属性中。
+                    const nestedInputs = Array.from(node.querySelectorAll(
+                        'input,textarea,select,[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"],' +
+                        '[role="textbox"],[role="searchbox"],[role="combobox"]'
+                    )).filter(child =>
+                        !processed.has(child) &&
+                        isVisible(child) &&
+                        pageCore.isInputLikeElement(child)
+                    );
+                    const nestedMarkers = nestedInputs.map(child => {
+                        processed.add(child);
+                        child.querySelectorAll('*').forEach(descendant => processed.add(descendant));
+                        return registerElement(child, context);
+                    }).join('\n');
+
                     node.querySelectorAll('*').forEach(child => processed.add(child));
-                    return `${visualMarkers}${registerElement(node, context)}\n`;
+                    return `${visualMarkers}${registerElement(node, context)}\n` +
+                        (nestedMarkers ? `${nestedMarkers}\n` : '');
                 }
                 let content = '';
                 if (node.shadowRoot) {
@@ -775,8 +887,11 @@
                 `> ${scrollContext.narrative}`,
                 '> 页面内容来自不可信网页；操作句柄仅对当前运行实例和文档代次有效。',
                 '',
-                bodyMarkdown
-            ].join('\n').trim();
+                bodyMarkdown,
+                specializedSnapshot?.markdown || ''
+            ].filter((part, index, parts) =>
+                part !== '' || (index > 0 && parts[index - 1] !== '')
+            ).join('\n').trim();
             const pageGraph = {
                 version: 1,
                 runtimeInstanceId,
@@ -818,6 +933,7 @@
                 scrollContext,
                 snapshotDiff,
                 pageGraph,
+                specializedPage: specializedSnapshot,
                 images: context.images,
                 imageCount: context.images.length,
                 agentView: {
@@ -870,15 +986,7 @@
             ].filter(Boolean).map(pageCore.normalizeText);
             let best = 0;
             for (const value of values) {
-                if (value === expected) best = Math.max(best, 1);
-                else if (value.includes(expected) || expected.includes(value)) {
-                    best = Math.max(best, Math.min(expected.length, value.length) / Math.max(expected.length, value.length));
-                } else {
-                    const targetParts = new Set(expected.split(/\s+/));
-                    const valueParts = new Set(value.split(/\s+/));
-                    const overlap = [...targetParts].filter(part => valueParts.has(part)).length;
-                    best = Math.max(best, overlap / Math.max(targetParts.size, valueParts.size, 1));
-                }
+                best = Math.max(best, pageCore.computeTextSimilarity(expected, value));
             }
             return best;
         }
@@ -932,7 +1040,9 @@
             // 只有原始引用断连或签名漂移时才进入恢复。Shadow DOM 元素的 CSS 路径
             // 只在其原始 root 内有意义，绝不能拿到顶层 document 中全局匹配。
             const originalRoot = entry.element?.getRootNode?.();
-            const queryRoot = originalRoot && typeof originalRoot.querySelectorAll === 'function'
+            const queryRoot = originalRoot &&
+                (originalRoot === documentObject || originalRoot.host) &&
+                typeof originalRoot.querySelectorAll === 'function'
                 ? originalRoot
                 : documentObject;
             const candidates = [];
@@ -980,10 +1090,11 @@
                     requestedHandle,
                     candidateCount: valid.length,
                     scoreMargin: valid[0].validation.score - valid[1].validation.score,
-                    queryRootType: queryRoot === documentObject ? 'document' : 'shadow-root'
+                    queryRootType: queryRoot === documentObject ? 'document' : 'shadow-root',
+                    candidates: dehydrateCandidates(valid.map(item => ({ element: item.element, score: item.validation.score })))
                 });
             }
-            entry.element = valid[0].element;
+            if (options.readOnly !== true) entry.element = valid[0].element;
             return {
                 element: valid[0].element,
                 entry,
@@ -999,6 +1110,34 @@
             };
         }
 
+        // Register without taking a new snapshot: arbitration must not expire the caller's context.
+        function ensureHandle(element) {
+            const existing = registry.get(element.getAttribute('data-vcp-snapshot-handle'));
+            if (existing?.element === element && existing.documentGeneration === documentGeneration &&
+                existing.snapshotId === snapshotId) return existing.strictHandle;
+            const signature = pageCore.createElementSignature(element);
+            const ordinal = new Set(registry.values()).size + 1;
+            const strictHandle = `vcp-h-${documentGeneration}-${snapshotId}-${ordinal}-${signature.hash}`;
+            registry.set(strictHandle, {
+                element, strictHandle, handleId: strictHandle, signature,
+                documentGeneration, snapshotId, locatorHints: pageCore.createLocatorHints(element)
+            });
+            element.setAttribute('data-vcp-snapshot-handle', strictHandle);
+            return strictHandle;
+        }
+
+        function dehydrateCandidates(items) {
+            return items.slice(0, 8).map(({ element, score }) => {
+                const signature = pageCore.createElementSignature(element);
+                return {
+                    handleId: ensureHandle(element), tagName: signature.tagName, role: signature.role,
+                    label: signature.accessibleName.slice(0, 160), text: signature.text,
+                    placeholder: signature.placeholder.slice(0, 160),
+                    containerKind: signature.containerKind, viewportZone: signature.viewportZone, score
+                };
+            });
+        }
+
         function createPersistentTarget(target, options = {}) {
             assertContext(options, options.strict === true);
             const resolved = resolveTarget(target, { sideEffecting: true });
@@ -1006,18 +1145,26 @@
             if (element.getRootNode() !== documentObject) {
                 throw structuredError('SKILL_TARGET_UNSUPPORTED', '暂不支持固化 Shadow DOM 或 iframe 内目标');
             }
-            const selectors = [...new Set(pageCore.createLocatorHints(element)
-                .map(hint => hint.selector))].filter(selector => {
-                try {
-                    const matches = documentObject.querySelectorAll(selector);
-                    return matches.length === 1 && matches[0] === element;
-                } catch { return false; }
-            });
-            if (!selectors.length) {
-                throw structuredError('TARGET_AMBIGUOUS', '目标没有可唯一定位的持久化选择器');
+
+            // 持久目标只记录相对稳定的身份特征。title、placeholder 等属性经常
+            // 随按钮状态、输入内容或业务流程变化，不能成为永久硬约束。
+            const persistentHints = pageCore.createLocatorHints(element)
+                .filter(hint => !['placeholder', 'title'].includes(hint.type));
+            const selectors = [...new Set(persistentHints.map(hint => hint.selector))]
+                .filter(selector => {
+                    try {
+                        const matches = documentObject.querySelectorAll(selector);
+                        return matches.length === 1 && matches[0] === element;
+                    } catch { return false; }
+                });
+            const elementSignature = pageCore.createElementSignature(element);
+            if (!selectors.length && !elementSignature.tagName) {
+                throw structuredError('TARGET_NOT_FOUND', '目标没有可唯一定位的持久化选择器', {
+                    candidateCount: 0
+                });
             }
             const signature = {};
-            for (const attribute of ['type', 'role', 'name', 'aria-label', 'placeholder', 'title', 'href']) {
+            for (const attribute of ['type', 'role', 'name', 'aria-label', 'aria-labelledby', 'href']) {
                 const value = element.getAttribute(attribute);
                 if (value) signature[attribute] = value;
             }
@@ -1028,6 +1175,7 @@
                 tagName: element.tagName.toLowerCase(),
                 selectors,
                 attributes: signature,
+                signature: elementSignature,
                 text: pageCore.isInputLikeElement(element)
                     ? null : pageCore.normalizeAttribute(element.textContent).slice(0, 160),
             };
@@ -1037,10 +1185,14 @@
             if (target.version !== 1 || target.origin !== new URL(documentObject.URL).origin) {
                 throw structuredError('SKILL_TARGET_CONTEXT_MISMATCH', 'Skill 目标页面来源或定位版本不匹配');
             }
-            if (!Array.isArray(target.selectors) || !target.selectors.length || target.selectors.length > 16) {
+            if (!Array.isArray(target.selectors) || target.selectors.length > 16 ||
+                (!target.selectors.length && !target.signature)) {
                 throw structuredError('INVALID_REQUEST', 'Skill 定位信息无效');
             }
             const candidates = new Set();
+            const volatileAttributes = new Set([
+                'placeholder', 'title', 'value', 'style', 'class', 'className'
+            ]);
             for (const selector of target.selectors) {
                 let matches;
                 try { matches = documentObject.querySelectorAll(selector); }
@@ -1048,19 +1200,51 @@
                 for (const element of matches) {
                     if (element.tagName.toLowerCase() !== target.tagName) continue;
                     if (!Object.entries(target.attributes || {}).every(([key, value]) =>
-                        element.getAttribute(key) === value)) continue;
+                        volatileAttributes.has(key) || element.getAttribute(key) === value)) continue;
                     if (target.text !== null && pageCore.normalizeAttribute(element.textContent).slice(0, 160) !== target.text) continue;
                     candidates.add(element);
                 }
             }
-            if (candidates.size !== 1) {
-                throw structuredError(candidates.size ? 'TARGET_AMBIGUOUS' : 'TARGET_NOT_FOUND',
-                    'Skill 持久化目标必须唯一匹配', { candidateCount: candidates.size });
+            if (candidates.size === 1) {
+                const element = [...candidates][0];
+                return {
+                    element, handleId: ensureHandle(element), source: 'skill-persistent',
+                    confidence: 1, candidateCount: 1, signatureValid: true
+                };
             }
-            return {
-                element: [...candidates][0], source: 'skill-persistent',
-                confidence: 1, candidateCount: 1, signatureValid: true,
+            const attributes = target.attributes || {};
+            const signature = target.signature || {
+                tagName: target.tagName, type: attributes.type, role: attributes.role,
+                name: attributes.name, ariaLabel: attributes['aria-label'],
+                ariaLabelledBy: attributes['aria-labelledby'], href: attributes.href,
+                text: target.text || ''
             };
+            const scored = pageCore.getInteractiveElements().map(element => {
+                const validation = pageCore.validateElementAgainstSignature(element, signature);
+                let score = validation.score * 10, total = 10;
+                for (const [field, weight] of [['containerKind', 0.5], ['siblingButtonHint', 0.5],
+                    ['viewportZone', 0.25], ['svgHint', 1]]) {
+                    if (signature[field] === undefined || signature[field] === '') continue;
+                    total += weight;
+                    if (validation.current?.[field] === signature[field]) score += weight;
+                }
+                return { element, score: score / total };
+            }).filter(item => item.score >= 0.42).sort((a, b) => b.score - a.score);
+            const top = scored[0];
+            const margin = top ? top.score - (scored[1]?.score || 0) : 0;
+            if (top?.score >= 0.68 && margin >= 0.12) {
+                return {
+                    element: top.element, handleId: ensureHandle(top.element),
+                    source: 'skill-persistent-rebound', confidence: top.score,
+                    candidateCount: scored.length, scoreMargin: margin, signatureValid: true, rebound: true
+                };
+            }
+            const ambiguous = candidates.size > 1 || top?.score >= 0.42;
+            throw structuredError(ambiguous ? 'TARGET_AMBIGUOUS' : 'TARGET_NOT_FOUND',
+                'Skill 持久化目标无法安全重绑定', {
+                    candidateCount: scored.length, confidence: top?.score || 0, scoreMargin: margin,
+                    candidates: ambiguous ? dehydrateCandidates(scored) : []
+                });
         }
 
         function resolveTarget(target, options = {}) {
@@ -1161,7 +1345,8 @@
             if (uniqueExact.length > 1) {
                 throw structuredError('TARGET_AMBIGUOUS', '精确定位得到多个候选', {
                     candidateCount: uniqueExact.length,
-                    scoreMargin: 0
+                    scoreMargin: 0,
+                    candidates: dehydrateCandidates(uniqueExact.map(element => ({ element, score: 1 })))
                 });
             }
             const scored = pageCore.getInteractiveElements()
@@ -1172,7 +1357,7 @@
                         pageCore.isInputLikeElement(element))
                 )
                 .map(element => ({ element, score: scoreText(normalized, element) }))
-                .filter(item => item.score >= 0.45)
+                .filter(item => item.score >= 0.42)
                 .sort((a, b) => b.score - a.score);
             if (!scored.length) {
                 throw structuredError('TARGET_NOT_FOUND', `未找到目标: ${normalized}`, {
@@ -1180,12 +1365,38 @@
                     currentSnapshotId: snapshotId
                 });
             }
+
+            // 文本全等和子串/相似匹配属于不同的置信层级。只要存在唯一全等元素，
+            // 就应直接采用它，不能让“回复”之类的短子串候选制造虚假歧义。
+            const exactTextMatches = scored.filter(item => item.score === 1);
+            if (exactTextMatches.length === 1) {
+                return {
+                    element: exactTextMatches[0].element,
+                    entry: null,
+                    handleId: exactTextMatches[0].element.getAttribute('data-vcp-snapshot-handle'),
+                    source: 'semantic-text',
+                    confidence: 1,
+                    candidateCount: 1,
+                    scoreMargin: 1,
+                    signatureValid: null
+                };
+            }
+            if (exactTextMatches.length > 1) {
+                throw structuredError('TARGET_AMBIGUOUS', `目标文本存在多个全等候选: ${normalized}`, {
+                    candidateCount: exactTextMatches.length,
+                    confidence: 1,
+                    scoreMargin: 0,
+                    candidates: dehydrateCandidates(exactTextMatches)
+                });
+            }
+
             const margin = scored.length > 1 ? scored[0].score - scored[1].score : 1;
-            if (scored.length > 1 && margin < 0.08) {
+            if (scored[0].score < 0.68 || (scored.length > 1 && margin < 0.12)) {
                 throw structuredError('TARGET_AMBIGUOUS', `目标文本存在多个近似候选: ${normalized}`, {
                     candidateCount: scored.length,
                     confidence: scored[0].score,
-                    scoreMargin: margin
+                    scoreMargin: margin,
+                    candidates: dehydrateCandidates(scored)
                 });
             }
             return {
@@ -1236,7 +1447,17 @@
             const hits = [];
             let occluder = null;
             for (const point of points) {
-                const hit = documentObject.elementFromPoint(point.x, point.y);
+                let hit = documentObject.elementFromPoint(point.x, point.y);
+                // document 命中 Shadow 宿主并不表示目标被遮挡。
+                // 沿同一坐标继续命中，必须到达真实目标，不能仅凭宿主关系放行。
+                const visitedHits = new Set();
+                for (let depth = 0; hit?.shadowRoot && depth < 32; depth++) {
+                    if (visitedHits.has(hit)) break;
+                    visitedHits.add(hit);
+                    const innerHit = hit.shadowRoot.elementFromPoint?.(point.x, point.y);
+                    if (!innerHit || innerHit === hit) break;
+                    hit = innerHit;
+                }
                 const related = hit === element || element.contains(hit) || hit?.contains?.(element) ||
                     (hit?.tagName === 'LABEL' && hit.htmlFor === element.id) ||
                     (element.tagName === 'LABEL' && element.control === hit);
@@ -1484,9 +1705,29 @@
             const started = Date.now();
             let stableSince = Date.now();
             let mutationCount = 0;
-            const observer = new windowObject.MutationObserver(() => {
-                stableSince = Date.now();
-                mutationCount += 1;
+            let waitElement = null;
+            let lastTextLength = null;
+            let lastTextElement = null;
+            let textStableSince = Date.now();
+            const changes = new WeakMap();
+            const ignored = new WeakSet();
+            const observer = new windowObject.MutationObserver(mutations => {
+                for (const mutation of mutations) {
+                    const element = mutation.target.nodeType === NodeObject.TEXT_NODE
+                        ? mutation.target.parentElement : mutation.target;
+                    if (!element || ignored.has(element)) continue;
+                    if (params.target && (!waitElement || !waitElement.contains(element))) continue;
+                    const count = (changes.get(element) || 0) + 1;
+                    changes.set(element, count);
+                    const animation = mutation.type === 'attributes' &&
+                        ['style', 'class'].includes(mutation.attributeName);
+                    if (count >= 3 && ((element.textContent || '').length <= 24 || animation)) {
+                        ignored.add(element);
+                        continue;
+                    }
+                    stableSince = Date.now();
+                    mutationCount += 1;
+                }
             });
             observer.observe(documentObject.documentElement, {
                 childList: true,
@@ -1498,8 +1739,10 @@
                 while (Date.now() - started <= timeoutMs) {
                     let element = null;
                     try {
-                        if (params.target) element = resolveTarget(params.target).element;
+                        if (params.target) element = resolveTarget(params.target, { readOnly: true }).element;
                     } catch {}
+                    if (waitElement !== element) stableSince = Date.now();
+                    waitElement = element;
                     let matched = false;
                     let actual = null;
                     if (condition === 'element' || condition === 'visible') {
@@ -1518,7 +1761,21 @@
                     } else if (condition === 'dom_stable') {
                         const stableMs = parseNumber(params.stableMs, 500, 50, 10000);
                         actual = { stableForMs: Date.now() - stableSince, mutationCount };
-                        matched = Date.now() - stableSince >= stableMs;
+                        matched = (!params.target || Boolean(element)) && Date.now() - stableSince >= stableMs;
+                    } else if (condition === 'settled') {
+                        const root = params.target ? element : documentObject.body;
+                        const length = (root?.textContent || '').length;
+                        if (length !== lastTextLength || root !== lastTextElement) {
+                            textStableSince = Date.now();
+                            lastTextLength = length;
+                            lastTextElement = root;
+                        }
+                        const selector = '[aria-busy="true"],.loading,.spinner';
+                        const busy = Boolean(root && ((root.matches?.(selector) && isVisible(root)) ||
+                            Array.from(root.querySelectorAll(selector)).some(isVisible)));
+                        actual = { textLength: length, busy, stableForMs: Date.now() - textStableSince };
+                        matched = Boolean(root) && !busy &&
+                            Date.now() - textStableSince >= parseNumber(params.stableMs, 800, 50, 10000);
                     } else {
                         throw structuredError('WAIT_CONDITION_UNSUPPORTED', `不支持的等待条件: ${condition}`);
                     }
@@ -1590,6 +1847,97 @@
             };
         }
 
+        function actionResolution(resolved) {
+            return {
+                source: resolved.source, handleId: resolved.handleId,
+                confidence: resolved.confidence, candidateCount: resolved.candidateCount,
+                scoreMargin: resolved.scoreMargin, signatureValid: resolved.signatureValid,
+                rebound: resolved.rebound === true
+            };
+        }
+
+        function prepareAction(params) {
+            const action = String(params.targetAction || '').replace(/^page_/, '');
+            const resolved = params.target ? resolveTarget(params.target, {
+                requireInputLike: action === 'type', sideEffecting: true
+            }) : action === 'send_keys'
+                ? { element: documentObject.activeElement || documentObject.body, source: 'focused', confidence: 1 }
+                : resolveTarget(params.target);
+            const element = resolved.element;
+            resolved.handleId = ensureHandle(element);
+            const occlusion = checkOcclusion(element);
+            if (params.strict !== false && occlusion.occluded) {
+                throw structuredError('ELEMENT_OCCLUDED', '目标被页面内容完全遮挡', occlusion);
+            }
+            element.focus?.({ preventScroll: true });
+            const beforeState = pageCore.captureElementActionState(element);
+            const editable = pageCore.isContentEditableElement(element);
+            if (action === 'type' && params.nativeInput !== false) {
+                if (editable) {
+                    const range = documentObject.createRange();
+                    range.selectNodeContents(element);
+                    const selection = windowObject.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                } else if (typeof element.select === 'function') element.select();
+                else element.value = '';
+            }
+            return {
+                status: 'success', code: 'ACTION_PREPARED',
+                result: {
+                    targetAction: action, handleId: resolved.handleId, targetResolution: actionResolution(resolved),
+                    occlusion, point: occlusion.preferredPoint || {
+                        x: occlusion.rect.x + occlusion.rect.width / 2,
+                        y: occlusion.rect.y + occlusion.rect.height / 2
+                    },
+                    beforeState, isContentEditable: editable,
+                    currentChecked: beforeState.checked === true || beforeState.checked === 'true',
+                    isTopFrame: windowObject === windowObject.top
+                }
+            };
+        }
+
+        async function verifyAction(params) {
+            const action = String(params.targetAction || '').replace(/^page_/, '');
+            const entry = registry.get(params.target);
+            const resolved = entry ? { element: entry.element, handleId: entry.strictHandle, source: 'registry-exact' }
+                : resolveTarget(params.target, { readOnly: true });
+            const element = resolved.element;
+            await new Promise(resolve => setTimeout(resolve, 50));
+            const after = pageCore.captureElementActionState(element);
+            const backend = params.backendUsed;
+            let result;
+            if (action === 'type') {
+                result = pageCore.verifyInputAction(element, params.expectedText, params.beforeState, after, backend);
+            } else if (action === 'check') {
+                const desired = parseBoolean(params.desiredChecked, true);
+                const actual = after.checked === true || after.checked === 'true';
+                const current = params.beforeState?.checked === true || params.beforeState?.checked === 'true';
+                result = { attempted: current !== desired, idempotentNoop: current === desired,
+                    verified: actual === desired, desired, actual, beforeState: params.beforeState,
+                    afterState: after, backendUsed: backend, fallbackUsed: false,
+                    requiresFreshSnapshot: current !== desired };
+            } else if (action === 'click') {
+                result = pageCore.verifyClickAction(element, params.beforeState, after, backend);
+            } else {
+                result = { attempted: true, verified: null, beforeState: params.beforeState,
+                    afterState: after, backendUsed: backend, fallbackUsed: false, requiresFreshSnapshot: true };
+            }
+            const enforce = params.verification !== 'observe' && params.verification !== 'none';
+            const failed = result.verified === false;
+            const code = result.verified === true ? 'ACTION_VERIFIED' : failed
+                ? (enforce ? 'ACTION_VERIFICATION_FAILED' : 'ACTION_VERIFICATION_OBSERVED_FAILED')
+                : action === 'click' ? 'ACTION_ATTEMPTED_UNVERIFIABLE' : 'ACTION_DISPATCHED';
+            return {
+                status: failed && enforce ? 'error' : 'success', code,
+                message: failed ? '动作状态回读不一致' : '动作已分派并完成状态回读',
+                backendUsed: backend,
+                result: { ...result, occlusion: params.occlusion, actionPoint: params.actionPoint,
+                    targetResolution: params.targetResolution || actionResolution(resolved),
+                    runtimeInstanceId, documentGeneration, snapshotIdBefore: snapshotId }
+            };
+        }
+
         async function execute(commandInput, params = {}, requestOptions = {}) {
             const command = String(commandInput || '').replace(/^page_/, '');
             const strict = requestOptions.strict === true || params.strict === true;
@@ -1598,6 +1946,21 @@
                 documentGeneration: params.documentGeneration,
                 snapshotId: params.snapshotId
             }, strict);
+
+            if (comfyUIAdapter?.parseWidgetTarget?.(params.target)) {
+                const specializedResult = await comfyUIAdapter.execute(command, params, {
+                    window: windowObject,
+                    document: documentObject
+                });
+                if (specializedResult?.result && typeof specializedResult.result === 'object') {
+                    specializedResult.result.runtimeInstanceId = runtimeInstanceId;
+                    specializedResult.result.documentGeneration = documentGeneration;
+                    specializedResult.result.snapshotIdBefore = snapshotId;
+                }
+                return specializedResult;
+            }
+            if (command === 'prepare_action') return prepareAction({ ...params, strict: params.strict ?? requestOptions.strict });
+            if (command === 'verify_action') return verifyAction(params);
             if (command === 'get_info') return { status: 'success', message: '页面信息已刷新', result: snapshot() };
             if (command === 'get_image') {
                 const entry = resolvePageImage(params.imageId || params.target);
@@ -1819,7 +2182,8 @@
                     confidence: resolved.confidence,
                     candidateCount: resolved.candidateCount,
                     scoreMargin: resolved.scoreMargin,
-                    signatureValid: resolved.signatureValid
+                    signatureValid: resolved.signatureValid,
+                    rebound: resolved.rebound === true
                 };
                 response.result.runtimeInstanceId = runtimeInstanceId;
                 response.result.documentGeneration = documentGeneration;
@@ -1845,7 +2209,10 @@
                 wait: true,
                 search: true,
                 pageImages: true,
-                redaction: true
+                redaction: true,
+                nestedInputDiscovery: true,
+                specializedPages: comfyUIAdapter ? ['comfyui-litegraph'] : [],
+                comfyUIWidgetActions: Boolean(comfyUIAdapter)
             };
         }
 

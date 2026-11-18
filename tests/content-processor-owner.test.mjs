@@ -118,3 +118,57 @@ test('HTML code preview is sandboxed without same-origin authority', () => {
     processor.dispose();
     dom.window.close();
 });
+
+test('long code blocks keep the side view and copy buttons side by side in one toolbar', () => {
+    const lines = Array.from({ length: 8 }, (_, i) => `line ${i}`).join('\n');
+    const dom = new JSDOM(`<body><div id="chat"><div class="md-content"><pre><code class="language-js">${lines}</code></pre></div></div></body>`);
+    const root = dom.window.document.getElementById('chat');
+    const processor = createContentProcessor();
+    processor.initializeContentProcessor({ chatMessagesDiv: root, messageCommands: {}, uiHelper: {} });
+    const previousDocument = globalThis.document;
+    globalThis.document = dom.window.document;
+    try {
+        processor.processRenderedContent(root.querySelector('.md-content'), {});
+    } finally {
+        globalThis.document = previousDocument;
+    }
+
+    const pre = root.querySelector('pre');
+    const toolbars = pre.querySelectorAll(':scope > .vcp-codeblock-actions');
+    assert.equal(toolbars.length, 1);
+    assert.deepEqual(
+        [...toolbars[0].children].map(button => button.getAttribute('aria-label')),
+        ['侧边副屏查看', '复制代码'],
+        'each button pinned to the same corner on its own lets the copy button cover the side view button'
+    );
+    processor.dispose();
+    dom.window.close();
+});
+
+test('quote highlighting leaves button labels untouched', () => {
+    const dom = new JSDOM('<body><div id="m"><p>说 "你好" 吧</p><button>工具 · "query"</button></div></body>');
+    const root = dom.window.document.getElementById('m');
+    createContentProcessor().highlightAllPatternsInMessage(root);
+    assert.equal(root.querySelectorAll('p .highlighted-quote').length, 1);
+    assert.equal(root.querySelector('button').innerHTML, '工具 · "query"');
+});
+
+
+test('Chinese paragraph normalization preserves list continuations, quotes and short indentation', () => {
+    const processor = createContentProcessor();
+    const source = '- 列表\n  中文子段落\n    中文续行\n\n普通正文\n  中文短缩进\n    中文误缩进\n> 引用\n  > 中文引用';
+    assert.equal(processor.deIndentMisinterpretedCodeBlocks(source),
+        '- 列表\n  中文子段落\n    中文续行\n\n普通正文\n  中文短缩进\n中文误缩进\n> 引用\n  > 中文引用');
+});
+
+test('preview cleanup never enumerates every syntax-highlighted descendant', () => {
+    const dom = new JSDOM('<div><pre><code><span>code</span></code></pre></div>');
+    const root = dom.window.document.querySelector('div');
+    const nativeQuery = root.querySelectorAll.bind(root);
+    root.querySelectorAll = selector => {
+        assert.notEqual(selector, '*');
+        return nativeQuery(selector);
+    };
+    createContentProcessor().cleanupPreviewsInContent(root);
+    dom.window.close();
+});

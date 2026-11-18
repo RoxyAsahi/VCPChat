@@ -124,6 +124,14 @@ test('single-concern modules import cleanly and expose their contract', async ()
     owners.teardownTypedOwners();
     owners.disposeTypedSettings();
 });
+test('identity name display follows typed snapshot projection', () => {
+    const entry = read(bridgeEntry);
+    assert.match(
+        entry,
+        /listenIdentity\(nameInput,\s*['"]vcp-uiux-sync['"],\s*syncName,\s*['"]identity-name-sync['"]\)/,
+        'programmatic userName projection must refresh the visible identity name',
+    );
+});
 
 test('Agent ModelPicker directory stays an injected short-lived capability', async () => {
     const { normalizeAgentModels, createAgentModelPickerDirectory } = await import(
@@ -386,7 +394,7 @@ test('Agent sections are schema-owned collapsible containers with manager toggle
 
     const expectedSections = ['identity', 'prompt', 'model', 'params', 'tts', 'regex'];
     assert.deepEqual([...settingsSidebarSchema.agent.sections], expectedSections,
-        'Agent schema must declare all 6 canonical sections');
+        'Agent schema must declare all 7 canonical sections');
 
     const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>');
     const form = renderAgentSettingsSurface(dom.window.document.getElementById('host'), dom.window.document);
@@ -422,7 +430,7 @@ test('Agent TTS Range is a schema-owned native control with slider and pill repr
         'the retired manager-only range progress projection must not remain');
 });
 
-test('Agent actions remain upstream-visible and theme-token driven', () => {
+test('Agent/Group actions remain visible and consume the Next navigation material', () => {
     const sidebarCss = read(path.join(root, 'styles', 'ui-system', 'settings-sidebar.css'));
     assert.doesNotMatch(sidebarCss, /#agentSettingsForm\s*>\s*\.form-actions\s+button\[type="submit"\][^\{]*\{[^}]*display:\s*none\s*!important/,
         'Agent save action must not be hidden by the presentation layer');
@@ -432,6 +440,19 @@ test('Agent actions remain upstream-visible and theme-token driven', () => {
         'delete action container exists in the unified sidebar surface');
     assert.match(sidebarCss, /--highlight-text/,
         'Agent save action keeps the upstream theme color contract');
+
+    const materialRule = sidebarCss.slice(
+        sidebarCss.indexOf('The floating save control is a navigation-material consumer'),
+        sidebarCss.indexOf('.form-actions .danger-button'),
+    );
+    assert.match(materialRule, /background-color:\s*var\(\s*--next-shell-bg/,
+        'Agent and Group save controls must inherit the navigation material surface');
+    assert.match(materialRule, /background-image:\s*var\(--next-material-sheen,\s*none\)/,
+        'Agent and Group save controls must inherit each navigation material sheen recipe');
+    assert.match(materialRule, /backdrop-filter:\s*var\(--next-backdrop-filter,/,
+        'Agent and Group save controls must inherit navigation blur/saturation/brightness');
+    assert.doesNotMatch(materialRule, /background:\s*var\(--vcp-settings-accent/,
+        'the floating save control must not regress to an opaque accent fill');
 });
 
 test('Agent TTS Voice Select is a schema-owned native control with canonical model loading', async () => {
@@ -883,12 +904,12 @@ test('data-visible-when 投影：复选/取值/未知来源放行/隐藏还原',
 });
 
 test('设置分区静态标记退役（M4）：分区契约由 schema 渲染承接', () => {
-    // main.html 的八个分区壳只剩 id + data-settings-section-key；行结构、
+    // main.html 的九个分区壳只剩 id + data-settings-section-key；行结构、
     // 业务锚点与 data-visible-when 组合的全部契约移到
     // tests/settings-schema-render.test.mjs（schema 编译产物逐字对齐原静态标记）。
     const html = read(path.join(root, 'main.html'));
-    for (const key of ['user-identity', 'server-connection', 'appearance-settings', 'render-settings',
-        'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions']) {
+    for (const key of ['user-identity', 'server-connection', 'jev-service', 'appearance-settings', 'render-settings',
+        'selection-assistant', 'voice-settings', 'advanced-features', 'workspace-management', 'quick-actions']) {
         assert.match(html, new RegExp(`id="section-${key}" data-settings-section-key="${key}"></div>`),
             `section ${key} shell must remain for nav/ownership`);
     }
@@ -928,7 +949,7 @@ test('设置分区静态标记退役（M4）：分区契约由 schema 渲染承�
     const legacy = read(eventListeners);
     assert.match(legacy, /syncDependentRows/);
     const audit = read(path.join(root, 'scripts', 'audit-settings-layout.mjs'));
-    assert.match(audit, /FLAT_SECTIONS = new Set\(\['quick-actions', 'advanced-features', 'render-settings', 'server-connection', 'voice-settings', 'selection-assistant', 'user-identity', 'appearance-settings'\]\)/,
+    assert.match(audit, /FLAT_SECTIONS = new Set\(\['quick-actions', 'advanced-features', 'render-settings', 'server-connection', 'jev-service', 'voice-settings', 'selection-assistant', 'user-identity', 'appearance-settings', 'workspace-management'\]\)/,
         'the layout probe must enforce the flattened sections');
     // 事件路径与快照路径都改走共享行评估器，不允许残留直写。
     const presentation = read(path.join(root, 'modules', 'renderer', 'mainChatSettingsPresentationOwner.js'));

@@ -3,11 +3,13 @@
 const SECTION_KEYS = Object.freeze({
     '用户身份': 'user-identity',
     '服务器连接': 'server-connection',
+    'Jev 服务': 'jev-service',
     '界面与外观': 'appearance-settings',
     '消息渲染': 'render-settings',
     '划词助手': 'selection-assistant',
     '语音设置': 'voice-settings',
     '高级功能': 'advanced-features',
+    '工作区管理': 'workspace-management',
     '快捷操作': 'quick-actions',
 });
 

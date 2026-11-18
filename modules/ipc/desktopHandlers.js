@@ -18,8 +18,10 @@ let desktopWindow = null;
 let mainWindow = null;
 let openChildWindows = [];
 let appSettingsManager = null;
+let appFeatures = null; // modules/appFeatures.js：插件管理器里一并列出应用功能模块
 let alwaysOnBottomEnabled = false;
 let alwaysOnBottomInterval = null;
+let pendingAutoSpawnQueue = []; // 🌟 开门迎客离线挂件待上屏队列
 
 // --- 独立 Electron App 子进程引用（防止重复启动） ---
 const standaloneAppProcesses = new Map(); // appDir -> child_process
@@ -34,6 +36,8 @@ let vchatMusicWindow = null;
 let vchatThemesWindow = null;
 let vchatTaskWindow = null;
 let vchatPluginManagerWindow = null;
+let vchatProjectForgeWindow = null;
+let vchatGameWindow = null;
 
 // --- 收藏系统路径 - 使用项目根目录的 AppData ---
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -56,12 +60,55 @@ function isSafeWidgetId(value) {
     return typeof value === 'string' && /^[a-zA-Z0-9_-]+$/.test(value);
 }
 
+/**
+ * 把挂件 ID 解析为 DESKTOP_WIDGETS_DIR 下的直接子目录。
+ * 只拒绝会逃出挂件库的输入（路径分隔符、'.'、'..'、盘符、空值），
+ * 不限制字符集，已有的中文名或带点号的手建文件夹照常可用。
+ * @param {string} id
+ * @returns {string|null} 绝对路径；输入不安全时返回 null
+ */
+function resolveWidgetDir(id) {
+    if (typeof id !== 'string' || !id || id === '.' || id === '..') return null;
+    if (/[\\/]/.test(id) || id !== path.basename(id)) return null;
+    const root = path.resolve(DESKTOP_WIDGETS_DIR);
+    const dir = path.resolve(root, id);
+    return path.dirname(dir) === root ? dir : null;
+}
+
 function isSafePluginFolderName(value) {
     return typeof value === 'string'
         && value.length > 0
         && value === path.basename(value)
         && !value.includes('..')
         && !/[\\/]/.test(value);
+}
+
+// 插件管理器里的应用功能模块用 "feature:<name>" 作 folderName，和分布式插件目录名区分开
+const FEATURE_FOLDER_PREFIX = 'feature:';
+
+function getFeatureName(folderName) {
+    return typeof folderName === 'string' && folderName.startsWith(FEATURE_FOLDER_PREFIX)
+        ? folderName.slice(FEATURE_FOLDER_PREFIX.length)
+        : null;
+}
+
+function listAppFeaturesForPluginManager() {
+    if (!appFeatures) return [];
+    return appFeatures.list().map((feature) => ({
+        folderName: FEATURE_FOLDER_PREFIX + feature.name,
+        featureName: feature.name,
+        source: 'feature',
+        relativePath: feature.relativePath,
+        enabled: feature.enabled,
+        active: feature.active,
+        manifestFileName: 'feature.json',
+        hasConfigEnv: false,
+        configEnvContent: '',
+        manifest: feature.manifest,
+        rawManifest: JSON.stringify(feature.manifest, null, 2),
+        parseError: feature.error,
+        pluginType: 'feature',
+    }));
 }
 
 function getPluginManagerPluginDir(folderName) {
@@ -445,6 +492,7 @@ function createOrFocusChildWindow(existingWindow, options) {
         modal: false,
         webPreferences: {
             preload: options.preloadPath || resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.UTILITY),
+            sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
             contextIsolation: true,
             nodeIntegration: false,
             devTools: true,
@@ -487,6 +535,8 @@ function createOrFocusChildWindow(existingWindow, options) {
         if (win === vchatThemesWindow) vchatThemesWindow = null;
         if (win === vchatTaskWindow) vchatTaskWindow = null;
         if (win === vchatPluginManagerWindow) vchatPluginManagerWindow = null;
+        if (win === vchatProjectForgeWindow) vchatProjectForgeWindow = null;
+        if (win === vchatGameWindow) vchatGameWindow = null;
     });
 
     console.log(`[DesktopHandlers] Created child window: ${options.title}`);
@@ -744,6 +794,44 @@ function registerManagedWindows() {
             return vchatPluginManagerWindow;
         },
     });
+
+    windowService.register(WINDOW_APP_IDS.PROJECT_FORGE, {
+        owner: 'desktopHandlers',
+        getWindow: () => vchatProjectForgeWindow || findWindowByUrl('projectforge.html'),
+        open: async () => {
+            const existing = findWindowByUrl('projectforge.html');
+            if (existing) {
+                if (!existing.isVisible()) existing.show();
+                existing.focus();
+                vchatProjectForgeWindow = existing;
+                return existing;
+            }
+            vchatProjectForgeWindow = createOrFocusChildWindow(vchatProjectForgeWindow, {
+                width: 1320, height: 860, minWidth: 960, minHeight: 620,
+                title: 'ProjectForge 施工图',
+                htmlPath: path.join(app.getAppPath(), 'ProjectForgemodules', 'projectforge.html'),
+            });
+            return vchatProjectForgeWindow;
+        },
+    });
+}
+function registerGameWindow() {
+    require('./gameHandlers').initialize();
+    windowService.register(WINDOW_APP_IDS.GAME, {
+        owner: 'desktopHandlers',
+        getWindow: () => vchatGameWindow,
+        open: async () => {
+            if (vchatGameWindow && !vchatGameWindow.isDestroyed() && vchatGameWindow.isMinimized()) {
+                vchatGameWindow.restore();
+            }
+            vchatGameWindow = createOrFocusChildWindow(vchatGameWindow, {
+                width: 1100, height: 760, minWidth: 640, minHeight: 480,
+                title: 'VCPgame 游戏大厅',
+                htmlPath: path.join(app.getAppPath(), 'Gamemodules', 'game.html'),
+            });
+            return vchatGameWindow;
+        },
+    });
 }
 
 function resolveAppActionToAppId(appAction) {
@@ -766,16 +854,22 @@ function resolveAppActionToAppId(appAction) {
             return WINDOW_APP_IDS.DICE;
         case 'open-canvas-window':
             return WINDOW_APP_IDS.CANVAS;
+        case 'open-chart-window':
+            return WINDOW_APP_IDS.CHART;
         case 'open-translator-window':
             return WINDOW_APP_IDS.TRANSLATOR;
         case 'open-music-window':
             return WINDOW_APP_IDS.MUSIC;
         case 'open-themes-window':
             return WINDOW_APP_IDS.THEMES;
+        case 'open-game-window':
+            return WINDOW_APP_IDS.GAME;
         case 'open-task-window':
             return WINDOW_APP_IDS.TASK;
         case 'open-plugin-manager-window':
             return WINDOW_APP_IDS.PLUGIN_MANAGER;
+        case 'open-project-forge-window':
+            return WINDOW_APP_IDS.PROJECT_FORGE;
         case 'open-scriptorium-window':
             return WINDOW_APP_IDS.DOCX;
         case 'open-desktop-window':
@@ -960,14 +1054,17 @@ function initialize(params) {
     mainWindow = params.mainWindow;
     openChildWindows = params.openChildWindows;
     appSettingsManager = params.settingsManager;
+    appFeatures = params.appFeatures || null;
     const appDataRoot = params.APP_DATA_ROOT_IN_PROJECT
         || path.join(PROJECT_ROOT, 'AppData');
     DESKTOP_WIDGETS_DIR = path.join(appDataRoot, 'DesktopWidgets');
     DESKTOP_DATA_DIR = path.join(appDataRoot, 'DesktopData');
+    DESKTOP_INBOX_DIR = path.join(DESKTOP_DATA_DIR, 'inbox');
     DOCK_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'dock.json');
     LAYOUT_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'layout.json');
     CATALOG_PATH = path.join(DESKTOP_WIDGETS_DIR, 'CATALOG.md');
     registerManagedWindows();
+    registerGameWindow();
 
     if (!standaloneProcessCleanupRegistered) {
         app.once('will-quit', cleanupStandaloneAppProcesses);
@@ -977,6 +1074,7 @@ function initialize(params) {
     // 确保目录存在
     fs.ensureDirSync(DESKTOP_WIDGETS_DIR);
     fs.ensureDirSync(DESKTOP_DATA_DIR);
+    fs.ensureDirSync(DESKTOP_INBOX_DIR);
 
     // 启动时生成/更新 CATALOG.md
     generateCatalog().catch(err => {
@@ -988,6 +1086,15 @@ function initialize(params) {
         await openDesktopWindow();
     });
 
+    // --- IPC: 桌面画布 DOM 与模块彻底就绪事件（零延时精准握手）---
+    ipcMain.handle('desktop-canvas-ready', async (event) => {
+        console.log('[DesktopHandlers] Desktop canvas reported ready via IPC handshake.');
+        if (desktopWindow && !desktopWindow.isDestroyed()) {
+            triggerAutoSpawnOnWindow(desktopWindow, 50);
+        }
+        return { success: true };
+    });
+
     // --- IPC: 窗口始终置底控制 ---
     ipcMain.handle('desktop-set-always-on-bottom', (event, enabled) => {
         setAlwaysOnBottom(enabled);
@@ -995,9 +1102,131 @@ function initialize(params) {
     });
 
     // --- IPC: 主窗口 -> 桌面画布的流式推送 ---
-    ipcMain.on('desktop-push', (event, data) => {
-        if (desktopWindow && !desktopWindow.isDestroyed()) {
-            desktopWindow.webContents.send('desktop-push-to-canvas', data);
+    ipcMain.on('desktop-push', async (event, data) => {
+        const { action, widgetId, content, offline } = data || {};
+        // 关键：必须同时检查 isVisible()！如果窗口处于隐藏或未打开状态，物理视同离线！
+        const isWindowVisible = desktopWindow && !desktopWindow.isDestroyed() && desktopWindow.isVisible();
+
+        // 1. 主进程权威仲裁（Master-Arbiter Pipeline）:
+        // 若桌面窗口真实处于可见在线状态 (isWindowVisible)，无视前端是否误标 offline！
+        if (isWindowVisible) {
+            if (action === 'finalize' && offline && typeof content === 'string' && content.trim().length > 0) {
+                // 收到前端误判离线的合并单包：主进程权威负责解包为标准创建三部曲，直通画布实时上屏！
+                console.log(`[DesktopHandlers] Master-Arbiter: Unpacking offline bundle for visible canvas: ${widgetId}`);
+                desktopWindow.webContents.send('desktop-push-to-canvas', {
+                    action: 'create',
+                    widgetId,
+                    options: { width: 340, height: 220 }
+                });
+                desktopWindow.webContents.send('desktop-push-to-canvas', {
+                    action: 'append',
+                    widgetId,
+                    content
+                });
+                desktopWindow.webContents.send('desktop-push-to-canvas', {
+                    action: 'finalize',
+                    widgetId
+                });
+            } else if (!offline) {
+                // 标准在线流式数据包直接转发
+                desktopWindow.webContents.send('desktop-push-to-canvas', data);
+            }
+        }
+
+        // 2. 无论桌面在不在线，收到 finalize 闭合且附带有效 HTML 时，出厂即归档落盘至收件箱 (路线 A)
+        if (action === 'finalize' && typeof content === 'string' && content.trim().length > 0 && widgetId) {
+            try {
+                if (isSafeWidgetId(widgetId)) {
+                    // 终局企划：大一统挂件库 + 置顶星标模型 (DesktopWidgets)
+                    const widgetDir = path.join(DESKTOP_WIDGETS_DIR, widgetId);
+                    await fs.ensureDir(widgetDir);
+
+                    // 写入挂件源码
+                    await fs.writeFile(path.join(widgetDir, 'widget.html'), content, 'utf-8');
+
+                    // 启发式提取友好名称
+                    let detectedName = '';
+                    const titleMatch = content.match(/<title>([^<]+)<\/title>/i);
+                    if (titleMatch && titleMatch[1].trim()) {
+                        detectedName = titleMatch[1].trim();
+                    } else {
+                        const hMatch = content.match(/<h[12][^>]*>([^<]+)<\/h[12]>/i);
+                        if (hMatch && hMatch[1].trim()) {
+                            detectedName = hMatch[1].trim();
+                        } else {
+                            const nowD = new Date();
+                            detectedName = `挂件-${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, '0')}${String(nowD.getDate()).padStart(2, '0')}-${String(nowD.getHours()).padStart(2, '0')}${String(nowD.getMinutes()).padStart(2, '0')}`;
+                        }
+                    }
+
+                    // 写入元数据：随聊生成默认未加星置顶 (pinned: false)
+                    const metaPath = path.join(widgetDir, 'meta.json');
+                    const meta = {
+                        id: widgetId,
+                        name: detectedName,
+                        origin: 'chat-stream',
+                        pinned: false,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                    };
+                    if (await fs.pathExists(metaPath)) {
+                        try {
+                            const existingMeta = await fs.readJson(metaPath);
+                            meta.createdAt = existingMeta.createdAt || meta.createdAt;
+                            if (existingMeta.name) meta.name = existingMeta.name;
+                            if (existingMeta.pinned !== undefined) meta.pinned = existingMeta.pinned;
+                        } catch (e) { /* ignore */ }
+                    }
+                    await fs.writeJson(metaPath, meta, { spaces: 2 });
+
+                    // 生成默认矢量占位图（纯英文无乱码设计 + 统一使用真实 PNG 后缀兼容）
+                    const thumbPath = path.join(widgetDir, 'thumbnail.png');
+                    if (!await fs.pathExists(thumbPath)) {
+                        const initial = (detectedName || 'W').trim().charAt(0).toUpperCase();
+                        // 避免任何中文字符导致字体库方块乱码，纯 CSS 渐变质感徽章
+                        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient></defs><rect width="320" height="200" fill="url(#bg)" rx="10"/><circle cx="160" cy="85" r="36" fill="#312e81" stroke="#6366f1" stroke-width="2"/><text x="160" y="96" font-size="32" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, monospace" font-weight="bold" fill="#38bdf8" text-anchor="middle">${initial}</text><rect x="60" y="145" width="200" height="20" rx="4" fill="rgba(255,255,255,0.06)"/><text x="160" y="159" font-size="11" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, monospace" font-weight="bold" fill="#94a3b8" text-anchor="middle" letter-spacing="1">DESKTOP WIDGET</text></svg>`;
+                        await fs.writeFile(thumbPath, Buffer.from(svg, 'utf-8'));
+                    }
+
+                    console.log(`[DesktopHandlers] Auto-archived stream widget to Library: ${detectedName} (${widgetId}) at ${widgetDir}`);
+
+                    // 在线时告诉画布：该挂件的归档 ID 就是 widgetId，收藏时复用此目录而不是另建 fav_*
+                    if (isWindowVisible && desktopWindow && !desktopWindow.isDestroyed()) {
+                        desktopWindow.webContents.send('desktop-push-to-canvas', {
+                            action: 'archived',
+                            widgetId,
+                            savedId: widgetId,
+                            name: meta.name,
+                            dirUrl: require('url').pathToFileURL(widgetDir).href,
+                        });
+                    }
+
+                    // 异步更新 CATALOG.md
+                    generateCatalog().catch(err => {
+                        console.warn('[DesktopHandlers] CATALOG.md update failed:', err.message);
+                    });
+
+                    // 3. 若此时桌面处于离线（未打开或隐藏状态），推入待上屏队列（上限 5 个防膨胀，FIFO 淘汰）
+                    if (!isWindowVisible) {
+                        const existingIdx = pendingAutoSpawnQueue.findIndex(item => item.widgetId === widgetId);
+                        if (existingIdx >= 0) {
+                            pendingAutoSpawnQueue.splice(existingIdx, 1);
+                        }
+                        if (pendingAutoSpawnQueue.length >= 5) {
+                            pendingAutoSpawnQueue.shift();
+                        }
+                        pendingAutoSpawnQueue.push({
+                            widgetId,
+                            content,
+                            name: detectedName,
+                            createdAt: Date.now(),
+                        });
+                        console.log(`[DesktopHandlers] Queued widget for auto-spawn: ${detectedName} (${widgetId}), queue length: ${pendingAutoSpawnQueue.length}`);
+                    }
+                }
+            } catch (err) {
+                console.error('[DesktopHandlers] Stash stream widget to Inbox error:', err);
+            }
         }
     });
 
@@ -1048,23 +1277,28 @@ function initialize(params) {
     // 保存/更新收藏
     ipcMain.handle('desktop-save-widget', async (event, data) => {
         try {
-            const { id, name, html, thumbnail } = data;
+            const { id, name, html, thumbnail, preserveMeta } = data;
             console.log(`[DesktopHandlers] desktop-save-widget called: id=${id}, name=${name}, html length=${html?.length}, has thumbnail=${!!thumbnail}`);
             if (!id || !name || !html) {
                 console.error('[DesktopHandlers] Missing required params:', { id: !!id, name: !!name, html: !!html });
                 return { success: false, error: '缺少必要参数' };
             }
 
-            const widgetDir = path.join(DESKTOP_WIDGETS_DIR, id);
+            const widgetDir = resolveWidgetDir(id);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${id}` };
+            }
             await fs.ensureDir(widgetDir);
 
             // 保存 HTML 内容
             await fs.writeFile(path.join(widgetDir, 'widget.html'), html, 'utf-8');
 
-            // 保存元数据
+            // 保存元数据：用户主动收藏/更新，打上加星置顶标记 (pinned: true)
             const meta = {
                 id,
                 name,
+                origin: 'user-favorite',
+                pinned: true,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
             };
@@ -1075,6 +1309,12 @@ function initialize(params) {
                 try {
                     const existingMeta = await fs.readJson(metaPath);
                     meta.createdAt = existingMeta.createdAt || meta.createdAt;
+                    // 只更新内容或缩略图时，保留原有来源、星标与名称
+                    if (preserveMeta) {
+                        if (existingMeta.origin) meta.origin = existingMeta.origin;
+                        if (existingMeta.pinned !== undefined) meta.pinned = existingMeta.pinned;
+                        if (existingMeta.name) meta.name = existingMeta.name;
+                    }
                 } catch (e) { /* ignore */ }
             }
 
@@ -1129,7 +1369,10 @@ function initialize(params) {
                 return { success: false, error: `不允许覆盖核心文件: ${safeName}` };
             }
 
-            const widgetDir = path.join(DESKTOP_WIDGETS_DIR, widgetId);
+            const widgetDir = resolveWidgetDir(widgetId);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${widgetId}` };
+            }
             await fs.ensureDir(widgetDir);
 
             const filePath = path.join(widgetDir, safeName);
@@ -1162,7 +1405,11 @@ function initialize(params) {
                 return { success: false, error: `不安全的文件名: ${fileName}` };
             }
 
-            const filePath = path.join(DESKTOP_WIDGETS_DIR, widgetId, safeName);
+            const widgetDir = resolveWidgetDir(widgetId);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${widgetId}` };
+            }
+            const filePath = path.join(widgetDir, safeName);
             if (!await fs.pathExists(filePath)) {
                 return { success: false, error: 'File not found.' };
             }
@@ -1195,7 +1442,10 @@ function initialize(params) {
                 return { success: false, error: '缺少 widgetId' };
             }
 
-            const widgetDir = path.join(DESKTOP_WIDGETS_DIR, widgetId);
+            const widgetDir = resolveWidgetDir(widgetId);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${widgetId}` };
+            }
             if (!await fs.pathExists(widgetDir)) {
                 return { success: true, files: [] };
             }
@@ -1229,7 +1479,10 @@ function initialize(params) {
     // 加载收藏（读取 HTML 内容）
     ipcMain.handle('desktop-load-widget', async (event, id) => {
         try {
-            const widgetDir = path.join(DESKTOP_WIDGETS_DIR, id);
+            const widgetDir = resolveWidgetDir(id);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${id}` };
+            }
             const htmlPath = path.join(widgetDir, 'widget.html');
             const metaPath = path.join(widgetDir, 'meta.json');
 
@@ -1246,7 +1499,8 @@ function initialize(params) {
                 } catch (e) { /* ignore */ }
             }
 
-            return { success: true, html, name, id };
+            // dirUrl 供渲染端把挂件内相对路径的 <script src> 解析到挂件目录
+            return { success: true, html, name, id, dirUrl: require('url').pathToFileURL(widgetDir).href };
         } catch (err) {
             console.error('[DesktopHandlers] Load widget error:', err);
             return { success: false, error: err.message };
@@ -1256,7 +1510,10 @@ function initialize(params) {
     // 删除收藏
     ipcMain.handle('desktop-delete-widget', async (event, id) => {
         try {
-            const widgetDir = path.join(DESKTOP_WIDGETS_DIR, id);
+            const widgetDir = resolveWidgetDir(id);
+            if (!widgetDir) {
+                return { success: false, error: `不安全的挂件 ID: ${id}` };
+            }
             if (await fs.pathExists(widgetDir)) {
                 await fs.remove(widgetDir);
                 console.log(`[DesktopHandlers] Widget deleted: ${id}`);
@@ -1297,26 +1554,41 @@ function initialize(params) {
                     } catch (e) { /* ignore */ }
                 }
 
-                // 读取缩略图为 Data URL
+                // 读取缩略图为 Data URL (智能适配 PNG 真实位图与 SVG 矢量图)
                 let thumbnail = '';
                 if (await fs.pathExists(thumbPath)) {
                     try {
                         const thumbBuffer = await fs.readFile(thumbPath);
-                        thumbnail = `data:image/png;base64,${thumbBuffer.toString('base64')}`;
+                        const isSvg = thumbBuffer.slice(0, 100).toString('utf-8').trim().startsWith('<svg');
+                        const mimeType = isSvg ? 'image/svg+xml' : 'image/png';
+                        thumbnail = `data:${mimeType};base64,${thumbBuffer.toString('base64')}`;
                     } catch (e) { /* ignore */ }
                 }
+
+                // 兼容性核心：老挂件未定义 pinned 时，无感默认判定为 true（老收藏全部置顶）
+                const isPinned = meta.pinned !== undefined ? Boolean(meta.pinned) : true;
 
                 widgets.push({
                     id: meta.id || entry.name,
                     name: meta.name || entry.name,
                     thumbnail,
+                    pinned: isPinned,
+                    origin: meta.origin || 'user-favorite',
                     createdAt: meta.createdAt,
                     updatedAt: meta.updatedAt,
                 });
             }
 
-            // 按更新时间倒序排列
-            widgets.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+            // 终极排序权重：
+            // 1. 加星置顶挂件 (pinned: true) 绝对排在前面
+            // 2. 随聊生成未加星挂件 (pinned: false) 紧随其后
+            // 3. 同级别内部按 updatedAt / createdAt 倒序
+            widgets.sort((a, b) => {
+                const aWeight = a.pinned ? 1 : 0;
+                const bWeight = b.pinned ? 1 : 0;
+                if (bWeight !== aWeight) return bWeight - aWeight;
+                return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+            });
 
             return { success: true, widgets };
         } catch (err) {
@@ -1369,6 +1641,7 @@ function initialize(params) {
 
             let vcpServerUrl = '';
             let vcpApiKey = '';
+            let desktopWidgetModel = '';
             let username = '';
             let password = '';
 
@@ -1377,6 +1650,10 @@ function initialize(params) {
                     const settings = await fs.readJson(settingsPath);
                     vcpServerUrl = settings.vcpServerUrl || '';
                     vcpApiKey = settings.vcpApiKey || '';
+                    // 可选：桌面挂件 vcpAPI.post 未指定 model 时使用的默认模型
+                    if (typeof settings.desktopWidgetModel === 'string') {
+                        desktopWidgetModel = settings.desktopWidgetModel.trim();
+                    }
                 } catch (e) { /* ignore */ }
             }
 
@@ -1402,6 +1679,7 @@ function initialize(params) {
                 apiBaseUrl,
                 vcpServerUrl,
                 vcpApiKey,
+                desktopWidgetModel,
                 username,
                 password,
             };
@@ -2191,6 +2469,7 @@ function initialize(params) {
                 const plugin = await readVcpPluginEntry(entry, pluginsRoot);
                 if (plugin) plugins.push(plugin);
             }
+            plugins.push(...listAppFeaturesForPluginManager());
 
             plugins.sort((a, b) => {
                 const aName = a.manifest?.displayName || a.manifest?.name || a.folderName;
@@ -2207,6 +2486,7 @@ function initialize(params) {
 
     ipcMain.handle('plugin-manager-save-manifest', async (event, data = {}) => {
         try {
+            if (getFeatureName(data.folderName)) return { success: false, error: '应用功能模块的 feature.json 随应用发布，不在这里编辑' };
             const pluginDir = getPluginManagerPluginDir(data.folderName);
             await fs.ensureDir(pluginDir);
             const manifestInfo = findExistingManifestPath(pluginDir);
@@ -2229,6 +2509,7 @@ function initialize(params) {
 
     ipcMain.handle('plugin-manager-save-config-env', async (event, data = {}) => {
         try {
+            if (getFeatureName(data.folderName)) return { success: false, error: '应用功能模块没有 config.env' };
             const pluginDir = getPluginManagerPluginDir(data.folderName);
             await fs.ensureDir(pluginDir);
             const envPath = path.join(pluginDir, 'config.env');
@@ -2242,6 +2523,12 @@ function initialize(params) {
 
     ipcMain.handle('plugin-manager-set-plugin-enabled', async (event, data = {}) => {
         try {
+            const featureName = getFeatureName(data.folderName);
+            if (featureName) {
+                if (!appFeatures) return { success: false, error: '应用功能模块不可用' };
+                const result = appFeatures.setEnabled(featureName, Boolean(data.enabled));
+                return { success: true, enabled: result.enabled, restartRequired: result.restartRequired };
+            }
             const pluginDir = getPluginManagerPluginDir(data.folderName);
             const enabledPath = path.join(pluginDir, 'plugin-manifest.json');
             const disabledPath = path.join(pluginDir, 'plugin-manifest.json.block');
@@ -2274,7 +2561,10 @@ function initialize(params) {
 
     ipcMain.handle('plugin-manager-open-plugin-folder', async (event, data = {}) => {
         try {
-            const pluginDir = getPluginManagerPluginDir(data.folderName);
+            const featureName = getFeatureName(data.folderName);
+            const feature = featureName ? appFeatures?.list().find((item) => item.name === featureName) : null;
+            if (featureName && !feature) return { success: false, error: '没有这个功能模块' };
+            const pluginDir = feature ? path.join(PROJECT_ROOT, feature.relativePath) : getPluginManagerPluginDir(data.folderName);
             if (!await fs.pathExists(pluginDir)) {
                 return { success: false, error: '插件目录不存在' };
             }
@@ -2301,12 +2591,60 @@ function initialize(params) {
 }
 
 /**
+ * 错落级联自动挂载上屏核心函数（统一供给首次打开与后台唤醒复用）
+ */
+function triggerAutoSpawnOnWindow(targetWin, delayMs = 350) {
+    if (!targetWin || targetWin.isDestroyed() || pendingAutoSpawnQueue.length === 0) return;
+
+    // 队列上限为 5，全部取出上屏；下方网格按 3 列自动换行排布
+    const itemsToSpawn = pendingAutoSpawnQueue.splice(0);
+
+    setTimeout(() => {
+        if (!targetWin || targetWin.isDestroyed()) return;
+        console.log(`[DesktopHandlers] Auto-spawning ${itemsToSpawn.length} queued widgets...`);
+        itemsToSpawn.forEach((item, index) => {
+            const cardW = 340;
+            const cardGap = 24;
+            const col = index % 3;
+            const row = Math.floor(index / 3);
+            const x = 60 + col * (cardW + cardGap);
+            const y = 50 + row * (220 + cardGap);
+
+            targetWin.webContents.send('desktop-push-to-canvas', {
+                action: 'create',
+                widgetId: item.widgetId,
+                options: { x, y, width: cardW, height: 220 }
+            });
+            targetWin.webContents.send('desktop-push-to-canvas', {
+                action: 'append',
+                widgetId: item.widgetId,
+                content: item.content
+            });
+            targetWin.webContents.send('desktop-push-to-canvas', {
+                action: 'finalize',
+                widgetId: item.widgetId
+            });
+            // 队列里的挂件入队前已归档，同样回写归档 ID
+            targetWin.webContents.send('desktop-push-to-canvas', {
+                action: 'archived',
+                widgetId: item.widgetId,
+                savedId: item.widgetId,
+                name: item.name,
+                dirUrl: require('url').pathToFileURL(path.join(DESKTOP_WIDGETS_DIR, item.widgetId)).href,
+            });
+        });
+    }, delayMs);
+}
+
+/**
  * 打开或聚焦桌面画布窗口
  */
 async function openDesktopWindow() {
     if (desktopWindow && !desktopWindow.isDestroyed()) {
         if (!desktopWindow.isVisible()) desktopWindow.show();
         desktopWindow.focus();
+        // 关键修复：当窗口只是隐藏（非初次启动）时，唤醒瞬间立即消费迎客队列！
+        triggerAutoSpawnOnWindow(desktopWindow, 150);
         return desktopWindow;
     }
 
@@ -2331,12 +2669,16 @@ async function openDesktopWindow() {
         ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' }),
         webPreferences: {
             preload: resolveAppPreload(app.getAppPath(), PRELOAD_ROLES.DESKTOP),
+            sandbox: false, // preloads/* 需要 require 本地模块，见 preloads/README.md
             contextIsolation: true,
             nodeIntegration: false,
+            devTools: true,
         },
         icon: path.join(app.getAppPath(), 'assets', 'icon.png'),
         show: false,
     });
+
+    // 生产环境保持正常，不自动弹出 DevTools
 
     const desktopUrl = `file://${path.join(app.getAppPath(), 'Desktopmodules', 'desktop.html')}?currentThemeMode=${encodeURIComponent(currentThemeMode)}`;
     desktopWindow.loadURL(desktopUrl);
@@ -2383,6 +2725,18 @@ async function openDesktopWindow() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('desktop-status', { connected: true, message: 'Desktop window is ready.' });
         }
+
+        // ============================================================
+        // 🌟 推进 1：离线挂件开门迎客（严禁在 ready-to-show 盲目 350ms 抢跑清空！）
+        // 绝对安全策略：由前端全部 DOM 与 ipcBridge 彻底就绪后触发的 'desktop-canvas-ready' 握手精准消费！
+        // 保底防御：若前端握手未达，1200ms 后才由 triggerAutoSpawnOnWindow 执行保底消费
+        // ============================================================
+        const fallbackSpawnTimer = setTimeout(() => {
+            if (desktopWindow && !desktopWindow.isDestroyed()) {
+                triggerAutoSpawnOnWindow(desktopWindow, 0);
+            }
+        }, 1200);
+        desktopWindow.once('closed', () => clearTimeout(fallbackSpawnTimer));
     });
 
     // 锁定最大化状态：如果开启了自动最大化，阻止用户手动还原

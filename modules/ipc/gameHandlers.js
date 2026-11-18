@@ -1,0 +1,277 @@
+'use strict';
+
+const { BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const { fileURLToPath } = require('url');
+const ROOT = path.resolve(__dirname, '../..');
+const HALL = path.join(ROOT, 'Gamemodules/game.html');
+let registered = false;
+let gameRuntime = null;
+let listGameAgents = null;
+let listGameModels = null;
+// VTrade 对决: the page and the rounds live in the VTrade plugin on VCPToolBox; VChat opens the page and invites Agents.
+let vtrade = null;
+function vtradeFeature() {
+    if (!vtrade) {
+        const { VTradeClient } = require('../game/vtrade/client');
+        vtrade = { client: new VTradeClient(), window: require('../game/vtrade/window'), orchestrator: null };
+    }
+    return vtrade;
+}
+// How long after Chat starts to look for VTrade rounds waiting on Agents.
+const VTRADE_RESUME_MS = 15000;
+const { clampGameAgentConfig, GAME_TURN_MAX_OUTPUT_TOKENS } = require('../game/gameRuntime');
+const gameWindows = new Map();
+const LOCAL_GAMES = Object.freeze({
+    neon: { title: 'VCP Neon Striker', page: 'Gamemodules/vcp-neon-game/index.html' },
+    forgeTax: { title: 'ForgeTax · 锻造模拟器', page: 'Gamemodules/forge-tax/index.html' },
+    srpg: { title: 'Tavern-SRPG · 万缕千丝战棋战术沙盘', page: 'Gamemodules/srpg/index.html' },
+    doudizhu: { title: 'Vgame · 斗地主', page: 'Gamemodules/doudizhu/index.html' },
+});
+
+function isHallSender(event) {
+    try {
+        if (!event?.sender || event.sender.isDestroyed()) return false;
+        if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return false;
+        const url = new URL(event.senderFrame.url);
+        return url.protocol === 'file:' && path.resolve(fileURLToPath(url)) === HALL;
+    } catch {
+        return false;
+    }
+}
+
+async function openGame(gameId) {
+    if (gameId === 'vtrade') {
+        const feature = vtradeFeature();
+        // The page lists the Agents it may invite; a failed sync leaves the last list and the page still opens.
+        await feature.orchestrator?.syncRoster().catch(error => console.warn('[VTrade] 同步 Agent 名单失败:', error?.message || error));
+        await feature.window.open(feature.client);
+        feature.orchestrator?.start({ windowOpen: feature.window.isOpen });
+        return { success: true, gameId };
+    }
+    if (gameId === 'forgeTax') {
+        await require('../../Gamemodules/forge-tax/service.cjs').openWindow();
+        return { success: true, gameId };
+    }
+    if (gameId === 'srpg') {
+        await require('../../Gamemodules/srpg/service.cjs').openWindow();
+        return { success: true, gameId };
+    }
+    if (gameId === 'blade') {
+        const service = require('../../VCPDistributedServer/Plugin/BladeGame/blade-service');
+        service.initialize();
+        const win = service.createOrFocusWindow();
+        if (win.webContents.isLoading()) {
+            await new Promise((resolve, reject) => {
+                const contents = win.webContents;
+                const clear = () => {
+                    contents.removeListener('did-finish-load', loaded);
+                    contents.removeListener('did-fail-load', failed);
+                    win.removeListener('closed', closed);
+                };
+                const loaded = () => { clear(); resolve(); };
+                const failed = (_event, code, description, _url, isMainFrame) => {
+                    if (isMainFrame === false) return;
+                    clear(); reject(new Error(`华山论剑加载失败：${code} ${description}`));
+                };
+                const closed = () => { clear(); reject(new Error('游戏窗口已关闭。')); };
+                contents.once('did-finish-load', loaded);
+                contents.on('did-fail-load', failed);
+                win.once('closed', closed);
+            });
+        }
+        return { success: true, gameId };
+    }
+    if (!Object.prototype.hasOwnProperty.call(LOCAL_GAMES, gameId)) return { success: false, error: '未知游戏。' };
+    const game = LOCAL_GAMES[gameId];
+    const existing = gameWindows.get(gameId);
+    if (existing && !existing.isDestroyed()) {
+        if (existing.isMinimized()) existing.restore();
+        existing.show();
+        existing.focus();
+        return { success: true, gameId };
+    }
+    const win = new BrowserWindow({
+        width: 1280, height: 860, minWidth: 640, minHeight: 480,
+        title: game.title,
+        backgroundColor: '#04040b', show: false,
+        webPreferences: {
+            contextIsolation: true, nodeIntegration: false, sandbox: gameId !== 'doudizhu',
+            ...(gameId === 'doudizhu' ? { preload: path.join(ROOT, 'preloads/utility.js') } : {}),
+        },
+    });
+    gameWindows.set(gameId, win);
+    win.setMenu(null);
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    win.webContents.on('will-navigate', event => event.preventDefault());
+    win.on('closed', () => { if (gameWindows.get(gameId) === win) gameWindows.delete(gameId); });
+    try {
+        await win.loadFile(path.join(ROOT, game.page));
+        if (win.isDestroyed()) throw new Error('游戏窗口已关闭。');
+        win.show();
+        win.focus();
+        return { success: true, gameId };
+    } catch (error) {
+        if (!win.isDestroyed()) win.destroy();
+        throw error;
+    }
+}
+
+function configureRuntime({ gameService, groupChat, loadAgent, listAgents, listModels }) {
+    listGameAgents = listAgents;
+    if (typeof listModels === 'function') listGameModels = listModels;
+    if (gameRuntime) return gameRuntime;
+    const { GameRuntime } = require('../game/gameRuntime');
+    const runAgent = async ({ groupId, topicId, agentId, invitePrompt }, agentLoader = loadAgent) => {
+        let requestError = null;
+        await groupChat.handleInviteAgentToSpeak(
+            groupId, topicId, agentId,
+            event => {
+                if (event.error || event.interrupted) {
+                    requestError = new Error(String(event.error || '游戏请求已中止。'));
+                }
+            },
+            agentLoader,
+            { invitePrompt, skipSummary: true },
+        );
+        if (requestError) throw requestError;
+    };
+    gameRuntime = new GameRuntime({
+        gameService, groupChat, loadAgent,
+        toolInstructions: async () => '',
+        // Seat overrides and the turn budget belong only to the Dou Dizhu runtime.
+        runAgent: decision => runAgent(decision, async id => {
+            const cfg = await loadAgent(id);
+            return id === decision.agentId ? clampGameAgentConfig(cfg, decision.model) : cfg;
+        }),
+    });
+    const { VTradeOrchestrator } = require('../game/vtrade/orchestrator');
+    vtradeFeature().orchestrator = new VTradeOrchestrator({
+        client: vtradeFeature().client, groupChat, listAgents, runAgent,
+        sessionsFile: path.join(ROOT, 'AppData', 'UserData', 'vtrade-duel-sessions.json'),
+    });
+    // Rounds left waiting for Agents carry on once Chat is up, without the VTrade window being opened first.
+    setTimeout(() => {
+        try { void vtradeFeature().orchestrator.resumeIfWaiting({ windowOpen: vtradeFeature().window.isOpen }); } catch { /* not available */ }
+    }, VTRADE_RESUME_MS).unref?.();
+    return gameRuntime;
+}
+function isTableSender(event) {
+    const win = gameWindows.get('doudizhu');
+    if (!win || win.isDestroyed() || event?.sender !== win.webContents
+        || event.senderFrame !== event.sender.mainFrame) return false;
+    try {
+        const url = new URL(event.senderFrame.url);
+        return url.protocol === 'file:' && path.resolve(fileURLToPath(url))
+            === path.join(ROOT, LOCAL_GAMES.doudizhu.page);
+    } catch { return false; }
+}
+function scheduleMatch(matchId) {
+    void gameRuntime.continue(matchId).catch(error => {
+        console.warn('[Vgame] 对局推进暂停:', error?.message || error);
+    });
+}
+function registerTableHandlers() {
+    const handle = (channel, operation) => ipcMain.handle(channel, async (event, request = {}) => {
+        if (!isTableSender(event)) return { success: false, error: '非法牌桌窗口请求。' };
+        if (!gameRuntime) return { success: false, error: '游戏后台尚未就绪。' };
+        try { return { success: true, ...await operation(request) }; }
+        catch (error) { return { success: false, error: error.message, code: error.code }; }
+    });
+    handle('vcp-game:agents', async request => {
+        const [agents, catalog] = await Promise.all([
+            listGameAgents(),
+            typeof listGameModels === 'function'
+                ? listGameModels({ forceRefresh: Boolean(request?.refreshModels) }).catch(() => ({}))
+                : Promise.resolve({}),
+        ]);
+        return {
+            agents,
+            models: Array.isArray(catalog?.models) ? catalog.models : [],
+            favoriteModels: Array.isArray(catalog?.favoriteModels) ? catalog.favoriteModels : [],
+            hotModels: Array.isArray(catalog?.hotModels) ? catalog.hotModels : [],
+        };
+    });
+    handle('vcp-game:create', async request => {
+        const table = await gameRuntime.openTable(request);
+        scheduleMatch(table.matchId);
+        return table;
+    });
+    handle('vcp-game:next', async request => {
+        const table = await gameRuntime.nextTable(request.matchId, request);
+        scheduleMatch(table.matchId);
+        return table;
+    });
+    handle('vcp-game:settings', request => gameRuntime.updateAutoPass(request.matchId, request.autoPass));
+    handle('vcp-game:observe', async request => {
+        if (Array.isArray(request?.agentModels)) {
+            await gameRuntime.updateSeatModels(request.matchId, request);
+        }
+        const record = await gameRuntime.gameService.read(request.matchId);
+        const isSpectator = record.seats.every(seat => seat?.kind === 'agent');
+        return {
+            observation: {
+                matchId: record.matchId,
+                decisionId: `${record.matchId}:${record.state.revision}`,
+                ...require('../game/doudizhu/rules').observation(record.state, 0),
+            },
+            seats: record.seats,
+            isSpectator,
+            ...(isSpectator ? {
+                spectator: {
+                    hands: record.state.hands.map(hand => [...hand]),
+                    bottom: [...record.state.bottom],
+                },
+            } : {}),
+            runtime: gameRuntime.getState(request.matchId),
+        };
+    });
+    handle('vcp-game:submit', async request => {
+        const result = await gameRuntime.submitHuman(request.matchId, request);
+        scheduleMatch(request.matchId);
+        return { result };
+    });
+    handle('vcp-game:continue', async request => {
+        if (Array.isArray(request?.agentModels)) {
+            await gameRuntime.updateSeatModels(request.matchId, request);
+        } else {
+            await gameRuntime.gameService.read(request.matchId);
+        }
+        scheduleMatch(request.matchId);
+        return {};
+    });
+    handle('vcp-game:stop', async request => {
+        await gameRuntime.gameService.read(request.matchId);
+        gameRuntime.stop(request.matchId);
+        return {};
+    });
+}
+function initialize() {
+    if (registered) return;
+    ipcMain.handle('vcp-game:launch', async (event, gameId) => {
+        if (!isHallSender(event)) return { success: false, error: '非法大厅请求。' };
+        try { return await openGame(gameId); }
+        catch (error) { return { success: false, error: error.message }; }
+    });
+    for (const [channel, operation] of [
+        ['vcp-game:resources', () => gameRuntime.resources.inventory()],
+        ['vcp-game:remove-resources', request => gameRuntime.resources.remove(request.groupIds)],
+        ['vcp-game:records', () => gameRuntime.gameService.listRecords()],
+        ['vcp-game:record', request => gameRuntime.gameService.getPublicRecord(request.matchId)],
+    ]) {
+        ipcMain.handle(channel, async (event, request = {}) => {
+            if (!isHallSender(event)) return { success: false, error: '非法大厅请求。' };
+            if (!gameRuntime) return { success: false, error: '游戏后台尚未就绪。' };
+            try { return { success: true, ...await operation(request) }; }
+            catch (error) { return { success: false, error: error.message, code: error.code }; }
+        });
+    }
+    registerTableHandlers();
+    registered = true;
+}
+
+module.exports = {
+    initialize, isHallSender, configureRuntime,
+    clampGameAgentConfig, GAME_TURN_MAX_OUTPUT_TOKENS,
+    getRuntime: () => gameRuntime,
+};

@@ -13,6 +13,7 @@ import { getSaveCoordinator } from './settings/save-coordinator.js';
 import { fieldDescriptor, fieldRestore } from './settings/field-registry.js';
 import { applySettings } from '../settings/store.js';
 import { schemaSurfaceSections } from '../settings/schema-surface.js';
+import { classifyInput, delayFor, markScheduled, unchangedSinceScheduled, trackComposition } from './settings/input-cadence.js';
 
 const typedFieldStates = new Set();
 const typedForumFieldStates = new Set();
@@ -263,6 +264,27 @@ function ensureTypedSettingsService() {
                         : { ...typedSettingsBase, ...(patch || {}) });
                     typedSettingsConflict = null;
                     getSaveCoordinator(document.getElementById('globalSettingsForm'))?.recordCommit?.(result, patch, patchToPathOps(patch));
+                    const committedSource = (result?.settings && typeof result.settings === 'object')
+                        ? result.settings
+                        : typedSettingsBase;
+                    const committedPatch = {};
+                    for (const key of Object.keys(patch || {})) {
+                        committedPatch[key] = key in committedSource ? committedSource[key] : patch[key];
+                    }
+                    const formElement = document.getElementById('globalSettingsForm');
+                    const targetView = formElement?.ownerDocument?.defaultView || window;
+                    try {
+                        targetView.dispatchEvent(new targetView.CustomEvent('vcp-typed-settings-committed', {
+                            detail: {
+                                settings: typedSettingsBase,
+                                patch: Object.freeze(committedPatch),
+                                source: 'typed-autosave',
+                                revision: typedSettingsRevision,
+                            }
+                        }));
+                    } catch (dispatchError) {
+                        console.error('[TypedSettings] Failed to dispatch typed-autosave committed update:', dispatchError);
+                    }
                     if (generation !== typedSettingsSaveGeneration) {
                         return { success: false, status: 'stale', operationId, currentRevision: typedSettingsRevision };
                     }
@@ -637,7 +659,7 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     userNameTextColor: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
     userNameTextColorText: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
     userName: { path: 'userName', kind: 'string', trimValue: true, fallback: '用户' },
-    continueWritingPrompt: { path: 'continueWritingPrompt', kind: 'string', trimValue: true, fallback: '请继续' },
+    continueWritingPrompt: { path: 'continueWritingPrompt', kind: 'string', trimValue: true, fallback: '[系统提示:] 请继续。若当前已无值得继续推进的任务或话题，请输出 [[Flowlock::Stop]] 关闭心流锁心跳。' },
     showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
     homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
@@ -657,6 +679,8 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     chatToolFontPreset: { path: 'chatToolFontPreset', kind: 'string' },
     chatToolFontCustom: { path: 'chatToolFontCustom', kind: 'string' },
     appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
+    appearanceToolPresentation: { path: 'appearanceProfile.toolPresentation', kind: 'string' },
+    appearanceToolExpansion: { path: 'appearanceProfile.toolExpansion', kind: 'string' },
     appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
     appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
     appearanceFontScale: { path: 'appearanceProfile.fontScale', kind: 'string' },
@@ -670,7 +694,13 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     // The model-selection button still uses the shared legacy modal, but the
     // canonical text value can already use the single typed save owner.
     topicSummaryModel: { path: 'topicSummaryModel', kind: 'string' },
+    enableContextCompaction: { path: 'enableContextCompaction', kind: 'boolean' },
+    contextCompactionModel: { path: 'contextCompactionModel', kind: 'string', trimValue: true },
+    contextCompactionPrompt: { path: 'contextCompactionPrompt', kind: 'string' },
+    contextCompactionSendPrompt: { path: 'contextCompactionSendPrompt', kind: 'string' },
+    contextCompactionMainPrompt: { path: 'contextCompactionMainPrompt', kind: 'string' },
     voiceInputMode: { path: 'voiceInputMode', kind: 'string', fallback: 'windows_voice_typing' },
+    localSttLanguage: { path: 'localSttLanguage', kind: 'string', fallback: 'auto' },
     voiceInputShortcut: { path: 'voiceInputShortcut', kind: 'string', fallback: 'F7', trimValue: true },
     streamAnimationPreset: { path: 'streamAnimationPreset', kind: 'string', fallback: 'slide-left' },
     streamAnimationDurationMs: { path: 'streamAnimationDurationMs', kind: 'number', fallback: 500 },
@@ -757,6 +787,12 @@ function mountTypedFieldOwner(root, form) {
         set('userNameTextColor', settings.userNameTextColor || '#ffffff');
         set('userNameTextColorText', fieldRestore('userNameTextColorText', settings) ?? '');
         set('continueWritingPrompt', settings.continueWritingPrompt);
+        check('enableContextCompaction', settings.enableContextCompaction === true);
+        set('contextCompactionModel', settings.contextCompactionModel ?? '');
+        set('contextCompactionPrompt', settings.contextCompactionPrompt ?? '');
+        set('contextCompactionSendPrompt', settings.contextCompactionSendPrompt ?? '');
+        set('contextCompactionMainPrompt', settings.contextCompactionMainPrompt ?? '');
+        syncDependentRows(form);
         // Chat typography owns its fallbacks here now that the generic
         // snapshot projection no longer writes these nodes.
         set('chatFontPreset', settings.chatFontPreset || 'system');
@@ -768,6 +804,7 @@ function mountTypedFieldOwner(root, form) {
         set('chatToolFontPreset', settings.chatToolFontPreset || 'system');
         set('chatToolFontCustom', settings.chatToolFontCustom || '');
         set('voiceInputMode', settings.voiceInputMode || 'windows_voice_typing');
+        set('localSttLanguage', settings.localSttLanguage || 'auto');
         set('voiceInputShortcut', fieldRestore('voiceInputShortcut', settings) ?? '');
         set('streamAnimationPreset', settings.streamAnimationPreset || 'slide-left');
         set('streamAnimationDurationMs', settings.streamAnimationDurationMs ?? 500);
@@ -903,10 +940,10 @@ function mountTypedFieldOwner(root, form) {
             if (state.pendingPatch && !state.disposed) schedule();
         }
     };
-    const schedule = () => {
+    const schedule = (delay = 400) => {
         if (state.disposed) return;
         if (state.timer) clearTimeout(state.timer);
-        state.timer = setTimeout(run, 400);
+        state.timer = setTimeout(run, delay);
     };
     state.run = run;
     const applyAppearanceDraft = () => {
@@ -947,6 +984,9 @@ function mountTypedFieldOwner(root, form) {
     const onInput = event => {
         const control = event.target;
         if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
+        const kind = classifyInput(event);
+        if (kind === 'skip') return;
+        if (kind === 'text-commit' && !state.pendingPatch && !state.timer && unchangedSinceScheduled(control)) return;
         if (control.id === 'middleClickAdvancedDelay') normalizeMiddleClickDelay(control);
         const patch = readTypedFieldPatch(control, service, state.pendingPatch) || {};
         if (patch.appearanceProfile) {
@@ -962,12 +1002,14 @@ function mountTypedFieldOwner(root, form) {
         }
         applyAppearanceDraft();
         markDirty();
-        schedule();
+        markScheduled(control);
+        schedule(delayFor(kind));
     };
     controls.forEach(control => {
         control.dataset.vcpTypedFieldOwner = 'true';
         ownerScope.listen(control, 'input', onInput);
         ownerScope.listen(control, 'change', onInput);
+        trackComposition(control, (target, type, handler) => ownerScope.listen(target, type, handler), onInput);
         state.cleanups.push(() => {
             delete control.dataset.vcpTypedFieldOwner;
         });

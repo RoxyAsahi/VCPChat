@@ -12,6 +12,9 @@ const CHANNELS = Object.freeze({
     FLOWLOCK_REQUEST: 'flowlock:request',
     FLOWLOCK_RESPONSE: 'flowlock:response',
     DESKTOP_LAUNCH: 'desktop-launch-vchat-app',
+    DESKTOP_API_LIST: 'desktop-api:list',
+    DESKTOP_API_DESCRIBE: 'desktop-api:describe',
+    DESKTOP_API_CALL: 'desktop-api:call',
 });
 
 const channelRegistry = new Map([
@@ -61,6 +64,30 @@ const channelRegistry = new Map([
         owner: 'VChat Shell',
         requestSchema: { appAction: 'string' },
         responseSchema: { success: 'boolean', appId: 'string?' },
+        supportsConcurrent: true,
+    }],
+    [CHANNELS.DESKTOP_API_LIST, {
+        channelName: CHANNELS.DESKTOP_API_LIST,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'VDesktop Platform',
+        requestSchema: { prefix: 'string?', query: 'string?' },
+        responseSchema: { ok: 'boolean', data: 'array?', error: 'object?' },
+        supportsConcurrent: true,
+    }],
+    [CHANNELS.DESKTOP_API_DESCRIBE, {
+        channelName: CHANNELS.DESKTOP_API_DESCRIBE,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'VDesktop Platform',
+        requestSchema: { apiId: 'string' },
+        responseSchema: { ok: 'boolean', data: 'object?', error: 'object?' },
+        supportsConcurrent: true,
+    }],
+    [CHANNELS.DESKTOP_API_CALL, {
+        channelName: CHANNELS.DESKTOP_API_CALL,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'VDesktop Platform',
+        requestSchema: { apiId: 'string', params: 'object?' },
+        responseSchema: { ok: 'boolean', id: 'string', data: 'any?', error: 'object?' },
         supportsConcurrent: true,
     }],
 ]);

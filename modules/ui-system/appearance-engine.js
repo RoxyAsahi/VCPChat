@@ -2,6 +2,9 @@
     const STORAGE_KEY = 'vcpchat.appearanceProfile';
     const OPTION_SETS = Object.freeze({
         density: new Set(['compact', 'comfortable', 'relaxed']),
+        toolPresentation: new Set(['legacy', 'compact', 'grouped', 'inline', 'process']),
+        toolExpansion: new Set(['attention', 'none', 'all']),
+
         radius: new Set(['square', 'small', 'medium', 'round', 'custom']),
         typography: new Set(['system', 'humanist', 'serif']),
         fontScale: new Set(['small', 'normal', 'large']),
@@ -39,6 +42,8 @@
         classic: Object.freeze({
             density: 'comfortable', radius: 'small', typography: 'system',
             fontScale: 'normal', contentWidth: 'full', wallpaperScope: 'theme', surface: 'translucent',
+            toolPresentation: 'legacy', toolExpansion: 'attention',
+
             sidebarRowHeight: 46,
             sidebarAvatarSize: 32,
             customRadius: 10,
@@ -49,6 +54,8 @@
         next: Object.freeze({
             density: 'comfortable', radius: 'medium', typography: 'humanist',
             fontScale: 'normal', contentWidth: 'full', wallpaperScope: 'theme', surface: 'translucent',
+            toolPresentation: 'legacy', toolExpansion: 'attention',
+
             sidebarRowHeight: 46,
             sidebarAvatarSize: 32,
             customRadius: 10,
@@ -234,6 +241,7 @@
         root.dataset.vcpTypography = resolved.typography;
         root.dataset.vcpFontScale = resolved.fontScale;
         root.dataset.vcpContentWidth = resolved.contentWidth;
+
         publishWallpaperScope(resolved, options.source || 'runtime');
         root.dataset.vcpSurface = resolved.surface;
         root.dataset.vcpSurfaceEffect = resolved.surfaceEffect;

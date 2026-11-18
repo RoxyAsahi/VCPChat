@@ -18,6 +18,13 @@ import { createMainChatThemeOwner } from './modules/renderer/mainChatThemeOwner.
 import { createMainChatSettingsPresentationOwner } from './modules/renderer/mainChatSettingsPresentationOwner.js';
 import { createMainChatAttachmentOwner } from './modules/renderer/mainChatAttachmentOwner.js';
 import { createMainChatSendOwner } from './modules/renderer/mainChatSendOwner.js';
+import { createTopicAdmissionQueueView } from './modules/renderer/topicAdmissionQueueView.js';
+import { prepareTopicAdmissionSingleChat } from './modules/chat/topicAdmissionSingleChat.js';
+import { createConversationTurnNavigator } from './modules/ui-system/conversation-turn-navigator.js';
+import { createChatBackToBottom } from './modules/ui-system/chat-back-to-bottom.js';
+import { createChatComposerInset } from './modules/ui-system/chat-composer-inset.js';
+import { initWorkspaceSidePane } from './modules/renderer/sidePaneWiring.js';
+import { registerComposerCommands } from './modules/renderer/composerCommands.js';
 
 const streamManager = createStreamProjection();
 const messageRenderer = createMessageRenderer({ streamManager });
@@ -58,6 +65,7 @@ const mainChatSettingsOwner = createMainChatSettingsOwner({ initial: {
     enableThoughtChainInjection: false, // 元思考注入上下文开关
     fileKey: '',
     enableWideChatLayout: false,
+    chatHeaderStyle: 'classic',
     chatPresentationMode: 'bubble',
     chatBubbleMaxWidthDefault: 82,
     chatBubbleMaxWidthNotifications: 90,
@@ -75,6 +83,7 @@ const mainChatSettingsOwner = createMainChatSettingsOwner({ initial: {
     chatToolFontCustom: '',
     enableUserChatBubbleUi: true,
     showUserMetaInChatBubbleUi: true,
+    enableTurnNavigator: true,
     voiceMode: 'local',
     voiceInputMode: 'windows_voice_typing',
     voiceInputShortcut: 'F7',
@@ -94,7 +103,10 @@ const initialSelectedItem = {
     avatarUrl: null,
     config: null // Store full config object for the selected item
 };
-const mainChatStateAuthority = createMainChatStateAuthority({ selectedItem: initialSelectedItem, topicId: null, history: [] });
+const mainChatStateAuthority = createMainChatStateAuthority(
+    { selectedItem: initialSelectedItem, topicId: null, history: [] },
+    { onHistoryChange: bumpConversationHistory }
+);
 const currentSelectedItemRef = mainChatStateAuthority.selectedItemRef;
 const currentTopicIdRef = mainChatStateAuthority.topicIdRef;
 const mainHistoryRef = mainChatStateAuthority.historyRef;
@@ -124,8 +136,9 @@ const {
     vcpLogConnectionStatusDiv, notificationsListUl, sidebarTabButtons,
     sidebarTabContents, tabContentTopics, tabContentSettings, topicSearchInput,
     leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight,
-    agentSearchInput, notificationTitleElement, digitalClockElement,
-    dateDisplayElement, toggleAssistantBtn, toggleSidebarModeBtn, openModelSelectBtn,
+    agentSearchInput, toggleAssistantBtn, toggleSidebarModeBtn, openModelSelectBtn,
+    vcpSidePane, sidePaneTabs, sidePaneContentContainer,
+    toggleSidePaneChatBtn, closeSidePaneBtn, addSidePaneChatBtn,
 } = createMainChatDomBindings(document);
 // 模态框及其内部元素现在延迟加载，不再在顶层缓存引用
 let globalSettingsForm = null;
@@ -153,6 +166,7 @@ let modelSelectModal = null;
 let modelList = null;
 let modelSearchInput = null;
 let refreshModelsBtn = null;
+let workspaceSidePaneController = null; // 话题删除时丢弃它的侧栏标签
 
 // UI Helper functions to be passed to modules
 // The main uiHelperFunctions object is now defined in modules/ui-helpers.js
@@ -170,6 +184,7 @@ import { createChatRepository } from './modules/chat/chatRepository.js';
 import { createMainChatComposition } from './modules/renderer/mainChatComposition.js';
 import { createMainChatDomBindings } from './modules/renderer/mainChatDomBindings.js';
 import { createMainChatStateAuthority } from './modules/chat/mainChatStateAuthority.js';
+import { bumpConversationHistory } from './modules/ui-system/sources/conversation-current.js';
 import { createNonStreamingEventConsumer } from './modules/renderer/nonStreamingEventConsumer.js';
 import { createChatPresentationState } from './modules/chat/chatPresentationState.js';
 
@@ -198,6 +213,8 @@ let mainChatSurface = null;
 let mainChatAdapter = null;
 let nonStreamingEventConsumer = null;
 let mainChatEventBridge = null;
+const activeGroupQueueScopes = new Set();
+const toGroupQueueScopeKey = (groupId, topicId) => (groupId && topicId ? `${groupId}::${topicId}` : '');
 const ownedRendererSubscriptions = new Set();
 const mainChatDomListenerOwner = createDomListenerOwner();
 const topicListDomListenerOwner = createDomListenerOwner();
@@ -207,6 +224,8 @@ const mainChatAttachmentOwner = createMainChatAttachmentOwner({
     },
 });
 const mainChatSendOwner = createMainChatSendOwner({
+    hasDraft: () => ['agent', 'group'].includes(currentSelectedItemRef.get()?.type)
+        && Boolean(messageInput.value.trim() || mainChatAttachmentOwner.ref.get().length),
     button: sendMessageBtn,
     messagesRoot: chatMessagesDiv,
     historyRef: mainHistoryRef,
@@ -219,6 +238,8 @@ const mainChatSendOwner = createMainChatSendOwner({
     getChatManager: () => chatManager,
     messageRenderer,
     notify: (message, type) => uiHelperFunctions?.showToastNotification?.(message, type),
+    isGroupQueueActive: (groupId, topicId) => activeGroupQueueScopes.has(toGroupQueueScopeKey(groupId, topicId)),
+    clearGroupQueueActive: (groupId, topicId) => activeGroupQueueScopes.delete(toGroupQueueScopeKey(groupId, topicId)),
 });
 const mainChatSettingsPresentationOwner = createMainChatSettingsPresentationOwner({
     documentRef: document,
@@ -228,6 +249,7 @@ const mainChatSettingsPresentationOwner = createMainChatSettingsPresentationOwne
     elements: {
         leftSidebar,
         rightNotificationsSidebar,
+        vcpSidePane,
         vcpLogConnectionStatus: vcpLogConnectionStatusDiv,
         toggleAssistant: toggleAssistantBtn,
         toggleSidebarMode: toggleSidebarModeBtn,
@@ -245,6 +267,7 @@ ownedRendererSubscriptions.add(topicListDomListenerOwner);
 ownedRendererSubscriptions.add(mainChatAttachmentOwner);
 ownedRendererSubscriptions.add(mainChatSendOwner);
 mainChatSendOwner.update();
+mainChatDomListenerOwner.add(messageInput, 'input', mainChatSendOwner.update);
 ownedRendererSubscriptions.add({
     async dispose() {
         const receipt = { promise: Promise.resolve() };
@@ -291,7 +314,7 @@ const forwardMessageOwner = createForwardMessageOwner({
 ownedRendererSubscriptions.add(forwardMessageOwner);
 const showForwardModal = message => forwardMessageOwner.show(message);
 
-function createOwnedInternalChatRenderer({ root, mode = 'readonly', handleSendMessage = null, conversation = null } = {}) {
+function createOwnedInternalChatRenderer({ root, mode = 'readonly', handleSendMessage = null, conversation = null, shouldScrollToBottom = null } = {}) {
     if (!root?.querySelector) throw new TypeError('Internal chat renderer requires a Surface root');
     const conversationCapability = createSurfaceConversation({
         selectedItem: conversation?.selectedItem || currentSelectedItemRef.get(),
@@ -313,6 +336,7 @@ function createOwnedInternalChatRenderer({ root, mode = 'readonly', handleSendMe
         const key = id => `${surfacePretextPrefix}:${id}`;
         return Object.freeze({
             isReady: () => bridge.isReady?.() === true,
+            getMeasurementOptions: (...args) => bridge.getMeasurementOptions?.(...args),
             estimateHeight: (id, ...args) => bridge.estimateHeight?.(key(id), ...args),
             evict: id => bridge.evict?.(key(id)),
         });
@@ -331,6 +355,8 @@ function createOwnedInternalChatRenderer({ root, mode = 'readonly', handleSendMe
         regexFromString: uiHelperFunctions.regexFromString,
         showToastNotification: uiHelperFunctions.showToastNotification,
         scrollToBottom() {
+            // 宿主可以按自己的贴底状态拒绝滚动（例如用户在辅助对话里往上翻时不被拉回底部）
+            if (typeof shouldScrollToBottom === 'function' && shouldScrollToBottom() === false) return;
             const scrollRoot = root.closest('.chat-messages-container') || root;
             scrollRoot.scrollTop = scrollRoot.scrollHeight;
         },
@@ -412,6 +438,10 @@ mainChatSettingsPresentationOwner.configureStartup({
         console.error('[RENDERER_INIT] trayManager module not found!');
     }
 
+    // 通知面板分组、待审批横幅与筛选（卡片仍由 notificationRenderer 生成）
+    // 有工作区侧栏时铃铛隐藏，待审批角标挂到侧栏按钮上
+    window.notificationCenter?.mount?.({ document, bellButton: document.getElementById('toggleSidePaneChatBtn') || undefined });
+
     if (window.topTabManager) {
         window.topTabManager.init();
     } else {
@@ -472,6 +502,7 @@ mainChatSettingsPresentationOwner.configureStartup({
             globalSettingsRef: mainChatSettingsOwner.ref,
             currentSelectedItemRef,
             currentTopicIdRef,
+            currentChatHistoryRef: mainHistoryRef,
             messageRenderer, // Explicit provider; initialized below
             uiHelper: uiHelperFunctions,
             mainRendererElements: mainRendererElementsForGroupRenderer, // 使用构造好的对象
@@ -578,6 +609,7 @@ mainChatSettingsPresentationOwner.configureStartup({
             settings: mainChatSettingsOwner,
             createInternalRenderer: createOwnedInternalChatRenderer,
             disposeCapabilities: async () => {
+                activeGroupQueueScopes.clear();
                 await mainChatEventBridge?.dispose?.();
                 mainChatEventBridge = null;
                 await nonStreamingEventConsumer?.dispose?.();
@@ -602,6 +634,15 @@ mainChatSettingsPresentationOwner.configureStartup({
             renderTarget: mainChatDomRenderer,
             messageRenderer,
             viewAuthority: { isCurrent: isContextForCurrentChat },
+            disposeStream: (messageId, reason) => mainChatAdapter?.disposeStream?.(messageId, reason),
+            streamProjection: streamManager,
+            onGroupQueueStateChange: ({ groupId, topicId, active }) => {
+                const key = toGroupQueueScopeKey(groupId, topicId);
+                if (!key) return;
+                if (active) activeGroupQueueScopes.add(key);
+                else activeGroupQueueScopes.delete(key);
+            },
+            notifySendStateChanged: mainChatSendOwner.update,
         });
         releaseNextUiChatCapabilities = mainComposition.releaseCapabilities;
 
@@ -617,6 +658,10 @@ mainChatSettingsPresentationOwner.configureStartup({
             attachedFiles: mainChatAttachmentOwner.ref,
             updateAttachmentPreview: mainChatAttachmentOwner.syncPreview,
             getCurrentAgentId: () => currentSelectedItemRef.get()?.id,
+            getConversationOwner: () => {
+                const item = currentSelectedItemRef.get();
+                return item ? { type: item.type, id: item.id } : null;
+            },
             getCurrentTopicId: currentTopicIdRef.get,
             uiHelper: uiHelperFunctions,
             listenerOwner: mainChatDomListenerOwner,
@@ -625,6 +670,65 @@ mainChatSettingsPresentationOwner.configureStartup({
     } else {
         console.error('[RENDERER_INIT] inputEnhancer module not found!');
     }
+
+    if (window.ComposerModelSelect) {
+        const composerModelSelect = window.ComposerModelSelect.init({
+            electronAPI: window.electronAPI || chatAPI,
+            selectedItemRef: currentSelectedItemRef,
+            nameObserveTarget: currentChatNameH3,
+            sendMessageBtn,
+            chatManager,
+        });
+        ownedRendererSubscriptions.add({ dispose: () => composerModelSelect.dispose?.() });
+    }
+
+    // 「显示提问导航条」设置：关掉时整个卸载（不留观察器），设置加载或保存后按新值挂上或卸下
+    let conversationTurnNavigator = null;
+    const syncConversationTurnNavigator = () => {
+        const enabled = getGlobalSettings().enableTurnNavigator !== false;
+        if (enabled === (conversationTurnNavigator !== null)) return;
+        if (!enabled) {
+            conversationTurnNavigator.dispose();
+            conversationTurnNavigator = null;
+            return;
+        }
+        conversationTurnNavigator = createConversationTurnNavigator({
+            document,
+            messagesRoot: chatMessagesDiv,
+            releaseFollow: () => uiHelperFunctions.releaseChatScrollFollow?.()
+        });
+        conversationTurnNavigator.mount();
+    };
+    syncConversationTurnNavigator();
+    window.addEventListener('global-settings-updated', syncConversationTurnNavigator);
+    const handleTypedSettingsCommitted = event => {
+        const committedPatch = event?.detail?.patch;
+        if (!committedPatch || typeof committedPatch !== 'object' || Object.keys(committedPatch).length === 0) return;
+        mainChatSettingsOwner.merge(committedPatch);
+        if ('enableTurnNavigator' in committedPatch) {
+            syncConversationTurnNavigator();
+        }
+    };
+    window.addEventListener('vcp-typed-settings-committed', handleTypedSettingsCommitted);
+    ownedRendererSubscriptions.add({ dispose: () => {
+        window.removeEventListener('global-settings-updated', syncConversationTurnNavigator);
+        window.removeEventListener('vcp-typed-settings-committed', handleTypedSettingsCommitted);
+        conversationTurnNavigator?.dispose();
+        conversationTurnNavigator = null;
+    } });
+    const chatBackToBottom = createChatBackToBottom({ document, uiHelper: uiHelperFunctions, messagesRoot: chatMessagesDiv });
+    chatBackToBottom.mount();
+    ownedRendererSubscriptions.add({ dispose: () => chatBackToBottom.dispose() });
+    const chatComposerInset = createChatComposerInset({ document, uiHelper: uiHelperFunctions });
+    chatComposerInset.mount();
+    ownedRendererSubscriptions.add({ dispose: () => chatComposerInset.dispose() });
+    ownedRendererSubscriptions.add(registerComposerCommands({
+        win: window,
+        messageInput,
+        selectedItemRef: currentSelectedItemRef,
+        topicIdRef: currentTopicIdRef,
+        uiHelper: uiHelperFunctions,
+    }));
 
     const auxiliaryEventOwner = createMainChatAuxiliaryEventOwner({
         subscriptions: {
@@ -683,9 +787,25 @@ mainChatSettingsPresentationOwner.configureStartup({
                     ? { ...selectedItem, config: nextConfig }
                     : { ...selectedItem, ...nextConfig });
             }
-            if (document.getElementById('tabContentTopics').classList.contains('active')) {
-                await window.topicListManager.loadTopicList();
-                if (!lifecycle.isActive()) return;
+            const topicsTabEl = document.getElementById('tabContentTopics');
+            const existingRow = topicsTabEl?.querySelector?.(`.topic-item[data-item-type="group"][data-item-id="${groupId}"][data-topic-id="${topicId}"]`);
+            if (existingRow) {
+                if (existingRow.__topicData && typeof existingRow.__topicData === 'object') {
+                    existingRow.__topicData.name = newTitle;
+                }
+                const isInlineEditing = Boolean(existingRow.querySelector('.topic-title-edit-input'));
+                if (!isInlineEditing) {
+                    const titleEl = existingRow.querySelector('.topic-title-display, .topic-name');
+                    if (titleEl) titleEl.textContent = newTitle;
+                    const avatarEl = existingRow.querySelector('img.avatar');
+                    if (avatarEl && selectedItem.name) avatarEl.alt = `${selectedItem.name} - ${newTitle}`;
+                }
+            } else if (topicsTabEl && (topicsTabEl.classList.contains('active') || topicsTabEl.classList.contains('compact-drawer-open'))) {
+                const isDragging = Boolean(topicsTabEl.querySelector('.sortable-drag-topic, .sortable-chosen-topic'));
+                if (!isDragging) {
+                    await window.topicListManager?.loadTopicList?.();
+                    if (!lifecycle.isActive()) return;
+                }
             }
         },
     });
@@ -694,7 +814,11 @@ mainChatSettingsPresentationOwner.configureStartup({
 
     mainChatEventBridge = createMainChatEventBridge({
         chatAPI,
-        acceptStreamEvent: eventData => mainChatAdapter?.acceptStreamEvent(eventData) === true,
+        acceptStreamEvent: eventData => {
+            // 侧栏说话状态必须先于当前会话路由更新，后台 Agent/群聊也能保持可见。
+            window.itemListManager?.consumeStreamActivityEvent?.(eventData);
+            return mainChatAdapter?.acceptStreamEvent(eventData) === true;
+        },
         consumeNonStreamingEvent: eventData => nonStreamingEventConsumer?.consume(eventData),
     });
 
@@ -729,6 +853,11 @@ mainChatSettingsPresentationOwner.configureStartup({
                         console.error('[TopicListManager] chatManager not available for handleTopicDeletion');
                     }
                 },
+                // 侧栏晚于话题列表初始化，删话题时再取
+                onTopicsDeleted: (deletion) => {
+                    void workspaceSidePaneController?.discardTabsOfDeletedTopics(deletion)
+                        .catch(error => console.error('[RENDERER] Failed to drop side pane tabs of deleted topics:', error));
+                },
                 selectTopic: (topicId) => {
                     if (chatManager) {
                         return chatManager.selectTopic(topicId);
@@ -747,6 +876,8 @@ mainChatSettingsPresentationOwner.configureStartup({
         chatManager.init({
             chatContext,
             chatRepository,
+            historyMutationAuthority,
+            flowlockManager: window.flowlockManager,
             streamConsumerRegistry: mainChatAdapter?.streamRoutes,
             chatDomRenderer: mainChatDomRenderer,
             electronAPI: chatAPI,
@@ -781,6 +912,10 @@ mainChatSettingsPresentationOwner.configureStartup({
                 // This is no longer needed as chatManager will call messageRenderer's summarizer
             },
             notifySendStateChanged: mainChatSendOwner.update
+        });
+        messageRenderer.setContextMenuDependencies({
+            compactContext: options => chatManager.compactContext(options),
+            isContextCompacting: () => chatManager.isContextCompacting(),
         });
         ownedRendererSubscriptions.add(chatManager);
         ownedRendererSubscriptions.add({ dispose: () => window.topicListManager.dispose?.() });
@@ -846,7 +981,11 @@ mainChatSettingsPresentationOwner.configureStartup({
             mainRendererFunctions: {
                 setCroppedFile: uiHelperFunctions.setCroppedFile,
                 getCroppedFile: uiHelperFunctions.getCroppedFile,
-                updateChatHeader: (text) => { if (currentChatNameH3) currentChatNameH3.textContent = text; },
+                updateChatHeader: (text) => {
+                    if (!currentChatNameH3) return;
+                    if (window.vcpChatHeader && typeof text === 'string') window.vcpChatHeader.setTitle({ classic: text });
+                    else currentChatNameH3.textContent = text;
+                },
                 onItemDeleted: async () => {
                     chatManager.displayNoItemSelected();
                     await window.itemListManager.loadItems();
@@ -889,17 +1028,48 @@ mainChatSettingsPresentationOwner.configureStartup({
                 elements: {
                     leftSidebar: document.querySelector('.sidebar'),
                     rightNotificationsSidebar: document.getElementById('notificationsSidebar'),
+                    vcpSidePane,
                     resizerLeft: document.getElementById('resizerLeft'),
                     resizerRight: document.getElementById('resizerRight'),
-                    digitalClockElement: document.getElementById('digitalClock'),
-                    dateDisplayElement: document.getElementById('dateDisplay'),
-                    notificationTitleElement: document.getElementById('notificationTitle'),
                     sidebarTabButtons: sidebarTabButtons,
                     sidebarTabContents: sidebarTabContents,
                 }
             });
         } else {
             console.error('[RENDERER_INIT] uiManager module not found!');
+        }
+
+        // 右侧工作区侧栏：通知 + 辅助对话
+        // 侧栏起不来只影响侧栏：后面的过滤器、事件绑定（发送按钮等）照常初始化
+        try {
+            workspaceSidePaneController = initWorkspaceSidePane({
+                document,
+                window,
+                elements: {
+                    root: vcpSidePane,
+                    resizerHandle: resizerRight,
+                    tabList: sidePaneTabs,
+                    contentContainer: sidePaneContentContainer,
+                    toggleNotificationsBtn,
+                    notificationsPanel: notificationsSidebar,
+                    toggleChatBtn: toggleSidePaneChatBtn,
+                    closeBtn: closeSidePaneBtn,
+                    addBtn: addSidePaneChatBtn,
+                },
+                chatAPI,
+                chatRepository,
+                chatManager,
+                uiHelper: uiHelperFunctions,
+                createRenderer: createOwnedInternalChatRenderer,
+                settingsRef: mainChatSettingsOwner.ref,
+                selectedItemRef: currentSelectedItemRef,
+                topicIdRef: currentTopicIdRef,
+                historyRef: mainHistoryRef,
+                subscriptions: ownedRendererSubscriptions,
+            });
+        } catch (error) {
+            console.error('[RENDERER_INIT] Failed to initialize the side pane:', error);
+            uiHelperFunctions?.showToastNotification?.(`侧栏初始化失败：${error?.message || '未知错误'}`, 'error');
         }
 
         // Initialize Filter Manager
@@ -950,6 +1120,7 @@ mainChatSettingsPresentationOwner.configureStartup({
             filterAgentList: uiHelperFunctions.filterAgentList,
             addNetworkPathInput: uiHelperFunctions.addNetworkPathInput,
             sendButtonAction: mainChatSendOwner.handleAction,
+            notifySendStateChanged: mainChatSendOwner.update,
             normalizeChatPresentationMode,
             applyChatPresentationMode,
             applyChatBubbleLayoutSettings,
@@ -964,6 +1135,8 @@ mainChatSettingsPresentationOwner.configureStartup({
         // diagnostics and isolated Electron smoke tests.
         document.documentElement.dataset.vcpRendererReady = 'true';
         window.dispatchEvent(new CustomEvent('vcp-renderer-ready'));
+        // 同一时刻通知主进程，作为启动标记里的 renderer-ready（lifecycle:get-main-snapshot.launch）
+        window.electronAPI?.markRendererReady?.();
 
         // Emoticon panel event listener
         if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {
@@ -992,45 +1165,12 @@ mainChatSettingsPresentationOwner.configureStartup({
         window.topicListManager.setupTopicSearch(); // Ensure this is called after DOM for topic search input is ready
         if(messageInput) uiHelperFunctions.autoResizeTextarea(messageInput);
 
-        if (quickNewTopicBtn && currentItemActionBtn) {
-            const syncQuickNewTopicButton = () => {
-                const isVisible = window.getComputedStyle(currentItemActionBtn).display !== 'none';
-                const buttonLabel = currentItemActionBtn.querySelector('.button-label')?.textContent?.trim();
-
-                quickNewTopicBtn.style.display = 'inline-flex';
-                quickNewTopicBtn.disabled = !isVisible;
-                quickNewTopicBtn.title = currentItemActionBtn.title || '新建聊天话题';
-
-                if (buttonLabel) {
-                    quickNewTopicBtn.setAttribute('aria-label', buttonLabel);
+        if (quickNewTopicBtn) {
+            mainChatDomListenerOwner.add(quickNewTopicBtn, 'click', () => {
+                if (window.TavernManager?.togglePopover) {
+                    window.TavernManager.togglePopover(quickNewTopicBtn);
                 }
-            };
-
-            const forwardCurrentItemAction = (eventName) => {
-                if (quickNewTopicBtn.disabled) return;
-                currentItemActionBtn.dispatchEvent(new MouseEvent(eventName, {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window
-                }));
-            };
-
-            mainChatDomListenerOwner.add(quickNewTopicBtn, 'click', () => forwardCurrentItemAction('click'));
-            mainChatDomListenerOwner.add(quickNewTopicBtn, 'contextmenu', (event) => {
-                event.preventDefault();
-                forwardCurrentItemAction('contextmenu');
             });
-
-            const quickTopicObserver = mainChatDomListenerOwner.own(new MutationObserver(syncQuickNewTopicButton));
-            quickTopicObserver.observe(currentItemActionBtn, {
-                attributes: true,
-                attributeFilter: ['style', 'title'],
-                childList: true,
-                subtree: true,
-                characterData: true
-            });
-
-            syncQuickNewTopicButton();
         }
 
         // Set default view if no item is selected
@@ -1127,6 +1267,108 @@ mainChatSettingsPresentationOwner.configureStartup({
         }
         },
     }));
+
+    const admissionQueueView = createTopicAdmissionQueueView({
+        parent: chatInputCard,
+        before: chatInputCard.firstChild,
+        api: chatAPI,
+        getScope: () => {
+            const selected = currentSelectedItemRef.get();
+            return selected?.id && currentTopicIdRef.get() ? {
+                itemType: selected.type, itemId: selected.id, topicId: currentTopicIdRef.get(),
+            } : null;
+        },
+        notify: (message, type) => uiHelperFunctions.showToastNotification(message, type),
+    });
+    const syncAdmissionHistory = async scope => {
+        const selected = currentSelectedItemRef.get();
+        if (selected?.id === scope.itemId && selected.type === scope.itemType
+            && currentTopicIdRef.get() === scope.topicId) {
+            await chatManager.syncHistoryFromFile(scope.itemId, scope.itemType, scope.topicId);
+        }
+    };
+    const stopAdmissionCommitted = chatAPI.onTopicAdmissionCommitted(({ scope }) => {
+        syncAdmissionHistory(scope).catch(error => console.error('[Admission] sync failed', error));
+    });
+    const stopAdmissionAdvance = chatAPI.onTopicAdmissionAdvance(request => {
+        void (async () => {
+            let acknowledged = false;
+            let placeholder = null;
+            let streaming = false;
+            const isVisible = () => {
+                const selected = currentSelectedItemRef.get();
+                return selected?.id === request.scope.itemId && selected.type === request.scope.itemType
+                    && currentTopicIdRef.get() === request.scope.topicId;
+            };
+            const removeThinking = async () => {
+                if (placeholder && isVisible()
+                    && mainHistoryRef.get().some(message => message.id === placeholder.id && message.isThinking)) {
+                    await messageRenderer.removeMessageById(placeholder.id, false);
+                }
+            };
+            try {
+                const operation = await prepareTopicAdmissionSingleChat({
+                    request, api: chatAPI, settings: mainChatSettingsOwner.get(),
+                    createRequestTextOptions: chatManager.createRequestTextOptions,
+                    persistAssistant: async (scope, message) => {
+                        const result = await chatRepository.persistAssistant(scope, message);
+                        if (!result?.success) throw new Error(result?.error || '终稿保存失败');
+                        return result;
+                    },
+                    onStarting: async value => {
+                        placeholder = value.message;
+                        streaming = value.streaming;
+                        await syncAdmissionHistory(request.scope);
+                        if (streaming) {
+                            await mainChatAdapter.startStream({ ...placeholder, streamOperationId: placeholder.id });
+                        } else if (isVisible()) {
+                            mainHistoryRef.set([...mainHistoryRef.get(), placeholder]);
+                            const item = await messageRenderer.renderMessage(placeholder);
+                            if (!isVisible()) item?.remove?.();
+                        }
+                        mainChatSendOwner.update();
+                    },
+                    onCommitted: async scope => {
+                        if (!streaming) await removeThinking();
+                        await syncAdmissionHistory(scope);
+                    },
+                    onFinalized: event => window.flowlockManager?.handleFinalizedMessage?.(event),
+                });
+                const receipt = await chatAPI.topicAdmissionAck(request.token);
+                if (!receipt?.success) return;
+                acknowledged = true;
+                window.flowlockManager?.adoptRelayMessage?.(
+                    request.scope.itemId, request.scope.topicId, operation.messageId, request.relayFrom);
+                await operation.start();
+            } catch (error) {
+                const detail = error.message || String(error);
+                if (placeholder) {
+                    if (streaming) {
+                        mainChatAdapter.acceptStreamEvent({
+                            type: 'error', messageId: placeholder.id, context: placeholder.context, error: detail,
+                        });
+                    } else {
+                        await removeThinking();
+                    }
+                    mainChatSendOwner.update();
+                }
+                // ACK transfers execution ownership; rejection after this point is not proof of no dispatch.
+                if (acknowledged) await chatAPI.topicAdmissionUncertain(request.scope, request.token, detail);
+                else await chatAPI.topicAdmissionAck(request.token, detail);
+                console.error('[Admission] advance paused', error);
+            }
+        })().catch(error => console.error('[Admission] failure reporting failed', error));
+    });
+    const stopAdmissionSelection = chatManager.onSelectionChange(() => admissionQueueView.selectionChanged());
+    ownedRendererSubscriptions.add({
+        dispose() {
+            stopAdmissionSelection();
+            stopAdmissionCommitted();
+            stopAdmissionAdvance();
+            admissionQueueView.dispose();
+        },
+    });
+    admissionQueueView.refresh().catch(error => console.error('[Admission] queue load failed', error));
 
     // --- Initialize Flowlock Module ---
     if (window.initializeFlowlockIntegration) {

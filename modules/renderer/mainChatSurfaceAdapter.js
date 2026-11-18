@@ -2,6 +2,7 @@ import { createChatSurface } from '../chat/chatSurface.js';
 import { createStreamConsumerRegistry } from '../chat/streamConsumerRegistry.js';
 import { createVcpStreamBridge } from '../chat/vcpStreamBridge.js';
 import { createMainChatStreamConsumer } from './mainChatStreamConsumer.js';
+import { isSideChatChildTopicId } from '../chat/sideChatSessionService.js';
 
 function createStreamCapabilities(root, services) {
     const required = ['streamProjection', 'historyPersistence', 'messageRenderer', 'getSelection', 'getTopicId'];
@@ -16,7 +17,25 @@ function createStreamCapabilities(root, services) {
         projectTerminal: (messageId, finishReason, context, payload) => (
             services.streamProjection.projectStreamTerminal(messageId, finishReason, context, payload)
         ),
-        persistTerminal: projected => services.historyPersistence.commit(projected),
+        async persistTerminal(projected) {
+            try {
+                return await services.historyPersistence.commit(projected);
+            } catch (error) {
+                const context = projected?.context;
+                if (context?.admissionToken && context.agentId && context.topicId) {
+                    try {
+                        const api = ownerDocument.defaultView?.chatAPI || ownerDocument.defaultView?.electronAPI;
+                        const receipt = await api.topicAdmissionUncertain({
+                            itemType: 'agent', itemId: context.agentId, topicId: context.topicId,
+                        }, context.admissionToken, error?.message || String(error));
+                        if (!receipt?.success) throw new Error(receipt?.error || receipt?.code || '保存待核实报告失败');
+                    } catch (diagnosticError) {
+                        reportError('[MainChatSurfaceAdapter] uncertain journal failed', diagnosticError);
+                    }
+                }
+                throw error;
+            }
+        },
         setPersistenceState(messageId, state, error = '') {
             const messageItem = root.querySelector(`.message-item[data-message-id="${messageId}"]`);
             if (!messageItem) return;
@@ -39,14 +58,48 @@ function createStreamCapabilities(root, services) {
                 : null;
             services.notifySendStateChanged?.({ ...value, event });
         },
-        onSettled(value) {
-            // 最终 outcome 发布后的幂等兜底，覆盖持久化失败等异常路径。
+        async onSettled(value) {
+            services.chatManager?.abandonStreamContextCompaction?.(value);
             services.notifySendStateChanged?.(value);
+            if (value.event?.type !== 'failed') return;
+            const context = value.context;
+            if (!context?.admissionToken || !context.agentId || !context.topicId) return;
+            try {
+                const api = ownerDocument.defaultView?.chatAPI || ownerDocument.defaultView?.electronAPI;
+                const receipt = await api.topicAdmissionUncertain({
+                    itemType: 'agent', itemId: context.agentId, topicId: context.topicId,
+                }, context.admissionToken, '流式生成失败');
+                if (!receipt?.success && receipt?.code !== 'STALE_LEASE') {
+                    throw new Error(receipt?.error || receipt?.code || '失败清理未确认');
+                }
+            } catch (error) { reportError('[MainChatSurfaceAdapter] failure cleanup failed', error); }
         },
         reportError,
         async afterPersist({ terminal, finalized, context, messageId }) {
             const finalizedContext = finalized?.context || context;
             const finalizedContent = finalized?.content || terminal.fullResponse || '';
+            if (terminal.kind === 'failed' && finalizedContext?.admissionToken) {
+                services.chatManager?.cancelStreamAdmissionRelay?.(messageId);
+                const api = ownerDocument.defaultView?.chatAPI || ownerDocument.defaultView?.electronAPI;
+                const receipt = await api.topicAdmissionUncertain({
+                    itemType: 'agent', itemId: finalizedContext.agentId, topicId: finalizedContext.topicId,
+                }, finalizedContext.admissionToken, terminal.error?.message || terminal.error || '流式生成失败');
+                if (!receipt?.success && receipt?.code !== 'STALE_LEASE') {
+                    throw new Error(receipt?.error || receipt?.code || '失败清理未确认');
+                }
+            } else if (services.chatManager?.hasStreamAdmissionRelay?.(messageId)) {
+                await services.chatManager.finishStreamAdmissionRelay({
+                    messageId, context: finalizedContext,
+                });
+                return;
+            }
+            if (terminal.kind !== 'failed' && finalizedContext?.admissionToken) {
+                const api = ownerDocument.defaultView?.chatAPI || ownerDocument.defaultView?.electronAPI;
+                const release = await api.topicAdmissionRelease({
+                    itemType: 'agent', itemId: finalizedContext.agentId, topicId: finalizedContext.topicId,
+                }, finalizedContext.admissionToken, { saved: true });
+                if (!release?.success) throw new Error(release?.error || release?.code || '入场租约释放失败');
+            }
             const selected = services.getSelection();
             const relevant = finalizedContext
                 && selected
@@ -56,13 +109,16 @@ function createStreamCapabilities(root, services) {
             if (terminal.kind === 'completed' && finalizedContext && !finalizedContext.isGroupMessage && relevant) {
                 effects.push(Promise.resolve().then(() => services.chatManager?.attemptTopicSummarizationIfNeeded?.()));
             }
-            effects.push(Promise.resolve().then(() => services.flowlockManager?.handleFinalizedMessage?.({
+            // 心流锁按助手加锁：侧聊回复若参与，会认领主聊天的待接续请求，或把整个助手锁到看不见的侧聊话题上，
+            // 主聊天随之无法切换、新建话题
+            if (!isSideChatChildTopicId(finalizedContext?.topicId)) effects.push(Promise.resolve().then(() => services.flowlockManager?.handleFinalizedMessage?.({
                 type: terminal.kind === 'failed' ? 'error' : 'end', messageId,
                 context: finalizedContext, content: finalizedContent,
                 finishReason: finalized?.finishReason || terminal.finishReason || terminal.kind,
                 error: terminal.error || null,
             })));
             const results = await Promise.allSettled(effects);
+            await services.chatManager?.finishStreamContextCompaction?.({ messageId, context: finalizedContext });
             results.forEach(result => {
                 if (result.status === 'rejected') reportError('[MainChatSurfaceAdapter] post-commit side effect failed', result.reason);
             });
@@ -86,7 +142,7 @@ function createStreamCapabilities(root, services) {
                 paragraph.appendChild(strong);
                 errorContent.appendChild(paragraph);
             } else {
-                services.messageRenderer.renderMessage({ role: 'system', content: `流处理错误 (ID: ${event.messageId}): ${error}`, timestamp: Date.now(), id: `err_${event.messageId}` });
+                services.messageRenderer.renderMessage({ role: 'system', notice: 'error', content: `流处理错误 (ID: ${event.messageId}): ${error}`, timestamp: Date.now(), id: `err_${event.messageId}` });
             }
         },
     });
@@ -122,12 +178,19 @@ export function createMainChatSurfaceAdapter({
         ...renderDependencies,
         chatDomRenderer: surface.renderer,
         streamStartCapability: message => streamServices.streamProjection.startStreamingMessage(message),
+        cancelStreamAdmissionRelay: messageId => streamServices.chatManager?.cancelStreamAdmissionRelay?.(messageId),
+        cancelStreamCapability: (messageId, reason) => bridge.cancelOperation(messageId, reason),
     });
     const streamCapabilities = createStreamCapabilities(root, streamServices);
     const bridge = createVcpStreamBridge({
         createConsumer: initialEvent => createMainChatStreamConsumer(initialEvent, {
             ...streamCapabilities,
             resolveProjection: messageId => streamRoutes.claim(messageId),
+            onStreamContextGrowth: value => streamServices.chatManager?.prepareStreamCompressionReady?.(value),
+            onToolReturnBoundary: value => streamServices.chatManager?.checkStreamContextBudget?.({
+                ...value,
+                cancelStream: (messageId, reason) => bridge.cancelOperation(messageId, reason),
+            }),
         }),
     });
     let disposed = false;
@@ -159,6 +222,7 @@ export function createMainChatSurfaceAdapter({
             return streamServices.streamProjection.startStreamingMessage(message, messageItem);
         },
         cancelStream(messageId, reason) { return disposed ? Promise.resolve(null) : bridge.cancelOperation(messageId, reason); },
+        disposeStream(messageId, reason) { return disposed ? Promise.resolve(false) : bridge.disposeOperation(messageId, reason); },
         async dispose() {
             if (disposed) return;
             disposed = true;

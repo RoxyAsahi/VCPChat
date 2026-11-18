@@ -24,10 +24,28 @@ window.topicListManager = (() => {
     let availableTopics = [];
     let currentItemConfig = null;
     let managedItemKey = '';
+    let chatRepositorySubscription = null;
 
-    const TOPIC_INITIAL_RENDER_COUNT = 40;
-    const TOPIC_PROGRESSIVE_BATCH_SIZE = 30;
-    const TOPIC_LOAD_MORE_THRESHOLD_PX = 320;
+    const TOPIC_OVERSCAN = 8;
+    const TOPIC_COUNT_CONCURRENCY = 4;
+    const TOPIC_SUMMARY_CACHE_LIMIT = 256;
+    const TOPIC_SUMMARY_TTL_MS = 30000;
+    let surfaceObserver = null;
+    let surfaceActive = true;
+    let snapshotDirty = true;
+    let snapshotSearch = '';
+    let savedScrollTop = 0;
+    let scrollScope = '';
+    let virtualView = null;
+    let renderFrame = null;
+    let countQueue = [];
+    let activeCountReads = 0;
+    const topicSummaryCache = new Map();
+    // Each search reload re-reads the item config and runs a content search
+    // over IPC. Typing waits for a short pause first (the 150-300ms range
+    // usual for IO-backed refreshes); Enter still searches at once.
+    const TOPIC_SEARCH_DEBOUNCE_MS = 200;
+    let topicSearchTimer = null;
 
     const addListener = (target, type, handler, options) => {
         if (listenerOwner) return listenerOwner.add(target, type, handler, options);
@@ -38,6 +56,27 @@ window.topicListManager = (() => {
     function addRenderListener(target, type, handler, options) {
         target?.addEventListener?.(type, handler, options);
         renderListenerDisposers.push(() => target?.removeEventListener?.(type, handler, options));
+    }
+
+    function cancelPendingTopicSearch() {
+        if (topicSearchTimer) clearTimeout(topicSearchTimer);
+        topicSearchTimer = null;
+    }
+
+    // Names and IPC error strings are user or disk data, so status rows are
+    // built with textContent, never by interpolating into innerHTML.
+    function renderTopicListStatus(topicListUl, message, { loading = false } = {}) {
+        const li = document.createElement('li');
+        if (loading) {
+            const spinner = document.createElement('div');
+            spinner.className = 'loading-spinner-small';
+            li.append(spinner, document.createTextNode(message));
+        } else {
+            const p = document.createElement('p');
+            p.textContent = message;
+            li.appendChild(p);
+        }
+        topicListUl.replaceChildren(li);
     }
 
     function disposeRenderListeners() {
@@ -71,9 +110,30 @@ window.topicListManager = (() => {
         uiManager = config.uiManager || null;
         itemListManager = config.itemListManager || null;
 
+        surfaceActive = isTopicSurfaceVisible();
+        surfaceObserver = new MutationObserver(() => syncSurfaceVisibility());
+        surfaceObserver.observe(topicListContainer, { attributes: true, attributeFilter: ['class'] });
+        const sidebar = topicListContainer.closest('.sidebar');
+        if (sidebar) surfaceObserver.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+
         // 设置鼠标快捷键
         setupMouseShortcuts();
         setupNextUiTopicTools();
+
+        chatRepositorySubscription?.();
+        chatRepositorySubscription = null;
+        if (typeof chatRepository?.onDidSaveHistory === 'function') {
+            chatRepositorySubscription = chatRepository.onDidSaveHistory(({ itemId, itemType, topicId, count }) => {
+                const currentItem = currentSelectedItemRef?.get?.();
+                if (currentItem && String(currentItem.id) === String(itemId) && currentItem.type === itemType) {
+                    updateTopicMessageCount(topicId, count, {
+                        itemId,
+                        itemType,
+                        isCurrent: String(topicId) === String(currentTopicIdRef?.get?.())
+                    });
+                }
+            });
+        }
 
         console.log('[TopicListManager] Initialized successfully.');
     }
@@ -179,35 +239,34 @@ window.topicListManager = (() => {
      * 未读组与已读组内部均保留用户自定义顺序。
      */
     async function prioritizeUnreadTopics(topics, currentSelectedItem) {
-        const topicsWithUnreadState = await Promise.all(topics.map(async topic => {
-            let history = [];
-            try {
-                history = await getHistory(currentSelectedItem.id, currentSelectedItem.type, topic.id);
-            } catch (error) {
-                console.warn(`[TopicListManager] 读取话题 ${topic.id} 的未读状态失败:`, error);
+        const generation = topicListRenderGeneration;
+        const results = new Array(topics.length);
+        let cursor = 0;
+        const worker = async () => {
+            while (cursor < topics.length && generation === topicListRenderGeneration && isTopicSurfaceVisible()) {
+                const index = cursor++;
+                const topic = topics[index];
+                let history = [];
+                try {
+                    history = await getHistory(currentSelectedItem.id, currentSelectedItem.type, topic.id);
+                } catch (error) {
+                    console.warn(`[TopicListManager] 读取话题 ${topic.id} 的未读状态失败:`, error);
+                }
+                if (generation !== topicListRenderGeneration || !isTopicSurfaceVisible()) return;
+                const calculatedUnreadCount = countUnreadMessages(history);
+                const isUnread = calculatedUnreadCount > 0 || hasValidPersistentUnreadMarker(topic, history);
+                await clearStalePersistentUnreadMarker(topic, currentSelectedItem.id, history);
+                results[index] = { topic, isUnread, calculatedUnreadCount };
             }
-
-            const calculatedUnreadCount = Array.isArray(history)
-                ? countUnreadMessages(history)
-                : 0;
-            const hasPersistentUnread = hasValidPersistentUnreadMarker(topic, history);
-
-            await clearStalePersistentUnreadMarker(topic, currentSelectedItem.id, history);
-
-            return {
-                topic,
-                isUnread: calculatedUnreadCount > 0 || hasPersistentUnread,
-                calculatedUnreadCount
-            };
-        }));
-
+        };
+        await Promise.all(Array.from({ length: Math.min(TOPIC_COUNT_CONCURRENCY, topics.length) }, worker));
+        if (generation !== topicListRenderGeneration) return topics;
         const unreadTopics = [];
         const readTopics = [];
-        topicsWithUnreadState.forEach(({ topic, isUnread, calculatedUnreadCount }) => {
+        results.forEach(({ topic, isUnread, calculatedUnreadCount }) => {
             topic.__calculatedUnreadCount = calculatedUnreadCount;
             (isUnread ? unreadTopics : readTopics).push(topic);
         });
-
         return unreadTopics.concat(readTopics);
     }
 
@@ -251,8 +310,49 @@ window.topicListManager = (() => {
         return 0; // 不显示
     }
 
+    function isTopicSurfaceVisible() {
+        if (!topicListContainer) return false;
+        const sidebar = topicListContainer.closest('.sidebar');
+        // Standalone consumers/tests do not have the main window's tab shell.
+        if (!sidebar) return true;
+        return sidebar.classList.contains('active') && (
+            topicListContainer.classList.contains('active') ||
+            (sidebar.classList.contains('avatar-only') && topicListContainer.classList.contains('compact-drawer-open'))
+        );
+    }
+
+    function syncSurfaceVisibility() {
+        const visible = isTopicSurfaceVisible();
+        if (visible === surfaceActive) return;
+        surfaceActive = visible;
+        if (!visible) {
+            // display:none may already have reset the browser's scrollTop.
+            // Keep the last visible scroll snapshot instead of reading it here.
+            cancelPendingTopicSearch();
+            cleanupProgressiveTopicRendering();
+            closeTopicContextMenu();
+            document.getElementById('topicList')?.replaceChildren();
+            return;
+        }
+        const selected = currentSelectedItemRef.get();
+        const search = parseTopicSearchQuery(document.getElementById('topicSearchInput')?.value).rawTerm;
+        if (!snapshotDirty && managedItemKey === `${selected.type}:${selected.id}` && search === snapshotSearch && displayedTopics.length) {
+            renderTopicListProgressively(document.getElementById('topicList'), displayedTopics, selected, currentTopicIdRef.get(), currentItemConfig, search);
+            syncManageUi();
+        } else {
+            void loadTopicList();
+        }
+    }
+
     function cleanupProgressiveTopicRendering() {
         topicListRenderGeneration++;
+        if (renderFrame !== null) {
+            cancelAnimationFrame(renderFrame);
+            renderFrame = null;
+        }
+        virtualView?.resizeObserver?.disconnect();
+        virtualView = null;
+        countQueue = [];
         disposeRenderListeners();
         if (typeof topicListScrollCleanup === 'function') {
             topicListScrollCleanup();
@@ -293,62 +393,110 @@ window.topicListManager = (() => {
         return topicCountObserver;
     }
 
+    function applyTopicSummary(li, summary) {
+        const span = li.querySelector('.message-count');
+        if (!span) return;
+        span.textContent = String(summary.count);
+        span.classList.toggle('has-unread', summary.unreadCount > 0);
+        span.classList.toggle('unread-marker-only', summary.unreadCount === -1);
+        if (summary.unreadCount !== 0) ensureTopicUnreadIndicator(li, summary.unreadCount);
+        else removeTopicUnreadIndicator(li);
+        li.dataset.countLoaded = 'true';
+    }
+
     function loadTopicMessageCount(li) {
-        if (!li?.isConnected || li.dataset.countLoaded === 'true' || li.dataset.countLoading === 'true') return;
-
-        const itemId = li.dataset.itemId;
-        const itemType = li.dataset.itemType;
-        const topicId = li.dataset.topicId;
-        const topic = li.__topicData;
-        const messageCountSpan = li.querySelector('.message-count');
-
-        if (!itemId || !itemType || !topicId || !topic || !messageCountSpan) return;
-
-        li.dataset.countLoading = 'true';
-
-        let historyPromise;
-        historyPromise = getHistory(itemId, itemType, topicId);
-
-        if (!historyPromise) {
-            messageCountSpan.textContent = 'N/A';
-            li.dataset.countLoaded = 'true';
-            li.dataset.countLoading = 'false';
+        if (!isTopicSurfaceVisible() || !li?.isConnected || li.dataset.countLoaded === 'true' || li.dataset.countLoading === 'true') return;
+        const key = JSON.stringify([li.dataset.itemType, li.dataset.itemId, li.dataset.topicId]);
+        const cached = topicSummaryCache.get(key);
+        if (cached && Date.now() - cached.at < TOPIC_SUMMARY_TTL_MS) {
+            applyTopicSummary(li, cached);
             return;
         }
+        li.dataset.countLoading = 'true';
+        countQueue.push({ li, key, generation: topicListRenderGeneration });
+        drainTopicCountQueue();
+    }
 
-        historyPromise.then(async historyResult => {
-            if (!li.isConnected) return;
-
-            messageCountSpan.classList.remove('has-unread', 'unread-marker-only');
-
-            if (historyResult && !historyResult.error && Array.isArray(historyResult)) {
-                await clearStalePersistentUnreadMarker(topic, itemId, historyResult);
-                const unreadCount = calculateTopicUnreadCount(topic, historyResult);
-                if (unreadCount > 0) {
-                    messageCountSpan.textContent = `${historyResult.length}`;
-                    messageCountSpan.classList.add('has-unread');
-                    ensureTopicUnreadIndicator(li, unreadCount);
-                } else if (unreadCount === -1) {
-                    messageCountSpan.textContent = `${historyResult.length}`;
-                    messageCountSpan.classList.add('unread-marker-only');
-                    ensureTopicUnreadIndicator(li);
-                } else {
-                    messageCountSpan.textContent = `${historyResult.length}`;
-                    removeTopicUnreadIndicator(li);
-                }
-            } else {
-                messageCountSpan.textContent = 'N/A';
-            }
-            li.dataset.countLoaded = 'true';
-        }).catch(() => {
-            if (li.isConnected) {
-                messageCountSpan.textContent = 'ERR';
-            }
-        }).finally(() => {
-            if (li.isConnected) {
+    function drainTopicCountQueue() {
+        while (activeCountReads < TOPIC_COUNT_CONCURRENCY && countQueue.length) {
+            const job = countQueue.shift();
+            const { li, key, generation } = job;
+            if (generation !== topicListRenderGeneration || !li.isConnected || !isTopicSurfaceVisible()) continue;
+            activeCountReads++;
+            const isCurrent = () => generation === topicListRenderGeneration && li.isConnected && isTopicSurfaceVisible();
+            Promise.resolve().then(() => getHistory(li.dataset.itemId, li.dataset.itemType, li.dataset.topicId)).then(async history => {
+                if (!isCurrent()) return;
+                if (!Array.isArray(history)) throw new Error('Invalid topic history');
+                await clearStalePersistentUnreadMarker(li.__topicData, li.dataset.itemId, history);
+                if (!isCurrent()) return;
+                const summary = { count: history.length, unreadCount: calculateTopicUnreadCount(li.__topicData, history), at: Date.now() };
+                topicSummaryCache.delete(key);
+                topicSummaryCache.set(key, summary);
+                if (topicSummaryCache.size > TOPIC_SUMMARY_CACHE_LIMIT) topicSummaryCache.delete(topicSummaryCache.keys().next().value);
+                applyTopicSummary(li, summary);
+            }).catch(() => {
+                if (isCurrent()) li.querySelector('.message-count').textContent = 'ERR';
+            }).finally(() => {
                 li.dataset.countLoading = 'false';
+                activeCountReads--;
+                drainTopicCountQueue();
+            });
+        }
+    }
+
+    function findTopicListItem(topicId) {
+        if (!topicListContainer || !topicId) return null;
+        const items = topicListContainer.querySelectorAll('.topic-item');
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].dataset.topicId === String(topicId)) {
+                return items[i];
             }
+        }
+        return null;
+    }
+
+    /**
+     * 响应式更新指定话题的消息条数及缓存。
+     * @param {string} topicId - 话题ID
+     * @param {number} count - 消息条数
+     * @param {object} [options] - 选项 (itemId, itemType, isCurrent, unreadCount)
+     */
+    function updateTopicMessageCount(topicId, count, options = {}) {
+        const numericCount = Number(count);
+        if (!topicId || !Number.isFinite(numericCount)) return;
+        const currentItem = currentSelectedItemRef?.get?.();
+        const itemId = options.itemId || currentItem?.id;
+        const itemType = options.itemType || currentItem?.type;
+        const isCurrent = options.isCurrent ?? (String(topicId) === String(currentTopicIdRef?.get?.()));
+
+        if (itemId && itemType) {
+            const key = JSON.stringify([itemType, itemId, String(topicId)]);
+            const existing = topicSummaryCache.get(key);
+            const unreadCount = options.unreadCount !== undefined
+                ? options.unreadCount
+                : (isCurrent ? 0 : (existing ? existing.unreadCount : 0));
+            const summary = {
+                count: numericCount,
+                unreadCount,
+                at: Date.now()
+            };
+            topicSummaryCache.delete(key);
+            topicSummaryCache.set(key, summary);
+            if (topicSummaryCache.size > TOPIC_SUMMARY_CACHE_LIMIT) {
+                topicSummaryCache.delete(topicSummaryCache.keys().next().value);
+            }
+        }
+
+        const li = findTopicListItem(topicId);
+        if (!li) return;
+        const unreadCount = options.unreadCount !== undefined
+            ? options.unreadCount
+            : (isCurrent ? 0 : undefined);
+        applyTopicSummary(li, {
+            count: numericCount,
+            unreadCount: unreadCount !== undefined ? unreadCount : 0
         });
+        li.dataset.countLoading = 'false';
     }
 
     function createTopicListItem(topic, currentSelectedItem, currentTopicId, itemConfigFull) {
@@ -364,6 +512,7 @@ window.topicListManager = (() => {
         li.classList.toggle('active', isCurrentActiveTopic);
         li.classList.toggle('active-topic-glowing', isCurrentActiveTopic);
         li.classList.toggle('has-unread-topic', isPersistentlyUnread);
+        li.tabIndex = isCurrentActiveTopic ? 0 : -1;
 
         const avatarImg = document.createElement('img');
         avatarImg.classList.add('avatar');
@@ -407,7 +556,9 @@ window.topicListManager = (() => {
         const observer = ensureTopicCountObserver();
         observer.observe(li);
 
-        addRenderListener(li, 'click', async () => {
+        // Row-local listeners are collected with recycled rows, not retained in
+        // the render owner's disposer array for the lifetime of the list.
+        li.addEventListener('click', async () => {
             if (isManageMode) {
                 toggleTopicSelection(topic.id);
                 return;
@@ -439,7 +590,7 @@ window.topicListManager = (() => {
             }
         });
 
-        addRenderListener(li, 'contextmenu', (e) => {
+        li.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             if (isManageMode) return;
             showTopicContextMenu(e, li, itemConfigFull, topic, currentSelectedItem.type);
@@ -449,94 +600,199 @@ window.topicListManager = (() => {
     }
 
     function renderTopicListProgressively(topicListUl, topicsToProcess, currentSelectedItem, currentTopicId, itemConfigFull, searchTerm) {
+        if (!topicListUl || !isTopicSurfaceVisible()) return;
         const renderGeneration = topicListRenderGeneration;
         const scrollContainer = getTopicScrollContainer(topicListUl);
-        const totalCount = topicsToProcess.length;
-        const initialCount = searchTerm
-            ? Math.min(Math.max(TOPIC_INITIAL_RENDER_COUNT, TOPIC_PROGRESSIVE_BATCH_SIZE), totalCount)
-            : Math.min(TOPIC_INITIAL_RENDER_COUNT, totalCount);
-
-        let currentIndex = 0;
-        let isRendering = false;
-        let allRendered = false;
-
-        const statusLi = document.createElement('li');
-        statusLi.className = 'topic-list-progressive-status';
-        statusLi.textContent = '';
-        statusLi.style.justifyContent = 'center';
-        statusLi.style.opacity = '0.75';
-
-        const finalizeIfDone = () => {
-            if (!allRendered || renderGeneration !== topicListRenderGeneration) return;
-
-            statusLi.remove();
-            if (typeof topicListScrollCleanup === 'function') {
-                topicListScrollCleanup();
-                topicListScrollCleanup = null;
-            }
-
-            if (currentSelectedItem.id && topicsToProcess.length > 0 && typeof Sortable !== 'undefined' && !searchTerm) {
-                initializeTopicSortable(currentSelectedItem.id, currentSelectedItem.type);
-            }
+        const spacer = () => {
+            const node = document.createElement('li');
+            node.className = 'topic-virtual-spacer';
+            node.setAttribute('aria-hidden', 'true');
+            return node;
         };
+        const top = spacer();
+        const bottom = spacer();
+        const rows = new Map();
+        let stride = (parseFloat(getComputedStyle(topicListUl).getPropertyValue('--vcp-ui-sidebar-row-height')) || 36) + 2;
+        let focusId = currentTopicId;
+        let dragging = false;
+        let rangeKey = '';
+        bottom.style.height = `${topicsToProcess.length * stride}px`;
+        topicListUl.replaceChildren(top, bottom);
+        scrollContainer.scrollTop = savedScrollTop;
 
-        const renderNextBatch = (batchSize = TOPIC_PROGRESSIVE_BATCH_SIZE) => {
-            if (isRendering || allRendered || renderGeneration !== topicListRenderGeneration) return;
-            isRendering = true;
-
-            requestAnimationFrame(() => {
-                if (renderGeneration !== topicListRenderGeneration) {
-                    isRendering = false;
-                    return;
+        const renderWindow = () => {
+            if (renderGeneration !== topicListRenderGeneration || !isTopicSurfaceVisible() || dragging) return;
+            const sample = rows.values().next().value;
+            if (sample) {
+                const style = getComputedStyle(sample);
+                stride = (parseFloat(style.height) || sample.getBoundingClientRect().height) + (parseFloat(style.marginBottom) || 0) || stride;
+            }
+            const height = scrollContainer.clientHeight || 600;
+            const maxScroll = Math.max(0, topicsToProcess.length * stride - height);
+            if (scrollContainer.scrollTop > maxScroll) scrollContainer.scrollTop = maxScroll;
+            savedScrollTop = scrollContainer.scrollTop;
+            const start = Math.max(0, Math.floor(scrollContainer.scrollTop / stride) - TOPIC_OVERSCAN);
+            const end = Math.min(topicsToProcess.length, start + Math.ceil(height / stride) + TOPIC_OVERSCAN * 2);
+            const nextKey = `${start}:${end}:${stride}`;
+            if (rangeKey === nextKey) return;
+            rangeKey = nextKey;
+            const wanted = new Set(topicsToProcess.slice(start, end).map(topic => topic.id));
+            for (const [id, row] of rows) {
+                if (wanted.has(id)) continue;
+                topicCountObserver?.unobserve(row);
+                virtualView?.resizeObserver?.unobserve(row);
+                row.remove();
+                rows.delete(id);
+            }
+            countQueue = countQueue.filter(job => job.li.isConnected);
+            for (let index = start; index < end; index++) {
+                const topic = topicsToProcess[index];
+                let row = rows.get(topic.id);
+                if (!row) {
+                    row = createTopicListItem(topic, currentSelectedItem, currentTopicIdRef.get(), itemConfigFull);
+                    rows.set(topic.id, row);
+                    topicListUl.insertBefore(row, bottom);
+                    virtualView?.resizeObserver?.observe(row);
                 }
-
-                const fragment = document.createDocumentFragment();
-                const end = Math.min(currentIndex + batchSize, totalCount);
-
-                for (; currentIndex < end; currentIndex++) {
-                    fragment.appendChild(createTopicListItem(
-                        topicsToProcess[currentIndex],
-                        currentSelectedItem,
-                        currentTopicId,
-                        itemConfigFull
-                    ));
-                }
-
-                if (statusLi.parentNode === topicListUl) {
-                    topicListUl.insertBefore(fragment, statusLi);
-                } else {
-                    topicListUl.appendChild(fragment);
-                }
-
-                allRendered = currentIndex >= totalCount;
-                isRendering = false;
-
-                if (!allRendered) {
-                    statusLi.textContent = `继续向下滚动加载更多话题（${currentIndex}/${totalCount}）`;
-                    if (!statusLi.parentNode) topicListUl.appendChild(statusLi);
-                    if (scrollContainer.scrollHeight <= scrollContainer.clientHeight + TOPIC_LOAD_MORE_THRESHOLD_PX) {
-                        renderNextBatch();
-                    }
-                } else {
-                    finalizeIfDone();
-                }
+                row.dataset.topicIndex = String(index);
+                row.setAttribute('aria-posinset', String(index + 1));
+                row.setAttribute('aria-setsize', String(topicsToProcess.length));
+                row.classList.toggle('selected', selectedTopicIds.has(topic.id));
+                row.setAttribute('aria-selected', String(selectedTopicIds.has(topic.id)));
+            }
+            // Reinsert only out-of-order/new rows; overlapping rows keep focus.
+            let previous = top;
+            for (let index = start; index < end; index++) {
+                const row = rows.get(topicsToProcess[index].id);
+                if (previous.nextElementSibling !== row) previous.after(row);
+                previous = row;
+            }
+            top.style.height = `${start * stride}px`;
+            bottom.style.height = `${(topicsToProcess.length - end) * stride}px`;
+            const stopId = rows.has(focusId) ? focusId : topicsToProcess[start]?.id;
+            for (const [id, row] of rows) row.tabIndex = id === stopId ? 0 : -1;
+        };
+        const schedule = () => {
+            if (!isTopicSurfaceVisible()) return;
+            savedScrollTop = scrollContainer.scrollTop;
+            if (renderFrame !== null || dragging) return;
+            renderFrame = requestAnimationFrame(() => {
+                renderFrame = null;
+                renderWindow();
             });
         };
-
-        const onScroll = () => {
-            if (allRendered || isRendering || renderGeneration !== topicListRenderGeneration) return;
-
-            const distanceToBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight;
-            if (distanceToBottom <= TOPIC_LOAD_MORE_THRESHOLD_PX) {
-                renderNextBatch();
-            }
+        virtualView = {
+            scrollContainer,
+            setDragging(value) { dragging = value; if (!value) { rangeKey = ''; schedule(); } },
+            focusIndex(index) {
+                index = Math.max(0, Math.min(topicsToProcess.length - 1, index));
+                focusId = topicsToProcess[index]?.id;
+                if (index * stride < scrollContainer.scrollTop) scrollContainer.scrollTop = index * stride;
+                else if ((index + 1) * stride > scrollContainer.scrollTop + (scrollContainer.clientHeight || 600)) {
+                    scrollContainer.scrollTop = (index + 1) * stride - (scrollContainer.clientHeight || 600);
+                }
+                rangeKey = '';
+                renderWindow();
+                rows.get(focusId)?.focus({ preventScroll: true });
+            },
+            setFocus(id) { focusId = id; }
         };
+        if (typeof ResizeObserver !== 'undefined') {
+            virtualView.resizeObserver = new ResizeObserver(schedule);
+            virtualView.resizeObserver.observe(scrollContainer);
+        }
+        scrollContainer.addEventListener('scroll', schedule, { passive: true });
+        topicListScrollCleanup = () => scrollContainer.removeEventListener('scroll', schedule);
+        addRenderListener(topicListUl, 'keydown', onTopicListKeydown);
+        addRenderListener(topicListUl, 'focusin', onTopicListFocusIn);
+        schedule();
+        if (currentSelectedItem.id && typeof Sortable !== 'undefined' && !searchTerm && !isManageMode) {
+            initializeTopicSortable(currentSelectedItem.id, currentSelectedItem.type);
+        }
+    }
 
-        scrollContainer.addEventListener('scroll', onScroll, { passive: true });
-        topicListScrollCleanup = () => scrollContainer.removeEventListener('scroll', onScroll);
+    // Keyboard model of a listbox with a context-menu trigger (as in
+    // Radix): one tab stop that follows focus, arrows/Home/End move it,
+    // Enter/Space open the topic, Shift+F10 or the menu key opens its menu.
+    function onTopicListFocusIn(event) {
+        const item = event.target;
+        if (!item?.classList?.contains('topic-item')) return;
+        item.parentElement?.querySelectorAll('.topic-item[tabindex="0"]').forEach(other => {
+            if (other !== item) other.tabIndex = -1;
+        });
+        item.tabIndex = 0;
+        virtualView?.setFocus(item.dataset.topicId);
+    }
 
-        topicListUl.innerHTML = '';
-        renderNextBatch(initialCount);
+    function onTopicListKeydown(event) {
+        const item = event.target;
+        if (!item?.classList?.contains('topic-item')) return;
+        const index = Number(item.dataset.topicIndex);
+        let nextIndex = index;
+        if (event.key === 'ArrowDown') nextIndex = index + 1;
+        else if (event.key === 'ArrowUp') nextIndex = index - 1;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = displayedTopics.length - 1;
+        else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            item.click();
+            return;
+        } else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+            event.preventDefault();
+            const rect = item.getBoundingClientRect();
+            item.dispatchEvent(new MouseEvent('contextmenu', {
+                bubbles: true,
+                cancelable: true,
+                clientX: rect.left + 16,
+                clientY: rect.bottom
+            }));
+            return;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        virtualView?.focusIndex(nextIndex);
+    }
+
+    function wireTopicMenuKeyboard(menu, topicItemElement) {
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', '话题操作');
+        const items = [...menu.querySelectorAll('.context-menu-item')];
+        items.forEach(item => {
+            item.setAttribute('role', 'menuitem');
+            item.tabIndex = -1;
+        });
+        const enabledItems = () => items.filter(item => item.isConnected && !item.classList.contains('disabled'));
+        const returnFocus = () => {
+            if (topicItemElement?.isConnected) topicItemElement.focus();
+        };
+        menu.addEventListener('keydown', event => {
+            const current = enabledItems();
+            const index = current.indexOf(event.target);
+            let next = null;
+            if (event.key === 'ArrowDown') next = current[(index + 1) % current.length];
+            else if (event.key === 'ArrowUp') next = current[(index - 1 + current.length) % current.length];
+            else if (event.key === 'Home') next = current[0];
+            else if (event.key === 'End') next = current[current.length - 1];
+            else if ((event.key === 'Enter' || event.key === ' ') && index >= 0) {
+                event.preventDefault();
+                event.target.click();
+                // An action that moved focus (title editing) keeps it; otherwise
+                // focus goes back to the topic instead of being lost to <body>.
+                if (!document.activeElement || document.activeElement === document.body) returnFocus();
+                return;
+            } else if (event.key === 'Escape' || event.key === 'Tab') {
+                event.preventDefault();
+                closeTopicContextMenu();
+                returnFocus();
+                return;
+            } else {
+                return;
+            }
+            event.preventDefault();
+            next?.focus();
+        });
+        enabledItems()[0]?.focus({ preventScroll: true });
     }
 
     async function loadTopicList() {
@@ -545,7 +801,18 @@ window.topicListManager = (() => {
             return;
         }
 
+        if (!isTopicSurfaceVisible()) {
+            snapshotDirty = true;
+            syncSurfaceVisibility();
+            return;
+        }
+        surfaceActive = true;
+        savedScrollTop = virtualView?.scrollContainer.scrollTop ?? savedScrollTop;
+        snapshotDirty = true;
+        topicSummaryCache.clear();
+        cancelPendingTopicSearch();
         cleanupProgressiveTopicRendering();
+        const loadGeneration = topicListRenderGeneration;
 
         let topicListUl = topicListContainer.querySelector('.topic-list');
         if (topicListUl) {
@@ -589,19 +856,34 @@ window.topicListManager = (() => {
         const searchQuery = parseTopicSearchQuery(searchInput ? searchInput.value : '');
         const searchTerm = searchQuery.rawTerm;
         const contentQueryTerm = searchQuery.queryTerm;
+        const nextScrollScope = JSON.stringify([nextItemKey, searchTerm]);
+        if (scrollScope !== nextScrollScope) savedScrollTop = 0;
+        scrollScope = nextScrollScope;
 
         let itemConfigFull;
 
         if (!searchTerm) {
-            topicListUl.innerHTML = `<li><div class="loading-spinner-small"></div>正在加载 ${itemNameForLoading} 的话题...</li>`;
+            renderTopicListStatus(topicListUl, `正在加载 ${itemNameForLoading} 的话题...`, { loading: true });
         } else {
             topicListUl.innerHTML = '';
         }
 
-        if (currentSelectedItem.type === 'agent') {
-            itemConfigFull = await electronAPI.getAgentConfig(currentSelectedItem.id);
-        } else if (currentSelectedItem.type === 'group') {
-            itemConfigFull = await electronAPI.getAgentGroupConfig(currentSelectedItem.id);
+        try {
+            if (currentSelectedItem.type === 'agent') {
+                itemConfigFull = await electronAPI.getAgentConfig(currentSelectedItem.id);
+            } else if (currentSelectedItem.type === 'group') {
+                itemConfigFull = await electronAPI.getAgentGroupConfig(currentSelectedItem.id);
+            }
+        } catch (error) {
+            // A rejected IPC call used to leave the loading spinner up for good.
+            console.error('[TopicListManager] Failed to load item config:', error);
+            itemConfigFull = { error: error?.message || String(error) };
+        }
+
+        if (loadGeneration !== topicListRenderGeneration ||
+            currentSelectedItemRef.get()?.id !== currentSelectedItem.id ||
+            currentSelectedItemRef.get()?.type !== currentSelectedItem.type) {
+            return;
         }
 
         if (itemConfigFull && !itemConfigFull.error) {
@@ -614,7 +896,7 @@ window.topicListManager = (() => {
             currentItemConfig = null;
             selectedTopicIds.clear();
             syncManageUi();
-            topicListUl.innerHTML = `<li><p>无法加载 ${itemNameForLoading} 的配置信息: ${itemConfigFull?.error || '未知错误'}</p></li>`;
+            renderTopicListStatus(topicListUl, `无法加载 ${itemNameForLoading} 的配置信息: ${itemConfigFull?.error || '未知错误'}`);
         } else {
             let topicsToProcess = itemConfigFull.topics || [];
             if (currentSelectedItem.type === 'agent' && topicsToProcess.length === 0) {
@@ -665,14 +947,22 @@ window.topicListManager = (() => {
                 topicsToProcess = await prioritizeUnreadTopics(topicsToProcess, currentSelectedItem);
             }
 
+            if (loadGeneration !== topicListRenderGeneration ||
+                currentSelectedItemRef.get()?.id !== currentSelectedItem.id ||
+                currentSelectedItemRef.get()?.type !== currentSelectedItem.type) {
+                return;
+            }
+
             displayedTopics = [...topicsToProcess];
+            snapshotSearch = searchTerm;
+            snapshotDirty = false;
             syncManageUi();
 
             if (topicsToProcess.length === 0) {
-                topicListUl.innerHTML = `<li><p>${itemNameForLoading} 还没有任何话题${searchTerm ? '匹配当前搜索' : ''}。您可以点击上方的“新建${currentSelectedItem.type === 'group' ? '群聊话题' : '聊天话题'}”按钮创建一个。</p></li>`;
+                renderTopicListStatus(topicListUl, `${itemNameForLoading} 还没有任何话题${searchTerm ? '匹配当前搜索' : ''}。您可以点击上方的“新建${currentSelectedItem.type === 'group' ? '群聊话题' : '聊天话题'}”按钮创建一个。`);
             } else {
                 const currentTopicId = currentTopicIdRef.get();
-                renderTopicListProgressively(topicListUl, topicsToProcess, currentSelectedItem, currentTopicId, itemConfigFull, searchTerm);
+                renderTopicListProgressively(topicListUl, displayedTopics, currentSelectedItem, currentTopicId, itemConfigFull, searchTerm);
             }
         }
     }
@@ -688,13 +978,21 @@ window.topicListManager = (() => {
         if (inputElement.dataset.topicSearchBound === 'true') return;
         inputElement.dataset.topicSearchBound = 'true';
 
-        addListener(inputElement, 'input', filterTopicList);
+        addListener(inputElement, 'input', scheduleTopicSearch);
         addListener(inputElement, 'keydown', (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 filterTopicList();
             }
         });
+    }
+
+    function scheduleTopicSearch() {
+        cancelPendingTopicSearch();
+        topicSearchTimer = setTimeout(() => {
+            topicSearchTimer = null;
+            loadTopicList();
+        }, TOPIC_SEARCH_DEBOUNCE_MS);
     }
 
     function filterTopicList() {
@@ -864,6 +1162,8 @@ window.topicListManager = (() => {
             }
         }
 
+        const deletedTopicIds = topicsToDelete.map(topic => topic.id).filter(id => !remainingTopics.some(item => item.id === id));
+        if (deletedTopicIds.length) mainRendererFunctions.onTopicsDeleted?.({ itemId: currentSelectedItem.id, itemType: currentSelectedItem.type, topicIds: deletedTopicIds });
         if (activeTopicDeleted) {
             mainRendererFunctions.handleTopicDeletion(remainingTopics, {
                 id: currentSelectedItem.id,
@@ -889,12 +1189,17 @@ window.topicListManager = (() => {
             topicListUl.sortableInstance.destroy();
         }
 
+        const targetItemId = itemId;
+        const targetItemType = itemType;
+        const sortGeneration = topicListRenderGeneration;
         topicListUl.sortableInstance = new Sortable(topicListUl, {
             animation: 150,
+            draggable: '.topic-item',
             ghostClass: 'sortable-ghost-topic',
             chosenClass: 'sortable-chosen-topic',
             dragClass: 'sortable-drag-topic',
             onStart: async function (evt) {
+                virtualView?.setDragging(true);
                 // Check original state, store it, and then disable if it was active.
                 if (electronAPI?.getSelectionListenerStatus) {
                     wasSelectionListenerActive = await electronAPI.getSelectionListenerStatus();
@@ -912,25 +1217,43 @@ window.topicListManager = (() => {
                     wasSelectionListenerActive = false; // Reset state
                 }
 
-                const topicItems = Array.from(evt.to.children);
-                const orderedTopicIds = topicItems.map(item => item.dataset.topicId);
+                // The DOM contains only a window. Move the dragged topic in the
+                // complete model; never persist spacers or a truncated catalog.
+                if (sortGeneration !== topicListRenderGeneration ||
+                    currentSelectedItemRef.get()?.id !== targetItemId ||
+                    currentSelectedItemRef.get()?.type !== targetItemType) return;
+                const movedId = evt.item?.dataset.topicId;
+                const oldIndex = availableTopics.findIndex(topic => topic.id === movedId);
+                if (oldIndex < 0) { virtualView?.setDragging(false); return; }
+                const nextId = evt.item.nextElementSibling?.dataset.topicId;
+                const previousId = evt.item.previousElementSibling?.dataset.topicId;
+                const reordered = availableTopics.filter(topic => topic.id !== movedId);
+                let insertion = nextId ? reordered.findIndex(topic => topic.id === nextId) : -1;
+                if (insertion < 0 && previousId) insertion = reordered.findIndex(topic => topic.id === previousId) + 1;
+                if (insertion < 0) insertion = oldIndex;
+                reordered.splice(insertion, 0, availableTopics[oldIndex]);
+                availableTopics = reordered;
+                displayedTopics.splice(0, displayedTopics.length, ...reordered);
+                if (currentItemConfig) currentItemConfig.topics = reordered;
+                const orderedTopicIds = reordered.map(topic => topic.id);
+                virtualView?.setDragging(false);
                 try {
                     let result;
-                    if (itemType === 'agent') {
-                        result = await electronAPI.saveTopicOrder(itemId, orderedTopicIds);
-                    } else if (itemType === 'group') {
-                        result = await electronAPI.saveGroupTopicOrder(itemId, orderedTopicIds);
+                    if (targetItemType === 'agent') {
+                        result = await electronAPI.saveTopicOrder(targetItemId, orderedTopicIds);
+                    } else if (targetItemType === 'group') {
+                        result = await electronAPI.saveGroupTopicOrder(targetItemId, orderedTopicIds);
                     }
 
                     if (result && result.success) {
                         // UI reflects sort.
                     } else {
-                        console.error(`Failed to save topic order for ${itemType} ${itemId}:`, result?.error);
+                        console.error(`Failed to save topic order for ${targetItemType} ${targetItemId}:`, result?.error);
                         uiHelper.showToastNotification(`保存话题顺序失败: ${result?.error || '未知错误'}`, 'error');
                         loadTopicList();
                     }
                 } catch (error) {
-                    console.error(`Error calling saveTopicOrder for ${itemType} ${itemId}:`, error);
+                    console.error(`Error calling saveTopicOrder for ${targetItemType} ${targetItemId}:`, error);
                     uiHelper.showToastNotification(`调用保存话题顺序API时出错: ${error.message}`, 'error');
                     loadTopicList();
                 }
@@ -946,6 +1269,10 @@ window.topicListManager = (() => {
         menu.id = 'topicContextMenu';
         menu.classList.add('context-menu');
 
+        // 冻结话题域目标；标题生成允许即时保存，但绝不能跨项目串写。
+        const targetItemId = itemFullConfig.id;
+        const targetItemType = itemType;
+        const targetTopicId = topic.id;
         // "生成话题名" 菜单项：Agent 和 Group 话题均支持
         const regenerateTitleOption = document.createElement('div');
         regenerateTitleOption.classList.add('context-menu-item');
@@ -958,11 +1285,14 @@ window.topicListManager = (() => {
             regenerateTitleOption.classList.add('disabled');
             try {
                 // 根据话题类型调用对应的 IPC
-                const result = itemType === 'agent'
-                    ? await electronAPI.regenerateAgentTopicTitle(itemFullConfig.id, topic.id)
-                    : await electronAPI.regenerateGroupTopicTitle(itemFullConfig.id, topic.id);
+                const result = targetItemType === 'agent'
+                    ? await electronAPI.regenerateAgentTopicTitle(targetItemId, targetTopicId)
+                    : await electronAPI.regenerateGroupTopicTitle(targetItemId, targetTopicId);
 
                 if (result?.success && result.newTitle) {
+                    // 原话题已保存；离开原项目后不再投影到当前界面，也不误报失败。
+                    if (currentSelectedItemRef.get()?.id !== targetItemId ||
+                        currentSelectedItemRef.get()?.type !== targetItemType) return;
                     topic.name = result.newTitle;
                     const topicInFullConfig = itemFullConfig.topics?.find(candidate => candidate.id === topic.id);
                     if (topicInFullConfig) topicInFullConfig.name = result.newTitle;
@@ -983,6 +1313,7 @@ window.topicListManager = (() => {
                 regenerateTitleOption.classList.remove('disabled');
             }
         };
+
         const editTitleOption = document.createElement('div');
         editTitleOption.classList.add('context-menu-item');
         editTitleOption.innerHTML = `<i class="fas fa-edit"></i> 编辑话题标题`;
@@ -1006,6 +1337,7 @@ window.topicListManager = (() => {
             inputField.onclick = (e) => e.stopPropagation();
 
             const confirmButton = document.createElement('button');
+            confirmButton.type = 'button';
             confirmButton.innerHTML = '✓';
             confirmButton.classList.add('topic-title-edit-confirm');
             confirmButton.onclick = async (e) => {
@@ -1013,10 +1345,10 @@ window.topicListManager = (() => {
                 const newTitle = inputField.value.trim();
                 if (newTitle && newTitle !== originalTitle) {
                     let saveResult;
-                    if (itemType === 'agent') {
-                        saveResult = await electronAPI.saveAgentTopicTitle(itemFullConfig.id, topic.id, newTitle);
-                    } else if (itemType === 'group') {
-                        saveResult = await electronAPI.saveGroupTopicTitle(itemFullConfig.id, topic.id, newTitle);
+                    if (targetItemType === 'agent') {
+                        saveResult = await electronAPI.saveAgentTopicTitle(targetItemId, targetTopicId, newTitle);
+                    } else if (targetItemType === 'group') {
+                        saveResult = await electronAPI.saveGroupTopicTitle(targetItemId, targetTopicId, newTitle);
                     }
                     if (saveResult && saveResult.success) {
                         topic.name = newTitle;
@@ -1034,6 +1366,7 @@ window.topicListManager = (() => {
             };
 
             const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
             cancelButton.innerHTML = '✗';
             cancelButton.classList.add('topic-title-edit-cancel');
             cancelButton.onclick = (e) => {
@@ -1098,7 +1431,7 @@ window.topicListManager = (() => {
         toggleLockOption.onclick = async () => {
             closeTopicContextMenu();
             try {
-                const result = await electronAPI.toggleTopicLock(itemFullConfig.id, topic.id);
+                const result = await electronAPI.toggleTopicLock(targetItemId, targetTopicId);
                 if (result.success) {
                     topic.locked = result.locked;
                     uiHelper.showToastNotification(result.message, 'success');
@@ -1122,7 +1455,7 @@ window.topicListManager = (() => {
         toggleUnreadOption.onclick = async () => {
             closeTopicContextMenu();
             try {
-                const result = await electronAPI.setTopicUnread(itemFullConfig.id, topic.id, !isUnread);
+                const result = await electronAPI.setTopicUnread(targetItemId, targetTopicId, !isUnread);
                 if (result.success) {
                     topic.unread = result.unread;
                     if (result.unreadSource) {
@@ -1155,7 +1488,7 @@ window.topicListManager = (() => {
             closeTopicContextMenu();
 
             // 活动 Flowlock Session 仍依赖该话题的历史目录，运行期间禁止删除。
-            if (itemType === 'agent' && window.flowlockManager?.isTopicLocked?.(itemFullConfig.id, topic.id)) {
+            if (targetItemType === 'agent' && window.flowlockManager?.isTopicLocked?.(targetItemId, targetTopicId)) {
                 uiHelper.showToastNotification('该话题正在心流锁中运行，请先停止对应 Agent 的心流锁。', 'warning');
                 return;
             }
@@ -1170,18 +1503,21 @@ window.topicListManager = (() => {
             );
             if (confirmed) {
                 let result;
-                if (itemType === 'agent') {
-                    result = await electronAPI.deleteTopic(itemFullConfig.id, topic.id);
-                } else if (itemType === 'group') {
-                    result = await electronAPI.deleteGroupTopic(itemFullConfig.id, topic.id);
+                if (targetItemType === 'agent') {
+                    result = await electronAPI.deleteTopic(targetItemId, targetTopicId);
+                } else if (targetItemType === 'group') {
+                    result = await electronAPI.deleteGroupTopic(targetItemId, targetTopicId);
                 }
 
                 if (result && result.success) {
-                    if (currentTopicIdRef.get() === topic.id) {
+                    mainRendererFunctions.onTopicsDeleted?.({ itemId: targetItemId, itemType: targetItemType, topicIds: [targetTopicId] });
+                    if (currentSelectedItemRef.get()?.id === targetItemId &&
+                        currentSelectedItemRef.get()?.type === targetItemType &&
+                        currentTopicIdRef.get() === targetTopicId) {
                         mainRendererFunctions.handleTopicDeletion(result.remainingTopics, {
-                            id: itemFullConfig.id,
-                            type: itemType,
-                            topicId: topic.id,
+                            id: targetItemId,
+                            type: targetItemType,
+                            topicId: targetTopicId,
                             fallbackTopicId: itemFullConfig.topics?.find(candidate => candidate.id !== topic.id)?.id || null,
                         });
                     }
@@ -1245,6 +1581,7 @@ window.topicListManager = (() => {
         menu.style.top = `${top}px`;
         menu.style.left = `${left}px`;
         menu.style.visibility = 'visible';
+        wireTopicMenuKeyboard(menu, topicItemElement);
 
         document.addEventListener('click', closeTopicContextMenuOnClickOutside, true);
     }
@@ -1512,7 +1849,15 @@ window.topicListManager = (() => {
     }
 
     function dispose() {
+        if (typeof chatRepositorySubscription === 'function') {
+            chatRepositorySubscription();
+            chatRepositorySubscription = null;
+        }
+        surfaceObserver?.disconnect();
+        surfaceObserver = null;
+        cancelPendingTopicSearch();
         cleanupProgressiveTopicRendering();
+        topicSummaryCache.clear();
         closeTopicContextMenu();
         selectedTopicIds.clear();
         displayedTopics = [];
@@ -1528,8 +1873,10 @@ window.topicListManager = (() => {
         init,
         loadTopicList,
         setupTopicSearch,
+        syncSurfaceVisibility,
         showTopicContextMenu,
         setupMouseShortcuts,
+        updateTopicMessageCount,
         dispose
     };
 })();

@@ -335,6 +335,9 @@ pub struct StateResponse {
     device_id: Option<usize>,
     exclusive_mode: bool,
     eq_type: String,
+    eq_enabled: bool,
+    fir_taps: usize,
+    eq_bands: std::collections::HashMap<String, f64>,
     dither_enabled: bool,
     replaygain_enabled: bool,
     loudness_enabled: bool,
@@ -425,6 +428,46 @@ impl ApiResponse {
 
 // ============ Helper Functions ============
 
+#[cfg(test)]
+mod settings_eq_tests {
+    use super::*;
+
+    #[test]
+    fn applying_saved_dither_updates_the_actual_dsp_snapshot() {
+        let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+        for enabled in [false, true, false] {
+            let settings = PersistentSettings {
+                dither_enabled: enabled,
+                ..PersistentSettings::default()
+            };
+            apply_settings_to_player(&mut player, &settings);
+            assert_eq!(player.dither_enabled, enabled);
+            assert_eq!(player.lockfree_noise_shaper_params.read().enabled, enabled);
+        }
+    }
+
+    #[test]
+    fn applying_eq_settings_unloads_fir_when_disabled_or_selecting_iir() {
+        // Synthetic defaults only: do not load AppConfig from the environment,
+        // open media/devices, create an HTTP server or persist any settings.
+        for (enabled, eq_type) in [(false, "FIR"), (false, "IIR"), (true, "IIR"), (true, "FIR")] {
+            let mut player = AudioPlayer::new(crate::config::AppConfig::default());
+            player.enable_fir_eq(511).unwrap();
+            assert!(player.is_fir_eq_enabled());
+            let settings = PersistentSettings {
+                eq_enabled: enabled,
+                eq_type: eq_type.to_string(),
+                fir_taps: Some(511),
+                ..PersistentSettings::default()
+            };
+            apply_settings_to_player(&mut player, &settings);
+            assert_eq!(player.is_fir_eq_enabled(), enabled && eq_type == "FIR");
+            assert_eq!(player.lockfree_eq_params.read().enabled, enabled && eq_type == "IIR");
+            assert_eq!(*player.shared_state().eq_type.read(), eq_type);
+        }
+    }
+}
+
 /// Apply persisted settings to player on startup
 fn apply_settings_to_player(player: &mut AudioPlayer, settings: &PersistentSettings) {
     // Volume
@@ -432,18 +475,29 @@ fn apply_settings_to_player(player: &mut AudioPlayer, settings: &PersistentSetti
     
     // Device settings are applied separately via configure_output API
     
-    // EQ
-    if settings.eq_type == "FIR" {
-        let taps = settings.fir_taps.unwrap_or(1023);
-        let _ = player.enable_fir_eq(taps);
+    // EQ — gate on persisted enable flag so a disabled EQ stays off across restarts
+    // Also used by /save_settings on a live player: remove the old FIR backend
+    // before disabling EQ or applying IIR, not just the lock-free IIR flag.
+    if player.is_fir_eq_enabled() && (!settings.eq_enabled || settings.eq_type != "FIR") {
+        player.disable_fir_eq();
+    }
+    if settings.eq_enabled {
+        if settings.eq_type == "FIR" {
+            let taps = settings.fir_taps.unwrap_or(1023);
+            let _ = player.enable_fir_eq(taps);
+        } else {
+            *player.shared_state().eq_type.write() = "IIR".to_string();
+            player.lockfree_eq_params.set_enabled(true);
+        }
     } else {
-        *player.shared_state().eq_type.write() = "IIR".to_string();
+        player.lockfree_eq_params.set_enabled(false);
+        *player.shared_state().eq_type.write() = settings.eq_type.clone();
     }
     
     if let Some(ref bands) = settings.eq_bands {
         // Build gains array from bands map
         let band_map: std::collections::HashMap<&str, usize> = [
-            ("31", 0), ("62", 1), ("125", 2), ("250", 3), ("500", 4),
+            ("31", 0), ("62", 1), ("32", 0), ("64", 1), ("125", 2), ("250", 3), ("500", 4),
             ("1000", 5), ("2000", 6), ("4000", 7), ("8000", 8), ("16000", 9),
             ("1k", 5), ("2k", 6), ("4k", 7), ("8k", 8), ("16k", 9),
         ].into_iter().collect();
@@ -466,9 +520,20 @@ fn apply_settings_to_player(player: &mut AudioPlayer, settings: &PersistentSetti
         }
     }
     
-    // Dither (state only; lock-free audio path currently does not host NoiseShaper stage)
+    // Keep persisted/UI state and the output chain's atomic DSP snapshot aligned.
     player.dither_enabled = settings.dither_enabled;
+    player.lockfree_noise_shaper_params.set_enabled(settings.dither_enabled);
     player.set_output_bits(settings.output_bits);
+
+    // Noise shaper curve (was persisted but never applied on startup)
+    let shaper_curve = match settings.noise_shaper_curve.as_str() {
+        "FWeighted9" => crate::processor::NoiseShaperCurve::FWeighted9,
+        "ModifiedE9" => crate::processor::NoiseShaperCurve::ModifiedE9,
+        "ImprovedE9" => crate::processor::NoiseShaperCurve::ImprovedE9,
+        "TpdfOnly" => crate::processor::NoiseShaperCurve::TpdfOnly,
+        _ => crate::processor::NoiseShaperCurve::Lipshitz5,
+    };
+    let _ = player.set_noise_shaper_curve(shaper_curve);
     
     // Loudness
     player.set_loudness_enabled(settings.loudness_enabled);
@@ -525,6 +590,28 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
     let device_id = shared.device_id.load(std::sync::atomic::Ordering::Relaxed);
     let file_path = shared.file_path.read().clone();
     let eq_type = shared.eq_type.read().clone();
+    let fir_taps = player.get_fir_taps();
+    // EQ enable + per-band gains for UI restore. Keys are the canonical labels
+    // shared by the settings file and the web UI.
+    let eq_enabled = player.is_fir_eq_enabled() || player.lockfree_eq_params.read().enabled;
+    const EQ_BAND_LABELS: [&str; 10] = ["32", "64", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"];
+    let eq_bands: std::collections::HashMap<String, f64> = if player.is_fir_eq_enabled() {
+        match player.get_fir_bands() {
+            Some(bands) => EQ_BAND_LABELS
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.to_string(), bands[i].1))
+                .collect(),
+            None => std::collections::HashMap::new(),
+        }
+    } else {
+        let gains = player.lockfree_eq_params.read().gains;
+        EQ_BAND_LABELS
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.to_string(), gains[i]))
+            .collect()
+    };
     
     // Get track metadata
     let metadata = shared.track_metadata.read();
@@ -559,6 +646,9 @@ fn get_player_state(player: &AudioPlayer) -> StateResponse {
         device_id: if device_id >= 0 { Some(device_id as usize) } else { None },
         exclusive_mode: player.exclusive_mode,
         eq_type,
+        eq_enabled,
+        fir_taps,
+        eq_bands,
         dither_enabled: player.dither_enabled,
         replaygain_enabled: player.replaygain_enabled,
         loudness_enabled: player.loudness_enabled,

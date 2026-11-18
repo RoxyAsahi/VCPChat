@@ -1,9 +1,19 @@
 // modules/fileManager.js
+// 实时引用上下文标签（主进程侧；单聊渲染进程在 singleChatRequestOrchestrator 中有同构实现）。
+function describeLiveReference(data) {
+    const ref = data?.workspaceRef;
+    if (data?.liveSource === 'workspace' || ref) {
+        const location = ref?.alias && ref?.relPath ? ` ${ref.alias}: ${ref.relPath}` : '';
+        return `工作区${location}，实时文件，可直接修改`;
+    }
+    return '笔记区实时文件，可直接修改';
+}
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto'); // 引入 crypto 模块
 const iconv = require('iconv-lite');
+const pdfAttachmentService = require('./services/pdfAttachmentService');
 // const { exec } = require('child_process'); // For potential future use with textract or other CLI tools
 
 // Base directory for all user-specific data, including attachments.
@@ -116,19 +126,24 @@ async function storeFile(sourcePathOrBuffer, originalName, agentId, topicId, fil
         createdAt: Date.now(),
         extractedText: null,
         imageFrames: null, // 新增：用于存储PDF转换后的图片
+        pdfMeta: null,     // 新增：PDF 结构化元数据（扫描件判定、页数、文本统计等）
     };
 
     // 6. Attempt to extract text content or convert to images
     try {
-        const textContentResult = await getTextContent(internalFilePath, attachmentData.type);
+        const textContentResult = await getTextContent(internalFilePath, attachmentData.type, originalName);
         if (textContentResult && textContentResult.text) {
             attachmentData.extractedText = textContentResult.text;
             console.log(`[FileManager] Successfully extracted text for ${attachmentData.name}, length: ${textContentResult.text.length}`);
-        } else if (textContentResult && textContentResult.imageFrames) {
+        }
+        if (textContentResult && Array.isArray(textContentResult.imageFrames) && textContentResult.imageFrames.length > 0) {
             attachmentData.imageFrames = textContentResult.imageFrames;
-            attachmentData.extractedText = `[VChat Auto-summary: This is a scanned PDF named "${attachmentData.name}". The content is displayed as images.]`;
             console.log(`[FileManager] PDF ${attachmentData.name} was converted to ${textContentResult.imageFrames.length} images.`);
-        } else {
+        }
+        if (textContentResult && textContentResult.pdfMeta) {
+            attachmentData.pdfMeta = textContentResult.pdfMeta;
+        }
+        if (!attachmentData.extractedText && !attachmentData.imageFrames) {
             console.log(`[FileManager] No text content extracted or supported for ${attachmentData.name} (type: ${attachmentData.type}).`);
         }
     } catch (error) {
@@ -137,6 +152,172 @@ async function storeFile(sourcePathOrBuffer, originalName, agentId, topicId, fil
 
     console.log('[FileManager] File processed:', attachmentData);
     return attachmentData;
+}
+
+// 允许以"实时引用"方式附加的笔记扩展名（@笔记）。
+const LIVE_REFERENCE_EXTENSIONS = new Set(['.md', '.txt']);
+
+// 工作区实时引用允许的文本 / 代码扩展名。二进制文件（图片、PDF、Office 等）
+// 仍走原有的复制附件逻辑，保证多模态内联与文本抽取行为不变。
+const WORKSPACE_TEXT_EXTENSIONS = new Set([
+    '.md', '.mdx', '.markdown', '.txt', '.rst', '.adoc', '.org', '.tex',
+    '.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx', '.vue', '.svelte', '.astro',
+    '.json', '.jsonc', '.json5', '.yml', '.yaml', '.toml', '.ini', '.cfg', '.conf', '.properties', '.env.example',
+    '.xml', '.html', '.htm', '.css', '.scss', '.sass', '.less', '.styl', '.svg',
+    '.py', '.pyi', '.ipynb', '.rb', '.php', '.pl', '.pm', '.lua', '.r', '.jl',
+    '.java', '.kt', '.kts', '.scala', '.groovy', '.gradle', '.clj',
+    '.c', '.h', '.cc', '.cpp', '.cxx', '.hpp', '.hh', '.cs', '.m', '.mm', '.swift',
+    '.go', '.rs', '.zig', '.nim', '.d', '.dart', '.ex', '.exs', '.erl', '.hs', '.ml', '.fs', '.cr', '.v', '.sol',
+    '.sh', '.bash', '.zsh', '.fish', '.ps1', '.psm1', '.bat', '.cmd', '.vbs',
+    '.sql', '.graphql', '.gql', '.proto', '.prisma',
+    '.csv', '.tsv', '.log', '.diff', '.patch', '.lock',
+    '.gitignore', '.gitattributes', '.editorconfig', '.npmrc', '.nvmrc', '.dockerignore', '.eslintrc', '.prettierrc',
+]);
+// 无扩展名但约定为文本的文件名。
+const WORKSPACE_TEXT_FILENAMES = new Set([
+    'makefile', 'dockerfile', 'containerfile', 'rakefile', 'gemfile', 'procfile', 'vagrantfile',
+    'license', 'licence', 'readme', 'changelog', 'authors', 'codeowners', 'cmakelists.txt',
+]);
+// 工作区单文件实时引用上限，避免把巨型生成文件整份塞进上下文。
+const WORKSPACE_LIVE_MAX_BYTES = 1024 * 1024;
+
+function isWorkspaceTextFile(filePath) {
+    if (typeof filePath !== 'string' || !filePath) return false;
+    const baseName = path.basename(filePath).toLowerCase();
+    if (WORKSPACE_TEXT_FILENAMES.has(baseName)) return true;
+    // 以点开头的配置文件（.gitignore 等）path.extname 返回空串，按全名判断。
+    if (baseName.startsWith('.') && WORKSPACE_TEXT_EXTENSIONS.has(baseName)) return true;
+    return WORKSPACE_TEXT_EXTENSIONS.has(path.extname(baseName));
+}
+
+/**
+ * 判断路径能否以实时引用方式附加。
+ * - 笔记（默认）：仅 .md / .txt；
+ * - 工作区（options.workspace 为真）：文本 / 代码类文件。
+ */
+function isLiveReferenceCandidate(filePath, options = {}) {
+    if (typeof filePath !== 'string') return false;
+    if (options.workspace) return isWorkspaceTextFile(filePath);
+    return LIVE_REFERENCE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+function cleanFileSource(sourcePath) {
+    let cleanSource = sourcePath.startsWith('file://') ? sourcePath.substring(7) : sourcePath;
+    try { cleanSource = decodeURIComponent(cleanSource); } catch { /* 保留原值 */ }
+    if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(cleanSource)) cleanSource = cleanSource.substring(1);
+    return path.resolve(cleanSource);
+}
+
+/**
+ * 创建一个"实时引用"附件：不复制文件，直接指向真实文件（笔记区或已登记的工作区）。
+ * - internalPath 为真实文件的 file:// 路径，AI 可以直接定位并修改该文件；
+ * - extractedText 只是附加时的快照，发送 / 重建上下文时会按 sourcePath 重新读取，
+ *   因此用户更新文件后，上下文也会同步更新。
+ * - options.workspace = { workspaceId, alias, relPath } 时记录工作区归属，
+ *   工作区被整体移动后可用 root + relPath 重新解析。
+ * 注意：此类附件绝不能被当作可清理的内部副本删除。
+ */
+async function createLiveFileReference(sourcePath, originalName, fileTypeHint = 'text/plain', options = {}) {
+    if (typeof sourcePath !== 'string' || !sourcePath) {
+        throw new Error('实时引用需要有效的文件路径。');
+    }
+    const workspace = options.workspace && typeof options.workspace === 'object' ? options.workspace : null;
+    const resolvedPath = cleanFileSource(sourcePath);
+    if (!isLiveReferenceCandidate(resolvedPath, { workspace: Boolean(workspace) })) {
+        throw new Error(workspace
+            ? `该文件类型不支持工作区实时引用: ${resolvedPath}`
+            : `仅支持实时引用 .md / .txt 笔记文件: ${resolvedPath}`);
+    }
+
+    const stat = await fs.stat(resolvedPath);
+    if (!stat.isFile()) {
+        throw new Error(`实时引用的路径不是普通文件: ${resolvedPath}`);
+    }
+    if (workspace && stat.size > WORKSPACE_LIVE_MAX_BYTES) {
+        throw new Error(`工作区文件超过 ${Math.round(WORKSPACE_LIVE_MAX_BYTES / 1024)}KB 实时引用上限: ${resolvedPath}`);
+    }
+
+    const name = originalName || path.basename(resolvedPath);
+    const pathHash = crypto.createHash('sha256').update(resolvedPath).digest('hex');
+    const mimeType = (fileTypeHint && fileTypeHint !== 'application/octet-stream' && fileTypeHint.startsWith('text/'))
+        ? fileTypeHint
+        : 'text/plain';
+
+    const attachmentData = {
+        id: `${workspace ? 'live_ws' : 'live_note'}_${pathHash}`,
+        name,
+        internalFileName: path.basename(resolvedPath),
+        // 与 storeFile 保持相同的 file:// 格式，方便现有读取逻辑复用。
+        internalPath: `file://${resolvedPath}`,
+        sourcePath: resolvedPath,
+        isLiveReference: true,
+        liveSource: workspace ? 'workspace' : 'note',
+        type: mimeType,
+        size: stat.size,
+        hash: null,
+        createdAt: Date.now(),
+        modifiedAt: stat.mtimeMs,
+        extractedText: null,
+        imageFrames: null,
+    };
+    if (workspace) {
+        attachmentData.workspaceRef = {
+            workspaceId: workspace.workspaceId || null,
+            alias: workspace.alias || null,
+            relPath: workspace.relPath || null,
+        };
+    }
+
+    const textContentResult = await getTextContent(resolvedPath, mimeType);
+    if (textContentResult && typeof textContentResult.text === 'string') {
+        attachmentData.extractedText = textContentResult.text;
+    }
+
+    console.log(`[FileManager] Created live ${attachmentData.liveSource} reference: ${resolvedPath}`);
+    return attachmentData;
+}
+
+// 工作区路径重解析钩子：由主进程注入 WorkspaceIndex.resolveReference。
+let workspaceReferenceResolver = null;
+
+function setWorkspaceReferenceResolver(resolver) {
+    workspaceReferenceResolver = typeof resolver === 'function' ? resolver : null;
+}
+
+/**
+ * 解析实时引用当前应读取的真实路径：优先原路径；原路径不存在且记录了工作区归属时，
+ * 用当前配置的工作区根目录 + relPath 重新定位。
+ */
+async function resolveLiveReferencePath(attachmentData) {
+    const rawSource = attachmentData?.sourcePath
+        || (typeof attachmentData?.internalPath === 'string' ? attachmentData.internalPath : null);
+    const primary = rawSource ? cleanFileSource(rawSource) : null;
+    if (primary && await fs.pathExists(primary)) return primary;
+    if (attachmentData?.workspaceRef && workspaceReferenceResolver) {
+        try {
+            const relocated = workspaceReferenceResolver(attachmentData.workspaceRef);
+            if (relocated && await fs.pathExists(relocated)) return relocated;
+        } catch (error) {
+            console.warn('[FileManager] Workspace reference re-resolution failed:', error.message);
+        }
+    }
+    return primary;
+}
+
+/**
+ * 读取实时引用附件的最新文本。失败时返回 null，由调用方回退到快照文本。
+ */
+async function readLiveReferenceText(attachmentData) {
+    if (!attachmentData?.isLiveReference) return null;
+    const sourcePath = await resolveLiveReferencePath(attachmentData);
+    if (!sourcePath) return null;
+    try {
+        const result = await getTextContent(sourcePath, attachmentData.type || 'text/plain');
+        return result && typeof result.text === 'string' ? result.text : null;
+    } catch (error) {
+        console.warn(`[FileManager] Failed to refresh live reference ${sourcePath}:`, error);
+        return null;
+    }
 }
 
 // Placeholder for future functions
@@ -220,7 +401,7 @@ function decodeTextBuffer(buffer) {
     }
 }
 
-async function getTextContent(internalFilePath, fileType) {
+async function getTextContent(internalFilePath, fileType, originalName = '') {
     let effectiveFileType = fileType;
     const cleanPath = internalFilePath.startsWith('file://') ? internalFilePath.substring(7) : internalFilePath;
 
@@ -257,44 +438,10 @@ async function getTextContent(internalFilePath, fileType) {
         }
     } else if (effectiveFileType === 'application/pdf') {
         try {
-            const dataBuffer = await fs.readFile(cleanPath);
-            const pdf = require('pdf-parse'); // Lazy load
-            const data = await pdf(dataBuffer);
-            // To determine if a PDF is scanned, we check not just the length of the extracted text,
-            // but also the number of alphabetic characters. This helps filter out OCR noise or PDFs
-            // that contain only symbols or formatting characters.
-            const text = data.text || '';
-            const trimmedText = text.trim();
-            const letterCount = (trimmedText.match(/[a-zA-Z]/g) || []).length;
-
-            // A document is considered text-based if it has a decent amount of trimmed text
-            // AND a minimum number of alphabetic characters.
-            if (trimmedText.length > 20 && letterCount > 10) {
-                console.log(`[FileManager] Successfully extracted text from PDF ${cleanPath}, length: ${trimmedText.length}, letterCount: ${letterCount}`);
-                return { text: text };
-            } else {
-                // If text is very short or lacks letters, treat as scanned PDF
-                const textLength = trimmedText.length;
-                console.log(`[FileManager] PDF ${cleanPath} has little or no extractable text (length: ${textLength}, letterCount: ${letterCount}). Attempting image conversion.`);
-                try {
-                    const imageFrames = await _convertPdfToImages(cleanPath);
-                    return { imageFrames };
-                } catch (conversionError) {
-                    console.error(`[FileManager] Failed to convert PDF to images: ${conversionError.message}`);
-                    // Return the minimal text if conversion fails, better than nothing.
-                    return { text: text || null, imageFrames: null };
-                }
-            }
-        } catch (pdfParseError) {
-            // This catches errors from the initial pdf-parse call itself
-            console.warn(`[FileManager] Failed to parse PDF text, treating as scanned: ${pdfParseError.message}`);
-            try {
-                const imageFrames = await _convertPdfToImages(cleanPath);
-                return { imageFrames };
-            } catch (conversionError) {
-                console.error(`[FileManager] Failed to convert PDF to images after parsing failed: ${conversionError.message}`);
-                return { text: null, imageFrames: null };
-            }
+            return await pdfAttachmentService.processPdfAttachment(cleanPath, originalName);
+        } catch (pdfProcessError) {
+            console.error(`[FileManager] pdfAttachmentService 处理 PDF 异常: ${cleanPath}`, pdfProcessError);
+            return { text: null, imageFrames: null, pdfMeta: { error: pdfProcessError.message } };
         }
     } else if (effectiveFileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         try {
@@ -368,6 +515,14 @@ async function _convertPdfToImages(pdfPath) {
 module.exports = {
     initializeFileManager,
     storeFile,
+    createLiveFileReference,
+    readLiveReferenceText,
+    resolveLiveReferencePath,
+    describeLiveReference,
+    isLiveReferenceCandidate,
+    isWorkspaceTextFile,
+    setWorkspaceReferenceResolver,
+    WORKSPACE_LIVE_MAX_BYTES,
     getFileAsBase64, // Exposing for now, might be internalized later
     getTextContent,   // Exposing for now
 };

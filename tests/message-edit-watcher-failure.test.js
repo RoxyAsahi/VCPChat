@@ -3,20 +3,39 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { JSDOM } = require('jsdom');
 
-const source = fs.readFileSync('modules/renderer/messageContextMenu.js', 'utf8');
+const moduleFile = path.resolve(__dirname, '../modules/renderer/messageContextMenu.js');
+const source = fs.readFileSync(moduleFile, 'utf8');
 
-test('a watcher restart failure cannot roll back a durably saved message edit', async () => {
-    const dom = new JSDOM(`<!doctype html><div class="message-item">
-        <div class="md-content">old content</div>
-    </div>`, { runScripts: 'outside-only', url: 'https://vcpchat.local/' });
+async function setupContextMenuDom(html) {
+    const dom = new JSDOM(html, { runScripts: 'outside-only', url: 'https://vcpchat.local/' });
+    const importRegex = /^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm;
+    for (const match of source.matchAll(importRegex)) {
+        const imported = await import(pathToFileURL(path.resolve(path.dirname(moduleFile), match[2])).href);
+        for (const rawSpec of match[1].split(',')) {
+            const spec = rawSpec.trim();
+            if (!spec) continue;
+            const [exportedName, localName] = spec.split(/\s+as\s+/).map(part => part.trim());
+            dom.window[localName || exportedName] = imported[exportedName];
+        }
+    }
     const executableSource = source
+        .replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*$/gm, '')
         .replace('export function createMessageContextMenu()', 'function createMessageContextMenu()')
         .concat('\nwindow.__messageEditTestApi = createMessageContextMenu();\n');
     dom.window.eval(executableSource);
+    return dom;
+}
 
-    const history = [{ id: 'message-1', role: 'assistant', content: 'old content' }];
+test('a watcher restart failure cannot roll back a durably saved message edit', async () => {
+    const dom = await setupContextMenuDom(`<!doctype html><div class="message-item">
+        <div class="md-content">old content</div>
+    </div>`);
+
+    let history = [{ id: 'message-1', role: 'assistant', content: 'old content' }];
     const message = history[0];
     const durableWrites = [];
     const toasts = [];
@@ -36,36 +55,47 @@ test('a watcher restart failure cannot roll back a durably saved message edit', 
                 return { success: true };
             },
         },
+        historyMutationAuthority: {
+            mutate: async (_target, mutator) => {
+                const nextHistory = mutator(history);
+                history = nextHistory;
+                durableWrites.push(JSON.parse(JSON.stringify(nextHistory)));
+                return {
+                    history: nextHistory,
+                    mutatedMessage: nextHistory.find(m => m.id === message.id)
+                };
+            }
+        },
         markedInstance: { parse: value => value },
         uiHelper: {
             autoResizeTextarea() {},
-            showToastNotification(messageText, type) { toasts.push({ message: messageText, type }); },
-        },
-        currentChatHistoryRef: { get: () => history, set: next => history.splice(0, history.length, ...next) },
-        currentSelectedItemRef: {
-            get: () => ({ id: 'agent-1', type: 'agent', config: { agentDataPath: '/fixture/agent-1' } }),
-        },
-        currentTopicIdRef: { get: () => 'topic-1' },
-        historyMutationAuthority: {
-            replace: async (_descriptor, nextHistory) => {
-                durableWrites.push(JSON.parse(JSON.stringify(nextHistory)));
-                return { result: { success: true }, history: nextHistory };
+            showToastNotification(messageText, type) {
+                toasts.push({ message: messageText, type });
             },
         },
+        currentChatHistoryRef: {
+            get: () => history,
+            set: next => { history = [...next]; },
+        },
+        currentSelectedItemRef: {
+            get: () => ({ id: 'group-1', type: 'group', config: { agentDataPath: 'C:\\dummy' } }),
+        },
+        currentTopicIdRef: { get: () => 'topic-1' },
     }, {
-        updateMessageContent(_messageId, content) { renderedContent = content; },
+        updateMessageContent: (id, text) => {
+            renderedContent = text;
+        },
     });
 
     const messageItem = dom.window.document.querySelector('.message-item');
     dom.window.__messageEditTestApi.toggleEditMode(messageItem, message);
+    assert.equal(messageItem.classList.contains('message-item-editing'), true);
+
     const textarea = messageItem.querySelector('.message-edit-textarea');
     textarea.value = 'new durable content';
-    messageItem.querySelector('.message-edit-controls button').click();
 
-    const deadline = Date.now() + 1_000;
-    while (messageItem.classList.contains('message-item-editing') && Date.now() < deadline) {
-        await new Promise(resolve => setTimeout(resolve, 5));
-    }
+    const saveButton = messageItem.querySelector('.message-edit-controls button');
+    await saveButton.onclick();
 
     assert.equal(watcherRestarts, 1);
     assert.equal(durableWrites.length, 1);
@@ -76,5 +106,171 @@ test('a watcher restart failure cannot roll back a durably saved message edit', 
     assert.equal(messageItem.classList.contains('message-item-editing'), false);
     assert.ok(toasts.some(toast => toast.type === 'success'));
     assert.equal(toasts.some(toast => toast.type === 'error'), false);
+    dom.window.close();
+});
+
+test('editing survives deletion of another message and replacement of the history array', async () => {
+    const dom = await setupContextMenuDom(`<!doctype html><div class="message-item">
+        <div class="md-content">target content</div>
+    </div>`);
+
+    let history = [
+        { id: 'deleted-before-save', role: 'assistant', content: 'remove me' },
+        { id: 'edit-target', role: 'user', content: 'target content' },
+    ];
+    const staleMenuMessage = history[1];
+    const durableWrites = [];
+    const toasts = [];
+    let renderedContent = null;
+
+    dom.window.__messageEditTestApi.initializeContextMenu({
+        electronAPI: {},
+        markedInstance: { parse: value => value },
+        uiHelper: {
+            autoResizeTextarea() {},
+            showToastNotification(messageText, type) { toasts.push({ message: messageText, type }); },
+        },
+        historyMutationAuthority: {
+            mutate: async (_target, mutator) => {
+                const nextHistory = mutator(history);
+                history = nextHistory;
+                durableWrites.push(JSON.parse(JSON.stringify(nextHistory)));
+                return {
+                    history: nextHistory,
+                    mutatedMessage: nextHistory.find(m => m.id === staleMenuMessage.id)
+                };
+            }
+        },
+        currentChatHistoryRef: {
+            get: () => history,
+            set: next => { history = [...next]; },
+        },
+        currentSelectedItemRef: {
+            get: () => ({ id: 'group-1', type: 'group', config: {} }),
+        },
+        currentTopicIdRef: { get: () => 'topic-1' },
+        chatRepository: {
+            saveHistory: async (_itemId, _type, _topicId, nextHistory) => {
+                durableWrites.push(JSON.parse(JSON.stringify(nextHistory)));
+                return { success: true };
+            },
+        },
+    }, {
+        updateMessageContent: (id, text) => {
+            renderedContent = text;
+        },
+    });
+
+    const messageItem = dom.window.document.querySelector('.message-item');
+    dom.window.__messageEditTestApi.toggleEditMode(messageItem, staleMenuMessage);
+
+    // Simulate an external action (like a stream deletion or sync) replacing the history array
+    history = [
+        { id: 'edit-target', role: 'user', content: 'target content' },
+    ];
+
+    const textarea = messageItem.querySelector('.message-edit-textarea');
+    textarea.value = 'updated target content';
+
+    const saveButton = messageItem.querySelector('.message-edit-controls button');
+    await saveButton.onclick();
+
+    assert.equal(durableWrites.length, 1);
+    assert.equal(durableWrites[0].length, 1);
+    assert.equal(durableWrites[0][0].id, 'edit-target');
+    assert.equal(durableWrites[0][0].content, 'updated target content');
+    assert.equal(history[0].content, 'updated target content');
+    assert.equal(staleMenuMessage.content, 'updated target content');
+    assert.equal(renderedContent, 'updated target content');
+    assert.equal(messageItem.classList.contains('message-item-editing'), false);
+    assert.ok(toasts.some(toast => toast.type === 'success'));
+    assert.equal(toasts.some(toast => toast.type === 'error' || toast.type === 'warning'), false);
+    dom.window.close();
+});
+
+test('a visible edited bubble is restored when a concurrent history snapshot temporarily omits it', async () => {
+    const dom = await setupContextMenuDom(`<!doctype html><div id="chatMessages">
+        <div class="message-item" data-message-id="before"><div class="md-content">before</div></div>
+        <div class="message-item" data-message-id="edit-target"><div class="md-content">target content</div></div>
+        <div class="message-item" data-message-id="after"><div class="md-content">after</div></div>
+    </div>`);
+
+    const staleBubbleMessage = {
+        id: 'edit-target',
+        role: 'user',
+        content: 'target content',
+        timestamp: 2,
+    };
+    let history = [
+        { id: 'before', role: 'assistant', content: 'before', timestamp: 1 },
+        { id: 'after', role: 'assistant', content: 'after', timestamp: 3 },
+    ];
+    let committedHistory = null;
+    const toasts = [];
+    const chatMessagesDiv = dom.window.document.getElementById('chatMessages');
+
+    dom.window.__messageEditTestApi.initializeContextMenu({
+        chatMessagesDiv,
+        electronAPI: {},
+        markedInstance: { parse: value => value },
+        uiHelper: {
+            autoResizeTextarea() {},
+            showToastNotification(messageText, type) { toasts.push({ message: messageText, type }); },
+        },
+        historyMutationAuthority: {
+            mutate: async (_target, mutator) => {
+                const nextHistory = mutator(history);
+                history = nextHistory;
+                committedHistory = JSON.parse(JSON.stringify(nextHistory));
+                return {
+                    history: nextHistory,
+                    mutatedMessage: nextHistory.find(m => m.id === staleBubbleMessage.id)
+                };
+            }
+        },
+        currentChatHistoryRef: {
+            get: () => history,
+            set: next => { history = [...next]; },
+        },
+        currentSelectedItemRef: {
+            get: () => ({ id: 'group-1', type: 'group', config: {} }),
+        },
+        currentTopicIdRef: { get: () => 'topic-1' },
+        chatRepository: {
+            saveHistory: async (_itemId, _type, _topicId, nextHistory) => {
+                committedHistory = JSON.parse(JSON.stringify(nextHistory));
+                return { success: true };
+            },
+        },
+    }, {
+        updateMessageContent: (id, text) => {
+            const contentDiv = dom.window.document.querySelector('.message-item[data-message-id="edit-target"] .md-content');
+            if (contentDiv) contentDiv.textContent = text;
+        },
+    });
+
+    const targetItem = dom.window.document.querySelector('.message-item[data-message-id="edit-target"]');
+    dom.window.__messageEditTestApi.toggleEditMode(targetItem, staleBubbleMessage);
+
+    const textarea = targetItem.querySelector('.message-edit-textarea');
+    textarea.value = 'restored concurrent target content';
+
+    const saveButton = targetItem.querySelector('.message-edit-controls button');
+    await saveButton.onclick();
+
+    assert.ok(committedHistory, 'history must be saved');
+    assert.equal(committedHistory.length, 3);
+    assert.deepEqual(committedHistory.map(entry => entry.id), ['before', 'edit-target', 'after']);
+    assert.equal(committedHistory[1].content, 'restored concurrent target content');
+    assert.equal(history.length, 3);
+    assert.deepEqual(history.map(entry => entry.id), ['before', 'edit-target', 'after']);
+    assert.equal(history[1].content, 'restored concurrent target content');
+
+    const editedBubble = dom.window.document.querySelector('.message-item[data-message-id="edit-target"]');
+    assert.ok(editedBubble, 'edited bubble must be present in DOM');
+    assert.equal(editedBubble.classList.contains('message-item-editing'), false);
+    assert.equal(editedBubble.querySelector('.md-content').textContent, 'restored concurrent target content');
+    assert.ok(toasts.some(toast => toast.type === 'success'));
+    assert.equal(toasts.some(toast => toast.type === 'error' || toast.type === 'warning'), false);
     dom.window.close();
 });

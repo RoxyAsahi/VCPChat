@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <title>音乐播放器</title>
     <link rel="stylesheet" href="music.css">
+    <link rel="stylesheet" href="music-stage/music-stage.css">
+    <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
     <link rel="stylesheet" href="../styles/themes.css">
 </head>
@@ -20,6 +22,10 @@
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                     <path fill="none" stroke="currentColor" stroke-width="1" d="M3,1.5 L8,5 L3,8.5 Z"></path>
                 </svg>
+            </button>
+            <button id="stage-toggle-btn" class="window-control-btn stage-toggle-btn" type="button"
+                title="进入歌词舞台" aria-label="进入歌词舞台" aria-pressed="false">
+                <span class="stage-toggle-orbit" aria-hidden="true"></span>
             </button>
             <div class="window-controls">
                 <button id="minimize-music-btn" class="window-control-btn" title="最小化">
@@ -45,62 +51,8 @@
     <div id="player-background"></div>
 
     <div class="music-player-container">
-        <div class="ambient-wave-rings" aria-hidden="true">
-            <svg class="ambient-wave-svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
-                <defs>
-                    <filter id="ambient-wave-glow" x="-35%" y="-35%" width="170%" height="170%">
-                        <feGaussianBlur stdDeviation="4.5" result="blur" />
-                        <feMerge>
-                            <feMergeNode in="blur" />
-                            <feMergeNode in="SourceGraphic" />
-                        </feMerge>
-                    </filter>
-                    <linearGradient id="ambient-wave-grad-a" x1="8%" y1="16%" x2="92%" y2="84%">
-                        <stop offset="0%" stop-color="var(--music-highlight)" stop-opacity="0.92" />
-                        <stop offset="48%" stop-color="#00ffcc" stop-opacity="0.46" />
-                        <stop offset="100%" stop-color="#da70d6" stop-opacity="0.16" />
-                    </linearGradient>
-                    <linearGradient id="ambient-wave-grad-b" x1="94%" y1="10%" x2="12%" y2="90%">
-                        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.58" />
-                        <stop offset="42%" stop-color="var(--music-highlight)" stop-opacity="0.42" />
-                        <stop offset="100%" stop-color="#ff4fd8" stop-opacity="0.12" />
-                    </linearGradient>
-                </defs>
-
-                <g class="ambient-wave-layer ambient-wave-layer-1">
-                    <path class="ambient-wave-path ambient-wave-path-strong" d="M100,41 C112,42 123,35 134,43 C145,50 154,58 158,72 C163,84 170,94 162,108 C158,121 157,134 144,142 C132,150 121,159 107,154 C94,158 82,157 72,146 C60,139 52,128 52,115 C43,103 39,91 48,78 C52,65 61,55 74,51 C83,42 91,38 100,41 Z">
-                        <animate attributeName="d" dur="5.2s" repeatCount="indefinite"
-                            values="
-                                M100,41 C112,42 123,35 134,43 C145,50 154,58 158,72 C163,84 170,94 162,108 C158,121 157,134 144,142 C132,150 121,159 107,154 C94,158 82,157 72,146 C60,139 52,128 52,115 C43,103 39,91 48,78 C52,65 61,55 74,51 C83,42 91,38 100,41 Z;
-                                M100,37 C114,43 127,39 138,47 C150,56 158,66 164,80 C169,94 166,106 158,120 C153,134 144,146 130,150 C116,154 105,165 92,156 C78,156 66,149 60,136 C50,126 42,113 46,99 C38,85 45,73 56,63 C64,51 76,50 88,43 C92,39 96,36 100,37 Z;
-                                M100,44 C109,36 122,40 135,45 C148,51 153,64 159,77 C168,89 166,101 157,113 C156,129 148,140 134,147 C123,156 110,151 98,158 C84,154 72,151 64,139 C53,131 51,117 48,105 C39,93 45,81 51,70 C59,59 70,58 81,49 C88,43 95,43 100,44 Z;
-                                M100,41 C112,42 123,35 134,43 C145,50 154,58 158,72 C163,84 170,94 162,108 C158,121 157,134 144,142 C132,150 121,159 107,154 C94,158 82,157 72,146 C60,139 52,128 52,115 C43,103 39,91 48,78 C52,65 61,55 74,51 C83,42 91,38 100,41 Z" />
-                    </path>
-                </g>
-
-                <g class="ambient-wave-layer ambient-wave-layer-2">
-                    <path class="ambient-wave-path" d="M100,27 C119,31 134,25 150,37 C166,49 174,63 177,82 C185,99 178,116 166,132 C158,150 142,161 124,166 C107,176 90,169 74,162 C55,156 43,142 37,124 C26,107 27,89 36,72 C42,53 58,43 76,37 C84,30 92,24 100,27 Z">
-                        <animate attributeName="d" dur="7.1s" repeatCount="indefinite"
-                            values="
-                                M100,27 C119,31 134,25 150,37 C166,49 174,63 177,82 C185,99 178,116 166,132 C158,150 142,161 124,166 C107,176 90,169 74,162 C55,156 43,142 37,124 C26,107 27,89 36,72 C42,53 58,43 76,37 C84,30 92,24 100,27 Z;
-                                M100,22 C121,32 139,30 154,43 C171,57 180,74 181,94 C184,113 172,127 160,144 C146,161 128,162 110,173 C91,168 73,171 58,156 C42,144 32,129 31,110 C22,92 32,76 42,60 C52,43 70,43 87,33 C92,28 97,21 100,22 Z;
-                                M100,31 C115,21 135,33 153,34 C163,51 179,65 174,85 C186,103 175,119 164,135 C154,154 134,156 117,166 C99,176 84,161 66,160 C49,150 43,134 35,118 C24,100 34,84 38,66 C53,56 62,40 81,40 C88,32 95,32 100,31 Z;
-                                M100,27 C119,31 134,25 150,37 C166,49 174,63 177,82 C185,99 178,116 166,132 C158,150 142,161 124,166 C107,176 90,169 74,162 C55,156 43,142 37,124 C26,107 27,89 36,72 C42,53 58,43 76,37 C84,30 92,24 100,27 Z" />
-                    </path>
-                </g>
-
-                <g class="ambient-wave-layer ambient-wave-layer-3">
-                    <path class="ambient-wave-path ambient-wave-path-dashed" d="M100,14 C126,17 148,14 169,31 C187,47 195,69 193,93 C199,118 188,140 169,158 C153,179 127,184 104,189 C80,186 56,180 38,162 C18,145 10,121 11,96 C8,72 19,50 40,35 C58,18 80,19 100,14 Z">
-                        <animate attributeName="d" dur="9.8s" repeatCount="indefinite"
-                            values="
-                                M100,14 C126,17 148,14 169,31 C187,47 195,69 193,93 C199,118 188,140 169,158 C153,179 127,184 104,189 C80,186 56,180 38,162 C18,145 10,121 11,96 C8,72 19,50 40,35 C58,18 80,19 100,14 Z;
-                                M100,9 C129,18 153,19 174,40 C194,60 196,86 191,111 C190,137 171,153 151,171 C128,188 105,183 82,187 C59,180 35,168 24,146 C8,125 12,100 14,77 C24,55 37,34 61,28 C73,17 91,9 100,9 Z;
-                                M100,19 C122,8 149,22 173,25 C188,48 201,70 192,97 C201,123 183,143 164,161 C148,184 119,177 97,190 C73,182 49,177 33,156 C14,138 15,112 8,89 C17,66 25,42 50,33 C66,16 86,24 100,19 Z;
-                                M100,14 C126,17 148,14 169,31 C187,47 195,69 193,93 C199,118 188,140 169,158 C153,179 127,184 104,189 C80,186 56,180 38,162 C18,145 10,121 11,96 C8,72 19,50 40,35 C58,18 80,19 100,14 Z" />
-                    </path>
-                </g>
-            </svg>
-        </div>
+        <!-- Pixi.js v8 硬件加速背景声纹与气泡粒子容器 -->
+        <div id="ambient-wave-container" class="ambient-wave-container" aria-hidden="true"></div>
         <!-- 左侧边栏 - 整合播放列表 -->
         <div id="left-sidebar" class="left-sidebar glass-panel">
             <!-- 顶部操作区 -->
@@ -577,6 +529,146 @@
             </div>
         </div>
     </div>
+
+    <!-- Folia-inspired immersive lyrics stage. Playback remains owned by the VCP audio engine. -->
+    <main id="music-stage" class="music-stage" tabindex="-1" hidden aria-hidden="true"
+        aria-label="沉浸式歌词舞台">
+        <div class="music-stage-backdrop" aria-hidden="true">
+            <div class="music-stage-backdrop-layer music-stage-backdrop-current"></div>
+            <div class="music-stage-backdrop-layer music-stage-backdrop-next"></div>
+            <div class="music-stage-backdrop-noise"></div>
+            <div class="music-stage-shade"></div>
+        </div>
+
+        <!-- 共用于四种演出模式的实时音频响应边缘频谱与流光。 -->
+        <div class="music-stage-edge-spectrum" aria-hidden="true">
+            <canvas class="music-stage-edge-spectrum-canvas"></canvas>
+            <div class="music-stage-edge-flow"></div>
+            <div class="music-stage-edge-corners">
+                <i></i><i></i><i></i><i></i>
+            </div>
+        </div>
+
+        <div class="music-stage-mode-root" aria-live="off"></div>
+
+        <header class="music-stage-top-chrome">
+            <div class="music-stage-wordmark" aria-hidden="true">
+                <span>VCP</span>
+                <i></i>
+                <span>LYRIC STAGE</span>
+            </div>
+            <nav class="music-stage-mode-switcher" aria-label="歌词演出模式"></nav>
+        </header>
+
+        <aside class="music-stage-settings" aria-label="舞台视觉设置">
+            <button class="music-stage-settings-toggle" type="button"
+                aria-expanded="false" aria-haspopup="dialog" aria-controls="music-stage-settings-card"
+                title="打开舞台控制舱">
+                <span class="music-stage-settings-glyph" aria-hidden="true">✦</span>
+                <span class="music-stage-settings-toggle-copy">
+                    <span class="music-stage-settings-toggle-kicker">STAGE LAB</span>
+                    <span class="music-stage-settings-toggle-label">控制舞台</span>
+                </span>
+                <span class="music-stage-settings-toggle-pulse" aria-hidden="true"></span>
+            </button>
+            <section id="music-stage-settings-card" class="music-stage-settings-card" role="dialog"
+                aria-modal="true" aria-labelledby="music-stage-settings-title"
+                aria-describedby="music-stage-settings-description" tabindex="-1" hidden>
+                <div class="music-stage-settings-header">
+                    <div class="music-stage-settings-heading">
+                        <span class="music-stage-settings-emblem" aria-hidden="true">S</span>
+                        <div>
+                            <div class="music-stage-settings-kicker">VCP · STAGE LAB / LIVE</div>
+                            <h2 id="music-stage-settings-title">舞台控制舱</h2>
+                            <p id="music-stage-settings-description">编排视觉语言、镜头响应与演出性能</p>
+                        </div>
+                    </div>
+                    <button class="music-stage-settings-close" type="button" aria-label="关闭舞台控制舱">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m7 7 10 10M17 7 7 17" fill="none" stroke="currentColor"
+                                stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="music-stage-settings-body">
+                    <section class="music-stage-settings-section">
+                        <div class="music-stage-settings-section-heading">
+                            <span class="music-stage-settings-section-index">01</span>
+                            <div>
+                                <div class="music-stage-settings-section-title">演出阵列</div>
+                                <div class="music-stage-settings-hint">选择要部署到顶部快速切换器的舞台模式</div>
+                            </div>
+                        </div>
+                        <div class="music-stage-mode-options"></div>
+                    </section>
+                    <section class="music-stage-settings-section">
+                        <div class="music-stage-settings-section-heading">
+                            <span class="music-stage-settings-section-index">02</span>
+                            <div>
+                                <div class="music-stage-settings-section-title">模式调制</div>
+                                <div class="music-stage-settings-hint music-stage-current-mode-hint"></div>
+                            </div>
+                        </div>
+                        <div class="music-stage-tuning-controls"></div>
+                    </section>
+                    <section class="music-stage-settings-section">
+                        <div class="music-stage-settings-section-heading">
+                            <span class="music-stage-settings-section-index">03</span>
+                            <div>
+                                <div class="music-stage-settings-section-title">全局输出</div>
+                                <div class="music-stage-settings-hint">作用于所有演出模式的渲染策略</div>
+                            </div>
+                        </div>
+                        <div class="music-stage-common-controls"></div>
+                    </section>
+                </div>
+                <div class="music-stage-settings-footer">
+                    <button class="music-stage-settings-reset" type="button">
+                        <span aria-hidden="true">↺</span> 恢复出厂编排
+                    </button>
+                    <span class="music-stage-settings-status" role="status" aria-live="polite"></span>
+                    <span class="music-stage-settings-footnote" aria-hidden="true">ESC TO CLOSE</span>
+                </div>
+            </section>
+        </aside>
+
+        <aside class="music-stage-id3" aria-label="当前曲目信息">
+            <div class="music-stage-cover" role="img"></div>
+            <div class="music-stage-track-copy">
+                <div class="music-stage-track-kicker">NOW PERFORMING</div>
+                <div class="music-stage-track-title">未选择歌曲</div>
+                <div class="music-stage-track-artist">未知艺术家</div>
+                <div class="music-stage-track-album" hidden></div>
+            </div>
+        </aside>
+
+        <div class="music-stage-empty-notice" hidden>选择一首歌曲，让文字开始演出</div>
+
+        <section class="music-stage-chrome" aria-label="播放控制">
+            <div class="music-stage-time music-stage-current-time">0:00</div>
+            <div class="music-stage-progress-track" role="slider" tabindex="0"
+                aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div class="music-stage-progress-glow"></div>
+                <div class="music-stage-progress-fill"></div>
+            </div>
+            <div class="music-stage-time music-stage-duration">0:00</div>
+            <div class="music-stage-transport">
+                <button class="music-stage-play-mode-button" type="button" data-stage-action="play-mode"
+                    title="列表循环" aria-label="列表循环"></button>
+                <button type="button" data-stage-action="previous" title="上一首" aria-label="上一首"></button>
+                <button class="music-stage-play-button" type="button" data-stage-action="toggle-play"
+                    title="播放" aria-label="播放"></button>
+                <button type="button" data-stage-action="next" title="下一首" aria-label="下一首"></button>
+                <div class="music-stage-volume">
+                    <button class="music-stage-volume-button" type="button" data-stage-action="toggle-mute"
+                        title="静音" aria-label="静音"></button>
+                    <input class="music-stage-volume-slider" type="range" min="0" max="1" step="0.01"
+                        value="1" aria-label="音量">
+                </div>
+            </div>
+        </section>
+    </main>
+
     <!-- 右键菜单 -->
     <div id="track-context-menu" class="context-menu">
         <div class="context-menu-item" data-action="play">
@@ -590,6 +682,13 @@
                 <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" fill="currentColor" />
             </svg>
             <span>下一首播放</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="get-lyrics">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path d="M12 3v10.17l-3.59-3.58L7 11l5 5 5-5-1.41-1.41L13 13.17V3h-1zM5 19v2h14v-2H5z" fill="currentColor" />
+            </svg>
+            <span>获取歌词</span>
         </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item has-submenu" data-action="add-to-playlist">
@@ -617,6 +716,45 @@
                     fill="currentColor" />
             </svg>
             <span>从列表中移除</span>
+        </div>
+    </div>
+
+    <!-- 多源歌词获取模态框 -->
+    <div id="lyrics-fetch-modal" class="music-modal-overlay" role="dialog" aria-modal="true"
+        aria-labelledby="lyrics-fetch-modal-title">
+        <div class="music-modal lyrics-fetch-modal">
+            <div class="music-modal-header">
+                <div>
+                    <h3 id="lyrics-fetch-modal-title">获取歌词版本</h3>
+                    <div id="lyrics-fetch-track" class="lyrics-fetch-track"></div>
+                </div>
+                <button class="music-modal-close-btn" id="lyrics-fetch-close" type="button"
+                    aria-label="关闭歌词获取窗口">✕</button>
+            </div>
+            <div class="lyrics-fetch-search">
+                <label>
+                    <span>歌曲</span>
+                    <input id="lyrics-fetch-title" type="text" autocomplete="off">
+                </label>
+                <label>
+                    <span>歌手</span>
+                    <input id="lyrics-fetch-artist" type="text" autocomplete="off">
+                </label>
+                <button id="lyrics-fetch-search-btn" class="dialog-btn confirm" type="button">搜索多个源</button>
+            </div>
+            <div class="lyrics-fetch-legend">
+                <span><i class="lyrics-capability word"></i>支持流式逐字符</span>
+                <span><i class="lyrics-capability line"></i>普通逐行</span>
+                <span>选择后将覆盖当前本地歌词文件</span>
+            </div>
+            <div id="lyrics-fetch-status" class="lyrics-fetch-status" aria-live="polite"></div>
+            <div id="lyrics-fetch-results" class="lyrics-fetch-results">
+                <div class="music-modal-empty">点击“搜索多个源”查找可用歌词版本</div>
+            </div>
+            <div class="music-modal-footer lyrics-fetch-footer">
+                <span id="lyrics-fetch-selection" class="modal-count">尚未选择歌词版本</span>
+                <button id="lyrics-fetch-apply" class="dialog-btn confirm" type="button" disabled>获取并覆盖</button>
+            </div>
         </div>
     </div>
 
@@ -699,8 +837,38 @@
     </div>
 
     <!-- 确保 JS 在 body 结束前加载 -->
+    <script src="../node_modules/pixi.js/dist/pixi.min.js"></script>
+    <script src="../vendor/three.min.js"></script>
     <script src="socket.io.min.js"></script>
+    <script src="music-stage/music-stage-runtime.js"></script>
+    <script src="music-stage/music-stage-config.js"></script>
+    <script src="music-stage/modes/stage-mode-utils.js"></script>
+    <script src="music-stage/modes/stage-lyric-layout.js"></script>
+    <script src="music-stage/modes/stage-lyric-decor.js"></script>
+    <script src="music-stage/modes/stage-lyric-performance.js"></script>
+    <script src="music-stage/modes/luminous-manager.js"></script>
+    <script src="music-stage/modes/partita-manager.js"></script>
+    <script src="music-stage/modes/cadenza-manager.js"></script>
+    <script src="music-stage/modes/stage-pixi-effects.js"></script>
+    <script src="music-stage/modes/stage-starbloom.js"></script>
+    <script src="music-stage/modes/tempera-pixi-core.js"></script>
+    <script src="music-stage/modes/sonnet-pixi-core.js"></script>
+    <script src="music-stage/modes/tempera-manager.js"></script>
+    <script src="music-stage/modes/sonnet-manager.js"></script>
+    <script src="music-stage/modes/diorama-director.js"></script>
+    <script src="music-stage/modes/diorama-camera.js"></script>
+    <script src="music-stage/modes/diorama-world.js"></script>
+    <script src="music-stage/modes/diorama-lyrics.js"></script>
+    <script src="music-stage/modes/diorama-optics.js"></script>
+    <script src="music-stage/modes/diorama-events.js"></script>
+    <script src="music-stage/modes/diorama-manager.js"></script>
+    <script src="music-stage/modes/fume-manager.js"></script>
+    <script src="music-stage/modes/tunnel-manager.js"></script>
+    <script src="music-stage/music-stage-advanced-modes.js"></script>
+    <script src="music-stage/music-stage-modes.js"></script>
+    <script src="music-stage/music-stage-host.js"></script>
     <script src="music-utils.js"></script>
+    <script src="music-ambient-pixi.js"></script>
     <script src="music-visualizer.js"></script>
     <script src="music-lyrics.js"></script>
     <script src="music-player.js"></script>

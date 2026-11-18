@@ -158,20 +158,37 @@
 
     function syncEmbeddedBounds(view) {
         if (view?.kind !== 'embedded' || !view.container.isConnected) return;
-        embeddedAppController?.setBounds(view.action, getEmbeddedBounds(view.container))?.catch(error => {
+        const bounds = getEmbeddedBounds(view.container);
+        if (bounds.width <= 1 || bounds.height <= 1) return;
+        embeddedAppController?.setBounds(view.action, bounds)?.catch(error => {
             console.warn(`[NextUI] Failed to resize embedded app ${view.action}:`, error);
         });
     }
 
     function syncEmbeddedActivation() {
-        const activeView = appTabHost.views.get(appTabHost.activeViewId);
+        const activeViewId = appTabHost.activeViewId;
+        const activeView = appTabHost.views.get(activeViewId);
         const action = mounted && !restoringTabs && !overlayCoordinator?.active && activeView?.kind === 'embedded'
             ? activeView.action
             : null;
+        if (action && activeView?.kind === 'embedded') {
+            syncEmbeddedBounds(activeView);
+        }
         const activation = embeddedAppController?.activate(action);
         if (!activation) return;
         trackTabPromise(`activate:${action || 'home'}`, activation).then(result => {
-            if (result?.success && activeView?.kind === 'embedded') syncEmbeddedBounds(activeView);
+            if (!mounted || appTabHost.activeViewId !== activeViewId) return;
+            if (result?.success && activeView?.kind === 'embedded') {
+                syncEmbeddedBounds(activeView);
+                const scheduleFrame = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+                    ? window.requestAnimationFrame
+                    : (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : fn => setTimeout(fn, 16));
+                scheduleFrame(() => {
+                    if (mounted && appTabHost.activeViewId === activeViewId) {
+                        syncEmbeddedBounds(activeView);
+                    }
+                });
+            }
         }).catch(error => console.warn('[NextUI] Failed to activate embedded app:', error));
     }
 
@@ -378,6 +395,8 @@
             }
             if (!result?.success) throw new Error(result?.error || '应用无法内嵌打开。');
             container.dataset.state = 'ready';
+            const statusNode = container.querySelector('.next-ui-embedded-app-status');
+            if (statusNode) statusNode.remove();
             if (appTabHost.activeViewId === viewId && !restoringTabs) {
                 syncEmbeddedBounds(view);
                 await embeddedAppController.activate(app.action);
@@ -385,8 +404,22 @@
         } catch (error) {
             console.error(`[NextUI] Failed to open embedded app ${app.id}:`, error);
             container.dataset.state = 'error';
-            container.innerHTML = `<div class="next-ui-embedded-app-status is-error"><span class="vcp-ui-icon" aria-hidden="true">error</span><span>${error.message || '应用加载失败'}</span></div>`;
+            container.replaceChildren(createEmbeddedAppError(error.message || '应用加载失败'));
         }
+    }
+
+    // The error text comes from the app or its process, so it goes in as text.
+    function createEmbeddedAppError(message) {
+        const status = document.createElement('div');
+        status.className = 'next-ui-embedded-app-status is-error';
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'error';
+        const text = document.createElement('span');
+        text.textContent = String(message);
+        status.append(icon, text);
+        return status;
     }
 
     function openEmbeddedApp(app) {
@@ -576,13 +609,14 @@
             }
             if (payload?.state !== 'error') return;
             view.container.dataset.state = 'error';
-            view.container.innerHTML = `<div class="next-ui-embedded-app-status is-error"><span class="vcp-ui-icon" aria-hidden="true">error</span><span>${payload.error || '应用运行异常'}</span></div>`;
+            view.container.replaceChildren(createEmbeddedAppError(payload.error || '应用运行异常'));
         });
     }
 
     function mountNativeTooltipBridge(scope) {
         if (!scope) return;
-        const converted = new Map();
+        // 只按元素记原始属性，不持有元素：被移出页面的节点要能回收。卸载时从页面上还在的节点里还原
+        const converted = new WeakMap();
         const isExcluded = element => element.closest?.('#nextUiInternalAppHost, #vchatAppTray') || (element.matches?.('input, select, textarea') && element.closest?.('.vcp-settings-schema-surface, .settings-sidebar-surface-view'));
         const convert = element => {
             if (!(element instanceof Element) || isExcluded(element) || !element.hasAttribute('title')) return;
@@ -632,6 +666,7 @@
             showTimer = null;
             activeTarget = null;
             host.hidden = true;
+            host.style.removeProperty('z-index');
         };
         const position = () => {
             if (!activeTarget || host.hidden) return;
@@ -655,6 +690,15 @@
         const show = target => {
             if (!target?.isConnected || isExcluded(target)) return;
             activeTarget = target;
+            // Body portal does not inherit its anchor's stacking context.
+            // Lift only Tavern-owned hints; do not raise all tooltips above dialogs.
+            const tavern = target.closest('.tavern-popover');
+            if (tavern) {
+                const layer = Number.parseInt(window.getComputedStyle(tavern).zIndex, 10);
+                host.style.zIndex = String((Number.isFinite(layer) ? layer : 5000) + 1);
+            } else {
+                host.style.removeProperty('z-index');
+            }
             bubble.textContent = target.dataset.tooltip || '';
             host.hidden = false;
             requestAnimationFrame(position);
@@ -686,8 +730,11 @@
             hide();
             host.remove();
             observer.disconnect();
-            converted.forEach(({ title, originalDataTooltip, originalAriaLabel, addedAriaLabel }, element) => {
-                if (!element.isConnected) return;
+            document.querySelectorAll('[data-tooltip]').forEach(element => {
+                const record = converted.get(element);
+                if (!record) return;
+                converted.delete(element);
+                const { title, originalDataTooltip, originalAriaLabel, addedAriaLabel } = record;
                 element.setAttribute('title', title);
                 if (originalDataTooltip === null) delete element.dataset.tooltip;
                 else element.setAttribute('data-tooltip', originalDataTooltip);
@@ -696,7 +743,6 @@
                     else element.setAttribute('aria-label', originalAriaLabel);
                 }
             });
-            converted.clear();
         }, 'next:native-tooltip-bridge', 'observer');
     }
 

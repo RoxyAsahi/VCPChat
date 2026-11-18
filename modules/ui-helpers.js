@@ -7,12 +7,12 @@
     let croppedUserAvatarFile = null;
     let croppedGroupAvatarFile = null;
     const modalGenerations = new Map();
-    const modalClosePromises = new WeakMap();
 
     const uiHelperFunctions = {};
     const textareaResizeStates = new WeakMap();
     const chatScrollStates = new WeakMap();
     const CHAT_BOTTOM_THRESHOLD_PX = 50;
+    const CHAT_FOLLOW_CHANGE_EVENT = 'vcp-chat-follow-change';
     const REGEX_CACHE_MAX_ENTRIES = 512;
     const regexCompileCache = new Map();
     const filePreviewIconMarkup = `
@@ -272,56 +272,184 @@
         return getDistanceFromChatBottom(container) <= threshold;
     }
 
+    // 跟随状态每次真正翻转都在滚动容器上派发 CHAT_FOLLOW_CHANGE_EVENT；
+    // 「回到底部」按钮这类界面只订阅事件，不直接读写内部状态。
+    function setChatFollowBottom(container, state, followBottom) {
+        if (state.followBottom === followBottom) return;
+        state.followBottom = followBottom;
+        const EventCtor = container.ownerDocument?.defaultView?.CustomEvent;
+        if (typeof EventCtor === 'function') {
+            container.dispatchEvent(new EventCtor(CHAT_FOLLOW_CHANGE_EVENT, { detail: { followBottom } }));
+        }
+    }
+
     function getChatScrollState(container) {
         let state = chatScrollStates.get(container);
         if (state) return state;
 
         state = {
+            // 这是用户授予的“持续跟随底部”意图，不是瞬时几何测量结果。
+            // 图片、图表等异步增高可能暂时令滚动条远离底部，但不能据此关闭跟随。
             followBottom: true,
             generation: 0,
             programmatic: false,
+            userScrollActive: false,
+            lastScrollTop: container.scrollTop,
             frameId: 0,
-            requestedGeneration: null
+            layoutFrameId: 0,
+            requestedGeneration: null,
+            resizeObserver: null
         };
         chatScrollStates.set(container, state);
 
-        const markUserIntent = () => {
-            state.programmatic = false;
-            state.generation += 1;
+        const cancelPendingScroll = () => {
             if (state.frameId) {
                 cancelAnimationFrame(state.frameId);
                 state.frameId = 0;
-                state.requestedGeneration = null;
             }
+            state.requestedGeneration = null;
+        };
+
+        const markUserIntent = () => {
+            state.programmatic = false;
+            state.userScrollActive = true;
+            state.generation += 1;
+            cancelPendingScroll();
+        };
+
+        const settleUserScrollIntent = () => {
+            const expectedGeneration = state.generation;
+            requestAnimationFrame(() => {
+                // 结算必须仍属于发起它的那次用户操作。比如一次向下滚动排队后，
+                // 用户立刻改为向上滚动，旧结算不得在下一帧重新开启跟随。
+                if (!container.isConnected || state.generation !== expectedGeneration) return;
+                const nearBottom = isChatNearBottom(container);
+                // 用户主动回到底部时重新授权持续跟随；离开底部则保持关闭。
+                setChatFollowBottom(container, state, nearBottom);
+                state.userScrollActive = false;
+            });
+        };
+
+        const releaseFollow = () => {
+            state.generation += 1;
+            cancelPendingScroll();
+            if (state.layoutFrameId) {
+                cancelAnimationFrame(state.layoutFrameId);
+                state.layoutFrameId = 0;
+            }
+            setChatFollowBottom(container, state, false);
         };
 
         container.addEventListener('wheel', (event) => {
-            markUserIntent();
             if (event.deltaY < 0) {
-                state.followBottom = false;
-            } else {
-                requestAnimationFrame(() => {
-                    if (container.isConnected) {
-                        state.followBottom = isChatNearBottom(container);
-                    }
-                });
+                markUserIntent();
+                // 向上滚轮是明确的解锁意图。保持 userScrollActive，直到后续
+                // 向下滚动结算；这样该滚轮默认行为产生的近底部 scroll 事件
+                // 不会在同一轮事件中立刻把 followBottom 改回 true。
+                setChatFollowBottom(container, state, false);
+            } else if (event.deltaY > 0) {
+                markUserIntent();
+                settleUserScrollIntent();
             }
+            // deltaY === 0 是纯横向滚动（触控板常在同一手势里带出），
+            // 不能当作“向下滚动”去结算，否则会冲掉刚才的向上解锁。
         }, { passive: true });
 
+        // 在已完成的消息里点展开类控件（工具行、折叠块、卡片内按钮）时，用户期望
+        // 被点的控件和上方内容不动、展开部分向下长。跟随开着时，内容增高会被下面的
+        // ResizeObserver 补滚到底，把刚点的控件推出视口，所以点击时先释放跟随。
+        // 正在生成的消息不在此列，生成中仍保持跟随。
+        const isInPlaceExpandTarget = (target) => {
+            if (!target?.closest) return false;
+            const messageItem = target.closest('.message-item');
+            if (!messageItem || messageItem.classList.contains('streaming') || messageItem.classList.contains('thinking')) {
+                return false;
+            }
+            return Boolean(target.closest('button, summary, details, [role="button"], [role="tab"], [aria-expanded]'));
+        };
+
         container.addEventListener('touchstart', markUserIntent, { passive: true });
+        container.addEventListener('touchend', settleUserScrollIntent, { passive: true });
+        container.addEventListener('touchcancel', settleUserScrollIntent, { passive: true });
         container.addEventListener('pointerdown', (event) => {
             // 普通内容点击不改变跟随状态；只把滚动条槽附近的按下视为滚动意图。
             const scrollbarWidth = Math.max(0, container.offsetWidth - container.clientWidth);
             const rect = container.getBoundingClientRect();
             if (scrollbarWidth > 0 && event.clientX >= rect.right - scrollbarWidth - 2) {
                 markUserIntent();
+                return;
             }
+            if (isInPlaceExpandTarget(event.target)) releaseFollow();
+        }, { capture: true, passive: true });
+        container.addEventListener('click', (event) => {
+            if (isInPlaceExpandTarget(event.target)) releaseFollow();
+        }, { capture: true, passive: true });
+        container.addEventListener('pointerup', () => {
+            if (state.userScrollActive) settleUserScrollIntent();
+        }, { passive: true });
+        container.addEventListener('pointercancel', () => {
+            if (state.userScrollActive) settleUserScrollIntent();
         }, { passive: true });
 
         container.addEventListener('scroll', () => {
+            const currentScrollTop = container.scrollTop;
+            const movedUp = currentScrollTop < state.lastScrollTop - 0.5;
+            state.lastScrollTop = currentScrollTop;
             if (state.programmatic) return;
-            state.followBottom = isChatNearBottom(container);
+
+            if (state.userScrollActive) {
+                // 用户操作期间，scroll 几何只能证明“已经离开底部”，不能覆盖
+                // 更早到达的向上滚轮解锁意图。重新开启统一交给向下滚轮、
+                // touchend 或滚动条 pointerup 的代际保护结算。
+                if (!isChatNearBottom(container)) {
+                    setChatFollowBottom(container, state, false);
+                }
+                return;
+            }
+
+            // 键盘 PageUp/ArrowUp、点击滚动条槽上方、触控板惯性滚动不一定经过
+            // 上面的输入事件。视口确实上移并离开底部阈值时，同样释放跟随并推进
+            // 代际，已排队的回底（包括回复结束时那一次）随之作废。
+            if (movedUp && !isChatNearBottom(container)) {
+                releaseFollow();
+                return;
+            }
+
+            // 兼容键盘 End、无障碍工具等未被上述输入事件标记的原生滚动：
+            // 只有真正到达底部（而非落入 50px 追踪阈值）才重新开启跟随。
+            // 这同时防止小幅向上滚轮产生的 scroll 事件发生近底部竞态。
+            if (getDistanceFromChatBottom(container) <= 1) {
+                setChatFollowBottom(container, state, true);
+            }
         }, { passive: true });
+
+        // 统一处理图片、Mermaid、公式、附件及字体加载造成的异步内容增高。
+        // ResizeObserver 观察内容根而非滚动视口；仅在用户的跟随授权仍有效、
+        // 且滚动代际未变化时补滚到底部。
+        const ResizeObserverCtor = window.ResizeObserver;
+        if (typeof ResizeObserverCtor === 'function') {
+            const contentRoot = container.querySelector('#chatMessages') || container.firstElementChild || container;
+            state.resizeObserver = new ResizeObserverCtor(() => {
+                if (!state.followBottom || state.layoutFrameId || !container.isConnected) return;
+                const expectedGeneration = state.generation;
+                state.layoutFrameId = requestAnimationFrame(() => {
+                    state.layoutFrameId = 0;
+                    if (
+                        !container.isConnected
+                        || !state.followBottom
+                        || state.generation !== expectedGeneration
+                    ) {
+                        return;
+                    }
+                    uiHelperFunctions.scrollToBottom({
+                        force: true,
+                        immediate: true,
+                        expectedGeneration
+                    });
+                });
+            });
+            state.resizeObserver.observe(contentRoot);
+        }
 
         return state;
     }
@@ -351,14 +479,49 @@
         if (!container) return;
         const state = getChatScrollState(container);
         state.generation += 1;
-        state.followBottom = true;
+        setChatFollowBottom(container, state, true);
         state.programmatic = false;
+        state.userScrollActive = false;
+        state.lastScrollTop = container.scrollTop;
         state.requestedGeneration = null;
         if (state.frameId) {
             cancelAnimationFrame(state.frameId);
             state.frameId = 0;
         }
+        if (state.layoutFrameId) {
+            cancelAnimationFrame(state.layoutFrameId);
+            state.layoutFrameId = 0;
+        }
     };
+
+    /**
+     * Releases bottom-follow before a programmatic jump (search result, turn
+     * navigator). The jump itself is not user input, so follow would stay on and
+     * content-visibility messages that grow while the jump passes them would let
+     * the ResizeObserver pull the view back to the bottom. Reaching the bottom
+     * again re-enables follow as usual.
+     */
+    uiHelperFunctions.releaseChatScrollFollow = function() {
+        const container = getChatScrollContainer();
+        if (!container) return;
+        const state = getChatScrollState(container);
+        state.generation += 1;
+        state.programmatic = false;
+        state.userScrollActive = false;
+        state.lastScrollTop = container.scrollTop;
+        state.requestedGeneration = null;
+        if (state.frameId) {
+            cancelAnimationFrame(state.frameId);
+            state.frameId = 0;
+        }
+        if (state.layoutFrameId) {
+            cancelAnimationFrame(state.layoutFrameId);
+            state.layoutFrameId = 0;
+        }
+        setChatFollowBottom(container, state, false);
+    };
+
+    uiHelperFunctions.CHAT_FOLLOW_CHANGE_EVENT = CHAT_FOLLOW_CHANGE_EVENT;
 
     /**
      * Scrolls the chat Surface to the bottom when bottom-follow is active.
@@ -382,11 +545,15 @@
         if (expectedGeneration !== null && state.generation !== expectedGeneration) {
             return false;
         }
-        if (!force && !state.followBottom && !isChatNearBottom(container)) {
+        // 跟随关闭后，非强制的滚到底一律不做。离底部 50px 内就重新开启的话，
+        // 生成中向上滚一格常常仍落在这 50px 里，下一帧流式渲染或回复结束时
+        // 的这次调用就会把人拉回底部。重新跟随只认用户动作：滚回底部、
+        // “回到底部”按钮、发送新消息（force）、切换话题（resetChatScrollFollow）。
+        if (!force && !state.followBottom) {
             return false;
         }
 
-        state.followBottom = true;
+        setChatFollowBottom(container, state, true);
         state.requestedGeneration = expectedGeneration ?? state.generation;
 
         const commitScroll = () => {
@@ -402,11 +569,13 @@
 
             state.programmatic = true;
             container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+            state.lastScrollTop = container.scrollTop;
             requestAnimationFrame(() => {
                 state.programmatic = false;
-                if (container.isConnected) {
-                    state.followBottom = isChatNearBottom(container);
-                }
+                // 不用下一帧的几何位置反向撤销跟随授权。图片可能恰好在两帧
+                // 之间完成解码并再次撑高内容；只要用户没有产生新滚动意图，
+                // ResizeObserver 会继续补偿到新的底部。也不在这里按几何重新
+                // 开启跟随：两帧之间用户可能刚向上滚了一小步，仍在阈值内。
             });
         };
 
@@ -450,6 +619,21 @@
             state.frameId = 0;
             if (!textarea.isConnected) return;
 
+            // 🟢 视口锚定守护：找到向上最近的滚动容器，记录当前的 scrollTop
+            const scrollContainer = textarea.closest?.('.chat-messages-container')
+                || textarea.closest?.('.sidebar-list-scroll')
+                || (textarea.parentElement && getComputedStyle(textarea.parentElement).overflowY !== 'visible' ? textarea.parentElement : null);
+            const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : null;
+
+            // 避免父级发生高度瞬间崩塌（利用父级临时 minHeight 或当前 clientHeight 撑住）
+            const currentHeight = textarea.clientHeight;
+            const parent = textarea.parentElement;
+            let originalParentMinHeight = '';
+            if (parent && currentHeight > 0) {
+                originalParentMinHeight = parent.style.minHeight;
+                parent.style.minHeight = `${parent.clientHeight}px`;
+            }
+
             textarea.style.height = 'auto';
             const computed = getComputedStyle(textarea);
             const maxHeight = parseFloat(computed.maxHeight);
@@ -465,6 +649,16 @@
                 state.lastHeight = nextHeight;
             } else {
                 textarea.style.height = `${state.lastHeight}px`;
+            }
+
+            // 恢复父级 minHeight
+            if (parent && currentHeight > 0) {
+                parent.style.minHeight = originalParentMinHeight;
+            }
+
+            // 🟢 恢复被截断的 scrollTop，保证视口绝对纹丝不动
+            if (scrollContainer && savedScrollTop !== null && scrollContainer.scrollTop !== savedScrollTop) {
+                scrollContainer.scrollTop = savedScrollTop;
             }
         });
     };
@@ -515,8 +709,6 @@
     uiHelperFunctions.closeModal = function(modalId) {
         const modalElement = document.getElementById(modalId);
         if (!modalElement) return Promise.resolve(false);
-        const existingClose = modalClosePromises.get(modalElement);
-        if (existingClose) return existingClose;
         const finishClose = () => {
             if (!modalElement.isConnected) return false;
             modalElement.classList.remove('active');
@@ -526,6 +718,7 @@
             return true;
         };
         if (modalId === 'globalSettingsModal' && modalElement.classList.contains('active')) {
+            // Hiding the connected surface keeps its draft owners alive. Only owner teardown awaits durability.
             const coordinator = window.VCPUISettingsBridge?.flush;
             if (typeof coordinator === 'function') {
                 Promise.resolve().then(() => coordinator()).catch(error => {
@@ -829,11 +1022,23 @@
         attachedFiles.forEach((af, index) => {
             const prevDiv = document.createElement('div');
             prevDiv.className = 'attachment-preview-item';
-            prevDiv.title = af.originalName || af.file.name;
     
             const fileType = af.file.type;
             const fileName = af.originalName || af.file.name || '';
             const fileVisual = uiHelperFunctions.resolveAttachmentFileVisual(fileName, fileType);
+            const isPdf = fileVisual.kind === 'pdf' || /\.pdf$/i.test(fileName);
+            const pdfMeta = af._fileManagerData?.pdfMeta || af.pdfMeta;
+            const hasImageFrames = (af._fileManagerData?.imageFrames?.length > 0) || (af.imageFrames?.length > 0);
+            const isScannedPdf = isPdf && (pdfMeta?.isScanned === true || hasImageFrames);
+
+            let previewTitle = af.originalName || af.file.name;
+            if (isScannedPdf) {
+                const pages = pdfMeta?.totalPages || af._fileManagerData?.imageFrames?.length || af.imageFrames?.length;
+                previewTitle += pages ? ` (扫描版PDF·共${pages}页已转图像)` : ` (扫描版PDF·已转图像)`;
+            } else if (isPdf && pdfMeta?.totalPages) {
+                previewTitle += ` (PDF·共${pdfMeta.totalPages}页)`;
+            }
+            prevDiv.title = previewTitle;
     
             if (fileType.startsWith('image/')) {
                 const thumbnailImg = document.createElement('img');
@@ -857,8 +1062,14 @@
     
             const nameSpan = document.createElement('span');
             nameSpan.className = 'file-preview-name';
-            const displayName = af.originalName || af.file.name;
-            nameSpan.textContent = displayName.length > 20 ? displayName.substring(0, 17) + '...' : displayName;
+            let displayName = af.originalName || af.file.name;
+            if (isScannedPdf) {
+                const badge = pdfMeta?.totalPages ? ` [扫描件·${pdfMeta.totalPages}页]` : ` [扫描件]`;
+                displayName = (displayName.length > 15 ? displayName.substring(0, 12) + '...' : displayName) + badge;
+            } else {
+                displayName = displayName.length > 20 ? displayName.substring(0, 17) + '...' : displayName;
+            }
+            nameSpan.textContent = displayName;
             prevDiv.appendChild(nameSpan);
     
             const removeBtn = document.createElement('button');
