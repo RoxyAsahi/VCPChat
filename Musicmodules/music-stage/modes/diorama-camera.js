@@ -84,6 +84,34 @@
     const CHASE_LATERAL = 7.5;
     const CHASE_LEAD = 66;
     const chaseAmount = height => smooth((height - 3.9) / 0.7);
+    /*
+     * Each chorus is seen from somewhere else. The first looks down on the
+     * train from behind and to one side. The second runs low over the water
+     * alongside it, the lit windows going by with their reflection underneath.
+     * The third goes up over the wires and looks down the length of the roofs.
+     * Height is where the camera ends up, lead how far the nose of the train
+     * runs ahead of it, yaw and pitch what is added to the forward gaze. The
+     * line on the sky is written off to one side of that gaze where the train
+     * would otherwise run through it.
+     */
+    const CHASE_RIGS = Object.freeze([
+        { name: 'QUARTER', lateral: CHASE_LATERAL, lead: CHASE_LEAD, height: null, yaw: -0.075, pitch: 0, fov: 0,
+            skyYaw: 0, skyPitch: 0 },
+        { name: 'ALONGSIDE', lateral: -CHASE_LATERAL, lead: 44, height: 1.7, yaw: 0.3, pitch: 0.13, fov: -4,
+            skyYaw: -0.12, skyPitch: 0.16 },
+        { name: 'OVERHEAD', lateral: 1.8, lead: 60, height: 8.6, yaw: -0.02, pitch: -0.2, fov: 0,
+            skyYaw: 0, skyPitch: 0.2 }
+    ]);
+    const chaseRigs = new WeakMap();
+    const chaseRig = (timeline, act) => {
+        let rigs = chaseRigs.get(timeline);
+        if (!rigs) {
+            let chorus = 0;
+            rigs = timeline.acts.map(item => CHASE_RIGS[item.kind === 'Chorus' ? chorus++ % CHASE_RIGS.length : 0]);
+            chaseRigs.set(timeline, rigs);
+        }
+        return rigs[act.index] || CHASE_RIGS[0];
+    };
     // Starts and stops without a jolt: no speed and no acceleration at either end.
     const ease = value => { const p = clamp(value); return p * p * p * (p * (p * 6 - 15) + 10); };
     /*
@@ -93,18 +121,30 @@
      * train up first, and slides in over the nose last. Each part takes
      * seconds, so nothing in the frame changes place faster than the eye follows.
      */
-    const crane = (act, previous, t) => {
+    const crane = (act, previous, t, timeline) => {
         const to = chaseAmount(act.params.height);
         const from = act.index ? chaseAmount(previous.params.height) : to;
+        // The shot belongs to whichever of the two acts is the high one; from
+        // one high act straight into another it is carried across.
+        const own = timeline ? chaseRig(timeline, act) : CHASE_RIGS[0];
+        const before = timeline && act.index ? chaseRig(timeline, previous) : own;
+        const across = ease((t - act.start) / Math.max(0.001, Math.min(8, (act.end - act.start) * 0.8)));
+        const rig = to > from || own === before ? own : to < from ? before : {
+            name: across < 0.5 ? before.name : own.name, lateral: mix(before.lateral, own.lateral, across),
+            lead: mix(before.lead, own.lead, across), yaw: mix(before.yaw, own.yaw, across),
+            pitch: mix(before.pitch, own.pitch, across), fov: mix(before.fov, own.fov, across),
+            skyYaw: mix(before.skyYaw, own.skyYaw, across), skyPitch: mix(before.skyPitch, own.skyPitch, across)
+        };
+        const level = item => chaseAmount(item.params.height) > 0.5
+            ? (timeline ? chaseRig(timeline, item) : CHASE_RIGS[0]).height ?? item.params.height : item.params.height;
         // Going up takes its time; coming back is a little brisker, to leave a break room for a scene.
         const p = (t - act.start) / Math.max(0.001, Math.min(to < from ? 7 : 10, (act.end - act.start) * 0.8));
-        const height = (a, b) => act.index ? mix(previous.params.height, act.params.height, ease((p - a) / b))
-            : act.params.height;
-        if (to > from) return { out: mix(from, to, ease(p / 0.6)), lead: mix(from, to, ease((p - 0.25) / 0.75)),
+        const height = (a, b) => act.index ? mix(level(previous), level(act), ease((p - a) / b)) : level(act);
+        if (to > from) return { rig, out: mix(from, to, ease(p / 0.6)), lead: mix(from, to, ease((p - 0.25) / 0.75)),
             height: height(0, 0.6) };
-        if (to < from) return { out: mix(from, to, ease((p - 0.4) / 0.6)), lead: mix(from, to, ease(p / 0.7)),
+        if (to < from) return { rig, out: mix(from, to, ease((p - 0.4) / 0.6)), lead: mix(from, to, ease(p / 0.7)),
             height: height(0.3, 0.7) };
-        return { out: to, lead: to, height: height(0, 0.5) };
+        return { rig, out: to, lead: to, height: height(0, 0.5) };
     };
     /*
      * When nobody is singing for a while there is nothing to read, and the
@@ -119,7 +159,7 @@
         if (options.cameraCuts === false || options.reducedMotion) return [];
         const low = t => {
             const index = timeline.sample(t).actIndex, act = timeline.acts[index];
-            const move = crane(act, timeline.acts[Math.max(0, index - 1)], t);
+            const move = crane(act, timeline.acts[Math.max(0, index - 1)], t, timeline);
             return act.kind !== 'Terminus' && move.out === 0 && move.lead === 0;
         };
         const scenes = [];
@@ -212,7 +252,7 @@
         const lateralTravel = directionSign * arch * (0.35 + openness * 0.65) * strength;
         const lift = arch * (0.12 + openness * 0.5) * strength;
         const push = arch * openness * 0.6 * strength;
-        const move = crane(act, previous, t);
+        const move = crane(act, previous, t, timeline);
         const staged = motion ? sceneAt(track, t) : null;
         const inside = staged?.scene.kind === 'SALOON' ? staged : null;
         const beside = staged?.scene.kind === 'TRACKSIDE' ? staged : null;
@@ -234,12 +274,12 @@
         // train: it swings out to one side and lets the train run ahead, so the
         // high acts look down on lit carriages crossing the water.
         const chase = motion ? Math.max(move.out, aside) : 0;
-        const swing = motion ? CHASE_LATERAL * move.out + TRACKSIDE.lateral * aside : 0;
+        const swing = motion ? move.rig.lateral * move.out + TRACKSIDE.lateral * aside : 0;
         position.x += frame.right.x * swing;
         position.z += frame.right.z * swing;
         let yaw = frame.yaw + yawBias + n(0.55, 3) * 0.003 * handheld
-            + directionSign * arch * openness * 0.012 * strength - 0.075 * (motion ? move.out : 0);
-        let pitch = mix(-0.025, -0.12, state.openness);
+            + directionSign * arch * openness * 0.012 * strength + move.rig.yaw * (motion ? move.out : 0);
+        let pitch = mix(-0.025, -0.12, state.openness) + move.rig.pitch * (motion ? move.out : 0);
         const finale = state.act === 'Terminus' && motion && !timeline.isSinging(t)
             ? smooth((t - act.start) / Math.max(1, act.end - act.start)) : 0;
         // A stationary roadside screen owns the gaze, never the train position.
@@ -250,7 +290,7 @@
         const upcoming = encounters[encounterIndex + 1];
         const blendAngle = (a, b, weight) => a
             + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
-        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength : 48;
+        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength + move.rig.fov * move.out : 48;
         const halfFrame = Math.atan(Math.tan(fov * Math.PI / 360) * Math.max(0.35, options.aspect || 1.6)) * 0.84;
         // A screen is read from its own side of the frame, with the line ahead
         // still in view: the camera turns only as far as it takes to hold the
@@ -351,17 +391,22 @@
         }
         const cp = Math.cos(pitch);
         const direction = { x: Math.sin(yaw) * cp, y: Math.sin(pitch), z: -Math.cos(yaw) * cp };
+        // Where a line on the sky is written for this view.
+        const out = motion ? move.out : 0;
+        const skyYaw = yaw + move.rig.skyYaw * out, skyPitch = pitch + move.rig.skyPitch * out;
+        const sky = { x: Math.sin(skyYaw) * Math.cos(skyPitch), y: Math.sin(skyPitch),
+            z: -Math.cos(skyYaw) * Math.cos(skyPitch) };
         return {
-            position, direction, yaw, pitch,
+            position, direction, yaw, pitch, sky, skyYaw,
             roll, fov, eventFocus, finale,
             // How far the saloon has to be there to be seen or passed through.
             saloon: inside ? inside.raised : 0,
             scene: staged && staged.weight > 0 ? { id: staged.scene.id, kind: staged.scene.kind, weight: staged.weight } : null,
             shot: openness > 0.6 ? 'rising-traverse' : 'window-tracking',
             rig: !motion ? 'CAB' : staged && staged.weight > 0.5 ? staged.scene.kind : rig,
-            encounterId, reading, distance, state, chase,
+            encounterId, reading, distance, state, chase, chaseRig: chase > 0.5 ? move.rig.name : null,
             // Where the front of the train is along the line.
-            trainFront: distance + mix(-0.4, CHASE_LEAD, motion ? Math.max(move.lead, passed) : 0),
+            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead), mix(-0.4, CHASE_LEAD, passed)) : -0.4),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }
         };
