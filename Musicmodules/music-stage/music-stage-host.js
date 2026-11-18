@@ -924,7 +924,7 @@
             elements.currentTime.textContent = currentTimeText;
             app.lastKnownCurrentTime = target;
             app.lastStateUpdateTime = Date.now();
-            if (commit && duration > 0) await app.api?.seekMusic?.(target);
+            if (commit && duration > 0) await (app.seekTo ? app.seekTo(target) : app.api?.seekMusic?.(target));
         };
 
         const updateTheme = () => {
@@ -1159,7 +1159,7 @@
             target = clamp(target, 0, duration);
             app.lastKnownCurrentTime = target;
             app.lastStateUpdateTime = Date.now();
-            app.api?.seekMusic?.(target);
+            if (app.seekTo) app.seekTo(target); else app.api?.seekMusic?.(target);
         });
         scope.listen(global, 'keydown', onKeyDown);
         scope.listen(global, 'resize', () => {
