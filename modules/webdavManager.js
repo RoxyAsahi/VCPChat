@@ -2,7 +2,7 @@
 // WebDAV 服务器管理模块
 // 管理服务器配置并通过 Rust 音频引擎 HTTP API 进行 WebDAV 操作
 
-const AUDIO_ENGINE_URL = 'http://127.0.0.1:63789';
+const audioEngineEndpoint = require('./services/audioEngineEndpoint');
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -51,7 +51,7 @@ async function audioEngineApi(endpoint, method = 'POST', body = null) {
         fetch = (await import('node-fetch')).default;
     }
     
-    const url = `${AUDIO_ENGINE_URL}${endpoint}`;
+    const url = `${audioEngineEndpoint.getBaseUrl()}${endpoint}`;
     const options = {
         method,
         headers: { 'Content-Type': 'application/json' },

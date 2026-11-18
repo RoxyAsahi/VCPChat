@@ -716,6 +716,22 @@ async fn shutdown_server(data: web::Data<Arc<AppState>>) -> HttpResponse {
 
 use crate::config::AppConfig;
 
+/// Drops the shared state from inside the async runtime without blocking it.
+///
+/// `AppState` owns a multi-thread Tokio runtime; dropping that runtime directly in an
+/// async context panics ("Cannot drop a runtime in a context where blocking is not
+/// allowed"), which on Windows ends the process with 0xC0000409 instead of a clean error.
+fn release_state_without_blocking(state: Arc<AppState>) {
+    match Arc::try_unwrap(state) {
+        Ok(app_state) => match Arc::try_unwrap(app_state.analysis_runtime) {
+            Ok(runtime) => runtime.shutdown_background(),
+            Err(shared_runtime) => std::mem::forget(shared_runtime),
+        },
+        // Something still holds the state; leak it rather than risk dropping the runtime here.
+        Err(shared_state) => std::mem::forget(shared_state),
+    }
+}
+
 pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSettingsManager) -> std::io::Result<()> {
     // Load WebDAV config from env if present
     let webdav_config = WebDavConfig {
@@ -804,10 +820,7 @@ pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSe
     });
     
     log::info!("Starting VCP Audio Engine on http://127.0.0.1:{}", port);
-    
-    // Print ready signal for parent process
-    println!("RUST_AUDIO_ENGINE_READY");
-    
+
     let server_state = Arc::clone(&state);
     let server = HttpServer::new(move || {
         App::new()
@@ -827,9 +840,27 @@ pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSe
                 .configure(settings_handlers::configure_routes)
                 .configure(webdav_handlers::configure_routes)
                 .configure(ws_handlers::configure_routes)
-    })
-    .bind(("127.0.0.1", port))?
-    .run();
+    });
+
+    // Bind before announcing readiness: the parent process treats the ready line as
+    // "the HTTP API is reachable". On Windows the port may sit inside a range the
+    // system reserved at boot (Hyper-V/WinNAT), which surfaces here as a bind error.
+    let server = match server.bind(("127.0.0.1", port)) {
+        Ok(bound) => bound.run(),
+        Err(e) => {
+            log::error!(
+                "Failed to bind 127.0.0.1:{}: {}. The port is in use or reserved by the system; start the engine with another --port.",
+                port,
+                e
+            );
+            eprintln!("RUST_AUDIO_ENGINE_BIND_FAILED port={} error={}", port, e);
+            release_state_without_blocking(state);
+            return Err(e);
+        }
+    };
+
+    // Print ready signal for parent process
+    println!("RUST_AUDIO_ENGINE_READY");
 
     {
         let mut shutdown_handle = state.shutdown_handle.lock();
