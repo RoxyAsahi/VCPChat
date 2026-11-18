@@ -272,12 +272,14 @@
         //   - 'planet'  -> 幽暗晨昏线气态巨行星與极光磁层 (Abyssal Terminator Planet)
         //   - 'ship'    -> 远航张拉星帆孤舟群与离子弦尾迹 (Nomad Solar-Sail Monolith)
         const ENCOUNTER_CYCLE = 2400;
+        // Each station keeps close company with a planet: it comes up small
+        // against the disc, then passes near the camera.
         const encounterSlots = [
-            { slotId: 0, type: 'station', baseS: 560,  side: -1, radial: 38, elev: 10,  scale: 1.15, rotSpeed: 0.11, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
+            { slotId: 0, type: 'station', baseS: 792,  side:  1, radial: 21, elev: 7,   scale: 0.58, rotSpeed: 0.05, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
             { slotId: 1, type: 'planet',  baseS: 860,  side:  1, radial: 56, elev: 18,  scale: 1.25, rotSpeed: 0.05, tilt: [0.22, -0.12, 0.16], p: 2, q: 3 },
             { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0.34], p: 2, q: 5 },
             { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 30, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
-            { slotId: 4, type: 'station', baseS: 1760, side:  1, radial: 42, elev: 14,  scale: 1.28, rotSpeed: -0.10, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
+            { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
             { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 32, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
@@ -796,8 +798,8 @@
                     // Thin gas takes the cloud's colour; where it is dense it brightens
                     // and pales, as lit gas does.
                     float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
-                    night += (uColorA * (m.r * 0.07 + coolCore * 0.12) + uColorB * (m.g * 0.055 + warmCore * 0.1)
-                        + uColorStar * (coolCore + warmCore) * 0.03) * uNebula;
+                    night += (uColorA * (m.r * 0.06 + coolCore * 0.07) + uColorB * (m.g * 0.05 + warmCore * 0.06)
+                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula;
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
                     night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
