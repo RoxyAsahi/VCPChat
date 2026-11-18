@@ -152,10 +152,11 @@
             const swell = moving ? (timeline.accentAt?.(time) ?? 0) : 0;
             const breath = moving ? R.clamp(audio.energy) * 0.05 : 0;
             renderer.toneMappingExposure = 1.15 * (1 + swell * 0.12 + breath);
-            lyrics.update(time, settings, audio, camera);
-            events.update(time, settings, mode.config.quality, palette(), audio);
             const bars = settings.letterbox !== false && settings.geometryMode !== 'corridor'
                 ? Math.max(0, (height - width / 2.39) / 2) * (1 - pose.state.openness * 0.75) : 0;
+            // Lyrics stay clear of the frame edge and of the letterbox bars.
+            lyrics.update(time, settings, audio, camera, { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height) });
+            events.update(time, settings, mode.config.quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
             renderer.info.reset();

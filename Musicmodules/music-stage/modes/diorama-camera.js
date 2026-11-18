@@ -45,14 +45,16 @@
             encounter.side = encounter.id % 2 === 0 ? 1 : -1;
             encounter.position = {
                 x: frame.position.x + frame.right.x * encounter.lateral * encounter.side,
-                y: 4.2,
+                y: 4.6,
                 z: frame.position.z + frame.right.z * encounter.lateral * encounter.side
             };
             const middle = at((encounter.startDistance + encounter.endDistance) * 0.5);
             encounter.yaw = Math.atan2(encounter.position.x - middle.position.x,
                 middle.position.z - encounter.position.z);
-            encounter.width = Math.min(13, 15 * Math.max(0.45, options.aspect || 1.6));
-            encounter.height = 3.6;
+            // Large enough that lyric and translation are both legible from the
+            // far end of the reading span, still inside the frame at the near end.
+            encounter.width = Math.min(16, 18.5 * Math.max(0.45, options.aspect || 1.6));
+            encounter.height = 4.2;
         });
         // Compile continuous yaw cues, including interrupted transitions.
         const cues = timeline.acts.slice(1).map(act => ({ time: act.start, rig: rigFor(act) }));

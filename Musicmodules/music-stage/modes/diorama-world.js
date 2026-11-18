@@ -2,6 +2,19 @@
     'use strict';
     const { clamp, seededRandom } = global.MusicStageRuntime;
     const smooth = value => { const p = clamp(value); return p * p * (3 - 2 * p); };
+    // A pole stands between the train and whatever it looks at. Each one goes
+    // on the side away from the next roadside screen, so it never crosses a lyric.
+    const poleSide = (track, address) => {
+        const encounters = track?.encounters || [];
+        let lo = 0, hi = encounters.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            if (encounters[mid].address - 10 < address) lo = mid + 1;
+            else hi = mid;
+        }
+        const next = encounters[lo];
+        return next && next.address - address < 140 && next.side < 0 ? 1 : -1;
+    };
     const create = (T, scene) => {
         const root = new T.Group();
         scene.add(root);
@@ -397,7 +410,9 @@
             for (let i = 0; i < lights.length; i++) {
                 const anchor = lightAnchors[i];
                 const f = track.at(anchor?.address ?? s);
-                lights[i].position.set(f.position.x - f.right.x * 3.05, 5.6, f.position.z - f.right.z * 3.05);
+                const side = anchor?.side ?? -1;
+                lights[i].position.set(f.position.x + f.right.x * 3.05 * side, 5.6,
+                    f.position.z + f.right.z * 3.05 * side);
                 lights[i].intensity = anchor && !saving ? 24 * (1 + clamp(audio.impact) * 0.12) : 0;
             }
             // Water streaks only for lamps still ahead of the camera.
@@ -407,8 +422,8 @@
                 const power = anchor ? Math.exp(-(anchor.address - s) / 70) : 0;
                 if (anchor) {
                     const f = track.at(anchor.address);
-                    waterMat.uniforms.lampPos.value[i].set(f.position.x - f.right.x * 3.05, 5.8,
-                        f.position.z - f.right.z * 3.05);
+                    waterMat.uniforms.lampPos.value[i].set(f.position.x + f.right.x * 3.05 * anchor.side, 5.8,
+                        f.position.z + f.right.z * 3.05 * anchor.side);
                 }
                 waterMat.uniforms.lampPower.value[i] = saving ? 0 : power;
             }
@@ -595,16 +610,17 @@
                 const density = densityAt(address);
                 if (density < 0.4 && id % 4 !== 0) continue;
                 const slot = poles.count++;
-                place(poles, slot, track, address, -3.4, 3.4, 0.12, 6.8, 0.12);
-                place(arms, arms.count++, track, address, -1.8, 6.7, 3.4, 0.09, 0.1);
+                const side = poleSide(track, address);
+                place(poles, slot, track, address, side * 3.4, 3.4, 0.12, 6.8, 0.12);
+                place(arms, arms.count++, track, address, side * 1.8, 6.7, 3.4, 0.09, 0.1);
                 if (id % 7 !== 3) {
-                    place(lamps, lamps.count++, track, address, -3.05, 5.8, 0.65, 0.08, 0.22);
+                    place(lamps, lamps.count++, track, address, side * 3.05, 5.8, 0.65, 0.08, 0.22);
                     const hf = track.at(address);
-                    haloPositions[haloCount * 3] = hf.position.x - hf.right.x * 3.05;
+                    haloPositions[haloCount * 3] = hf.position.x + hf.right.x * 3.05 * side;
                     haloPositions[haloCount * 3 + 1] = 5.72;
-                    haloPositions[haloCount * 3 + 2] = hf.position.z - hf.right.z * 3.05;
+                    haloPositions[haloCount * 3 + 2] = hf.position.z + hf.right.z * 3.05 * side;
                     haloCount++;
-                    lightAnchors.push({ address, distance: Math.abs(address - s) });
+                    lightAnchors.push({ address, side, distance: Math.abs(address - s) });
                 }
                 if (density >= 0.4) {
                     for (let segment = 0; segment < 8; segment++) {
@@ -785,5 +801,5 @@
             }
         };
     };
-    global.MusicStageDioramaWorld = Object.freeze({ create });
+    global.MusicStageDioramaWorld = Object.freeze({ create, poleSide });
 })(window);

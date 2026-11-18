@@ -605,6 +605,7 @@
 
         let viewportAspect = 1.6;
         let pixelRatio = 1;
+        let viewportPixels = 720;
         let stagePalette = {};
         let timeline = compileTunnelTimeline([], 'init', 180);
         let totalTravelDistance = 0;
@@ -1296,7 +1297,9 @@
 
                     float depth = max(1.0, -mv.z);
                     vSpark = vocalWave;
-                    gl_PointSize = clamp((1.55 + localCohesion * 0.85 + vocalWave * 1.15) * uPixelRatio * 320.0 / depth, 1.0, 26.0);
+                    // Settled points sit on the strokes: keep them finer than the strokes
+                    // so the glyph edge stays crisp, and let them swell only in flight.
+                    gl_PointSize = clamp((1.7 - localCohesion * 0.6 + vocalWave * 0.9) * uPixelRatio * 320.0 / depth, 1.0, 26.0);
 
                     float nearFade = smoothstep(4.0, 16.0, depth);
                     vAlpha = nearFade * (0.28 + localCohesion * 0.72) * (1.0 - smoothstep(0.65, 1.0, uDisperse));
@@ -1363,16 +1366,92 @@
         let glyphVocalEnd = 0;
         let activePointCount = 0;
 
+        // One atlas texture, one geometry and one material per lyric line. A
+        // line used to cost a canvas, texture, material and geometry per glyph.
+        const glyphMaterial = new T.ShaderMaterial({
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            uniforms: {
+                map: { value: null },
+                time: { value: 0 },
+                alpha: { value: 1 },
+                motion: { value: 1 },
+                glow: { value: 1 },
+                waitMain: { value: new T.Color() },
+                sungMain: { value: new T.Color() },
+                waitSub: { value: new T.Color() },
+                sungSub: { value: new T.Color() },
+                ink: { value: new T.Color() }
+            },
+            vertexShader: `
+                attribute vec2 aCenter, aLocal, aTiming;
+                attribute float aKind;
+                uniform float time, motion;
+                varying vec2 vUv, vLocal, vTiming;
+                varying float vActive, vKind;
+                void main() {
+                    vUv = uv;
+                    vLocal = aLocal;
+                    vTiming = aTiming;
+                    vKind = aKind;
+                    float p = clamp((time - aTiming.x) / max(0.001, aTiming.y - aTiming.x), 0.0, 1.0);
+                    float pulse = sin(p * 3.14159265) * motion;
+                    vActive = pulse;
+                    vec3 pos = position;
+                    pos.xy *= 1.0 + pulse * 0.06;
+                    pos.y += pulse * 0.24;
+                    pos.z += pulse * 0.35;
+                    pos.xy += aCenter;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D map;
+                uniform float time, alpha, glow;
+                uniform vec3 waitMain, sungMain, waitSub, sungSub, ink;
+                varying vec2 vUv, vLocal, vTiming;
+                varying float vActive, vKind;
+                void main() {
+                    float cov = texture2D(map, vUv).a;
+                    if (cov < 0.01) discard;
+                    float p = clamp((time - vTiming.x) / max(0.001, vTiming.y - vTiming.x), 0.0, 1.0);
+                    float wipe = 1.0 - smoothstep(p - 0.04, p + 0.04, vLocal.x);
+                    if (p <= 0.0) wipe = 0.0;
+                    if (p >= 1.0) wipe = 1.0;
+                    // 擦亮前沿高光游标 (Leading Edge Spark)
+                    float edgeGlow = exp(-pow((vLocal.x - p) * 14.0, 2.0)) * step(0.01, p) * step(p, 0.99);
+                    float core = smoothstep(0.16, 0.74, cov);
+                    float a = clamp(core + cov * (1.0 - core) * glow * 0.68, 0.0, 1.0) * alpha;
+                    vec3 wait = mix(waitMain, waitSub, vKind);
+                    vec3 sung = mix(sungMain, sungSub, vKind);
+                    vec3 baseCol = mix(wait, mix(sung, ink, 0.12), wipe);
+                    vec3 finalCol = baseCol + ink * edgeGlow * 0.65 + sung * vActive * 0.25;
+                    gl_FragColor = vec4(finalCol, a);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        });
+        const glyphCanvas = document.createElement('canvas');
+        let glyphMesh = null;
+        let glyphTexture = null;
+
         const clearGlyphStage = () => {
-            while (glyphStage.children.length) {
-                const mesh = glyphStage.children[0];
-                glyphStage.remove(mesh);
-                mesh.material?.uniforms?.map?.value?.dispose?.();
-                mesh.material?.dispose?.();
-                mesh.geometry?.dispose?.();
+            if (glyphMesh) {
+                glyphStage.remove(glyphMesh);
+                glyphMesh.geometry.dispose();
+                glyphMesh = null;
             }
+            glyphTexture?.dispose();
+            glyphTexture = null;
+            glyphMaterial.uniforms.map.value = null;
             glyphCacheKey = '';
         };
+
+        // Glyph textures follow the output resolution so text stays sharp on
+        // large or high-density windows without paying for it on small ones.
+        const glyphResolution = () => Math.round(clamp(viewportPixels / 1000, 1, 2.5) * 4) / 4;
 
         const buildLyricStage = (line, settings) => {
             if (!line) {
@@ -1385,20 +1464,24 @@
             const scale = clamp(finiteNumber(settings?.fontScale, 1), 0.65, 1.5);
             const showTrans = settings?.showTranslation !== false;
             const subText = showTrans ? (R.resolveSupplementalText(line) || '') : '';
+            const res = glyphResolution();
             const cacheKey = JSON.stringify([
                 currentLineKey,
                 subText,
                 colors.inkHex,
                 colors.accentHex,
                 colors.secondaryHex,
-                scale.toFixed(2)
+                scale.toFixed(2),
+                res
             ]);
 
             if (cacheKey === glyphCacheKey) return;
             clearGlyphStage();
             glyphCacheKey = cacheKey;
 
-            const mainFont = '800 80px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const fontFamily = '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const mainFont = `800 80px ${fontFamily}`;
+            const subFont = `500 32px ${fontFamily}`;
             measureCtx.font = mainFont;
 
             let glyphs = buildGlyphTimeline(line);
@@ -1435,115 +1518,21 @@
             const unit = Math.min(0.024 * scale, 38 / maxRowWidth, 11.5 / (rows.length * 108 + 76));
             const rawSamples = [];
 
-            const addGlyphMesh = (label, px, py, advance, start, end, isSub = false, normOrder = 0.5) => {
-                if (!String(label || '').trim()) return null;
-                const canvas = document.createElement('canvas');
-                canvas.width = Math.max(32, Math.ceil(advance + 44));
-                canvas.height = isSub ? 92 : 148;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) return null;
-
-                ctx.font = isSub ? '500 32px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif' : mainFont;
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#ffffff';
-                ctx.shadowBlur = isSub ? 3 : 8;
-                ctx.fillText(label, 22, canvas.height * 0.5);
-
-                const map = new T.CanvasTexture(canvas);
-                map.generateMipmaps = false;
-                map.minFilter = T.LinearFilter;
-                map.magFilter = T.LinearFilter;
-
-                const wWorld = canvas.width * unit;
-                const hWorld = canvas.height * unit;
-                const centerX = px + (advance * unit) * 0.5;
-                const centerY = py;
-
-                const mat = new T.ShaderMaterial({
-                    transparent: true,
-                    depthTest: false,
-                    depthWrite: false,
-                    uniforms: {
-                        map: { value: map },
-                        time: { value: 0 },
-                        begin: { value: start },
-                        finish: { value: end },
-                        alpha: { value: 1 },
-                        motion: { value: 1 },
-                        glow: { value: 1 },
-                        wait: { value: isSub ? colors.secondary.clone().multiplyScalar(0.78) : colors.ink.clone().multiplyScalar(0.52) },
-                        sung: { value: isSub ? colors.secondary.clone() : colors.accent.clone() },
-                        ink: { value: colors.ink.clone() }
-                    },
-                    vertexShader: `
-                        uniform float time, begin, finish, motion;
-                        varying vec2 vUv;
-                        varying float vActive;
-                        void main() {
-                            vUv = uv;
-                            float p = clamp((time - begin) / max(0.001, finish - begin), 0.0, 1.0);
-                            float pulse = sin(p * 3.14159265) * motion;
-                            vActive = pulse;
-                            vec3 pos = position;
-                            pos.xy *= 1.0 + pulse * 0.06;
-                            pos.y += pulse * 0.24;
-                            pos.z += pulse * 0.35;
-                            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-                        }
-                    `,
-                    fragmentShader: `
-                        uniform sampler2D map;
-                        uniform float time, begin, finish, alpha, glow;
-                        uniform vec3 wait, sung, ink;
-                        varying vec2 vUv;
-                        varying float vActive;
-                        void main() {
-                            float cov = texture2D(map, vUv).a;
-                            if (cov < 0.01) discard;
-                            float p = clamp((time - begin) / max(0.001, finish - begin), 0.0, 1.0);
-                            float wipe = 1.0 - smoothstep(p - 0.04, p + 0.04, vUv.x);
-                            if (p <= 0.0) wipe = 0.0;
-                            if (p >= 1.0) wipe = 1.0;
-                            // 擦亮前沿高光游标 (Leading Edge Spark)
-                            float edgeGlow = exp(-pow((vUv.x - p) * 14.0, 2.0)) * step(0.01, p) * step(p, 0.99);
-                            float core = smoothstep(0.16, 0.74, cov);
-                            float a = clamp(core + cov * (1.0 - core) * glow * 0.68, 0.0, 1.0) * alpha;
-                            vec3 baseCol = mix(wait, mix(sung, ink, 0.22), wipe);
-                            vec3 finalCol = baseCol + ink * edgeGlow * 0.65 + sung * vActive * 0.25;
-                            gl_FragColor = vec4(finalCol, a);
-                            #include <tonemapping_fragment>
-                            #include <colorspace_fragment>
-                        }
-                    `
+            // Layout first: every glyph becomes a cell (design pixels at the 80px
+            // reference size) with a world-space centre.
+            const cells = [];
+            const addCell = (label, px, py, advance, start, end, isSub = false, normOrder = 0.5, fit = 1) => {
+                if (!String(label || '').trim()) return;
+                cells.push({
+                    label, start, end, isSub, order: normOrder, fit,
+                    w: Math.max(32, Math.ceil(advance + 44)),
+                    h: isSub ? 92 : 148,
+                    cx: px + advance * unit * fit * 0.5,
+                    cy: py
                 });
-
-                const mesh = new T.Mesh(new T.PlaneGeometry(wWorld, hWorld), mat);
-                mesh.position.set(centerX, centerY, 0);
-                mesh.renderOrder = 30;
-                glyphStage.add(mesh);
-
-                // 直接在创建字形时一次性采样 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
-                const imgData = ctx.getImageData?.(0, 0, canvas.width, canvas.height)?.data;
-                const pColor = isSub ? colors.secondary : colors.accent;
-                if (imgData && imgData.length >= canvas.width * canvas.height * 4) {
-                    const stride = isSub ? 6 : 5;
-                    for (let y = 0; y < canvas.height; y += stride) {
-                        for (let x = 0; x < canvas.width; x += stride) {
-                            if (imgData[(y * canvas.width + x) * 4 + 3] < 130) continue;
-                            rawSamples.push({
-                                x: centerX + ((x + 0.5) / canvas.width - 0.5) * wWorld,
-                                y: centerY + (0.5 - (y + 0.5) / canvas.height) * hWorld,
-                                color: pColor,
-                                order: normOrder
-                            });
-                        }
-                    }
-                }
-                return mesh;
             };
 
-            let totalGlyphCount = Math.max(1, rows.reduce((s, r) => s + r.length, 0));
+            const totalGlyphCount = Math.max(1, rows.reduce((s, r) => s + r.length, 0));
             let glyphCounter = 0;
             rows.forEach((row, ri) => {
                 let x = -row.reduce((s, g) => s + g.advance, 0) * unit * 0.5;
@@ -1551,34 +1540,153 @@
                 row.forEach((g) => {
                     const order = glyphCounter / totalGlyphCount;
                     glyphCounter += 1;
-                    addGlyphMesh(g.text, x, y, g.advance, g.startTime, g.endTime, false, order);
+                    addCell(g.text, x, y, g.advance, g.startTime, g.endTime, false, order);
                     x += g.advance * unit;
                 });
             });
 
             if (subText) {
-                measureCtx.font = '500 32px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+                measureCtx.font = subFont;
                 const subLines = String(subText).split('\n').filter(Boolean).slice(0, 2);
                 subLines.forEach((subRowText, sri) => {
-                    const labels = splitGraphemes(subRowText);
-                    const advances = labels.map((ch) => Math.max(10, measureCtx.measureText(ch).width));
+                    // The translation has no per-glyph timing, so it is drawn in a
+                    // few wide runs instead of one cell per character.
+                    const runs = [];
+                    let run = '';
+                    splitGraphemes(subRowText).forEach((ch) => {
+                        run += ch;
+                        if (measureCtx.measureText(run).width >= 480) {
+                            runs.push(run);
+                            run = '';
+                        }
+                    });
+                    if (run) runs.push(run);
+                    const advances = runs.map((text) => Math.max(10, measureCtx.measureText(text).width));
                     const totalW = advances.reduce((a, b) => a + b, 0);
                     const fit = Math.min(1, 1360 / Math.max(1, totalW));
                     let x = -totalW * unit * fit * 0.5;
                     const y = -(rows.length * 54 + 44 + sri * 42) * unit;
-                    labels.forEach((ch, idx) => {
-                        const mesh = addGlyphMesh(ch, x, y, advances[idx], -1, -0.5, true, idx / Math.max(1, labels.length));
-                        if (mesh) {
-                            mesh.scale.x = fit;
-                            mesh.position.x = x + advances[idx] * unit * fit * 0.5;
-                        }
+                    let passed = 0;
+                    runs.forEach((text, idx) => {
+                        addCell(text, x, y, advances[idx], -1, -0.5, true,
+                            (passed + advances[idx] * 0.5) / Math.max(1, totalW), fit);
+                        passed += advances[idx];
                         x += advances[idx] * unit * fit;
                     });
                 });
             }
 
+            if (cells.length) {
+                // Shelf-pack the cells into one atlas and draw it once.
+                const shelfLimit = Math.floor(4096 / res);
+                let penX = 0, penY = 0, shelfH = 0, atlasW = 1;
+                cells.forEach((cell) => {
+                    if (penX + cell.w > shelfLimit && penX > 0) {
+                        penX = 0;
+                        penY += shelfH;
+                        shelfH = 0;
+                    }
+                    cell.ax = penX;
+                    cell.ay = penY;
+                    penX += cell.w;
+                    shelfH = Math.max(shelfH, cell.h);
+                    atlasW = Math.max(atlasW, penX);
+                });
+                const atlasH = penY + shelfH;
+                glyphCanvas.width = Math.ceil(atlasW * res);
+                glyphCanvas.height = Math.ceil(atlasH * res);
+                const ctx = glyphCanvas.getContext('2d', { willReadFrequently: true });
+                if (ctx) {
+                    ctx.setTransform(res, 0, 0, res, 0, 0);
+                    ctx.clearRect(0, 0, atlasW, atlasH);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                    cells.forEach((cell) => {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(cell.ax, cell.ay, cell.w, cell.h);
+                        ctx.clip?.();
+                        ctx.font = cell.isSub ? subFont : mainFont;
+                        // Shadow blur is measured in device pixels, not in the transform.
+                        ctx.shadowBlur = (cell.isSub ? 3 : 8) * res;
+                        ctx.fillText(cell.label, cell.ax + 22, cell.ay + cell.h * 0.5);
+                        ctx.restore();
+                    });
+
+                    const positions = [], centers = [], uvs = [], locals = [], timings = [], kinds = [], indices = [];
+                    cells.forEach((cell, index) => {
+                        const halfW = cell.w * unit * cell.fit * 0.5;
+                        const halfH = cell.h * unit * 0.5;
+                        for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+                            positions.push((u * 2 - 1) * halfW, (v * 2 - 1) * halfH, 0);
+                            centers.push(cell.cx, cell.cy);
+                            uvs.push((cell.ax + u * cell.w) / atlasW, 1 - (cell.ay + (1 - v) * cell.h) / atlasH);
+                            locals.push(u, v);
+                            timings.push(cell.start, cell.end);
+                            kinds.push(cell.isSub ? 1 : 0);
+                        }
+                        const first = index * 4;
+                        indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+                    });
+                    const geometry = new T.BufferGeometry();
+                    geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+                    geometry.setAttribute('aCenter', new T.Float32BufferAttribute(centers, 2));
+                    geometry.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
+                    geometry.setAttribute('aLocal', new T.Float32BufferAttribute(locals, 2));
+                    geometry.setAttribute('aTiming', new T.Float32BufferAttribute(timings, 2));
+                    geometry.setAttribute('aKind', new T.Float32BufferAttribute(kinds, 1));
+                    geometry.setIndex(indices);
+
+                    glyphTexture = new T.CanvasTexture(glyphCanvas);
+                    glyphTexture.generateMipmaps = false;
+                    glyphTexture.minFilter = T.LinearFilter;
+                    glyphTexture.magFilter = T.LinearFilter;
+                    const uniforms = glyphMaterial.uniforms;
+                    uniforms.map.value = glyphTexture;
+                    uniforms.waitMain.value.copy(colors.ink).multiplyScalar(0.52);
+                    uniforms.sungMain.value.copy(colors.accent);
+                    uniforms.waitSub.value.copy(colors.secondary).multiplyScalar(0.78);
+                    uniforms.sungSub.value.copy(colors.secondary);
+                    uniforms.ink.value.copy(colors.ink);
+
+                    glyphMesh = new T.Mesh(geometry, glyphMaterial);
+                    glyphMesh.frustumCulled = false;
+                    glyphMesh.renderOrder = 30;
+                    glyphStage.add(glyphMesh);
+
+                    // 一次性采样整张图集的 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
+                    const pixelW = glyphCanvas.width;
+                    const imgData = ctx.getImageData?.(0, 0, pixelW, glyphCanvas.height)?.data;
+                    if (imgData && imgData.length >= pixelW * glyphCanvas.height * 4) {
+                        cells.forEach((cell) => {
+                            // Point sprites are wider than a translation stroke; left
+                            // on the small row they merge into a white smear over it.
+                            if (cell.isSub) return;
+                            const stride = 5;
+                            const pColor = colors.accent;
+                            const wWorld = cell.w * unit * cell.fit;
+                            const hWorld = cell.h * unit;
+                            for (let y = 0; y < cell.h; y += stride) {
+                                const row = Math.min(glyphCanvas.height - 1, Math.floor((cell.ay + y + 0.5) * res)) * pixelW;
+                                for (let x = 0; x < cell.w; x += stride) {
+                                    const column = Math.min(pixelW - 1, Math.floor((cell.ax + x + 0.5) * res));
+                                    if (imgData[(row + column) * 4 + 3] < 130) continue;
+                                    rawSamples.push({
+                                        x: cell.cx + ((x + 0.5) / cell.w - 0.5) * wWorld,
+                                        y: cell.cy + (0.5 - (y + 0.5) / cell.h) * hWorld,
+                                        color: pColor,
+                                        order: cell.order
+                                    });
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
             // 若运行在无像素缓冲环境（如 JSDOM 冒烟测试），生成程序化李萨如字形骨架点位兜底
-            if (!rawSamples.length && glyphStage.children.length) {
+            if (!rawSamples.length && cells.length) {
                 const fallbackRand = seededRandom(`fallback-glyph:${currentLineKey}`);
                 for (let i = 0; i < 360; i += 1) {
                     const u = i / 360;
@@ -1687,7 +1795,7 @@
             const glowAmount = clamp(settingVal('glow', 1), 0, 2);
             const dissolveAmount = clamp(settingVal('dissolveAmount', 0.72), 0, 1);
             const holdRatio = clamp(settingVal('textHoldRatio', 0.32), 0, 0.8);
-            const pauseDur = clamp(settingVal('pauseDuration', 0.9), 0, 3);
+            const pauseDur = clamp(settingVal('pauseDuration', 0.4), 0, 3);
 
             if (audioState.seek) {
                 bassSmooth = 0;
@@ -1769,7 +1877,10 @@
             if (activeLine && activePointCount > 0) {
                 const start = finiteNumber(activeLine.startTime, time);
                 const vocalEnd = Math.max(start + 0.25, glyphVocalEnd);
-                const exitStart = vocalEnd + Math.min(0.95, holdRatio * 0.55 + pauseDur * 0.18);
+                // The dwell is the number of seconds the finished line stays whole
+                // before it dissolves; it used to be scaled down and capped to
+                // a fraction of a second, which made the control inert.
+                const exitStart = vocalEnd + holdRatio * 0.55 + pauseDur;
                 const exitDuration = 0.55 + dissolveAmount * 0.65;
 
                 const entryPhase = clamp((time - start) / 0.34);
@@ -1813,18 +1924,16 @@
                 lookZ = mix(lookZ, stageZ, 0.58);
 
                 glyphStage.visible = alive && glyphAlpha > 0.004;
-                glyphStage.children.forEach((mesh) => {
-                    mesh.material.uniforms.time.value = time;
-                    mesh.material.uniforms.alpha.value = glyphAlpha;
-                    mesh.material.uniforms.motion.value = motionAmount;
-                    mesh.material.uniforms.glow.value = glowAmount;
-                });
+                glyphMaterial.uniforms.time.value = time;
+                glyphMaterial.uniforms.alpha.value = glyphAlpha;
+                glyphMaterial.uniforms.motion.value = motionAmount;
+                glyphMaterial.uniforms.glow.value = glowAmount;
 
                 const releaseIn = smooth(exitPhase / 0.22);
                 const releaseOut = 1 - smooth((exitPhase - 0.58) / 0.42);
                 const particleOpacity = (!alive || settings.reducedMotion)
                     ? 0
-                    : clamp((1 - solidIn * 0.72) * 0.92 + solidIn * releaseIn * releaseOut * (0.45 + dissolveAmount * 0.55), 0, 1);
+                    : clamp((1 - solidIn * 0.8) * 0.92 + solidIn * releaseIn * releaseOut * (0.45 + dissolveAmount * 0.55), 0, 1);
 
                 lyricPoints.visible = particleOpacity > 0.005;
                 lyricParticleMat.uniforms.uTime.value = time;
@@ -2010,6 +2119,7 @@
             resize(w, h, ratio) {
                 viewportAspect = Math.max(0.2, Number(w) / Math.max(1, Number(h)));
                 pixelRatio = ratio;
+                viewportPixels = Math.max(1, Number(h) * ratio);
                 fieldMat.uniforms.uPixelRatio.value = ratio;
                 filamentMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 lyricParticleMat.uniforms.uPixelRatio.value = ratio;
@@ -2019,7 +2129,7 @@
                 clearGlyphStage();
                 scene.remove(root);
                 [fieldGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
-                [fieldMat, filamentMat, streakMat, lyricParticleMat, ...frameArcMats].forEach((m) => m?.dispose?.());
+                [fieldMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, ...frameArcMats].forEach((m) => m?.dispose?.());
                 entityNodes.forEach((node) => {
                     node.geo?.dispose?.();
                     node.mat?.dispose?.();

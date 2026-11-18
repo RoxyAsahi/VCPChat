@@ -111,6 +111,8 @@
             const group = new T.Group(), materials = [], textures = [];
             const midpoint = (phrase.start + phrase.end) * 0.5;
             const intended = C.pose(timeline, track, midpoint, options);
+            const opening = C.pose(timeline, track, phrase.start, options);
+            const closing = C.pose(timeline, track, phrase.end, options);
             const act = timeline.sample(phrase.start);
             const constellation = options.lyricCarrier === 'constellation'
                 || options.lyricCarrier !== 'sign' && ['Chorus', 'Open'].includes(act.act);
@@ -267,9 +269,14 @@
             const yaw = reference.yaw;
             const right = new T.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
             const shift = constellation ? 0 : Math.min(2.5, halfHeight * aspect * 0.12);
-            group.position.set(reference.position.x + reference.direction.x * distance + right.x * shift,
-                Math.max(height + 0.5, reference.position.y + reference.direction.y * distance + halfHeight * 0.12),
-                reference.position.z + reference.direction.z * distance + right.z * shift);
+            // The camera keeps travelling and turning while a phrase is read.
+            // Aim at where it looks over the whole phrase, not only at its midpoint.
+            const aimed = axis => (opening.position[axis] + opening.direction[axis] * distance) * 0.25
+                + (reference.position[axis] + reference.direction[axis] * distance) * 0.5
+                + (closing.position[axis] + closing.direction[axis] * distance) * 0.25;
+            group.position.set(aimed('x') + right.x * shift,
+                Math.max(height + 0.5, aimed('y') + halfHeight * 0.12),
+                aimed('z') + right.z * shift);
             group.rotation.y = -yaw;
             const addBox = (sx, sy, sz, px, py, pz, material) => {
                 const mesh = new T.Mesh(box, material);
@@ -282,7 +289,7 @@
                 group.position.set(0, 0, 0);
                 group.rotation.y = 0;
                 const ratio = canvas.width / canvas.height;
-                const screenHeight = Math.min(encounter.height * 0.65, (encounter.width - 0.6) / ratio);
+                const screenHeight = Math.min(encounter.height * 0.6, (encounter.width - 0.6) / ratio);
                 text.scale.set(screenHeight * ratio, screenHeight, 1);
             }
             const supplemental = R.resolveSupplementalText(timeline.lines[phrase.lineIndex]);
@@ -290,20 +297,40 @@
                 const sub = document.createElement('canvas');
                 sub.width = 2048; sub.height = 256;
                 const sc = sub.getContext('2d');
-                sc.font = '48px "Microsoft YaHei",sans-serif';
+                const subWidth = encounter ? encounter.width - 0.6 : Math.max(width, 7);
+                // Size the translation against the lyric it accompanies, then
+                // shrink or wrap only as far as the text needs.
+                const wanted = encounter ? 0.74 : height * scale * 0.27;
+                const subFont = px => `500 ${Math.round(px)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+                let rows = supplemental.split('\n').map(row => row.trim()).filter(Boolean).slice(0, 2);
+                let px = R.clamp(wanted / subWidth * 2048, 44, 116);
+                const widest = () => { sc.font = subFont(px); return Math.max(1, ...rows.map(row => sc.measureText(row).width)); };
+                if (rows.length === 1 && widest() > 1960) {
+                    const glyphs = R.splitGraphemes(rows[0]);
+                    let cut = Math.ceil(glyphs.length / 2);
+                    for (let offset = 0; offset < glyphs.length / 4; offset++) {
+                        if (!(glyphs[cut + offset] || 'x').trim()) { cut += offset; break; }
+                        if (!(glyphs[cut - offset] || 'x').trim()) { cut -= offset; break; }
+                    }
+                    rows = [glyphs.slice(0, cut).join('').trim(), glyphs.slice(cut).join('').trim()].filter(Boolean);
+                }
+                if (rows.length > 1) px = Math.min(px, 92);
+                px = Math.max(40, px * Math.min(1, 1960 / widest()));
+                sc.font = subFont(px);
                 sc.fillStyle = '#ffffff'; sc.textAlign = 'center'; sc.textBaseline = 'middle';
-                supplemental.split('\n').slice(0, 2).forEach((line, i) => sc.fillText(line, 1024, 70 + i * 65, 1960));
+                rows.forEach((row, i) => sc.fillText(row, 1024, 128 + (i - (rows.length - 1) / 2) * px * 1.22, 1960));
                 const subTexture = texture(sub);
                 textures.push(subTexture);
                 const subMat = new T.MeshBasicMaterial({ map: subTexture, color: palette.ink || '#f2f0e9',
                     transparent: true, opacity: 0.7, depthWrite: false, side: T.DoubleSide, forceSinglePass: true });
                 materials.push(subMat);
                 const subtitle = new T.Mesh(plane, subMat);
-                subtitle.scale.set(Math.max(width, 7), Math.max(width, 7) / 8, 1);
-                subtitle.position.set(0, -height * scale * 0.6 - 0.45, 0.07);
+                subtitle.scale.set(subWidth, subWidth / 8, 1);
+                subtitle.position.set(0, -height * scale * 0.5 - subWidth / 16 * 0.62, 0.07);
                 if (encounter) {
-                    subtitle.scale.set(encounter.width - 0.6, (encounter.width - 0.6) / 8, 1);
-                    subtitle.position.y = -1.35;
+                    // Two rows on the screen: lyric above, translation below.
+                    text.position.y = 0.42;
+                    subtitle.position.y = -1.3;
                 }
                 group.add(subtitle);
                 group.userData.subtitle = subtitle;
@@ -346,16 +373,68 @@
                 if (!sign) throw new Error(`Missing roadside sign for encounter ${encounter.id}`);
                 sign.group.add(group);
             } else root.add(group);
+            const subtitle = group.userData.subtitle;
             return { group, materials, textures, mat, phrase, constellation, text, encounter, glyphGeometry,
-                echo, echoMat, style };
+                echo, echoMat, style, home: group.position.clone(),
+                halfWidth: width / 2, halfHeight: height * scale / 2,
+                // Lower edge of the block once the translation rows are included.
+                subtitleDrop: subtitle ? subtitle.scale.y * 0.3 - subtitle.position.y : 0,
+                echoLevel: echo ? echo.position.y + group.position.y : 0,
+                reflectedLevel: group.userData.reflectedSubtitle
+                    ? group.userData.reflectedSubtitle.position.y + group.position.y : 0 };
+        };
+        // Sky lyrics live in the world, but a turning camera may not push them
+        // out of the picture. Slide the block just far enough to stay readable;
+        // the correction is a pure function of the current camera pose.
+        const corner = new T.Vector3(), slide = new T.Vector3(), axis = new T.Vector3();
+        const keepInFrame = (node, camera, frame) => {
+            const group = node.group;
+            group.position.copy(node.home);
+            if (camera) {
+                const tanV = Math.tan(camera.fov * Math.PI / 360);
+                const tanH = tanV * camera.aspect;
+                const limitX = frame?.x ?? 0.94, limitY = frame?.y ?? 0.9;
+                const ry = group.rotation.y;
+                const drop = group.userData.subtitle?.visible
+                    ? Math.max(node.halfHeight, node.subtitleDrop) : node.halfHeight;
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, behind = false;
+                for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+                    corner.set(node.home.x + Math.cos(ry) * node.halfWidth * sx,
+                        node.home.y + (sy > 0 ? node.halfHeight : -drop),
+                        node.home.z - Math.sin(ry) * node.halfWidth * sx).applyMatrix4(camera.matrixWorldInverse);
+                    if (corner.z > -1) behind = true;
+                    minX = Math.min(minX, corner.x / (-corner.z * tanH));
+                    maxX = Math.max(maxX, corner.x / (-corner.z * tanH));
+                    minY = Math.min(minY, corner.y / (-corner.z * tanV));
+                    maxY = Math.max(maxY, corner.y / (-corner.z * tanV));
+                }
+                const correction = (low, high, limit) => high - low >= limit * 2 ? -(high + low) / 2
+                    : high > limit ? limit - high : low < -limit ? -limit - low : 0;
+                const dx = behind ? 0 : correction(minX, maxX, limitX);
+                const dy = behind ? 0 : correction(minY, maxY, limitY);
+                if (dx || dy) {
+                    corner.copy(node.home).applyMatrix4(camera.matrixWorldInverse);
+                    const depth = -corner.z;
+                    slide.set(0, 0, 0);
+                    slide.addScaledVector(axis.setFromMatrixColumn(camera.matrixWorld, 0), dx * depth * tanH);
+                    slide.addScaledVector(axis.setFromMatrixColumn(camera.matrixWorld, 1), dy * depth * tanV);
+                    group.position.add(slide);
+                    group.position.y = Math.max(node.halfHeight + 0.4, group.position.y);
+                }
+            }
+            // Mirror-only children are parked at a fixed world height.
+            if (node.echo) node.echo.position.y = node.echoLevel - group.position.y;
+            const reflected = group.userData.reflectedSubtitle;
+            if (reflected) reflected.position.y = node.reflectedLevel - group.position.y;
         };
         return {
             reset(nextTimeline, nextTrack, nextOptions, nextPalette) {
                 timeline = nextTimeline; track = nextTrack; options = nextOptions; palette = nextPalette || {};
                 clear();
             },
-            update(time, tuning, audio = {}, camera = null) {
+            update(time, tuning, audio = {}, camera = null, frame = null) {
                 if (!timeline) return;
+                camera?.updateMatrixWorld();
                 lastCamera = camera; lastDiagnosticTime = time;
                 const distance = timeline.distanceAt(time, options.cameraSpeed ?? 1);
                 signs.forEach(sign => {
@@ -394,7 +473,9 @@
                     const subtitle = node.group.userData.subtitle;
                     const reflectionOn = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
                     if (reflected) reflected.visible = reflectionOn && tuning.showTranslation !== false;
-                    if (subtitle) subtitle.visible = tuning.showTranslation !== false && (!reflected || !reflectionOn);
+                    // The upright translation is the readable one; its water
+                    // echo is decoration and never a substitute.
+                    if (subtitle) subtitle.visible = tuning.showTranslation !== false;
                     const previousEnd = phrases[i - 1]?.end ?? -Infinity;
                     const nextStart = phrases[i + 1]?.start ?? Infinity;
                     // Sign pages must not crossfade in the same physical slot.
@@ -439,7 +520,8 @@
                         sign.back.emissiveIntensity = activation * 0.035;
                         sign.trim.emissiveIntensity = activation * 0.24;
                     }
-                    if (subtitle) subtitle.material.opacity = 0.7 * enter * (1 - exit);
+                    if (subtitle) subtitle.material.opacity = 0.82 * enter * (1 - exit);
+                    if (node.constellation) keepInFrame(node, camera, frame);
                 }
                 // A malformed/overlapping vocal timeline can still produce two
                 // pages at one address. Latest started page owns that address.
