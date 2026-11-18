@@ -263,6 +263,9 @@
         const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow];
         Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glow })
             .forEach(([name, mesh]) => { mesh.name = name; });
+        // The bed hides the track from below, so the water never shows it.
+        rails.layers.set(1);
+        sleepers.layers.set(1);
         // The rock pile is a data script of its own, fetched once the stage is up.
         let rocks = null, rocksArrived = false;
         const raiseRocks = () => {
@@ -731,14 +734,17 @@
             shape.setIndex(indices);
             return geometry(shape);
         })();
-        const endMaterial = tail => material(new T.ShaderMaterial({
+        // Instance 0 is the leading end, instance 1 the trailing one.
+        const endMaterial = material(new T.ShaderMaterial({
             transparent: true, depthWrite: false,
             uniforms: { warm: { value: new T.Color('#ffd28c') }, head: { value: new T.Color('#fff3d6') },
-                red: { value: new T.Color('#ff3b2f') }, tail: { value: tail } },
-            vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind;
-                void main(){vUv=uv;vKind=kind;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            fragmentShader: `uniform vec3 warm,head,red;uniform float tail;varying vec2 vUv;varying float vKind;
+                red: { value: new T.Color('#ff3b2f') } },
+            vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind,vTail;
+                void main(){vUv=uv;vKind=kind;vTail=float(gl_InstanceID);
+                    gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
+            fragmentShader: `uniform vec3 warm,head,red;varying vec2 vUv;varying float vKind,vTail;
                 void main(){
+                    float tail=step(0.5,vTail);
                     vec3 c;float a=1.0;
                     vec2 p=vUv*2.0-1.0;float r=dot(p,p);
                     if(vKind<0.5){
@@ -769,15 +775,11 @@
                     #include <colorspace_fragment>
                 }`
         }));
-        const trainEnds = [0, 1].map(tail => {
-            const mesh = new T.Mesh(endGeometry, endMaterial(tail));
-            mesh.frustumCulled = false; mesh.renderOrder = 2; mesh.name = tail ? 'trainTail' : 'trainFront';
-            root.add(mesh);
-            return mesh;
-        });
+        const trainEnds = instances(endMaterial, 2, endGeometry);
+        trainEnds.renderOrder = 2; trainEnds.name = 'trainEnds';
         const cabinGlow = new T.PointLight('#ffd28c', 0, 15, 2);
         root.add(cabinGlow);
-        const trainParts = [cars, glass, kits, ...trainEnds];
+        const trainParts = [cars, glass, kits, trainEnds];
         /*
          * The saloon of the leading car, for the breaks in the song when the
          * camera rides inside. It is laid out as the 300 series is: long benches
@@ -926,9 +928,10 @@
         };
         const placeTrain = (track, front, visible) => {
             trainParts.forEach(mesh => { mesh.visible = visible; });
-            if (!visible) { cars.count = glass.count = kits.count = 0; return; }
+            if (!visible) { cars.count = glass.count = kits.count = trainEnds.count = 0; return; }
             cars.count = glass.count = CARS;
             kits.count = CARS / 2;
+            trainEnds.count = 2;
             const reach = (CAR.length + CAR.joint) / 2;
             for (let i = 0; i < CARS; i++) {
                 // A car rides on its own bogie and on the one it shares at the
@@ -945,10 +948,7 @@
                 dummy.updateMatrix();
                 cars.setMatrixAt(i, dummy.matrix);
                 glass.setMatrixAt(i, dummy.matrix);
-                if (i === 0 || i === CARS - 1) {
-                    const end = trainEnds[i === 0 ? 0 : 1];
-                    end.position.copy(dummy.position); end.rotation.copy(dummy.rotation);
-                }
+                if (i === 0 || i === CARS - 1) trainEnds.setMatrixAt(i === 0 ? 0 : 1, dummy.matrix);
                 if (i === 1) cabinGlow.position.set(dummy.position.x, 2.4, dummy.position.z);
                 if (!second) {
                     const a = track.at(joint + 1).position, b = track.at(joint - 1).position;
@@ -958,7 +958,8 @@
                     kits.setMatrixAt(set, dummy.matrix);
                 }
             }
-            cars.instanceMatrix.needsUpdate = glass.instanceMatrix.needsUpdate = kits.instanceMatrix.needsUpdate = true;
+            cars.instanceMatrix.needsUpdate = glass.instanceMatrix.needsUpdate = kits.instanceMatrix.needsUpdate
+                = trainEnds.instanceMatrix.needsUpdate = true;
         };
         const skyMat = material(new T.ShaderMaterial({
             side: T.BackSide, depthWrite: false,
@@ -1459,7 +1460,7 @@
             glassMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
             glassMaterial.uniforms.seat.value.copy(secondary).multiplyScalar(0.3);
             glassMaterial.uniforms.night.value.copy(deep).multiplyScalar(0.5);
-            trainEnds.forEach(mesh => mesh.material.uniforms.warm.value.copy(emission).lerp(white, 0.18));
+            endMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
             cabinGlow.color.copy(emission);
             starMat.uniforms.tint.value.copy(light ? surface : ink).lerp(tertiary, 0.08);
             baseStarOpacity = light ? 0.15 : 0.8;
