@@ -185,13 +185,34 @@
             return mesh;
         };
         // Flat-bottom rail: head, web and foot. Sleepers carry their tie plates.
-        const rails = instances(steel, 320, fused([
+        // A rail is rust everywhere but the band its wheels run on: only that
+        // narrow strip along the crown is polished, and only it catches the lamps.
+        const railMaterial = material(new T.MeshStandardMaterial({ color: '#626b76', metalness: 0.8, roughness: 0.4 }));
+        railMaterial.onBeforeCompile = shader => {
+            shader.vertexShader = shader.vertexShader.replace('#include <common>',
+                '#include <common>\nvarying vec3 vRail;').replace('#include <begin_vertex>',
+                '#include <begin_vertex>\nvRail = vec3(position.xy, normal.y);');
+            shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+                varying vec3 vRail;
+                float railCrown() {
+                    return step(0.5, vRail.z) * step(0.07, vRail.y) * smoothstep(0.03, 0.021, abs(vRail.x));
+                }`).replace('#include <color_fragment>', `#include <color_fragment>
+                diffuseColor.rgb *= mix(0.34, 0.8, railCrown());`).replace('#include <roughnessmap_fragment>',
+                `#include <roughnessmap_fragment>
+                roughnessFactor = mix(0.92, 0.36, railCrown());`).replace('#include <metalnessmap_fragment>',
+                `#include <metalnessmap_fragment>
+                metalnessFactor = mix(0.3, 0.9, railCrown());`);
+        };
+        const rails = instances(railMaterial, 320, fused([
             [0.07, 0.05, 1, 0, 0.055, 0], [0.024, 0.09, 1, 0, 0, 0], [0.15, 0.024, 1, 0, -0.055, 0]]));
         // Each sleeper brings its own length of ballast: a crowned bed the
         // timbers sit in, its shoulders falling away into the shallows.
         const sleepers = instances(permanentWay, 400, (() => {
             const shape = fused([
-                [2.4, 0.16, 0.24, 0, 0, 0], [0.34, 0.03, 0.2, -0.7175, 0.09, 0], [0.34, 0.03, 0.2, 0.7175, 0.09, 0]]);
+                [2.4, 0.16, 0.24, 0, 0, 0], [0.34, 0.03, 0.2, -0.7175, 0.09, 0], [0.34, 0.03, 0.2, 0.7175, 0.09, 0],
+                // Fastenings: a clip and its bolt head each side of each rail's foot.
+                ...[-0.7175, 0.7175].flatMap(rail => [-0.115, 0.115].flatMap(clip => [
+                    [0.05, 0.035, 0.11, rail + clip, 0.12, 0], [0.03, 0.03, 0.03, rail + clip * 1.12, 0.15, 0]]))]);
             const position = Array.from(shape.attributes.position.array);
             const normal = Array.from(shape.attributes.normal.array);
             const index = Array.from(shape.index.array);
@@ -1268,6 +1289,8 @@
             steel.color.copy(structure).lerp(muted, light ? 0.3 : 0.5);
             concrete.color.copy(surface).lerp(border, light ? 0.2 : 0.45);
             timber.color.copy(deep).lerp(structure, 0.55).lerp(emission, 0.025);
+            // Rust takes a little of the lamp colour.
+            railMaterial.color.copy(steel.color).lerp(emission, light ? 0.04 : 0.1);
             wood.color.copy(timber.color);
             permanentWay.color.copy(timber.color);
             rockMaterial.color.copy(concrete.color).multiplyScalar(rockMaterial.map ? 1.7 : 0.8);
