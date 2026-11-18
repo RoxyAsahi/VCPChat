@@ -28,6 +28,17 @@
 
     const blendAngle = (a, b, weight) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
 
+    // Where the key light comes from, and where the sun that casts it hangs in
+    // the sky. The sun is drawn further into the frame than the light strictly
+    // allows, so bodies keep a lit face while it stays in the picture.
+    const unit = (v) => { const length = Math.hypot(...v); return v.map((n) => n / length); };
+    const KEY_LIGHT = unit([-0.78, 0.44, 0.26]);
+    const SUN_AT = unit([-0.5, 0.26, -0.83]);
+    // The galaxy's plane, tilted across the upper part of the view, and its bright middle.
+    const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
+    const GALAXY_CORE = unit([0.75, 0.21, -1]);
+    const glslVec3 = (v) => `vec3(${v.map((n) => n.toFixed(4)).join(', ')})`;
+
     /* ============================================================================
      * 1. 深空分镜导演 (Deep-Space Cinematography & Shot Director)
      *    - 自动识别乐段 (Drift / Verse / Pre / Chorus / Interlude / Horizon)
@@ -773,6 +784,153 @@
         root.add(fieldPoints);
 
         /* ------------------------------------------------------------------------
+         * Layer 0: the sky everything else is seen against. A galaxy crosses the
+         * upper part of the view, a warm cloud hangs round the sun and a cool one
+         * low on the far side. The clouds are worked out once into a small map of
+         * densities, so a frame costs one lookup, the sun and a layer of stars.
+         * ------------------------------------------------------------------------ */
+        const skyMasks = new T.WebGLRenderTarget(2048, 1024, {
+            depthBuffer: false, generateMipmaps: false,
+            minFilter: T.LinearFilter, magFilter: T.LinearFilter, wrapS: T.RepeatWrapping
+        });
+        const skyBakeMat = new T.ShaderMaterial({
+            depthTest: false, depthWrite: false, blending: T.NoBlending,
+            vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+            fragmentShader: `
+                varying vec2 vUv;
+                float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                float noise(vec3 p) {
+                    vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                        mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                        mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                        mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                }
+                float fbm(vec3 p) {
+                    float sum = 0.0, gain = 0.5;
+                    for (int i = 0; i < 5; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
+                    return sum;
+                }
+                float ridge(vec3 p) {
+                    float sum = 0.0, gain = 0.5;
+                    for (int i = 0; i < 5; i++) {
+                        sum += gain * (1.0 - abs(noise(p) * 2.0 - 1.0));
+                        p = p * 2.07 + vec3(1.7, 9.2, 4.4); gain *= 0.5;
+                    }
+                    return sum;
+                }
+                void main() {
+                    float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.14159265;
+                    vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat));
+                    vec3 w = d * 2.4 + vec3(fbm(d * 2.6 + 1.7), fbm(d * 2.6 + 9.2), fbm(d * 2.6 + 4.4)) * 1.1;
+                    // Red: the cool cloud. Green: the warm one round the sun.
+                    float coolAt = smoothstep(0.25, 0.95, dot(d, normalize(vec3(0.66, -0.36, -0.66))));
+                    float cool = coolAt * smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float warmAt = smoothstep(0.45, 0.98, dot(d, ${glslVec3(SUN_AT)}));
+                    float warm = warmAt * smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    // Blue: the galaxy, clumped, with its bulge. Alpha: dust that hides it.
+                    float h = dot(d, ${glslVec3(GALAXY_POLE)});
+                    float band = exp(-h * h / 0.022) * (0.35 + 0.9 * fbm(d * 6.0 + 20.0));
+                    float bulge = exp(-(1.0 - dot(d, ${glslVec3(GALAXY_CORE)})) * 14.0) * exp(-h * h / 0.05);
+                    float lanes = exp(-h * h / 0.006) * smoothstep(0.5, 0.78, ridge(d * 7.0 + 31.0)) * 0.9;
+                    lanes = max(lanes, coolAt * smoothstep(0.62, 0.85, ridge(w * 2.6 + 17.0)) * 0.5);
+                    gl_FragColor = vec4(cool, warm, clamp(band * 0.7 + bulge * 0.9, 0.0, 1.0), clamp(lanes, 0.0, 1.0));
+                }
+            `
+        });
+        const skyGeo = new T.SphereGeometry(1, 32, 16);
+        const skyMat = new T.ShaderMaterial({
+            side: T.BackSide, depthTest: false, depthWrite: false, fog: false,
+            uniforms: {
+                uMasks: { value: skyMasks.texture },
+                uBase: { value: new T.Color('#020305') },
+                uColorA: { value: new T.Color('#76bfae') },
+                uColorB: { value: new T.Color('#f2a900') },
+                uColorStar: { value: new T.Color('#b8c7d4') },
+                uColorSun: { value: new T.Color('#fff1d6') },
+                uInk: { value: new T.Color('#f2f0e9') },
+                uTime: { value: 0 }, uNebula: { value: 1 }, uPaper: { value: 0 },
+                uViewport: { value: new T.Vector2(1280, 720) }
+            },
+            vertexShader: `
+                varying vec3 vDir;
+                void main() {
+                    vDir = position;
+                    // Turned with the camera, never moved by it: the sky is infinitely far.
+                    vec4 clip = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
+                    gl_Position = clip.xyww;
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D uMasks;
+                uniform vec3 uBase, uColorA, uColorB, uColorStar, uColorSun, uInk;
+                uniform float uTime, uNebula, uPaper;
+                uniform vec2 uViewport;
+                varying vec3 vDir;
+                float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                void main() {
+                    vec3 d = normalize(vDir);
+                    float lat = asin(clamp(d.y, -1.0, 1.0));
+                    vec2 uv = vec2(atan(d.x, -d.z) / 6.2831853 + 0.5, lat / 3.14159265 + 0.5);
+                    vec4 m = texture2D(uMasks, uv);
+                    // Whatever lies behind the reading area steps back.
+                    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                    float read = mix(0.3, 1.0, smoothstep(0.12, 0.9, length(ndc * vec2(0.75, 1.4))));
+                    // One star to a cell of the sky, more of them along the galaxy, a pixel or two wide.
+                    vec2 g = uv * vec2(440.0, 220.0), cell = floor(g);
+                    float pick = hash(cell), mag = pow(hash(cell + 5.1), 7.0);
+                    vec2 at = 0.2 + 0.6 * vec2(hash(cell + 17.3), hash(cell + 41.7));
+                    float px = max(length(dFdx(g)), length(dFdy(g)));
+                    float dist = length((fract(g) - at) * vec2(cos(lat), 1.0));
+                    float star = step(0.86 - m.b * 0.3, pick) * smoothstep(px * (0.75 + mag * 0.9), px * 0.2, dist)
+                        * (0.1 + 0.9 * mag) * (0.8 + 0.2 * sin(uTime * (0.6 + pick * 2.0) + pick * 40.0));
+                    float angle = acos(clamp(dot(d, ${glslVec3(SUN_AT)}), -1.0, 1.0));
+                    float disc = smoothstep(0.024, 0.008, angle);
+                    float corona = exp(-angle * 24.0) * 0.8 + exp(-angle * 6.5) * 0.14 + exp(-angle * 2.2) * 0.03;
+                    // Six thin rays, as a lens draws a point of light.
+                    vec3 sunward = ${glslVec3(SUN_AT)};
+                    vec3 across = normalize(cross(vec3(0.0, 1.0, 0.0), sunward)), up = cross(sunward, across);
+                    vec2 offset = vec2(dot(d, across), dot(d, up));
+                    float rays = 0.0;
+                    for (int i = 0; i < 3; i++) {
+                        float turn = 0.35 + float(i) * 1.0472;
+                        vec2 axis = vec2(cos(turn), sin(turn));
+                        rays += exp(-abs(dot(offset, vec2(-axis.y, axis.x))) * 420.0) * exp(-abs(dot(offset, axis)) * 15.0);
+                    }
+                    corona += rays * 0.17 * step(0.0, dot(d, sunward));
+
+                    vec3 night = uBase + uColorStar * m.b * 0.055;
+                    night += (uColorA * m.r * 0.1 + uColorB * m.g * 0.075) * uNebula;
+                    night *= (1.0 - m.a * 0.8) * read;
+                    night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
+                    night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
+                    // On a pale theme the same sky is washes of colour on paper.
+                    vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
+                    paper = mix(paper, uColorB, m.g * 0.22 * uNebula);
+                    paper = mix(paper, uInk, m.a * 0.1 + star * 0.45);
+                    paper = mix(paper, vec3(1.0), clamp(disc + corona * 0.9, 0.0, 1.0) * 0.85);
+
+                    gl_FragColor = vec4(mix(night, paper, uPaper), 1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        });
+        const skyDome = new T.Mesh(skyGeo, skyMat);
+        skyDome.frustumCulled = false;
+        skyDome.renderOrder = -10;
+        root.add(skyDome);
+        // The cloud map is drawn once the renderer exists, and again after a lost context.
+        const prepare = (renderer) => {
+            const quad = new T.Mesh(new T.PlaneGeometry(2, 2), skyBakeMat);
+            const previous = renderer.getRenderTarget();
+            renderer.setRenderTarget(skyMasks);
+            renderer.render(quad, new T.Camera());
+            renderer.setRenderTarget(previous);
+            quad.geometry.dispose();
+        };
+
+        /* ------------------------------------------------------------------------
          * 层级 2：深空结项引力丝束 (Geodesic Braided Filaments)
          * 三股沿深空弯曲航道相互缠绕的李萨如/环面结光丝，在画面边缘勾勒出幽邃的空间曲率，
          * 并在中央阅读区自动压暗让位。
@@ -1092,7 +1250,7 @@
                     vec4 worldPos = modelMatrix * vec4(localPos, 1.0);
                     vec3 worldNormal = normalize(mat3(modelMatrix) * nrm);
                     vec3 viewDir = normalize(cameraPosition - worldPos.xyz);
-                    vec3 lightDir = normalize(vec3(-0.78, 0.5, 0.22));
+                    vec3 lightDir = ${glslVec3(KEY_LIGHT)};
 
                     float ndotl = dot(worldNormal, lightDir);
                     // 晨昏线柔和过渡 + 背光边缘瑞利辉光 (Rim Halo)
@@ -1226,7 +1384,7 @@
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
-                uLight: { value: new T.Vector3(-0.78, 0.5, 0.22).normalize() },
+                uLight: { value: new T.Vector3(...KEY_LIGHT) },
                 uLightLocal: { value: new T.Vector3(0, 1, 0) },
                 uViewport: { value: new T.Vector2(1280, 720) },
                 uColorPrimary: { value: new T.Color('#76bfae') },
@@ -1267,6 +1425,7 @@
                         mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
                 }
                 float fbm(vec3 p) { return noise(p) * 0.55 + noise(p * 2.1) * 0.28 + noise(p * 4.3) * 0.17; }
+                const vec3 SUN = ${glslVec3(SUN_AT)};
 
                 void main() {
                     // Gathering and tearing apart: a noise front eats the surface.
@@ -1331,6 +1490,9 @@
                         surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
                         col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
+                        // Seen against the sun the air along the limb lights up.
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0);
+                        col += air * rim * against * (0.4 + 0.6 * smoothstep(-0.4, 0.5, dot(n, SUN))) * 2.6;
                         float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
                         float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
                         col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
@@ -1352,8 +1514,8 @@
                         float along = -dot(vLocal, uLightLocal);
                         float miss = length(vLocal + uLightLocal * along);
                         float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
-                        float forward = pow(max(dot(-v, uLight), 0.0), 6.0);
-                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 1.6) * mix(0.05, 1.0, shadow);
+                        float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
+                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 0.7) * mix(0.05, 1.0, shadow);
                         alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
                     } else {
                         // Light sail: a thin membrane on ribs, iridescent at grazing angles.
@@ -1464,7 +1626,7 @@
             root.add(group);
             return { group, parts };
         });
-        const worldLight = new T.Vector3(-0.78, 0.5, 0.22).normalize();
+        const worldLight = new T.Vector3(...KEY_LIGHT);
         const bodyTurn = new T.Quaternion();
 
         /* ------------------------------------------------------------------------
@@ -2029,6 +2191,17 @@
             fieldMat.uniforms.uNebulaA.value.copy(colors.secondary);
             fieldMat.uniforms.uNebulaB.value.copy(colors.accent);
 
+            const pale = colors.background.r * 0.2126 + colors.background.g * 0.7152 + colors.background.b * 0.0722
+                > colors.ink.r * 0.2126 + colors.ink.g * 0.7152 + colors.ink.b * 0.0722;
+            const sky = skyMat.uniforms;
+            sky.uBase.value.copy(abyssBg);
+            sky.uColorA.value.copy(colors.secondary);
+            sky.uColorB.value.copy(colors.ember).lerp(colors.accent, 0.3);
+            sky.uColorStar.value.copy(colors.ink).lerp(colors.muted, 0.35);
+            sky.uColorSun.value.copy(colors.accent).lerp(new T.Color('#ffffff'), 0.62);
+            sky.uInk.value.copy(colors.ink);
+            sky.uPaper.value = pale ? 1 : 0;
+
             filamentMat.uniforms.uColorA.value.copy(colors.secondary);
             filamentMat.uniforms.uColorB.value.copy(colors.accent);
             filamentMat.uniforms.uColorC.value.copy(colors.muted);
@@ -2282,6 +2455,9 @@
             // 4. 更新深空星尘、体积星云与结项引力丝束
             const showStarfield = settings.starfield !== false;
             fieldPoints.visible = showStarfield;
+            skyDome.visible = showStarfield;
+            skyMat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
+            skyMat.uniforms.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
             filamentMesh.visible = showStarfield;
             streakLines.visible = showStarfield && !settings.reducedMotion;
 
@@ -2435,12 +2611,14 @@
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
+            prepare,
             update,
             resize(w, h, ratio) {
                 viewportAspect = Math.max(0.2, Number(w) / Math.max(1, Number(h)));
                 pixelRatio = ratio;
                 viewportPixels = Math.max(1, Number(h) * ratio);
                 fieldMat.uniforms.uPixelRatio.value = ratio;
+                skyMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 filamentMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 lyricParticleMat.uniforms.uPixelRatio.value = ratio;
                 entityNodes.forEach((node) => { node.mat.uniforms.uPixelRatio.value = ratio; });
@@ -2451,8 +2629,9 @@
             destroy() {
                 clearGlyphStage();
                 scene.remove(root);
-                [fieldGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
-                [fieldMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, ...frameArcMats].forEach((m) => m?.dispose?.());
+                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
+                [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, ...frameArcMats].forEach((m) => m?.dispose?.());
+                skyMasks.dispose();
                 entityNodes.forEach((node) => {
                     node.geo?.dispose?.();
                     node.mat?.dispose?.();
@@ -2480,6 +2659,7 @@
         let camera = null;
         let renderer = null;
         let world = null;
+        let optics = null;
         let initialized = false;
         let fallbackMode = false;
         let initializing = null;
@@ -2532,6 +2712,8 @@
         const disposeGraphics = () => {
             world?.destroy?.();
             world = null;
+            optics?.destroy();
+            optics = null;
             if (renderer) {
                 renderer.dispose?.();
                 renderer.forceContextLoss?.();
@@ -2617,7 +2799,12 @@
 
             fallback.hidden = true;
             if (frame.isPlaying && renderScale.tick(performance.now())) resize();
-            renderer.render(scene, camera);
+            renderer.info.reset();
+            // The same lens as the diorama: the sun, the lamps and the lyric glow through it.
+            if (optics) {
+                optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config,
+                    { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
+            } else renderer.render(scene, camera);
             lastTime = time;
         };
 
@@ -2654,7 +2841,10 @@
                     recoverContext();
                 });
 
+                renderer.info.autoReset = false;
+                optics = global.MusicStageDioramaOptics?.create(T) || null;
                 world = createTunnelWorld(T, scene, services?.app);
+                world.prepare(renderer);
                 initialized = true;
                 resize();
                 world.setPalette(services?.app?.stagePalette || {});

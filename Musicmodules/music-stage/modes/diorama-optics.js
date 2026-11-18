@@ -87,9 +87,10 @@
         };
         let dead = false;
         return {
-            render(renderer, world, worldCamera, time, config) {
+            // The diorama's own settings unless another mode passes its own.
+            render(renderer, world, worldCamera, time, config, lens) {
                 if (dead) return;
-                const tuning = config.modes?.diorama || {};
+                const tuning = lens || config.modes?.diorama || {};
                 if (tuning.postProcess === false || config.quality === 'energy-saving') {
                     renderer.render(world, worldCamera);
                     return;
@@ -105,6 +106,7 @@
                 material.uniforms.grain.value = tuning.grain ?? 0.08;
                 material.uniforms.vignette.value = tuning.vignette ?? 0.22;
                 material.uniforms.bloom.value = (tuning.glow ?? 1) * 0.6;
+                prefilter.uniforms.threshold.value = tuning.threshold ?? 0.82;
                 const previous = renderer.getRenderTarget();
                 const autoClear = renderer.autoClear;
                 try {
