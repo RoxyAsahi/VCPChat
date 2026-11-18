@@ -112,7 +112,8 @@ function setupVisualizer(app) {
             || app.ws.readyState === WebSocket.CONNECTING
         )) return;
 
-        const socket = new WebSocket("ws://127.0.0.1:63789/ws");
+        // 端口由主进程启动引擎时探测决定，地址经 getAudioEngineEndpoint 下发；拿不到时退回默认端口。
+        const socket = new WebSocket(app.audioEngineWsUrl || "ws://127.0.0.1:63789/ws");
         app.ws = socket;
 
         socket.onopen = () => {

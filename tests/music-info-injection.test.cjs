@@ -21,6 +21,7 @@ function loadMusic(manager) {
             if (name === 'electron') return {
                 ipcMain: { handle: (name, handler) => handles.set(name, handler), on() {} }
             };
+            if (name === '../services/audioEngineEndpoint') return require('../modules/services/audioEngineEndpoint');
             if (name.startsWith('../')) return {};
             return require(name);
         }
