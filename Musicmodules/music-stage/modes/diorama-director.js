@@ -263,8 +263,11 @@
         const speed = clamp(options.cameraSpeed ?? 1, 0.55, 1.85);
         const aspect = clamp(options.aspect ?? 1.6, 0.35, 3);
         const horizontalFov = 2 * Math.atan(Math.tan(48 * Math.PI / 360) * aspect);
-        const lateral = 18;
-        const travelBudget = clamp(2 * lateral * Math.tan(horizontalFov * 0.6), 24, 48);
+        // Screens stand close enough to the line, and far enough ahead of where
+        // their last page ends, that reading one never turns the camera far from
+        // the way the train is going.
+        const lateral = 13;
+        const travelBudget = clamp(36 * Math.tan(horizontalFov * 0.6), 24, 48);
         const encounters = [];
         const pageEncounter = new Map();
         let current = null;
@@ -298,7 +301,7 @@
         encounters.forEach((encounter, index) => {
             // Fixed roadside address. It never follows the camera. A short
             // forward bias keeps the screen ahead until its final page finishes.
-            encounter.address = encounter.endDistance + 10;
+            encounter.address = encounter.endDistance + 16;
             encounter.previewStart = Math.max(0, encounter.start - 7);
             encounter.releaseAfter = encounter.end + 12;
             const previous = encounters[index - 1];

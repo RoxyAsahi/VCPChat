@@ -22,6 +22,7 @@
         const onset = R.createAudioOnset();
         const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
         const palette = () => services?.app?.stagePalette || {};
+        const dayLens = {};
         const options = () => ({
             ...(mode.config.modes?.diorama || {}),
             animationIntensity: mode.config.animationIntensity ?? 1,
@@ -203,7 +204,12 @@
             if (frame.isPlaying && renderScale.tick(performance.now())) resize();
             renderer.info.reset();
             world.renderReflection(renderer, camera);
-            if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config);
+            // By day the paper-white sky is brighter than the lens's usual
+            // threshold, and its veil would wash thin dark lyric strokes pale.
+            // Only what is brighter than the paper may bloom.
+            const lens = palette().light
+                ? Object.assign(dayLens, mode.config.modes?.diorama, { threshold: 1.4 }) : undefined;
+            if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config, lens);
             else renderer.render(scene, camera);
             lastTime = time;
         };

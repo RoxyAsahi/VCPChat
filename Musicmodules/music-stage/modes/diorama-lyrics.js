@@ -237,6 +237,10 @@
                     constellation: { value: constellation ? 1 : 0 },
                     entrance: { value: 1 }, departure: { value: 0 },
                     motion: { value: 0 }, style: { value: style }, waterEcho: { value: 0 },
+                    // Dark strokes blended over a pale sky in linear light come out
+                    // far paler than their opacity suggests, so by day the words
+                    // still to be sung are laid on more heavily.
+                    rest: { value: palette.light ? 0.82 : 0.48 },
                     accent: { value: new T.Color(palette.accent || '#f2a900') },
                     ink: { value: new T.Color(palette.ink || '#f2f0e9') },
                     cold: { value: new T.Color(palette.secondary || '#76bfae') },
@@ -270,7 +274,7 @@
                         gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);
                     }`,
                 fragmentShader: `uniform sampler2D map;uniform float time,fade,glow,vocal;
-                    uniform float constellation,entrance,departure,style,waterEcho;
+                    uniform float constellation,entrance,departure,style,waterEcho,rest;
                     uniform vec3 accent,ink,cold;uniform float ranges[64],starts[64],ends[64];
                     varying vec2 vUv;
                     void main(){float start=1e8,end=1e8;float selected=0.0;
@@ -305,7 +309,7 @@
                         float brightness=1.0+peak*glow*0.7;
                         brightness+=singing*step(0.8,end-start)*vocal*0.15*glow;
                         vec3 lit=mix(color,mix(cold,ink,0.55),constellation*0.38);
-                        gl_FragColor=vec4(lit*brightness,alpha*fade*mix(0.48,0.95,step(start,time)));
+                        gl_FragColor=vec4(lit*brightness,alpha*fade*mix(rest,0.95,step(start,time)));
                         #include <tonemapping_fragment>
                         #include <colorspace_fragment>
                     }`
@@ -541,6 +545,7 @@
                     sign.performance.uniforms.closing.value = 0;
                     sign.back.emissiveIntensity = 0;
                     sign.trim.emissiveIntensity = 0;
+                    sign.held = 0;
                     sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby);
                 });
                 const phrases = timeline.phrases;
@@ -618,10 +623,15 @@
                         if (time >= node.phrase.end && time < node.phrase.end + exitDuration)
                             sign.performance.uniforms.closing.value = exit;
                         sign.back.emissiveIntensity = activation * 0.035;
-                        sign.wash.value.multiplyScalar(1 - 0.8 * enter * (1 - exit));
+                        // The lamps go down ahead of a line and come back only once
+                        // the board has stood empty for a while, so they do not
+                        // flash in the breath between two lines on the same board.
+                        sign.held = Math.max(sign.held, D.smooth((time - node.phrase.start + 1.4) / 1.2)
+                            * (1 - D.smooth((time - node.phrase.end - 1.6) / 2.4)));
+                        sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby * (1 - 0.8 * sign.held));
                         sign.trim.emissiveIntensity = activation * 0.24;
                     }
-                    if (subtitle) subtitle.material.opacity = 0.82 * enter * (1 - exit);
+                    if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * enter * (1 - exit);
                     if (node.constellation) keepInFrame(node, camera, frame);
                 }
                 // A malformed/overlapping vocal timeline can still produce two
