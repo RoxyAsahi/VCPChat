@@ -17,25 +17,38 @@
             const back = new T.MeshStandardMaterial({ color: backingColor, roughness: 0.58, metalness: 0.35 });
             const trim = new T.MeshStandardMaterial({ color: palette.secondary || '#76bfae', roughness: 0.35, metalness: 0.7 });
             // A board with nothing on it is still a made thing: cabinet seams
-            // across its face, and glass that picks up the sky at a glancing view.
+            // across its face, glass that picks up the sky at a glancing view,
+            // and at night the hood lamps washing down it, a pool under each.
             const sheen = { value: new T.Color(palette.secondary || '#76bfae') };
+            const wash = { value: new T.Color() }, pitch = { value: 3 };
             back.onBeforeCompile = shader => {
-                shader.uniforms.sheen = sheen;
+                Object.assign(shader.uniforms, { sheen, wash, pitch });
                 shader.vertexShader = shader.vertexShader
-                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;')
+                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;\nvarying vec2 vFace;')
                     .replace('#include <begin_vertex>', `#include <begin_vertex>
                         #ifdef USE_INSTANCING
-                        vPanel = uv * vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
+                        vec2 panel = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
                         #else
-                        vPanel = uv;
-                        #endif`);
+                        vec2 panel = vec2(1.0);
+                        #endif
+                        vPanel = uv * panel;
+                        // Only the lyric face of the board itself is lamplit.
+                        vFace = vec2(step(0.5, normal.z) * step(1.5, panel.y), panel.y);`);
                 shader.fragmentShader = shader.fragmentShader
-                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;\nuniform vec3 sheen;')
+                    .replace('#include <common>',
+                        '#include <common>\nvarying vec2 vPanel;\nvarying vec2 vFace;\nuniform vec3 sheen, wash;\nuniform float pitch;')
                     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
                         vec2 cabinet = abs(fract(vPanel / 0.96) - 0.5) * 0.96;
-                        float seam = 1.0 - smoothstep(0.004, 0.02, 0.48 - max(cabinet.x, cabinet.y));
+                        float grain = length(fwidth(vPanel));
+                        float seam = (1.0 - smoothstep(0.004, 0.02 + grain, 0.48 - max(cabinet.x, cabinet.y)))
+                            * 0.03 / (0.03 + grain);
                         float glance = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
-                        totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam);`);
+                        totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam);
+                        float below = vFace.y - vPanel.y;
+                        float lamp = 0.5 + 0.5 * cos(6.2832 * vPanel.x / pitch - 3.1416);
+                        float pool = exp(-below * 0.85) * mix(0.3 + 0.7 * lamp, 1.0, smoothstep(0.0, 1.5, below))
+                            * smoothstep(0.0, 0.12, below);
+                        totalEmissiveRadiance += wash * pool * vFace.x * (1.0 - 0.45 * seam);`);
             };
             // A trackside display board: bezel, hooded lamp row, lattice legs
             // on footings, raking back stays, a service ledge and its ladder.
@@ -62,6 +75,7 @@
             // Hood and the lamps under it.
             add(W + 0.5, 0.07, 1.0, 0, top + 0.2, 0.26, back, 0.12);
             const lamps = Math.max(3, Math.round(W / 3));
+            pitch.value = W / lamps;
             for (let i = 0; i < lamps; i++)
                 add(0.7, 0.05, 0.1, (i + 0.5) / lamps * W - W / 2, top + 0.08, 0.6, trim);
             // Service ledge along the foot of the board.
@@ -140,7 +154,7 @@
             trim.emissive.set(palette.accent || '#f2a900');
             root.add(group);
             group.updateMatrixWorld(true);
-            return { group, materials: [back, trim, performance], textures: [], performance, back, trim,
+            return { group, materials: [back, trim, performance], textures: [], performance, back, trim, wash,
                 size: { x: W / 2, y: H / 2 } };
         };
         const plane = new T.PlaneGeometry(1, 1);
@@ -520,11 +534,14 @@
                 camera?.updateMatrixWorld();
                 lastCamera = camera; lastDiagnosticTime = time;
                 const distance = timeline.distanceAt(time, options.cameraSpeed ?? 1);
+                // Hood lamps are a night thing, and they dim while a line is up.
+                const standby = palette.light ? 0 : 0.24;
                 signs.forEach(sign => {
                     sign.performance.uniforms.light.value = 0;
                     sign.performance.uniforms.closing.value = 0;
                     sign.back.emissiveIntensity = 0;
                     sign.trim.emissiveIntensity = 0;
+                    sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby);
                 });
                 const phrases = timeline.phrases;
                 const center = Math.max(0, D.upperBound(phrases, time, 'start') - 1);
@@ -601,6 +618,7 @@
                         if (time >= node.phrase.end && time < node.phrase.end + exitDuration)
                             sign.performance.uniforms.closing.value = exit;
                         sign.back.emissiveIntensity = activation * 0.035;
+                        sign.wash.value.multiplyScalar(1 - 0.8 * enter * (1 - exit));
                         sign.trim.emissiveIntensity = activation * 0.24;
                     }
                     if (subtitle) subtitle.material.opacity = 0.82 * enter * (1 - exit);
