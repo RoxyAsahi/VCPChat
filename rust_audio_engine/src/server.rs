@@ -869,13 +869,15 @@ pub async fn run_server(port: u16, config: AppConfig, settings_manager: SharedSe
 
     let server_result = server.await;
 
-    if let Ok(app_state) = Arc::try_unwrap(state) {
-        if let Ok(runtime) = Arc::try_unwrap(app_state.analysis_runtime) {
-            let _ = actix_web::rt::task::spawn_blocking(move || {
+    // Release the state on a blocking thread so the analysis runtime is never dropped
+    // inside the async context, even if a clone of the state or runtime is still alive.
+    let _ = actix_web::rt::task::spawn_blocking(move || {
+        if let Ok(app_state) = Arc::try_unwrap(state) {
+            if let Ok(runtime) = Arc::try_unwrap(app_state.analysis_runtime) {
                 runtime.shutdown_timeout(Duration::from_secs(2));
-            }).await;
+            }
         }
-    }
+    }).await;
 
     server_result
 }
