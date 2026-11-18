@@ -1101,7 +1101,29 @@
             };
             const beam = (r, length, axis, at, sides = 4) => {
                 parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, sides, 1), 4, length), axis)
-                    .translate(at[0] * k, at[1] * k, at[2] * k), 5]);
+                    .translate(at[0] * k, at[1] * k, at[2] * k), r >= 0.5 ? 5 : 7]);
+            };
+            const node = (r, at) => {
+                parts.push([sized(new T.SphereGeometry(r * k, 16, 10), TAU * r, r * 3).translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            // Stowage and experiments bolted along a truss or a hull.
+            const crate = (size, at) => {
+                parts.push([sized(new T.BoxGeometry(size[0] * k, size[1] * k, size[2] * k), size[0] * 4, size[1] * 2)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            // A dish on a short mast, and a jointed arm.
+            const dish = (r, at, tilt) => {
+                parts.push([new T.ConeGeometry(r * k, r * 0.45 * k, 20, 1, true).rotateX(tilt).translate(at[0] * k, at[1] * k, at[2] * k), 7]);
+                parts.push([new T.CylinderGeometry(0.06 * k, 0.06 * k, r * 1.4 * k, 5, 1, true).translate(at[0] * k, (at[1] - r * 0.8) * k, at[2] * k), 7]);
+            };
+            const arm = (from, elbow, to) => {
+                for (const [a, b] of [[from, elbow], [elbow, to]]) {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = new T.CylinderGeometry(0.11 * k, 0.11 * k, span.length() * k, 6, 1, true);
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), 7]);
+                }
+                node(0.2, elbow);
             };
             // A flat panel: long side along `axis`, lying in the plane that holds `across`.
             const panel = (length, width, axis, across, at, code) => {
@@ -1140,7 +1162,17 @@
                 module(1.2, 5.0, 'z', [0, 0, -11.3]);
                 module(1.3, 4.4, 'x', [3.5, 0, 8.4]);
                 module(1.3, 5.2, 'x', [-3.9, 0, 8.4]);
-                panel(4.2, 2.4, 'x', 'z', [-8.6, 0.3, 8.4], 5);
+                panel(4.2, 2.4, 'x', 'z', [-8.6, 0.3, 8.4], 7);
+                node(1.5, [0, 0, 4.8]);
+                node(1.3, [0, 0, -1.9]);
+                for (const [x, up] of [[-17.8, 1], [-10.5, -1], [-3.2, 1], [3.4, -1], [10.3, 1], [17.6, -1], [-8, 1], [8.4, 1]]) {
+                    crate([1.5, 0.8, 1.1], [x, 1.6 + up * 1.25, 0.2 * up]);
+                }
+                crate([1.0, 0.7, 2.4], [1.7, 0.4, -6.2]);
+                crate([0.9, 0.6, 1.8], [-1.6, 0.5, 2.0]);
+                dish(1.3, [3.2, 4.4, 1.2], -0.5);
+                dish(0.8, [-1.2, 2.6, -11.0], 0.4);
+                arm([1.2, 2.5, 3.2], [4.6, 5.0, 5.2], [3.0, 1.6, 8.2]);
                 module(1.1, 3.4, 'y', [0, -2.7, 1.6]);
                 module(1.0, 3.0, 'y', [0, -2.5, -5.9]);
                 for (const side of [-1, 1]) panel(7.4, 1.5, 'x', 'z', [side * 5.2, 0, -11.6], 4);
@@ -1164,7 +1196,17 @@
                     panel(4.4, 1.4, 'z', 'y', [side * 2.2, 0.4, -4.2], 6);
                 }
                 beam(0.2, 5.2, 'y', [0, 4.0, -5.8], 6);
-                panel(2.6, 2.6, 'x', 'z', [0, 6.7, -5.8], 5);
+                panel(2.6, 2.6, 'x', 'z', [0, 6.7, -5.8], 7);
+                node(1.75, [0, 0, 7.0]);
+                crate([1.2, 0.7, 2.6], [0, 2.2, -3.0]);
+                crate([0.9, 0.6, 1.6], [0, -2.2, -4.4]);
+                for (const side of [-1, 1]) {
+                    crate([2.4, 0.7, 1.0], [side * 6.4, 2.2, 7.0]);
+                    crate([1.4, 0.6, 0.9], [side * 12.4, -1.5, 7.0]);
+                    for (const up of [-1, 1]) beam(0.1, 13.5, 'y', [side * 18.7, up * 7.4, 7.0], 5);
+                }
+                dish(1.1, [1.9, 3.6, 1.0], -0.6);
+                arm([0, 2.1, -1.0], [0, 5.4, 2.2], [3.4, 3.0, 5.6]);
                 visitor(10.4, -1);
                 module(1.55, 5.6, 'z', [0, 0, -10.2]);
                 for (const side of [-1, 1]) panel(5.6, 1.4, 'x', 'z', [side * 4.4, 0, -10.6], 4);
@@ -1521,11 +1563,19 @@
                         // Sunlight is hard in vacuum; the sky fills the shade a little
                         // and shows in whatever is polished.
                         bool tube = vPart < 2.5;
-                        bool truss = vPart > 4.5 && vPart < 5.5;
+                        bool lattice = vPart > 4.5 && vPart < 5.5;
+                        bool truss = lattice || vPart > 6.5;
                         vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(8.0, 14.0) : vec2(16.0, 16.0));
                         vec2 cell = floor(cells), inside = fract(cells);
                         float seam = smoothstep(0.0, 0.05, inside.x) * smoothstep(0.0, 0.07, inside.y)
                             * smoothstep(0.0, 0.05, 1.0 - inside.x) * smoothstep(0.0, 0.07, 1.0 - inside.y);
+                        // An open truss: longerons along the edges, a batten and a
+                        // diagonal in every bay, and nothing between them.
+                        if (lattice && uDetail > 0.5) {
+                            float member = max(max(step(0.4, abs(inside.x - 0.5)), step(0.42, abs(inside.y - 0.5))),
+                                1.0 - smoothstep(0.06, 0.09, abs(inside.x - inside.y)));
+                            if (member < 0.5) discard;
+                        }
                         float tone = hash(vec3(cell, uSeed + 3.0));
                         // Blankets wrap whole sections; a painted band runs round the rim.
                         float section = tube ? hash(vec3(floor(vUv.x * 16.0), floor(vUv.y * 2.0), uSeed))
@@ -1574,7 +1624,7 @@
                         col = mix(col, sky * (0.4 + 3.0 * fresnel) + uColorInk * pow(sun, 90.0) * lam, port);
                         col += mix(uColorAccent, uColorInk, 0.45) * lit * 0.8
                             * (0.85 + 0.15 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 5.5) {
+                        if (vPart > 5.5 && vPart < 6.5) {
                             // Radiator: white ribbed panels that shed heat edge-on to the sun.
                             float rib = smoothstep(0.0, 0.12, abs(fract(vUv.x * 9.0) - 0.5));
                             float flatLit = clamp(abs(dot(n, uLight)), 0.0, 1.0);
@@ -1847,7 +1897,7 @@
             const frame = [];
             for (let i = 0; i < 4; i += 1) {
                 frame.push([new T.CylinderGeometry(plan.boom, plan.boom * 0.5, plan.half * Math.SQRT2, 6, 1, true)
-                    .translate(0, plan.half * Math.SQRT2 / 2, 0).rotateZ(Math.PI / 4 + i * Math.PI / 2), 5]);
+                    .translate(0, plan.half * Math.SQRT2 / 2, 0).rotateZ(Math.PI / 4 + i * Math.PI / 2), 7]);
             }
             frame.push([new T.CylinderGeometry(plan.bus, plan.bus, plan.busLength, 16, 1)
                 .rotateX(Math.PI / 2).translate(0, 0, plan.busLength * 0.2), 3]);
