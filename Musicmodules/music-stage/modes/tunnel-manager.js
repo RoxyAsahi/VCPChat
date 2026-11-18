@@ -2028,15 +2028,19 @@
                             1.0 - smoothstep(0.0, 0.05, abs(fract(q.y * 9.0) - 0.5) * 2.0));
                         float slack = noise(vec3(q * vec2(5.0, 23.0) * (aq.x > aq.y ? 1.0 : 0.0)
                             + q.yx * vec2(5.0, 23.0) * (aq.x > aq.y ? 0.0 : 1.0), uSeed * 9.0)) - 0.5;
-                        vec3 nn = normalize(n + (aq.x > aq.y ? vec3(0.0, slack, 0.0) : vec3(slack, 0.0, 0.0)) * 0.35
-                            + flat_ * 0.0);
+                        // Tension lines fan out from the hub and the boom tips; a
+                        // fine crinkle is left from the film having been packed.
+                        float fan = noise(vec3(atan(q.y, q.x) * 26.0, reach * 2.0, uSeed * 5.0)) - 0.5;
+                        vec2 crinkle = vec2(noise(vec3(q * 46.0, uSeed)), noise(vec3(q * 46.0 + 19.0, uSeed))) - 0.5;
+                        vec3 nn = normalize(n + (aq.x > aq.y ? vec3(0.0, slack, 0.0) : vec3(slack, 0.0, 0.0)) * 0.5
+                            + vec3(-q.y, q.x, 0.0) * fan * 0.55 + vec3(crinkle, 0.0) * 0.22 * uDetail);
                         float lam = clamp(abs(dot(nn, uLight)), 0.0, 1.0);
                         float facing = clamp(abs(dot(nn, v)), 0.0, 1.0);
                         vec3 bounce = reflect(-v, nn);
-                        vec3 sky = mix(uColorPrimary * 0.2, mix(uColorEmber, uColorAccent, 0.4) * 0.34,
-                            smoothstep(-0.6, 0.7, dot(bounce, SUN)));
-                        float sun = pow(max(dot(normalize(uLight + v), nn), 0.0), 9.0);
-                        vec3 silver = uColorInk * (0.1 + 0.3 * lam) + sky * 1.6 + uColorInk * sun * 1.5 * lam;
+                        vec3 sky = mix(mix(uColorPrimary, uColorInk, 0.3) * 0.13, mix(uColorEmber, uColorAccent, 0.4) * 0.36,
+                            smoothstep(-0.25, 0.55, dot(bounce, SUN)));
+                        float sun = pow(max(dot(normalize(uLight + v), nn), 0.0), 14.0);
+                        vec3 silver = uColorInk * (0.05 + 0.16 * lam) + sky * 1.9 + uColorInk * sun * 1.6 * lam;
                         vec3 gold = mix(mix(uColorPrimary, uColorInk, 0.72), uColorAccent, 0.42) * (0.07 + 0.42 * lam)
                             + mix(uColorAccent, uColorInk, 0.5) * sun * 0.9 * lam + sky * 0.5;
                         col = sunward ? silver : gold;
