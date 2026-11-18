@@ -249,3 +249,53 @@ test('the outro keeps a slow glide instead of a frozen frame', () => {
     assert.equal(timeline.acts.at(-1).kind, 'Terminus');
     assert.ok(timeline.distanceAt(215) - timeline.distanceAt(200) > 2);
 });
+
+test('break scenes are planned in long silences only, and the camera moves into them without a jump', () => {
+    // A long introduction, two verses, a long break, a last verse.
+    const starts = [16, 21, 26, 31, 36, 41, 80, 85, 90];
+    const song = R.normalizeLines(starts.map((start, i) => ({
+        startTime: start, endTime: start + 3.5, fullText: `第${i}句 车窗外的海`
+    })));
+    const timeline = D.compile({ lines: song, trackId: 'scenes', duration: 120 });
+    const track = C.createTrack(timeline, 1, { aspect: 1.78 });
+    assert.ok(track.scenes.length >= 2, 'the introduction and the break each get a scene');
+    assert.equal(track.scenes[0].kind, 'SALOON');
+    assert.equal(track.scenes[0].start, 0);
+    assert.ok(track.scenes.some(scene => scene.kind === 'TRACKSIDE'));
+    for (const scene of track.scenes) {
+        assert.ok(scene.end - scene.start >= 7.5 && scene.end - scene.start <= 14.5);
+        // Nobody sings during a scene, and the next line is at least five seconds off.
+        for (const busy of timeline.protectedIntervals)
+            assert.ok(busy.end <= scene.start || busy.start >= scene.end + 5 - 1e-6);
+    }
+    assert.deepEqual(plain(C.createTrack(timeline, 1, { aspect: 1.78, cameraCuts: false }).scenes), []);
+    // Inside the saloon the camera stands in the leading car, clear of its walls.
+    const saloon = track.scenes[0], middle = (saloon.start + saloon.end) / 2;
+    const inside = C.pose(timeline, track, middle, { aspect: 1.78 });
+    assert.equal(inside.rig, 'SALOON');
+    assert.ok(inside.saloon > 0.99);
+    const back = inside.trainFront - inside.distance;
+    assert.ok(Math.abs(back + 0.4) < 1e-9, 'the train stays where the cab view left it');
+    const car = track.at(inside.distance - 8);
+    const lateral = (inside.position.x - car.position.x) * car.right.x + (inside.position.z - car.position.z) * car.right.z;
+    assert.ok(Math.abs(lateral) < 0.6 && inside.position.y > 2.3 && inside.position.y < 3.1);
+    // Beside the line the train is only let past once the camera is clear of it.
+    const beside = track.scenes.find(scene => scene.kind === 'TRACKSIDE');
+    let previous = null;
+    for (let t = 0; t <= 120; t += 1 / 60) {
+        const pose = C.pose(timeline, track, t, { aspect: 1.78 });
+        const f = track.at(pose.distance);
+        const offset = (pose.position.x - f.position.x) * f.right.x + (pose.position.z - f.position.z) * f.right.z;
+        const lead = pose.trainFront - pose.distance;
+        if (t > beside.start - 3 && t < beside.end + 3 && lead > 0.5 && lead < 53)
+            assert.ok(Math.abs(offset) > 2, `the train would run through the camera at ${t.toFixed(2)}`);
+        if (previous) {
+            const step = Math.hypot(pose.position.x - previous.position.x, pose.position.y - previous.position.y,
+                pose.position.z - previous.position.z);
+            assert.ok(step < 0.25, `camera jumps ${step.toFixed(2)} m at ${t.toFixed(2)}`);
+            const turn = Math.abs(Math.atan2(Math.sin(pose.yaw - previous.yaw), Math.cos(pose.yaw - previous.yaw)));
+            assert.ok(turn < 0.03, `camera whips ${turn.toFixed(3)} rad at ${t.toFixed(2)}`);
+        }
+        previous = pose;
+    }
+});
