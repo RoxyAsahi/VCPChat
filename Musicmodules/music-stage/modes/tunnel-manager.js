@@ -38,6 +38,11 @@
     const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
     const GALAXY_CORE = unit([0.75, 0.21, -1]);
     const glslVec3 = (v) => `vec3(${v.map((n) => n.toFixed(4)).join(', ')})`;
+    // Surface maps sit beside the modes, wherever the page that hosts them lives.
+    const ASSETS = (() => {
+        const here = global.document?.currentScript?.src;
+        return here ? new URL('../assets/', here).href : 'music-stage/assets/';
+    })();
 
     /* ============================================================================
      * 1. 深空分镜导演 (Deep-Space Cinematography & Shot Director)
@@ -1374,13 +1379,45 @@
             fused.setIndex(index);
             return fused;
         };
-        // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane.
-        const makeBodyMaterial = (kind, seed) => new T.ShaderMaterial({
+        // Photographed cloud decks and a measured ring profile, kept as
+        // luminance only: the palette still decides every colour. Until a map
+        // arrives, and wherever it cannot be read, the procedural surface stands in.
+        const surfaceMaps = new Map();
+        let surfacesReleased = false;
+        const wearSurface = (material, file) => {
+            if (!file || !T.TextureLoader) return material;
+            let entry = surfaceMaps.get(file);
+            if (!entry) {
+                entry = { texture: null, wearers: [] };
+                surfaceMaps.set(file, entry);
+                new T.TextureLoader().load(ASSETS + file, (texture) => {
+                    if (surfacesReleased) { texture.dispose(); return; }
+                    texture.wrapS = T.RepeatWrapping;
+                    texture.anisotropy = 4;
+                    entry.texture = texture;
+                    entry.wearers.forEach((wearer) => {
+                        wearer.uniforms.uSurface.value = texture;
+                        wearer.uniforms.uMapped.value = 1;
+                    });
+                }, undefined, () => {});
+            }
+            if (entry.texture) {
+                material.uniforms.uSurface.value = entry.texture;
+                material.uniforms.uMapped.value = 1;
+            } else {
+                entry.wearers.push(material);
+            }
+            return material;
+        };
+        // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane, 4 air above the clouds.
+        const AIR_REACH = 1.045;
+        const makeBodyMaterial = (kind, seed, surface) => wearSurface(new T.ShaderMaterial({
             transparent: kind >= 2,
             depthWrite: kind < 2,
-            side: kind >= 2 ? T.DoubleSide : T.FrontSide,
+            side: kind === 2 || kind === 3 ? T.DoubleSide : T.FrontSide,
             uniforms: {
                 uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
+                uSurface: { value: null }, uMapped: { value: 0 },
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
@@ -1409,7 +1446,8 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius;
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped;
+                uniform sampler2D uSurface;
                 uniform vec2 uRing, uViewport;
                 uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
                 varying vec3 vLocal, vWorld, vNormal;
@@ -1426,6 +1464,8 @@
                 }
                 float fbm(vec3 p) { return noise(p) * 0.55 + noise(p * 2.1) * 0.28 + noise(p * 4.3) * 0.17; }
                 const vec3 SUN = ${glslVec3(SUN_AT)};
+                // Where the cloud tops' silhouette falls on the shell of air around them.
+                const float LIMB = ${Math.sqrt(1 - 1 / (AIR_REACH * AIR_REACH)).toFixed(4)};
 
                 void main() {
                     // Gathering and tearing apart: a noise front eats the surface.
@@ -1439,7 +1479,7 @@
                     if (uKind < 1.5 && dither > fade) discard;
 
                     vec3 n = normalize(vNormal);
-                    if (uKind > 2.5) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                    if (uKind > 2.5 && uKind < 3.5) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
                     vec3 v = normalize(cameraPosition - vWorld);
                     if (dot(n, v) < 0.0) n = -n;
                     float ndl = dot(n, uLight);
@@ -1485,9 +1525,21 @@
                         float storm = smoothstep(0.62, 0.86, fbm(vec3(p.x * 4.0, lat * 13.0, p.z * 4.0) + uSeed * 11.0));
                         vec3 dark = mix(uColorPrimary, uColorInk, 0.12) * 0.26;
                         vec3 pale = mix(uColorPrimary, uColorInk, 0.62) * 0.74;
-                        vec3 surface = mix(dark, pale, bands * (0.72 + fine * 0.28));
+                        float deck = bands * (0.72 + fine * 0.28);
+                        if (uMapped > 0.5) {
+                            // A real cloud deck turns slowly under the same light;
+                            // only its light and dark are kept.
+                            vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, vUv.y + (warp - 0.5) * 0.004);
+                            deck = smoothstep(0.04, 0.96, texture2D(uSurface, at).r);
+                            storm = 0.0;
+                            bands = deck;
+                        }
+                        vec3 surface = mix(dark, pale, deck);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.25) * 0.8, storm * 0.5);
                         surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
+                        // Belts lean warm and the brightest zones catch the accent.
+                        surface = mix(surface, uColorEmber * 0.36, smoothstep(0.5, 0.12, deck) * 0.42 * uMapped);
+                        surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
                         col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
                         // Seen against the sun the air along the limb lights up.
@@ -1511,12 +1563,34 @@
                         float density = ringlets * edges * division * wave * dust;
                         vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
                         tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
+                        if (uMapped > 0.5) {
+                            // A measured profile: how much ice there is along the
+                            // radius, and how bright it is.
+                            vec4 profile = texture2D(uSurface, vec2(t, 0.5));
+                            float sand = 0.84 + 0.16 * noise(vec3(t * 420.0, uSeed * 5.0, 0.0));
+                            density = profile.r * sand * edges * (0.9 + 0.1 * wave) * dust;
+                            tone = mix(uColorAccent, mix(uColorPrimary, uColorInk, 0.4), smoothstep(0.05, 0.45, t))
+                                * (0.5 + 1.45 * profile.g);
+                            tone = mix(tone, uColorInk * 0.62, smoothstep(0.78, 1.0, t) * 0.6);
+                        }
                         float along = -dot(vLocal, uLightLocal);
                         float miss = length(vLocal + uLightLocal * along);
                         float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
                         float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
                         col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 0.7) * mix(0.05, 1.0, shadow);
                         alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
+                    } else if (uKind > 3.5) {
+                        // Air above the cloud tops: brightest along the limb, thinning
+                        // outwards, lit on the day side and glowing when the sun is behind.
+                        float facing = clamp(dot(n, v), 0.0, 1.0);
+                        float halo = facing < LIMB
+                            ? pow(facing / LIMB, 2.4)
+                            : pow(1.0 - (facing - LIMB) / (1.0 - LIMB), 7.0);
+                        float lit = smoothstep(-0.32, 0.45, ndl);
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.5, 0.3, dot(n, SUN));
+                        col = mix(uColorPrimary, uColorInk, 0.38) * (0.5 + lit)
+                            + mix(uColorAccent, uColorInk, 0.5) * against * 1.5;
+                        alpha = halo * (0.05 + 0.5 * lit + 0.55 * against) * fade * step(grain, solid - 0.04);
                     } else {
                         // Light sail: a thin membrane on ribs, iridescent at grazing angles.
                         float rib = max(smoothstep(0.86, 1.0, abs(fract(vUv.x * 11.0) * 2.0 - 1.0)),
@@ -1539,7 +1613,7 @@
                     #include <colorspace_fragment>
                 }
             `
-        });
+        }), surface);
 
         const buildStationBody = ({ p, q, radius }, seed) => {
             class KnotPath extends T.Curve {
@@ -1558,14 +1632,19 @@
             ]), makeBodyMaterial(0, seed)]];
         };
         const buildPlanetBody = ({ radius }, seed) =>
-            [[fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]), makeBodyMaterial(1, seed)]];
+            [
+                [fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]),
+                    makeBodyMaterial(1, seed, seed < 0.5 ? 'gas-giant-b.webp' : 'gas-giant-a.webp')],
+                [fuse([[new T.SphereGeometry(radius * 0.985 * AIR_REACH, 56, 32), 0]]), makeBodyMaterial(4, seed)]
+            ];
         const buildRingedBody = ({ inner, outer }, seed) => {
             const bodyRadius = inner / 1.32;
-            const disc = makeBodyMaterial(2, seed);
+            const disc = makeBodyMaterial(2, seed, 'ring-system.png');
             disc.uniforms.uRing.value.set(inner, outer);
             disc.uniforms.uBodyRadius.value = bodyRadius;
             return [
-                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37)],
+                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp')],
+                [fuse([[new T.SphereGeometry(bodyRadius * AIR_REACH, 48, 28), 0]]), makeBodyMaterial(4, seed + 0.37)],
                 [fuse([[new T.RingGeometry(inner, outer, 160, 6).rotateX(-Math.PI / 2), 0]]), disc]
             ];
         };
@@ -2637,6 +2716,8 @@
                     node.mat?.dispose?.();
                 });
                 bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
+                surfacesReleased = true;
+                surfaceMaps.forEach((entry) => entry.texture?.dispose());
                 ripples.forEach((r) => r.mat?.dispose?.());
             }
         };

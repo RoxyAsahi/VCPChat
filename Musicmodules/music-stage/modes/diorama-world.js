@@ -33,6 +33,15 @@
     const SIGHT_FLOOR = 2.35;
     const LAMP_GAIN = 2.6;
     const POLE_OFFSET = 3.4, LAMP_OFFSET = 2.55, LAMP_Y = 5.8, CONTACT_Y = 5.72;
+    // Scanned surfaces and models sit beside the modes, wherever the page that hosts them lives.
+    const ASSETS = (() => {
+        const here = global.document?.currentScript?.src;
+        return here ? new URL('../assets/', here).href : 'music-stage/assets/';
+    })();
+    const SIGNAL_RED = '#ff3b2f';
+    // Landmarks on the far shore, as bearings round the sky. The line runs towards -z.
+    const ISLE = Object.freeze({ bearing: -1.3, reach: 0.2, radius: 520, crest: 34, height: 27, tower: 0.16 });
+    const FUJI = Object.freeze({ bearing: -1.08, reach: 0.21, radius: 646, height: 62 });
     const create = (T, scene) => {
         const root = new T.Group();
         scene.add(root);
@@ -45,6 +54,108 @@
         const concrete = material(new T.MeshStandardMaterial({ color: '#444852', roughness: 0.8 }));
         const lampMaterial = material(new T.MeshBasicMaterial({ color: '#ffd994' }));
         const coldLampMaterial = material(new T.MeshBasicMaterial({ color: '#9fe6d6' }));
+        /*
+         * Scanned wood, gravel and rock are used for their light and dark
+         * only. They break up a palette colour and roughen how it takes the
+         * light; they never bring a hue of their own. Until a scan arrives,
+         * and wherever it cannot be read, the plain material stands in.
+         */
+        let released = false;
+        const scans = [];
+        const scan = (file, arrived) => {
+            const held = { map: { value: null }, ready: { value: 0 } };
+            if (T.TextureLoader) new T.TextureLoader().load(ASSETS + file, texture => {
+                if (released) { texture.dispose(); return; }
+                texture.wrapS = texture.wrapT = T.RepeatWrapping;
+                texture.anisotropy = 4;
+                scans.push(texture);
+                held.map.value = texture;
+                held.ready.value = 1;
+                arrived?.(texture);
+            }, undefined, () => {});
+            return held;
+        };
+        const planks = scan('planks.webp'), gravel = scan('ballast.webp');
+        // Boards are laid along the longer side of whatever they clad, an
+        // edge of the piece falling on a gap between two boards.
+        const grained = bed => {
+            const wood = material(new T.MeshStandardMaterial({ color: '#292d32', roughness: 0.95 }));
+            if (bed) wood.defines = { TRACK_BED: '' };
+            wood.onBeforeCompile = shader => {
+                Object.assign(shader.uniforms, { planks: planks.map, planked: planks.ready,
+                    gravel: gravel.map, gravelled: gravel.ready, stone: { value: concrete.color } });
+                shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
+                    attribute float bed;
+                    varying vec3 vGrainAt, vGrainSize, vGrainFace, vGrainWorld;
+                    varying float vBed, vGrainSeed;`).replace('#include <begin_vertex>', `#include <begin_vertex>
+                    #ifdef USE_INSTANCING
+                        mat4 grainMatrix = modelMatrix * instanceMatrix;
+                        vGrainSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz),
+                            length(instanceMatrix[2].xyz));
+                        vGrainSeed = fract(sin(mod(float(gl_InstanceID), 289.0) * 12.9898) * 43758.5453);
+                    #else
+                        mat4 grainMatrix = modelMatrix;
+                        vGrainSize = vec3(1.0);
+                        vGrainSeed = 0.0;
+                    #endif
+                    vGrainAt = position * vGrainSize;
+                    vGrainFace = normal;
+                    vGrainWorld = (grainMatrix * vec4(position, 1.0)).xyz;
+                    vBed = bed;`);
+                shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+                    uniform sampler2D planks, gravel;
+                    uniform float planked, gravelled;
+                    uniform vec3 stone;
+                    varying vec3 vGrainAt, vGrainSize, vGrainFace, vGrainWorld;
+                    varying float vBed, vGrainSeed;
+                    float grainRelief = 0.0, grainDepth = 0.0;`).replace('#include <color_fragment>', `#include <color_fragment>
+                    #ifdef TRACK_BED
+                    if (vBed > 0.5) {
+                        float pebbles = texture2D(gravel, vGrainWorld.xz * 0.5).r;
+                        diffuseColor.rgb = stone * mix(0.8, 0.4 + 1.45 * pebbles, gravelled);
+                        grainRelief = pebbles * gravelled;
+                        grainDepth = 0.018;
+                    } else {
+                        vec2 board = vec2(0.0586 + floor(vGrainSeed * 9.0) / 9.0 + (vGrainAt.z * 0.94 + 0.12) / 2.16,
+                            vGrainAt.x / 2.16 + vGrainSeed);
+                    #else
+                    {
+                        vec3 face = abs(vGrainFace);
+                        vec2 at = face.x > face.y && face.x > face.z ? vGrainAt.zy
+                            : face.y > face.z ? vGrainAt.xz : vGrainAt.xy;
+                        vec2 extent = face.x > face.y && face.x > face.z ? vGrainSize.zy
+                            : face.y > face.z ? vGrainSize.xz : vGrainSize.xy;
+                        if (extent.y > extent.x) { at = at.yx; extent = extent.yx; }
+                        vec2 board = vec2(0.0586 + floor(vGrainSeed * 9.0) / 9.0 + (at.y + extent.y * 0.5) / 1.62,
+                            at.x / 1.62 + vGrainSeed);
+                    #endif
+                        float wood = texture2D(planks, board).r;
+                        diffuseColor.rgb *= mix(1.0, min(0.2 + 2.3 * wood, 2.1), planked);
+                        grainRelief = wood * planked;
+                        grainDepth = 0.008;
+                    }`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+                    {
+                        // Relief from the scan's own light and dark, by screen-space derivatives.
+                        vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+                        vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
+                        float det = dot(dpdx, r1);
+                        normal = normalize(abs(det) * normal - sign(det) * grainDepth
+                            * (dFdx(grainRelief) * r1 + dFdy(grainRelief) * r2));
+                    }`);
+            };
+            wood.customProgramCacheKey = () => (bed ? 'grained-bed' : 'grained');
+            return wood;
+        };
+        const wood = grained(false), permanentWay = grained(true);
+        // Shore rocks: a scanned pile, lit as stone in the palette's colour.
+        const rockMaterial = material(new T.MeshStandardMaterial({ color: '#444852', roughness: 0.92 }));
+        scan('coast-rock.webp', texture => {
+            texture.flipY = false;
+            rockMaterial.map = rockMaterial.bumpMap = texture;
+            rockMaterial.bumpScale = 0.4;
+            rockMaterial.needsUpdate = true;
+        });
+        const signalMaterial = material(new T.MeshBasicMaterial({ color: '#ffffff' }));
         // Several boxes fused into one shape, so a profile still costs one instance.
         const fused = parts => {
             const positions = [], normals = [], indices = [];
@@ -73,20 +184,75 @@
         // Flat-bottom rail: head, web and foot. Sleepers carry their tie plates.
         const rails = instances(steel, 320, fused([
             [0.07, 0.05, 1, 0, 0.055, 0], [0.024, 0.09, 1, 0, 0, 0], [0.15, 0.024, 1, 0, -0.055, 0]]));
-        const sleepers = instances(timber, 400, fused([
-            [2.4, 0.16, 0.24, 0, 0, 0], [0.34, 0.03, 0.2, -0.7175, 0.09, 0], [0.34, 0.03, 0.2, 0.7175, 0.09, 0]]));
+        // Each sleeper brings its own length of ballast: a crowned bed the
+        // timbers sit in, its shoulders falling away into the shallows.
+        const sleepers = instances(permanentWay, 400, (() => {
+            const shape = fused([
+                [2.4, 0.16, 0.24, 0, 0, 0], [0.34, 0.03, 0.2, -0.7175, 0.09, 0], [0.34, 0.03, 0.2, 0.7175, 0.09, 0]]);
+            const position = Array.from(shape.attributes.position.array);
+            const normal = Array.from(shape.attributes.normal.array);
+            const index = Array.from(shape.index.array);
+            const bed = new Array(position.length / 3).fill(0);
+            const profile = [[-2.3, -0.3], [-1.5, 0.03], [1.5, 0.03], [2.3, -0.3]], half = 0.39;
+            for (let i = 0; i < 3; i++) {
+                const [x0, y0] = profile[i], [x1, y1] = profile[i + 1];
+                const length = Math.hypot(x1 - x0, y1 - y0), base = position.length / 3;
+                position.push(x0, y0, -half, x1, y1, -half, x0, y0, half, x1, y1, half);
+                for (let corner = 0; corner < 4; corner++) {
+                    normal.push(-(y1 - y0) / length, (x1 - x0) / length, 0);
+                    bed.push(1);
+                }
+                index.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
+            }
+            shape.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            shape.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            shape.setAttribute('bed', new T.Float32BufferAttribute(bed, 1));
+            shape.setIndex(index);
+            return shape;
+        })());
         // Tapered octagonal column: catenary masts, lamp posts, signals.
         const masts = instances(steel, 72, geometry(new T.CylinderGeometry(0.065, 0.115, 1, 8)));
         // Everything else is drawn from one pool per material, whatever it
         // depicts, so richer scenery does not cost more draw calls.
         const steelParts = instances(steel, 720);
         const concreteParts = instances(concrete, 320);
-        const timberParts = instances(timber, 240);
+        const timberParts = instances(wood, 240);
         const glowParts = instances(lampMaterial, 128);
         const coldGlowParts = instances(coldLampMaterial, 64);
-        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts];
-        Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts })
-            .forEach(([name, mesh]) => { mesh.name = name; });
+        // The pair of lamps at a level crossing, flashing in turn.
+        const signalLamps = instances(signalMaterial, 16);
+        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts, signalLamps];
+        Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts,
+            signalLamps }).forEach(([name, mesh]) => { mesh.name = name; });
+        // The rock pile is a data script of its own, fetched once the stage is up.
+        let rocks = null, rocksArrived = false;
+        const raiseRocks = () => {
+            const data = global.MusicStageAssets?.coastRock;
+            if (!data || released || rocks) return;
+            const bytes = text => Uint8Array.from(global.atob(text), c => c.charCodeAt(0));
+            const quantised = new Uint16Array(bytes(data.position).buffer);
+            const position = new Float32Array(quantised.length);
+            for (let i = 0; i < quantised.length; i++)
+                position[i] = quantised[i] / 65535 * data.size[i % 3] + data.origin[i % 3];
+            const shape = geometry(new T.BufferGeometry());
+            shape.setAttribute('position', new T.BufferAttribute(position, 3));
+            shape.setAttribute('normal', new T.BufferAttribute(new Int8Array(bytes(data.normal).buffer), 3, true));
+            shape.setAttribute('uv', new T.BufferAttribute(new Uint16Array(bytes(data.uv).buffer), 2, true));
+            shape.setIndex(new T.BufferAttribute(new Uint16Array(bytes(data.index).buffer), 1));
+            rocks = instances(rockMaterial, 40, shape);
+            rocks.name = 'rocks';
+            sceneryPools.push(rocks);
+            rocksArrived = true;
+        };
+        if (T.TextureLoader && global.document?.createElement) {
+            if (global.MusicStageAssets?.coastRock) raiseRocks();
+            else {
+                const tag = global.document.createElement('script');
+                tag.src = ASSETS + 'coast-rock.js';
+                tag.onload = raiseRocks;
+                global.document.head?.appendChild(tag);
+            }
+        }
         let stationTypes = [];
         const wirePositions = new Float32Array(40 * 20 * 6);
         const wireGeometry = geometry(new T.BufferGeometry());
@@ -106,9 +272,59 @@
             ridgePositions.push(ax, -2, az, bx, -2, bz, ax, elevation(a), az,
                 bx, -2, bz, bx, elevation(b), bz, ax, elevation(a), az);
         }
+        /*
+         * The far shore is the Shonan coast. Off it lies Enoshima: a wooded
+         * table of an island, its lighthouse tower standing on top, joined to
+         * the land by a long bridge. Beyond and to the right, Mount Fuji. They
+         * are part of the same silhouette as the ridge, a tone apart: the
+         * island nearer and darker, the mountain hazed and capped with snow.
+         */
+        const ridgeTones = new Array(ridgePositions.length / 3).fill(1);
+        const facet = (a0, a1, radius, low0, high0, low1, high1, tone) => {
+            const x0 = Math.cos(a0) * radius, z0 = Math.sin(a0) * radius;
+            const x1 = Math.cos(a1) * radius, z1 = Math.sin(a1) * radius;
+            ridgePositions.push(x0, low0, z0, x1, low1, z1, x0, high0, z0, x1, low1, z1, x1, high1, z1, x0, high0, z0);
+            for (let i = 0; i < 6; i++) ridgeTones.push(tone);
+        };
+        const isleCrest = u => ISLE.crest * Math.pow(Math.max(0, 1 - u * u), 0.55) * (0.86 + 0.14 * Math.cos(u * 2.2 - 0.5))
+            + (Math.abs(u) < 0.97 ? 1.6 * Math.sin(u * 23) + 1.1 * Math.sin(u * 51 + 1) : 0);
+        for (let i = 0; i < 56; i++) {
+            const u0 = i / 28 - 1, u1 = (i + 1) / 28 - 1;
+            facet(ISLE.bearing + u0 * ISLE.reach, ISLE.bearing + u1 * ISLE.reach, ISLE.radius,
+                -2, Math.max(-2, isleCrest(u0)), -2, Math.max(-2, isleCrest(u1)), 0.72);
+        }
+        // The tower: a stem that opens out to the deck near its top, a lantern, a mast.
+        const towerAt = ISLE.bearing + ISLE.tower * ISLE.reach, towerFoot = isleCrest(ISLE.tower) - 1;
+        [[0, 0.8, 0.62, 1.1], [0.62, 1.1, 0.76, 2.7], [0.76, 2.7, 0.8, 2.7], [0.8, 1.7, 0.88, 1.3], [0.88, 0.22, 1, 0.14]]
+            .forEach(([from, wide0, to, wide1]) => {
+                const y0 = towerFoot + from * ISLE.height, y1 = towerFoot + to * ISLE.height;
+                const split = (w0, w1) => {
+                    const x0 = Math.cos(towerAt - w0 / ISLE.radius) * ISLE.radius, z0 = Math.sin(towerAt - w0 / ISLE.radius) * ISLE.radius;
+                    const x1 = Math.cos(towerAt + w0 / ISLE.radius) * ISLE.radius, z1 = Math.sin(towerAt + w0 / ISLE.radius) * ISLE.radius;
+                    const x2 = Math.cos(towerAt - w1 / ISLE.radius) * ISLE.radius, z2 = Math.sin(towerAt - w1 / ISLE.radius) * ISLE.radius;
+                    const x3 = Math.cos(towerAt + w1 / ISLE.radius) * ISLE.radius, z3 = Math.sin(towerAt + w1 / ISLE.radius) * ISLE.radius;
+                    ridgePositions.push(x0, y0, z0, x1, y0, z1, x2, y1, z2, x1, y0, z1, x3, y1, z3, x2, y1, z2);
+                    for (let i = 0; i < 6; i++) ridgeTones.push(0.72);
+                };
+                split(wide0, wide1);
+            });
+        const fujiCrest = u => {
+            const flank = Math.pow(Math.max(0, 1 - Math.abs(u)), 1.75);
+            return FUJI.height * Math.min(flank, 0.93 + 0.02 * Math.sin(u * 90)) / 0.93;
+        };
+        const snowLine = u => FUJI.height * (0.62 + 0.05 * Math.sin(u * 37) + 0.03 * Math.sin(u * 83));
+        for (let i = 0; i < 64; i++) {
+            const u0 = i / 32 - 1, u1 = (i + 1) / 32 - 1;
+            const a0 = FUJI.bearing + u0 * FUJI.reach, a1 = FUJI.bearing + u1 * FUJI.reach;
+            const h0 = fujiCrest(u0), h1 = fujiCrest(u1), s0 = Math.min(h0, snowLine(u0)), s1 = Math.min(h1, snowLine(u1));
+            facet(a0, a1, FUJI.radius, -2, s0, -2, s1, 1.22);
+            if (h0 > s0 || h1 > s1) facet(a0, a1, FUJI.radius, s0, h0, s1, h1, 2.3);
+        }
         const ridgeGeometry = geometry(new T.BufferGeometry());
         ridgeGeometry.setAttribute('position', new T.Float32BufferAttribute(ridgePositions, 3));
-        const ridgeMaterial = material(new T.MeshBasicMaterial({ color: '#1c2935', side: T.DoubleSide, fog: false }));
+        ridgeGeometry.setAttribute('color', new T.Float32BufferAttribute(ridgeTones.flatMap(tone => [tone, tone, tone]), 3));
+        const ridgeMaterial = material(new T.MeshBasicMaterial({ color: '#1c2935', side: T.DoubleSide, fog: false,
+            vertexColors: true }));
         const ridge = new T.Mesh(ridgeGeometry, ridgeMaterial);
         root.add(ridge);
         const dummy = new T.Object3D();
@@ -670,6 +886,28 @@
                 phases.push(shore());
             }
         }
+        const light = (bearing, radius, y, brightness, warm, size) => {
+            positions.push(Math.cos(bearing) * radius, y, Math.sin(bearing) * radius);
+            colors.push(brightness, brightness * (0.7 + warm * 0.2), brightness * (0.34 + warm * 0.4));
+            sizes.push(size);
+            phases.push(shore());
+        };
+        // The island: the harbour and the shrine town at its foot, a few lights up the slope.
+        for (let i = 0; i < 70; i++) {
+            const u = 0.1 + shore() * 0.85, climb = shore() * shore();
+            light(ISLE.bearing + u * ISLE.reach, ISLE.radius - 2, 1 + climb * 18 * Math.sqrt(Math.max(0, 1 - u * u)),
+                0.5 + shore() * 0.5, shore(), 1.8 + shore() * 1.4);
+        }
+        // Its bridge: a string of lamps from the island across to the land.
+        for (let i = 0; i <= 30; i++) {
+            light(ISLE.bearing + ISLE.reach * (0.96 + i / 30 * 1.5), ISLE.radius + i / 30 * 90, 3.2, 1, 0.75, 2.6);
+        }
+        // The tower: lit windows round the deck, the lantern, and the stem picked out below.
+        const beaconAt = ISLE.bearing + ISLE.tower * ISLE.reach;
+        const beaconFoot = ISLE.crest * Math.pow(1 - ISLE.tower * ISLE.tower, 0.55) * 0.9;
+        for (let i = -3; i <= 3; i++) light(beaconAt + i * 0.75 / ISLE.radius, ISLE.radius - 3, beaconFoot + ISLE.height * 0.78, 1.2, 0.9, 2.2);
+        for (let i = 1; i <= 6; i++) light(beaconAt, ISLE.radius - 3, beaconFoot + ISLE.height * 0.1 * i, 0.6, 1, 1.7);
+        light(beaconAt, ISLE.radius - 3, beaconFoot + ISLE.height * 0.9, 1.8, 1, 5);
         const townLights = positions.length / 3;
         for (let i = 0; i < 8000; i++) {
             const y = random(), angle = random() * Math.PI * 2;
@@ -937,6 +1175,17 @@
         let baseStarOpacity = 0.8;
         // Palette-derived baselines; chapter warmth modulates around them each frame.
         let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1;
+        // The lamps of a crossing light in turn, a little faster than once a second.
+        const signalLit = new T.Color(SIGNAL_RED).multiplyScalar(3.2), signalDark = new T.Color(SIGNAL_RED).multiplyScalar(0.06);
+        const flashSignals = time => {
+            if (!signalLamps.count) return;
+            const turn = Math.floor(time * 2.2) & 1;
+            for (let i = 0; i < signalLamps.count; i++) {
+                // Every third is the lamp on a barrier arm, lit with whichever is nearer.
+                signalLamps.setColorAt(i, i % 3 === 2 || (i % 3) === turn ? signalLit : signalDark);
+            }
+            signalLamps.instanceColor.needsUpdate = true;
+        };
         const updateLights = (track, s, saving, audio) => {
             lightAnchors.sort((a, b) => Math.abs(a.address - s) - Math.abs(b.address - s));
             for (let i = 0; i < lights.length; i++) {
@@ -995,6 +1244,9 @@
             steel.color.copy(structure).lerp(muted, light ? 0.3 : 0.5);
             concrete.color.copy(surface).lerp(border, light ? 0.2 : 0.45);
             timber.color.copy(deep).lerp(structure, 0.55).lerp(emission, 0.025);
+            wood.color.copy(timber.color);
+            permanentWay.color.copy(timber.color);
+            rockMaterial.color.copy(concrete.color).multiplyScalar(rockMaterial.map ? 1.7 : 0.8);
             hemisphere.color.copy(light ? surface : muted).lerp(tertiary, 0.12);
             hemisphere.groundColor.copy(deep);
             hemisphere.intensity = light ? 1.8 : 0.65;
@@ -1139,7 +1391,9 @@
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - 24 + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
+            if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
+                flashSignals(time);
                 updateLights(track, s, saving, audio);
                 return;
             }
@@ -1154,6 +1408,16 @@
             const span = (mesh, address, l0, y0, l1, y1, thick, depth = thick) => part(mesh, address,
                 (l0 + l1) / 2, (y0 + y1) / 2, Math.hypot(l1 - l0, y1 - y0), thick, depth, Math.atan2(y1 - y0, l1 - l0));
             const rawPart = part, rawSpan = span;
+            // A pile of shore rocks, turned and sized so no two read as the same one.
+            const rock = (address, lateral, size, turn, sunk = 0.12) => {
+                if (!rocks || rocks.count >= rocks.instanceMatrix.count) return;
+                const f = track.at(address);
+                dummy.position.set(f.position.x + f.right.x * lateral, -sunk * size, f.position.z + f.right.z * lateral);
+                dummy.rotation.set(0, turn, 0);
+                dummy.scale.set(size, size * (0.85 + 0.3 * Math.abs(Math.sin(turn * 3.1))), size);
+                dummy.updateMatrix();
+                rocks.setMatrixAt(rocks.count++, dummy.matrix);
+            };
             const speed = tuning.cameraSpeed ?? 1;
             // When the train reaches an address along the line.
             const timeAt = address => {
@@ -1398,16 +1662,37 @@
                         part(glowParts, address + z, lateral(10), 4.2, 0.34, 0.38, 0.34);
                     }
                     if (!saving) {
-                        // A gate standing alone in the shallows beyond the steps.
-                        for (const z of [-3.1, 3.1]) {
-                            part(timberParts, address + z, lateral(15.5), 2.9, 0.42, 6.4, 0.42, 0, z > 0 ? 0.045 : -0.045);
-                            part(concreteParts, address + z, lateral(15.5), 0.25, 0.7, 0.5, 0.7);
+                        // A torii standing alone in the shallows beyond the steps, after
+                        // the bronze one on the approach to Enoshima: round columns
+                        // leaning in on stone footings, a tie beam run through them and
+                        // wedged, a strut carrying the tablet, and a lintel that lifts
+                        // towards its ends.
+                        const gate = lateral(15.5);
+                        for (const z of [-2.9, 2.9]) {
+                            part(masts, address + z * 0.975, gate, 3.0, 3.1, 5.9, 3.1, 0, z > 0 ? 0.045 : -0.045);
+                            part(concreteParts, address + z, gate, 0.16, 1.05, 0.5, 1.05);
+                            part(concreteParts, address + z, gate, 0.5, 0.82, 0.18, 0.82);
+                            part(steelParts, address + z * 0.96, gate, 4.92, 0.6, 0.05, 0.16);
                         }
-                        part(timberParts, address, lateral(15.5), 6.25, 0.5, 0.4, 8.6);
-                        part(timberParts, address, lateral(15.5), 6.52, 0.72, 0.14, 9.5);
-                        part(timberParts, address, lateral(15.5), 5.3, 0.3, 0.3, 7.2);
-                        part(timberParts, address, lateral(15.5), 5.78, 0.26, 0.66, 0.3);
-                        part(coldGlowParts, address, lateral(15.5), 4.75, 0.22, 0.3, 0.22);
+                        part(steelParts, address, gate, 4.7, 0.22, 0.38, 7.5);
+                        part(steelParts, address, gate, 5.27, 0.18, 0.76, 0.3);
+                        part(timberParts, address, lateral(15.36), 5.27, 0.05, 0.84, 0.58);
+                        part(steelParts, address, gate, 5.8, 0.36, 0.3, 6.9);
+                        part(steelParts, address, gate, 6.08, 0.54, 0.2, 4.4);
+                        for (const end of [-1, 1]) {
+                            part(steelParts, address + end * 3.3, gate, 6.17, 0.54, 0.2, 2.3, 0, end * 0.08);
+                            part(steelParts, address + end * 3.3, gate, 6.3, 0.62, 0.05, 2.34, 0, end * 0.08);
+                        }
+                        part(steelParts, address, gate, 6.2, 0.62, 0.05, 4.44);
+                        part(coldGlowParts, address, gate, 4.3, 0.2, 0.3, 0.2);
+                        part(steelParts, address, gate, 4.47, 0.26, 0.04, 0.26);
+                    }
+                    // Rocks gathered against the ends of the steps and out past the gate.
+                    const pile = seededRandom(`rocks:${id}`);
+                    for (const [along, out, size] of [[-8.6, 11.2, 1.25], [-10.9, 13.4, 0.8], [8.2, 12.2, 1.45],
+                        [10.8, 10.6, 0.7], [6.4, 17.6, 1.0], [-5.6, 18.4, 0.6]]) {
+                        rock(address + along + (pile() - 0.5) * 1.2, lateral(out + (pile() - 0.5) * 1.2),
+                            size * (0.85 + pile() * 0.35), pile() * 6.28);
                     }
                 } else {
                     // Window arcade and low walls leave actual openings for
@@ -1439,6 +1724,53 @@
             }
             stationInstances = sceneryPools.reduce((sum, mesh) => sum + mesh.count, 0) - beforeStations;
 
+            // --- Level crossings ---
+            // A road comes up out of the shallows, crosses the line and goes down
+            // again, as the coast road does at every other station along the bay.
+            // The train is always passing, so the arms are down and the lamps flash.
+            const crossings = [];
+            const ROAD = 2.3, crossingPitch = spacing * 11;
+            for (let cell = Math.floor((s - 80) / crossingPitch); cell <= Math.floor((s + 260) / crossingPitch)
+                && enabled; cell++) {
+                if (cell < 0) continue;
+                // Midway between two poles, so neither stands in the road.
+                const address = cell * crossingPitch + spacing * 5.5;
+                if ([-1, 1].some(side => atStation(address, side, 10))) continue;
+                crossings.push(address);
+                part(timberParts, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
+                for (const side of [-1, 1]) {
+                    const L = value => side * value;
+                    part(concreteParts, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
+                    span(concreteParts, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
+                    for (const edge of [-1, 1]) part(concreteParts, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
+                    // The signal stands on the left of the road as it comes up to the line.
+                    const post = address - side * (ROAD + 0.55), at = L(3.3);
+                    const tall = !inSight(track, post, 3.3, side, 4);
+                    part(concreteParts, post, at, 0.34, 0.5, 0.5, 0.5);
+                    part(masts, post, at, tall ? 2.0 : 1.4, 0.95, tall ? 2.9 : 1.7, 0.95);
+                    for (const band of [0.85, 1.25]) part(concreteParts, post, at, band, 0.2, 0.2, 0.2);
+                    // Two lamps side by side on a dark board, each under its hood.
+                    part(steelParts, post, at, 1.95, 0.07, 0.38, 0.98);
+                    for (const lamp of [-0.27, 0.27]) {
+                        part(signalLamps, post + lamp, at, 1.95, 0.13, 0.21, 0.21);
+                        part(steelParts, post + lamp, at, 2.09, 0.3, 0.03, 0.27);
+                    }
+                    if (tall) {
+                        // The crossed boards, and the bell on top.
+                        for (const lean of [-0.6, 0.6]) part(concreteParts, post, at, 2.72, 0.045, 0.15, 1.28, 0, lean);
+                        part(steelParts, post, at, 3.5, 0.24, 0.16, 0.24);
+                    }
+                    // The barrier machine and its arm, down across the road in bands of light and dark.
+                    part(steelParts, post, L(3.85), 0.78, 0.34, 0.8, 0.5);
+                    for (let band = 0; band < 6; band++) {
+                        part(band % 2 ? concreteParts : steelParts, post + side * (0.45 + band * 0.85), L(3.85),
+                            1.08, 0.07, 0.07, 0.85);
+                    }
+                    part(signalLamps, post + side * 3.0, L(3.85), 0.98, 0.07, 0.09, 0.09);
+                    rock(address - side * (ROAD + 1.6), L(7.4), 0.75, cell * 2.4 + side);
+                    rock(address + side * (ROAD + 1.1), L(6.1), 0.5, cell * 1.3 - side);
+                }
+            }
             // --- Remains of old piers: weathered posts standing in the shallows ---
             for (let cell = Math.floor((s - 60) / 34); cell <= Math.floor((s + 240) / 34) && enabled && !saving; cell++) {
                 if (cell < 0) continue;
@@ -1449,7 +1781,8 @@
                 const side = poleSide(track, address);
                 const count = 3 + Math.floor(random() * 5), outward = random() > 0.45;
                 const reach = 8.5 + random() * 5, lantern = random() > 0.5;
-                if (atStation(address, side, 12)) continue;
+                if (atStation(address, side, 12) || crossings.some(at => Math.abs(at - address) < 14)) continue;
+                if (random() > 0.6) rock(address - 1.5, side * (reach + 1.4), 0.55 + random() * 0.5, random() * 6.28, 0.2);
                 for (let post = 0; post < count; post++) {
                     const height = 0.9 + random() * 1.7;
                     const at = address + (outward ? (random() - 0.5) * 0.5 : post * 1.9);
@@ -1465,6 +1798,7 @@
                     }
                 }
             }
+            flashSignals(time);
             updateLights(track, s, saving, audio);
             sceneryPools.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
         };
@@ -1540,6 +1874,8 @@
                 dead = true;
                 scene.remove(root);
                 root.traverse(object => { if (object.isInstancedMesh) object.dispose(); });
+                released = true;
+                scans.forEach(texture => texture.dispose());
                 geometries.forEach(g => g.dispose());
                 materials.forEach(m => m.dispose());
                 target.dispose();
