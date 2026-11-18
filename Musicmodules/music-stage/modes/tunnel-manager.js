@@ -1306,11 +1306,10 @@
                     vAlpha = nearClip * farClip * stageAlpha * (0.68 + seed * 0.32);
 
                     // Once the body has formed, the points that sketched its
-                    // surface give way to the solid; haloes, field lines, jets
-                    // and wakes stay, and a few sparks ride on hulls and rings.
+                    // surface give way to the solid. Planets and rings are left
+                    // clean; field lines, jets and wakes stay on the built things.
                     float keep = uType < 0.5 ? (shade > 2.5 ? 1.0 : shade > 1.5 ? 0.35 : 0.3)
-                        : uType < 1.5 ? (shade > 2.5 ? 0.5 : shade > 1.5 ? 0.25 : 0.0)
-                        : uType < 2.5 ? 0.4
+                        : uType < 2.5 ? 0.0
                         : (shade > 2.5 ? 0.5 : 0.18);
                     vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
                 }
@@ -1384,7 +1383,7 @@
         // arrives, and wherever it cannot be read, the procedural surface stands in.
         const surfaceMaps = new Map();
         let surfacesReleased = false;
-        const wearSurface = (material, file) => {
+        const wearSurface = (material, file, slot = 'uSurface', flag = 'uMapped') => {
             if (!file || !T.TextureLoader) return material;
             let entry = surfaceMaps.get(file);
             if (!entry) {
@@ -1395,17 +1394,17 @@
                     texture.wrapS = T.RepeatWrapping;
                     texture.anisotropy = 4;
                     entry.texture = texture;
-                    entry.wearers.forEach((wearer) => {
-                        wearer.uniforms.uSurface.value = texture;
-                        wearer.uniforms.uMapped.value = 1;
+                    entry.wearers.forEach(([wearer, into, mark]) => {
+                        wearer.uniforms[into].value = texture;
+                        wearer.uniforms[mark].value = 1;
                     });
                 }, undefined, () => {});
             }
             if (entry.texture) {
-                material.uniforms.uSurface.value = entry.texture;
-                material.uniforms.uMapped.value = 1;
+                material.uniforms[slot].value = entry.texture;
+                material.uniforms[flag].value = 1;
             } else {
-                entry.wearers.push(material);
+                entry.wearers.push([material, slot, flag]);
             }
             return material;
         };
@@ -1418,6 +1417,7 @@
             uniforms: {
                 uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
                 uSurface: { value: null }, uMapped: { value: 0 },
+                uRingMap: { value: null }, uRingMapped: { value: 0 }, uRinged: { value: 0 },
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
@@ -1446,8 +1446,8 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped;
-                uniform sampler2D uSurface;
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged;
+                uniform sampler2D uSurface, uRingMap;
                 uniform vec2 uRing, uViewport;
                 uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
                 varying vec3 vLocal, vWorld, vNormal;
@@ -1541,10 +1541,28 @@
                         surface = mix(surface, uColorEmber * 0.36, smoothstep(0.5, 0.12, deck) * 0.42 * uMapped);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
-                        col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
+                        // The disc dims towards its edge, where the light has
+                        // more air to cross, and the terminator runs warm.
+                        float facing = clamp(dot(n, v), 0.0, 1.0);
+                        surface *= mix(0.5, 1.0, pow(facing, 0.55));
+                        surface = mix(surface, surface * mix(vec3(1.0), uColorEmber * 1.6, 0.55),
+                            smoothstep(0.5, 0.0, ndl) * smoothstep(-0.2, 0.1, ndl));
+                        // The rings lay their shadow across the cloud tops.
+                        float veil = 1.0;
+                        if (uRinged > 0.5 && abs(uLightLocal.y) > 0.01) {
+                            float reach = -vLocal.y / uLightLocal.y;
+                            vec3 hit = vLocal + uLightLocal * reach;
+                            float rt = (length(hit.xz) - uRing.x) / (uRing.y - uRing.x);
+                            if (reach > 0.0 && rt > 0.0 && rt < 1.0) {
+                                float ice = uRingMapped > 0.5 ? texture2D(uRingMap, vec2(rt, 0.5)).r
+                                    : 0.75 - 0.7 * smoothstep(0.27, 0.285, rt) * (1.0 - smoothstep(0.34, 0.355, rt));
+                                veil = 1.0 - 0.82 * ice * smoothstep(0.0, 0.03, rt) * (1.0 - smoothstep(0.95, 1.0, rt));
+                            }
+                        }
+                        col = surface * (0.006 + day * 0.99 * veil) + air * rim * (0.012 + day * 0.8 * veil);
                         // Seen against the sun the air along the limb lights up.
                         float against = pow(max(dot(-v, SUN), 0.0), 4.0);
-                        col += air * rim * against * (0.4 + 0.6 * smoothstep(-0.4, 0.5, dot(n, SUN))) * 2.6;
+                        col += air * rim * against * smoothstep(-0.1, 0.7, dot(n, SUN)) * 2.2;
                         float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
                         float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
                         col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
@@ -1560,7 +1578,7 @@
                         float division = 1.0 - 0.94 * smoothstep(0.27, 0.285, t) * (1.0 - smoothstep(0.34, 0.355, t));
                         float wave = 0.82 + 0.18 * sin(angle * 2.0 - log(max(r, 1.0)) * 9.0 + uTime * 0.12);
                         float dust = 0.82 + 0.18 * noise(vec3(vLocal.xz * 1.3, uSeed));
-                        float density = ringlets * edges * division * wave * dust;
+                        float density = ringlets * division * wave * dust;
                         vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
                         tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
                         if (uMapped > 0.5) {
@@ -1568,17 +1586,42 @@
                             // radius, and how bright it is.
                             vec4 profile = texture2D(uSurface, vec2(t, 0.5));
                             float sand = 0.84 + 0.16 * noise(vec3(t * 420.0, uSeed * 5.0, 0.0));
-                            density = profile.r * sand * edges * (0.9 + 0.1 * wave) * dust;
-                            tone = mix(uColorAccent, mix(uColorPrimary, uColorInk, 0.4), smoothstep(0.05, 0.45, t))
-                                * (0.5 + 1.45 * profile.g);
-                            tone = mix(tone, uColorInk * 0.62, smoothstep(0.78, 1.0, t) * 0.6);
+                            density = profile.r * sand * (0.94 + 0.06 * wave);
+                            // Dusty and warm near the planet, pale ice in the broad
+                            // middle ring, greyer and cooler outside the division.
+                            vec3 dusty = mix(uColorAccent, uColorEmber, 0.35) * 0.55;
+                            vec3 ice = mix(uColorInk, uColorAccent, 0.14);
+                            vec3 outerIce = mix(uColorInk, uColorPrimary, 0.3) * 0.8;
+                            tone = mix(dusty, ice, smoothstep(0.12, 0.3, t));
+                            tone = mix(tone, outerIce, smoothstep(0.66, 0.76, t));
+                            tone *= 0.45 + 0.75 * profile.g;
                         }
+                        // Fine ringlets, kept only while a pixel can still resolve them.
+                        float grainT = fwidth(t);
+                        density *= 1.0 - 0.3 * (1.0 - smoothstep(0.001, 0.004, grainT))
+                            * noise(vec3(t * 760.0, uSeed * 7.0, 1.0));
+                        density *= 1.0 - 0.22 * (1.0 - smoothstep(0.004, 0.012, grainT))
+                            * noise(vec3(t * 230.0, uSeed * 3.0, 2.0));
                         float along = -dot(vLocal, uLightLocal);
                         float miss = length(vLocal + uLightLocal * along);
-                        float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
+                        // The planet's shadow, its edge softening with distance.
+                        float soft = 0.03 + 0.05 * clamp(-along / (uBodyRadius * 3.0), 0.0, 1.0);
+                        float shadow = along < 0.0
+                            ? smoothstep(uBodyRadius * (1.0 - soft), uBodyRadius * (1.0 + soft), miss) : 1.0;
+                        // Ice in sunlight: the lit face reflects, more where the
+                        // ring is thick; seen from below, the thin rings glow
+                        // with light passed through and the thick one goes dark.
+                        float depthOf = density * 3.2;
+                        float tilt = 0.3 + 0.7 * abs(uLightLocal.y);
+                        float reflected = (1.0 - exp(-depthOf)) * tilt;
+                        float passed = depthOf * exp(-depthOf) * 1.9 * tilt;
+                        float litFace = smoothstep(-0.04, 0.04, ndl);
                         float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
-                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 0.7) * mix(0.05, 1.0, shadow);
-                        alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
+                        col = tone * (mix(passed, reflected, litFace) * 0.82 + forward * 0.5 * passed)
+                            * mix(0.03, 1.0, shadow);
+                        // Seen edge-on a thin sheet still hides what is behind it.
+                        float across = max(0.22, abs(dot(n, v)));
+                        alpha = (1.0 - exp(-depthOf * 0.8 / across)) * edges * fade;
                     } else if (uKind > 3.5) {
                         // Air above the cloud tops: brightest along the limb, thinning
                         // outwards, lit on the day side and glowing when the sun is behind.
@@ -1587,10 +1630,10 @@
                             ? pow(facing / LIMB, 2.4)
                             : pow(1.0 - (facing - LIMB) / (1.0 - LIMB), 7.0);
                         float lit = smoothstep(-0.32, 0.45, ndl);
-                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.5, 0.3, dot(n, SUN));
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.05, 0.75, dot(n, SUN));
                         col = mix(uColorPrimary, uColorInk, 0.38) * (0.5 + lit)
                             + mix(uColorAccent, uColorInk, 0.5) * against * 1.5;
-                        alpha = halo * (0.05 + 0.5 * lit + 0.55 * against) * fade * step(grain, solid - 0.04);
+                        alpha = halo * (0.012 + 0.42 * lit + 0.5 * against) * fade * step(grain, solid - 0.04);
                     } else {
                         // Light sail: a thin membrane on ribs, iridescent at grazing angles.
                         float rib = max(smoothstep(0.86, 1.0, abs(fract(vUv.x * 11.0) * 2.0 - 1.0)),
@@ -1642,10 +1685,14 @@
             const disc = makeBodyMaterial(2, seed, 'ring-system.png');
             disc.uniforms.uRing.value.set(inner, outer);
             disc.uniforms.uBodyRadius.value = bodyRadius;
+            const globe = wearSurface(makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp'),
+                'ring-system.png', 'uRingMap', 'uRingMapped');
+            globe.uniforms.uRinged.value = 1;
+            globe.uniforms.uRing.value.set(inner, outer);
             return [
-                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp')],
+                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), globe],
                 [fuse([[new T.SphereGeometry(bodyRadius * AIR_REACH, 48, 28), 0]]), makeBodyMaterial(4, seed + 0.37)],
-                [fuse([[new T.RingGeometry(inner, outer, 160, 6).rotateX(-Math.PI / 2), 0]]), disc]
+                [fuse([[new T.RingGeometry(inner, outer, 192, 2).rotateX(-Math.PI / 2), 0]]), disc]
             ];
         };
         const buildShipBody = ({ scale }, seed) => {
