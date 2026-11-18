@@ -713,8 +713,14 @@
                         float cross = exp(-abs(p.x) * 18.0) * exp(-abs(p.y) * 4.5)
                                     + exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 4.5);
                         float airy = vLayer > 0.5 ? cross * 0.16 * (1.0 - r2) : 0.0;
-                        vec3 col = mix(uStarColor, mix(uNebulaA, uNebulaB, vSeed), 0.28);
-                        gl_FragColor = vec4(col * (core * 1.55 + halo + airy), (core + halo + airy) * vAlpha);
+                        // Stars have temperatures: a few cool orange ones, many
+                        // warm and white, some hot and blue. The halo keeps the
+                        // tint; the core burns towards white.
+                        float heat = fract(vSeed * 7.31);
+                        vec3 tint = heat < 0.14 ? vec3(1.0, 0.66, 0.42) : heat < 0.45 ? vec3(1.0, 0.9, 0.74)
+                            : heat < 0.8 ? vec3(1.0) : vec3(0.7, 0.82, 1.0);
+                        vec3 col = mix(uStarColor, mix(uNebulaA, uNebulaB, vSeed), 0.12) * tint;
+                        gl_FragColor = vec4(mix(col, vec3(1.0), core * 0.6) * (core * 1.55 + halo + airy), (core + halo + airy) * vAlpha);
                     }
                 }
             `
@@ -1508,7 +1514,21 @@
                             // A real cloud deck turns slowly under the same light;
                             // only its light and dark are kept.
                             vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, vUv.y + (warp - 0.5) * 0.004);
-                            deck = smoothstep(0.04, 0.96, texture2D(uSurface, at).r);
+                            float shade = texture2D(uSurface, at).r;
+                            if (uDetail > 0.5) {
+                                // Belts and zones run at different speeds. The map is
+                                // carried along each jet in two overlapping passes, so
+                                // the shear never winds it up.
+                                float jet = sin(vUv.y * 31.0 + uSeed * 6.0) * 0.016;
+                                float pass = fract(uTime * 0.02);
+                                float a = texture2D(uSurface, at + vec2(jet * (pass - 0.5), 0.0)).r;
+                                float b = texture2D(uSurface, at + vec2(jet * (fract(pass + 0.5) - 0.5), 0.0)).r;
+                                shade = mix(a, b, abs(1.0 - 2.0 * pass));
+                                // Close up, the cloud tops break into finer eddies.
+                                shade += (noise(p * vec3(34.0, 90.0, 34.0) + warp * 6.0) - 0.5) * 0.07
+                                    * (1.0 - smoothstep(0.0005, 0.004, fwidth(vUv.y)));
+                            }
+                            deck = smoothstep(0.04, 0.96, shade);
                             storm = 0.0;
                             bands = deck;
                         }
