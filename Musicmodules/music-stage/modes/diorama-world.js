@@ -31,6 +31,7 @@
     };
     // Anything lower than the sight line to a screen's bottom row is harmless.
     const SIGHT_FLOOR = 2.35;
+    const LAMP_GAIN = 2.6;
     const POLE_OFFSET = 3.4, LAMP_OFFSET = 2.55, LAMP_Y = 5.8, CONTACT_Y = 5.72;
     const create = (T, scene) => {
         const root = new T.Group();
@@ -131,9 +132,220 @@
             root.add(light);
             return light;
         });
-        // The train itself is never seen; its headlight on the rails ahead is.
         const headlight = new T.PointLight('#ffe9c4', 0, 16, 2);
         root.add(headlight);
+        /*
+         * The train. From the cab it is all around the camera and unseen; when
+         * the camera rises and swings out it is the subject of the picture:
+         * three carriages with lit windows running ahead over the water.
+         */
+        const CAR_LENGTH = 18.6, CAR_PITCH = 19.3, CARS = 3;
+        const carGeometry = (() => {
+            const positions = [], normals = [], groups = [], indices = [];
+            const add = (shape, group) => {
+                const flat = shape.index ? shape.toNonIndexed() : shape;
+                const base = positions.length / 3;
+                positions.push(...flat.attributes.position.array);
+                normals.push(...flat.attributes.normal.array);
+                for (let i = 0; i < flat.attributes.position.count; i++) { groups.push(group); indices.push(base + i); }
+                if (flat !== shape) flat.dispose();
+                shape.dispose();
+            };
+            const boxAt = (sx, sy, sz, x, y, z, group) => add(new T.BoxGeometry(sx, sy, sz).translate(x, y, z), group);
+            // Body shell: skirt, upright sides, a low arched roof.
+            const outline = new T.Shape();
+            outline.moveTo(-1.36, 0.82); outline.lineTo(-1.45, 1.18); outline.lineTo(-1.45, 3.02);
+            for (let i = 1; i < 12; i++) {
+                const a = Math.PI - i / 12 * Math.PI;
+                outline.lineTo(Math.cos(a) * 1.45, 3.02 + Math.sin(a) * 0.74);
+            }
+            outline.lineTo(1.45, 3.02); outline.lineTo(1.45, 1.18); outline.lineTo(1.36, 0.82); outline.closePath();
+            add(new T.ExtrudeGeometry(outline, { depth: CAR_LENGTH, bevelEnabled: false })
+                .translate(0, 0, -CAR_LENGTH / 2), 0);
+            // The roof weathers darker than the sides.
+            for (let i = 0; i < groups.length; i++) if (normals[i * 3 + 1] > 0.35) groups[i] = 3;
+            // Colour band under the windows, and a thin one at the cant rail.
+            for (const side of [-1, 1]) {
+                boxAt(0.025, 0.34, CAR_LENGTH - 0.3, side * 1.455, 1.52, 0, 1);
+                boxAt(0.025, 0.07, CAR_LENGTH - 0.3, side * 1.455, 2.98, 0, 1);
+            }
+            // Underframe, bogies with their wheels, roof units, gangway.
+            boxAt(2.3, 0.42, CAR_LENGTH - 5.5, 0, 0.72, 0, 2);
+            for (const z of [-6.3, 6.3]) {
+                boxAt(2.25, 0.34, 3.3, 0, 0.66, z, 2);
+                for (const axle of [-1.05, 1.05]) for (const side of [-1, 1]) {
+                    add(new T.CylinderGeometry(0.43, 0.43, 0.13, 14).rotateZ(Math.PI / 2)
+                        .translate(side * 0.7175, 0.82, z + axle), 2);
+                }
+            }
+            for (const z of [-4.4, 4.4]) boxAt(1.7, 0.24, 3.6, 0, 3.82, z, 3);
+            boxAt(1.05, 0.1, 1.5, 0, 3.8, 0, 3);
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+            shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
+            shape.setAttribute('color', new T.Float32BufferAttribute(new Float32Array(positions.length).fill(1), 3));
+            shape.setIndex(indices);
+            shape.userData.groups = groups;
+            return geometry(shape);
+        })();
+        const carMaterial = material(new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.2, roughness: 0.62 }));
+        const cars = instances(carMaterial, CARS, carGeometry);
+        cars.name = 'trainCars';
+        // Bellows between neighbouring carriages.
+        const gangways = instances(timber, CARS - 1, geometry(new T.BoxGeometry(1.8, 2.2, CAR_PITCH - CAR_LENGTH + 0.1)));
+        gangways.name = 'trainGangways';
+        // Too dark to show in the water; layer 1 is drawn for the viewer only.
+        gangways.layers.set(1);
+        // Windows are quads just proud of the shell, lit from inside.
+        const glassGeometry = (() => {
+            const positions = [], uvs = [], seeds = [], indices = [];
+            const pane = (side, z, y, w, h, seed) => {
+                const base = positions.length / 3, x = side * 1.462;
+                // Wound so the pane faces outwards on either side.
+                const z0 = z + side * w / 2, z1 = z - side * w / 2;
+                positions.push(x, y - h / 2, z0, x, y - h / 2, z1, x, y + h / 2, z1, x, y + h / 2, z0);
+                uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+                for (let i = 0; i < 4; i++) seeds.push(seed, w / h);
+                indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+            };
+            for (const side of [-1, 1]) {
+                [-7.55, -2.95, -0.98, 0.98, 2.95, 7.55].forEach((z, i) => pane(side, z, 2.3, 1.62, 0.92, i * 7 + (side > 0 ? 3 : 61)));
+                for (const z of [-5.25, 5.25]) for (const leaf of [-0.36, 0.36]) {
+                    pane(side, z + leaf, 2.28, 0.5, 1.02, 131 + z * 3 + leaf * 9 + side);
+                }
+            }
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+            shape.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
+            shape.setAttribute('pane', new T.Float32BufferAttribute(seeds, 2));
+            shape.setIndex(indices);
+            return geometry(shape);
+        })();
+        const glassMaterial = material(new T.ShaderMaterial({
+            uniforms: { warm: { value: new T.Color('#ffd28c') }, power: { value: 1.35 } },
+            vertexShader: `attribute vec2 pane;varying vec2 vUv;varying vec2 vPane;varying float car;
+                void main(){vUv=uv;vPane=pane;
+                    #ifdef USE_INSTANCING
+                    car=instanceMatrix[3][0]*0.37+instanceMatrix[3][2]*0.11;
+                    gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);
+                    #else
+                    car=0.0;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+                    #endif
+                }`,
+            fragmentShader: `uniform vec3 warm;uniform float power;varying vec2 vUv;varying vec2 vPane;varying float car;
+                float h(float n){return fract(sin(n*91.345)*47453.5453);}
+                void main(){
+                    float id=vPane.x+floor(car);
+                    // A carriage interior: strip lights along the ceiling, warm walls,
+                    // seat backs below the sill line, and now and then somebody sitting.
+                    vec3 c=warm*(0.5+0.4*vUv.y);
+                    c+=vec3(1.0,0.96,0.88)*smoothstep(0.74,0.93,vUv.y)*0.55;
+                    c*=mix(0.5,1.0,smoothstep(0.16,0.34,vUv.y));
+                    vec2 seat=vec2((vUv.x-0.25-0.5*h(id))*vPane.y,vUv.y-0.36);
+                    float body=min(length(seat*vec2(1.0,1.15))-0.13,length(seat*vec2(0.55,1.0)+vec2(0.0,0.26))-0.17);
+                    c*=mix(1.0,0.22,step(0.45,h(id+3.1))*smoothstep(0.02,-0.02,body));
+                    // Glazing bar, and the odd blind half drawn.
+                    c*=1.0-0.6*step(1.2,vPane.y)*smoothstep(0.016,0.006,abs(vUv.x-0.5));
+                    c*=mix(1.0,0.5,step(0.82,h(id+7.7))*step(0.55,vUv.y));
+                    c*=0.82+0.18*h(id+1.3);
+                    gl_FragColor=vec4(c*power,1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }`
+        }));
+        const glass = instances(glassMaterial, CARS, glassGeometry);
+        glass.name = 'trainWindows';
+        // The two ends: windscreen, destination blind, and the lamps.
+        const endGeometry = (() => {
+            const positions = [], uvs = [], kinds = [], indices = [];
+            const quad = (x, y, w, h, kind) => {
+                const base = positions.length / 3, z = -(CAR_LENGTH / 2 + 0.012);
+                positions.push(x + w / 2, y - h / 2, z, x - w / 2, y - h / 2, z, x - w / 2, y + h / 2, z, x + w / 2, y + h / 2, z);
+                uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+                for (let i = 0; i < 4; i++) kinds.push(kind);
+                indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+            };
+            quad(0, 2.42, 2.3, 0.92, 0);
+            quad(0, 3.22, 1.2, 0.26, 1);
+            for (const side of [-1, 1]) { quad(side * 0.98, 1.36, 0.34, 0.2, 2); quad(side * 0.98, 1.36, 1.5, 0.9, 3); }
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+            shape.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
+            shape.setAttribute('kind', new T.Float32BufferAttribute(kinds, 1));
+            shape.setIndex(indices);
+            return geometry(shape);
+        })();
+        const endMaterial = tail => material(new T.ShaderMaterial({
+            transparent: true, depthWrite: false,
+            uniforms: { warm: { value: new T.Color('#ffd28c') }, lamp: { value: new T.Color(tail ? '#ff3b2f' : '#fff3d6') },
+                power: { value: tail ? 2.6 : 5 } },
+            vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind;
+                void main(){vUv=uv;vKind=kind;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+            fragmentShader: `uniform vec3 warm,lamp;uniform float power;varying vec2 vUv;varying float vKind;
+                void main(){
+                    vec3 c;float a=1.0;
+                    if(vKind<0.5){
+                        // Windscreen: the cab is dim, the saloon behind it glows through.
+                        c=warm*(0.22+0.5*smoothstep(0.35,0.95,vUv.y))*(1.0-0.5*smoothstep(0.012,0.004,abs(vUv.x-0.5)));
+                    }else if(vKind<1.5){
+                        c=warm*1.5*(0.55+0.45*step(0.5,fract(vUv.x*9.0)));
+                    }else if(vKind<2.5){
+                        c=lamp*power;
+                    }else{
+                        // The lamp's own glare, a soft disc around it.
+                        vec2 p=(vUv-0.5)*vec2(2.0,2.0);float r=dot(p,p);
+                        a=exp(-r*5.0)*0.55;c=lamp*power*0.5;
+                    }
+                    gl_FragColor=vec4(c,a);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }`
+        }));
+        const trainEnds = [0, 1].map(tail => {
+            const mesh = new T.Mesh(endGeometry, endMaterial(tail));
+            mesh.frustumCulled = false; mesh.renderOrder = 2; mesh.name = tail ? 'trainTail' : 'trainFront';
+            root.add(mesh);
+            return mesh;
+        });
+        const cabinGlow = new T.PointLight('#ffd28c', 0, 15, 2);
+        root.add(cabinGlow);
+        const trainParts = [cars, glass, gangways, ...trainEnds];
+        const paintTrain = (body, band, dark, kit) => {
+            const colours = [body, band, dark, kit], attribute = carGeometry.attributes.color;
+            carGeometry.userData.groups.forEach((group, i) => attribute.setXYZ(i, colours[group].r, colours[group].g, colours[group].b));
+            attribute.needsUpdate = true;
+        };
+        const placeTrain = (track, front, visible) => {
+            trainParts.forEach(mesh => { mesh.visible = visible; });
+            if (!visible) { cars.count = glass.count = gangways.count = 0; return; }
+            cars.count = glass.count = CARS;
+            gangways.count = CARS - 1;
+            for (let i = 0; i < CARS; i++) {
+                // Each carriage rides on its two bogies, so it follows the curve as a chord.
+                const centre = front - CAR_LENGTH / 2 - i * CAR_PITCH;
+                const a = track.at(centre + 6.3).position, b = track.at(centre - 6.3).position;
+                dummy.position.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2);
+                dummy.rotation.set(0, Math.atan2(-(a.x - b.x), -(a.z - b.z)), 0);
+                dummy.scale.set(1, 1, 1);
+                dummy.updateMatrix();
+                cars.setMatrixAt(i, dummy.matrix);
+                glass.setMatrixAt(i, dummy.matrix);
+                if (i === 0) { trainEnds[0].position.copy(dummy.position); trainEnds[0].rotation.copy(dummy.rotation); }
+                if (i === CARS - 1) {
+                    trainEnds[1].position.copy(dummy.position);
+                    trainEnds[1].rotation.set(0, dummy.rotation.y + Math.PI, 0);
+                }
+                if (i === 1) cabinGlow.position.set(dummy.position.x, 2.4, dummy.position.z);
+                if (i < CARS - 1) {
+                    const joint = track.at(centre - CAR_PITCH / 2);
+                    dummy.position.set(joint.position.x, 2.0, joint.position.z);
+                    dummy.rotation.set(0, -joint.yaw, 0);
+                    dummy.updateMatrix();
+                    gangways.setMatrixAt(i, dummy.matrix);
+                }
+            }
+            cars.instanceMatrix.needsUpdate = glass.instanceMatrix.needsUpdate = gangways.instanceMatrix.needsUpdate = true;
+        };
         const skyMat = material(new T.ShaderMaterial({
             side: T.BackSide, depthWrite: false,
             uniforms: {
@@ -329,7 +541,7 @@
         const moonColor = moonMat.uniforms.color.value;
         const moon = new T.Mesh(geometry(new T.SphereGeometry(20, 32, 24)), moonMat);
         root.add(moon);
-        const target = new T.WebGLRenderTarget(512, 320, { depthBuffer: true });
+        const target = new T.WebGLRenderTarget(512, 320, { depthBuffer: true, type: T.HalfFloatType });
         const mirror = new T.PerspectiveCamera();
         const textureMatrix = new T.Matrix4();
         const waterMat = material(new T.ShaderMaterial({
@@ -351,6 +563,8 @@
                 uniform vec3 lampPos[4];uniform float lampPower[4];
                 varying vec4 reflected;varying vec3 world;
                 float h21(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+                float n21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+                    return mix(mix(h21(i),h21(i+vec2(1.0,0.0)),f.x),mix(h21(i+vec2(0.0,1.0)),h21(i+vec2(1.0,1.0)),f.x),f.y);}
                 void main(){
                     vec3 toCam=cameraPosition-world;float dist=length(toCam);vec3 v=toCam/max(dist,0.001);
                     // Analytic ripple normal: two swells and fine chop, damped with distance.
@@ -374,9 +588,11 @@
                     vec3 refl=reflect(-v,n);
                     float lobe=pow(max(dot(refl,moonDir),0.0),260.0);
                     float wide=pow(max(dot(refl,moonDir),0.0),28.0)*0.08;
-                    vec2 cell=floor(world.xz*vec2(2.2,1.1));
-                    float spark=step(0.72,h21(cell+floor(time*3.0+h21(cell)*7.0)));
-                    c+=moonTint*(lobe*(0.6+spark*2.4)+wide)*glitter*strength;
+                    // Glints come and go as smooth patches, never as squares, and
+                    // thin out right under the camera where each would fill the view.
+                    float spark=smoothstep(0.55,0.9,n21(world.xz*vec2(9.0,4.6)+vec2(time*0.8,-time*0.5))
+                        *n21(world.xz*vec2(2.1,1.1)-vec2(time*0.22))*2.0);
+                    c+=moonTint*(lobe*(0.14+spark*1.0)*mix(0.1,1.0,smoothstep(8.0,40.0,dist))+wide)*glitter*strength;
                     // Vertical lamp streaks along the camera-lamp bearing.
                     for(int i=0;i<4;i++){
                         if(lampPower[i]<=0.0)continue;
@@ -566,9 +782,16 @@
             hemisphere.intensity = light ? 1.8 : 0.65;
             moonLight.color.copy(light ? surface : ink).lerp(tertiary, 0.12);
             moonColor.copy(light ? surface : ink).lerp(emission, 0.08);
-            lampMaterial.color.copy(emission);
-            coldLampMaterial.color.copy(luminous(secondary.clone()));
+            // Lamps are brighter than white, so the lens has something to spread.
+            lampMaterial.color.copy(emission).multiplyScalar(LAMP_GAIN);
+            coldLampMaterial.color.copy(luminous(secondary.clone())).multiplyScalar(1.7);
             lights.forEach(l => l.color.copy(emission));
+            // Livery: a pale body the moon can model, a band in the theme's colour.
+            paintTrain(ink.clone().lerp(surface, light ? 0.1 : 0.6), luminous(secondary.clone()).multiplyScalar(0.8),
+                deep.clone().lerp(structure, 0.4).multiplyScalar(0.6), structure.clone().lerp(muted, 0.12));
+            glassMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
+            trainEnds.forEach(mesh => mesh.material.uniforms.warm.value.copy(emission).lerp(white, 0.18));
+            cabinGlow.color.copy(emission);
             starMat.uniforms.tint.value.copy(light ? surface : ink).lerp(tertiary, 0.08);
             baseStarOpacity = light ? 0.15 : 0.8;
             starMat.opacity = baseStarOpacity;
@@ -618,7 +841,7 @@
             lights.forEach(l => l.color.copy(scratch));
             waterMat.uniforms.lampTint.value.copy(scratch);
             haloMat.uniforms.color.value.copy(scratch);
-            lampMaterial.color.copy(scratch).multiplyScalar(1 + Math.max(0, bias) * 0.15);
+            lampMaterial.color.copy(scratch).multiplyScalar(LAMP_GAIN * (1 + Math.max(0, bias) * 0.15));
         };
         const update = (timeline, track, pose, time, config, audio = {}) => {
             if (dead) return;
@@ -670,8 +893,12 @@
             const spacing = 16 / clamp(tuning.stationIntensity ?? 1, 0.5, 2);
             headlight.color.copy(palBase?.lamp || white).lerp(white, 0.45);
             headlight.intensity = saving ? 0 : 3 * (palBase?.light ? 0.4 : 1);
-            const ahead = track.at(s + 8);
+            const front = pose.trainFront ?? s - 0.4;
+            const ahead = track.at(front + 7.5);
             headlight.position.set(ahead.position.x, 0.7, ahead.position.z);
+            // From the cab the train is all behind the lens: nothing of it to draw.
+            placeTrain(track, front, tuning.showTrain !== false && (pose.chase ?? 0) > 0.002);
+            cabinGlow.intensity = saving || tuning.showTrain === false ? 0 : 9 * (palBase?.light ? 0.4 : 1) * clamp(pose.chase ?? 0);
             // The permanent way slides forward in long strides; scenery is laid
             // out again only when a new pole or station comes into range.
             const nextTrackKey = [Math.floor(s / 12), quality].join(':');
@@ -1008,7 +1235,8 @@
                     const lateral = side * (reach + (outward ? post * 1.7 : (random() - 0.5) * 0.5));
                     const lean = [(random() - 0.5) * 0.2, (random() - 0.5) * 0.16];
                     const tall = height + (lantern && post === count - 1 ? 0.35 : 0);
-                    if (tall > SIGHT_FLOOR && inSight(track, at, Math.abs(lateral), side)) continue;
+                    // Even a low post is in the way when it stands under a screen being read.
+                    if (inSight(track, at, Math.abs(lateral), side, tall > SIGHT_FLOOR ? 3 : 1)) continue;
                     part(timberParts, at, lateral, height / 2 - 0.3, 0.22, height + 0.6, 0.22, lean[0], lean[1]);
                     if (lantern && post === count - 1) {
                         part(steelParts, at, lateral, height + 0.06, 0.2, 0.05, 0.2);
@@ -1047,7 +1275,10 @@
             mirror.projectionMatrixInverse.copy(mirror.projectionMatrix).invert();
             mirror.layers.enable(2);
             const size = renderer.getSize(new T.Vector2());
-            const width = quality === 'ultimate' ? 1024 : quality === 'energy-saving' ? 256 : 512;
+            // Half the picture's own resolution, within a ceiling per tier.
+            const buffer = size.x * renderer.getPixelRatio();
+            const width = Math.round(Math.min(buffer * 0.5,
+                quality === 'ultimate' ? 1440 : quality === 'energy-saving' ? 384 : 960));
             const height = Math.max(1, Math.round(width * size.y / Math.max(1, size.x)));
             if (target.width !== width || target.height !== height) target.setSize(width, height);
             const oldTarget = renderer.getRenderTarget(), oldAutoClear = renderer.autoClear;

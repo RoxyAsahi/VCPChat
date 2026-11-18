@@ -75,6 +75,9 @@
         }
         return { at, encounters: plan.encounters, pageEncounter: plan.pageEncounter, turns, initialYaw };
     };
+    const CHASE_LATERAL = 7.5;
+    const CHASE_LEAD = 70;
+    const chaseAmount = height => smooth((height - 3.9) / 0.7);
     const rigFor = act => act.kind === 'Departure' ? 'RAIL'
         : ['Chorus', 'Open'].includes(act.kind) ? 'WIDE'
             : act.kind === 'Interlude' ? 'WINDOW'
@@ -137,8 +140,14 @@
         position.x += frame.right.x * lateralTravel + frame.forward.x * push;
         position.z += frame.right.z * lateralTravel + frame.forward.z * push;
         position.y += lift;
+        // Low acts are seen from the cab. When the camera rises it also leaves the
+        // train: it swings out to one side and lets the train run ahead, so the
+        // high acts look down on lit carriages crossing the water.
+        const chase = motion ? chaseAmount(state.height) : 0;
+        position.x += frame.right.x * CHASE_LATERAL * chase;
+        position.z += frame.right.z * CHASE_LATERAL * chase;
         let yaw = frame.yaw + yawBias + n(0.55, 3) * 0.003 * handheld
-            + directionSign * arch * openness * 0.012 * strength;
+            + directionSign * arch * openness * 0.012 * strength - 0.075 * chase;
         let pitch = mix(-0.025, -0.12, state.openness);
         const finale = state.act === 'Terminus' && motion && !timeline.isSinging(t)
             ? smooth((t - act.start) / Math.max(1, act.end - act.start)) : 0;
@@ -224,7 +233,9 @@
             fov, eventFocus, finale,
             shot: openness > 0.6 ? 'rising-traverse' : 'window-tracking',
             rig: !motion ? 'CAB' : rig,
-            encounterId, reading, distance, state,
+            encounterId, reading, distance, state, chase,
+            // Where the front of the train is along the line.
+            trainFront: distance + mix(-0.4, CHASE_LEAD, chase),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }
         };
