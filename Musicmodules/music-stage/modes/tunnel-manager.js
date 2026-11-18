@@ -283,7 +283,7 @@
             { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
-            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 58, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
+            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 25, elev: 5,   scale: 0.66, rotSpeed: 0.012, tilt: [0.35, 0.5 - 7 * 1.1, -0.95], p: 2, q: 3, hold: true }
         ];
 
         // The first chorus is flown through a ring system. The whole procession
@@ -335,7 +335,7 @@
         stationA: { radius: 25, plan: 'truss' }, stationB: { radius: 26, plan: 'cross' },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
-        shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
+        shipA: { scale: 1.0 }, shipB: { scale: 0.92, radius: 25, plan: 'probe' }
     });
     // A solar sail, after the square sails that have flown: a thin film in
     // four quadrants, slack between four diagonal booms, and a small drum of
@@ -1217,6 +1217,88 @@
                 for (const at of [[0, 3.1, 0], [-23.3, 1.6, 0], [23.3, 1.6, 0], [0, 0, 16.4], [0, 0, -19.4]]) {
                     parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
                 }
+            } else if (spec.plan === 'probe') {
+                // A deep-space probe of the kind sent past the outer planets:
+                // a great white dish over a ten-sided bus, three isotope
+                // generators on one boom, the instruments on another, a long
+                // lattice mast for the magnetometers and two whip antennas.
+                // Part codes 8 and 9: painted and foil-wrapped, without ports.
+                const strut = (a, b, r, code = 7, sides = 5) => {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = sized(new T.CylinderGeometry(r * k, r * k, span.length() * k, sides, 1, true), 4, span.length());
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), code]);
+                };
+                const drum = (r, length, axis, at, code, sides = 16) => {
+                    parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, sides, 1), TAU * r, length), axis)
+                        .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+                };
+                // The dish opens along +Y: a paraboloid with a rolled rim.
+                const DISH = 11, DEPTH = 3.1;
+                const profile = [];
+                for (let i = 0; i <= 14; i += 1) {
+                    const r = DISH * i / 14;
+                    profile.push(new T.Vector2(r * k, DEPTH * (r / DISH) * (r / DISH) * k));
+                }
+                parts.push([sized(new T.LatheGeometry(profile, 48), 8, 8).translate(0, 2.4 * k, 0), 8]);
+                parts.push([new T.TorusGeometry(DISH * k, 0.16 * k, 6, 48).rotateX(Math.PI / 2).translate(0, (2.4 + DEPTH) * k, 0), 7]);
+                // Feed and subreflector on a tripod above the dish.
+                for (let i = 0; i < 3; i += 1) {
+                    const a = i * TAU / 3 + 0.5;
+                    strut([Math.cos(a) * 7.6, 2.4 + DEPTH * 0.48, Math.sin(a) * 7.6], [Math.cos(a) * 0.9, 9.6, Math.sin(a) * 0.9], 0.1);
+                }
+                parts.push([new T.ConeGeometry(1.5 * k, 1.0 * k, 20, 1).translate(0, 9.9 * k, 0), 8]);
+                parts.push([new T.CylinderGeometry(0.5 * k, 0.8 * k, 1.6 * k, 12, 1).translate(0, 3.3 * k, 0), 9]);
+                // Six struts carry the dish on the bus; a fuel sphere sits in its middle.
+                drum(4.6, 2.3, 'y', [0, -0.4, 0], 9, 10);
+                for (let i = 0; i < 6; i += 1) {
+                    const a = i * TAU / 6, b = a + TAU / 12;
+                    strut([Math.cos(a) * 4.3, 0.7, Math.sin(a) * 4.3], [Math.cos(b) * 5.6, 2.4 + DEPTH * 0.26, Math.sin(b) * 5.6], 0.11);
+                }
+                node(2.1, [0, -1.7, 0]);
+                for (let i = 0; i < 4; i += 1) {
+                    const a = i * TAU / 4 + 0.4;
+                    parts.push([new T.ConeGeometry(0.36 * k, 0.8 * k, 8, 1, true).translate(Math.cos(a) * 4.4 * k, -2.0 * k, Math.sin(a) * 4.4 * k), 7]);
+                }
+                // The record on the side of the bus.
+                parts.push([new T.CylinderGeometry(1.05 * k, 1.05 * k, 0.1 * k, 24, 1).rotateZ(Math.PI / 2).translate(4.5 * k, -0.4 * k, 1.2 * k), 9]);
+                // Isotope generators: three finned drums in line, out on a boom.
+                strut([-3.6, -0.6, -1.4], [-10.5, -3.4, -4.2], 0.5, 5, 4);
+                strut([-3.2, -1.4, 0.6], [-10.5, -3.4, -4.2], 0.09);
+                for (let i = 0; i < 3; i += 1) {
+                    const along = 11.9 + i * 3.1;
+                    const at = [-along * 0.9, -3.4 - (along - 10.5) * 0.36, -4.2 - (along - 10.5) * 0.36];
+                    const from = [at[0] + 1.3, at[1] + 0.52, at[2] + 0.52], to = [at[0] - 1.3, at[1] - 0.52, at[2] - 0.52];
+                    strut(from, to, 0.85, 9, 12);
+                    for (let f = 0; f < 6; f += 1) {
+                        const fin = new T.BoxGeometry(0.05 * k, 2.5 * k, 0.8 * k).translate(0, 0, 1.2 * k).rotateY(f * TAU / 6);
+                        fin.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0),
+                            new T.Vector3(to[0] - from[0], to[1] - from[1], to[2] - from[2]).normalize()));
+                        parts.push([fin.translate(at[0] * k, at[1] * k, at[2] * k), 6]);
+                    }
+                }
+                // Science boom: a lattice arm to a platform that turns its cameras.
+                strut([3.8, -0.4, -1.0], [14.5, -1.2, -3.6], 0.5, 5, 4);
+                crate([1.6, 1.2, 1.4], [8.2, 0.2, -2.3]);
+                drum(0.5, 3.2, 'y', [15.0, -1.6, -3.7], 8, 10);
+                crate([2.6, 1.5, 1.3], [15.2, 0.6, -3.7]);
+                drum(0.62, 2.8, 'z', [14.4, 0.7, -5.4], 9, 14);
+                drum(0.4, 2.2, 'z', [15.9, 0.9, -5.1], 8, 12);
+                crate([1.1, 1.9, 0.9], [15.4, -3.6, -3.5]);
+                parts.push([new T.ConeGeometry(0.9 * k, 0.5 * k, 16, 1, true).rotateX(-1.2).translate(13.2 * k, 1.9 * k, -3.0 * k), 7]);
+                // Magnetometer mast: far longer than the craft, a sensor midway and one at the tip.
+                strut([-1.6, -1.2, 3.6], [-9.5, -6.5, 38], 0.5, 5, 3);
+                crate([0.9, 0.9, 0.9], [-5.6, -3.9, 21]);
+                crate([1.0, 1.0, 1.0], [-9.6, -6.6, 38.4]);
+                // Two whips at right angles for the radio and plasma-wave receivers.
+                strut([0.6, -1.6, -2.4], [15, -13, -21], 0.07);
+                strut([-0.6, -1.6, -2.4], [-13, -15, -21], 0.07);
+                // Louvred radiators and electronics bays round the bus.
+                for (let i = 0; i < 10; i += 1) {
+                    if (i % 3 === 0) continue;
+                    const a = i * TAU / 10 + TAU / 20;
+                    parts.push([new T.BoxGeometry(2.1 * k, 1.5 * k, 0.12 * k).translate(0, -0.4 * k, 4.5 * k).rotateY(a), i % 2 ? 6 : 8]);
+                }
             } else {
                 // A core with two laboratories off its forward node, each
                 // carrying a great pair of wings at its far end.
@@ -1286,6 +1368,7 @@
         };
         manifoldTemplates.stationA = scatterOver(stationGeometry(ENTITY_SPECS.stationA), POINTS_PER_ENTITY, 'manifold-station-a');
         manifoldTemplates.stationB = scatterOver(stationGeometry(ENTITY_SPECS.stationB), POINTS_PER_ENTITY, 'manifold-station-b');
+        manifoldTemplates.shipB = scatterOver(stationGeometry(ENTITY_SPECS.shipB), POINTS_PER_ENTITY, 'manifold-probe');
 
         const makeEntityMaterial = (typeCode) => new T.ShaderMaterial({
             transparent: true,
@@ -1600,7 +1683,8 @@
                         // and shows in whatever is polished.
                         bool tube = vPart < 2.5;
                         bool lattice = vPart > 4.5 && vPart < 5.5;
-                        bool truss = lattice || vPart > 6.5;
+                        bool plain = vPart > 7.5;
+                        bool truss = lattice || (vPart > 6.5 && !plain);
                         vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(8.0, 14.0) : vec2(16.0, 16.0));
                         vec2 cell = floor(cells), inside = fract(cells);
                         float seam = smoothstep(0.0, 0.05, inside.x) * smoothstep(0.0, 0.07, inside.y)
@@ -1616,10 +1700,10 @@
                         // Blankets wrap whole sections; a painted band runs round the rim.
                         float section = tube ? hash(vec3(floor(vUv.x * 16.0), floor(vUv.y * 2.0), uSeed))
                             : hash(vec3(floor(vUv.y * 0.5), 7.0, uSeed));
-                        float foil = truss ? 0.0 : step(tube ? 0.86 : 0.66, section);
+                        float foil = truss ? 0.0 : plain ? step(8.5, vPart) : step(tube ? 0.86 : 0.66, section);
                         float band = tube ? step(5.5, cell.y) * step(cell.y, 6.5) : 0.0;
                         float portRow = tube ? step(1.5, mod(cell.y, 6.0)) * step(mod(cell.y, 6.0), 2.5) : step(0.5, mod(cell.y, 4.0)) * step(mod(cell.y, 4.0), 1.5);
-                        float port = truss ? 0.0 : portRow * (1.0 - foil)
+                        float port = truss || plain ? 0.0 : portRow * (1.0 - foil)
                             * step(0.22, inside.x) * step(inside.x, 0.78) * step(0.28, inside.y) * step(inside.y, 0.72);
                         float lit = port * step(tube ? 0.3 : 0.7, hash(vec3(cell, uSeed)));
 
@@ -1915,8 +1999,9 @@
                 [fuse([[new T.RingGeometry(inner, outer, 192, 2).rotateX(-Math.PI / 2), 0]]), disc]
             ];
         };
-        const buildShipBody = ({ scale }, seed) => {
-            const plan = sailPlan(scale);
+        const buildShipBody = (spec, seed) => {
+            if (spec.plan) return buildStationBody(spec, seed);
+            const plan = sailPlan(spec.scale);
             const at = new Float32Array(3);
             const posed = (geometry) => {
                 const p = geometry.attributes.position, n = geometry.attributes.normal;
