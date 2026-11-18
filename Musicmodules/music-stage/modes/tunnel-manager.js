@@ -1146,7 +1146,9 @@
                 for (const side of [-1, 1]) panel(7.4, 1.5, 'x', 'z', [side * 5.2, 0, -11.6], 4);
                 visitor(13.8, -1);
                 visitor(-16.0, 1);
-                parts.push([new T.IcosahedronGeometry(0.34 * k, 1).translate(0, 3.1 * k, 0), 2]);
+                for (const at of [[0, 3.1, 0], [-23.3, 1.6, 0], [23.3, 1.6, 0], [0, 0, 16.4], [0, 0, -19.4]]) {
+                    parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
+                }
             } else {
                 // A core with two laboratories off its forward node, each
                 // carrying a great pair of wings at its far end.
@@ -1166,7 +1168,9 @@
                 visitor(10.4, -1);
                 module(1.55, 5.6, 'z', [0, 0, -10.2]);
                 for (const side of [-1, 1]) panel(5.6, 1.4, 'x', 'z', [side * 4.4, 0, -10.6], 4);
-                parts.push([new T.IcosahedronGeometry(0.34 * k, 1).translate(0, 2.5 * k, 3.0 * k), 2]);
+                for (const at of [[0, 2.5, 3.0], [-22.7, 0, 7.0], [22.7, 0, 7.0], [0, 6.9, -5.8], [0, 0, -13.3]]) {
+                    parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
+                }
             }
             const geometry = fuse(parts);
             stationGeometries.set(spec, geometry);
@@ -1439,6 +1443,7 @@
                 uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
                 uSurface: { value: null }, uMapped: { value: 0 },
                 uRingMap: { value: null }, uRingMapped: { value: 0 }, uRinged: { value: 0 }, uDetail: { value: 1 },
+                uBounceDir: { value: new T.Vector3(0, 1, 0) }, uBounce: { value: 0 },
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
@@ -1467,7 +1472,8 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged, uDetail;
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged, uDetail, uBounce;
+                uniform vec3 uBounceDir;
                 uniform sampler2D uSurface, uRingMap;
                 uniform vec2 uRing, uViewport;
                 uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
@@ -1549,7 +1555,10 @@
                         // sun on one side and the nebula's on the other.
                         vec3 key = mix(uColorInk, uColorAccent, 0.2) * lam;
                         vec3 fill = uColorPrimary * (0.035 + 0.06 * clamp(0.5 - 0.5 * dot(nn, uLight), 0.0, 1.0));
-                        vec3 light = key + fill;
+                        // A planet close by throws its own pale light back.
+                        vec3 shine = mix(uColorPrimary, uColorInk, 0.45) * uBounce * 0.42
+                            * pow(clamp(dot(nn, uBounceDir) * 0.5 + 0.5, 0.0, 1.0), 2.0);
+                        vec3 light = key + fill + shine;
                         vec3 shell = mix(uColorPrimary, uColorInk, 0.72);
                         float pale = (0.5 + 0.12 * tone) * mix(1.0, 0.7, step(0.93, tone)) * mix(1.0, 0.55, band);
                         vec3 painted = shell * pale * mix(0.66, 1.0, seam) * light + uColorInk * pow(sun, 48.0) * lam * 0.22
@@ -1588,16 +1597,10 @@
                             col = wing + mix(uColorInk, uColorAccent, 0.25)
                                 * pow(max(dot(normalize(uLight + v), n), 0.0), 120.0) * 1.6 * flat_;
                         } else if (vPart > 1.5 && vPart < 2.5) {
-                            // Core or engine: pure emission with a hot centre.
-                            float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
-                            float facing = clamp(dot(n, v), 0.0, 1.0);
-                            // A lattice shell around the glow keeps it a lamp, not a blob.
-                            vec3 q = normalize(vLocal - vec3(0.0)) * 5.0;
-                            float cage = smoothstep(0.38, 0.5, abs(fract(q.x + q.y) - 0.5))
-                                + smoothstep(0.38, 0.5, abs(fract(q.y - q.z) - 0.5));
-                            col = mix(uColorAccent, uColorInk, 0.3) * pow(facing, 2.2) * (0.3 + heat * 0.55) * uGlow
-                                + uColorEmber * (1.0 - facing) * 0.2;
-                            col *= 1.0 - 0.72 * clamp(cage, 0.0, 1.0);
+                            // Navigation strobes: dim, then a short flash, each on its own beat.
+                            float beat = fract(uTime * 0.7 + hash(floor(vLocal * 0.35) + uSeed));
+                            float flash = smoothstep(0.88, 0.9, beat) * (1.0 - smoothstep(0.95, 1.0, beat));
+                            col = mix(uColorAccent, uColorInk, 0.45) * (0.22 + 2.4 * flash) * uGlow;
                         }
                     } else if (uKind < 1.5) {
                         if (vPart > 0.5) {
@@ -2846,6 +2849,14 @@
                     b.uAudioPulse.value = audioPulse;
                     b.uGlow.value = glowAmount;
                     b.uLightLocal.value.copy(worldLight).applyQuaternion(bodyTurn);
+                    if (slot.type === 'station') {
+                        // The planet that follows a station in the plan is its companion.
+                        const companion = bodyNodes[idx + 1].group;
+                        b.uBounceDir.value.copy(companion.position).sub(body.group.position);
+                        const apart = b.uBounceDir.value.length();
+                        b.uBounce.value = companion.visible && apart > 1 ? clamp(90 / apart) : 0;
+                        if (apart > 1) b.uBounceDir.value.divideScalar(apart);
+                    }
                 }
             });
         };
