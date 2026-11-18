@@ -314,6 +314,10 @@ pub struct SharedState {
     pub audio_buffer: ArcSwap<TrackBuffer>,
     /// Set by the callback while it is starved waiting for the decoder.
     pub buffering: AtomicBool,
+    /// Output fade for pause/resume (f32 bits). The control thread sets the
+    /// target; only the audio callback moves `fade_gain` toward it.
+    pub fade_target: std::sync::atomic::AtomicU32,
+    pub fade_gain: std::sync::atomic::AtomicU32,
     pub exclusive_mode: AtomicBool,
     pub device_id: std::sync::atomic::AtomicI64,
     pub volume: std::sync::atomic::AtomicU64,
@@ -365,6 +369,9 @@ pub struct SharedState {
     // Writers: audio thread or async tasks use fetch_or(EVENT_*, Release)
     // Reader: WebSocket pusher uses swap(0, AcqRel) to atomically take all events
     pub event_flags: std::sync::atomic::AtomicU32,
+    /// Wakes the WebSocket hub right away for events raised off the realtime
+    /// thread (load done, command applied), instead of at its next 50 ms tick.
+    pub event_notify: tokio::sync::Notify,
     pub current_track_path: RwLock<Option<String>>,  // Current track for notifications
 
     // Track metadata
@@ -390,6 +397,8 @@ impl SharedState {
             spectrum_data: Mutex::new(vec![0.0; 64]),
             audio_buffer: ArcSwap::new(Arc::new(TrackBuffer::empty())),
             buffering: AtomicBool::new(false),
+            fade_target: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+            fade_gain: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             exclusive_mode: AtomicBool::new(false),
             device_id: std::sync::atomic::AtomicI64::new(-1),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
@@ -420,6 +429,7 @@ impl SharedState {
             applied_seq: AtomicU64::new(0),
 
             event_flags: std::sync::atomic::AtomicU32::new(0),
+            event_notify: tokio::sync::Notify::new(),
             current_track_path: RwLock::new(None),
 
             track_metadata: RwLock::new(crate::decoder::TrackMetadata::default()),
@@ -460,6 +470,13 @@ impl SharedState {
     /// Allocate the next command sequence number.
     pub fn next_cmd_seq(&self) -> u64 {
         self.cmd_seq.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    /// Raise events from a non-realtime thread and wake the pusher.
+    /// (The audio callback only sets `event_flags`; it must not touch Notify.)
+    pub fn raise_events(&self, flags: u32) {
+        self.event_flags.fetch_or(flags, Ordering::Release);
+        self.event_notify.notify_one();
     }
 
     /// Free retired track buffers. Call only from non-realtime threads.

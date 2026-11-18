@@ -161,7 +161,10 @@ async fn run_hub(hub: Arc<Hub>, shared: Arc<SharedState>) {
     let text = |value: serde_json::Value| HubMessage::Text(value.to_string().into());
 
     loop {
-        timer.tick().await;
+        tokio::select! {
+            _ = timer.tick() => {}
+            _ = shared.event_notify.notified() => {}
+        }
 
         // ── Event bitmask: atomic take-all, once for every client ──
         let events = shared.event_flags.swap(0, Ordering::AcqRel);
@@ -272,7 +275,10 @@ async fn run_hub(hub: Arc<Hub>, shared: Arc<SharedState>) {
         if !is_playing && !is_loading {
             idle_ticks = idle_ticks.saturating_add(1);
             if idle_ticks > 40 {
-                tokio::time::sleep(IDLE_TICK).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(IDLE_TICK) => {}
+                    _ = shared.event_notify.notified() => {}
+                }
             }
         } else {
             idle_ticks = 0;

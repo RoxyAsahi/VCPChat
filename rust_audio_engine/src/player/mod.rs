@@ -473,7 +473,7 @@ impl AudioPlayer {
                     if let Some(integrated_lufs) = lufs {
                         let _ = cmd_tx.send(AudioCommand::LoudnessMeasured { generation, integrated_lufs });
                     }
-                    shared_state.event_flags.fetch_or(EVENT_DECODE_COMPLETE, Ordering::Release);
+                    shared_state.raise_events(EVENT_DECODE_COMPLETE);
                     return;
                 }
                 log::warn!("Cache validation failed, will re-decode");
@@ -585,7 +585,7 @@ impl AudioPlayer {
             if let Some(integrated_lufs) = integrated_lufs {
                 let _ = cmd_tx.send(AudioCommand::LoudnessMeasured { generation, integrated_lufs });
             }
-            shared_state.event_flags.fetch_or(EVENT_DECODE_COMPLETE, Ordering::Release);
+            shared_state.raise_events(EVENT_DECODE_COMPLETE);
         }
 
         if let Some(ref cp) = cache_path {

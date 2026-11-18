@@ -397,6 +397,32 @@ fn convolve_interleaved_ir(a: &[f64], b: &[f64], channels: usize) -> Result<Vec<
 // AUDIO CALLBACK
 // ============================================================================
 
+/// Frames for a full 0↔1 fade (~8 ms at 48 kHz). Short enough to feel
+/// instant, long enough to remove the click of a hard stop/start.
+pub const FADE_FRAMES: f32 = 384.0;
+
+/// Ramp the block toward the pause/resume fade target.
+#[inline]
+fn apply_fade(data: &mut [f64], shared: &SharedState, channels: usize) {
+    let target = f32::from_bits(shared.fade_target.load(Ordering::Acquire));
+    let mut gain = f32::from_bits(shared.fade_gain.load(Ordering::Relaxed));
+    if gain == target && gain == 1.0 {
+        return;
+    }
+    let step = 1.0 / FADE_FRAMES;
+    for frame in data.chunks_mut(channels.max(1)) {
+        if gain < target {
+            gain = (gain + step).min(target);
+        } else if gain > target {
+            gain = (gain - step).max(target);
+        }
+        for sample in frame.iter_mut() {
+            *sample *= gain as f64;
+        }
+    }
+    shared.fade_gain.store(gain.to_bits(), Ordering::Relaxed);
+}
+
 /// Main f64 audio callback core shared by CPAL and WASAPI.
 ///
 /// CPAL executes the complete source/rate/output chain and converts to f32 only
@@ -419,6 +445,14 @@ pub fn audio_callback_lockfree(
     resample_output: &mut Vec<f64>,
     finalize_output_domain: bool,
 ) {
+    // Shared-mode streams are kept (paused) between tracks and reused. Some
+    // backends keep calling a paused stream; never play while not Playing.
+    // (WASAPI exclusive drives its own start/stop and passes `false`.)
+    if finalize_output_domain && shared.state.load() != PlayerState::Playing {
+        data.fill(0.0);
+        return;
+    }
+
     // Format-specific chains are prepared before stream construction. The
     // callback only resets state at a block boundary; it never redesigns
     // filters, resizes storage, or logs.
@@ -427,6 +461,13 @@ pub fn audio_callback_lockfree(
     ).is_ok() {
         dsp_pipeline.reset();
         let _ = convolver.reset();
+        // A reused output stream must not carry the previous track's
+        // resampler history or buffered output into the new one.
+        if let Some(processor) = resampler.as_mut() {
+            let _ = processor.reset();
+        }
+        resample_leftover.clear();
+        *resample_leftover_pos = 0;
     }
 
     let has_leftover = *resample_leftover_pos < resample_leftover.len();
@@ -534,8 +575,13 @@ pub fn audio_callback_lockfree(
                 *resample_leftover_pos = 0;
                 shared.dsp_reset_pending.store(false, Ordering::Release);
 
-                data.fill(0.0);
-                return;
+                // Continue straight into the next track in this same block
+                // instead of emitting a block of silence at the boundary.
+                return audio_callback_lockfree(
+                    data, shared, dsp_pipeline, convolver, loudness_state, spectrum_tx, channels,
+                    process_buf, resampler, resample_leftover, resample_leftover_pos,
+                    resample_output, finalize_output_domain,
+                );
             }
         }
 
@@ -685,6 +731,25 @@ pub fn audio_callback_lockfree(
         }
     }
 
+    // The track ended inside this block and the next one is ready: render
+    // the rest of the block from it (gapless), rather than padding silence.
+    if samples_written < output_len
+        && complete
+        && current_pos >= ready
+        && *resample_leftover_pos >= resample_leftover.len()
+        && shared.pending_ready.load(Ordering::Acquire)
+        && shared.state.load() == PlayerState::Playing
+    {
+        drop(buf);
+        let (_, rest) = data.split_at_mut(samples_written);
+        audio_callback_lockfree(
+            rest, shared, dsp_pipeline, convolver, loudness_state, spectrum_tx, channels,
+            process_buf, resampler, resample_leftover, resample_leftover_pos,
+            resample_output, finalize_output_domain,
+        );
+        return;
+    }
+
     shared
         .buffering
         .store(samples_written < output_len && !complete, Ordering::Relaxed);
@@ -695,6 +760,8 @@ pub fn audio_callback_lockfree(
             data[i] = 0.0;
         }
     }
+
+    apply_fade(data, shared, channels);
 
     // Spectrum output: mono-downmix the first 512 frames and push them to
     // the analysis thread through the wait-free ring in one batch. When the
@@ -1000,14 +1067,45 @@ mod tests {
         harness.shared.pending_channels.store(2, Ordering::Relaxed);
         harness.shared.pending_ready.store(true, Ordering::Release);
 
-        let mut output = vec![0.0; 512 * 2];
-        harness.render(&mut output); // plays the 256-frame track to its end
-        harness.render(&mut output); // swaps at the boundary
+        let mut output = vec![0.0; 2048 * 2];
+        // The 256-frame track ends mid-block; the rest of the same block
+        // comes from the next track, with no silent block in between.
+        harness.render(&mut output);
         assert!(Arc::ptr_eq(&harness.shared.audio_buffer.load_full(), &next));
         assert_eq!(harness.shared.retired_buffers_rx.len(), 1, "old buffer freed off the audio thread");
+        assert_eq!(harness.position(), 2048 - 256);
+        assert!(
+            output[1024 * 2..].iter().any(|s| s.abs() > 1e-4),
+            "the rest of the boundary block must carry the next track"
+        );
+        let mut output = vec![0.0; 512 * 2];
         harness.render(&mut output);
-        assert_eq!(harness.position(), 512);
+        assert_eq!(harness.position(), 2048 - 256 + 512);
         assert_eq!(harness.shared.state.load(), PlayerState::Playing);
+    }
+
+    #[test]
+    fn pause_fades_out_and_resume_fades_in_without_steps() {
+        let mut harness = StreamingHarness::new();
+        harness.shared.audio_buffer.store(TrackBuffer::from_samples(vec![0.5; 44_100 * 2], 2));
+        let mut output = vec![0.0; 512 * 2];
+        for _ in 0..8 {
+            harness.render(&mut output); // settle limiter / smoothing
+        }
+        harness.shared.fade_target.store(0.0f32.to_bits(), Ordering::Release);
+        harness.render(&mut output);
+        let left: Vec<f64> = output.chunks(2).map(|f| f[0]).collect();
+        assert!(left[0].abs() > 0.05, "fade starts from the current level");
+        assert!(left[(FADE_FRAMES as usize) + 1..].iter().all(|s| s.abs() < 1e-9), "silent after the fade");
+        for pair in left.windows(2).take(FADE_FRAMES as usize) {
+            assert!((pair[0] - pair[1]).abs() < 0.01, "no step during the fade");
+        }
+
+        harness.shared.fade_target.store(1.0f32.to_bits(), Ordering::Release);
+        harness.render(&mut output);
+        let left: Vec<f64> = output.chunks(2).map(|f| f[0]).collect();
+        assert!(left[0].abs() < 0.01, "resume starts from silence");
+        assert!(left[511].abs() > 0.05, "and is back at level within the block");
     }
 
     #[test]

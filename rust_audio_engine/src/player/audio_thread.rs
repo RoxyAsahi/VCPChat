@@ -58,6 +58,11 @@ pub fn audio_thread_main(
 ) {
     log::info!("Audio thread started, initializing cpal host...");
     let mut stream: Option<Stream> = None;
+    // Geometry of the open shared-mode stream: (device id, source rate,
+    // channels). Consecutive tracks with the same geometry reuse the stream
+    // instead of re-enumerating the device and rebuilding it on every switch.
+    let mut stream_key: Option<(i64, u32, u16)> = None;
+    let stream_failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     // Keep a default output bit-depth hint for downstream components.
     shared_state
@@ -89,13 +94,41 @@ pub fn audio_thread_main(
                 log::info!("Received Play command");
                 if shared_state.state.load() == PlayerState::Paused {
                     if let Some(ref s) = stream {
+                        // Resume from silence and fade in.
+                        shared_state.fade_gain.store(0.0f32.to_bits(), Ordering::Relaxed);
+                        shared_state.fade_target.store(1.0f32.to_bits(), Ordering::Release);
                         let _ = s.play();
                     }
                     shared_state.state.store(PlayerState::Playing);
                     continue;
                 }
+                // A fresh start plays at full level from the first sample.
+                shared_state.fade_gain.store(1.0f32.to_bits(), Ordering::Relaxed);
+                shared_state.fade_target.store(1.0f32.to_bits(), Ordering::Release);
 
                 let use_exclusive = shared_state.exclusive_mode.load(Ordering::Relaxed);
+
+                let key = (
+                    shared_state.device_id.load(Ordering::Relaxed),
+                    shared_state.sample_rate.load(Ordering::Relaxed) as u32,
+                    shared_state.channels.load(Ordering::Relaxed) as u16,
+                );
+                if !use_exclusive && stream_key == Some(key) && !stream_failed.load(Ordering::Acquire) {
+                    if let Some(ref s) = stream {
+                        // Same format as the previous track: restart the
+                        // existing stream. The callback resets DSP and
+                        // resampler state before its next block.
+                        shared_state.dsp_needs_rebuild.store(true, Ordering::Release);
+                        if s.play().is_ok() {
+                            shared_state.state.store(PlayerState::Playing);
+                            log::info!("Reusing output stream ({} Hz, {} ch)", key.1, key.2);
+                            continue;
+                        }
+                    }
+                }
+                stream = None;
+                stream_key = None;
+                stream_failed.store(false, Ordering::Release);
 
                 #[cfg(windows)]
                 if use_exclusive {
@@ -325,6 +358,7 @@ pub fn audio_thread_main(
                 let mut callback_output_f64 = vec![0.0; 8192 * channels as usize];
 
                 log::info!("Building output stream...");
+                let failed_flag = Arc::clone(&stream_failed);
                 let new_stream = device.build_output_stream(
                     &config,
                     move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
@@ -378,7 +412,10 @@ pub fn audio_thread_main(
                             }
                         }
                     },
-                    |err| log::error!("Stream error: {}", err),
+                    move |err| {
+                        log::error!("Stream error: {}", err);
+                        failed_flag.store(true, Ordering::Release);
+                    },
                     None,
                 );
 
@@ -386,6 +423,7 @@ pub fn audio_thread_main(
                     Ok(s) => {
                         let _ = s.play();
                         stream = Some(s);
+                        stream_key = Some(key);
                         shared_state.state.store(PlayerState::Playing);
 
                         let detected_bits: u32 = match device.default_output_config() {
@@ -484,6 +522,7 @@ pub fn audio_thread_main(
                             let mut fallback_callback_output_f64 =
                                 vec![0.0; 8192 * fallback_channels];
 
+                            let failed_flag = Arc::clone(&stream_failed);
                             match device.build_output_stream(
                                 &fallback_config,
                                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
@@ -542,12 +581,16 @@ pub fn audio_thread_main(
                                         }
                                     }
                                 },
-                                |err| log::error!("Stream error: {}", err),
+                                move |err| {
+                        log::error!("Stream error: {}", err);
+                        failed_flag.store(true, Ordering::Release);
+                    },
                                 None,
                             ) {
                                 Ok(s) => {
                                     let _ = s.play();
                                     stream = Some(s);
+                                    stream_key = Some(key);
                                     shared_state.state.store(PlayerState::Playing);
 
                                     let detected_bits: u32 = match device.default_output_config() {
@@ -583,6 +626,12 @@ pub fn audio_thread_main(
             }
             Ok(AudioCommand::Pause) => {
                 if let Some(ref s) = stream {
+                    if shared_state.state.load() == PlayerState::Playing {
+                        // Fade out before stopping the device so pausing
+                        // does not click; the fade takes ~8 ms.
+                        shared_state.fade_target.store(0.0f32.to_bits(), Ordering::Release);
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                    }
                     let _ = s.pause();
                 }
                 shared_state.state.store(PlayerState::Paused);
@@ -594,7 +643,14 @@ pub fn audio_thread_main(
                 shared_state.position_frames.store(new_pos, Ordering::Relaxed);
             }
             Ok(AudioCommand::Stop) => {
-                stream = None;
+                // Keep the stream (paused) so the next track can reuse it.
+                if let Some(ref s) = stream {
+                    if shared_state.state.load() == PlayerState::Playing {
+                        shared_state.fade_target.store(0.0f32.to_bits(), Ordering::Release);
+                        std::thread::sleep(std::time::Duration::from_millis(25));
+                    }
+                    let _ = s.pause();
+                }
                 shared_state.position_frames.store(0, Ordering::Relaxed);
                 shared_state.state.store(PlayerState::Stopped);
             }
@@ -752,7 +808,7 @@ pub fn audio_thread_main(
                 // This prevents the race condition where the frontend sees
                 // is_loading=false but file_path is still the old value.
                 shared_state.is_loading.store(false, Ordering::Release);
-                shared_state.event_flags.fetch_or(EVENT_LOAD_COMPLETE, Ordering::Release);
+                shared_state.raise_events(EVENT_LOAD_COMPLETE);
             }
             Ok(AudioCommand::LoadError { generation, error }) => {
                 let current_generation = shared_state.load_generation.load(Ordering::Acquire);
@@ -770,7 +826,7 @@ pub fn audio_thread_main(
                 *shared_state.load_error.write() = Some(error);
                 shared_state.is_loading.store(false, Ordering::Release);
                 shared_state.state.store(PlayerState::Stopped);
-                shared_state.event_flags.fetch_or(EVENT_LOAD_ERROR, Ordering::Release);
+                shared_state.raise_events(EVENT_LOAD_ERROR);
             }
             Ok(AudioCommand::LoudnessMeasured { generation, integrated_lufs }) => {
                 apply_measured_loudness(&shared_state, &loudness_state, target_lufs, generation, integrated_lufs);
@@ -784,7 +840,7 @@ pub fn audio_thread_main(
 /// Record that every command queued before marker `seq` has run.
 fn publish_applied(shared_state: &SharedState, seq: u64) {
     shared_state.applied_seq.fetch_max(seq, Ordering::AcqRel);
-    shared_state.event_flags.fetch_or(EVENT_COMMAND_APPLIED, Ordering::Release);
+    shared_state.raise_events(EVENT_COMMAND_APPLIED);
 }
 
 /// Apply the EBU R128 fallback gain measured by the decode thread, if the
