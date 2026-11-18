@@ -299,3 +299,46 @@ test('break scenes are planned in long silences only, and the camera moves into 
         previous = pose;
     }
 });
+
+test('each chorus is seen from somewhere else, and the train never runs through the camera', () => {
+    // Three choruses of four lines, verses between them.
+    const chorus = i => i >= 6 && i < 10 || i >= 16 && i < 20 || i >= 26 && i < 30;
+    const song = R.normalizeLines(Array.from({ length: 32 }, (_, i) => ({
+        startTime: 6 + i * 5, endTime: 6 + i * 5 + 4, fullText: `第${i}句 沿着海岸线`, isChorus: chorus(i)
+    })));
+    const timeline = D.compile({ lines: song, trackId: 'three-choruses', duration: 175 });
+    const track = C.createTrack(timeline, 1, { aspect: 1.78 });
+    const choruses = timeline.acts.filter(act => act.kind === 'Chorus');
+    assert.equal(choruses.length, 3);
+    const held = choruses.map(act => C.pose(timeline, track, act.end - 2, { aspect: 1.78 }));
+    assert.deepEqual(plain(held.map(pose => pose.chaseRig)), ['QUARTER', 'ALONGSIDE', 'OVERHEAD']);
+    const beside = pose => {
+        const f = track.at(pose.distance);
+        return (pose.position.x - f.position.x) * f.right.x + (pose.position.z - f.position.z) * f.right.z;
+    };
+    // High and to one side; low over the water on the other; up over the roofs.
+    assert.ok(beside(held[0]) > 6 && held[0].position.y > 6);
+    assert.ok(beside(held[1]) < -6 && held[1].position.y < 3);
+    assert.ok(Math.abs(beside(held[2])) < 3.5 && held[2].position.y > 8);
+    // Beside the train the line on the sky is written above the gaze, clear of the windows.
+    assert.ok(held[1].sky.y > held[1].direction.y + 0.1);
+    assert.equal(held[0].sky.y, held[0].direction.y);
+    let previous = null;
+    for (let t = 0; t <= 175; t += 1 / 60) {
+        const pose = C.pose(timeline, track, t, { aspect: 1.78 });
+        const lead = pose.trainFront - pose.distance;
+        // The train reaches from its nose 53 m back. Where that covers the
+        // camera, the camera is out to one side of it or up over its roof.
+        if (pose.chase > 0.01 && lead > 0.5 && lead < 53)
+            assert.ok(Math.abs(beside(pose)) > 2 || pose.position.y > 5.2,
+                `the train would run through the camera at ${t.toFixed(2)}`);
+        if (previous) {
+            const step = Math.hypot(pose.position.x - previous.position.x, pose.position.y - previous.position.y,
+                pose.position.z - previous.position.z);
+            assert.ok(step < 0.25, `camera jumps ${step.toFixed(2)} m at ${t.toFixed(2)}`);
+            const turn = Math.abs(Math.atan2(Math.sin(pose.yaw - previous.yaw), Math.cos(pose.yaw - previous.yaw)));
+            assert.ok(turn < 0.03, `camera whips ${turn.toFixed(3)} rad at ${t.toFixed(2)}`);
+        }
+        previous = pose;
+    }
+});

@@ -362,14 +362,15 @@
             text.scale.set(width, height * scale, 1);
             text.position.z = 0.055;
             group.add(text);
-            const yaw = reference.yaw;
+            const yaw = constellation ? reference.skyYaw ?? reference.yaw : reference.yaw;
             const right = new T.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
             const shift = constellation ? 0 : Math.min(2.5, halfHeight * aspect * 0.12);
             // The camera keeps travelling and turning while a phrase is read.
             // Aim at where it looks over the whole phrase, not only at its midpoint.
-            const aimed = axis => (opening.position[axis] + opening.direction[axis] * distance) * 0.25
-                + (reference.position[axis] + reference.direction[axis] * distance) * 0.5
-                + (closing.position[axis] + closing.direction[axis] * distance) * 0.25;
+            const gaze = view => constellation && view.sky || view.direction;
+            const aimed = axis => (opening.position[axis] + gaze(opening)[axis] * distance) * 0.25
+                + (reference.position[axis] + gaze(reference)[axis] * distance) * 0.5
+                + (closing.position[axis] + gaze(closing)[axis] * distance) * 0.25;
             group.position.set(aimed('x') + right.x * shift,
                 Math.max(height + 0.5, aimed('y') + halfHeight * 0.12),
                 aimed('z') + right.z * shift);

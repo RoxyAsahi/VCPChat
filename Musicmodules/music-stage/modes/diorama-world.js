@@ -268,6 +268,8 @@
         sleepers.layers.set(1);
         // The rock pile is a data script of its own, fetched once the stage is up.
         let rocks = null, rocksArrived = false;
+        // The camera's path past each address, worked out once per journey.
+        let passing = new Map(), passingTrack = null;
         const raiseRocks = () => {
             const data = global.MusicStageAssets?.coastRock;
             if (!data || released || rocks) return;
@@ -1756,6 +1758,7 @@
             // A pile of shore rocks, turned and sized so no two read as the same one.
             const rock = (address, lateral, size, turn, sunk = 0.12) => {
                 if (!rocks || rocks.count >= rocks.instanceMatrix.count) return;
+                if (inTheWay(address, lateral, size * 1.7, size * 3, size * 3 + 1)) return;
                 const f = track.at(address);
                 dummy.position.set(f.position.x + f.right.x * lateral, -sunk * size, f.position.z + f.right.z * lateral);
                 dummy.rotation.set(0, turn, 0);
@@ -1775,6 +1778,32 @@
                 return (lo + hi) * 0.5;
             };
             const stateAt = address => timeline.sample(timeAt(address));
+            // Where the camera is as it goes by an address: how far out to one
+            // side of the line, and how high. In the cab it is on the line.
+            if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
+            const cameraAt = address => {
+                const key = Math.round(address / 2);
+                let at = passing.get(key);
+                if (!at) {
+                    const view = global.MusicStageDioramaCamera.pose(timeline, track, timeAt(key * 2), tuning);
+                    const f = track.at(view.distance);
+                    at = { y: view.position.y, lateral: (view.position.x - f.position.x) * f.right.x
+                        + (view.position.z - f.position.z) * f.right.z };
+                    passing.set(key, at);
+                }
+                return at;
+            };
+            // When the camera leaves the cab it flies beside the line, sometimes
+            // low over the water. Nothing may stand where it goes: true if a
+            // thing at this lateral, this tall and this wide would be in its way.
+            const inTheWay = (address, lateral, top, half = 1, along = 3) => {
+                for (let at = address - along; at <= address + along; at += 2) {
+                    const camera = cameraAt(at);
+                    if (Math.abs(camera.lateral) > 1.3 && Math.abs(camera.lateral - lateral) < half + 0.8
+                        && camera.y < top + 0.9) return true;
+                }
+                return false;
+            };
             // With no screen ahead the camera may still be turned to a line on the
             // sky: a pole then takes the side the camera faces away from as it
             // comes up to and passes that pole.
@@ -1798,8 +1827,12 @@
                 const exposure = side => [-11, -5.5, 0, 5.5, 11].filter(bay =>
                     inSight(track, address + bay, 7, side)).length;
                 const preferred = id % 2 ? 1 : -1;
-                stations.push({ id, address, open: stateAt(address).density < 0.4,
-                    side: exposure(-preferred) < exposure(preferred) ? -preferred : preferred });
+                let side = exposure(-preferred) < exposure(preferred) ? -preferred : preferred;
+                // A station takes the other side from the camera, or is not built.
+                const flownOver = towards => inTheWay(address, towards * 5.4, 5.2, 4.6, 15);
+                if (flownOver(side)) side = -side;
+                if (flownOver(side)) continue;
+                stations.push({ id, address, open: stateAt(address).density < 0.4, side });
             }
             const atStation = (address, side, margin) => stations.some(station =>
                 station.side === side && Math.abs(station.address - address) < 14 + margin);
@@ -1818,7 +1851,10 @@
                 // water the camera climbs above bare lamp posts instead.
                 let side = poleSide(track, address, awayFromGaze(address));
                 if (inSight(track, address, POLE_OFFSET, side)) side = -side;
-                const clear = !inSight(track, address, POLE_OFFSET, side);
+                // Nor may a pole stand where the camera swings out past it.
+                const flownPast = towards => inTheWay(address, towards * POLE_OFFSET, 8.5, 1.4);
+                if (flownPast(side) && !inSight(track, address, POLE_OFFSET, -side)) side = -side;
+                const clear = !inSight(track, address, POLE_OFFSET, side) && !flownPast(side);
                 // A high camera also sees the masts ahead of it, so the wire only
                 // starts a few spans after the train has come down.
                 polePlan.push({ id, address, present: present && clear, side,
@@ -2217,6 +2253,8 @@
                     part(paleMarks, address, L(3.05), 0.406, 0.28, 0.012, ROAD * 2 - 0.5);
                     // The signal stands on the left of the road as it comes up to the line.
                     const post = address - side * (ROAD + 0.55), at = L(3.3);
+                    // The road stays; its signal and barrier give way to the camera.
+                    if (inTheWay(post, L(3.6), 3.7, 1.3, 5)) continue;
                     const tall = !inSight(track, post, 3.3, side, 4);
                     part(concreteParts, post, at, 0.34, 0.5, 0.5, 0.5);
                     part(masts, post, at, tall ? 2.0 : 1.4, 0.95, tall ? 2.9 : 1.7, 0.95);
@@ -2263,6 +2301,7 @@
                     const tall = height + (lantern && post === count - 1 ? 0.35 : 0);
                     // Even a low post is in the way when it stands under a screen being read.
                     if (inSight(track, at, Math.abs(lateral), side, tall > SIGHT_FLOOR ? 3 : 1)) continue;
+                    if (inTheWay(at, lateral, tall + 0.3, 0.5)) continue;
                     part(timberParts, at, lateral, height / 2 - 0.3, 0.22, height + 0.6, 0.22, lean[0], lean[1]);
                     if (lantern && post === count - 1) {
                         part(steelParts, at, lateral, height + 0.06, 0.2, 0.05, 0.2);
