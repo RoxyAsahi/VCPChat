@@ -308,102 +308,67 @@
     // One set of dimensions for each encounter: the point template and the
     // solid body are built from the same numbers, so they coincide.
     const ENTITY_SPECS = Object.freeze({
-        stationA: { p: 3, q: 5, radius: 25 }, stationB: { p: 4, q: 7, radius: 26 },
+        stationA: { radius: 25, wheels: 1 }, stationB: { radius: 26, wheels: 2 },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
         shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
     });
+    // A rotating wheel station, after the mid-century wheel and the later
+    // torus settlement studies: a habitat rim, spokes to a hub on the spin
+    // axis, and solar wings off both ends of the hub. Y is the spin axis.
+    const wheelPlan = ({ radius, wheels }) => {
+        const rim = radius * 0.8, tube = radius * (wheels > 1 ? 0.062 : 0.085);
+        const decks = wheels > 1 ? [-radius * 0.17, radius * 0.17] : [0];
+        return {
+            rim, tube, decks, spokes: wheels > 1 ? 6 : 4, spoke: radius * 0.02,
+            hub: radius * 0.12, hubLength: radius * (wheels > 1 ? 0.8 : 0.62),
+            wing: [radius * 0.46, radius * 0.17], wingAt: radius * 0.35, mast: radius * 0.55
+        };
+    };
     const createManifoldTemplates = (pointsPerSlot) => {
-        // A. 高维环面结流形 / 戴森星门遗迹 (Torus Knot (p,q) Manifold + Harmonic Filaments)
-        const buildTorusKnotManifold = (count, p, q, radius, seedStr) => {
+        // A0. 轮式空间站：点云与实体同一套尺寸
+        const buildWheelStation = (count, spec, seedStr) => {
             const rand = seededRandom(seedStr);
+            const plan = wheelPlan(spec);
             const pos = new Float32Array(count * 3);
             const normal = new Float32Array(count * 3);
             const meta = new Float32Array(count * 4);
-            const strands = 3;
-
             for (let i = 0; i < count; i += 1) {
                 const u = rand();
-                const t = (i / count) * TAU * p + (rand() - 0.5) * 0.04;
-                const pqPhase = (q / p) * t;
-                const tubeR = radius * (0.36 + 0.12 * Math.cos(pqPhase));
-                const coreR = radius * (0.72 + 0.28 * Math.cos(pqPhase));
-
-                // 环面结主曲线中心与切向基
-                const cx = coreR * Math.cos(t);
-                const cy = coreR * Math.sin(t);
-                const cz = tubeR * Math.sin(pqPhase);
-
-                const idx3 = i * 3;
-                const idx4 = i * 4;
-
-                if (u < 0.62) {
-                    // 1. 结项主谐波丝束 (Harmonic Ribbon Strands)
-                    const strandIdx = i % strands;
-                    const twist = t * 2.5 + (strandIdx / strands) * TAU;
-                    const minorR = (1.2 + rand() * 2.4) * (0.65 + 0.35 * Math.sin(t * 3.0));
-                    const nx = Math.cos(twist) * Math.cos(t) - Math.sin(twist) * Math.sin(t) * 0.5;
-                    const ny = Math.cos(twist) * Math.sin(t) + Math.sin(twist) * Math.cos(t) * 0.5;
-                    const nz = Math.sin(twist);
-                    pos[idx3] = cx + nx * minorR;
-                    pos[idx3 + 1] = cy + ny * minorR;
-                    pos[idx3 + 2] = cz + nz * minorR;
-                    normal[idx3] = nx;
-                    normal[idx3 + 1] = ny;
-                    normal[idx3 + 2] = nz;
-                    meta[idx4] = (t / (TAU * p)) % 1;
-                    meta[idx4 + 1] = strandIdx === 0 ? 1 : 0; // 0=主骨白弦, 1=松石谐波弦
-                    meta[idx4 + 2] = 1.15 + rand() * 0.85;
-                    meta[idx4 + 3] = rand();
+                let x, y, z, nx, ny, nz, shade, phase;
+                if (u < 0.6) {
+                    const a = rand() * TAU, b = rand() * TAU;
+                    const deck = plan.decks[i % plan.decks.length];
+                    const reach = plan.rim + plan.tube * Math.cos(b);
+                    x = reach * Math.cos(a); z = reach * Math.sin(a); y = deck + plan.tube * Math.sin(b);
+                    nx = Math.cos(b) * Math.cos(a); nz = Math.cos(b) * Math.sin(a); ny = Math.sin(b);
+                    shade = i % 4 === 0 ? 1 : 0; phase = a / TAU;
+                } else if (u < 0.76) {
+                    const a = (Math.floor(rand() * plan.spokes) / plan.spokes) * TAU, r = rand() * plan.rim;
+                    const deck = plan.decks[i % plan.decks.length];
+                    x = r * Math.cos(a); z = r * Math.sin(a); y = deck;
+                    nx = -Math.sin(a); nz = Math.cos(a); ny = 0;
+                    shade = 0; phase = r / plan.rim;
                 } else if (u < 0.86) {
-                    // 2. 相位引力包络环与张拉弦 (Phase Containment Halo)
-                    const ringAngle = rand() * TAU;
-                    const ringR = radius * (1.02 + (rand() - 0.5) * 0.08);
-                    const planeTilt = (i % 2 === 0 ? 0.38 : -0.38);
-                    const rx = Math.cos(ringAngle) * ringR;
-                    const ry = Math.sin(ringAngle) * ringR * Math.cos(planeTilt);
-                    const rz = Math.sin(ringAngle) * ringR * Math.sin(planeTilt);
-                    pos[idx3] = rx;
-                    pos[idx3 + 1] = ry;
-                    pos[idx3 + 2] = rz;
-                    const inv = 1 / Math.max(0.001, Math.hypot(rx, ry, rz));
-                    normal[idx3] = rx * inv;
-                    normal[idx3 + 1] = ry * inv;
-                    normal[idx3 + 2] = rz * inv;
-                    meta[idx4] = ringAngle / TAU;
-                    meta[idx4 + 1] = 2; // 2=琥珀星门刻度环
-                    meta[idx4 + 2] = 1.3 + rand() * 0.7;
-                    meta[idx4 + 3] = rand();
+                    const a = rand() * TAU;
+                    x = plan.hub * Math.cos(a); z = plan.hub * Math.sin(a); y = (rand() - 0.5) * plan.hubLength;
+                    nx = Math.cos(a); nz = Math.sin(a); ny = 0;
+                    shade = 1; phase = rand();
+                } else if (u < 0.96) {
+                    const end = rand() < 0.5 ? -1 : 1, side = rand() < 0.5 ? -1 : 1;
+                    x = side * (plan.wingAt + (rand() - 0.5) * plan.wing[0]);
+                    z = (rand() - 0.5) * plan.wing[1]; y = end * plan.mast;
+                    nx = 0; nz = 0; ny = end;
+                    shade = 2; phase = rand();
                 } else {
-                    // 3. 奇点核心与轴向射流 (Singularity Core & Axial Jet)
-                    const jet = rand() < 0.55;
-                    if (jet) {
-                        const side = rand() < 0.5 ? -1 : 1;
-                        const zDist = side * Math.pow(rand(), 1.4) * radius * 1.45;
-                        const spread = (0.4 + Math.abs(zDist) * 0.06) * rand();
-                        const a = rand() * TAU;
-                        pos[idx3] = Math.cos(a) * spread;
-                        pos[idx3 + 1] = Math.sin(a) * spread;
-                        pos[idx3 + 2] = zDist;
-                        normal[idx3] = Math.cos(a);
-                        normal[idx3 + 1] = Math.sin(a);
-                        normal[idx3 + 2] = side * 0.4;
-                    } else {
-                        const r = Math.pow(rand(), 1.8) * radius * 0.22;
-                        const theta = rand() * TAU;
-                        const phi = Math.acos(2 * rand() - 1);
-                        pos[idx3] = r * Math.sin(phi) * Math.cos(theta);
-                        pos[idx3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-                        pos[idx3 + 2] = r * Math.cos(phi);
-                        normal[idx3] = Math.sin(phi) * Math.cos(theta);
-                        normal[idx3 + 1] = Math.sin(phi) * Math.sin(theta);
-                        normal[idx3 + 2] = Math.cos(phi);
-                    }
-                    meta[idx4] = rand();
-                    meta[idx4 + 1] = 3; // 3=核心辉光
-                    meta[idx4 + 2] = 1.6 + rand() * 1.1;
-                    meta[idx4 + 3] = rand();
+                    const end = rand() < 0.5 ? -1 : 1, r = rand() * plan.hub * 0.5, a = rand() * TAU;
+                    x = r * Math.cos(a); z = r * Math.sin(a); y = end * (plan.hubLength * 0.5 + rand() * plan.hub);
+                    nx = Math.cos(a) * 0.4; nz = Math.sin(a) * 0.4; ny = end;
+                    shade = 3; phase = rand();
                 }
+                pos.set([x, y, z], i * 3);
+                normal.set([nx, ny, nz], i * 3);
+                meta.set([phase, shade, 1.1 + rand() * 0.8, rand()], i * 4);
             }
             return { pos, normal, meta };
         };
@@ -609,8 +574,8 @@
 
         const S = ENTITY_SPECS;
         return {
-            stationA: buildTorusKnotManifold(pointsPerSlot, S.stationA.p, S.stationA.q, S.stationA.radius, 'manifold-knot-3-5'),
-            stationB: buildTorusKnotManifold(pointsPerSlot, S.stationB.p, S.stationB.q, S.stationB.radius, 'manifold-knot-4-7'),
+            stationA: buildWheelStation(pointsPerSlot, S.stationA, 'manifold-wheel-a'),
+            stationB: buildWheelStation(pointsPerSlot, S.stationB, 'manifold-wheel-b'),
             ringsA:   buildRocheRings(pointsPerSlot, S.ringsA.inner, S.ringsA.outer, 'manifold-roche-a'),
             ringsB:   buildRocheRings(pointsPerSlot, S.ringsB.inner, S.ringsB.outer, 'manifold-roche-b'),
             planetA:  buildAbyssalPlanet(pointsPerSlot, S.planetA.radius, 'manifold-planet-a'),
@@ -1209,9 +1174,9 @@
 
                     // 1. 结项相位流动与天体内部动力学 (Internal Manifold Dynamics)
                     if (uType < 0.5) {
-                        // Torus Knot 谐波呼吸
+                        // 轮站：成形前的尘埃随音乐轻微起伏，成形后静止
                         float harmonic = sin(uTime * 1.4 + phase * 18.8495 + seed * 6.28);
-                        localPos += nrm * harmonic * (0.45 + uAudioPulse * 0.55);
+                        localPos += nrm * harmonic * (0.45 + uAudioPulse * 0.55) * (1.0 - localCohesion);
                     } else if (uType > 1.5 && uType < 2.5) {
                         // Roche Rings 开普勒差速旋转微扰
                         float kepler = uTime * (0.35 + (1.0 - phase) * 0.45);
@@ -1308,7 +1273,7 @@
                     // Once the body has formed, the points that sketched its
                     // surface give way to the solid. Planets and rings are left
                     // clean; field lines, jets and wakes stay on the built things.
-                    float keep = uType < 0.5 ? (shade > 2.5 ? 1.0 : shade > 1.5 ? 0.35 : 0.3)
+                    float keep = uType < 0.5 ? (shade > 2.5 ? 0.5 : 0.0)
                         : uType < 2.5 ? 0.0
                         : (shade > 2.5 ? 0.5 : 0.18);
                     vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
@@ -1417,7 +1382,7 @@
             uniforms: {
                 uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
                 uSurface: { value: null }, uMapped: { value: 0 },
-                uRingMap: { value: null }, uRingMapped: { value: 0 }, uRinged: { value: 0 },
+                uRingMap: { value: null }, uRingMapped: { value: 0 }, uRinged: { value: 0 }, uDetail: { value: 1 },
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
@@ -1446,7 +1411,7 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged;
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged, uDetail;
                 uniform sampler2D uSurface, uRingMap;
                 uniform vec2 uRing, uViewport;
                 uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
@@ -1489,19 +1454,28 @@
                     float alpha = 1.0;
 
                     if (uKind < 0.5) {
-                        // Hull: dark plating with seams, lit ports, and a few luminous parts.
-                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 5.0));
+                        // Hull: pale plating with seams and rows of lit ports.
+                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 8.0));
                         vec2 cell = floor(cells), inside = fract(cells);
                         float seam = smoothstep(0.0, 0.08, inside.x) * smoothstep(0.0, 0.14, inside.y);
-                        float lit = step(0.83, hash(vec3(cell, uSeed)))
+                        // Ports sit in rows, a few dark, as on a lived-in deck.
+                        float row = vPart > 2.5 ? 1.0 : step(0.5, mod(cell.y, 3.0)) * step(mod(cell.y, 3.0), 1.5);
+                        float lit = row * step(0.55, hash(vec3(cell, uSeed)))
                             * step(0.25, inside.x) * step(inside.x, 0.75) * step(0.3, inside.y) * step(inside.y, 0.7);
-                        vec3 plate = mix(uColorInk, uColorPrimary, 0.35) * (0.05 + 0.05 * hash(vec3(cell * 0.5, 3.0)));
-                        col = plate * seam * (0.35 + day * 2.4) + uColorPrimary * rim * (0.22 + day * 0.35);
-                        col += uColorAccent * lit * (0.75 + 0.35 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 0.5 && vPart < 1.5) {
-                            // Graduated gate ring: travelling marks.
-                            float mark = step(0.5, fract(vUv.x * 72.0 - uTime * 0.12));
-                            col = uColorAccent * (0.14 + mark * 0.7) * uGlow + uColorInk * rim * 0.25;
+                        if (vPart > 2.5) lit *= step(0.9, hash(vec3(cell, uSeed + 2.0)));
+                        vec3 plate = mix(uColorInk, uColorPrimary, 0.3) * (0.15 + 0.07 * hash(vec3(floor(cells * 0.25), 3.0)));
+                        float gloss = pow(max(dot(reflect(-uLight, n), v), 0.0), 24.0);
+                        col = plate * seam * (0.04 + day * 2.3) + uColorInk * gloss * day * 0.35
+                            + uColorPrimary * rim * (0.02 + day * 0.3);
+                        col += mix(uColorAccent, uColorInk, 0.35) * lit * (0.8 + 0.2 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
+                        if (vPart > 3.5) {
+                            // Solar wing: dark cells in a pale grid, a glint when it faces the sun.
+                            vec2 grid = fract(vUv * vec2(14.0, 5.0));
+                            float frame = 1.0 - smoothstep(0.0, 0.07, min(min(grid.x, 1.0 - grid.x), min(grid.y, 1.0 - grid.y)));
+                            float glint = pow(max(dot(reflect(-uLight, n), v), 0.0), 60.0);
+                            col = mix(mix(uColorPrimary, vec3(0.05, 0.08, 0.2), 0.6) * (0.03 + 0.2 * max(ndl, 0.0)),
+                                uColorInk * (0.05 + 0.4 * day), frame)
+                                + mix(uColorInk, uColorAccent, 0.3) * glint * 1.4;
                         } else if (vPart > 1.5 && vPart < 2.5) {
                             // Core or engine: pure emission with a hot centre.
                             float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
@@ -1518,7 +1492,7 @@
                         // Gas giant: turbulent latitude bands, storms, a soft
                         // terminator, a limb of atmosphere, aurora on the night pole.
                         vec3 p = normalize(vLocal);
-                        float warp = fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0));
+                        float warp = uDetail > 0.5 ? fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0)) : 0.5;
                         float lat = p.y + (warp - 0.5) * 0.16;
                         float bands = 0.5 + 0.5 * sin(lat * (15.0 + uSeed * 9.0) + sin(lat * 41.0) * 0.6);
                         float fine = noise(vec3(p.x * 5.0, lat * 46.0, p.z * 5.0) + uSeed * 3.0);
@@ -1597,7 +1571,7 @@
                             tone *= 0.45 + 0.75 * profile.g;
                         }
                         // Fine ringlets, kept only while a pixel can still resolve them.
-                        float grainT = fwidth(t);
+                        float grainT = uDetail > 0.5 ? fwidth(t) : 1.0;
                         density *= 1.0 - 0.3 * (1.0 - smoothstep(0.001, 0.004, grainT))
                             * noise(vec3(t * 760.0, uSeed * 7.0, 1.0));
                         density *= 1.0 - 0.22 * (1.0 - smoothstep(0.004, 0.012, grainT))
@@ -1658,21 +1632,29 @@
             `
         }), surface);
 
-        const buildStationBody = ({ p, q, radius }, seed) => {
-            class KnotPath extends T.Curve {
-                getPoint(u, target = new T.Vector3()) {
-                    const t = u * TAU * p, phase = (q / p) * t;
-                    const core = radius * (0.72 + 0.28 * Math.cos(phase));
-                    return target.set(core * Math.cos(t), core * Math.sin(t),
-                        radius * (0.36 + 0.12 * Math.cos(phase)) * Math.sin(phase));
+        const buildStationBody = (spec, seed) => {
+            const plan = wheelPlan(spec);
+            const parts = [];
+            for (const deck of plan.decks) {
+                parts.push([new T.TorusGeometry(plan.rim, plan.tube, 14, 112).rotateX(Math.PI / 2).translate(0, deck, 0), 0]);
+                for (let i = 0; i < plan.spokes; i += 1) {
+                    parts.push([new T.CylinderGeometry(plan.spoke, plan.spoke, plan.rim, 6, 1, true)
+                        .rotateZ(Math.PI / 2).translate(plan.rim / 2, deck, 0).rotateY((i / plan.spokes) * TAU), 3]);
                 }
             }
-            return [[fuse([
-                [new T.TubeGeometry(new KnotPath(), 640, 0.95, 7, true), 0],
-                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(0.38), 1],
-                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(-0.38), 1],
-                [new T.IcosahedronGeometry(radius * 0.12, 3), 2]
-            ]), makeBodyMaterial(0, seed)]];
+            parts.push([new T.CylinderGeometry(plan.hub, plan.hub, plan.hubLength, 20, 1), 3]);
+            for (const end of [-1, 1]) {
+                parts.push([new T.CylinderGeometry(plan.hub * 0.16, plan.hub * 0.16, plan.mast - plan.hubLength / 2, 6, 1, true)
+                    .translate(0, end * (plan.mast + plan.hubLength / 2) / 2, 0), 3]);
+                parts.push([new T.CylinderGeometry(plan.hub * 0.1, plan.hub * 0.1, plan.wingAt * 2, 6, 1, true)
+                    .rotateZ(Math.PI / 2).translate(0, end * plan.mast, 0), 3]);
+                for (const side of [-1, 1]) {
+                    parts.push([new T.BoxGeometry(plan.wing[0], plan.hub * 0.03, plan.wing[1])
+                        .translate(side * plan.wingAt, end * plan.mast, 0), 4]);
+                }
+            }
+            parts.push([new T.IcosahedronGeometry(plan.hub * 0.26, 2).translate(0, plan.hubLength / 2 + plan.hub * 0.2, 0), 2]);
+            return [[fuse(parts), makeBodyMaterial(0, seed)]];
         };
         const buildPlanetBody = ({ radius }, seed) =>
             [
@@ -2732,8 +2714,19 @@
             });
         };
 
+        // What each quality tier spends inside the world: how many of the
+        // gathering points are drawn, and whether the bodies compute their
+        // finest surface detail.
+        const QUALITY_TIERS = { 'energy-saving': [0.5, 0], standard: [0.8, 1], ultimate: [1, 1] };
+        const setQuality = (tier) => {
+            const [points, detail] = QUALITY_TIERS[tier] || QUALITY_TIERS.standard;
+            entityNodes.forEach((node) => node.geo.setDrawRange(0, Math.floor(POINTS_PER_ENTITY * points)));
+            bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => { mat.uniforms.uDetail.value = detail; }));
+        };
+
         return {
             get distance() { return totalTravelDistance; },
+            setQuality,
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
