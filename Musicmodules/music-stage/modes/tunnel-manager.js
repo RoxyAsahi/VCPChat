@@ -1981,6 +1981,17 @@
                             * noise(vec3(t * 760.0, uSeed * 7.0, 1.0));
                         density *= 1.0 - 0.22 * (1.0 - smoothstep(0.004, 0.012, grainT))
                             * noise(vec3(t * 230.0, uSeed * 3.0, 2.0));
+                        // Close to, the sheet resolves into what it is made of:
+                        // clumps strung out along the orbit, grit, glints of ice.
+                        float nearBy = uDetail * (1.0 - smoothstep(50.0, 240.0, vDepth));
+                        float glint = 0.0;
+                        if (nearBy > 0.0) {
+                            float clump = noise(vec3(r * 2.4, vLocal.z * 0.33, vLocal.x * 0.33 + uSeed * 5.0));
+                            float grit = noise(vec3(vLocal.xz * 4.6, uSeed * 2.0));
+                            density *= mix(1.0, (0.5 + 1.0 * clump) * (0.72 + 0.56 * grit), nearBy);
+                            glint = smoothstep(0.8, 0.9, noise(vec3(vLocal.xz * 41.0, uSeed + 4.0)))
+                                * (1.0 - smoothstep(40.0, 150.0, vDepth)) * uDetail;
+                        }
                         float along = -dot(vLocal, uLightLocal);
                         float miss = length(vLocal + uLightLocal * along);
                         // The planet's shadow, its edge softening with distance.
@@ -1996,7 +2007,7 @@
                         float passed = depthOf * exp(-depthOf) * 1.9 * tilt;
                         float litFace = smoothstep(-0.04, 0.04, ndl);
                         float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
-                        col = tone * (mix(passed, reflected, litFace) * 0.82 + forward * 0.5 * passed)
+                        col = tone * (mix(passed, reflected, litFace) * (0.82 + 0.4 * glint) + forward * 0.5 * passed)
                             * mix(0.03, 1.0, shadow);
                         // Seen edge-on a thin sheet still hides what is behind it.
                         float across = max(0.22, abs(dot(n, v)));
