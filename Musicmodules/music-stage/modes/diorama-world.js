@@ -258,6 +258,8 @@
         const warmMarks = tinted(3), paleMarks = tinted(4);
         // A lit room seen through its window: the lamp colour, well short of the lamp itself.
         const windowLight = tinted(5), roomGlow = new T.Color();
+        // A ceiling with lamps under it: far dimmer than a lamp, and one even tone.
+        const litSurface = tinted(6), ceilingGlow = new T.Color();
         const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow];
         Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glow })
             .forEach(([name, mesh]) => { mesh.name = name; });
@@ -1219,6 +1221,8 @@
             // By day a window is only a little warmer than the wall it is in.
             if (palBase?.light) roomGlow.copy(lampMaterial.color).multiplyScalar(0.3 / LAMP_GAIN).lerp(palePaint, 0.7);
             else roomGlow.copy(lampMaterial.color).multiplyScalar(0.34);
+            if (palBase?.light) ceilingGlow.copy(palePaint).multiplyScalar(0.82);
+            else ceilingGlow.copy(lampMaterial.color).multiplyScalar(0.04).lerp(timber.color, 0.3);
             let signal = 0;
             for (let i = 0; i < glow.count; i++) {
                 const kind = glowKinds[i];
@@ -1227,7 +1231,7 @@
                     glow.setColorAt(i, signal % 3 === 2 || signal % 3 === turn ? signalLit : signalDark);
                     signal++;
                 } else glow.setColorAt(i, kind === 0 ? lampMaterial.color : kind === 1 ? coldLampMaterial.color
-                    : kind === 3 ? warmPaint : kind === 4 ? palePaint : roomGlow);
+                    : kind === 3 ? warmPaint : kind === 4 ? palePaint : kind === 5 ? roomGlow : ceilingGlow);
             }
             glow.instanceColor.needsUpdate = true;
         };
@@ -1694,8 +1698,14 @@
                 if (type === 0) {
                     // Butterfly canopy on a single row of Y columns: two roof
                     // planes fold down to a valley gutter over the column line.
+                    // Under the sheeting the boards of the ceiling catch the tube
+                    // lamps, and the purlins cross them as dark lines.
                     span(steelParts, address, lateral(4.1), 5.62, lateral(7), 5.16, 0.1, 26);
                     span(steelParts, address, lateral(7), 5.16, lateral(9.5), 5.5, 0.1, 26);
+                    span(litSurface, address, lateral(4.18), 5.542, lateral(6.86), 5.117, 0.02, 25.9);
+                    span(litSurface, address, lateral(7.14), 5.114, lateral(9.42), 5.424, 0.02, 25.9);
+                    for (const [offset, y] of [[4.9, 5.37], [6.0, 5.2], [7.9, 5.16], [8.8, 5.28]])
+                        part(steelParts, address, lateral(offset), y, 0.07, 0.1, 26);
                     part(steelParts, address, lateral(7), 5.02, 0.32, 0.24, 26);
                     part(steelParts, address, lateral(4.12), 5.56, 0.07, 0.24, 26.1);
                     part(steelParts, address, lateral(9.48), 5.44, 0.07, 0.22, 26.1);
@@ -1705,7 +1715,21 @@
                         part(concreteParts, z, lateral(7), 1.2, 0.42, 0.2, 0.42);
                         span(steelParts, z, lateral(7), 4.15, lateral(4.9), 5.38, 0.1);
                         span(steelParts, z, lateral(7), 4.15, lateral(9.0), 5.33, 0.1);
-                        if ((id + bay) % 7 !== 3) part(glowParts, z + 2.75, lateral(5.5), 5.3, 0.1, 0.04, 2.3);
+                        if ((id + bay) % 7 !== 3) {
+                            part(glowParts, z + 2.75, lateral(5.5), 5.3, 0.1, 0.04, 2.3);
+                            // The batten the tube is fixed to, and its two drops.
+                            if (!saving) part(steelParts, z + 2.75, lateral(5.5), 5.345, 0.16, 0.05, 2.5);
+                        }
+                        // The valley gutter drains down the end columns.
+                        if (!saving && (bay === 0 || bay === 4)) {
+                            part(steelParts, z + (bay ? 0.17 : -0.17), lateral(7), 3.05, 0.08, 3.7, 0.08);
+                            part(steelParts, z + (bay ? 0.17 : -0.17), lateral(7), 1.34, 0.12, 0.08, 0.14);
+                        }
+                        // Timetable and fare table on the middle columns.
+                        if (!saving && (bay === 1 || bay === 3)) {
+                            part(steelParts, z, lateral(6.86), 2.45, 0.03, 1.0, 0.74);
+                            part(paleMarks, z, lateral(6.84), 2.45, 0.012, 0.9, 0.64);
+                        }
                     }
                     if (!saving) {
                         // Hanging platform sign and a back rail.
@@ -1716,6 +1740,25 @@
                         for (const y of [1.65, 2.15]) part(steelParts, address, lateral(9.15), y, 0.05, 0.05, 26);
                         for (let post = 0; post <= 8; post++)
                             part(steelParts, address - 13 + post * 3.25, lateral(9.15), 1.65, 0.06, 1.1, 0.06);
+                        // The station nameboard stands at the back of the platform
+                        // facing the track: a pale panel on two posts with the
+                        // line's band across it. It goes up whole or not at all.
+                        const board = address + 8.25;
+                        if (clear(board, 8.85, 3.2)) {
+                            for (const post of [-0.95, 0.95])
+                                rawPart(steelParts, board + post, lateral(8.85), 2.1, 0.07, 2.0, 0.07);
+                            rawPart(steelParts, board, lateral(8.85), 3.08, 0.12, 0.05, 2.1);
+                            rawPart(paleMarks, board, lateral(8.83), 2.55, 0.05, 0.9, 1.84);
+                            rawPart(warmMarks, board, lateral(8.8), 2.3, 0.012, 0.1, 1.84);
+                        }
+                        // A clock hangs from the canopy beside the platform sign.
+                        const clock = address + 2.75;
+                        if (clear(clock, 5.6, 5)) {
+                            rawPart(steelParts, clock, lateral(5.6), 4.86, 0.03, 0.62, 0.03);
+                            rawPart(steelParts, clock, lateral(5.6), 4.3, 0.18, 0.54, 0.54);
+                            for (const face of [-0.095, 0.095])
+                                rawPart(windowLight, clock, lateral(5.6 + face), 4.3, 0.012, 0.44, 0.44);
+                        }
                     }
                 } else if (type === 1) {
                     // Timber waiting shelters, as on the small platforms along the
@@ -2005,6 +2048,7 @@
                 starOpacity: starMat.opacity, moonRadius: 20,
                 instanceRebuilds, reflectionSize: [target.width, target.height],
                 architecturalInstances: stationInstances,
+                poolFill: sceneryPools.map(mesh => [mesh.count, mesh.instanceMatrix.count]),
                 worldInstances: rails.count + sleepers.count
                     + sceneryPools.reduce((sum, mesh) => sum + mesh.count, 0) }),
             destroy() {
