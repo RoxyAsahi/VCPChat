@@ -16,6 +16,27 @@
                 .lerp(new T.Color(palette.deep || palette.background || '#111b1c'), 0.35);
             const back = new T.MeshStandardMaterial({ color: backingColor, roughness: 0.58, metalness: 0.35 });
             const trim = new T.MeshStandardMaterial({ color: palette.secondary || '#76bfae', roughness: 0.35, metalness: 0.7 });
+            // A board with nothing on it is still a made thing: cabinet seams
+            // across its face, and glass that picks up the sky at a glancing view.
+            const sheen = { value: new T.Color(palette.secondary || '#76bfae') };
+            back.onBeforeCompile = shader => {
+                shader.uniforms.sheen = sheen;
+                shader.vertexShader = shader.vertexShader
+                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;')
+                    .replace('#include <begin_vertex>', `#include <begin_vertex>
+                        #ifdef USE_INSTANCING
+                        vPanel = uv * vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
+                        #else
+                        vPanel = uv;
+                        #endif`);
+                shader.fragmentShader = shader.fragmentShader
+                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;\nuniform vec3 sheen;')
+                    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                        vec2 cabinet = abs(fract(vPanel / 0.96) - 0.5) * 0.96;
+                        float seam = 1.0 - smoothstep(0.004, 0.02, 0.48 - max(cabinet.x, cabinet.y));
+                        float glance = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
+                        totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam);`);
+            };
             // A trackside display board: bezel, hooded lamp row, lattice legs
             // on footings, raking back stays, a service ledge and its ladder.
             const backing = new T.InstancedMesh(box, back, 8);
