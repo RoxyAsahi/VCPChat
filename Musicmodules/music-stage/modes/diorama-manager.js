@@ -296,8 +296,10 @@
         mode.updateTheme = () => { if (latest) update(latest, true); };
         const resume = mode.resume;
         mode.resume = () => { resume(); cap.reset(); if (latest) update(latest, true); };
+        // The layers hold nothing to describe until shaders are warm and the first frame has run.
         mode.getDebugSnapshot = () => ({
-            initialized, fallbackMode, rebuilds, ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera),
+            initialized, fallbackMode, rebuilds,
+            ...(initialized ? { ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera) } : null),
             camera: camera?.position.toArray(), quaternion: camera?.quaternion.toArray(),
             act: pose?.state.act, rig: pose?.rig, distance: pose?.distance,
             acts: timeline?.acts.map(a => ({ kind: a.kind, start: a.start, end: a.end })),
