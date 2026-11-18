@@ -308,23 +308,11 @@
     // One set of dimensions for each encounter: the point template and the
     // solid body are built from the same numbers, so they coincide.
     const ENTITY_SPECS = Object.freeze({
-        stationA: { radius: 25, wheels: 1 }, stationB: { radius: 26, wheels: 2 },
+        stationA: { radius: 25, plan: 'truss' }, stationB: { radius: 26, plan: 'cross' },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
         shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
     });
-    // A rotating wheel station, after the mid-century wheel and the later
-    // torus settlement studies: a habitat rim, spokes to a hub on the spin
-    // axis, and solar wings off both ends of the hub. Y is the spin axis.
-    const wheelPlan = ({ radius, wheels }) => {
-        const rim = radius * 0.8, tube = radius * (wheels > 1 ? 0.062 : 0.085);
-        const decks = wheels > 1 ? [-radius * 0.17, radius * 0.17] : [0];
-        return {
-            rim, tube, decks, spokes: wheels > 1 ? 6 : 4, spoke: radius * 0.02,
-            hub: radius * 0.12, hubLength: radius * (wheels > 1 ? 0.8 : 0.62),
-            wing: [radius * 0.46, radius * 0.17], wingAt: radius * 0.35, mast: radius * 0.55
-        };
-    };
     // A solar sail, after the square sails that have flown: a thin film in
     // four quadrants, slack between four diagonal booms, and a small drum of
     // a spacecraft at the centre. The film lies across Z, turned to cruise
@@ -346,53 +334,6 @@
         };
     };
     const createManifoldTemplates = (pointsPerSlot) => {
-        // A0. 轮式空间站：点云与实体同一套尺寸
-        const buildWheelStation = (count, spec, seedStr) => {
-            const rand = seededRandom(seedStr);
-            const plan = wheelPlan(spec);
-            const pos = new Float32Array(count * 3);
-            const normal = new Float32Array(count * 3);
-            const meta = new Float32Array(count * 4);
-            for (let i = 0; i < count; i += 1) {
-                const u = rand();
-                let x, y, z, nx, ny, nz, shade, phase;
-                if (u < 0.6) {
-                    const a = rand() * TAU, b = rand() * TAU;
-                    const deck = plan.decks[i % plan.decks.length];
-                    const reach = plan.rim + plan.tube * Math.cos(b);
-                    x = reach * Math.cos(a); z = reach * Math.sin(a); y = deck + plan.tube * Math.sin(b);
-                    nx = Math.cos(b) * Math.cos(a); nz = Math.cos(b) * Math.sin(a); ny = Math.sin(b);
-                    shade = i % 4 === 0 ? 1 : 0; phase = a / TAU;
-                } else if (u < 0.76) {
-                    const a = (Math.floor(rand() * plan.spokes) / plan.spokes) * TAU, r = rand() * plan.rim;
-                    const deck = plan.decks[i % plan.decks.length];
-                    x = r * Math.cos(a); z = r * Math.sin(a); y = deck;
-                    nx = -Math.sin(a); nz = Math.cos(a); ny = 0;
-                    shade = 0; phase = r / plan.rim;
-                } else if (u < 0.86) {
-                    const a = rand() * TAU;
-                    x = plan.hub * Math.cos(a); z = plan.hub * Math.sin(a); y = (rand() - 0.5) * plan.hubLength;
-                    nx = Math.cos(a); nz = Math.sin(a); ny = 0;
-                    shade = 1; phase = rand();
-                } else if (u < 0.96) {
-                    const end = rand() < 0.5 ? -1 : 1, side = rand() < 0.5 ? -1 : 1;
-                    x = side * (plan.wingAt + (rand() - 0.5) * plan.wing[0]);
-                    z = (rand() - 0.5) * plan.wing[1]; y = end * plan.mast;
-                    nx = 0; nz = 0; ny = end;
-                    shade = 2; phase = rand();
-                } else {
-                    const end = rand() < 0.5 ? -1 : 1, r = rand() * plan.hub * 0.5, a = rand() * TAU;
-                    x = r * Math.cos(a); z = r * Math.sin(a); y = end * (plan.hubLength * 0.5 + rand() * plan.hub);
-                    nx = Math.cos(a) * 0.4; nz = Math.sin(a) * 0.4; ny = end;
-                    shade = 3; phase = rand();
-                }
-                pos.set([x, y, z], i * 3);
-                normal.set([nx, ny, nz], i * 3);
-                meta.set([phase, shade, 1.1 + rand() * 0.8, rand()], i * 4);
-            }
-            return { pos, normal, meta };
-        };
-
         // B. 洛希吸积盘与螺旋密度波星环 (Roche Accretion Vortex & Spiral Density Waves)
         const buildRocheRings = (count, innerR, outerR, seedStr) => {
             const rand = seededRandom(seedStr);
@@ -544,8 +485,6 @@
 
         const S = ENTITY_SPECS;
         return {
-            stationA: buildWheelStation(pointsPerSlot, S.stationA, 'manifold-wheel-a'),
-            stationB: buildWheelStation(pointsPerSlot, S.stationB, 'manifold-wheel-b'),
             ringsA:   buildRocheRings(pointsPerSlot, S.ringsA.inner, S.ringsA.outer, 'manifold-roche-a'),
             ringsB:   buildRocheRings(pointsPerSlot, S.ringsB.inner, S.ringsB.outer, 'manifold-roche-b'),
             planetA:  buildAbyssalPlanet(pointsPerSlot, S.planetA.radius, 'manifold-planet-a'),
@@ -857,7 +796,7 @@
                     // Thin gas takes the cloud's colour; where it is dense it brightens
                     // and pales, as lit gas does.
                     float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
-                    night += (uColorA * (m.r * 0.085 + coolCore * 0.13) + uColorB * (m.g * 0.065 + warmCore * 0.11)
+                    night += (uColorA * (m.r * 0.07 + coolCore * 0.12) + uColorB * (m.g * 0.055 + warmCore * 0.1)
                         + uColorStar * (coolCore + warmCore) * 0.03) * uNebula;
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
@@ -1109,6 +1048,160 @@
          * ------------------------------------------------------------------------ */
         const POINTS_PER_ENTITY = 2200;
         const manifoldTemplates = createManifoldTemplates(POINTS_PER_ENTITY);
+        const fuse = (parts) => {
+            const position = [], normal = [], uv = [], part = [], index = [];
+            for (const [geometry, code] of parts) {
+                const base = position.length / 3;
+                const count = geometry.attributes.position.count;
+                position.push(...geometry.attributes.position.array);
+                normal.push(...geometry.attributes.normal.array);
+                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
+                for (let i = 0; i < count; i += 1) part.push(code);
+                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
+                else for (let i = 0; i < count; i += 1) index.push(i + base);
+                geometry.dispose();
+            }
+            const fused = new T.BufferGeometry();
+            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
+            fused.setIndex(index);
+            return fused;
+        };
+
+        // Stations are built the way the ones in orbit are: pressurised
+        // cylinders joined at nodes, a truss, solar wings, radiators, a
+        // visiting ship on a port. Part codes: 3 module, 4 solar wing, 5 truss,
+        // 6 radiator, 2 lamp. Module and truss maps are laid out in real
+        // lengths so plating stays the same size on every piece.
+        const stationGeometries = new Map();
+        const stationGeometry = (spec) => {
+            if (stationGeometries.has(spec)) return stationGeometries.get(spec);
+            const k = spec.radius / 25;
+            const parts = [];
+            let serial = 0;
+            const sized = (geometry, around, along) => {
+                const uv = geometry.attributes.uv;
+                serial += 1;
+                for (let i = 0; i < uv.count; i += 1) uv.setXY(i, uv.getX(i) * around / 8, uv.getY(i) * Math.min(1.9, along / 8) + serial * 2);
+                return geometry;
+            };
+            // axis: 'x' | 'y' | 'z'; at: centre
+            const turn = (geometry, axis) => axis === 'x' ? geometry.rotateZ(Math.PI / 2) : axis === 'z' ? geometry.rotateX(Math.PI / 2) : geometry;
+            const module = (r, length, axis, at, code = 3) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, 18, 1), TAU * r, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+            };
+            const cone = (r0, r1, length, axis, at) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r0 * k, r1 * k, length * k, 16, 1), TAU * r1, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            const beam = (r, length, axis, at, sides = 4) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, sides, 1), 4, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), 5]);
+            };
+            // A flat panel: long side along `axis`, lying in the plane that holds `across`.
+            const panel = (length, width, axis, across, at, code) => {
+                const g = new T.BoxGeometry(length * k, 0.06 * k, width * k);
+                if (axis === 'z') g.rotateY(Math.PI / 2);
+                if (axis === 'y') { g.rotateZ(Math.PI / 2); if (across === 'x') g.rotateY(Math.PI / 2); }
+                if (axis === 'x' && across === 'y') g.rotateX(Math.PI / 2);
+                if (axis === 'z' && across === 'y') g.rotateZ(Math.PI / 2);
+                parts.push([g.translate(at[0] * k, at[1] * k, at[2] * k), code]);
+            };
+            const visitor = (z, facing) => {
+                // A capsule on a docking port: service module, crew cone, two small wings.
+                module(1.0, 2.6, 'z', [0, 0, z]);
+                cone(facing > 0 ? 1.0 : 0.45, facing > 0 ? 0.45 : 1.0, 1.5, 'z', [0, 0, z - facing * 2.05]);
+                panel(3.2, 1.1, 'x', 'z', [2.7, 0, z + facing * 0.6], 4);
+                panel(3.2, 1.1, 'x', 'z', [-2.7, 0, z + facing * 0.6], 4);
+            };
+            if (spec.plan === 'truss') {
+                // A long truss across, eight solar wings, radiators, and a
+                // spine of modules fore and aft with laboratories off a node.
+                beam(0.85, 46, 'x', [0, 1.6, 0]);
+                for (const x of [-21, -14.5, 14.5, 21]) {
+                    beam(0.22, 23, 'z', [x, 1.6, 0], 6);
+                    for (const side of [-1, 1]) {
+                        for (const dx of [-1.45, 1.45]) panel(10.2, 2.5, 'z', 'x', [x + dx, 1.6, side * 6.6], 4);
+                    }
+                }
+                for (const x of [-6.2, 6.2]) {
+                    for (const dx of [-1.9, 0, 1.9]) panel(6.6, 1.7, 'z', 'y', [x + dx, 1.6, -5.2], 6);
+                }
+                module(1.35, 5.4, 'z', [0, 0, 8.3]);
+                module(1.05, 1.6, 'z', [0, 0, 4.8]);
+                module(1.35, 4.6, 'z', [0, 0, 1.6]);
+                module(1.15, 2.2, 'z', [0, 0, -1.9]);
+                module(1.3, 5.6, 'z', [0, 0, -5.9]);
+                module(1.2, 5.0, 'z', [0, 0, -11.3]);
+                module(1.3, 4.4, 'x', [3.5, 0, 8.4]);
+                module(1.3, 5.2, 'x', [-3.9, 0, 8.4]);
+                panel(4.2, 2.4, 'x', 'z', [-8.6, 0.3, 8.4], 5);
+                module(1.1, 3.4, 'y', [0, -2.7, 1.6]);
+                module(1.0, 3.0, 'y', [0, -2.5, -5.9]);
+                for (const side of [-1, 1]) panel(7.4, 1.5, 'x', 'z', [side * 5.2, 0, -11.6], 4);
+                visitor(13.8, -1);
+                visitor(-16.0, 1);
+                parts.push([new T.IcosahedronGeometry(0.34 * k, 1).translate(0, 3.1 * k, 0), 2]);
+            } else {
+                // A core with two laboratories off its forward node, each
+                // carrying a great pair of wings at its far end.
+                module(2.05, 7.4, 'z', [0, 0, -3.4]);
+                module(1.4, 5.6, 'z', [0, 0, 3.0]);
+                module(1.5, 2.6, 'z', [0, 0, 7.0]);
+                for (const side of [-1, 1]) {
+                    module(2.05, 8.6, 'x', [side * 5.8, 0, 7.0]);
+                    module(1.35, 5.4, 'x', [side * 12.7, 0, 7.0]);
+                    beam(0.28, 7.5, 'x', [side * 18.8, 0, 7.0], 6);
+                    for (const up of [-1, 1]) panel(13.5, 3.3, 'y', 'z', [side * 20.5, up * 7.4, 7.0], 4);
+                    panel(5.4, 1.5, 'x', 'z', [side * 4.6, 0, 1.6], 4);
+                    panel(4.4, 1.4, 'z', 'y', [side * 2.2, 0.4, -4.2], 6);
+                }
+                beam(0.2, 5.2, 'y', [0, 4.0, -5.8], 6);
+                panel(2.6, 2.6, 'x', 'z', [0, 6.7, -5.8], 5);
+                visitor(10.4, -1);
+                module(1.55, 5.6, 'z', [0, 0, -10.2]);
+                for (const side of [-1, 1]) panel(5.6, 1.4, 'x', 'z', [side * 4.4, 0, -10.6], 4);
+                parts.push([new T.IcosahedronGeometry(0.34 * k, 1).translate(0, 2.5 * k, 3.0 * k), 2]);
+            }
+            const geometry = fuse(parts);
+            stationGeometries.set(spec, geometry);
+            return geometry;
+        };
+        // Gathering points for a built thing are scattered over its own surface.
+        const scatterOver = (geometry, count, seedStr) => {
+            const rand = seededRandom(seedStr);
+            const p = geometry.attributes.position, n = geometry.attributes.normal, part = geometry.attributes.aPart;
+            const index = geometry.index.array, faces = index.length / 3;
+            const edge = (a, b, axis) => p.array[b * 3 + axis] - p.array[a * 3 + axis];
+            const cumulative = new Float32Array(faces);
+            let total = 0;
+            for (let f = 0; f < faces; f += 1) {
+                const a = index[f * 3], b = index[f * 3 + 1], c = index[f * 3 + 2];
+                const ux = edge(a, b, 0), uy = edge(a, b, 1), uz = edge(a, b, 2);
+                const vx = edge(a, c, 0), vy = edge(a, c, 1), vz = edge(a, c, 2);
+                total += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+                cumulative[f] = total;
+            }
+            const pos = new Float32Array(count * 3), normal = new Float32Array(count * 3), meta = new Float32Array(count * 4);
+            for (let i = 0; i < count; i += 1) {
+                const f = Math.min(faces - 1, upperBound(cumulative, rand() * total));
+                const a = index[f * 3], b = index[f * 3 + 1], c = index[f * 3 + 2];
+                let u = rand(), v = rand();
+                if (u + v > 1) { u = 1 - u; v = 1 - v; }
+                for (let axis = 0; axis < 3; axis += 1) {
+                    pos[i * 3 + axis] = p.array[a * 3 + axis] + edge(a, b, axis) * u + edge(a, c, axis) * v;
+                    normal[i * 3 + axis] = n.array[a * 3 + axis];
+                }
+                const code = part.array[a];
+                meta.set([rand(), code === 4 ? 2 : code === 2 ? 3 : i % 4 === 0 ? 1 : 0, 1.1 + rand() * 0.8, rand()], i * 4);
+            }
+            return { pos, normal, meta };
+        };
+        manifoldTemplates.stationA = scatterOver(stationGeometry(ENTITY_SPECS.stationA), POINTS_PER_ENTITY, 'manifold-station-a');
+        manifoldTemplates.stationB = scatterOver(stationGeometry(ENTITY_SPECS.stationB), POINTS_PER_ENTITY, 'manifold-station-b');
 
         const makeEntityMaterial = (typeCode) => new T.ShaderMaterial({
             transparent: true,
@@ -1304,27 +1397,6 @@
          * and tearing apart as the camera sweeps past; in between they give way
          * to the solid, which hides the stars behind it like a real object.
          * ------------------------------------------------------------------------ */
-        const fuse = (parts) => {
-            const position = [], normal = [], uv = [], part = [], index = [];
-            for (const [geometry, code] of parts) {
-                const base = position.length / 3;
-                const count = geometry.attributes.position.count;
-                position.push(...geometry.attributes.position.array);
-                normal.push(...geometry.attributes.normal.array);
-                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
-                for (let i = 0; i < count; i += 1) part.push(code);
-                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
-                else for (let i = 0; i < count; i += 1) index.push(i + base);
-                geometry.dispose();
-            }
-            const fused = new T.BufferGeometry();
-            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
-            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
-            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
-            fused.setIndex(index);
-            return fused;
-        };
         // Photographed cloud decks and a measured ring profile, kept as
         // luminance only: the palette still decides every colour. Until a map
         // arrives, and wherever it cannot be read, the procedural surface stands in.
@@ -1441,16 +1513,16 @@
                         // Sunlight is hard in vacuum; the sky fills the shade a little
                         // and shows in whatever is polished.
                         bool tube = vPart < 2.5;
-                        bool truss = vPart > 4.5;
-                        vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(3.0, 22.0) : vec2(18.0, 40.0));
+                        bool truss = vPart > 4.5 && vPart < 5.5;
+                        vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(8.0, 14.0) : vec2(16.0, 16.0));
                         vec2 cell = floor(cells), inside = fract(cells);
                         float seam = smoothstep(0.0, 0.05, inside.x) * smoothstep(0.0, 0.07, inside.y)
                             * smoothstep(0.0, 0.05, 1.0 - inside.x) * smoothstep(0.0, 0.07, 1.0 - inside.y);
                         float tone = hash(vec3(cell, uSeed + 3.0));
                         // Blankets wrap whole sections; a painted band runs round the rim.
                         float section = tube ? hash(vec3(floor(vUv.x * 16.0), floor(vUv.y * 2.0), uSeed))
-                            : hash(vec3(floor(vUv.y * 6.0), 7.0, uSeed));
-                        float foil = truss ? 0.0 : step(tube ? 0.86 : 0.55, section);
+                            : hash(vec3(floor(vUv.y * 0.5), 7.0, uSeed));
+                        float foil = truss ? 0.0 : step(tube ? 0.86 : 0.66, section);
                         float band = tube ? step(5.5, cell.y) * step(cell.y, 6.5) : 0.0;
                         float portRow = tube ? step(1.5, mod(cell.y, 6.0)) * step(mod(cell.y, 6.0), 2.5) : step(0.5, mod(cell.y, 4.0)) * step(mod(cell.y, 4.0), 1.5);
                         float port = truss ? 0.0 : portRow * (1.0 - foil)
@@ -1484,7 +1556,13 @@
                         col = mix(col, sky * (0.4 + 3.0 * fresnel) + uColorInk * pow(sun, 90.0) * lam, port);
                         col += mix(uColorAccent, uColorInk, 0.45) * lit
                             * (0.85 + 0.15 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 3.5 && vPart < 4.5) {
+                        if (vPart > 5.5) {
+                            // Radiator: white ribbed panels that shed heat edge-on to the sun.
+                            float rib = smoothstep(0.0, 0.12, abs(fract(vUv.x * 9.0) - 0.5));
+                            float flatLit = clamp(abs(dot(n, uLight)), 0.0, 1.0);
+                            col = uColorInk * (0.06 + 0.8 * flatLit) * mix(0.6, 1.0, rib)
+                                + sky * (0.5 + 2.0 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 4.0));
+                        } else if (vPart > 3.5 && vPart < 4.5) {
                             // Solar wing: deep blue cells under glass, silver busbars, a hard glint.
                             vec2 at = vUv * vec2(16.0, 6.0);
                             vec2 grid = fract(at);
@@ -1511,6 +1589,20 @@
                             col *= 1.0 - 0.72 * clamp(cage, 0.0, 1.0);
                         }
                     } else if (uKind < 1.5) {
+                        if (vPart > 0.5) {
+                            // A moon in attendance: airless rock, dark plains,
+                            // craters with bright rims, lit hard from one side
+                            // and faintly by the planet it circles.
+                            float plains = smoothstep(0.42, 0.62, fbm(vLocal * 0.8 + uSeed * 9.0));
+                            float pit = noise(vLocal * 2.9 + 4.0 + uSeed * 3.0);
+                            float small = noise(vLocal * 7.5 + 9.0);
+                            float bowl = smoothstep(0.66, 0.72, pit) - smoothstep(0.72, 0.8, pit) * 1.7
+                                + (smoothstep(0.7, 0.75, small) - smoothstep(0.75, 0.82, small) * 1.6) * 0.5;
+                            float rock = mix(0.46, 0.2, plains) * (0.85 + 0.3 * noise(vLocal * 15.0)) + bowl * 0.14;
+                            float sunlit = clamp(ndl * 1.2 + 0.02, 0.0, 1.0);
+                            col = mix(uColorInk, uColorPrimary, 0.12) * max(rock, 0.03) * sunlit * 1.25
+                                + uColorPrimary * 0.012;
+                        } else {
                         // Gas giant: turbulent latitude bands, storms, a soft
                         // terminator, a limb of atmosphere, aurora on the night pole.
                         vec3 p = normalize(vLocal);
@@ -1576,6 +1668,7 @@
                         float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
                         float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
                         col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
+                        }
                     } else if (uKind < 2.5) {
                         // Ring system: ringlets, a wide division, spiral density
                         // waves, the planet's shadow, and light scattered forward.
@@ -1693,33 +1786,14 @@
             `
         }), surface);
 
-        const buildStationBody = (spec, seed) => {
-            const plan = wheelPlan(spec);
-            const parts = [];
-            for (const deck of plan.decks) {
-                parts.push([new T.TorusGeometry(plan.rim, plan.tube, 14, 112).rotateX(Math.PI / 2).translate(0, deck, 0), 0]);
-                for (let i = 0; i < plan.spokes; i += 1) {
-                    parts.push([new T.CylinderGeometry(plan.spoke, plan.spoke, plan.rim, 6, 1, true)
-                        .rotateZ(Math.PI / 2).translate(plan.rim / 2, deck, 0).rotateY((i / plan.spokes) * TAU), 5]);
-                }
-            }
-            parts.push([new T.CylinderGeometry(plan.hub, plan.hub, plan.hubLength, 20, 1), 3]);
-            for (const end of [-1, 1]) {
-                parts.push([new T.CylinderGeometry(plan.hub * 0.16, plan.hub * 0.16, plan.mast - plan.hubLength / 2, 6, 1, true)
-                    .translate(0, end * (plan.mast + plan.hubLength / 2) / 2, 0), 5]);
-                parts.push([new T.CylinderGeometry(plan.hub * 0.1, plan.hub * 0.1, plan.wingAt * 2, 6, 1, true)
-                    .rotateZ(Math.PI / 2).translate(0, end * plan.mast, 0), 5]);
-                for (const side of [-1, 1]) {
-                    parts.push([new T.BoxGeometry(plan.wing[0], plan.hub * 0.03, plan.wing[1])
-                        .translate(side * plan.wingAt, end * plan.mast, 0), 4]);
-                }
-            }
-            parts.push([new T.IcosahedronGeometry(plan.hub * 0.26, 2).translate(0, plan.hubLength / 2 + plan.hub * 0.2, 0), 2]);
-            return [[fuse(parts), makeBodyMaterial(0, seed)]];
-        };
+        const buildStationBody = (spec, seed) => [[stationGeometry(spec), makeBodyMaterial(0, seed)]];
         const buildPlanetBody = ({ radius }, seed) =>
             [
-                [fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]),
+                [fuse([
+                    [new T.SphereGeometry(radius * 0.985, 72, 44), 0],
+                    [new T.SphereGeometry(radius * 0.11, 24, 16).translate(radius * 1.72, radius * 0.1, radius * 0.3), 1],
+                    [new T.SphereGeometry(radius * 0.045, 20, 12).translate(-radius * 1.1, -radius * 0.18, radius * 2.0), 1]
+                ]),
                     makeBodyMaterial(1, seed, seed < 0.5 ? 'gas-giant-b.webp' : 'gas-giant-a.webp')],
                 [fuse([[new T.SphereGeometry(radius * 0.985 * AIR_REACH, 56, 32), 0]]), makeBodyMaterial(4, seed)]
             ];
@@ -1733,7 +1807,10 @@
             globe.uniforms.uRinged.value = 1;
             globe.uniforms.uRing.value.set(inner, outer);
             return [
-                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), globe],
+                [fuse([
+                    [new T.SphereGeometry(bodyRadius, 56, 36), 0],
+                    [new T.SphereGeometry(bodyRadius * 0.13, 24, 16).translate(outer * 1.2, outer * 0.02, 0).rotateY(2.1), 1]
+                ]), globe],
                 [fuse([[new T.SphereGeometry(bodyRadius * AIR_REACH, 48, 28), 0]]), makeBodyMaterial(4, seed + 0.37)],
                 [fuse([[new T.RingGeometry(inner, outer, 192, 2).rotateX(-Math.PI / 2), 0]]), disc]
             ];
