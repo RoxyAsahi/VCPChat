@@ -283,7 +283,8 @@
             { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
-            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 25, elev: 5,   scale: 0.66, rotSpeed: 0.012, tilt: [0.35, 0.5 - 7 * 1.1, -0.95], p: 2, q: 3, hold: true }
+            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 25, elev: 5,   scale: 0.66, rotSpeed: 0.012, tilt: [0.35, 0.5 - 7 * 1.1, -0.95], p: 2, q: 3, hold: true },
+            { slotId: 8, type: 'ship',    baseS: 1730, side:  1, radial: 25, elev: -4,  scale: 0.6,  rotSpeed: 0.01, tilt: [0.3, -0.55 - 8 * 1.1, 0.12], p: 3, q: 7, hold: true }
         ];
 
         // The first chorus is flown through a ring system. The whole procession
@@ -335,7 +336,8 @@
         stationA: { radius: 25, plan: 'truss' }, stationB: { radius: 26, plan: 'cross' },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
-        shipA: { scale: 1.0 }, shipB: { scale: 0.92, radius: 25, plan: 'probe' }
+        shipA: { scale: 1.0 }, shipB: { scale: 0.92, radius: 25, plan: 'probe' },
+        scope: { radius: 25, plan: 'telescope' }
     });
     // A solar sail, after the square sails that have flown: a thin film in
     // four quadrants, slack between four diagonal booms, and a small drum of
@@ -1217,6 +1219,67 @@
                 for (const at of [[0, 3.1, 0], [-23.3, 1.6, 0], [23.3, 1.6, 0], [0, 0, 16.4], [0, 0, -19.4]]) {
                     parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
                 }
+            } else if (spec.plan === 'telescope') {
+                // A space telescope of the cold, far kind: a mirror of eighteen
+                // gold hexagons standing on a kite-shaped sunshield of five
+                // spaced films, a secondary mirror out on a tripod, and the
+                // spacecraft bus on the sunward side. Part code 10: mirror.
+                const strut = (a, b, r, code = 7, sides = 5) => {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = new T.CylinderGeometry(r * k, r * k, span.length() * k, sides, 1, true);
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), code]);
+                };
+                const box = (size, at, code) => {
+                    parts.push([sized(new T.BoxGeometry(size[0] * k, size[1] * k, size[2] * k), size[0] * 2, size[1] * 2)
+                        .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+                };
+                // Sunshield: five films, each a little smaller and higher than the last.
+                for (let layer = 0; layer < 5; layer += 1) {
+                    const grow = 1 - layer * 0.035;
+                    const outline = [[-21, 0], [-13.5, 6.6], [0, 7.6], [13.5, 6.6], [21, 0], [13.5, -6.6], [0, -7.6], [-13.5, -6.6]];
+                    const film = new T.ShapeGeometry(new T.Shape(outline.map(([x, z]) => new T.Vector2(x * grow * k, z * grow * k))));
+                    const uv = film.attributes.uv;
+                    for (let i = 0; i < uv.count; i += 1) uv.setXY(i, uv.getX(i) / (11 * k) + layer * 3, uv.getY(i) / (11 * k));
+                    parts.push([film.rotateX(-Math.PI / 2).translate(0, layer * 0.42 * k, 0), 11]);
+                }
+                // The booms and spreader bars that hold the films out.
+                strut([-21, 0.8, 0], [21, 0.8, 0], 0.16);
+                strut([0, 0.8, -7.6], [0, 0.8, 7.6], 0.16);
+                for (const sx of [-1, 1]) for (const sz of [-1, 1]) strut([0, 0.8, 0], [sx * 13.5, 0.8, sz * 6.6], 0.08);
+                // Mirror: two rings of hexagons round an open centre, facing +Z.
+                const HEX = 1.42, MIRROR_Y = 9.2, MIRROR_Z = 0.6;
+                for (let q = -2; q <= 2; q += 1) {
+                    for (let r = -2; r <= 2; r += 1) {
+                        if (Math.abs(q + r) > 2 || (q === 0 && r === 0)) continue;
+                        const x = HEX * Math.sqrt(3) * (q + r / 2), y = HEX * 1.5 * r;
+                        parts.push([new T.CylinderGeometry(HEX * 0.965 * k, HEX * 0.965 * k, 0.16 * k, 6, 1).rotateX(Math.PI / 2)
+                            .translate(x * k, (MIRROR_Y + y) * k, MIRROR_Z * k), 10]);
+                    }
+                }
+                // Backplane, the instrument module behind it, and the tower down to the shield.
+                box([7.6, 7.2, 0.7], [0, MIRROR_Y, MIRROR_Z - 0.55], 7);
+                box([4.6, 4.4, 2.6], [0, MIRROR_Y - 0.6, MIRROR_Z - 2.2], 9);
+                box([3.4, 1.6, 0.12], [0, MIRROR_Y + 2.6, MIRROR_Z - 3.6], 6);
+                box([1.5, 4.4, 1.5], [0, 3.6, MIRROR_Z - 1.4], 8);
+                // Secondary mirror on three long struts; the baffle cone at the centre.
+                const SECOND = [0, MIRROR_Y, MIRROR_Z + 8.6];
+                strut([-3.5, MIRROR_Y - 3.2, MIRROR_Z], SECOND, 0.09);
+                strut([3.5, MIRROR_Y - 3.2, MIRROR_Z], SECOND, 0.09);
+                strut([0, MIRROR_Y + 4.3, MIRROR_Z], SECOND, 0.09);
+                parts.push([new T.CylinderGeometry(0.55 * k, 0.55 * k, 0.14 * k, 16, 1).rotateX(Math.PI / 2)
+                    .translate(SECOND[0] * k, SECOND[1] * k, SECOND[2] * k), 10]);
+                parts.push([new T.ConeGeometry(0.75 * k, 2.2 * k, 12, 1, true).rotateX(Math.PI / 2)
+                    .translate(0, MIRROR_Y * k, (MIRROR_Z + 1.2) * k), 7]);
+                // Bus on the sunward side: a box, a solar array, a dish, a trim flap aft.
+                box([3.2, 1.8, 3.2], [0, -1.3, 0], 9);
+                panel(7.2, 2.2, 'z', 'x', [0, -2.6, -5.4], 4);
+                parts.push([new T.ConeGeometry(0.9 * k, 0.45 * k, 16, 1, true).translate(1.2 * k, -3.0 * k, 1.0 * k), 7]);
+                strut([1.2, -2.2, 1.0], [1.2, -3.2, 1.0], 0.07);
+                strut([0, 0.4, -7.6], [0, -1.6, -11.6], 0.1);
+                panel(3.6, 2.2, 'z', 'x', [0, -2.2, -12.6], 6);
+                box([0.5, 0.5, 0.8], [-1.3, -2.4, 1.2], 8);
+                box([0.5, 0.5, 0.8], [-0.6, -2.4, 1.5], 8);
             } else if (spec.plan === 'probe') {
                 // A deep-space probe of the kind sent past the outer planets:
                 // a great white dish over a ten-sided bus, three isotope
@@ -1368,6 +1431,7 @@
         };
         manifoldTemplates.stationA = scatterOver(stationGeometry(ENTITY_SPECS.stationA), POINTS_PER_ENTITY, 'manifold-station-a');
         manifoldTemplates.stationB = scatterOver(stationGeometry(ENTITY_SPECS.stationB), POINTS_PER_ENTITY, 'manifold-station-b');
+        manifoldTemplates.scope = scatterOver(stationGeometry(ENTITY_SPECS.scope), POINTS_PER_ENTITY, 'manifold-telescope');
         manifoldTemplates.shipB = scatterOver(stationGeometry(ENTITY_SPECS.shipB), POINTS_PER_ENTITY, 'manifold-probe');
 
         const makeEntityMaterial = (typeCode) => new T.ShaderMaterial({
@@ -1553,7 +1617,7 @@
             return { geo, mat, points };
         };
 
-        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB']
+        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB', 'scope']
             .map((name, idx) => ({ tmpl: manifoldTemplates[name], spec: ENTITY_SPECS[name], code: idx % 4 }));
         const entityNodes = slotTemplateMap.map((item) => buildEntityMesh(item.tmpl, item.code));
 
@@ -1744,7 +1808,28 @@
                         col = mix(col, sky * (0.4 + 3.0 * fresnel) + uColorInk * pow(sun, 90.0) * lam, port);
                         col += mix(uColorAccent, uColorInk, 0.45) * lit * 0.8
                             * (0.85 + 0.15 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 5.5 && vPart < 6.5) {
+                        if (vPart > 10.5) {
+                            // Sunshield film: aluminised, slack between its
+                            // spreader bars, creased where it was folded.
+                            float crease = max(1.0 - smoothstep(0.0, 0.04, abs(fract(vUv.x * 6.0) - 0.5) * 2.0),
+                                1.0 - smoothstep(0.0, 0.04, abs(fract(vUv.y * 6.0) - 0.5) * 2.0));
+                            vec3 slackN = normalize(n + (vec3(noise(vLocal * 0.9 + 3.0), 0.0, noise(vLocal * 0.9 + 17.0)) - 0.5) * 0.3);
+                            float filmLit = clamp(abs(dot(slackN, uLight)), 0.0, 1.0);
+                            vec3 filmSky = mix(mix(uColorPrimary, uColorInk, 0.4) * 0.12, mix(uColorEmber, uColorAccent, 0.4) * 0.3,
+                                smoothstep(-0.6, 0.7, dot(reflect(-v, slackN), SUN)));
+                            col = (shell * (0.1 + 0.34 * filmLit) * mix(uColorInk, uColorAccent, 0.2) + filmSky * 1.3
+                                + uColorInk * pow(max(dot(normalize(uLight + v), slackN), 0.0), 14.0) * 0.5 * filmLit)
+                                * (1.0 - 0.3 * crease);
+                        } else if (vPart > 9.5) {
+                            // Telescope mirror: nearly all reflection, faintly warm.
+                            vec3 flatN = normalize(n);
+                            vec3 seen = reflect(-v, flatN);
+                            vec3 mirrored = mix(mix(uColorPrimary, uColorInk, 0.55) * 0.1, mix(uColorEmber, uColorAccent, 0.5) * 0.42,
+                                smoothstep(-0.6, 0.7, dot(seen, SUN)));
+                            col = mix(mirrored, mirrored * mix(uColorInk, uColorAccent, 0.45) * 2.2, 0.7)
+                                + mix(uColorInk, uColorAccent, 0.35) * pow(max(dot(normalize(uLight + v), flatN), 0.0), 200.0) * 2.0
+                                + shell * 0.05 * light;
+                        } else if (vPart > 5.5 && vPart < 6.5) {
                             // Radiator: white ribbed panels that shed heat edge-on to the sun.
                             float rib = smoothstep(0.0, 0.12, abs(fract(vUv.x * 9.0) - 0.5));
                             float flatLit = clamp(abs(dot(n, uLight)), 0.0, 1.0);
@@ -3189,8 +3274,13 @@
                 u.uAudioPulse.value = audioPulse;
                 u.uGlow.value = glowAmount;
 
+                // Neither is drawn while it would be fully transparent: the solid
+                // before it starts to form, the points once it has (stations
+                // keep theirs for the lamps).
+                const lampless = slotTemplateMap[idx].code !== 0 || slot.type !== 'station';
+                node.points.visible = !(lampless && cohesion > 0.985);
                 // The solid shares the points' place, attitude and envelope.
-                body.group.visible = true;
+                body.group.visible = cohesion > 0.42;
                 body.group.position.copy(node.points.position);
                 body.group.rotation.copy(node.points.rotation);
                 body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
