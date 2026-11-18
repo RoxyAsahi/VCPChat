@@ -50,6 +50,8 @@ const bootProfile = require('./modules/diagnostics/bootProfile');
 
 const { app, BrowserWindow, webContents, ipcMain, nativeTheme, globalShortcut, screen, clipboard, shell, dialog, protocol, Tray, Menu, powerMonitor } = require('electron'); // Added screen, clipboard, and shell
 bootProfile.install(ipcMain);
+// 记录每个 ipcMain.handle 的实现，供声明式 API（modules/desktopApi）直接复用；须在任何 handler 注册之前
+require('./modules/desktopApi/ipcHandlerIndex').install(ipcMain);
 const { registerChartEmbedScheme, installChartEmbedProtocol } = require('./modules/services/chartEmbedProtocol');
 registerChartEmbedScheme(protocol);
 // 文坊中原位打开的网页（scriptorium-page:// 协议），须在 app ready 之前登记。
@@ -1857,6 +1859,7 @@ if (!gotTheLock) {
             APP_DATA_ROOT_IN_PROJECT,
             appFeatures,
         });
+        require('./modules/desktopApi').registerIpc({ ipcMain, getDesktopWindow: desktopHandlers.getDesktopWindow });
         await embeddedAppSessions?.closeAll();
         embeddedAppTasks?.dispose('main-window-reinitialized');
         embeddedAppTasks = new SenderTaskRegistry({ label: 'embedded-app-tasks' });

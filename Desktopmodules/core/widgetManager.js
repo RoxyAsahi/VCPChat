@@ -696,6 +696,9 @@
                         fetch: function(endpoint, opts) { return window.__vcpProxyFetch(endpoint, opts); },
                         post: function(messages, opts) { return window.__vcpProxyPost(messages, opts); },
                         weather: function() { return window.__vcpProxyFetch('/admin_api/weather'); },
+                        apis: function(filter) { return window.__vcpApiList(filter); },
+                        describe: function(apiId) { return window.__vcpApiDescribe(apiId); },
+                        call: function(apiId, params) { return window.__vcpApiCall(apiId, params); },
                     };
                     
                     var widgetFS = {

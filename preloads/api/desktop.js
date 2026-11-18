@@ -6,7 +6,7 @@
 const { invoke, send, on } = require('../core/define');
 
 module.exports = {
-    handlers: ['modules/ipc/desktopHandlers.js', 'modules/ipc/desktopMetrics.js', 'modules/ipc/desktopRemoteHandlers.js'],
+    handlers: ['modules/ipc/desktopHandlers.js', 'modules/ipc/desktopMetrics.js', 'modules/ipc/desktopRemoteHandlers.js', 'modules/desktopApi/index.js'],
     roles: ['desktop'],
     api: {
         openDesktopWindow: invoke('open-desktop-window').roles('chat', 'utility', 'desktop'),
@@ -21,6 +21,11 @@ module.exports = {
         onDesktopRemoteSetWallpaper: on('desktop-remote-set-wallpaper').roles('chat', 'desktop'),
         onDesktopRemoteRequest: on('desktop-remote:request').roles('chat', 'desktop'),
         sendDesktopRemoteResponse: send('desktop-remote:response', 'data').roles('chat', 'desktop'),
+
+        // 声明式 API（modules/desktopApi）：挂件经 vcpAPI.apis / describe / call 使用
+        desktopApiList: invoke('desktop-api:list', (filter = {}) => [filter]),
+        desktopApiDescribe: invoke('desktop-api:describe', 'apiId'),
+        desktopApiCall: invoke('desktop-api:call', (apiId, params = {}) => [apiId, params]),
 
         // 小组件
         desktopSaveWidget: invoke('desktop-save-widget', 'data'),

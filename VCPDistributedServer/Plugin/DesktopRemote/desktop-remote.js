@@ -8,7 +8,7 @@
 
 'use strict';
 
-const VALID_COMMANDS = "'SetWallpaper', 'QueryDesktop', 'QueryDock', 'ViewWidgetSource', 'CreateWidget', 'SetStyleAutomation', 'GetStyleAutomationStatus'";
+const VALID_COMMANDS = "'ListAPIs', 'DescribeAPI', 'CallAPI', 'SetWallpaper', 'QueryDesktop', 'QueryDock', 'ViewWidgetSource', 'CreateWidget', 'SetStyleAutomation', 'GetStyleAutomationStatus'";
 
 /**
  * 取第一个有值的键。保留 0 与 false，跳过 undefined / null / 空字符串。
@@ -175,6 +175,36 @@ function buildSetStyleAutomation(args) {
     return { command: 'SetStyleAutomation', configPatch, persist };
 }
 
+// ---------- 声明式 API：目录 / 说明 / 调用 ----------
+// 参数的类型转换与校验由主进程按接口声明完成（modules/desktopApi/schema.js），这里只做取值与 JSON 解析。
+
+const API_ID_KEYS = ['apiId', 'apiid', 'ApiId', 'api_id', 'api', 'Api', 'API'];
+
+function buildListApis(args) {
+    const payload = { command: 'ListAPIs' };
+    const prefix = _pick(args, 'prefix', 'Prefix', 'domain', 'Domain');
+    if (prefix) payload.prefix = String(prefix);
+    const query = _pick(args, 'query', 'Query', 'keyword', 'Keyword', 'search');
+    if (query) payload.query = String(query);
+    return payload;
+}
+
+function buildDescribeApi(args) {
+    const apiId = _pick(args, ...API_ID_KEYS);
+    if (!apiId) throw new Error("The 'apiId' parameter is required for DescribeAPI command. Use ListAPIs to find one.");
+    return { command: 'DescribeAPI', apiId: String(apiId).trim() };
+}
+
+function buildCallApi(args) {
+    const apiId = _pick(args, ...API_ID_KEYS);
+    if (!apiId) throw new Error("The 'apiId' parameter is required for CallAPI command. Use ListAPIs to find one.");
+    const params = _parseJsonLike(_pick(args, 'params', 'Params', 'parameters', 'Parameters', 'args', 'arguments'), 'params');
+    if (params !== null && !_isPlainObject(params)) {
+        throw new Error("The 'params' parameter must be a JSON object.");
+    }
+    return { command: 'CallAPI', apiId: String(apiId).trim(), params: params || {} };
+}
+
 /**
  * 把工具参数规范化为主进程可执行的命令载荷。
  * @param {object} args
@@ -190,6 +220,18 @@ function buildPayload(args) {
     }
 
     switch (String(command).toLowerCase()) {
+        case 'listapis':
+        case 'list_apis':
+        case 'apis':
+            return buildListApis(args);
+        case 'describeapi':
+        case 'describe_api':
+        case 'describe':
+            return buildDescribeApi(args);
+        case 'callapi':
+        case 'call_api':
+        case 'call':
+            return buildCallApi(args);
         case 'setwallpaper':
         case 'set_wallpaper':
             return buildSetWallpaper(args);

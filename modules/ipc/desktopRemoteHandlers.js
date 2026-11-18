@@ -110,6 +110,32 @@ async function ensureDesktopWindow(desktopWin, options = {}) {
     return targetWin;
 }
 
+function getDesktopWindow() {
+    if (!desktopHandlersRef) {
+        desktopHandlersRef = require('./desktopHandlers');
+    }
+    return desktopHandlersRef.getDesktopWindow();
+}
+
+/**
+ * 向桌面画布发一条渲染端 RPC。open 为 true 时桌面没开会先打开；否则直接报错。
+ * @param {string} command Desktopmodules/api/ipcBridge.js 认识的命令
+ * @param {object} [payload]
+ * @param {{ open?: boolean, timeoutMs?: number }} [options]
+ */
+async function queryDesktopRenderer(command, payload = {}, { open = false, timeoutMs = 5000 } = {}) {
+    let desktopWin = getDesktopWindow();
+    if (!desktopWin || desktopWin.isDestroyed()) {
+        if (!open) {
+            const error = new Error('桌面窗口没有打开。');
+            error.code = 'API_UNAVAILABLE';
+            throw error;
+        }
+        desktopWin = await ensureDesktopWindow(desktopWin, { waitAfterOpenMs: 2000 });
+    }
+    return requestDesktopRemote(desktopWin, command, payload, { timeoutMs, timeoutMessage: `${command} timed out.` });
+}
+
 function requestDesktopRemote(desktopWin, command, payload, options = {}) {
     return requestRendererRpc(
         desktopWin,
@@ -269,7 +295,7 @@ async function handleDesktopRemoteControl(commandPayload) {
 
         switch (command) {
             case 'SetWallpaper':
-                return await _handleSetWallpaper(commandPayload, desktopWin);
+                return await _handleSetWallpaper(commandPayload);
             case 'QueryDesktop':
                 return await _handleQueryDesktop(desktopWin);
             case 'QueryDock':
@@ -281,7 +307,13 @@ async function handleDesktopRemoteControl(commandPayload) {
             case 'GetStyleAutomationStatus':
                 return await _handleGetStyleAutomationStatus(desktopWin);
             case 'CreateWidget':
-                return await _handleCreateWidget(commandPayload, desktopWin);
+                return await _handleCreateWidget(commandPayload);
+            case 'ListAPIs':
+                return _handleListApis(commandPayload);
+            case 'DescribeAPI':
+                return _handleDescribeApi(commandPayload);
+            case 'CallAPI':
+                return await _handleCallApi(commandPayload);
             default:
                 throw new Error(`Unknown desktop remote command: ${command}`);
         }
@@ -302,15 +334,17 @@ function inferWallpaperType(source) {
     return 'image';
 }
 
-async function _handleSetWallpaper(commandPayload, desktopWin) {
-    const { wallpaperSource } = commandPayload;
-    if (!wallpaperSource) {
+/**
+ * 壁纸来源 → 渲染端壁纸配置。内联 HTML 先落盘成文件。
+ * @param {string} wallpaperSource
+ */
+async function buildWallpaperConfig(wallpaperSource) {
+    if (typeof wallpaperSource !== 'string' || !wallpaperSource.trim()) {
         throw new Error('wallpaperSource parameter is required for SetWallpaper.');
     }
 
     const trimmedSource = wallpaperSource.trim();
     const isHtmlContent = /^<!DOCTYPE|^<html/i.test(trimmedSource);
-    let wallpaperConfig;
 
     if (isHtmlContent) {
         const htmlFileName = `ai_wallpaper_${Date.now()}.html`;
@@ -318,7 +352,7 @@ async function _handleSetWallpaper(commandPayload, desktopWin) {
         const htmlFilePath = path.join(htmlDir, htmlFileName);
         await fs.ensureDir(htmlDir);
         await fs.writeFile(htmlFilePath, wallpaperSource, 'utf-8');
-        wallpaperConfig = {
+        return {
             enabled: true,
             type: 'html',
             source: `file:///${htmlFilePath.replace(/\\/g, '/')}`,
@@ -327,8 +361,9 @@ async function _handleSetWallpaper(commandPayload, desktopWin) {
             blur: 0,
             brightness: 1,
         };
-    } else if (trimmedSource.startsWith('http://') || trimmedSource.startsWith('https://')) {
-        wallpaperConfig = {
+    }
+    if (trimmedSource.startsWith('http://') || trimmedSource.startsWith('https://')) {
+        return {
             enabled: true,
             type: inferWallpaperType(new URL(trimmedSource).pathname),
             source: trimmedSource,
@@ -337,9 +372,10 @@ async function _handleSetWallpaper(commandPayload, desktopWin) {
             blur: 0,
             brightness: 1,
         };
-    } else if (trimmedSource.startsWith('file://')) {
+    }
+    if (trimmedSource.startsWith('file://')) {
         const localPath = trimmedSource.replace(/^file:\/\/\/?/, '');
-        wallpaperConfig = {
+        return {
             enabled: true,
             type: inferWallpaperType(localPath),
             source: trimmedSource,
@@ -348,16 +384,27 @@ async function _handleSetWallpaper(commandPayload, desktopWin) {
             blur: 0,
             brightness: 1,
         };
-    } else {
-        throw new Error('wallpaperSource must be an HTTP/HTTPS URL, a file:// URL, or inline HTML.');
     }
+    throw new Error('wallpaperSource must be an HTTP/HTTPS URL, a file:// URL, or inline HTML.');
+}
 
+/**
+ * 设置壁纸，桌面没开时先打开。返回实际下发的配置。
+ * @param {string} wallpaperSource
+ */
+async function setWallpaper(wallpaperSource) {
+    const wallpaperConfig = await buildWallpaperConfig(wallpaperSource);
+    const desktopWin = getDesktopWindow();
     const targetWin = await ensureDesktopWindow(desktopWin, {
         waitAfterOpenMs: desktopWin ? 0 : 2000,
         errorMessage: 'Unable to open desktop window for wallpaper update.',
     });
-
     targetWin.webContents.send('desktop-remote-set-wallpaper', wallpaperConfig);
+    return wallpaperConfig;
+}
+
+async function _handleSetWallpaper(commandPayload) {
+    const wallpaperConfig = await setWallpaper(commandPayload.wallpaperSource);
 
     const mdReport = [
         '### Wallpaper Updated',
@@ -597,7 +644,12 @@ async function _handleGetStyleAutomationStatus(desktopWin) {
     };
 }
 
-async function _handleCreateWidget(commandPayload, desktopWin) {
+/**
+ * 在桌面上创建挂件，返回结构化结果。桌面没开时先打开并等待 2 秒。
+ * scriptCode 会写成挂件目录下的 app.js，因此强制持久化。
+ * @param {object} commandPayload DesktopRemote CreateWidget 载荷
+ */
+async function createWidget(commandPayload) {
     const {
         htmlContent,
         x,
@@ -618,7 +670,7 @@ async function _handleCreateWidget(commandPayload, desktopWin) {
         throw new Error("CreateWidget requires one of 'htmlContent', 'builtinWidgetKey' or 'metricComponent'.");
     }
 
-    const targetWin = await ensureDesktopWindow(desktopWin, {
+    const targetWin = await ensureDesktopWindow(getDesktopWindow(), {
         waitAfterOpenMs: 2000,
         errorMessage: 'Unable to open desktop window for widget creation.',
     });
@@ -684,11 +736,31 @@ async function _handleCreateWidget(commandPayload, desktopWin) {
         resolveOnTimeout: { timedOut: true },
     });
 
-    if (responseData?.timedOut) {
+    const timedOut = !!responseData?.timedOut;
+    const finalSavedId = savedId || (timedOut ? null : responseData?.savedId) || null;
+    return {
+        widgetId: (!timedOut && responseData?.widgetId) || finalWidgetId,
+        x: options.x ?? 100,
+        y: options.y ?? 100,
+        width: options.width ?? 320,
+        height: options.height ?? 200,
+        savedId: finalSavedId,
+        savedName: finalSavedId ? (saveName || responseData?.savedName || null) : null,
+        savedDir: finalSavedId ? `AppData/DesktopWidgets/${finalSavedId}` : null,
+        builtinWidgetKey: (!timedOut && responseData?.builtinWidgetKey) || null,
+        script: hasScriptCode ? 'app.js' : null,
+        timedOut,
+    };
+}
+
+async function _handleCreateWidget(commandPayload) {
+    const created = await createWidget(commandPayload);
+
+    if (created.timedOut) {
         let timeoutReport = '### Widget Creation Queued\n\n';
-        timeoutReport += `- widgetId: \`${finalWidgetId}\`\n`;
-        timeoutReport += `- position: (${options.x ?? 100}, ${options.y ?? 100})\n`;
-        timeoutReport += `- size: ${options.width ?? 320} x ${options.height ?? 200}\n`;
+        timeoutReport += `- widgetId: \`${created.widgetId}\`\n`;
+        timeoutReport += `- position: (${created.x}, ${created.y})\n`;
+        timeoutReport += `- size: ${created.width} x ${created.height}\n`;
         timeoutReport += '- status: renderer response timed out, but request was dispatched.';
         return {
             status: 'success',
@@ -697,20 +769,17 @@ async function _handleCreateWidget(commandPayload, desktopWin) {
     }
 
     let mdReport = '### Widget Created\n\n';
-    mdReport += `- widgetId: \`${responseData?.widgetId || finalWidgetId}\`\n`;
-    mdReport += `- position: (${options.x ?? 100}, ${options.y ?? 100})\n`;
-    mdReport += `- size: ${options.width ?? 320} x ${options.height ?? 200}\n`;
-
-    const finalSavedId = savedId || responseData?.savedId;
-    const finalSavedName = saveName || responseData?.savedName;
-    if (finalSavedId) {
-        mdReport += `- savedName: ${finalSavedName}\n`;
-        mdReport += `- savedDir: \`AppData/DesktopWidgets/${finalSavedId}\`\n`;
+    mdReport += `- widgetId: \`${created.widgetId}\`\n`;
+    mdReport += `- position: (${created.x}, ${created.y})\n`;
+    mdReport += `- size: ${created.width} x ${created.height}\n`;
+    if (created.savedId) {
+        mdReport += `- savedName: ${created.savedName}\n`;
+        mdReport += `- savedDir: \`${created.savedDir}\`\n`;
     }
-    if (responseData?.builtinWidgetKey) {
-        mdReport += `- builtinWidgetKey: ${responseData.builtinWidgetKey}\n`;
+    if (created.builtinWidgetKey) {
+        mdReport += `- builtinWidgetKey: ${created.builtinWidgetKey}\n`;
     }
-    if (hasScriptCode) {
+    if (created.script) {
         mdReport += '- script: `app.js`\n';
     }
 
@@ -720,9 +789,62 @@ async function _handleCreateWidget(commandPayload, desktopWin) {
     };
 }
 
+// ---------- 声明式 API：目录、说明、调用 ----------
+
+function getDesktopApi() {
+    return require('../desktopApi').getDesktopApi();
+}
+
+function _textResult(text) {
+    return { status: 'success', result: { content: [{ type: 'text', text }] } };
+}
+
+function _handleListApis(commandPayload) {
+    const apis = getDesktopApi().list({ caller: 'model', prefix: commandPayload.prefix || '', query: commandPayload.query || '' });
+    let md = `### Desktop API Directory\n\n- count: ${apis.length}\n`;
+    if (commandPayload.prefix) md += `- prefix: \`${commandPayload.prefix}\`\n`;
+    if (commandPayload.query) md += `- query: ${commandPayload.query}\n`;
+    md += '\n';
+    if (!apis.length) {
+        md += '- none\n';
+    } else {
+        md += '| apiId | access | params | summary |\n|---|---|---|---|\n';
+        for (const api of apis) {
+            md += `| \`${api.id}\` | ${api.access} | ${api.params.length ? api.params.join(', ') : '-'} | ${api.summary.replace(/\|/g, '\\|')} |\n`;
+        }
+        md += '\n参数名带 ? 的可省略。用 DescribeAPI 查看完整参数，再用 CallAPI 调用。';
+    }
+    return _textResult(md);
+}
+
+function _handleDescribeApi(commandPayload) {
+    const info = getDesktopApi().describe(commandPayload.apiId, { caller: 'model' });
+    let md = `### ${info.id}\n\n- title: ${info.title}\n- access: ${info.access}\n- callers: ${info.callers.join(', ')}\n\n${info.description}\n\n`;
+    md += `#### params (JSON Schema)\n\n\`\`\`json\n${JSON.stringify(info.paramsSchema, null, 2)}\n\`\`\`\n`;
+    if (info.returns) md += `\n#### returns\n\n${info.returns}\n`;
+    if (info.example) md += `\n#### example params\n\n\`\`\`json\n${JSON.stringify(info.example, null, 2)}\n\`\`\`\n`;
+    return _textResult(md);
+}
+
+async function _handleCallApi(commandPayload) {
+    const outcome = await getDesktopApi().call(commandPayload.apiId, commandPayload.params, { caller: 'model' });
+    if (!outcome.ok) {
+        throw new Error(`[${outcome.error.code}] ${outcome.error.message}`);
+    }
+    const json = JSON.stringify(outcome.data, null, 2) ?? 'null';
+    return _textResult(`### ${outcome.id}\n\n\`\`\`json\n${json}\n\`\`\``);
+}
+
 module.exports = {
     initialize,
     handleDesktopRemoteControl,
     handleCanvasControl,
     handleFlowlockControl,
+    // 声明式 API 的桌面实现（modules/desktopApi/operations/desktop.js）
+    desktopBridge: Object.freeze({
+        getDesktopWindow,
+        queryDesktopRenderer,
+        setWallpaper,
+        createWidget,
+    }),
 };

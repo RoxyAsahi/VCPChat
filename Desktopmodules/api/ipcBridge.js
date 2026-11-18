@@ -227,6 +227,19 @@
                     return;
                 }
 
+                case 'RemoveWidget': {
+                    const widgetId = payload.widgetId;
+                    const existed = state.widgets.has(widgetId);
+                    if (existed) {
+                        widget.remove(widgetId);
+                    }
+                    sendDesktopRemoteRpcResponse(requestId, {
+                        ok: true,
+                        data: { widgetId, removed: existed },
+                    });
+                    return;
+                }
+
                 case 'SetStyleAutomation': {
                     if (!window.VCPDesktop?.styleAutomation) {
                         throw new Error('styleAutomation module is unavailable.');

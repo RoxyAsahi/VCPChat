@@ -2,8 +2,8 @@
   "name": "DesktopRemote",
   "displayName": "桌面远程控制器",
   "pluginType": "synchronous",
-  "version": "1.5.0",
-  "description": "远程控制VCPdesktop桌面画布，支持推送壁纸、感知查询桌面状态、查询Dock应用列表、查看挂件源码、创建新挂件，以及指标驱动全局样式自动化。",
+  "version": "1.6.0",
+  "description": "远程控制VCPdesktop桌面画布。推荐先用 ListAPIs 查看声明式接口目录、DescribeAPI 读取参数，再用 CallAPI 调用；原有的推送壁纸、查询桌面与 Dock、查看挂件源码、创建挂件、样式自动化命令保留兼容。",
   "author": "VCPToolBox",
   "license": "CC BY-NC-SA 4.0",
   "entryPoint": {
@@ -14,6 +14,18 @@
   },
   "capabilities": {
     "invocationCommands": [
+      {
+        "command": "ListAPIs",
+        "description": "功能: 列出 V桌面与 VChat 可调用的声明式接口目录（接口 ID、访问级别 read/write、参数名、一句话说明）。参数名带 ? 的可省略。\n先用它找到接口，再用 DescribeAPI 看完整参数，最后用 CallAPI 调用。\n\n参数:\n- prefix (字符串, 可选): 只看某一组接口，例如 desktop、desktop.widget、vchat。\n- query (字符串, 可选): 按关键词过滤，例如 壁纸、指标。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」DesktopRemote「末」,\ncommand:「始」ListAPIs「末」\n<<<[END_TOOL_REQUEST]>>>"
+      },
+      {
+        "command": "DescribeAPI",
+        "description": "功能: 查看单个声明式接口的完整说明、参数 JSON Schema、返回值说明与示例。\n\n参数:\n- apiId (字符串, 必需): ListAPIs 返回的接口 ID。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」DesktopRemote「末」,\ncommand:「始」DescribeAPI「末」,\napiId:「始」desktop.metrics.snapshot「末」\n<<<[END_TOOL_REQUEST]>>>"
+      },
+      {
+        "command": "CallAPI",
+        "description": "功能: 调用一个声明式接口，返回 JSON 结果。参数按 DescribeAPI 给出的 Schema 校验，拼错参数名或类型不对会直接报错并说明原因。\n\n参数:\n- apiId (字符串, 必需): 接口 ID。\n- params (JSON对象或JSON字符串, 可选): 接口参数，没有参数时可省略。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」DesktopRemote「末」,\ncommand:「始」CallAPI「末」,\napiId:「始」desktop.widget.remove「末」,\nparams:「始」{\"widgetId\": \"remote-widget-123\"}「末」\n<<<[END_TOOL_REQUEST]>>>"
+      },
       {
         "command": "SetWallpaper",
         "description": "功能: 推送壁纸到用户的VCPdesktop桌面。支持多种壁纸来源：\n1. 直接URL（http/https）：推送网络图片或视频作为壁纸。\n2. 本地文件URL（file:///...）：推送本地图片、视频或HTML文件作为壁纸。\n3. HTML内容：直接传入一段HTML代码，系统会将其保存为HTML文件并作为动态壁纸加载（适合粒子效果、shader动画等）。\n\n壁纸类型会根据文件扩展名或内容自动检测：图片(jpg/png/gif/webp/svg)、视频(mp4/webm)、HTML动态壁纸(html/htm)。\n\n参数:\n- wallpaperSource (字符串, 必需): 壁纸来源。可以是：\n  - HTTP/HTTPS URL (如 https://example.com/bg.jpg)\n  - 本地文件 file:// URL (如 file:///C:/wallpapers/bg.png)\n  - 完整的HTML代码（以 <!DOCTYPE 或 <html 开头时会被识别为HTML内容）\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」DesktopRemote「末」,\ncommand:「始」SetWallpaper「末」,\nwallpaperSource:「始」https://example.com/beautiful-landscape.jpg「末」\n<<<[END_TOOL_REQUEST]>>>\n\n创建HTML动态壁纸示例:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」DesktopRemote「末」,\ncommand:「始」SetWallpaper「末」,\nwallpaperSource:「始」<!DOCTYPE html><html><head><style>body{margin:0;overflow:hidden;background:#000}canvas{display:block}</style></head><body><canvas id=\"c\"></canvas><script>/* 粒子动画代码 */</script></body></html>「末」\n<<<[END_TOOL_REQUEST]>>>"
