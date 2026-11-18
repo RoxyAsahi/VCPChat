@@ -192,7 +192,9 @@
             const idx = Math.min(count - 1, Math.floor(t / step));
             const t0 = idx * step;
             const span = Math.max(1e-5, Math.min(duration, (idx + 1) * step) - t0);
-            const baseDist = mix(distances[idx], distances[idx + 1], clamp((t - t0) / span));
+            let baseDist = mix(distances[idx], distances[idx + 1], clamp((t - t0) / span));
+            // Keep cruising if playback outlives the compiled timeline.
+            if (time > duration) baseDist += (time - duration) * Math.max(0.2, sampleState(duration).speed);
             return baseDist * clamp(speedScale, 0.25, 2.5);
         };
 
@@ -1650,12 +1652,12 @@
             glyphCacheKey = ''; // 触发当前句按新主题重绘
         };
 
-        const reset = (lines = [], identity = 'tunnel-track') => {
+        const reset = (lines = [], identity = 'tunnel-track', duration = 0) => {
             clearGlyphStage();
             currentLineKey = '';
             activePointCount = 0;
             lyricGeo.setDrawRange(0, 0);
-            timeline = compileTunnelTimeline(lines, identity);
+            timeline = compileTunnelTimeline(lines, identity, duration);
             totalTravelDistance = 0;
             cruiseSpeed = 1.0;
             bassSmooth = 0;
@@ -2050,6 +2052,7 @@
         let latest = null;
         let source = null;
         let identity = '';
+        let compiledDuration = -1;
         let width = 1;
         let height = 1;
         let lastTime = null;
@@ -2113,11 +2116,15 @@
             }
 
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
-            if (source !== frame.lines || identity !== nextIdentity) {
+            // The track length often arrives a moment after the track itself; the
+            // journey has to be compiled for the whole song, not just its lyrics.
+            const nextDuration = Math.round(finiteNumber(frame.duration, 0));
+            if (source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration) {
                 source = frame.lines;
                 identity = nextIdentity;
+                compiledDuration = nextDuration;
                 lastTime = null;
-                world?.reset?.(frame.lines || [], identity);
+                world?.reset?.(frame.lines || [], identity, nextDuration);
             }
 
             const settings = tuning();
@@ -2225,5 +2232,5 @@
         return mode;
     };
 
-    global.MusicStageTunnelManager = Object.freeze({ create });
+    global.MusicStageTunnelManager = Object.freeze({ create, compileTimeline: compileTunnelTimeline });
 })(window);

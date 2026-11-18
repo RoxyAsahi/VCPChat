@@ -1,0 +1,164 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const { JSDOM } = require('jsdom');
+
+const workspace = path.resolve(__dirname, '..');
+const read = (relativePath) => fs.readFileSync(path.join(workspace, relativePath), 'utf8');
+const createDom = () => new JSDOM('<!doctype html><html><body></body></html>', {
+    url: 'http://localhost/',
+    pretendToBeVisual: true,
+    runScripts: 'outside-only'
+});
+const runScript = (dom, relativePath) => {
+    vm.runInContext(read(relativePath), dom.getInternalVMContext(), { filename: relativePath });
+};
+const loadStage = (dom, ...extra) => {
+    [
+        'Musicmodules/music-stage/music-stage-config.js',
+        'Musicmodules/music-stage/music-stage-runtime.js',
+        'Musicmodules/music-stage/modes/stage-mode-utils.js',
+        ...extra
+    ].forEach((file) => runScript(dom, file));
+    return dom.window;
+};
+
+test('timestamp-only lyric lines end after a reading estimate instead of spanning the break', () => {
+    const dom = createDom();
+    const { MusicStageRuntime: Runtime } = loadStage(dom);
+    const lines = Runtime.normalizeLines([
+        { time: 10, original: '短短的一句歌词' },
+        { time: 14, original: '紧接着的下一句' },
+        { time: 60, original: '间奏之后' }
+    ]);
+
+    // A normal gap is still owned by the line in full.
+    assert.equal(lines[0].endTime, 14);
+    // 7 graphemes * 0.45 s + 2 s, not the 46 s until the next line.
+    assert.ok(Math.abs(lines[1].endTime - (14 + 7 * 0.45 + 2)) < 1e-9);
+    assert.ok(lines[1].vocalEndTime <= lines[1].endTime + 1e-9);
+    assert.equal(Runtime.buildGlyphTimeline(lines[1]).at(-1).endTime <= lines[1].endTime + 1e-9, true);
+    dom.window.close();
+});
+
+test('declared end times and word timings are never shortened', () => {
+    const dom = createDom();
+    const { MusicStageRuntime: Runtime } = loadStage(dom);
+    const lines = Runtime.normalizeLines([
+        { time: 0, endTime: 40, original: '声明了结束时间' },
+        { time: 50, original: '逐字', words: [{ text: '逐字', startTime: 50, endTime: 51 }] },
+        { time: 120, original: '结尾' }
+    ]);
+    assert.equal(lines[0].endTime, 40);
+    assert.equal(lines[1].endTime, 120);
+    dom.window.close();
+});
+
+test('stage clock filters poll jitter, stays monotonic and snaps on seeks', () => {
+    const dom = createDom();
+    const { MusicStageRuntime: Runtime } = loadStage(dom);
+    const app = { isPlaying: true, lastKnownCurrentTime: 30, lastStateUpdateTime: 1_000_000 };
+    const jitter = [0.031, -0.024, 0.04, -0.038, 0.012, -0.03, 0.036, -0.019];
+    let previous = Runtime.resolveSteadyPlaybackTime(app, 1_000_000);
+    let worstStep = 0;
+    let worstError = 0;
+    for (let frame = 1; frame <= 480; frame += 1) {
+        const now = 1_000_000 + frame * (1000 / 60);
+        if (frame % 15 === 0) {
+            // A poll lands: true position plus a few tens of milliseconds of noise.
+            app.lastKnownCurrentTime = 30 + (now - 1_000_000) / 1000 + jitter[(frame / 15) % jitter.length];
+            app.lastStateUpdateTime = now;
+        }
+        const time = Runtime.resolveSteadyPlaybackTime(app, now);
+        assert.ok(time >= previous, 'clock must not run backwards');
+        worstStep = Math.max(worstStep, Math.abs(time - previous - 1 / 60));
+        worstError = Math.max(worstError, Math.abs(time - (30 + (now - 1_000_000) / 1000)));
+        previous = time;
+    }
+    assert.ok(worstStep < 0.004, `frame steps stay even, saw ${worstStep}`);
+    assert.ok(worstError < 0.045, `clock stays near the engine, saw ${worstError}`);
+
+    const seekAt = 1_000_000 + 9000;
+    app.lastKnownCurrentTime = 95;
+    app.lastStateUpdateTime = seekAt;
+    assert.equal(Runtime.resolveSteadyPlaybackTime(app, seekAt), 95);
+    app.isPlaying = false;
+    assert.equal(Runtime.resolveSteadyPlaybackTime(app, seekAt + 5000), 95);
+    dom.window.close();
+});
+
+test('play and pause keep the extrapolated position continuous', async () => {
+    const dom = createDom();
+    const { window } = dom;
+    runScript(dom, 'Musicmodules/music-stage/music-stage-runtime.js');
+    runScript(dom, 'Musicmodules/music-player.js');
+    const classList = { add() {}, remove() {}, toggle() {} };
+    const app = {
+        playlist: [{ path: 'a.flac', title: 'a' }],
+        currentTrackIndex: 0,
+        isTrackLoading: false,
+        isPlaying: false,
+        lastKnownCurrentTime: 22.5,
+        lastKnownDuration: 200,
+        // The last sample is six seconds old because polling stops while paused.
+        lastStateUpdateTime: Date.now() - 6000,
+        playPauseBtn: { classList },
+        phantomAudio: { play: () => Promise.resolve(), pause() {} },
+        stripAudioExtension: (value) => value,
+        normalizePathForCompare: (value) => value,
+        syncTrackIndexByPath() {},
+        pollState() {},
+        api: {
+            musicPlay: async () => ({ status: 'success' }),
+            musicPause: async () => ({ status: 'success' })
+        }
+    };
+    vm.runInContext('setupPlayer', dom.getInternalVMContext())(app);
+    const Runtime = window.MusicStageRuntime;
+
+    await app.playTrack();
+    assert.equal(app.isPlaying, true);
+    const resumed = Runtime.resolvePlaybackTime(app, Date.now());
+    assert.ok(resumed - 22.5 < 0.2, `resume must not add the pause, got ${resumed}`);
+
+    app.lastStateUpdateTime = Date.now() - 180;
+    await app.pauseTrack();
+    assert.equal(app.isPlaying, false);
+    const paused = Runtime.resolvePlaybackTime(app, Date.now() + 5000);
+    assert.ok(paused >= 22.5 + 0.17 && paused < 22.5 + 0.4, `pause keeps the shown position, got ${paused}`);
+    app.stopStatePolling();
+    dom.window.close();
+});
+
+test('tunnel journey covers the whole song, with or without lyrics', () => {
+    const dom = createDom();
+    const { MusicStageTunnelManager: Tunnel } = loadStage(dom, 'Musicmodules/music-stage/modes/tunnel-manager.js');
+    const lines = dom.window.MusicStageRuntime.normalizeLines([
+        { time: 10, original: '第一句歌词' },
+        { time: 100, original: '最后一句歌词' }
+    ]);
+
+    const full = Tunnel.compileTimeline(lines, 'song', 200);
+    assert.equal(full.duration, 200);
+    assert.ok(full.distanceAt(190) > full.distanceAt(150));
+    assert.ok(full.distanceAt(150) > full.distanceAt(115));
+
+    const instrumental = Tunnel.compileTimeline([], 'instrumental', 180);
+    assert.ok(instrumental.distanceAt(170) > instrumental.distanceAt(60));
+    assert.ok(instrumental.distanceAt(60) > instrumental.distanceAt(25));
+
+    // Unknown length: the camera still keeps moving past the compiled end.
+    const unknown = Tunnel.compileTimeline([], 'unknown', 0);
+    assert.ok(unknown.distanceAt(90) > unknown.distanceAt(30));
+    dom.window.close();
+});
+
+test('mode settings keep their own ranges', () => {
+    const dom = createDom();
+    const { MusicStageConfig: Config } = loadStage(dom);
+    Config.setModePatch('fume', { textHoldRatio: 1 });
+    assert.equal(Config.get().modes.fume.textHoldRatio, 1);
+    dom.window.close();
+});
