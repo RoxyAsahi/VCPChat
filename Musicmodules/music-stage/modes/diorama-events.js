@@ -66,6 +66,10 @@
     const compile = (timeline, track, options = {}) => {
         const events = [];
         const occupied = timeline.protectedIntervals.map(i => ({ start: i.start - 2, end: i.end + 2.5 }));
+        // While the camera is inside the car or out at the waterside it is not
+        // looking down the line, so nothing is staged there for it to miss.
+        for (const scene of track.scenes || []) occupied.push({ start: scene.start - 1, end: scene.end + 1 });
+        occupied.sort((a, b) => a.start - b.start);
         const gaps = [];
         let cursor = 5;
         for (const interval of occupied) {

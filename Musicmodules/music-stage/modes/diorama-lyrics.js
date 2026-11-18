@@ -14,18 +14,26 @@
             group.rotation.y = -encounter.yaw;
             const backingColor = new T.Color(palette.surface || palette.background || '#111b1c')
                 .lerp(new T.Color(palette.deep || palette.background || '#111b1c'), 0.35);
-            const back = new T.MeshStandardMaterial({ color: backingColor, roughness: 0.58, metalness: 0.35 });
-            const trim = new T.MeshStandardMaterial({ color: palette.secondary || '#76bfae', roughness: 0.35, metalness: 0.7 });
+            const trimColor = new T.Color(palette.secondary || '#76bfae');
+            // One material and one draw for the whole board: the backing parts
+            // come first, the bright trim after them, each in its own colour.
+            const back = new T.MeshStandardMaterial({ roughness: 0.58, metalness: 0.35 });
             // A board with nothing on it is still a made thing: cabinet seams
             // across its face, glass that picks up the sky at a glancing view,
             // and at night the hood lamps washing down it, a pool under each.
             const sheen = { value: new T.Color(palette.secondary || '#76bfae') };
-            const wash = { value: new T.Color() }, pitch = { value: 3 };
+            const wash = { value: new T.Color() }, pitch = { value: 3 }, backings = { value: 0 };
             back.onBeforeCompile = shader => {
-                Object.assign(shader.uniforms, { sheen, wash, pitch });
+                Object.assign(shader.uniforms, { sheen, wash, pitch, backings });
                 shader.vertexShader = shader.vertexShader
-                    .replace('#include <common>', '#include <common>\nvarying vec2 vPanel;\nvarying vec2 vFace;')
+                    .replace('#include <common>',
+                        '#include <common>\nuniform float backings;\nvarying float vTrim;\nvarying vec2 vPanel;\nvarying vec2 vFace;')
                     .replace('#include <begin_vertex>', `#include <begin_vertex>
+                        #ifdef USE_INSTANCING
+                        vTrim = step(backings - 0.5, float(gl_InstanceID));
+                        #else
+                        vTrim = 0.0;
+                        #endif
                         #ifdef USE_INSTANCING
                         vec2 panel = vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
                         #else
@@ -36,35 +44,37 @@
                         vFace = vec2(step(0.5, normal.z) * step(1.5, panel.y), panel.y);`);
                 shader.fragmentShader = shader.fragmentShader
                     .replace('#include <common>',
-                        '#include <common>\nvarying vec2 vPanel;\nvarying vec2 vFace;\nuniform vec3 sheen, wash;\nuniform float pitch;')
+                        '#include <common>\nvarying float vTrim;\nvarying vec2 vPanel;\nvarying vec2 vFace;\nuniform vec3 sheen, wash;\nuniform float pitch;')
+                    .replace('#include <roughnessmap_fragment>',
+                        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.35, vTrim);')
+                    .replace('#include <metalnessmap_fragment>',
+                        '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.7, vTrim);')
                     .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                        // Trim glows about seven times as strongly as the backing.
+                        totalEmissiveRadiance *= mix(1.0, 6.857, vTrim);
+                        float plain = 1.0 - vTrim;
                         vec2 cabinet = abs(fract(vPanel / 0.96) - 0.5) * 0.96;
                         float grain = length(fwidth(vPanel));
                         float seam = (1.0 - smoothstep(0.004, 0.02 + grain, 0.48 - max(cabinet.x, cabinet.y)))
                             * 0.03 / (0.03 + grain);
                         float glance = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
-                        totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam);
+                        totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam) * plain;
                         float below = vFace.y - vPanel.y;
                         float lamp = 0.5 + 0.5 * cos(6.2832 * vPanel.x / pitch - 3.1416);
                         float pool = exp(-below * 0.85) * mix(0.3 + 0.7 * lamp, 1.0, smoothstep(0.0, 1.5, below))
                             * smoothstep(0.0, 0.12, below);
-                        totalEmissiveRadiance += wash * pool * vFace.x * (1.0 - 0.45 * seam);`);
+                        totalEmissiveRadiance += wash * pool * vFace.x * (1.0 - 0.45 * seam) * plain;`);
             };
             // A trackside display board: bezel, hooded lamp row, lattice legs
             // on footings, raking back stays, a service ledge and its ladder.
-            const backing = new T.InstancedMesh(box, back, 8);
-            const frame = new T.InstancedMesh(box, trim, 64);
-            backing.count = frame.count = 0;
-            group.add(backing, frame);
+            const trim = 'trim', pieces = [[], []];
             const transform = new T.Object3D();
             const add = (sx, sy, sz, x, y, z, mat, rx = 0, rz = 0) => {
-                const mesh = mat === back ? backing : frame;
-                if (mesh.count >= mesh.instanceMatrix.count) return;
                 transform.scale.set(sx, sy, sz);
                 transform.position.set(x, y, z);
                 transform.rotation.set(rx, 0, rz);
                 transform.updateMatrix();
-                mesh.setMatrixAt(mesh.count++, transform.matrix);
+                pieces[mat === trim ? 1 : 0].push(transform.matrix.clone());
             };
             const W = encounter.width + 0.7, H = encounter.height + 1.5;
             const top = H / 2 - 0.35, bottom = -H / 2 - 0.35, water = -encounter.position.y;
@@ -103,7 +113,13 @@
             const ladder = encounter.width * 0.36 + 1.15;
             for (const stile of [-0.2, 0.2]) add(0.04, bottom - water + 0.5, 0.04, ladder + stile, (bottom + water) / 2 + 0.25, 0.62, trim);
             for (let y = water + 0.35; y < bottom + 0.4; y += 0.32) add(0.4, 0.03, 0.03, ladder, y, 0.62, trim);
-            backing.instanceMatrix.needsUpdate = frame.instanceMatrix.needsUpdate = true;
+            const parts = new T.InstancedMesh(box, back, pieces[0].length + pieces[1].length);
+            backings.value = pieces[0].length;
+            pieces.flat().forEach((matrix, i) => {
+                parts.setMatrixAt(i, matrix);
+                parts.setColorAt(i, i < backings.value ? backingColor : trimColor);
+            });
+            group.add(parts);
             const performance = new T.ShaderMaterial({
                 transparent: true, depthWrite: false,
                 uniforms: { bins: { value: new Float32Array(24) }, light: { value: 0 },
@@ -151,10 +167,9 @@
             strip.position.set(0, -encounter.height / 2 - 0.58, 0.025);
             group.add(strip);
             back.emissive.set(palette.accent || '#f2a900');
-            trim.emissive.set(palette.accent || '#f2a900');
             root.add(group);
             group.updateMatrixWorld(true);
-            return { group, materials: [back, trim, performance], textures: [], performance, back, trim, wash,
+            return { group, materials: [back, performance], textures: [], performance, back, wash,
                 size: { x: W / 2, y: H / 2 } };
         };
         const plane = new T.PlaneGeometry(1, 1);
@@ -347,14 +362,15 @@
             text.scale.set(width, height * scale, 1);
             text.position.z = 0.055;
             group.add(text);
-            const yaw = reference.yaw;
+            const yaw = constellation ? reference.skyYaw ?? reference.yaw : reference.yaw;
             const right = new T.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
             const shift = constellation ? 0 : Math.min(2.5, halfHeight * aspect * 0.12);
             // The camera keeps travelling and turning while a phrase is read.
             // Aim at where it looks over the whole phrase, not only at its midpoint.
-            const aimed = axis => (opening.position[axis] + opening.direction[axis] * distance) * 0.25
-                + (reference.position[axis] + reference.direction[axis] * distance) * 0.5
-                + (closing.position[axis] + closing.direction[axis] * distance) * 0.25;
+            const gaze = view => constellation && view.sky || view.direction;
+            const aimed = axis => (opening.position[axis] + gaze(opening)[axis] * distance) * 0.25
+                + (reference.position[axis] + gaze(reference)[axis] * distance) * 0.5
+                + (closing.position[axis] + gaze(closing)[axis] * distance) * 0.25;
             group.position.set(aimed('x') + right.x * shift,
                 Math.max(height + 0.5, aimed('y') + halfHeight * 0.12),
                 aimed('z') + right.z * shift);
@@ -539,12 +555,22 @@
                 lastCamera = camera; lastDiagnosticTime = time;
                 const distance = timeline.distanceAt(time, options.cameraSpeed ?? 1);
                 // Hood lamps are a night thing, and they dim while a line is up.
-                const standby = palette.light ? 0 : 0.24;
+                // A line written on the sky is drawn over whatever stands behind
+                // it, and a lit board there would eat its contrast: while one is
+                // up, and a little either side of it, every board goes dark.
+                let sky = 0;
+                const around = Math.max(0, D.upperBound(timeline.phrases, time, 'start') - 1);
+                for (let i = Math.max(0, around - 2); i <= Math.min(timeline.phrases.length - 1, around + 3); i++) {
+                    const phrase = timeline.phrases[i];
+                    if (track.pageEncounter?.has(phrase.id)) continue;
+                    sky = Math.max(sky, D.smooth((time - phrase.start + 1.6) / 1.2)
+                        * (1 - D.smooth((time - phrase.end - 1) / 2)));
+                }
+                const standby = (palette.light ? 0 : 0.24) * (1 - sky);
                 signs.forEach(sign => {
                     sign.performance.uniforms.light.value = 0;
                     sign.performance.uniforms.closing.value = 0;
                     sign.back.emissiveIntensity = 0;
-                    sign.trim.emissiveIntensity = 0;
                     sign.held = 0;
                     sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby);
                 });
@@ -629,7 +655,6 @@
                         sign.held = Math.max(sign.held, D.smooth((time - node.phrase.start + 1.4) / 1.2)
                             * (1 - D.smooth((time - node.phrase.end - 1.6) / 2.4)));
                         sign.wash.value.copy(sign.back.emissive).multiplyScalar(standby * (1 - 0.8 * sign.held));
-                        sign.trim.emissiveIntensity = activation * 0.24;
                     }
                     if (subtitle) subtitle.material.opacity = (palette.light ? 0.96 : 0.82) * enter * (1 - exit);
                     if (node.constellation) keepInFrame(node, camera, frame);
