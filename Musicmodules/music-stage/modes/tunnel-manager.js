@@ -1454,28 +1454,68 @@
                     float alpha = 1.0;
 
                     if (uKind < 0.5) {
-                        // Hull: pale plating with seams and rows of lit ports.
-                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 8.0));
+                        // Hull, as spacecraft are finished: white thermal panels,
+                        // gold foil blankets, bare truss metal, glass ports in rows.
+                        // Sunlight is hard in vacuum; the sky fills the shade a little
+                        // and shows in whatever is polished.
+                        bool tube = vPart < 2.5;
+                        bool truss = vPart > 4.5;
+                        vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(3.0, 22.0) : vec2(18.0, 40.0));
                         vec2 cell = floor(cells), inside = fract(cells);
-                        float seam = smoothstep(0.0, 0.08, inside.x) * smoothstep(0.0, 0.14, inside.y);
-                        // Ports sit in rows, a few dark, as on a lived-in deck.
-                        float row = vPart > 2.5 ? 1.0 : step(0.5, mod(cell.y, 3.0)) * step(mod(cell.y, 3.0), 1.5);
-                        float lit = row * step(0.55, hash(vec3(cell, uSeed)))
-                            * step(0.25, inside.x) * step(inside.x, 0.75) * step(0.3, inside.y) * step(inside.y, 0.7);
-                        if (vPart > 2.5) lit *= step(0.9, hash(vec3(cell, uSeed + 2.0)));
-                        vec3 plate = mix(uColorInk, uColorPrimary, 0.3) * (0.15 + 0.07 * hash(vec3(floor(cells * 0.25), 3.0)));
-                        float gloss = pow(max(dot(reflect(-uLight, n), v), 0.0), 24.0);
-                        col = plate * seam * (0.04 + day * 2.3) + uColorInk * gloss * day * 0.35
-                            + uColorPrimary * rim * (0.02 + day * 0.3);
-                        col += mix(uColorAccent, uColorInk, 0.35) * lit * (0.8 + 0.2 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 3.5) {
-                            // Solar wing: dark cells in a pale grid, a glint when it faces the sun.
-                            vec2 grid = fract(vUv * vec2(14.0, 5.0));
-                            float frame = 1.0 - smoothstep(0.0, 0.07, min(min(grid.x, 1.0 - grid.x), min(grid.y, 1.0 - grid.y)));
-                            float glint = pow(max(dot(reflect(-uLight, n), v), 0.0), 60.0);
-                            col = mix(mix(uColorPrimary, vec3(0.05, 0.08, 0.2), 0.6) * (0.03 + 0.2 * max(ndl, 0.0)),
-                                uColorInk * (0.05 + 0.4 * day), frame)
-                                + mix(uColorInk, uColorAccent, 0.3) * glint * 1.4;
+                        float seam = smoothstep(0.0, 0.05, inside.x) * smoothstep(0.0, 0.07, inside.y)
+                            * smoothstep(0.0, 0.05, 1.0 - inside.x) * smoothstep(0.0, 0.07, 1.0 - inside.y);
+                        float tone = hash(vec3(cell, uSeed + 3.0));
+                        // Blankets wrap whole sections; a painted band runs round the rim.
+                        float section = tube ? hash(vec3(floor(vUv.x * 16.0), floor(vUv.y * 2.0), uSeed))
+                            : hash(vec3(floor(vUv.y * 6.0), 7.0, uSeed));
+                        float foil = truss ? 0.0 : step(tube ? 0.86 : 0.55, section);
+                        float band = tube ? step(5.5, cell.y) * step(cell.y, 6.5) : 0.0;
+                        float portRow = tube ? step(1.5, mod(cell.y, 6.0)) * step(mod(cell.y, 6.0), 2.5) : step(0.5, mod(cell.y, 4.0)) * step(mod(cell.y, 4.0), 1.5);
+                        float port = truss ? 0.0 : portRow * (1.0 - foil)
+                            * step(0.22, inside.x) * step(inside.x, 0.78) * step(0.28, inside.y) * step(inside.y, 0.72);
+                        float lit = port * step(tube ? 0.3 : 0.7, hash(vec3(cell, uSeed)));
+
+                        // Foil is crinkled: its mirror wanders.
+                        vec3 crease = vec3(noise(vLocal * 7.0 + 11.0), noise(vLocal * 7.0 + 37.0), noise(vLocal * 7.0 + 71.0)) - 0.5;
+                        vec3 nn = normalize(n + crease * 0.4 * foil);
+                        float lam = clamp(dot(nn, uLight) * 1.15 + 0.04, 0.0, 1.0);
+                        float facing = clamp(dot(nn, v), 0.0, 1.0);
+                        vec3 bounce = reflect(-v, nn);
+                        // What a polished surface sees: the warm side of the sky
+                        // towards the sun, the cool nebula away from it, and the sun.
+                        vec3 sky = mix(uColorPrimary * 0.16, mix(uColorEmber, uColorAccent, 0.4) * 0.3,
+                            smoothstep(-0.6, 0.7, dot(bounce, SUN)));
+                        float sun = max(dot(normalize(uLight + v), nn), 0.0);
+                        float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 5.0);
+
+                        vec3 white = mix(uColorInk, uColorAccent, 0.06) * (0.74 + 0.16 * tone) * mix(1.0, 0.72, step(0.93, tone));
+                        vec3 paint = mix(white, uColorAccent * 0.85, band);
+                        vec3 painted = paint * mix(0.62, 1.0, seam) * (0.03 + lam * 1.02) + uColorInk * pow(sun, 48.0) * lam * 0.3
+                            + sky * fresnel * 1.5 + uColorPrimary * 0.02;
+                        vec3 gold = mix(uColorAccent, uColorEmber, 0.22);
+                        vec3 foiled = gold * mix(0.8, 1.0, seam) * (0.05 + lam * 0.5) + gold * sky * 1.2 * (0.5 + 0.5 * fresnel)
+                            + mix(gold, uColorInk, 0.55) * pow(sun, 26.0) * lam * 1.1;
+                        vec3 metal = uColorInk * 0.3 * (0.05 + lam) * (0.55 + 0.45 * step(0.5, abs(fract(cells.y + cells.x) - 0.5) * 2.0))
+                            + uColorInk * pow(sun, 30.0) * lam * 0.6 + sky * 0.6;
+                        col = truss ? metal : mix(painted, foiled, foil);
+                        // Glass: dark, with the sky in it, unless someone is home.
+                        col = mix(col, sky * (0.4 + 3.0 * fresnel) + uColorInk * pow(sun, 90.0) * lam, port);
+                        col += mix(uColorAccent, uColorInk, 0.45) * lit
+                            * (0.85 + 0.15 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
+                        if (vPart > 3.5 && vPart < 4.5) {
+                            // Solar wing: deep blue cells under glass, silver busbars, a hard glint.
+                            vec2 at = vUv * vec2(16.0, 6.0);
+                            vec2 grid = fract(at);
+                            float frame = 1.0 - smoothstep(0.0, 0.06, min(min(grid.x, 1.0 - grid.x), min(grid.y, 1.0 - grid.y)));
+                            float bus = 1.0 - smoothstep(0.0, 0.05, abs(fract(at.x * 3.0) - 0.5));
+                            float flat_ = clamp(dot(n, uLight), 0.0, 1.0);
+                            float face = clamp(dot(n, v), 0.0, 1.0);
+                            vec3 silicon = mix(vec3(0.03, 0.07, 0.24), uColorPrimary * 0.25, 0.25)
+                                * (0.9 + 0.2 * hash(vec3(floor(at), uSeed)));
+                            vec3 wing = silicon * (0.25 + flat_ * 1.3) + uColorPrimary * 0.12 * pow(1.0 - face, 3.0);
+                            wing = mix(wing, uColorInk * (0.08 + 0.55 * flat_), max(frame, bus * 0.35));
+                            col = wing + mix(uColorInk, uColorAccent, 0.25)
+                                * pow(max(dot(normalize(uLight + v), n), 0.0), 120.0) * 2.2 * flat_;
                         } else if (vPart > 1.5 && vPart < 2.5) {
                             // Core or engine: pure emission with a hot centre.
                             float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
@@ -1639,15 +1679,15 @@
                 parts.push([new T.TorusGeometry(plan.rim, plan.tube, 14, 112).rotateX(Math.PI / 2).translate(0, deck, 0), 0]);
                 for (let i = 0; i < plan.spokes; i += 1) {
                     parts.push([new T.CylinderGeometry(plan.spoke, plan.spoke, plan.rim, 6, 1, true)
-                        .rotateZ(Math.PI / 2).translate(plan.rim / 2, deck, 0).rotateY((i / plan.spokes) * TAU), 3]);
+                        .rotateZ(Math.PI / 2).translate(plan.rim / 2, deck, 0).rotateY((i / plan.spokes) * TAU), 5]);
                 }
             }
             parts.push([new T.CylinderGeometry(plan.hub, plan.hub, plan.hubLength, 20, 1), 3]);
             for (const end of [-1, 1]) {
                 parts.push([new T.CylinderGeometry(plan.hub * 0.16, plan.hub * 0.16, plan.mast - plan.hubLength / 2, 6, 1, true)
-                    .translate(0, end * (plan.mast + plan.hubLength / 2) / 2, 0), 3]);
+                    .translate(0, end * (plan.mast + plan.hubLength / 2) / 2, 0), 5]);
                 parts.push([new T.CylinderGeometry(plan.hub * 0.1, plan.hub * 0.1, plan.wingAt * 2, 6, 1, true)
-                    .rotateZ(Math.PI / 2).translate(0, end * plan.mast, 0), 3]);
+                    .rotateZ(Math.PI / 2).translate(0, end * plan.mast, 0), 5]);
                 for (const side of [-1, 1]) {
                     parts.push([new T.BoxGeometry(plan.wing[0], plan.hub * 0.03, plan.wing[1])
                         .translate(side * plan.wingAt, end * plan.mast, 0), 4]);
