@@ -279,21 +279,31 @@
             { slotId: 0, type: 'station', baseS: 792,  side:  1, radial: 21, elev: 7,   scale: 0.58, rotSpeed: 0.05, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
             { slotId: 1, type: 'planet',  baseS: 860,  side:  1, radial: 56, elev: 18,  scale: 1.25, rotSpeed: 0.05, tilt: [0.22, -0.12, 0.16], p: 2, q: 3 },
             { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0], p: 2, q: 5 },
-            { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 30, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
+            { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 58, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
             { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
-            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 32, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
+            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 58, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
         ];
 
         // The first chorus is flown through a ring system. The whole procession
         // of encounters is slid along the route so that the first ringed planet
         // (whose ring plane the route pierces, between planet and outer edge)
         // is reached a few seconds into that chorus.
-        const firstChorus = acts.find((act) => act.kind === 'Chorus' && act.end - act.start > 4);
-        const ringPass = firstChorus
-            ? { distance: distanceAt(firstChorus.start + Math.min(5, (firstChorus.end - firstChorus.start) * 0.5)), baseS: 1160 }
-            : null;
+        const choruses = acts.filter((act) => act.kind === 'Chorus' && act.end - act.start > 4);
+        const passTime = (act) => act.start + Math.min(5, (act.end - act.start) * 0.5);
+        const passAt = (act) => distanceAt(passTime(act));
+        // A pass has the sky to itself: nothing else arrives within a few seconds of it.
+        const hero = (act, place) => act && { ...place, distance: passAt(act), hold: true,
+            clearFrom: distanceAt(Math.max(0, passTime(act) - 4.5)), clearTo: distanceAt(passTime(act) + 3.5) };
+        const ringPass = choruses[0] ? { distance: passAt(choruses[0]), baseS: 1160 } : null;
+        // The later choruses each get a pass of their own, placed outside the
+        // procession: the second skims the sunlit cloud tops of a gas giant,
+        // the third goes up through a ring system from its shaded side.
+        const heroPasses = [
+            hero(choruses[1], { slotId: 5, side: 1, radial: 35, elev: -5, tilt: [0.31, 0.15, -0.24] }),
+            hero(choruses[2], { slotId: 6, side: 1, radial: 46, elev: 12, tilt: [-0.62, -0.2, 0] })
+        ].filter(Boolean);
 
         return {
             seedHash,
@@ -303,6 +313,7 @@
             lineShots,
             encounterSlots,
             ringPass,
+            heroPasses,
             ENCOUNTER_CYCLE,
             sampleState,
             distanceAt,
@@ -1849,7 +1860,7 @@
                         vec3 sky = mix(uColorPrimary * 0.2, mix(uColorEmber, uColorAccent, 0.4) * 0.34,
                             smoothstep(-0.6, 0.7, dot(bounce, SUN)));
                         float sun = pow(max(dot(normalize(uLight + v), nn), 0.0), 9.0);
-                        vec3 silver = uColorInk * (0.1 + 0.3 * lam) + sky * 2.2 + uColorInk * sun * 1.5 * lam;
+                        vec3 silver = uColorInk * (0.1 + 0.3 * lam) + sky * 1.6 + uColorInk * sun * 1.5 * lam;
                         vec3 gold = mix(mix(uColorPrimary, uColorInk, 0.72), uColorAccent, 0.42) * (0.07 + 0.42 * lam)
                             + mix(uColorAccent, uColorInk, 0.5) * sun * 0.9 * lam + sky * 0.5;
                         col = sunward ? silver : gold;
@@ -1857,7 +1868,7 @@
                         // Thin-film cells in a band on each quadrant, taped hems.
                         float cells = smoothstep(0.5, 0.52, reach) * (1.0 - smoothstep(0.62, 0.64, reach))
                             * smoothstep(0.06, 0.09, gap) * step(0.12, fract(max(aq.x, aq.y) < 0.0 ? 0.0 : min(aq.x, aq.y) * 14.0));
-                        col = mix(col, vec3(0.03, 0.06, 0.2) * (0.3 + lam) + sky * 0.8, cells * (sunward ? 1.0 : 0.25));
+                        col = mix(col, uColorInk * 0.035 * (0.3 + lam) + sky * 0.8, cells * (sunward ? 1.0 : 0.25));
                         float hem = smoothstep(0.965, 0.985, reach) + (1.0 - smoothstep(0.012, 0.03, gap));
                         col = mix(col, uColorInk * (0.1 + 0.5 * lam), clamp(hem, 0.0, 1.0) * 0.8);
                         alpha = (0.9 + 0.1 * (1.0 - facing)) * fade;
@@ -2879,6 +2890,7 @@
 
             // The camera turns to watch whatever it is passing: a little while
             // a line is being read, freely in the gaps between lines.
+            let passBank = 0, passRush = 0;
             if (motionAmount > 0.001 && !settings.reducedMotion) {
                 const shots = timeline.lineShots;
                 const nextIdx = upperBound(shots, time, 'startTime');
@@ -2892,6 +2904,14 @@
                     const ahead = camZ - body.group.position.z;
                     const near = smooth((560 - ahead) / 220) * smooth((ahead + 150) / 130);
                     if (near <= 0) return;
+                    // Close alongside, the camera banks towards the body and the lens widens.
+                    const beside = smooth(1 - Math.abs(ahead - 25) / 150);
+                    const offX = body.group.position.x - camX, offY = body.group.position.y - camY;
+                    const closeBy = beside * clamp(70 / Math.max(20, Math.hypot(offX, offY)));
+                    if (closeBy > passRush) {
+                        passRush = closeBy;
+                        passBank = -Math.sign(offX * camSpine.right.x + offY * camSpine.right.y) * closeBy;
+                    }
                     weight = Math.max(weight, near);
                     sum += near;
                     gx += body.group.position.x * near; gy += body.group.position.y * near; gz += body.group.position.z * near;
@@ -2907,11 +2927,11 @@
                 }
             }
             cameraInstance.lookAt(lookX, lookY, lookZ);
-            cameraInstance.rotation.z += rigRoll + camSpine.curvature * 0.032 * motionAmount
+            cameraInstance.rotation.z += rigRoll + passBank * 0.11 * Math.min(1, motionAmount) + camSpine.curvature * 0.032 * motionAmount
                 + Math.sin(time * 0.21) * 0.008 * breathAmount * motionAmount;
 
             const targetFov = clamp(
-                actState.fov + rigFov + bassSmooth * 2.4 * shakeAmount + (cruiseSpeed - 1.0) * 3.5 * Math.min(1, motionAmount),
+                actState.fov + rigFov + passRush * 5.0 * Math.min(1, motionAmount) + bassSmooth * 2.4 * shakeAmount + (cruiseSpeed - 1.0) * 3.5 * Math.min(1, motionAmount),
                 38,
                 68
             );
@@ -3011,7 +3031,24 @@
                 // 计算该巨构在当前周期内的世界弧长坐标 sWorld（掠过身后 220m 后再折返至下一周期 2180m 远方）
                 const placed = slot.baseS + encounterShift;
                 const cycleIndex = Math.floor((totalTravelDistance - placed + 220) / cycle);
-                const sWorld = placed + cycleIndex * cycle;
+                let sWorld = placed + cycleIndex * cycle;
+                let place = slot;
+                for (const hero of timeline.heroPasses) {
+                    const routeScale = clamp(speedScale, 0.25, 2.5);
+                    const heroS = hero.distance * routeScale;
+                    if (hero.slotId !== idx) {
+                        if (sWorld > hero.clearFrom * routeScale && sWorld < hero.clearTo * routeScale) sWorld = -1e9;
+                        continue;
+                    }
+                    const heroRel = heroS - totalTravelDistance;
+                    if (heroRel > -180 && heroRel < 1820) {
+                        sWorld = heroS;
+                        place = hero;
+                    } else if (place === slot && sWorld > heroS - 2100 && sWorld < heroS + 300) {
+                        // Its place in the procession would crowd the pass: sit this one out.
+                        sWorld = -1e9;
+                    }
+                }
                 const relS = sWorld - totalTravelDistance; // >0 在镜头前方，<0 已掠过镜头后方
 
                 if (relS < -180 || relS > 1820) {
@@ -3033,13 +3070,13 @@
                 const anchorSpine = timeline.spineAt(sWorld, motionAmount);
                 // 远方未完全凝聚时，巨构位置略微向航道中轴聚拢，随凝聚自然舒展到两侧巡航位
                 const birthSpread = 0.65 + 0.35 * (1.0 - smooth((relS - 460) / 1150));
-                const wx = anchorSpine.x + anchorSpine.right.x * (slot.side * slot.radial * birthSpread) + anchorSpine.up.x * (slot.elev * birthSpread);
-                const wy = anchorSpine.y + anchorSpine.right.y * (slot.side * slot.radial * birthSpread) + anchorSpine.up.y * (slot.elev * birthSpread);
+                const wx = anchorSpine.x + anchorSpine.right.x * (place.side * place.radial * birthSpread) + anchorSpine.up.x * (place.elev * birthSpread);
+                const wy = anchorSpine.y + anchorSpine.right.y * (place.side * place.radial * birthSpread) + anchorSpine.up.y * (place.elev * birthSpread);
                 const wz = anchorSpine.z;
                 node.points.position.set(wx, wy, wz);
 
                 const rotY = time * slot.rotSpeed + idx * 1.1;
-                node.points.rotation.set(slot.tilt[0], rotY + slot.tilt[1], slot.tilt[2]);
+                node.points.rotation.set(place.tilt[0], rotY + place.tilt[1], place.tilt[2]);
 
                 // 结项凝聚与近场擦肩解体包络：
                 // 远方 (relS: 1680 -> 440) 从深空纵向星尘细丝缓缓坍缩凝结为精密流形；
@@ -3050,9 +3087,9 @@
                 if (relS > 440) {
                     cohesion = 1.0 - smoother((relS - 440) / 1220);
                     dissolveDir = -1.0;
-                } else if (slot.type === 'rings' ? relS < -15 : relS < 135) {
+                } else if (slot.type === 'rings' || place.hold ? relS < -15 : relS < 135) {
                     // A ring system holds together until the camera is through its plane.
-                    const passPhase = slot.type === 'rings' ? clamp((-15 - relS) / 150) : clamp((135 - relS) / 260);
+                    const passPhase = slot.type === 'rings' || place.hold ? clamp((-15 - relS) / 150) : clamp((135 - relS) / 260);
                     cohesion = 1.0 - easeInCubic(passPhase) * (0.48 + dissolveAmount * 0.52);
                     dissolveDir = 1.0;
                 }
