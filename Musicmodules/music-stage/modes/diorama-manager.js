@@ -38,13 +38,12 @@
             }
             U.updateWords(Array.from(fallbackLine.children), frame.wordStates || []);
         };
+        const renderScale = U.createRenderScale();
         const resize = () => {
             width = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             height = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             if (!renderer) return;
-            const quality = mode.config.quality;
-            const cap = quality === 'energy-saving' ? 1 : quality === 'ultimate' ? 2 : 1.5;
-            renderer.setPixelRatio(Math.min(cap, global.devicePixelRatio || 1));
+            renderer.setPixelRatio(renderScale.ratio(mode.config.quality, width, height));
             renderer.setSize(width, height, false);
             world?.setPixelRatio?.(renderer.getPixelRatio());
             events?.setViewport?.(height * renderer.getPixelRatio());
@@ -201,6 +200,7 @@
             events.update(time, settings, mode.config.quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
+            if (frame.isPlaying && renderScale.tick(performance.now())) resize();
             renderer.info.reset();
             world.renderReflection(renderer, camera);
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config);
@@ -269,6 +269,7 @@
             act: pose?.state.act, rig: pose?.rig, distance: pose?.distance,
             acts: timeline?.acts.map(a => ({ kind: a.kind, start: a.start, end: a.end })),
             cutsCount: timeline?.cuts.length || 0, rhythmSource: timeline?.rhythmSource,
+            pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
             drawCalls: renderer?.info.render.calls, geometries: renderer?.info.memory.geometries,
             textures: renderer?.info.memory.textures,
             signSpectrum: Array.from(audio.spectrum)

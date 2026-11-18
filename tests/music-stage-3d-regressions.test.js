@@ -181,3 +181,33 @@ test('diorama scenery knows when it would stand between the train and a lyric sc
     assert.equal(World.poleSide({ encounters: [] }, 100, 1), 1);
     dom.window.close();
 });
+
+test('3D modes draw to a pixel budget and step down while frames are slow', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: Utils } = loadStage(dom);
+    dom.window.devicePixelRatio = 1.5;
+    const scale = Utils.createRenderScale();
+    // A small window keeps the device pixel ratio; a maximised 4K one is held to the budget.
+    assert.equal(scale.ratio('standard', 1280, 700), 1.5);
+    const large = scale.ratio('standard', 2560, 1440);
+    assert.ok(large * large * 2560 * 1440 <= 2.4e6 * 1.001, `budget exceeded: ${large}`);
+    assert.ok(scale.ratio('ultimate', 2560, 1440) > large);
+    assert.ok(scale.ratio('energy-saving', 2560, 1440) < large);
+
+    let now = 1000;
+    const run = (interval, count) => {
+        let changed = 0;
+        for (let i = 0; i < count; i += 1) { now += interval; if (scale.tick(now)) changed += 1; }
+        return changed;
+    };
+    scale.tick(now);
+    assert.equal(run(16.7, 600), 0, 'a held frame rate changes nothing');
+    assert.equal(run(4000, 3), 0, 'a hidden window is not a slow renderer');
+    assert.ok(run(33.3, 200) >= 1, 'thirty frames a second steps down');
+    assert.ok(scale.factor < 1 && scale.factor >= 0.55);
+    assert.ok(scale.ratio('standard', 2560, 1440) < large);
+    const low = scale.factor;
+    run(16.7, 2000);
+    assert.ok(scale.factor > low, 'a long steady stretch tries the larger size again');
+    dom.window.close();
+});

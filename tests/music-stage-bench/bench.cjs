@@ -3,7 +3,7 @@
  *
  *   npx electron tests/music-stage-bench/bench.cjs [--root=<repo>] [--gpu=high|low]
  *       [--seconds=8] [--only=diorama,tunnel] [--size=1280x700|max] [--capped]
- *       [--scale=0.5] [--out=<file.json>]
+ *       [--scale=0.5] [--out=<file.json>] [--shots=<dir>]
  *
  * It serves the music window's stage scripts from --root with a fake player
  * (harness.js), plays a fixed song in each scenario and reports how long frames
@@ -120,6 +120,13 @@ const measure = async (win, origin, scenario) => {
             stage: Object.fromEntries(Object.entries(stage).filter(([, v]) => typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean'))
         };
     })()`);
+    if (args.shots) {
+        // What the real GPU drew, for looking at rather than timing.
+        fs.mkdirSync(path.resolve(args.shots), { recursive: true });
+        const image = await win.webContents.capturePage();
+        const file = `${scenario.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.png`;
+        fs.writeFileSync(path.join(path.resolve(args.shots), file), image.toPNG());
+    }
     const intervals = raw.frames.map(([interval]) => interval).sort((a, b) => a - b);
     const script = raw.frames.map(([, cost]) => cost).sort((a, b) => a - b);
     const total = intervals.reduce((sum, value) => sum + value, 0);

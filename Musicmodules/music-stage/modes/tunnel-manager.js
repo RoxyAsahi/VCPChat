@@ -2516,12 +2516,12 @@
             U.updateWords(Array.from(fallbackLine.children), frame?.wordStates || []);
         };
 
+        const renderScale = U.createRenderScale();
         const resize = () => {
             width = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             height = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             if (!renderer || !camera) return;
-            const cap = mode.config.quality === 'energy-saving' ? 1 : mode.config.quality === 'ultimate' ? 2 : 1.5;
-            const dpr = Math.min(cap, global.devicePixelRatio || 1);
+            const dpr = renderScale.ratio(mode.config.quality, width, height);
             renderer.setPixelRatio(dpr);
             renderer.setSize(width, height, false);
             camera.aspect = width / height;
@@ -2616,6 +2616,7 @@
             }, camera);
 
             fallback.hidden = true;
+            if (frame.isPlaying && renderScale.tick(performance.now())) resize();
             renderer.render(scene, camera);
             lastTime = time;
         };
@@ -2679,6 +2680,8 @@
         mode.getDebugSnapshot = () => ({
             initialized,
             fallbackMode,
+            pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
+            drawCalls: renderer?.info.render.calls,
             distance: world?.distance || 0,
             currentSpeed: world?.currentSpeed || 0,
             cameraPos: camera?.position?.toArray() || null,

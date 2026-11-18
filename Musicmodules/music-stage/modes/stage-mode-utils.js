@@ -138,7 +138,61 @@
         };
     };
 
+    /*
+     * How large a 3D mode draws. A device pixel ratio cap alone lets a
+     * maximised window on a 4K screen shade eight million pixels a frame,
+     * several times over once reflections and post-processing are added; the
+     * drawing buffer is held to a pixel budget instead, and steps down further
+     * while the frame rate is not being held.
+     */
+    const PIXEL_BUDGET = Object.freeze({ 'energy-saving': 1.0e6, standard: 2.4e6, ultimate: 4.2e6 });
+    const RATIO_CAP = Object.freeze({ 'energy-saving': 1, standard: 1.5, ultimate: 2 });
+    const createRenderScale = () => {
+        let factor = 1;
+        let last = 0;
+        let average = 0;
+        let frames = 0;
+        let steady = 0;
+        let patience = 900;
+        return {
+            get factor() { return factor; },
+            ratio(quality, width, height) {
+                const budget = PIXEL_BUDGET[quality] || PIXEL_BUDGET.standard;
+                const cap = RATIO_CAP[quality] || RATIO_CAP.standard;
+                const fit = Math.sqrt(budget / Math.max(1, width * height));
+                return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * factor);
+            },
+            // Feed the time of every drawn frame. Returns true when the ratio changed.
+            tick(now) {
+                const interval = now - last;
+                last = now;
+                // A hidden window, a seek or a rebuild is not a slow renderer.
+                if (!(interval > 0) || interval > 250) { frames = 0; return false; }
+                average = frames ? average * 0.92 + interval * 0.08 : interval;
+                frames += 1;
+                if (frames < 45) return false;
+                if (average > 23 && factor > 0.56) {
+                    // Under about 43 frames a second: shade fewer pixels.
+                    factor = Math.max(0.55, factor * 0.84);
+                    frames = 0; steady = 0;
+                    return true;
+                }
+                if (factor < 1 && average < 17.6) {
+                    steady += 1;
+                    if (steady > patience) {
+                        // Try the larger size again, and wait longer before the next try.
+                        factor = Math.min(1, factor / 0.84);
+                        patience *= 2; frames = 0; steady = 0;
+                        return true;
+                    }
+                } else steady = 0;
+                return false;
+            }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
+        createRenderScale,
         clamp,
         hashString,
         seededRandom,
