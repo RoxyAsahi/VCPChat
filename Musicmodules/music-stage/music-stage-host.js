@@ -333,6 +333,10 @@
             });
             state.stats.modeCreates += 1;
             localStorage.setItem('musicStageMode', state.modeId);
+            // The 3D modes paint every pixel themselves; see .stage-scene-3d.
+            const scene3d = state.modeId === 'diorama' || state.modeId === 'tunnel';
+            root.classList.toggle('stage-scene-3d', scene3d);
+            document.body.classList.toggle('music-stage-scene-3d', scene3d);
 
             elements.modeSwitcher.querySelectorAll('[data-stage-mode]').forEach((button) => {
                 const selected = button.dataset.stageMode === state.modeId;
@@ -1007,7 +1011,7 @@
             state.active = false;
             app.isStageActive = false;
             root.classList.remove('is-visible');
-            document.body.classList.remove('music-stage-active');
+            document.body.classList.remove('music-stage-active', 'music-stage-scene-3d');
             setButtonState();
             const generation = ++state.generation;
             requestAnimationFrame(() => {
@@ -1259,7 +1263,7 @@
                     elements.edgeCanvas.height = 1;
                 }
                 scope.destroy();
-                document.body.classList.remove('music-stage-active');
+                document.body.classList.remove('music-stage-active', 'music-stage-scene-3d');
                 root.remove();
             }
         };

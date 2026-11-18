@@ -2755,6 +2755,17 @@
         let height = 1;
         let lastTime = null;
         let paletteKey = '';
+        // Something other than the clock changed since the last drawn frame.
+        let dirty = true;
+        let canvasSmoothing = null;
+        let builtQuality = null;
+        const cap = U.createFrameCap();
+        const wantsCanvasSmoothing = () => !(global.MusicStageDioramaOptics?.active(mode.config, {}) ?? false);
+        const applyQuality = () => {
+            if (!world || builtQuality === mode.config.quality) return;
+            builtQuality = mode.config.quality;
+            world.setQuality?.(builtQuality);
+        };
 
         const tuning = () => ({
             ...(mode.config.modes?.tunnel || {}),
@@ -2804,6 +2815,8 @@
             camera = null;
             scene = null;
             initialized = false;
+            dirty = true;
+            builtQuality = null;
         };
 
         // A lost context (driver reset, sleep, remote desktop) is usually
@@ -2827,7 +2840,7 @@
             }, 800 * 2 ** contextRetries++);
         };
 
-        const update = (frame) => {
+        const update = (frame, force = false) => {
             if (mode.destroyed || mode.suspended || !frame) return;
             latest = frame;
             if (!initialized) {
@@ -2835,6 +2848,13 @@
                 if (!fallbackMode) void initialize();
                 return;
             }
+            // Paused with nothing changed: the last picture is still right, so
+            // the GPU can rest. Playing: no more often than the tier's rate.
+            const still = !frame.isPlaying && lastTime !== null
+                && finiteNumber(frame.playbackTime, 0) === lastTime;
+            if (!force && !dirty && (still || !cap.take(performance.now(), mode.config.quality))) return;
+            dirty = false;
+            applyQuality();
 
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
             // The track length often arrives a moment after the track itself; the
@@ -2879,7 +2899,7 @@
             }, camera);
 
             fallback.hidden = true;
-            if (frame.isPlaying && renderScale.tick(performance.now())) resize();
+            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(mode.config.quality))) resize();
             renderer.info.reset();
             // The same lens as the diorama: the sun, the lamps and the lyric glow through it.
             if (optics) {
@@ -2903,14 +2923,17 @@
                 camera = new T.PerspectiveCamera(50, 1, 0.1, 3200);
                 camera.position.set(0, 0, 0);
 
+                canvasSmoothing = wantsCanvasSmoothing();
                 renderer = new T.WebGLRenderer({
-                    antialias: true,
+                    antialias: canvasSmoothing,
                     alpha: false,
                     powerPreference: 'high-performance'
                 });
                 renderer.outputColorSpace = T.SRGBColorSpace;
                 renderer.toneMapping = T.ACESFilmicToneMapping;
                 renderer.toneMappingExposure = 1.08;
+                // Checking every program's log reads back from the GPU process and stalls.
+                renderer.debug.checkShaderErrors = false;
                 renderer.domElement.className = 'tunnel-canvas';
                 mode.root.insertBefore(renderer.domElement, fallback);
 
@@ -2926,10 +2949,14 @@
                 optics = global.MusicStageDioramaOptics?.create(T) || null;
                 world = createTunnelWorld(T, scene, services?.app);
                 world.prepare(renderer);
-                initialized = true;
+                applyQuality();
                 resize();
                 world.setPalette(services?.app?.stagePalette || {});
-                if (latest) update(latest);
+                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: !canvasSmoothing });
+                if (mode.destroyed || !renderer) return;
+                initialized = true;
+                dirty = true;
+                if (latest) update(latest, true);
             }).catch((error) => {
                 disposeGraphics();
                 fallbackMode = true;
@@ -2941,18 +2968,34 @@
             return initializing;
         };
 
-        mode.updateFrame = update;
-        mode.resize = () => { resize(); if (latest && initialized) update(latest); };
+        mode.updateFrame = (frame) => update(frame);
+        mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
-        mode.updateConfig = (config) => { baseConfig(config); resize(); if (latest && initialized) update(latest); };
-        mode.updateTheme = () => { if (latest && initialized) update(latest); };
+        mode.updateConfig = (config) => {
+            baseConfig(config);
+            // The canvas is antialiased only when the lens is off; that is fixed
+            // when the context is made, so a change of tier rebuilds it.
+            if (initialized && canvasSmoothing !== wantsCanvasSmoothing()) {
+                disposeGraphics();
+                initializing = null;
+                lastTime = null;
+                void initialize();
+                return;
+            }
+            resize();
+            if (latest && initialized) update(latest, true);
+        };
+        mode.updateTheme = () => { if (latest && initialized) update(latest, true); };
         const resume = mode.resume;
-        mode.resume = () => { resume(); lastTime = null; if (latest) update(latest); };
+        mode.resume = () => { resume(); lastTime = null; cap.reset(); if (latest) update(latest, true); };
         mode.getDebugSnapshot = () => ({
             initialized,
             fallbackMode,
             pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
             drawCalls: renderer?.info.render.calls,
+            triangles: renderer?.info.render.triangles,
+            programs: renderer?.info.programs?.length,
+            canvasSmoothing,
             distance: world?.distance || 0,
             currentSpeed: world?.currentSpeed || 0,
             cameraPos: camera?.position?.toArray() || null,

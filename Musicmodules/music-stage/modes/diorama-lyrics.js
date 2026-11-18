@@ -200,7 +200,8 @@
                 - timeline.distanceAt(phrase.start, options.cameraSpeed);
             const distance = 24 + travel * 1.3 + (constellation ? 12 : 0);
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            // Drawn on the CPU: an accelerated canvas has to be read back from the GPU to become a texture.
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             const font = `${constellation ? '500' : '700'} 144px "Microsoft YaHei","PingFang SC",sans-serif`;
             ctx.font = font;
             const advances = phrase.glyphs.map(g => Math.max(1, ctx.measureText(g.text).width));
@@ -373,7 +374,7 @@
             if (supplemental && options.showTranslation !== false) {
                 const sub = document.createElement('canvas');
                 sub.width = 2048; sub.height = 256;
-                const sc = sub.getContext('2d');
+                const sc = sub.getContext('2d', { willReadFrequently: true });
                 const subWidth = encounter ? encounter.width - 0.6 : Math.max(width, 7);
                 // Size the translation against the lyric it accompanies, then
                 // shrink or wrap only as far as the text needs.

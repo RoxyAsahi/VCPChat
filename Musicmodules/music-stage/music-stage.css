@@ -3128,3 +3128,42 @@ body.light-theme .music-stage-settings-card option {
         0 14px 38px rgba(26, 45, 58, 0.16),
         inset 0 0 0 1px rgba(255, 255, 255, 0.55);
 }
+/*
+ * The 3D modes draw an opaque picture that changes every frame. Under it the
+ * blurred cover would still be filtered and composited; over it, every
+ * frosted-glass control would blur the moving picture again each frame at the
+ * window's full resolution. Neither shows, so the cover is not drawn and the
+ * controls use a denser tint instead of a live blur.
+ */
+.music-stage.stage-scene-3d .music-stage-backdrop {
+    display: none;
+}
+body.music-stage-scene-3d #custom-title-bar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+.music-stage.stage-scene-3d .music-stage-mode-switcher,
+.music-stage.stage-scene-3d .music-stage-chrome,
+.music-stage.stage-scene-3d .music-stage-settings-toggle {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: color-mix(in srgb, var(--stage-bg) 58%, transparent);
+}
+
+/* The edge spectrum's fading group is a full-window offscreen pass of its own
+   every frame; over a 3D picture the parts fade themselves instead, and the
+   canvas keeps only the glow it draws itself. */
+.music-stage.stage-scene-3d .music-stage-edge-spectrum {
+    opacity: 1;
+    transition: none;
+}
+.music-stage.stage-scene-3d .music-stage-edge-spectrum-canvas {
+    opacity: calc(0.9 * (0.26 + var(--stage-edge-energy) * 0.72));
+    filter: none;
+}
+.music-stage.stage-scene-3d .music-stage-edge-flow {
+    opacity: calc((0.32 + var(--stage-edge-energy) * 0.68) * (0.26 + var(--stage-edge-energy) * 0.72));
+}
+.music-stage.stage-scene-3d .music-stage-edge-corners {
+    opacity: calc(0.26 + var(--stage-edge-energy) * 0.72);
+}

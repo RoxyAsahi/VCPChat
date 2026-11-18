@@ -162,8 +162,9 @@
                 const fit = Math.sqrt(budget / Math.max(1, width * height));
                 return Math.max(0.5, Math.min(cap, global.devicePixelRatio || 1, fit) * factor);
             },
-            // Feed the time of every drawn frame. Returns true when the ratio changed.
-            tick(now) {
+            // Feed the time of every drawn frame, and the interval the frame
+            // cap aims for. Returns true when the ratio changed.
+            tick(now, aim = 0) {
                 const interval = now - last;
                 last = now;
                 // A hidden window, a seek or a rebuild is not a slow renderer.
@@ -171,13 +172,16 @@
                 average = frames ? average * 0.92 + interval * 0.08 : interval;
                 frames += 1;
                 if (frames < 45) return false;
-                if (average > 23 && factor > 0.56) {
-                    // Under about 43 frames a second: shade fewer pixels.
+                // Slow means well behind the cap, or under about 43 frames a second without one.
+                const slow = Math.max(23, aim * 1.3);
+                const fast = Math.max(17.6, aim * 1.08);
+                if (average > slow && factor > 0.56) {
+                    // Shade fewer pixels.
                     factor = Math.max(0.55, factor * 0.84);
                     frames = 0; steady = 0;
                     return true;
                 }
-                if (factor < 1 && average < 17.6) {
+                if (factor < 1 && average < fast) {
                     steady += 1;
                     if (steady > patience) {
                         // Try the larger size again, and wait longer before the next try.
@@ -191,8 +195,70 @@
         };
     };
 
+    /*
+     * What each quality tier asks of the GPU, in one place so both 3D modes
+     * agree. The canvas itself is only antialiased when nothing is drawn over
+     * it afterwards: with the lens on, the scene is drawn into its own target
+     * and the canvas's multisampled buffer would only cost memory and a resolve.
+     */
+    const TIERS = Object.freeze({
+        'energy-saving': Object.freeze({ fps: 30, lens: false, samples: 0 }),
+        standard: Object.freeze({ fps: 60, lens: true, samples: 0 }),
+        ultimate: Object.freeze({ fps: 0, lens: true, samples: 4 })
+    });
+    const tier = (quality) => TIERS[quality] || TIERS.standard;
+
+    /*
+     * Draws at most the tier's frame rate. A 120 or 144 Hz display would
+     * otherwise have the stage drawn twice as often as anyone can follow a
+     * camera move, at twice the power. Returns true when this frame is drawn.
+     */
+    const createFrameCap = () => {
+        let last = -Infinity;
+        return {
+            aim(quality) { const fps = tier(quality).fps; return fps ? 1000 / fps : 0; },
+            take(now, quality) {
+                const aim = this.aim(quality);
+                // A little early is still this frame: display intervals jitter.
+                if (aim && now - last < aim - 3) return false;
+                last = aim && now - last < aim * 2 ? last + aim : now;
+                return true;
+            },
+            reset() { last = -Infinity; }
+        };
+    };
+
+    /*
+     * Compile every material in the scene, visible or not, before the first
+     * frame. Otherwise each effect compiles its shaders the first time it
+     * appears, and on Windows that stalls the frame for tens to hundreds of
+     * milliseconds right at the chorus. A material drawn into an offscreen
+     * target (the lens, the water) compiles differently from one drawn to the
+     * canvas, so it is compiled for each place the frame will draw it.
+     */
+    const precompile = async (T, renderer, scene, camera, { canvas = true, offscreen = true } = {}) => {
+        const previous = renderer.getRenderTarget();
+        const probe = offscreen ? new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType }) : null;
+        try {
+            for (const target of [canvas ? null : undefined, probe || undefined]) {
+                if (target === undefined) continue;
+                renderer.setRenderTarget(target);
+                if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
+                else renderer.compile(scene, camera);
+            }
+        } catch (error) {
+            console.warn('[MusicStage] shader warm-up skipped:', error);
+        } finally {
+            renderer.setRenderTarget(previous);
+            probe?.dispose();
+        }
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         createRenderScale,
+        createFrameCap,
+        precompile,
+        tier,
         clamp,
         hashString,
         seededRandom,
