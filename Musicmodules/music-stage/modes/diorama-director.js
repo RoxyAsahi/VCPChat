@@ -13,7 +13,8 @@
         Chorus: { speed: 4.2, height: 6.5, fov: 58, openness: 1, warmth: 0.45, density: 0.1 },
         Open: { speed: 3.4, height: 4.8, fov: 55, openness: 0.75, warmth: 0.4, density: 0.35 },
         Interlude: { speed: 1.5, height: 2.6, fov: 42, openness: 0.4, warmth: 0.5, density: 0.5 },
-        Terminus: { speed: 0, height: 3.6, fov: 48, openness: 0.9, warmth: 0.25, density: 0.1 }
+        // The train almost stops at the end, but a long outro never freezes the view.
+        Terminus: { speed: 0.3, height: 3.6, fov: 48, openness: 0.9, warmth: 0.25, density: 0.1 }
     });
     const upperBound = (items, time, key) => {
         let lo = 0, hi = items.length;
@@ -73,17 +74,9 @@
         lines.forEach((line, lineIndex) => {
             const glyphs = buildGlyphTimeline(line);
             const cjkLine = /[\u3040-\u30ff\u3400-\u9fff]/u.test(line.fullText);
+            const groups = [];
             let group = [];
-            const flush = () => {
-                if (!group.length) return;
-                if (group.some(g => g.text.trim())) phrases.push({
-                    id: phrases.length, lineIndex, glyphs: group,
-                    text: group.map(g => g.text).join(''),
-                    start: Math.min(...group.map(g => g.startTime)),
-                    end: Math.max(...group.map(g => g.endTime))
-                });
-                group = [];
-            };
+            const flush = () => { if (group.length) groups.push(group); group = []; };
             glyphs.forEach((glyph, i) => {
                 const previous = glyphs[i - 1];
                 const boundary = previous && (/[\s，。！？；,.!?;:：]/u.test(previous.text)
@@ -98,6 +91,26 @@
                 group.push(glyph);
             });
             flush();
+            // A fixed cut can strand one or two characters on a sign of their
+            // own. Fold a short tail back, or share the two halves evenly.
+            for (let i = groups.length - 1; cjkLine && i > 0; i--) {
+                if (groups[i].filter(g => g.text.trim()).length >= 4) continue;
+                const joined = groups[i - 1].concat(groups[i]);
+                const natural = /[\s，。！？；,.!?;:：]/u.test(groups[i - 1].at(-1).text);
+                if (joined.length <= 14) groups.splice(i - 1, 2, joined);
+                else if (!natural) {
+                    const cut = Math.ceil(joined.length / 2);
+                    groups.splice(i - 1, 2, joined.slice(0, cut), joined.slice(cut));
+                }
+            }
+            for (const glyphs of groups) {
+                if (glyphs.some(g => g.text.trim())) phrases.push({
+                    id: phrases.length, lineIndex, glyphs,
+                    text: glyphs.map(g => g.text).join(''),
+                    start: Math.min(...glyphs.map(g => g.startTime)),
+                    end: Math.max(...glyphs.map(g => g.endTime))
+                });
+            }
         });
         return phrases;
     };

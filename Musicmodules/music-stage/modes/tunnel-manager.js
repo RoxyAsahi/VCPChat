@@ -2163,6 +2163,9 @@
         let source = null;
         let identity = '';
         let compiledDuration = -1;
+        let contextRetries = 0;
+        let contextTimer = 0;
+        let lastContextLoss = 0;
         let width = 1;
         let height = 1;
         let lastTime = null;
@@ -2214,6 +2217,27 @@
             camera = null;
             scene = null;
             initialized = false;
+        };
+
+        // A lost context (driver reset, sleep, remote desktop) is usually
+        // temporary. Show the text fallback, then rebuild on a fresh canvas a
+        // few times before settling for the fallback.
+        const recoverContext = () => {
+            const now = Date.now();
+            if (now - lastContextLoss > 60000) contextRetries = 0;
+            lastContextLoss = now;
+            fallbackMode = true;
+            disposeGraphics();
+            if (latest) renderFallback(latest);
+            if (mode.destroyed || contextRetries >= 3) return;
+            global.clearTimeout(contextTimer);
+            contextTimer = global.setTimeout(() => {
+                contextTimer = 0;
+                if (mode.destroyed || initialized) return;
+                fallbackMode = false;
+                initializing = null;
+                void initialize();
+            }, 800 * 2 ** contextRetries++);
         };
 
         const update = (frame) => {
@@ -2297,11 +2321,12 @@
                 renderer.domElement.className = 'tunnel-canvas';
                 mode.root.insertBefore(renderer.domElement, fallback);
 
-                mode.scope.listen(renderer.domElement, 'webglcontextlost', (event) => {
+                const canvas = renderer.domElement;
+                mode.scope.listen(canvas, 'webglcontextlost', (event) => {
                     event.preventDefault();
-                    fallbackMode = true;
-                    disposeGraphics();
-                    if (latest) renderFallback(latest);
+                    // Disposing the renderer loses its context on purpose.
+                    if (renderer?.domElement !== canvas) return;
+                    recoverContext();
                 });
 
                 world = createTunnelWorld(T, scene, services?.app);
@@ -2335,7 +2360,7 @@
             cameraPos: camera?.position?.toArray() || null,
             activeLine: latest?.activeLine?.fullText || null
         });
-        mode.scope.add(() => { disposeGraphics(); latest = source = null; });
+        mode.scope.add(() => { global.clearTimeout(contextTimer); disposeGraphics(); latest = source = null; });
 
         resize();
         void initialize();

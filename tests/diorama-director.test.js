@@ -233,3 +233,19 @@ test('finale progress is monotonic, seekable and ends facing the moon', () => {
     assert.deepEqual(plain(C.pose(timeline, track, 22)), plain(final));
     assert.equal(C.pose(timeline, track, 22, { reducedMotion: true }).finale, 0);
 });
+test('long CJK lines split into balanced signs without stray tails', () => {
+    const phrasesOf = text => D.compile({
+        lines: R.normalizeLines([{ startTime: 2, endTime: 8, fullText: text }]), trackId: 'split', duration: 20
+    }).phrases.map(phrase => phrase.text);
+    // 13 characters used to become 12 + 1.
+    assert.deepEqual(plain(phrasesOf('一二三四五六七八九十甲乙丙')), ['一二三四五六七八九十甲乙丙']);
+    // 15 characters used to become 12 + 3.
+    const halves = phrasesOf('一二三四五六七八九十甲乙丙丁戊');
+    assert.deepEqual(plain(halves), ['一二三四五六七八', '九十甲乙丙丁戊']);
+});
+
+test('the outro keeps a slow glide instead of a frozen frame', () => {
+    const timeline = D.compile({ lines, trackId: 'test', duration: 220 });
+    assert.equal(timeline.acts.at(-1).kind, 'Terminus');
+    assert.ok(timeline.distanceAt(215) - timeline.distanceAt(200) > 2);
+});

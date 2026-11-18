@@ -17,6 +17,8 @@
         let latest = null, source = null, identity = null, timeline = null, track = null;
         let compiledDuration = null, optionsKey = '', paletteKey = '', pose = null;
         let width = 1, height = 1, lastTime = null;
+        let pendingOptions = null, pendingSince = 0, settleTimer = 0, builtSettings = {}, rebuilds = 0;
+        let contextRetries = 0, contextTimer = 0, lastContextLoss = 0;
         const onset = R.createAudioOnset();
         const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
         const palette = () => services?.app?.stagePalette || {};
@@ -60,7 +62,34 @@
             renderer?.domElement.remove();
             renderer = camera = scene = null;
             initialized = false;
+            // A rebuilt stage starts with empty layers: compile the journey into them again.
+            timeline = null;
+            paletteKey = '';
         };
+        // A lost context (driver reset, sleep, remote desktop) is usually
+        // temporary. Show the text fallback, then rebuild on a fresh canvas a
+        // few times before settling for the fallback.
+        const recoverContext = () => {
+            const now = Date.now();
+            if (now - lastContextLoss > 60000) contextRetries = 0;
+            lastContextLoss = now;
+            fallbackMode = true;
+            disposeGraphics();
+            if (latest) renderFallback(latest);
+            if (mode.destroyed || contextRetries >= 3) return;
+            global.clearTimeout(contextTimer);
+            contextTimer = global.setTimeout(() => {
+                contextTimer = 0;
+                if (mode.destroyed || initialized) return;
+                fallbackMode = false;
+                initializing = null;
+                void initialize();
+            }, 800 * 2 ** contextRetries++);
+        };
+        // Settings that force the journey, lyric layout and events to be rebuilt.
+        const REBUILD_KEYS = ['cameraSpeed', 'motionAmount', 'animationIntensity', 'reducedMotion',
+            'cameraCuts', 'aspect', 'lyricCarrier', 'showTranslation', 'fireworks',
+            'narrativeStations', 'stationIntensity'];
         const update = frame => {
             if (mode.destroyed || mode.suspended) return;
             latest = frame;
@@ -72,12 +101,7 @@
             const nextIdentity = frame.track?.path || frame.track?.title || 'last-train';
             const nextDuration = R.finiteNumber(frame.duration, R.finiteNumber(frame.track?.duration));
             const settings = options();
-            const nextOptions = JSON.stringify([
-                settings.cameraSpeed, settings.motionAmount, settings.animationIntensity,
-                settings.reducedMotion, settings.cameraCuts, settings.aspect,
-                settings.lyricCarrier, settings.showTranslation, settings.fireworks,
-                settings.narrativeStations, settings.stationIntensity
-            ]);
+            const nextOptions = JSON.stringify(REBUILD_KEYS.map(key => settings[key]));
             const nextPalette = JSON.stringify(palette());
             let recompile = false;
             if (!timeline || source !== frame.lines || identity !== nextIdentity || compiledDuration !== nextDuration) {
@@ -97,11 +121,29 @@
                 paletteKey = nextPalette;
                 recompile = true;
             }
-            if (recompile || nextOptions !== optionsKey) {
+            // A slider drag or a window resize changes these many times a second.
+            // Rebuild once the value has settled; until then keep performing with
+            // the values the current journey was built for.
+            let hold = false;
+            if (!recompile && nextOptions !== optionsKey) {
+                const now = performance.now();
+                if (pendingOptions !== nextOptions) { pendingOptions = nextOptions; pendingSince = now; }
+                hold = now - pendingSince < 180;
+                if (hold) {
+                    for (const key of REBUILD_KEYS) settings[key] = builtSettings[key];
+                    // Paused stages still get frames, but do not rely on it.
+                    global.clearTimeout(settleTimer);
+                    settleTimer = global.setTimeout(() => { if (latest && !mode.destroyed) update(latest); }, 200);
+                }
+            }
+            if (recompile || nextOptions !== optionsKey && !hold) {
                 track = global.MusicStageDioramaCamera.createTrack(timeline, settings.cameraSpeed ?? 1, settings);
                 lyrics.reset(timeline, track, settings, palette());
                 events.reset(timeline, track, settings);
                 optionsKey = nextOptions;
+                pendingOptions = null;
+                builtSettings = settings;
+                rebuilds++;
             }
             const time = R.finiteNumber(frame.playbackTime);
             const dt = lastTime === null ? 0 : time - lastTime;
@@ -186,11 +228,12 @@
                 renderer.info.autoReset = false;
                 renderer.domElement.className = 'diorama-canvas';
                 mode.root.insertBefore(renderer.domElement, fallback);
-                mode.scope.listen(renderer.domElement, 'webglcontextlost', event => {
+                const canvas = renderer.domElement;
+                mode.scope.listen(canvas, 'webglcontextlost', event => {
                     event.preventDefault();
-                    fallbackMode = true;
-                    disposeGraphics();
-                    if (latest) renderFallback(latest);
+                    // Disposing the renderer loses its context on purpose.
+                    if (renderer?.domElement !== canvas) return;
+                    recoverContext();
                 });
                 world = global.MusicStageDioramaWorld.create(T, scene);
                 lyrics = global.MusicStageDioramaLyrics.create(T, scene);
@@ -221,7 +264,7 @@
         const resume = mode.resume;
         mode.resume = () => { resume(); if (latest) update(latest); };
         mode.getDebugSnapshot = () => ({
-            initialized, fallbackMode, ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera),
+            initialized, fallbackMode, rebuilds, ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera),
             camera: camera?.position.toArray(), quaternion: camera?.quaternion.toArray(),
             act: pose?.state.act, rig: pose?.rig, distance: pose?.distance,
             acts: timeline?.acts.map(a => ({ kind: a.kind, start: a.start, end: a.end })),
@@ -230,7 +273,12 @@
             textures: renderer?.info.memory.textures,
             signSpectrum: Array.from(audio.spectrum)
         });
-        mode.scope.add(() => { disposeGraphics(); latest = source = timeline = track = null; });
+        mode.scope.add(() => {
+            global.clearTimeout(settleTimer);
+            global.clearTimeout(contextTimer);
+            disposeGraphics();
+            latest = source = timeline = track = null;
+        });
         resize();
         void initialize();
         return mode;

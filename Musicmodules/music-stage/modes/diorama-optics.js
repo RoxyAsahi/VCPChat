@@ -2,7 +2,9 @@
     'use strict';
     const create = (T) => {
         const target = new T.WebGLRenderTarget(1, 1, {
-            type: T.HalfFloatType, depthBuffer: true
+            type: T.HalfFloatType, depthBuffer: true,
+            // The scene is drawn into this target, so the canvas's own antialiasing never applies.
+            samples: 4
         });
         const scene = new T.Scene();
         const camera = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
