@@ -78,6 +78,27 @@
     const CHASE_LATERAL = 7.5;
     const CHASE_LEAD = 66;
     const chaseAmount = height => smooth((height - 3.9) / 0.7);
+    // Starts and stops without a jolt: no speed and no acceleration at either end.
+    const ease = value => { const p = clamp(value); return p * p * p * (p * (p * 6 - 15) + 10); };
+    /*
+     * Leaving the cab for a high act is a crane move with an order to it. The
+     * camera first lifts out to one side of the line; only when it is clear of
+     * the train does the train draw ahead of it. Coming back it catches the
+     * train up first, and slides in over the nose last. Each part takes
+     * seconds, so nothing in the frame changes place faster than the eye follows.
+     */
+    const crane = (act, previous, t) => {
+        const to = chaseAmount(act.params.height);
+        const from = act.index ? chaseAmount(previous.params.height) : to;
+        const p = (t - act.start) / Math.max(0.001, Math.min(10, (act.end - act.start) * 0.8));
+        const height = (a, b) => act.index ? mix(previous.params.height, act.params.height, ease((p - a) / b))
+            : act.params.height;
+        if (to > from) return { out: mix(from, to, ease(p / 0.6)), lead: mix(from, to, ease((p - 0.25) / 0.75)),
+            height: height(0, 0.6) };
+        if (to < from) return { out: mix(from, to, ease((p - 0.4) / 0.6)), lead: mix(from, to, ease(p / 0.7)),
+            height: height(0.3, 0.7) };
+        return { out: to, lead: to, height: height(0, 0.5) };
+    };
     const rigFor = act => act.kind === 'Departure' ? 'RAIL'
         : ['Chorus', 'Open'].includes(act.kind) ? 'WIDE'
             : act.kind === 'Interlude' ? 'WINDOW'
@@ -131,9 +152,10 @@
         const lateralTravel = directionSign * arch * (0.35 + openness * 0.65) * strength;
         const lift = arch * (0.12 + openness * 0.5) * strength;
         const push = arch * openness * 0.6 * strength;
+        const move = crane(act, previous, t);
         const position = {
             x: frame.position.x + frame.right.x * (-0.25 + n(0.8, 1) * 0.025 * handheld),
-            y: (motion ? state.height : 2.2) + Math.sin(t * Math.PI * 0.4) * 0.01 * handheld
+            y: (motion ? move.height : 2.2) + Math.sin(t * Math.PI * 0.4) * 0.01 * handheld
                 + n(1.3, 2) * 0.018 * handheld + timeline.rhythmAt(t).impulse * 0.012 * handheld,
             z: frame.position.z + frame.right.z * -0.25
         };
@@ -143,7 +165,7 @@
         // Low acts are seen from the cab. When the camera rises it also leaves the
         // train: it swings out to one side and lets the train run ahead, so the
         // high acts look down on lit carriages crossing the water.
-        const chase = motion ? chaseAmount(state.height) : 0;
+        const chase = motion ? move.out : 0;
         position.x += frame.right.x * CHASE_LATERAL * chase;
         position.z += frame.right.z * CHASE_LATERAL * chase;
         let yaw = frame.yaw + yawBias + n(0.55, 3) * 0.003 * handheld
@@ -157,14 +179,26 @@
         const encounterIndex = upperBound(encounters, t, 'start') - 1;
         const encounter = encounters[encounterIndex];
         const upcoming = encounters[encounterIndex + 1];
+        const blendAngle = (a, b, weight) => a
+            + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
+        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength : 48;
+        const halfFrame = Math.atan(Math.tan(fov * Math.PI / 360) * Math.max(0.35, options.aspect || 1.6)) * 0.84;
+        // A screen is read from its own side of the frame, with the line ahead
+        // still in view: the camera turns only as far as it takes to hold the
+        // whole screen inside the picture. Going from one screen to the next is
+        // then a short pan across the track instead of a swing from side to side.
         const aim = item => {
             const dx = item.position.x - position.x;
             const dz = item.position.z - position.z;
-            return { yaw: Math.atan2(dx, -dz),
-                pitch: Math.atan2(item.position.y - position.y, Math.hypot(dx, dz)) };
+            const reach = Math.hypot(dx, dz);
+            const pitch = Math.atan2(item.position.y - position.y, reach);
+            const full = Math.atan2(dx, -dz);
+            if (!item.width) return { yaw: full, pitch };
+            const off = Math.atan2(Math.sin(full - frame.yaw), Math.cos(full - frame.yaw));
+            const needed = Math.abs(off) + Math.atan(item.width * 0.5 / reach) - halfFrame;
+            const turn = Math.min(Math.abs(off), Math.max(needed, Math.abs(off) * 0.6));
+            return { yaw: frame.yaw + Math.sign(off) * turn, pitch };
         };
-        const blendAngle = (a, b, weight) => a
-            + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
         let encounterId = null;
         const directHandoff = encounter && upcoming && t >= encounter.end
             && upcoming.start - encounter.end > 0 && upcoming.start - encounter.end <= 7;
@@ -198,7 +232,6 @@
                 encounterId = upcoming.id;
             }
         }
-        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength : 48;
         let eventFocus = null;
         const events = track.events || [];
         const event = events[upperBound(events, t, 'start') - 1];
@@ -235,7 +268,7 @@
             rig: !motion ? 'CAB' : rig,
             encounterId, reading, distance, state, chase,
             // Where the front of the train is along the line.
-            trainFront: distance + mix(-0.4, CHASE_LEAD, chase),
+            trainFront: distance + mix(-0.4, CHASE_LEAD, motion ? move.lead : 0),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }
         };
