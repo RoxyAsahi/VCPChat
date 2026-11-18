@@ -37,6 +37,7 @@
     // The galaxy's plane, tilted across the upper part of the view, and its bright middle.
     const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
     const GALAXY_CORE = unit([0.75, 0.21, -1]);
+    const COMET_AT = unit([0.52, -0.2, -0.83]);
     const glslVec3 = (v) => `vec3(${v.map((n) => n.toFixed(4)).join(', ')})`;
     // Surface maps sit beside the modes, wherever the page that hosts them lives.
     const ASSETS = (() => {
@@ -51,12 +52,12 @@
      *    - 为每句歌词分配三维空间遭遇锚点 (Spatial Encounter) 与机位运镜 (Shot Rig)
      * ============================================================================ */
     const ACT_PRESETS = Object.freeze({
-        Drift:     { speed: 15.0, fov: 46, knotFlow: 0.32, nebulaAlpha: 0.48, warp: 0.08, lateralAmp: 0.55, rollAmp: 0.018 },
-        Verse:     { speed: 22.0, fov: 50, knotFlow: 0.55, nebulaAlpha: 0.65, warp: 0.22, lateralAmp: 0.85, rollAmp: 0.028 },
-        Pre:       { speed: 29.0, fov: 53, knotFlow: 0.78, nebulaAlpha: 0.78, warp: 0.45, lateralAmp: 1.05, rollAmp: 0.036 },
-        Chorus:    { speed: 38.0, fov: 60, knotFlow: 1.00, nebulaAlpha: 0.95, warp: 0.88, lateralAmp: 1.30, rollAmp: 0.048 },
-        Interlude: { speed: 18.0, fov: 44, knotFlow: 0.68, nebulaAlpha: 0.72, warp: 0.16, lateralAmp: 1.15, rollAmp: 0.042 },
-        Horizon:   { speed: 11.0, fov: 48, knotFlow: 0.40, nebulaAlpha: 0.55, warp: 0.05, lateralAmp: 0.45, rollAmp: 0.015 }
+        Drift:     { speed: 15.0, fov: 46, knotFlow: 0.32, nebulaAlpha: 0.48, warp: 0.08, lateralAmp: 0.55, rollAmp: 0.018, rocks: 0.55 },
+        Verse:     { speed: 22.0, fov: 50, knotFlow: 0.55, nebulaAlpha: 0.65, warp: 0.22, lateralAmp: 0.85, rollAmp: 0.028, rocks: 0.00 },
+        Pre:       { speed: 29.0, fov: 53, knotFlow: 0.78, nebulaAlpha: 0.78, warp: 0.45, lateralAmp: 1.05, rollAmp: 0.036, rocks: 0.00 },
+        Chorus:    { speed: 38.0, fov: 60, knotFlow: 1.00, nebulaAlpha: 0.95, warp: 0.88, lateralAmp: 1.30, rollAmp: 0.048, rocks: 0.00 },
+        Interlude: { speed: 18.0, fov: 44, knotFlow: 0.68, nebulaAlpha: 0.72, warp: 0.16, lateralAmp: 1.15, rollAmp: 0.042, rocks: 1.00 },
+        Horizon:   { speed: 11.0, fov: 48, knotFlow: 0.40, nebulaAlpha: 0.55, warp: 0.05, lateralAmp: 0.45, rollAmp: 0.015, rocks: 0.70 }
     });
 
     const SHOT_RIGS = Object.freeze([
@@ -804,6 +805,18 @@
                     }
                     corona += rays * 0.17 * step(0.0, dot(d, sunward));
 
+                    // A comet low on the far side: a small bright coma, a broad dust
+                    // tail curving away from the sun and a thin straight one of gas.
+                    vec3 comet = ${glslVec3(COMET_AT)};
+                    vec3 away = normalize(comet * dot(comet, sunward) - sunward), side = cross(comet, away);
+                    vec3 from = d - comet;
+                    float along = dot(from, away), off = dot(from, side), gone = max(along, 0.0);
+                    float coma = exp(-length(from) * 190.0) * 0.9 + exp(-length(from) * 46.0) * 0.1;
+                    float bend = off - gone * gone * 0.55;
+                    float dustTail = exp(-bend * bend / (0.00006 + gone * 0.008)) * exp(-gone * 6.5) * step(0.0, along) * 0.2;
+                    float gasTail = exp(-off * off / (0.00001 + gone * 0.0005)) * exp(-gone * 4.2) * step(0.0, along) * 0.16;
+                    float cometSide = step(0.0, dot(d, comet));
+
                     vec3 night = uBase + uColorStar * m.b * 0.055;
                     // Thin gas takes the cloud's colour; where it is dense it brightens
                     // and pales, as lit gas does.
@@ -812,6 +825,8 @@
                         + uColorStar * (coolCore + warmCore) * 0.015) * uNebula;
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
+                    night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail) + uColorA * gasTail * 1.6)
+                        * cometSide * (0.45 + 0.55 * read);
                     night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
                     // On a pale theme the same sky is washes of colour on paper.
                     vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
@@ -1936,6 +1951,119 @@
         const worldLight = new T.Vector3(...KEY_LIGHT);
         const bodyTurn = new T.Quaternion();
 
+
+        /* ------------------------------------------------------------------------
+         * Layer 4c: a field of rock. In the quiet passages (the opening drift,
+         * interludes, the close) the route runs through scattered boulders that
+         * tumble past on every side. They live in a box that travels with the
+         * camera, so there are always more ahead, and keep clear of the route.
+         * ------------------------------------------------------------------------ */
+        const ROCK_COUNT = 110;
+        const rockField = (() => {
+            const rand = seededRandom('rock-field-v1');
+            const proto = new T.IcosahedronGeometry(1, 1);
+            const protoPos = proto.attributes.position, per = protoPos.count;
+            const position = new Float32Array(ROCK_COUNT * per * 3);
+            const home = new Float32Array(ROCK_COUNT * per * 4);
+            const spin = new Float32Array(ROCK_COUNT * per * 4);
+            const lump = (x, y, z, seed) => 1 + 0.26 * Math.sin(x * 2.3 + seed * 9) * Math.cos(y * 2.9 - seed * 5)
+                + 0.2 * Math.sin(z * 3.7 + seed * 13) + 0.12 * Math.cos((x + y + z) * 5.1 + seed * 3);
+            for (let r = 0; r < ROCK_COUNT; r += 1) {
+                const seed = rand(), size = 0.5 + Math.pow(rand(), 3.2) * 5.2;
+                const squash = [0.7 + rand() * 0.6, 0.55 + rand() * 0.5, 0.7 + rand() * 0.6];
+                const centre = [(rand() - 0.5) * 300, (rand() - 0.5) * 190, -rand() * 900, seed];
+                const axis = unit([rand() - 0.5, rand() - 0.5, rand() - 0.5]);
+                const rate = (0.08 + rand() * 0.3) * (rand() < 0.5 ? -1 : 1);
+                for (let i = 0; i < per; i += 1) {
+                    const x = protoPos.getX(i), y = protoPos.getY(i), z = protoPos.getZ(i);
+                    const k = lump(x, y, z, seed) * size, o = (r * per + i);
+                    position.set([x * k * squash[0], y * k * squash[1], z * k * squash[2]], o * 3);
+                    home.set(centre, o * 4);
+                    spin.set([axis[0], axis[1], axis[2], rate], o * 4);
+                }
+            }
+            proto.dispose();
+            const geo = new T.BufferGeometry();
+            geo.setAttribute('position', new T.BufferAttribute(position, 3));
+            geo.setAttribute('aHome', new T.BufferAttribute(home, 4));
+            geo.setAttribute('aSpin', new T.BufferAttribute(spin, 4));
+            const mat = new T.ShaderMaterial({
+                uniforms: {
+                    uCamPos: { value: new T.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 },
+                    uLight: { value: new T.Vector3(...KEY_LIGHT) },
+                    uColorPrimary: { value: new T.Color('#76bfae') }, uColorInk: { value: new T.Color('#f2f0e9') },
+                    uColorAccent: { value: new T.Color('#f2a900') }, uFloor: { value: new T.Color('#000000') },
+                    uViewport: { value: new T.Vector2(1280, 720) }
+                },
+                vertexShader: `
+                    attribute vec4 aHome, aSpin;
+                    uniform vec3 uCamPos;
+                    uniform float uTime;
+                    varying vec3 vWorld, vLocal;
+                    varying float vSeed, vDepth;
+                    void main() {
+                        // Tumble about the rock's own axis.
+                        float turn = uTime * aSpin.w + aHome.w * 6.28;
+                        vec3 k = aSpin.xyz;
+                        vec3 local = position * cos(turn) + cross(k, position) * sin(turn) + k * dot(k, position) * (1.0 - cos(turn));
+                        vec3 box = vec3(300.0, 190.0, 900.0);
+                        vec3 rel = mod(aHome.xyz - uCamPos + box * 0.5, box) - box * 0.5;
+                        rel.z = mod(aHome.z - uCamPos.z, 900.0) - 860.0;
+                        // Nothing sits on the route itself.
+                        float clear = length(rel.xy);
+                        rel.xy *= max(clear, 17.0 + aHome.w * 9.0) / max(clear, 0.001);
+                        vec3 world = uCamPos + rel + local;
+                        vWorld = world; vLocal = position; vSeed = aHome.w;
+                        vec4 mv = viewMatrix * vec4(world, 1.0);
+                        vDepth = -mv.z;
+                        gl_Position = projectionMatrix * mv;
+                    }
+                `,
+                fragmentShader: `
+                    uniform float uAmount;
+                    uniform vec3 uLight, uColorPrimary, uColorInk, uColorAccent, uFloor;
+                    uniform vec2 uViewport;
+                    varying vec3 vWorld, vLocal;
+                    varying float vSeed, vDepth;
+                    float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                    float noise(vec3 p) {
+                        vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                        return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                            mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                            mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                            mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                    }
+                    void main() {
+                        // Rocks come and go one by one, and thin out with distance.
+                        float present = smoothstep(vSeed * 0.7, vSeed * 0.7 + 0.3, uAmount)
+                            * (1.0 - smoothstep(560.0, 840.0, vDepth)) * smoothstep(4.0, 16.0, vDepth);
+                        float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+                        if (dither >= present) discard;
+                        // Broken faces, as shattered rock has.
+                        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                        vec3 v = normalize(cameraPosition - vWorld);
+                        if (dot(n, v) < 0.0) n = -n;
+                        float lit = clamp(dot(n, uLight) * 1.15 + 0.03, 0.0, 1.0);
+                        float grain = 0.6 + 0.4 * noise(vLocal * 2.6 + vSeed * 31.0);
+                        float pit = smoothstep(0.62, 0.7, noise(vLocal * 1.3 + vSeed * 7.0));
+                        vec3 stone = mix(uColorPrimary, uColorInk, 0.55) * (0.2 + 0.14 * vSeed) * grain * (1.0 - 0.45 * pit);
+                        vec3 col = stone * (mix(uColorInk, uColorAccent, 0.2) * lit * 1.5
+                            + uColorPrimary * (0.05 + 0.07 * clamp(0.5 - 0.5 * dot(n, uLight), 0.0, 1.0))) + uFloor;
+                        vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                        col *= mix(0.35, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                        gl_FragColor = vec4(col, 1.0);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }
+                `
+            });
+            const mesh = new T.Mesh(geo, mat);
+            mesh.frustumCulled = false;
+            mesh.visible = false;
+            root.add(mesh);
+            return { geo, mat, mesh, per };
+        })();
+
         /* ------------------------------------------------------------------------
          * 层级 5：深空引力波纹环 (Gravitational Wave Ripples)
          * ------------------------------------------------------------------------ */
@@ -2528,6 +2656,10 @@
             const paper = luma(colors.background) > luma(colors.ink);
             const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
             const bodyFloor = paper ? colors.ink.clone().lerp(colors.secondary, 0.4).multiplyScalar(0.5) : new T.Color('#000000');
+            rockField.mat.uniforms.uColorPrimary.value.copy(colors.secondary);
+            rockField.mat.uniforms.uColorAccent.value.copy(colors.accent);
+            rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
+            rockField.mat.uniforms.uFloor.value.copy(bodyFloor);
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
                 mat.uniforms.uColorPrimary.value.copy(colors.secondary);
                 mat.uniforms.uColorAccent.value.copy(colors.accent);
@@ -2745,6 +2877,35 @@
                 lyricParticleMat.uniforms.uOpacity.value = 0;
             }
 
+            // The camera turns to watch whatever it is passing: a little while
+            // a line is being read, freely in the gaps between lines.
+            if (motionAmount > 0.001 && !settings.reducedMotion) {
+                const shots = timeline.lineShots;
+                const nextIdx = upperBound(shots, time, 'startTime');
+                const sinceLine = nextIdx > 0 ? time - shots[nextIdx - 1].endTime : time;
+                const untilLine = nextIdx < shots.length ? shots[nextIdx].startTime - time : 6;
+                const free = activeLine ? 0 : Math.min(smooth(sinceLine / 1.4), smooth(untilLine / 1.8));
+                const reach = (0.16 + 0.6 * free) * Math.min(1, motionAmount);
+                let weight = 0, sum = 0, gx = 0, gy = 0, gz = 0;
+                bodyNodes.forEach((body) => {
+                    if (!body.group.visible) return;
+                    const ahead = camZ - body.group.position.z;
+                    const near = smooth((560 - ahead) / 220) * smooth((ahead + 150) / 130);
+                    if (near <= 0) return;
+                    weight = Math.max(weight, near);
+                    sum += near;
+                    gx += body.group.position.x * near; gy += body.group.position.y * near; gz += body.group.position.z * near;
+                });
+                if (sum > 0) {
+                    const pull = weight * reach;
+                    // Aim at a point a fixed way off, so a body alongside turns the head fully.
+                    const tx = gx / sum - camX, ty = gy / sum - camY, tz = gz / sum - camZ;
+                    const far = 140 / Math.max(1, Math.hypot(tx, ty, tz));
+                    lookX = mix(lookX, camX + tx * far, pull);
+                    lookY = mix(lookY, camY + ty * far, pull);
+                    lookZ = mix(lookZ, camZ + tz * far, pull);
+                }
+            }
             cameraInstance.lookAt(lookX, lookY, lookZ);
             cameraInstance.rotation.z += rigRoll + camSpine.curvature * 0.032 * motionAmount
                 + Math.sin(time * 0.21) * 0.008 * breathAmount * motionAmount;
@@ -2765,6 +2926,11 @@
             skyDome.visible = showStarfield;
             skyMat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
             skyMat.uniforms.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
+            const rockAmount = (actState.rocks || 0) * clamp(objectDensity, 0, 1.2);
+            rockField.mesh.visible = rockAmount > 0.01;
+            rockField.mat.uniforms.uAmount.value = rockAmount;
+            rockField.mat.uniforms.uTime.value = time;
+            rockField.mat.uniforms.uCamPos.value.copy(cameraInstance.position);
             filamentMesh.visible = showStarfield;
             streakLines.visible = showStarfield && !settings.reducedMotion;
 
@@ -2930,9 +3096,10 @@
         // What each quality tier spends inside the world: how many of the
         // gathering points are drawn, and whether the bodies compute their
         // finest surface detail.
-        const QUALITY_TIERS = { 'energy-saving': [0.5, 0], standard: [0.8, 1], ultimate: [1, 1] };
+        const QUALITY_TIERS = { 'energy-saving': [0.5, 0, 0.4], standard: [0.8, 1, 0.75], ultimate: [1, 1, 1] };
         const setQuality = (tier) => {
-            const [points, detail] = QUALITY_TIERS[tier] || QUALITY_TIERS.standard;
+            const [points, detail, rocks] = QUALITY_TIERS[tier] || QUALITY_TIERS.standard;
+            rockField.geo.setDrawRange(0, Math.floor(ROCK_COUNT * rocks) * rockField.per);
             entityNodes.forEach((node) => node.geo.setDrawRange(0, Math.floor(POINTS_PER_ENTITY * points)));
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => { mat.uniforms.uDetail.value = detail; }));
         };
@@ -2957,6 +3124,7 @@
                 bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
                     mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 }));
+                rockField.mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
             },
             destroy() {
                 clearGlyphStage();
@@ -2969,6 +3137,7 @@
                     node.mat?.dispose?.();
                 });
                 bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
+                rockField.geo.dispose(); rockField.mat.dispose();
                 surfacesReleased = true;
                 surfaceMaps.forEach((entry) => entry.texture?.dispose());
                 ripples.forEach((r) => r.mat?.dispose?.());
