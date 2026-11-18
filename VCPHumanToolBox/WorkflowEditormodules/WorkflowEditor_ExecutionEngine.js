@@ -17,6 +17,8 @@
             this.nodeInputData = new Map(); // 存储节点输入数据
             this.executedNodes = new Set(); // 全局执行状态跟踪
             this.executingNodes = new Set(); // 正在执行的节点
+            this.nodeErrors = new Map(); // 节点失败原因，供运行面板展示
+            this.stopRequested = false;
 
             // 从 settings.json 读取配置
             this.loadSettings();
@@ -73,8 +75,12 @@
             }
 
             this.isExecuting = true;
+            this.stopRequested = false;
             this.nodeResults.clear();
+            this.nodeErrors.clear();
             this.nodeInputData.clear();
+            this._emitExecution('executionStarted', {});
+            let runError = null;
             this.executedNodes.clear(); // 清空执行状态
             this.executingNodes.clear(); // 清空正在执行状态
 
@@ -152,9 +158,26 @@
 
             } catch (error) {
                 console.error('[ExecutionEngine] Workflow execution failed:', error);
+                runError = error;
                 throw error;
             } finally {
                 this.isExecuting = false;
+                this._emitExecution('executionFinished', {
+                    ok: !runError,
+                    stopped: this.stopRequested,
+                    error: runError ? runError.message : null
+                });
+            }
+        }
+
+        // 向运行面板等订阅方广播执行事件（经 StateManager 的事件总线）
+        _emitExecution(event, payload) {
+            if (this.stateManager && typeof this.stateManager.emit === 'function') {
+                try {
+                    this.stateManager.emit(event, { ...payload, at: Date.now() });
+                } catch (e) {
+                    console.warn('[ExecutionEngine] execution listener failed:', e);
+                }
             }
         }
 
@@ -271,6 +294,9 @@
             const skippedNodes = new Set(); // 记录被跳过的节点
 
             for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+                if (this.stopRequested) {
+                    throw new Error('执行已被手动停止');
+                }
                 const layer = layers[layerIndex];
                 console.log(`[ExecutionEngine] === 执行第 ${layerIndex} 层: [${layer.join(', ')}]===`);
 
@@ -510,6 +536,7 @@
                 console.error(`[ExecutionEngine] Node ${node.id} execution failed:`, error);
 
                 // 更新节点状态为失败
+                this.nodeErrors.set(node.id, error && error.message ? error.message : String(error));
                 this.updateNodeStatus(node.id, 'error');
 
                 throw error;
@@ -1880,11 +1907,18 @@
                     this.stateManager.updateNode(nodeId, { status });
                 }
             }
+            this._emitExecution('executionNodeStatus', {
+                nodeId,
+                status,
+                result: status === 'success' ? this.nodeResults.get(nodeId) : undefined,
+                error: status === 'error' ? (this.nodeErrors.get(nodeId) || null) : null
+            });
         }
 
         // 停止执行
         stopExecution() {
-            this.isExecuting = false;
+            // 当前层跑完后在下一层入口处中断；已发出的工具请求无法撤回
+            this.stopRequested = true;
             console.log('[ExecutionEngine] Execution stopped');
         }
 
@@ -2629,6 +2663,7 @@
                     __retryExhausted: true,
                     text: `[ERROR after ${maxRetries + 1} attempts] ${lastError.message}`
                 });
+                this.nodeErrors.set(node.id, lastError.message);
                 this.updateNodeStatus(node.id, 'error');
                 return; // 不抛出——工作流继续
             }

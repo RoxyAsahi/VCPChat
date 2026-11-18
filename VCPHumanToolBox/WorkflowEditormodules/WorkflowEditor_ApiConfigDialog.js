@@ -31,7 +31,7 @@
                             <form id="api-config-form">
                                 <div class="form-group">
                                     <label for="api-host">服务器地址:</label>
-                                    <input type="text" id="api-host" name="host" placeholder="例如: 49.235.138.100" required>
+                                    <input type="text" id="api-host" name="host" placeholder="例如: localhost" required>
                                     <small class="form-help">输入插件服务器的IP地址或域名</small>
                                 </div>
                                 

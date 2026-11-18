@@ -1645,6 +1645,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function openWorkflowEditor() {
         try {
+            // 工作流插件面板在未连接管理 API 时使用这份本地工具清单
+            window.VCPHumanToolCatalog = allTools;
             if (!workflowEditorLoaded) {
                 await loadWorkflowEditorModules();
                 workflowEditorLoaded = true;
