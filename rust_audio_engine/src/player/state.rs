@@ -11,21 +11,13 @@ use std::path::Path;
 use std::fs;
 use std::io::{Read, Write};
 use crate::processor::NoiseShaperCurve;
+use super::track_buffer::TrackBuffer;
 
 // ============ Cache System ============
 
 const CACHE_MAGIC: &[u8; 4] = b"VCP1";
 const CACHE_VERSION: u32 = 1;
 const CACHE_HEADER_SIZE: usize = 32;
-
-/// Calculate CRC32 checksum for cache validation
-fn calculate_checksum(data: &[f64]) -> u32 {
-    let mut hasher = crc32fast::Hasher::new();
-    for sample in data {
-        hasher.update(&sample.to_bits().to_le_bytes());
-    }
-    hasher.finalize()
-}
 
 fn read_u32_from_bytes(bytes: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes(bytes[offset..offset+4].try_into().unwrap())
@@ -35,23 +27,35 @@ fn read_u64_from_bytes(bytes: &[u8], offset: usize) -> u64 {
     u64::from_le_bytes(bytes[offset..offset+8].try_into().unwrap())
 }
 
-/// Save samples to cache with header validation
+/// Save a completed track buffer to the resample cache with header validation.
+///
+/// The on-disk format is unchanged: 32-byte header, then little-endian f64
+/// samples, CRC32 over the sample bytes.
 pub fn save_cache_with_header(
     path: &Path,
-    samples: &[f64],
+    buffer: &TrackBuffer,
     sample_rate: u32,
     channels: u32,
 ) -> std::io::Result<()> {
-    let frame_count = (samples.len() / channels as usize) as u64;
-    let checksum = calculate_checksum(samples);
+    let frame_count = buffer.ready_frames();
+    let mut hasher = crc32fast::Hasher::new();
+    buffer.for_each_chunk(|chunk| {
+        for sample in chunk {
+            hasher.update(&sample.to_bits().to_le_bytes());
+        }
+    });
+    let checksum = hasher.finalize();
 
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
 
-    let mut file = fs::File::create(path)?;
+    // Write to a temporary name first so a crash never leaves a truncated
+    // file that would only be rejected on the next load.
+    let temporary = path.with_extension("bin.partial");
+    let file = fs::File::create(&temporary)?;
+    let mut writer = std::io::BufWriter::with_capacity(1 << 20, file);
 
-    // Write header explicitly (avoids unsafe transmute and padding issues)
     let mut header_bytes = [0u8; CACHE_HEADER_SIZE];
     header_bytes[0..4].copy_from_slice(CACHE_MAGIC);
     header_bytes[4..8].copy_from_slice(&CACHE_VERSION.to_le_bytes());
@@ -59,14 +63,26 @@ pub fn save_cache_with_header(
     header_bytes[12..16].copy_from_slice(&channels.to_le_bytes());
     header_bytes[16..24].copy_from_slice(&frame_count.to_le_bytes());
     header_bytes[24..28].copy_from_slice(&checksum.to_le_bytes());
-    // bytes 28..32 are reserved (already zero)
-    file.write_all(&header_bytes)?;
+    writer.write_all(&header_bytes)?;
 
-    for sample in samples {
-        file.write_all(&sample.to_le_bytes())?;
-    }
+    let mut result = Ok(());
+    buffer.for_each_chunk(|chunk| {
+        if result.is_err() {
+            return;
+        }
+        for sample in chunk {
+            if let Err(error) = writer.write_all(&sample.to_le_bytes()) {
+                result = Err(error);
+                return;
+            }
+        }
+    });
+    result?;
+    writer.flush()?;
+    drop(writer);
+    fs::rename(&temporary, path)?;
 
-    log::info!("Saved {} samples to cache with header validation", samples.len());
+    log::info!("Saved {} frames to cache with header validation", frame_count);
     Ok(())
 }
 
@@ -81,9 +97,10 @@ pub fn load_cache_with_header(
     path: &Path,
     expected_sr: u32,
     expected_ch: u32,
-) -> Option<Vec<f64>> {
-    let mut file = fs::File::open(path).ok()?;
+) -> Option<Arc<TrackBuffer>> {
+    let file = fs::File::open(path).ok()?;
     let metadata = file.metadata().ok()?;
+    let mut file = std::io::BufReader::with_capacity(1 << 20, file);
     let file_size = metadata.len() as usize;
 
     if file_size < CACHE_HEADER_SIZE + 8 {
@@ -129,19 +146,29 @@ pub fn load_cache_with_header(
     }
 
     // FIX for Defect 6: Stream CRC32 computation while reading samples
-    // in a single pass, instead of reading all then checksumming all.
+    // in a single pass, straight into the chunked track buffer (no second
+    // full-size copy).
     let sample_count = frame_count as usize * channels as usize;
-    let mut samples = Vec::with_capacity(sample_count);
+    let (buffer, mut writer) = TrackBuffer::new(channels as usize, Some(frame_count));
     let mut hasher = crc32fast::Hasher::new();
-    let mut sample_bytes = [0u8; 8];
-
-    for _ in 0..sample_count {
-        if file.read_exact(&mut sample_bytes).is_err() {
+    let mut bytes = vec![0u8; 8 * 8192];
+    let mut block: Vec<f64> = Vec::with_capacity(8192);
+    let mut remaining = sample_count;
+    while remaining > 0 {
+        let take = remaining.min(8192);
+        if file.read_exact(&mut bytes[..take * 8]).is_err() {
             log::warn!("Failed to read all samples from cache");
             return None;
         }
-        hasher.update(&sample_bytes);
-        samples.push(f64::from_le_bytes(sample_bytes));
+        hasher.update(&bytes[..take * 8]);
+        block.clear();
+        block.extend(
+            bytes[..take * 8]
+                .chunks_exact(8)
+                .map(|b| f64::from_le_bytes(b.try_into().unwrap())),
+        );
+        writer.push(&block).ok()?;
+        remaining -= take;
     }
 
     // Verify checksum computed during read
@@ -154,8 +181,9 @@ pub fn load_cache_with_header(
         return None;
     }
 
-    log::info!("Loaded {} samples from validated cache (streaming checksum verified)", samples.len());
-    Some(samples)
+    writer.finish();
+    log::info!("Loaded {} samples from validated cache (streaming checksum verified)", sample_count);
+    Some(buffer)
 }
 
 // ============ Event Flag Constants (Task E) ============
@@ -166,15 +194,21 @@ pub const EVENT_TRACK_CHANGED:       u32 = 1 << 2;
 pub const EVENT_PLAYBACK_ENDED:      u32 = 1 << 3;
 pub const EVENT_NEEDS_PRELOAD:       u32 = 1 << 4;
 pub const EVENT_NEEDS_PRELOAD_RESET: u32 = 1 << 5;
+/// A control command finished on the audio thread (`applied_seq` moved).
+pub const EVENT_COMMAND_APPLIED:     u32 = 1 << 6;
+/// The current track's buffer finished decoding (duration is now exact).
+pub const EVENT_DECODE_COMPLETE:     u32 = 1 << 7;
 
 // ============ Commands & State ============
 
 /// Load result for async loading
 #[derive(Debug, Clone)]
 pub struct LoadResult {
-    pub samples: Vec<f64>,
+    /// Progressive buffer; may still be filling when the load completes.
+    pub buffer: Arc<TrackBuffer>,
     pub sample_rate: u32,
     pub channels: usize,
+    /// Estimated length until the buffer completes.
     pub total_frames: u64,
     pub file_path: String,
     pub loudness_info: Option<crate::processor::LoudnessInfo>,
@@ -197,6 +231,12 @@ pub enum AudioCommand {
     SetNoiseShaperCurve { curve: NoiseShaperCurve },
     LoadComplete { generation: u64, result: LoadResult },
     LoadError { generation: u64, error: String },
+    /// Integrated loudness measured while streaming a track that has no
+    /// ReplayGain tags; applied only if `generation` is still current.
+    LoudnessMeasured { generation: u64, integrated_lufs: f64 },
+    /// Marker queued after a control command; the audio thread publishes it
+    /// as `applied_seq` once every earlier command has taken effect.
+    Applied(u64),
 }
 
 /// State of the audio player
@@ -271,7 +311,9 @@ pub struct SharedState {
     /// Audio sample buffer — lock-free via ArcSwap for realtime-safe reads
     /// from the audio callback. Writers (load, gapless swap) call .store()
     /// which is an atomic pointer swap; readers call .load() which never blocks.
-    pub audio_buffer: ArcSwap<Vec<f64>>,
+    pub audio_buffer: ArcSwap<TrackBuffer>,
+    /// Set by the callback while it is starved waiting for the decoder.
+    pub buffering: AtomicBool,
     pub exclusive_mode: AtomicBool,
     pub device_id: std::sync::atomic::AtomicI64,
     pub volume: std::sync::atomic::AtomicU64,
@@ -283,7 +325,11 @@ pub struct SharedState {
     /// Pending audio buffer for gapless transition — lock-free via ArcSwap.
     /// The preload thread stores the decoded next-track samples here;
     /// the audio callback atomically swaps it into audio_buffer at track boundary.
-    pub pending_buffer: ArcSwapOption<Vec<f64>>,
+    pub pending_buffer: ArcSwapOption<TrackBuffer>,
+    /// Buffers swapped out by the realtime callback are sent here so they are
+    /// freed on a non-realtime thread (the spectrum thread drains it).
+    pub retired_buffers_tx: crossbeam::channel::Sender<Arc<TrackBuffer>>,
+    pub retired_buffers_rx: crossbeam::channel::Receiver<Arc<TrackBuffer>>,
     pub pending_total_frames: AtomicU64,
     pub pending_sample_rate: AtomicU64,
     pub pending_channels: AtomicU64,
@@ -310,6 +356,11 @@ pub struct SharedState {
     pub load_progress: AtomicU64,  // Percentage (0-100)
     pub load_error: RwLock<Option<String>>,
 
+    // Command sequencing: every control command gets the next `cmd_seq`;
+    // the audio thread stores it in `applied_seq` after the command ran.
+    pub cmd_seq: AtomicU64,
+    pub applied_seq: AtomicU64,
+
     // WebSocket event flags — unified bitmask (Task E)
     // Writers: audio thread or async tasks use fetch_or(EVENT_*, Release)
     // Reader: WebSocket pusher uses swap(0, AcqRel) to atomically take all events
@@ -329,6 +380,7 @@ pub struct SharedState {
 
 impl SharedState {
     pub fn new() -> Self {
+        let (retired_buffers_tx, retired_buffers_rx) = crossbeam::channel::bounded(8);
         Self {
             state: AtomicPlayerState::new(PlayerState::Stopped),
             position_frames: AtomicU64::new(0),
@@ -336,7 +388,8 @@ impl SharedState {
             channels: AtomicU64::new(2),
             total_frames: AtomicU64::new(0),
             spectrum_data: Mutex::new(vec![0.0; 64]),
-            audio_buffer: ArcSwap::new(Arc::new(Vec::new())),
+            audio_buffer: ArcSwap::new(Arc::new(TrackBuffer::empty())),
+            buffering: AtomicBool::new(false),
             exclusive_mode: AtomicBool::new(false),
             device_id: std::sync::atomic::AtomicI64::new(-1),
             volume: std::sync::atomic::AtomicU64::new(1_000_000),
@@ -345,6 +398,8 @@ impl SharedState {
             noise_shaper_curve: RwLock::new(NoiseShaperCurve::Lipshitz5),
 
             pending_buffer: ArcSwapOption::empty(),
+            retired_buffers_tx,
+            retired_buffers_rx,
             pending_total_frames: AtomicU64::new(0),
             pending_sample_rate: AtomicU64::new(44100),
             pending_channels: AtomicU64::new(2),
@@ -361,6 +416,8 @@ impl SharedState {
             load_generation: AtomicU64::new(0),
             load_progress: AtomicU64::new(0),
             load_error: RwLock::new(None),
+            cmd_seq: AtomicU64::new(0),
+            applied_seq: AtomicU64::new(0),
 
             event_flags: std::sync::atomic::AtomicU32::new(0),
             current_track_path: RwLock::new(None),
@@ -378,10 +435,36 @@ impl SharedState {
         pos as f64 / sr as f64
     }
 
+    /// Track length. While a streamed track is still decoding this is the
+    /// container estimate; it becomes exact once decoding finishes.
     pub fn duration_secs(&self) -> f64 {
-        let total = self.total_frames.load(Ordering::Relaxed);
+        let total = self.audio_buffer.load().duration_frames();
         let sr = self.sample_rate.load(Ordering::Relaxed).max(1);
         total as f64 / sr as f64
+    }
+
+    /// Seconds of the current track that are decoded and playable.
+    pub fn buffered_secs(&self) -> f64 {
+        let ready = self.audio_buffer.load().ready_frames();
+        let sr = self.sample_rate.load(Ordering::Relaxed).max(1);
+        ready as f64 / sr as f64
+    }
+
+    /// Whether the current track has finished decoding.
+    pub fn decode_complete(&self) -> bool {
+        self.audio_buffer.load().is_complete()
+    }
+}
+
+impl SharedState {
+    /// Allocate the next command sequence number.
+    pub fn next_cmd_seq(&self) -> u64 {
+        self.cmd_seq.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    /// Free retired track buffers. Call only from non-realtime threads.
+    pub fn reclaim_retired_buffers(&self) {
+        while self.retired_buffers_rx.try_recv().is_ok() {}
     }
 }
 

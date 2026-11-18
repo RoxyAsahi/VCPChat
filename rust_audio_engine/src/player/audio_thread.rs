@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Receiver;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Stream, StreamConfig};
 
@@ -13,9 +13,10 @@ use cpal::{Stream, StreamConfig};
 use assert_no_alloc::assert_no_alloc;
 
 use super::callback::{audio_callback_lockfree, LockfreeDspContext};
+use super::spectrum::SpectrumTap;
 use super::state::{
     AudioCommand, PlayerState, SharedState,
-    EVENT_LOAD_COMPLETE, EVENT_LOAD_ERROR,
+    EVENT_COMMAND_APPLIED, EVENT_LOAD_COMPLETE, EVENT_LOAD_ERROR,
 };
 use crate::config::PhaseResponse;
 use crate::processor::{
@@ -51,7 +52,7 @@ pub fn audio_thread_main(
     dynamic_loudness_telemetry: Arc<AtomicDynamicLoudnessTelemetry>,
     loudness_state: Arc<AtomicLoudnessState>,
     noise_shaper_bits: u32,
-    spectrum_tx: Sender<f64>,
+    spectrum_tap: SpectrumTap,
     phase_response: PhaseResponse,
     target_lufs: f64,
 ) {
@@ -103,7 +104,8 @@ pub fn audio_thread_main(
                         &shared_state,
                         &dsp_ctx,
                         &loudness_state,
-                        &spectrum_tx,
+                        &spectrum_tap,
+                        target_lufs,
                     ) {
                         continue;
                     }
@@ -276,7 +278,7 @@ pub fn audio_thread_main(
 
                 let cb_shared = Arc::clone(&shared_state);
                 let cb_loudness_state = Arc::clone(&loudness_state);
-                let cb_spectrum_tx = spectrum_tx.clone();
+                let mut cb_spectrum_tx = spectrum_tap.producer();
 
                 // Build the callback-owned pipeline from the negotiated source
                 // and device geometry before entering the realtime thread.
@@ -340,7 +342,7 @@ pub fn audio_thread_main(
                                 &mut cb_dsp_chain,
                                 &mut convolver,
                                 &cb_loudness_state,
-                                &cb_spectrum_tx,
+                                &mut cb_spectrum_tx,
                                 channels as usize,
                                 &mut process_buffer,
                                 &mut resampler,
@@ -362,7 +364,7 @@ pub fn audio_thread_main(
                                 &mut cb_dsp_chain,
                                 &mut convolver,
                                 &cb_loudness_state,
-                                &cb_spectrum_tx,
+                                &mut cb_spectrum_tx,
                                 channels as usize,
                                 &mut process_buffer,
                                 &mut resampler,
@@ -431,7 +433,7 @@ pub fn audio_thread_main(
                             dsp_ctx.reclaim_retired_convolver();
                             let cb_shared = Arc::clone(&shared_state);
                             let cb_loudness_state = Arc::clone(&loudness_state);
-                            let cb_spectrum_tx = spectrum_tx.clone();
+                            let mut cb_spectrum_tx = spectrum_tap.producer();
                             // Build a fresh DspChain for the fallback path
                             let (_, fallback_chain) = LockfreeDspContext::new(
                                 fallback_channels,
@@ -500,7 +502,7 @@ pub fn audio_thread_main(
                                             &mut fb_dsp_chain,
                                             &mut fallback_convolver,
                                             &cb_loudness_state,
-                                            &cb_spectrum_tx,
+                                            &mut cb_spectrum_tx,
                                             fallback_channels,
                                             &mut process_buffer,
                                             &mut fallback_resampler,
@@ -524,7 +526,7 @@ pub fn audio_thread_main(
                                             &mut fb_dsp_chain,
                                             &mut fallback_convolver,
                                             &cb_loudness_state,
-                                            &cb_spectrum_tx,
+                                            &mut cb_spectrum_tx,
                                             fallback_channels,
                                             &mut process_buffer,
                                             &mut fallback_resampler,
@@ -644,15 +646,15 @@ pub fn audio_thread_main(
                     .store(result.total_frames, Ordering::Relaxed);
                 shared_state.position_frames.store(0, Ordering::Relaxed);
                 shared_state.state.store(PlayerState::Stopped);
-                let channels = result.channels;
                 let _sr = result.sample_rate as f64;
                 let sr_u32 = result.sample_rate;
                 let metadata = result.metadata;
                 let file_path = result.file_path;
 
-                // Lock-free buffer swap via ArcSwap — move samples into Arc
-                let samples_arc = Arc::new(result.samples);
-                shared_state.audio_buffer.store(Arc::clone(&samples_arc));
+                // Lock-free buffer swap via ArcSwap. The buffer may still be
+                // filling; the callback only reads published frames.
+                shared_state.buffering.store(false, Ordering::Relaxed);
+                shared_state.audio_buffer.store(result.buffer);
                 *shared_state.file_path.write() = Some(file_path.clone());
 
                 *shared_state.track_metadata.write() = metadata.clone();
@@ -716,29 +718,11 @@ pub fn audio_thread_main(
                                 peak
                             );
                         } else {
-                            log::warn!("No ReplayGain track gain found, falling back to EBU R128 analysis");
-                            let loudness = crate::processor::LoudnessMeter::new(channels, sr_u32)
-                                .and_then(|mut meter| {
-                                    meter.process(&samples_arc)?;
-                                    Ok(meter.integrated_loudness())
-                                })
-                                .unwrap_or(f64::NEG_INFINITY);
-                            if loudness.is_finite() {
-                                let gain = target_lufs - loudness + preamp;
-                                loudness_state.set_target_gain(gain);
-                                log::info!(
-                                    "EBU R128 fallback: {:.2} LUFS -> gain {:.2} dB (target: {:.2} LUFS)",
-                                    loudness,
-                                    gain,
-                                    target_lufs
-                                );
-                            } else {
-                                loudness_state.set_target_gain(preamp);
-                                log::warn!(
-                                    "EBU R128 analysis failed, using preamp only: {:.2} dB",
-                                    preamp
-                                );
-                            }
+                            // The decode thread measures the track while
+                            // streaming and sends LoudnessMeasured; preamp
+                            // only until then.
+                            log::info!("No ReplayGain track gain; EBU R128 fallback pending");
+                            loudness_state.set_target_gain(preamp);
                         }
                     }
                     crate::config::NormalizationMode::ReplayGainAlbum => {
@@ -755,25 +739,8 @@ pub fn audio_thread_main(
                                 peak
                             );
                         } else {
-                            log::warn!("No ReplayGain gain found, falling back to EBU R128 analysis");
-                            let loudness = crate::processor::LoudnessMeter::new(channels, sr_u32)
-                                .and_then(|mut meter| {
-                                    meter.process(&samples_arc)?;
-                                    Ok(meter.integrated_loudness())
-                                })
-                                .unwrap_or(f64::NEG_INFINITY);
-                            if loudness.is_finite() {
-                                let gain = target_lufs - loudness + preamp;
-                                loudness_state.set_target_gain(gain);
-                                log::info!(
-                                    "EBU R128 fallback: {:.2} LUFS -> gain {:.2} dB (target: {:.2} LUFS)",
-                                    loudness,
-                                    gain,
-                                    target_lufs
-                                );
-                            } else {
-                                loudness_state.set_target_gain(preamp);
-                            }
+                            log::info!("No ReplayGain gain; EBU R128 fallback pending");
+                            loudness_state.set_target_gain(preamp);
                         }
                     }
                     _ => {}
@@ -805,8 +772,52 @@ pub fn audio_thread_main(
                 shared_state.state.store(PlayerState::Stopped);
                 shared_state.event_flags.fetch_or(EVENT_LOAD_ERROR, Ordering::Release);
             }
+            Ok(AudioCommand::LoudnessMeasured { generation, integrated_lufs }) => {
+                apply_measured_loudness(&shared_state, &loudness_state, target_lufs, generation, integrated_lufs);
+            }
+            Ok(AudioCommand::Applied(seq)) => publish_applied(&shared_state, seq),
             Ok(AudioCommand::Shutdown) | Err(_) => break,
         }
+    }
+}
+
+/// Record that every command queued before marker `seq` has run.
+fn publish_applied(shared_state: &SharedState, seq: u64) {
+    shared_state.applied_seq.fetch_max(seq, Ordering::AcqRel);
+    shared_state.event_flags.fetch_or(EVENT_COMMAND_APPLIED, Ordering::Release);
+}
+
+/// Apply the EBU R128 fallback gain measured by the decode thread, if the
+/// track is still current and still in a ReplayGain mode without tags.
+fn apply_measured_loudness(
+    shared_state: &SharedState,
+    loudness_state: &AtomicLoudnessState,
+    target_lufs: f64,
+    generation: u64,
+    integrated_lufs: f64,
+) {
+    if shared_state.load_generation.load(Ordering::Acquire) != generation {
+        return;
+    }
+    if !matches!(
+        loudness_state.get_mode(),
+        crate::config::NormalizationMode::ReplayGainTrack
+            | crate::config::NormalizationMode::ReplayGainAlbum
+    ) {
+        return;
+    }
+    let preamp = loudness_state.preamp_gain_db();
+    if integrated_lufs.is_finite() {
+        let gain = target_lufs - integrated_lufs + preamp;
+        loudness_state.set_target_gain(gain);
+        log::info!(
+            "EBU R128 fallback: {:.2} LUFS -> gain {:.2} dB (target: {:.2} LUFS)",
+            integrated_lufs,
+            gain,
+            target_lufs
+        );
+    } else {
+        log::warn!("EBU R128 analysis failed, keeping preamp only: {:.2} dB", preamp);
     }
 }
 
@@ -817,7 +828,8 @@ fn handle_wasapi_exclusive(
     shared_state: &Arc<SharedState>,
     dsp_ctx: &Arc<LockfreeDspContext>,
     loudness_state: &Arc<AtomicLoudnessState>,
-    spectrum_tx: &Sender<f64>,
+    spectrum_tap: &SpectrumTap,
+    target_lufs: f64,
 ) -> bool {
     log::info!("Starting TRUE WASAPI exclusive mode playback...");
 
@@ -839,7 +851,7 @@ fn handle_wasapi_exclusive(
 
     let cb_shared = Arc::clone(shared_state);
     let cb_loudness_state = Arc::clone(loudness_state);
-    let cb_spectrum_tx = spectrum_tx.clone();
+    let mut cb_spectrum_tx = spectrum_tap.producer();
 
     let mut process_buffer = Vec::with_capacity(8192 * channels);
     process_buffer.resize(8192 * channels, 0.0);
@@ -903,7 +915,7 @@ fn handle_wasapi_exclusive(
                         &mut wasapi_dsp_chain,
                         &mut wasapi_convolver,
                         &cb_loudness_state,
-                        &cb_spectrum_tx,
+                        &mut cb_spectrum_tx,
                         cb_channels,
                         &mut process_buffer,
                         &mut unused_resampler,
@@ -1006,6 +1018,16 @@ fn handle_wasapi_exclusive(
                         AudioCommand::Shutdown => {
                             drop(wasapi_player);
                             return false;
+                        }
+                        AudioCommand::Applied(seq) => publish_applied(shared_state, seq),
+                        AudioCommand::LoudnessMeasured { generation, integrated_lufs } => {
+                            apply_measured_loudness(
+                                shared_state,
+                                loudness_state,
+                                target_lufs,
+                                generation,
+                                integrated_lufs,
+                            );
                         }
                         _ => {}
                     }
