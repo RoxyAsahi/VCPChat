@@ -754,12 +754,12 @@
                 }
                 float fbm(vec3 p) {
                     float sum = 0.0, gain = 0.5;
-                    for (int i = 0; i < 5; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
+                    for (int i = 0; i < 7; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
                     return sum;
                 }
                 float ridge(vec3 p) {
                     float sum = 0.0, gain = 0.5;
-                    for (int i = 0; i < 5; i++) {
+                    for (int i = 0; i < 7; i++) {
                         sum += gain * (1.0 - abs(noise(p) * 2.0 - 1.0));
                         p = p * 2.07 + vec3(1.7, 9.2, 4.4); gain *= 0.5;
                     }
@@ -769,17 +769,25 @@
                     float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.14159265;
                     vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat));
                     vec3 w = d * 2.4 + vec3(fbm(d * 2.6 + 1.7), fbm(d * 2.6 + 9.2), fbm(d * 2.6 + 4.4)) * 1.1;
-                    // Red: the cool cloud. Green: the warm one round the sun.
+                    // Folded a second time, the gas draws out into sheets and threads.
+                    w += (vec3(fbm(w * 2.1 + 3.1), fbm(w * 2.1 + 7.7), fbm(w * 2.1 + 1.3)) - 0.5) * 0.9;
+                    // Red: the cool cloud. Green: the warm one round the sun. Each
+                    // is a soft body of gas with bright threads where it is compressed.
                     float coolAt = smoothstep(0.25, 0.95, dot(d, normalize(vec3(0.66, -0.36, -0.66))));
-                    float cool = coolAt * smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float coolBody = smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float coolThread = pow(ridge(w * 3.4 + 2.0), 4.0);
+                    float cool = coolAt * clamp(coolBody * 0.62 + sqrt(coolBody) * coolThread * 1.5, 0.0, 1.0);
                     float warmAt = smoothstep(0.45, 0.98, dot(d, ${glslVec3(SUN_AT)}));
-                    float warm = warmAt * smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    float warmBody = smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    float warmThread = pow(ridge(w * 4.1 + 8.0), 4.0);
+                    float warm = warmAt * clamp(warmBody * 0.62 + sqrt(warmBody) * warmThread * 1.5, 0.0, 1.0);
                     // Blue: the galaxy, clumped, with its bulge. Alpha: dust that hides it.
                     float h = dot(d, ${glslVec3(GALAXY_POLE)});
                     float band = exp(-h * h / 0.022) * (0.35 + 0.9 * fbm(d * 6.0 + 20.0));
                     float bulge = exp(-(1.0 - dot(d, ${glslVec3(GALAXY_CORE)})) * 14.0) * exp(-h * h / 0.05);
                     float lanes = exp(-h * h / 0.006) * smoothstep(0.5, 0.78, ridge(d * 7.0 + 31.0)) * 0.9;
-                    lanes = max(lanes, coolAt * smoothstep(0.62, 0.85, ridge(w * 2.6 + 17.0)) * 0.5);
+                    // Dark dust threads through both clouds, sharp-edged against the glow.
+                    lanes = max(lanes, max(coolAt, warmAt * 0.8) * smoothstep(0.6, 0.76, ridge(w * 2.6 + 17.0)) * 0.72);
                     gl_FragColor = vec4(cool, warm, clamp(band * 0.7 + bulge * 0.9, 0.0, 1.0), clamp(lanes, 0.0, 1.0));
                 }
             `
@@ -846,8 +854,12 @@
                     corona += rays * 0.17 * step(0.0, dot(d, sunward));
 
                     vec3 night = uBase + uColorStar * m.b * 0.055;
-                    night += (uColorA * m.r * 0.1 + uColorB * m.g * 0.075) * uNebula;
-                    night *= (1.0 - m.a * 0.8) * read;
+                    // Thin gas takes the cloud's colour; where it is dense it brightens
+                    // and pales, as lit gas does.
+                    float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
+                    night += (uColorA * (m.r * 0.085 + coolCore * 0.13) + uColorB * (m.g * 0.065 + warmCore * 0.11)
+                        + uColorStar * (coolCore + warmCore) * 0.03) * uNebula;
+                    night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
                     night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
                     // On a pale theme the same sky is washes of colour on paper.

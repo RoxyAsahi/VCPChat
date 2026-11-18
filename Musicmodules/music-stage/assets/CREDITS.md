@@ -11,7 +11,7 @@ The files below are modified from the originals.
 | File | Original | Changes |
 |---|---|---|
 | `gas-giant-a.webp` | `2k_jupiter.jpg` | Converted to greyscale, levels stretched, saved as WebP at 2048×1024. |
-| `gas-giant-b.webp` | `2k_venus_atmosphere.jpg` | Converted to greyscale, levels stretched, reduced to 1024×512, saved as WebP. |
+| `gas-giant-b.webp` | `2k_venus_atmosphere.jpg` | Converted to greyscale, levels stretched, local contrast raised and sharpened, saved as WebP at 2048×1024. |
 | `ringed-giant.webp` | `2k_saturn.jpg` | Converted to greyscale, levels stretched, reduced to 1024×512, saved as WebP. |
 | `ring-system.png` | `2k_saturn_ring_alpha.png` | One row taken along the radius and resampled to 1024×4: red holds the ring's opacity, green its brightness. |
 
