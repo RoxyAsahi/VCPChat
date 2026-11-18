@@ -305,6 +305,13 @@
             hero(choruses[1], { slotId: 5, side: 1, radial: 35, elev: -5, tilt: [0.31, 0.15, -0.24] }),
             hero(choruses[2], { slotId: 6, side: 1, radial: 46, elev: 12, tilt: [-0.62, -0.2, 0] })
         ].filter(Boolean);
+        // The close is an arrival: a ringed planet gathers far ahead through
+        // the last act and the song ends on the slow approach to it.
+        const closing = acts[acts.length - 1];
+        if (closing && closing.kind === 'Horizon' && closing.end - closing.start > 12) {
+            heroPasses.push({ slotId: 2, distance: distanceAt(duration) + 150, side: -1, radial: 58, elev: -10,
+                tilt: [0.5, 0.2, -0.25], hold: true, clearFrom: distanceAt(duration - 16), clearTo: Infinity });
+        }
 
         return {
             seedHash,
@@ -3203,6 +3210,7 @@
                 const cycleIndex = Math.floor((totalTravelDistance - placed + 220) / cycle);
                 let sWorld = placed + cycleIndex * cycle;
                 let place = slot;
+                let handover = 1;
                 for (const hero of timeline.heroPasses) {
                     const routeScale = clamp(speedScale, 0.25, 2.5);
                     const heroS = hero.distance * routeScale;
@@ -3212,11 +3220,20 @@
                     }
                     const heroRel = heroS - totalTravelDistance;
                     if (heroRel > -180 && heroRel < 1820) {
+                        // One body cannot be in two places. Its turn in the
+                        // procession, if it comes first and clear of the pass,
+                        // is finished before it is gathered again for the pass.
+                        if (place === slot && sWorld < hero.clearFrom * routeScale && sWorld - totalTravelDistance > -180) continue;
+                        const before = placed + Math.floor((heroS - placed) / cycle) * cycle;
+                        if (before < hero.clearFrom * routeScale && before + 180 > heroS - 1820) {
+                            handover = Math.min(handover, smooth((totalTravelDistance - before - 180) / 160));
+                        }
                         sWorld = heroS;
                         place = hero;
-                    } else if (place === slot && sWorld > heroS - 2100 && sWorld < heroS + 300) {
-                        // Its place in the procession would crowd the pass: sit this one out.
-                        sWorld = -1e9;
+                    } else if (place === slot && sWorld > heroS && sWorld < heroS + 2000) {
+                        // ... and the one after waits until the pass is over.
+                        if (heroRel >= 1820) sWorld = -1e9;
+                        else handover = Math.min(handover, smooth((-180 - heroRel) / 160));
                     }
                 }
                 const relS = sWorld - totalTravelDistance; // >0 在镜头前方，<0 已掠过镜头后方
@@ -3230,7 +3247,7 @@
                 // 远端 1820m -> 920m 从 0% 极微弱星雾渐显，近端 -30m -> -180m 在身后彻底消隐
                 const farPresence = 1.0 - smoother((relS - 920) / 880);
                 const nearPresence = smooth((relS + 180) / 150);
-                const presence = clamp(farPresence * nearPresence, 0, 1);
+                const presence = clamp(farPresence * nearPresence * handover, 0, 1);
                 if (presence <= 0.002) {
                     node.points.visible = false;
                     return;
