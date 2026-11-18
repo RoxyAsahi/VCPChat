@@ -539,7 +539,18 @@
                 lastCamera = camera; lastDiagnosticTime = time;
                 const distance = timeline.distanceAt(time, options.cameraSpeed ?? 1);
                 // Hood lamps are a night thing, and they dim while a line is up.
-                const standby = palette.light ? 0 : 0.24;
+                // A line written on the sky is drawn over whatever stands behind
+                // it, and a lit board there would eat its contrast: while one is
+                // up, and a little either side of it, every board goes dark.
+                let sky = 0;
+                const around = Math.max(0, D.upperBound(timeline.phrases, time, 'start') - 1);
+                for (let i = Math.max(0, around - 2); i <= Math.min(timeline.phrases.length - 1, around + 3); i++) {
+                    const phrase = timeline.phrases[i];
+                    if (track.pageEncounter?.has(phrase.id)) continue;
+                    sky = Math.max(sky, D.smooth((time - phrase.start + 1.6) / 1.2)
+                        * (1 - D.smooth((time - phrase.end - 1) / 2)));
+                }
+                const standby = (palette.light ? 0 : 0.24) * (1 - sky);
                 signs.forEach(sign => {
                     sign.performance.uniforms.light.value = 0;
                     sign.performance.uniforms.closing.value = 0;

@@ -43,6 +43,13 @@
             // The first encounter is to the right; successive encounters
             // alternate sides without ever creating a second screen per page.
             encounter.side = encounter.id % 2 === 0 ? 1 : -1;
+            // When the next line is written on the sky, this screen is the last
+            // of its run and nothing is read after it: it stands well back from
+            // the line, so it is out of the picture when the camera looks ahead.
+            const phrases = timeline.phrases || [];
+            const next = phrases[upperBound(phrases, encounter.end - 0.001, 'start')];
+            const skyNext = Boolean(next) && !plan.pageEncounter.has(next.id);
+            if (skyNext && next.start - encounter.end < 10) encounter.lateral = 21;
             encounter.position = {
                 x: frame.position.x + frame.right.x * encounter.lateral * encounter.side,
                 y: 4.6,
@@ -57,9 +64,7 @@
             encounter.height = 4.2;
             // When the next line is written on the sky, the camera has to let go
             // of this screen by then, or the screen stands in front of that line.
-            const phrases = timeline.phrases || [];
-            const next = phrases[upperBound(phrases, encounter.end - 0.001, 'start')];
-            encounter.skyStart = next && !plan.pageEncounter.has(next.id) ? next.start : Infinity;
+            encounter.skyStart = skyNext ? next.start : Infinity;
         });
         // Compile continuous yaw cues, including interrupted transitions.
         const cues = timeline.acts.slice(1).map(act => ({ time: act.start, rig: rigFor(act) }));
