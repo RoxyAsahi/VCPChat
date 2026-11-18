@@ -52,8 +52,12 @@
         const steel = material(new T.MeshStandardMaterial({ color: '#626b76', metalness: 0.8, roughness: 0.4 }));
         const timber = material(new T.MeshStandardMaterial({ color: '#292d32', roughness: 0.95 }));
         const concrete = material(new T.MeshStandardMaterial({ color: '#444852', roughness: 0.8 }));
-        const lampMaterial = material(new T.MeshBasicMaterial({ color: '#ffd994' }));
-        const coldLampMaterial = material(new T.MeshBasicMaterial({ color: '#9fe6d6' }));
+        // Whatever gives off light, or is painted, is one mesh with a colour
+        // per instance: warm lamps, cold lamps, a crossing's signal lamps, and
+        // two paints that are simply a fixed tone.
+        const lampMaterial = { color: new T.Color('#ffd994') }, coldLampMaterial = { color: new T.Color('#9fe6d6') };
+        const warmPaint = new T.Color('#6b5326'), palePaint = new T.Color('#5d6468');
+        const glowMaterial = material(new T.MeshBasicMaterial({ color: '#ffffff' }));
         /*
          * Scanned wood, gravel and rock are used for their light and dark
          * only. They break up a palette colour and roughen how it takes the
@@ -155,7 +159,6 @@
             rockMaterial.bumpScale = 0.4;
             rockMaterial.needsUpdate = true;
         });
-        const signalMaterial = material(new T.MeshBasicMaterial({ color: '#ffffff' }));
         // Several boxes fused into one shape, so a profile still costs one instance.
         const fused = parts => {
             const positions = [], normals = [], indices = [];
@@ -214,16 +217,29 @@
         const masts = instances(steel, 72, geometry(new T.CylinderGeometry(0.065, 0.115, 1, 8)));
         // Everything else is drawn from one pool per material, whatever it
         // depicts, so richer scenery does not cost more draw calls.
-        const steelParts = instances(steel, 720);
-        const concreteParts = instances(concrete, 320);
+        const steelParts = instances(steel, 960);
+        const concreteParts = instances(concrete, 400);
         const timberParts = instances(wood, 240);
-        const glowParts = instances(lampMaterial, 128);
-        const coldGlowParts = instances(coldLampMaterial, 64);
+        const GLOW_CAPACITY = 288;
+        const glow = instances(glowMaterial, GLOW_CAPACITY);
+        const glowKinds = new Uint8Array(GLOW_CAPACITY);
+        glow.setColorAt(0, lampMaterial.color);
+        // Each kind writes into the shared mesh and remembers which colour it takes.
+        const tinted = kind => ({
+            instanceMatrix: glow.instanceMatrix,
+            get count() { return glow.count; },
+            set count(value) { glow.count = value; },
+            setMatrixAt(index, matrix) { glowKinds[index] = kind; glow.setMatrixAt(index, matrix); }
+        });
+        const glowParts = tinted(0), coldGlowParts = tinted(1);
         // The pair of lamps at a level crossing, flashing in turn.
-        const signalLamps = instances(signalMaterial, 16);
-        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts, signalLamps];
-        Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glowParts, coldGlowParts,
-            signalLamps }).forEach(([name, mesh]) => { mesh.name = name; });
+        const signalLamps = tinted(2);
+        const warmMarks = tinted(3), paleMarks = tinted(4);
+        // A lit room seen through its window: the lamp colour, well short of the lamp itself.
+        const windowLight = tinted(5), roomGlow = new T.Color();
+        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow];
+        Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glow })
+            .forEach(([name, mesh]) => { mesh.name = name; });
         // The rock pile is a data script of its own, fetched once the stage is up.
         let rocks = null, rocksArrived = false;
         const raiseRocks = () => {
@@ -1177,14 +1193,22 @@
         let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1;
         // The lamps of a crossing light in turn, a little faster than once a second.
         const signalLit = new T.Color(SIGNAL_RED).multiplyScalar(3.2), signalDark = new T.Color(SIGNAL_RED).multiplyScalar(0.06);
-        const flashSignals = time => {
-            if (!signalLamps.count) return;
+        const tintGlow = time => {
             const turn = Math.floor(time * 2.2) & 1;
-            for (let i = 0; i < signalLamps.count; i++) {
-                // Every third is the lamp on a barrier arm, lit with whichever is nearer.
-                signalLamps.setColorAt(i, i % 3 === 2 || (i % 3) === turn ? signalLit : signalDark);
+            // By day a window is only a little warmer than the wall it is in.
+            if (palBase?.light) roomGlow.copy(lampMaterial.color).multiplyScalar(0.3 / LAMP_GAIN).lerp(palePaint, 0.7);
+            else roomGlow.copy(lampMaterial.color).multiplyScalar(0.34);
+            let signal = 0;
+            for (let i = 0; i < glow.count; i++) {
+                const kind = glowKinds[i];
+                if (kind === 2) {
+                    // Every third is the lamp on a barrier arm, lit with whichever is nearer.
+                    glow.setColorAt(i, signal % 3 === 2 || signal % 3 === turn ? signalLit : signalDark);
+                    signal++;
+                } else glow.setColorAt(i, kind === 0 ? lampMaterial.color : kind === 1 ? coldLampMaterial.color
+                    : kind === 3 ? warmPaint : kind === 4 ? palePaint : roomGlow);
             }
-            signalLamps.instanceColor.needsUpdate = true;
+            glow.instanceColor.needsUpdate = true;
         };
         const updateLights = (track, s, saving, audio) => {
             lightAnchors.sort((a, b) => Math.abs(a.address - s) - Math.abs(b.address - s));
@@ -1255,6 +1279,9 @@
             // Lamps are brighter than white, so the lens has something to spread.
             lampMaterial.color.copy(emission).multiplyScalar(LAMP_GAIN);
             coldLampMaterial.color.copy(luminous(secondary.clone())).multiplyScalar(1.7);
+            // Paint does not shine: a marking is a little lighter than what it is painted on.
+            warmPaint.copy(emission).lerp(concrete.color, 0.4).multiplyScalar(light ? 0.8 : 0.2);
+            palePaint.copy(light ? surface : ink).lerp(concrete.color, 0.3).multiplyScalar(light ? 0.95 : 0.3);
             lights.forEach(l => l.color.copy(emission));
             // Livery: cream above the waist, the theme's colour below it.
             paintTrain((light ? surface : ink).clone().lerp(emission, light ? 0.1 : 0.22),
@@ -1393,7 +1420,7 @@
             }
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
-                flashSignals(time);
+                tintGlow(time);
                 updateLights(track, s, saving, audio);
                 return;
             }
@@ -1495,6 +1522,12 @@
                 const L = value => side * value;
                 const stagger = id % 2 ? 0.18 : -0.18;
                 part(concreteParts, address, L(POLE_OFFSET), 0.3, 0.6, 0.6, 0.6);
+                if (!saving) {
+                    // Base flange, the switch box on the far side, and the pole's number plate.
+                    part(steelParts, address, L(POLE_OFFSET), 0.63, 0.32, 0.06, 0.32);
+                    part(steelParts, address, L(POLE_OFFSET + 0.17), 1.45, 0.14, 0.42, 0.24);
+                    part(paleMarks, address, L(POLE_OFFSET - 0.115), 2.0, 0.012, 0.24, 0.1);
+                }
                 if (pole.wired) {
                     part(masts, address, L(POLE_OFFSET), 4.3, 1, 7.4, 1);
                     // Cantilever: top tube, tie rod, bracket tube and steady arm.
@@ -1511,6 +1544,11 @@
                 if (id % 7 !== 3) {
                     // Luminaire: bracket, hooded housing and the lit diffuser below it.
                     span(steelParts, address, L(POLE_OFFSET), lampY + 0.02, L(LAMP_OFFSET - 0.2), lampY + 0.2, 0.05);
+                    if (!saving) {
+                        // A stay under the bracket and the clamp that holds both to the pole.
+                        span(steelParts, address, L(POLE_OFFSET), lampY - 0.4, L(LAMP_OFFSET + 0.3), lampY + 0.12, 0.025);
+                        part(steelParts, address, L(POLE_OFFSET), lampY - 0.19, 0.2, 0.5, 0.2);
+                    }
                     part(steelParts, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
                     part(glowParts, address, L(LAMP_OFFSET), lampY + 0.105, 0.66, 0.04, 0.2);
                     const hf = track.at(address);
@@ -1561,7 +1599,7 @@
             // --- Stations ---
             liveStations = 0;
             stationTypes = [];
-            const motifNames = ['sheltered-platform', 'door-gallery', 'water-stairs', 'window-arcade'];
+            const motifNames = ['sheltered-platform', 'waiting-shelters', 'water-stairs', 'station-house'];
             const beforeStations = sceneryPools.reduce((sum, mesh) => sum + mesh.count, 0);
             for (const { id, address, open, side } of stations) {
                 // The steps belong to open water; lit stations rotate through the other three.
@@ -1587,9 +1625,18 @@
                 // All objects remain below/away from the lyric viewing zone:
                 // lyric signs stand at +/-18m; shelters stay within +/-10m and
                 // take the side with no screen nearby.
-                part(concreteParts, address, lateral(6.5), 0.55, 5, 1.1, 28);
+                // The platform is a deck on cross walls standing in the water, its
+                // edge carried out past them on a beam: coping stones, the white line,
+                // and the band of tactile paving a pace back from the edge.
+                part(concreteParts, address, lateral(6.5), 0.97, 5, 0.26, 28);
+                part(concreteParts, address, lateral(4.3), 0.9, 0.32, 0.36, 28);
+                for (let pier = 0; pier < (saving ? 4 : 8); pier++) {
+                    part(concreteParts, address - 13.3 + pier * (saving ? 8.87 : 3.8), lateral(6.75), 0.42, 4.3, 0.86, 0.55);
+                }
                 part(concreteParts, address, lateral(4.2), 1.13, 0.7, 0.08, 28.2);
                 part(glowParts, address, lateral(3.84), 1.12, 0.045, 0.035, 28);
+                part(paleMarks, address, lateral(4.5), 1.174, 0.07, 0.012, 27.6);
+                part(warmMarks, address, lateral(4.95), 1.108, 0.3, 0.016, 27.6);
                 part(concreteParts, address, lateral(8.8), 1.25, 0.18, 0.3, 28);
                 // Steps run down into the shallows at both ends.
                 for (let step = 0; step < 4; step++) {
@@ -1604,6 +1651,22 @@
                     part(timberParts, address + 9.5, lateral(8.45), 2.75, 0.07, 0.85, 3.1);
                     part(concreteParts, address + 9.5, lateral(8.4), 2.48, 0.05, 0.12, 3.1);
                     part(glowParts, address + 9.5, lateral(8.4), 3.21, 0.05, 0.04, 3.1);
+                }
+                if (!saving && !open) {
+                    // A drinks machine, its window the brightest thing on the platform,
+                    // and the card reader on its post by the steps.
+                    // It stands taller than the sight line allows, so it is all there or not at all.
+                    const machine = address - 9.5;
+                    if (clear(machine, 8.22, 2.93)) {
+                        rawPart(steelParts, machine, lateral(8.22), 2.015, 0.7, 1.83, 1.02);
+                        rawPart(coldGlowParts, machine, lateral(7.86), 2.33, 0.02, 0.8, 0.88);
+                        rawPart(paleMarks, machine, lateral(7.862), 1.58, 0.02, 0.42, 0.88);
+                        rawPart(glowParts, machine + 0.3, lateral(7.855), 1.82, 0.02, 0.05, 0.16);
+                        rawPart(steelParts, machine, lateral(7.84), 1.3, 0.05, 0.14, 0.7);
+                    }
+                    part(steelParts, address + 12.4, lateral(5.5), 1.62, 0.1, 1.04, 0.1);
+                    part(steelParts, address + 12.4, lateral(5.5), 2.2, 0.2, 0.14, 0.26, side * 0.5);
+                    part(coldGlowParts, address + 12.4, lateral(5.46), 2.275, 0.1, 0.012, 0.12, side * 0.5);
                 }
                 if (type === 0) {
                     // Butterfly canopy on a single row of Y columns: two roof
@@ -1632,22 +1695,33 @@
                             part(steelParts, address - 13 + post * 3.25, lateral(9.15), 1.65, 0.06, 1.1, 0.06);
                     }
                 } else if (type === 1) {
-                    // Receding doorways: grounded counterparts of old memory
-                    // frames. A missing lintel on return creates an absence.
-                    part(concreteParts, address, lateral(6.8), 1.2, 3.6, 0.2, 24.5);
-                    for (let bay = 0; bay < 6; bay++) {
-                        const z = address - 11 + bay * 4.4;
-                        for (const edge of [-1, 1]) {
-                            part(concreteParts, z, lateral(6.8 + edge * 1.5), 2.9, 0.3, 3.4, 0.42);
-                            part(concreteParts, z, lateral(6.8 + edge * 1.5), 1.42, 0.44, 0.24, 0.56);
+                    // Timber waiting shelters, as on the small platforms along the
+                    // bay: a back of upright boards between cheek walls, a lean-to
+                    // roof on two posts, one tube lamp under it, a bench and the
+                    // timetable inside. Between them the platform is open to the water.
+                    // A shelter that would stand in a sight line leaves only its bench.
+                    [-4.6, 2.6].forEach((centre, index) => {
+                        const z = address + centre;
+                        part(timberParts, z, lateral(8.2), 1.56, 0.42, 0.06, 3.2);
+                        part(timberParts, z, lateral(8.46), 1.9, 0.05, 0.36, 3.2, side * -0.1);
+                        for (const leg of [-1.3, 0, 1.3]) part(steelParts, z + leg, lateral(8.22), 1.33, 0.38, 0.4, 0.05);
+                        if (![-2.1, 0, 2.1].every(at => clear(z + at, 7.6, 3.8))) return;
+                        rawPart(timberParts, z, lateral(8.62), 2.3, 0.08, 2.4, 4.2);
+                        for (const cheek of [-2.1, 2.1]) {
+                            rawPart(timberParts, z + cheek, lateral(7.95), 2.3, 1.3, 2.4, 0.08);
+                            rawPart(steelParts, z + cheek, lateral(6.75), 2.42, 0.09, 2.6, 0.09);
+                            rawPart(concreteParts, z + cheek, lateral(6.75), 1.16, 0.2, 0.12, 0.2);
                         }
-                        if ((id + bay) % 6 !== 4) {
-                            part(concreteParts, z, lateral(6.8), 4.72, 3.9, 0.3, 0.5);
-                            part(steelParts, z, lateral(6.8), 4.93, 4.2, 0.07, 0.62);
-                            part(glowParts, z, lateral(6.8), 4.54, 2.5, 0.04, 0.08);
-                        }
-                        part(glowParts, z, lateral(8.1), 3.0, 0.04, 2.6, 0.06);
-                    }
+                        rawSpan(concreteParts, z, lateral(6.4), 3.8, lateral(8.9), 3.5, 0.06, 4.7);
+                        // The lamp's light on the boards behind the bench.
+                        if ((id + index) % 5 !== 3) rawPart(windowLight, z, lateral(8.575), 2.85, 0.012, 1.2, 4.0);
+                        rawPart(steelParts, z, lateral(6.42), 3.72, 0.05, 0.16, 4.7);
+                        rawPart(steelParts, z, lateral(8.62), 3.5, 0.12, 0.1, 4.2);
+                        rawPart(steelParts, z, lateral(7.5), 3.6, 0.14, 0.05, 1.5);
+                        if ((id + index) % 5 !== 3) rawPart(glowParts, z, lateral(7.5), 3.55, 0.07, 0.04, 1.3);
+                        rawPart(steelParts, z - 1.0, lateral(8.555), 2.6, 0.03, 0.7, 1.0);
+                        rawPart(paleMarks, z - 1.0, lateral(8.535), 2.6, 0.02, 0.6, 0.9);
+                    });
                 } else if (type === 2) {
                     // Broad steps descend toward the water, not into the sky.
                     // In open acts they replace dense station silhouettes.
@@ -1695,25 +1769,57 @@
                             size * (0.85 + pile() * 0.35), pile() * 6.28);
                     }
                 } else {
-                    // Window arcade and low walls leave actual openings for
-                    // water and the far horizon. Missing panes are intentional.
-                    part(concreteParts, address, lateral(8.8), 1.6, 0.34, 1, 25);
-                    part(concreteParts, address, lateral(8.8), 2.14, 0.48, 0.08, 25.2);
-                    part(steelParts, address, lateral(8.8), 4.62, 0.3, 0.16, 25);
-                    for (let bay = 0; bay < 7; bay++) {
-                        const z = address - 12 + bay * 4;
-                        part(steelParts, z, lateral(8.8), 3.38, 0.18, 2.4, 0.18);
-                        if (bay < 6 && (id + bay) % 5 !== 2) {
-                            part(steelParts, z + 2, lateral(8.8), 3.38, 0.05, 2.32, 0.05);
-                            part(steelParts, z + 2, lateral(8.8), 3.5, 0.05, 0.05, 3.8);
-                            part(glowParts, z + 2, lateral(8.72), 4.5, 0.04, 0.03, 2.8);
+                    // A timber station house along the back of the platform, after
+                    // the old ones on the line: boarded walls on a concrete base, a
+                    // row of sash windows lit from inside, the ticket window and the
+                    // way through beside it, and a tin gable roof whose eaves come out
+                    // over the platform. Where it would stand in a sight line only
+                    // the boarded fence at its foot is built.
+                    const HOUSE = 13, wall = lateral(8.36), face = lateral(8.3);
+                    part(concreteParts, address, lateral(9.6), 0.55, 2.4, 1.1, HOUSE);
+                    part(timberParts, address, wall, 1.72, 0.1, 1.2, HOUSE);
+                    part(steelParts, address, wall, 2.34, 0.16, 0.05, HOUSE + 0.1);
+                    if ([-6, -3, 0, 3, 6].every(at => clear(address + at, 9.3, 4.6))) {
+                        rawPart(timberParts, address, wall, 2.95, 0.1, 1.2, HOUSE);
+                        for (const end of [-1, 1]) {
+                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 2.35, 2.1, 2.5, 0.1);
+                            rawPart(steelParts, address + end * HOUSE / 2, lateral(8.36), 2.35, 0.14, 2.5, 0.14);
+                            // The gable closes up to the ridge in two steps of boarding.
+                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 3.83, 1.9, 0.46, 0.1);
+                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 4.22, 0.8, 0.32, 0.1);
+                        }
+                        // Sash windows: a lit pane, its cross of glazing bars, sill and head.
+                        [-5.2, -3.2, -1.2, 5.2].forEach((at, index) => {
+                            const z = address + at;
+                            rawPart((id + index) % 4 === 1 ? warmMarks : windowLight, z, face, 2.6, 0.02, 0.95, 1.3);
+                            rawPart(steelParts, z, lateral(8.285), 2.6, 0.03, 0.95, 0.045);
+                            rawPart(steelParts, z, lateral(8.285), 2.6, 0.03, 0.045, 1.3);
+                            rawPart(steelParts, z, lateral(8.26), 2.1, 0.12, 0.05, 1.44);
+                            rawPart(steelParts, z, lateral(8.28), 3.1, 0.05, 0.07, 1.44);
+                        });
+                        // The ticket window with its counter, and the open way through.
+                        rawPart(glowParts, address + 1.0, face, 2.42, 0.02, 0.5, 0.82);
+                        rawPart(timberParts, address + 1.0, lateral(8.18), 2.1, 0.34, 0.05, 1.06);
+                        rawPart(steelParts, address + 1.0, lateral(8.2), 2.78, 0.26, 0.04, 1.06, side * 0.25);
+                        rawPart(windowLight, address + 3.2, face, 2.2, 0.02, 2.0, 1.12);
+                        for (const jamb of [-0.6, 0.6]) rawPart(steelParts, address + 3.2 + jamb, lateral(8.28), 2.2, 0.06, 2.06, 0.08);
+                        rawPart(steelParts, address + 3.2, lateral(8.28), 3.24, 0.06, 0.08, 1.28);
+                        rawPart(paleMarks, address + 2.1, lateral(8.29), 3.02, 0.02, 0.34, 0.34);
+                        // Roof: two slopes, the ridge cap, the gutter, and bulbs under the eaves.
+                        rawSpan(concreteParts, address, lateral(7.35), 3.42, lateral(9.4), 4.5, 0.07, HOUSE + 1.2);
+                        rawSpan(concreteParts, address, lateral(9.4), 4.5, lateral(11.2), 3.55, 0.07, HOUSE + 1.2);
+                        rawPart(steelParts, address, lateral(9.4), 4.56, 0.22, 0.1, HOUSE + 1.3);
+                        rawPart(steelParts, address, lateral(7.37), 3.36, 0.07, 0.12, HOUSE + 1.2);
+                        for (const at of [-4.2, 0, 4.2]) {
+                            rawPart(steelParts, address + at, lateral(7.8), 3.5, 0.3, 0.04, 0.3);
+                            rawPart(glowParts, address + at, lateral(7.8), 3.42, 0.12, 0.1, 0.12);
                         }
                     }
                 }
                 for (let seat = 0; seat < (saving ? 1 : 3); seat++) {
-                    if ((id + seat) % 4 === 2) continue;
-                    const z = address - 7 + seat * 7 + (type === 0 ? 2.75 : 0);
-                    const back = type === 0 ? 8.2 : 7.25;
+                    if ((id + seat) % 4 === 2 || type === 1) continue;
+                    const z = address - 7 + seat * 7 + (type === 0 ? 2.75 : type === 3 ? 0.6 - seat * 1.6 : 0);
+                    const back = type === 0 ? 8.2 : type === 3 ? 8.2 : 7.25;
                     part(timberParts, z, lateral(back - 0.25), 1.58, 0.5, 0.07, 1.8);
                     part(timberParts, z, lateral(back), 1.95, 0.07, 0.5, 1.8, side * -0.12);
                     for (const leg of [-0.75, 0.75])
@@ -1742,7 +1848,16 @@
                     const L = value => side * value;
                     part(concreteParts, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
                     span(concreteParts, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
-                    for (const edge of [-1, 1]) part(concreteParts, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
+                    for (const edge of [-1, 1]) {
+                        part(concreteParts, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
+                        // The road's edge line, and a guard rail down the ramp.
+                        part(paleMarks, address + edge * (ROAD - 0.22), L(2.0), 0.406, 2.4, 0.012, 0.1);
+                        span(steelParts, address + edge * (ROAD + 0.1), L(5.5), 0.86, L(8.1), 0.36, 0.05, 0.05);
+                        for (const post of [5.6, 6.8, 8.0])
+                            part(steelParts, address + edge * (ROAD + 0.1), L(post), 0.5 - (post - 5.6) * 0.19, 0.06, 0.7, 0.06);
+                    }
+                    // The stop line.
+                    part(paleMarks, address, L(3.05), 0.406, 0.28, 0.012, ROAD * 2 - 0.5);
                     // The signal stands on the left of the road as it comes up to the line.
                     const post = address - side * (ROAD + 0.55), at = L(3.3);
                     const tall = !inSight(track, post, 3.3, side, 4);
@@ -1798,7 +1913,7 @@
                     }
                 }
             }
-            flashSignals(time);
+            tintGlow(time);
             updateLights(track, s, saving, audio);
             sceneryPools.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
         };
