@@ -1589,7 +1589,7 @@
                     float keep = uType < 0.5 ? (shade > 2.5 ? 0.5 : 0.0)
                         : uType < 2.5 ? 0.0
                         : 0.0;
-                    vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
+                    vAlpha *= mix(1.0, keep, smoothstep(0.5, 0.86, uCohesion));
                 }
             `,
             fragmentShader: `
@@ -3310,9 +3310,11 @@
                 // before it starts to form, the points once it has (stations
                 // keep theirs for the lamps).
                 const lampless = slotTemplateMap[idx].code !== 0 || slot.type !== 'station';
-                node.points.visible = !(lampless && cohesion > 0.985);
+                node.points.visible = !(lampless && cohesion > 0.87);
                 // The solid shares the points' place, attitude and envelope.
-                body.group.visible = cohesion > 0.42;
+                // Far off a body is only its dust; the solid forms on the approach.
+                const formed = dissolveDir < 0 ? Math.min(cohesion, mix(0.42, 1, smooth((1020 - relS) / 420))) : cohesion;
+                body.group.visible = formed > 0.42;
                 body.group.position.copy(node.points.position);
                 body.group.rotation.copy(node.points.rotation);
                 body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
@@ -3320,7 +3322,7 @@
                 for (const { mat } of body.parts) {
                     const b = mat.uniforms;
                     b.uTime.value = time;
-                    b.uCohesion.value = cohesion;
+                    b.uCohesion.value = formed;
                     b.uPresence.value = presence;
                     b.uAudioPulse.value = audioPulse;
                     b.uGlow.value = glowAmount;
