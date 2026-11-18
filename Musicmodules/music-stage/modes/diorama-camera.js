@@ -76,7 +76,7 @@
         return { at, encounters: plan.encounters, pageEncounter: plan.pageEncounter, turns, initialYaw };
     };
     const CHASE_LATERAL = 7.5;
-    const CHASE_LEAD = 70;
+    const CHASE_LEAD = 66;
     const chaseAmount = height => smooth((height - 3.9) / 0.7);
     const rigFor = act => act.kind === 'Departure' ? 'RAIL'
         : ['Chorus', 'Open'].includes(act.kind) ? 'WIDE'
