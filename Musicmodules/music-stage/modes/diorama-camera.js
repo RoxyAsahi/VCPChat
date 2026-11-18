@@ -55,6 +55,11 @@
             // far end of the reading span, still inside the frame at the near end.
             encounter.width = Math.min(16, 18.5 * Math.max(0.45, options.aspect || 1.6));
             encounter.height = 4.2;
+            // When the next line is written on the sky, the camera has to let go
+            // of this screen by then, or the screen stands in front of that line.
+            const phrases = timeline.phrases || [];
+            const next = phrases[upperBound(phrases, encounter.end - 0.001, 'start')];
+            encounter.skyStart = next && !plan.pageEncounter.has(next.id) ? next.start : Infinity;
         });
         // Compile continuous yaw cues, including interrupted transitions.
         const cues = timeline.acts.slice(1).map(act => ({ time: act.start, rig: rigFor(act) }));
@@ -163,7 +168,8 @@
             rig = 'WINDOW';
         }
         if (encounter && !directHandoff) {
-            const release = upcoming ? Math.min(4, Math.max(0.1, upcoming.start - encounter.end)) : 4;
+            const release = Math.min(upcoming ? Math.min(4, Math.max(0.1, upcoming.start - encounter.end)) : 4,
+                Math.max(0.8, encounter.skyStart - encounter.end));
             const weight = 1 - smooth((t - encounter.end) / release);
             if (weight > 0) {
                 const target = aim(encounter);

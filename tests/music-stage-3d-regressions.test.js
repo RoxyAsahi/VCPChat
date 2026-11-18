@@ -162,3 +162,22 @@ test('mode settings keep their own ranges', () => {
     assert.equal(Config.get().modes.fume.textHoldRatio, 1);
     dom.window.close();
 });
+
+test('diorama scenery knows when it would stand between the train and a lyric screen', () => {
+    const dom = createDom();
+    const { MusicStageDioramaWorld: World } = loadStage(dom, 'Musicmodules/music-stage/modes/diorama-world.js');
+    // The train reads this screen between 100 m and 130 m; it stands 18 m to the right at 140 m.
+    const track = { encounters: [{ side: 1, address: 140, lateral: 18, startDistance: 100, endDistance: 130 }] };
+    // A pole 3.4 m from the track, anywhere the sight line sweeps, is in the way.
+    assert.equal(World.inSight(track, 120, 3.4, 1), true);
+    assert.equal(World.inSight(track, 135, 3.4, 1), true);
+    // The other side of the track, behind the reader, or beyond the screen is not.
+    assert.equal(World.inSight(track, 120, 3.4, -1), false);
+    assert.equal(World.inSight(track, 80, 3.4, 1), false);
+    assert.equal(World.inSight(track, 170, 3.4, 1), false);
+    // Poles prefer the side away from the next screen and fall back when none is near.
+    assert.equal(World.poleSide({ encounters: [{ side: 1, address: 140 }] }, 100), -1);
+    assert.equal(World.poleSide({ encounters: [{ side: -1, address: 140 }] }, 100), 1);
+    assert.equal(World.poleSide({ encounters: [] }, 100, 1), 1);
+    dom.window.close();
+});

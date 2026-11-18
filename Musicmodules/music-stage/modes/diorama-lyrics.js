@@ -16,22 +16,59 @@
                 .lerp(new T.Color(palette.deep || palette.background || '#111b1c'), 0.35);
             const back = new T.MeshStandardMaterial({ color: backingColor, roughness: 0.58, metalness: 0.35 });
             const trim = new T.MeshStandardMaterial({ color: palette.secondary || '#76bfae', roughness: 0.35, metalness: 0.7 });
-            const backing = new T.InstancedMesh(box, back, 1);
-            const frame = new T.InstancedMesh(box, trim, 3);
+            // A trackside display board: bezel, hooded lamp row, lattice legs
+            // on footings, raking back stays, a service ledge and its ladder.
+            const backing = new T.InstancedMesh(box, back, 8);
+            const frame = new T.InstancedMesh(box, trim, 64);
+            backing.count = frame.count = 0;
             group.add(backing, frame);
-            let frameIndex = 0;
             const transform = new T.Object3D();
-            const add = (sx, sy, sz, x, y, z, mat) => {
+            const add = (sx, sy, sz, x, y, z, mat, rx = 0, rz = 0) => {
+                const mesh = mat === back ? backing : frame;
+                if (mesh.count >= mesh.instanceMatrix.count) return;
                 transform.scale.set(sx, sy, sz);
                 transform.position.set(x, y, z);
+                transform.rotation.set(rx, 0, rz);
                 transform.updateMatrix();
-                if (mat === back) backing.setMatrixAt(0, transform.matrix);
-                else frame.setMatrixAt(frameIndex++, transform.matrix);
+                mesh.setMatrixAt(mesh.count++, transform.matrix);
             };
-            add(encounter.width + 0.7, encounter.height + 1.5, 0.25, 0, -0.35, -0.16, back);
-            add(encounter.width + 0.9, 0.07, 0.3, 0, encounter.height / 2 + 0.4, -0.12, trim);
-            for (const side of [-1, 1]) add(0.14, encounter.position.y, 0.14,
-                side * encounter.width * 0.4, -encounter.position.y / 2, -0.22, trim);
+            const W = encounter.width + 0.7, H = encounter.height + 1.5;
+            const top = H / 2 - 0.35, bottom = -H / 2 - 0.35, water = -encounter.position.y;
+            add(W, H, 0.25, 0, -0.35, -0.16, back);
+            add(W + 0.2, 0.09, 0.34, 0, top, -0.12, trim);
+            add(W + 0.2, 0.09, 0.34, 0, bottom, -0.12, trim);
+            for (const side of [-1, 1]) add(0.09, H, 0.34, side * W / 2, -0.35, -0.12, trim);
+            // Hood and the lamps under it.
+            add(W + 0.5, 0.07, 1.0, 0, top + 0.2, 0.26, back, 0.12);
+            const lamps = Math.max(3, Math.round(W / 3));
+            for (let i = 0; i < lamps; i++)
+                add(0.7, 0.05, 0.1, (i + 0.5) / lamps * W - W / 2, top + 0.08, 0.6, trim);
+            // Service ledge along the foot of the board.
+            add(W, 0.06, 0.8, 0, bottom - 0.05, 0.28, back);
+            add(W, 0.04, 0.04, 0, bottom + 0.42, 0.66, trim);
+            for (let i = 0; i <= 4; i++) add(0.04, 0.46, 0.04, (i / 4 - 0.5) * (W - 0.1), bottom + 0.2, 0.66, trim);
+            const legHeight = bottom - water + 0.6, legY = (bottom + water - 0.6) / 2;
+            for (const side of [-1, 1]) {
+                const x = side * encounter.width * 0.36;
+                for (const chord of [-0.42, 0.42]) add(0.12, legHeight, 0.12, x + chord, legY, -0.28, trim);
+                // Lattice between the chords, then a stay raking back into the water.
+                const bays = Math.max(1, Math.round((bottom - water) / 0.9)), bay = (bottom - water) / bays;
+                for (let i = 0; i < bays; i++) {
+                    add(Math.hypot(0.84, bay), 0.05, 0.05, x, bottom - (i + 0.5) * bay, -0.28, trim,
+                        0, (i % 2 ? 1 : -1) * Math.atan2(bay, 0.84));
+                    add(0.84, 0.05, 0.05, x, bottom - (i + 1) * bay + 0.03, -0.28, trim);
+                }
+                add(1.5, 0.5, 1.5, x, water + 0.12, -0.28, back);
+                const rise = top - 1.2 - water, run = 3.4;
+                add(0.1, Math.hypot(rise, run), 0.1, x, water + rise / 2, -0.3 - run / 2, trim, Math.atan2(run, rise));
+                add(0.9, 0.4, 0.9, x, water + 0.1, -0.3 - run, back);
+                add(0.14, 0.14, 0.14, side * (W / 2 + 0.02), top + 0.3, -0.12, trim);
+            }
+            // Ladder up to the ledge.
+            const ladder = encounter.width * 0.36 + 1.15;
+            for (const stile of [-0.2, 0.2]) add(0.04, bottom - water + 0.5, 0.04, ladder + stile, (bottom + water) / 2 + 0.25, 0.62, trim);
+            for (let y = water + 0.35; y < bottom + 0.4; y += 0.32) add(0.4, 0.03, 0.03, ladder, y, 0.62, trim);
+            backing.instanceMatrix.needsUpdate = frame.instanceMatrix.needsUpdate = true;
             const performance = new T.ShaderMaterial({
                 transparent: true, depthWrite: false,
                 uniforms: { bins: { value: new Float32Array(24) }, light: { value: 0 },
@@ -81,12 +118,15 @@
             back.emissive.set(palette.accent || '#f2a900');
             trim.emissive.set(palette.accent || '#f2a900');
             root.add(group);
-            return { group, materials: [back, trim, performance], textures: [], performance, back, trim };
+            group.updateMatrixWorld(true);
+            return { group, materials: [back, trim, performance], textures: [], performance, back, trim,
+                size: { x: W / 2, y: H / 2 } };
         };
         const plane = new T.PlaneGeometry(1, 1);
         const box = new T.BoxGeometry(1, 1, 1);
         let palette = {}, timeline = null, track = null, options = {};
         let readingBounds = [], lastCamera = null, lastDiagnosticTime = 0;
+        const sight = new T.Raycaster();
         const release = node => {
             node.group.parent?.remove(node.group);
             node.group.traverse(object => {
@@ -154,6 +194,8 @@
             textures.push(map);
             const mat = new T.ShaderMaterial({
                 transparent: true, depthWrite: false, side: T.DoubleSide, forceSinglePass: true,
+                // A line written on the sky is never hidden by what the train passes.
+                depthTest: !constellation,
                 uniforms: {
                     map: { value: map }, time: { value: 0 }, fade: { value: 1 },
                     glow: { value: 1 }, vocal: { value: 0 },
@@ -322,7 +364,8 @@
                 const subTexture = texture(sub);
                 textures.push(subTexture);
                 const subMat = new T.MeshBasicMaterial({ map: subTexture, color: palette.ink || '#f2f0e9',
-                    transparent: true, opacity: 0.7, depthWrite: false, side: T.DoubleSide, forceSinglePass: true });
+                    transparent: true, opacity: 0.7, depthWrite: false, depthTest: !constellation,
+                    side: T.DoubleSide, forceSinglePass: true });
                 materials.push(subMat);
                 const subtitle = new T.Mesh(plane, subMat);
                 subtitle.scale.set(subWidth, subWidth / 8, 1);
@@ -410,11 +453,30 @@
                 }
                 const correction = (low, high, limit) => high - low >= limit * 2 ? -(high + low) / 2
                     : high > limit ? limit - high : low < -limit ? -limit - low : 0;
+                corner.copy(node.home).applyMatrix4(camera.matrixWorldInverse);
+                const depth = -corner.z;
+                // A display board nearer than the line would hide it: the line
+                // rises clear of the board for as long as the two overlap.
+                let lift = 0;
+                if (!behind) signs.forEach(board => {
+                    let boardLeft = Infinity, boardRight = -Infinity, boardBottom = Infinity, boardTop = -Infinity;
+                    let nearest = Infinity;
+                    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+                        corner.set(sx * board.size.x, sy * board.size.y - 0.35, 0)
+                            .applyMatrix4(board.group.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+                        nearest = Math.min(nearest, -corner.z);
+                        boardLeft = Math.min(boardLeft, corner.x / (-corner.z * tanH));
+                        boardRight = Math.max(boardRight, corner.x / (-corner.z * tanH));
+                        boardBottom = Math.min(boardBottom, corner.y / (-corner.z * tanV));
+                        boardTop = Math.max(boardTop, corner.y / (-corner.z * tanV));
+                    }
+                    if (nearest < 1 || nearest > depth || boardBottom > maxY) return;
+                    const shared = (Math.min(maxX, boardRight) - Math.max(minX, boardLeft)) / Math.max(1e-6, maxX - minX);
+                    lift = Math.max(lift, Math.max(0, boardTop + 0.05 - minY) * D.smooth(shared / 0.15));
+                });
                 const dx = behind ? 0 : correction(minX, maxX, limitX);
-                const dy = behind ? 0 : correction(minY, maxY, limitY);
+                const dy = behind ? 0 : lift + correction(minY + lift, maxY + lift, limitY);
                 if (dx || dy) {
-                    corner.copy(node.home).applyMatrix4(camera.matrixWorldInverse);
-                    const depth = -corner.z;
                     slide.set(0, 0, 0);
                     slide.addScaledVector(axis.setFromMatrixColumn(camera.matrixWorld, 0), dx * depth * tanH);
                     slide.addScaledVector(axis.setFromMatrixColumn(camera.matrixWorld, 1), dy * depth * tanV);
@@ -592,18 +654,48 @@
                         const bottom = Math.min(...corners.map(p => p.y));
                         const top = Math.max(...corners.map(p => p.y));
                         const sign = node.encounter && signs.get(node.encounter.id);
-                        const signCentre = sign
-                            ? new T.Vector3(0, 0, 0).applyMatrix4(sign.group.matrixWorld) : null;
                         const textCentre = new T.Vector3().applyMatrix4(node.text.matrixWorld);
+                        // How much of a sky line a nearer display board hides.
+                        let covered = 0;
+                        if (!node.encounter && right > left && top > bottom) signs.forEach(board => {
+                            const half = board.size;
+                            const points = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => new T.Vector3(
+                                x * half.x, y * half.y - 0.35, 0).applyMatrix4(board.group.matrixWorld).project(camera));
+                            if (points.some(p => Math.abs(p.z) > 1) || points[0].z > corners[0].z) return;
+                            const overlap = (a0, a1, b0, b1) => Math.max(0, Math.min(a1, b1) - Math.max(a0, b0));
+                            covered = Math.max(covered,
+                                overlap(left, right, Math.min(...points.map(p => p.x)), Math.max(...points.map(p => p.x)))
+                                * overlap(bottom, top, Math.min(...points.map(p => p.y)), Math.max(...points.map(p => p.y)))
+                                / ((right - left) * (top - bottom)));
+                        });
+                        // Share of the line that scenery (poles, shelters, posts)
+                        // stands in front of, sampled on a grid of sight lines.
+                        let blocked = 0, blockedBy = '';
+                        const scenery = scene.children.filter(child => child !== root);
+                        for (let ix = 0; ix < 5; ix++) for (let iy = 0; iy < 3; iy++) {
+                            const target = new T.Vector3(-0.45 + ix * 0.225, -0.35 + iy * 0.35, 0)
+                                .applyMatrix4(node.text.matrixWorld);
+                            const origin = new T.Vector3().setFromMatrixPosition(camera.matrixWorld);
+                            const reach = origin.distanceTo(target);
+                            sight.set(origin, target.sub(origin).normalize());
+                            sight.far = reach - 0.6;
+                            const hit = sight.intersectObjects(scenery, true).find(item => item.object.isInstancedMesh);
+                            if (hit) { blocked++; blockedBy = `${hit.object.name}@${Math.round(hit.distance)}m`; }
+                        }
+                        blocked /= 15;
                         readingBounds.push({
-                            phraseId: node.phrase.id, left, right, bottom, top,
+                            phraseId: node.phrase.id, left, right, bottom, top, covered, blocked, blockedBy,
+                            fade: uniforms.fade.value,
                             carrier: node.encounter ? 'sign' : 'sky',
                             encounterId: node.encounter?.id ?? null,
                             side: node.encounter?.side ?? null,
                             fitsCarrier,
                             animatedVertices: corners.length,
                             attached: !node.encounter || node.group.parent === sign?.group,
-                            anchorError: signCentre ? signCentre.distanceTo(textCentre) : 0,
+                            // Which row of the screen a line sits on is layout; drifting
+                            // sideways or off the surface is the error.
+                            anchorError: sign ? Math.hypot(...sign.group.worldToLocal(textCentre.clone())
+                                .toArray().filter((_, axis) => axis !== 1)) : 0,
                             heightRatio: (top - bottom) / 2,
                             inside: corners.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)
                                 && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && Math.abs(p.z) <= 1)
