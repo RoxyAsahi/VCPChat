@@ -75,6 +75,7 @@ function setup(api = {}) {
     context.setupLyrics(app);
     context.setupPlayer(app);
     context.setupState(app);
+    app.engineTrackPath = track.path; // 默认当作第一首已经在引擎里
     app.renderLyrics = () => {};
     app.setNow = value => { context.__now = value; };
     return app;
@@ -320,4 +321,62 @@ test('binary spectrum frames decode to the same array the JSON frames carried', 
     assert.equal(JSON.stringify(app.decodeEngineBinaryFrame(buffer)), JSON.stringify({ type: 'spectrum_data', data: bins }));
     view.setUint8(0, 9);
     assert.equal(app.decodeEngineBinaryFrame(buffer), null, 'unknown frame kinds are ignored');
+});
+
+test('play after a failed load retries the load instead of playing nothing', async t => {
+    let ready = false;
+    const app = setup({ getMusicState: async () => ready ? readyState() : ({ status: 'success', state: { is_loading: false } }) });
+    t.after(() => app.stopStatePolling());
+    const loading = app.loadTrack(0, true);
+    await tick(20);
+    app.handleEngineLoadEvent({ type: 'load_error', error: 'file locked' });
+    await loading;
+    assert.equal(app.calls.includes('play'), false);
+
+    ready = true;
+    await app.playTrack();
+    await tick(5);
+    assert.deepEqual(app.calls, ['load:a', 'load:a', 'play']);
+    assert.equal(app.isPlaying, true);
+});
+
+test('skipping quickly through tracks only loads the one the user stops on', async t => {
+    const app = setup({ getMusicState: async () => readyState({ file_path: 'C:/music/b.flac' }) });
+    t.after(() => app.stopStatePolling());
+    app.playlist.push({ path: 'C:/music/c.flac', title: 'c' }, { path: 'C:/music/d.flac', title: 'd' });
+    app.loadTrack(0, true);
+    await tick(10);
+    app.loadTrack(2, true);
+    await tick(10);
+    app.loadTrack(3, true);
+    await tick(10);
+    const last = app.loadTrack(1, true);
+    await last;
+    assert.deepEqual(app.calls.filter(c => c.startsWith('load')), ['load:a', 'load:b']);
+});
+
+test('previous returns to the track that was actually playing before', async t => {
+    const app = setup({ getMusicState: async () => readyState() });
+    t.after(() => app.stopStatePolling());
+    app.playlist.push({ path: 'C:/music/c.flac', title: 'c' }, { path: 'C:/music/d.flac', title: 'd' });
+    app.playModes = ['shuffle']; app.currentPlayMode = 0;
+    await app.loadTrack(3, false);
+    await app.loadTrack(1, false);
+    app.prevTrack();
+    assert.equal(app.currentTrackIndex, 1, 'index changes once the load starts');
+    await tick(250);
+    assert.equal(app.currentTrackIndex, 3);
+});
+
+test('previous stays inside the filtered list', async t => {
+    const app = setup({ getMusicState: async () => readyState() });
+    t.after(() => app.stopStatePolling());
+    const c = { path: 'C:/music/c.flac', title: 'c' };
+    const d = { path: 'C:/music/d.flac', title: 'd' };
+    app.playlist.push(c, d);
+    app.currentFilteredTracks = [app.playlist[0], d];
+    app.currentTrackIndex = 3;
+    app.prevTrack();
+    await tick(250);
+    assert.equal(app.currentTrackIndex, 0);
 });
