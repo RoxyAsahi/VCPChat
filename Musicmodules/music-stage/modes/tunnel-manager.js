@@ -277,13 +277,22 @@
         const encounterSlots = [
             { slotId: 0, type: 'station', baseS: 792,  side:  1, radial: 21, elev: 7,   scale: 0.58, rotSpeed: 0.05, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
             { slotId: 1, type: 'planet',  baseS: 860,  side:  1, radial: 56, elev: 18,  scale: 1.25, rotSpeed: 0.05, tilt: [0.22, -0.12, 0.16], p: 2, q: 3 },
-            { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0.34], p: 2, q: 5 },
+            { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0], p: 2, q: 5 },
             { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 30, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
             { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
             { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 32, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
         ];
+
+        // The first chorus is flown through a ring system. The whole procession
+        // of encounters is slid along the route so that the first ringed planet
+        // (whose ring plane the route pierces, between planet and outer edge)
+        // is reached a few seconds into that chorus.
+        const firstChorus = acts.find((act) => act.kind === 'Chorus' && act.end - act.start > 4);
+        const ringPass = firstChorus
+            ? { distance: distanceAt(firstChorus.start + Math.min(5, (firstChorus.end - firstChorus.start) * 0.5)), baseS: 1160 }
+            : null;
 
         return {
             seedHash,
@@ -292,6 +301,7 @@
             lines,
             lineShots,
             encounterSlots,
+            ringPass,
             ENCOUNTER_CYCLE,
             sampleState,
             distanceAt,
@@ -2813,6 +2823,10 @@
             const showShips = settings.showShips !== false;
             const showStations = settings.showStations !== false;
             const cycle = timeline.ENCOUNTER_CYCLE;
+            const pass = timeline.ringPass;
+            const encounterShift = pass
+                ? (((pass.distance * clamp(speedScale, 0.25, 2.5) - pass.baseS) % cycle) + cycle) % cycle
+                : 0;
             const audioPulse = clamp(bassSmooth * 1.1 + vocalSmooth * 0.35, 0, 1.2);
 
             timeline.encounterSlots.forEach((slot, idx) => {
@@ -2829,8 +2843,9 @@
                 }
 
                 // 计算该巨构在当前周期内的世界弧长坐标 sWorld（掠过身后 220m 后再折返至下一周期 2180m 远方）
-                const cycleIndex = Math.max(0, Math.floor((totalTravelDistance - slot.baseS + 220) / cycle));
-                const sWorld = slot.baseS + cycleIndex * cycle;
+                const placed = slot.baseS + encounterShift;
+                const cycleIndex = Math.floor((totalTravelDistance - placed + 220) / cycle);
+                const sWorld = placed + cycleIndex * cycle;
                 const relS = sWorld - totalTravelDistance; // >0 在镜头前方，<0 已掠过镜头后方
 
                 if (relS < -180 || relS > 1820) {
@@ -2869,8 +2884,9 @@
                 if (relS > 440) {
                     cohesion = 1.0 - smoother((relS - 440) / 1220);
                     dissolveDir = -1.0;
-                } else if (relS < 135) {
-                    const passPhase = clamp((135 - relS) / 260);
+                } else if (slot.type === 'rings' ? relS < -15 : relS < 135) {
+                    // A ring system holds together until the camera is through its plane.
+                    const passPhase = slot.type === 'rings' ? clamp((-15 - relS) / 150) : clamp((135 - relS) / 260);
                     cohesion = 1.0 - easeInCubic(passPhase) * (0.48 + dissolveAmount * 0.52);
                     dissolveDir = 1.0;
                 }
