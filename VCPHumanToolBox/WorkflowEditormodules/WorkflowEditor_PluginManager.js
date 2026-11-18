@@ -11,6 +11,8 @@
             this.stateManager = null;
             this.discoveredPlugins = new Map();
             this.pluginCategories = new Map();
+            this.catalogSource = 'none'; // 'remote' | 'local' | 'none'
+            this.defaultApiConfig = null;
             
             WorkflowEditor_PluginManager.instance = this;
         }
@@ -25,6 +27,7 @@
         // 初始化插件管理器
         async init(stateManager) {
             this.stateManager = stateManager;
+            await this.loadDefaultApiConfig();
             
             // 初始化API配置对话框
             if (window.WorkflowEditor_ApiConfigDialog) {
@@ -62,15 +65,22 @@
         // 发现所有可用插件
         async discoverPlugins() {
             try {
+                this.catalogSource = 'none';
                 // 检查API配置
                 if (!this.isApiConfigured()) {
-                    console.warn('[PluginManager] API not configured, no plugins loaded');
-                    this.showConfigurationPrompt();
+                    console.warn('[PluginManager] API not configured, using local tool catalog');
+                    this.loadLocalToolCatalog();
+                    this.updateAvailablePlugins();
                     return;
                 }
 
                 // 从远程API获取插件
                 await this.fetchRemotePlugins();
+                if (this.countPluginNodes() > 0) {
+                    this.catalogSource = 'remote';
+                } else {
+                    this.loadLocalToolCatalog();
+                }
                 
                 // 更新状态管理器中的可用插件
                 this.updateAvailablePlugins();
@@ -78,8 +88,130 @@
                 console.log('[PluginManager] Discovered plugins:', this.discoveredPlugins);
             } catch (error) {
                 console.error('[PluginManager] Plugin discovery failed:', error);
+                // 管理 API 不可达时仍然给出可用的工具：退回工具箱自带的工具清单
+                this.loadLocalToolCatalog();
+                this.updateAvailablePlugins();
                 this.handleDiscoveryError(error);
             }
+        }
+
+        countPluginNodes() {
+            let count = 0;
+            ['vcpChat', 'vcpToolBox'].forEach(category => {
+                const list = this.pluginCategories.get(category);
+                if (list) count += list.length;
+            });
+            return count;
+        }
+
+        // 默认连接到 settings.json 里 vcpServerUrl 所在的主机（而不是某个固定地址）
+        async loadDefaultApiConfig() {
+            try {
+                if (!window.electronAPI || typeof window.electronAPI.invoke !== 'function') return;
+                const settings = await window.electronAPI.invoke('vcp-ht-get-settings');
+                if (settings && settings.vcpServerUrl) {
+                    const url = new URL(settings.vcpServerUrl);
+                    this.defaultApiConfig = {
+                        host: url.hostname,
+                        port: url.port || (url.protocol === 'https:' ? '443' : '80'),
+                        username: '',
+                        password: ''
+                    };
+                }
+            } catch (error) {
+                console.warn('[PluginManager] Failed to derive default API config:', error);
+            }
+        }
+
+        // 工具箱「工具」页的工具定义 → 工作流插件节点
+        loadLocalToolCatalog() {
+            const catalog = window.VCPHumanToolCatalog;
+            if (!catalog || typeof catalog !== 'object') {
+                console.warn('[PluginManager] Local tool catalog not available');
+                return;
+            }
+            let added = 0;
+            Object.entries(catalog).forEach(([toolName, tool]) => {
+                if (!tool || typeof tool !== 'object') return;
+                const pluginInfo = this.adaptLocalTool(toolName, tool);
+                const pluginKey = `${pluginInfo.category}_${pluginInfo.id}`;
+                if (this.discoveredPlugins.has(pluginKey)) return;
+                this.discoveredPlugins.set(pluginKey, pluginInfo);
+                this.addToCategory(pluginInfo.category, pluginInfo);
+                added += 1;
+            });
+            if (added > 0) this.catalogSource = 'local';
+            console.log(`[PluginManager] Loaded ${added} tools from local catalog`);
+        }
+
+        adaptLocalTool(toolName, tool) {
+            const toSchema = (params) => {
+                const schema = {};
+                (params || []).forEach(param => {
+                    if (!param || !param.name || param.name === 'maid' || param.name === 'command') return;
+                    let type = 'string';
+                    if (param.type === 'number') type = 'number';
+                    else if (param.type === 'checkbox') type = 'boolean';
+                    const entry = {
+                        type,
+                        required: !!param.required,
+                        description: param.description || param.placeholder || ''
+                    };
+                    if (Array.isArray(param.options) && param.options.length) {
+                        entry.type = 'enum';
+                        entry.options = param.options.map(o => (o && typeof o === 'object') ? (o.value ?? o.label) : o);
+                    }
+                    if (param.default !== undefined) {
+                        entry.default = param.default;
+                        entry.defaultValue = param.default;
+                    }
+                    schema[param.name] = entry;
+                });
+                return schema;
+            };
+            let commands;
+            if (tool.commands && typeof tool.commands === 'object') {
+                commands = Object.entries(tool.commands).map(([commandName, def]) => ({
+                    id: commandName,
+                    name: (def && def.description) ? `${commandName} · ${def.description}` : commandName,
+                    command: commandName,
+                    needsCommand: true,
+                    inputs: ['trigger'],
+                    outputs: ['result', 'error'],
+                    paramsSchema: toSchema(def && def.params)
+                }));
+            } else {
+                commands = [{
+                    id: 'default',
+                    name: '默认',
+                    command: 'default',
+                    needsCommand: false,
+                    inputs: ['trigger'],
+                    outputs: ['result', 'error'],
+                    paramsSchema: toSchema(tool.params)
+                }];
+            }
+            const description = String(tool.description || '').replace(/\s*\[后端插件:[^\]]*\]\s*$/, '');
+            return {
+                id: toolName,
+                name: tool.displayName || toolName,
+                description,
+                version: '',
+                author: '',
+                category: 'vcpToolBox',
+                type: 'vcpToolBox',
+                enabled: true,
+                isDistributed: false,
+                serverId: null,
+                inputs: ['trigger'],
+                outputs: ['result', 'error'],
+                configSchema: {},
+                icon: 'plugin',
+                tags: ['vcpToolBox', 'local'],
+                source: 'local',
+                manifest: { name: toolName, displayName: tool.displayName || toolName, description },
+                commands
+            };
         }
 
         // 从远程API获取插件
@@ -420,10 +552,10 @@
                 }
             }
 
-            // 默认配置
-            return {
-                host: '49.235.138.100',
-                port: '6005',
+            // 默认配置：跟随 settings.json 的 vcpServerUrl；读不到时留空，由用户在「连接设置」里填写
+            return this.defaultApiConfig ? { ...this.defaultApiConfig } : {
+                host: '',
+                port: '',
                 username: '',
                 password: ''
             };

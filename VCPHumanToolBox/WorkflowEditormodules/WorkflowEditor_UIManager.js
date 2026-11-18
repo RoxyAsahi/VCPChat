@@ -46,6 +46,72 @@
             console.log('[WorkflowEditor_UIManager] Initialized');
         }
 
+        // 编辑器快捷键（只在编辑器可见时生效）
+        handleShortcut(e, isInputFocused) {
+            if (!this.isVisible) return;
+            if (document.querySelector('.plugin-dialog, .api-config-dialog.active, .workflow-save-dialog, .workflow-load-dialog')) return;
+            const mod = e.ctrlKey || e.metaKey;
+            const key = (e.key || '').toLowerCase();
+            if (mod && key === 'enter') {
+                e.preventDefault();
+                const engine = window.WorkflowEditor_ExecutionEngine;
+                if (!(engine && engine.isExecuting)) this.executeWorkflow();
+                return;
+            }
+            if (mod && key === 's') {
+                e.preventDefault();
+                this.saveWorkflow();
+                return;
+            }
+            if (isInputFocused) return;
+            if (mod && key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.stateManager.undo();
+            } else if (mod && (key === 'y' || (key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                this.stateManager.redo();
+            } else if (e.shiftKey && e.code === 'Digit1') {
+                e.preventDefault();
+                this.zoomFit();
+            } else if (key === 'backspace') {
+                const selectedNodes = this.stateManager.getSelectedNodes();
+                if (selectedNodes.length > 0) {
+                    e.preventDefault();
+                    selectedNodes.forEach(nodeId => this.stateManager.removeNode(nodeId));
+                }
+            }
+        }
+
+        // 视口工具：画布元素尺寸与节点包围盒（画布坐标）
+        _nodeBounds(nodeIds) {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodeIds.forEach(id => {
+                const node = this.stateManager.getNode(id);
+                if (!node || !node.position) return;
+                const el = document.getElementById(id);
+                const w = el ? el.offsetWidth : 200;
+                const h = el ? el.offsetHeight : 100;
+                minX = Math.min(minX, node.position.x);
+                minY = Math.min(minY, node.position.y);
+                maxX = Math.max(maxX, node.position.x + w);
+                maxY = Math.max(maxY, node.position.y + h);
+            });
+            if (!isFinite(minX)) return null;
+            return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+        }
+
+        // 把某个节点移到可视区域中央（缩放不变）
+        centerOnNode(nodeId) {
+            const canvas = document.getElementById('workflowCanvas');
+            const box = this._nodeBounds([nodeId]);
+            if (!canvas || !box) return;
+            const zoom = this.stateManager.getCanvasZoom() || 1;
+            this.stateManager.setCanvasOffset({
+                x: Math.round(canvas.clientWidth / 2 - (box.minX + box.width / 2) * zoom),
+                y: Math.round(canvas.clientHeight / 2 - (box.minY + box.height / 2) * zoom)
+            });
+        }
+
         // 创建主容器
         createContainer() {
             // 移除已存在的容器
@@ -59,29 +125,36 @@
             this.container.className = 'workflow-editor-container';
             
             this.container.innerHTML = `
-                <!-- 顶部工具栏 - 分为上下两部分 -->
-                <div class="workflow-toolbar">
-                    <!-- 标题部分 - 撑住不可点击区域 -->
-                    <div class="workflow-toolbar-header">
-                        <div class="workflow-logo">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <!-- 顶部工具栏：单行；空白处可拖动窗口，控件区不可拖动 -->
+                <div class="workflow-toolbar wf-shell-toolbar">
+                    <div class="wf-shell-row">
+                        <button class="wf-tb-btn wf-tb-back" id="closeWorkflowBtn" title="返回工具箱"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>工具箱</span></button>
+                        <div class="workflow-logo wf-shell-logo">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                             </svg>
-                            VCP 工作流编排
+                            工作流编排
                         </div>
-                    
-                    </div>
-                    <!-- 按钮部分 - 完全可点击 -->
-                    <div class="workflow-toolbar-actions">
-                        <button class="workflow-btn" id="newWorkflowBtn">新建</button>
-                        <button class="workflow-btn" id="loadWorkflowBtn">加载</button>
-                        <button class="workflow-btn" id="saveWorkflowBtn">保存</button>
-                        <button class="workflow-btn secondary" id="exportWorkflowBtn">导出</button>
-                        <button class="workflow-btn success" id="executeWorkflowBtn">▶️ 执行工作流</button>
-                        <button class="workflow-btn danger" id="stopWorkflowBtn">⏹️ 停止执行</button>
-                    
-                        <button class="workflow-btn secondary" id="apiConfigBtn">API配置</button>
-                        <button class="workflow-btn danger" id="closeWorkflowBtn">关闭</button>
+                        <input type="text" class="workflow-title-input wf-shell-title" id="workflowTitleInput" placeholder="未命名工作流" spellcheck="false" aria-label="工作流名称">
+                        <div class="wf-tb-group" role="group" aria-label="文件">
+                            <button class="wf-tb-btn" id="newWorkflowBtn" title="新建工作流"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15h6"/></svg><span>新建</span></button>
+                            <button class="wf-tb-btn" id="loadWorkflowBtn" title="打开已保存的工作流"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>打开</span></button>
+                            <button class="wf-tb-btn" id="saveWorkflowBtn" title="保存 (Ctrl+S)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8M7 21v-7h10v7"/></svg><span>保存</span></button>
+                            <button class="wf-tb-btn" id="exportWorkflowBtn" title="导出为 JSON 文件"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg><span>导出</span></button>
+                        </div>
+                        <div class="wf-tb-group" role="group" aria-label="编辑">
+                            <button class="wf-tb-btn icon-only" id="undoWorkflowBtn" title="撤销 (Ctrl+Z)" aria-label="撤销"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+                            <button class="wf-tb-btn icon-only" id="redoWorkflowBtn" title="重做 (Ctrl+Shift+Z / Ctrl+Y)" aria-label="重做"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+                        </div>
+                        <div class="wf-shell-spacer"></div>
+                        <button class="wf-tb-btn" id="apiConfigBtn" title="插件服务器与 AI 接口配置"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>连接设置</span></button>
+                        <button class="wf-tb-btn wf-tb-stop" id="stopWorkflowBtn" title="当前这一层节点跑完后停止"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span>停止</span></button>
+                        <button class="wf-tb-btn wf-tb-run" id="executeWorkflowBtn" title="运行工作流 (Ctrl+Enter)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg><span>运行</span><kbd>Ctrl ↵</kbd></button>
+                        <div class="wf-window-controls" aria-label="窗口">
+                            <button class="wf-win-btn" data-window-action="minimize" title="最小化" aria-label="最小化">&#8211;</button>
+                            <button class="wf-win-btn" data-window-action="maximize" title="最大化" aria-label="最大化">&#9633;</button>
+                            <button class="wf-win-btn is-close" data-window-action="close" title="关闭窗口" aria-label="关闭窗口">&times;</button>
+                        </div>
                     </div>
                 </div>
 
@@ -135,6 +208,9 @@
                     </div>
                 </div>
 
+                <!-- 运行面板：逐节点状态、耗时、输出 -->
+                <div id="workflowRunPanel"></div>
+
                 <!-- 底部状态栏 -->
                 <div class="workflow-statusbar">
                     <div class="status-item">
@@ -151,7 +227,7 @@
                         <button class="zoom-btn" id="zoomOutBtn">-</button>
                         <div class="zoom-level" id="zoomLevel">100%</div>
                         <button class="zoom-btn" id="zoomInBtn">+</button>
-                        <button class="zoom-btn" id="zoomFitBtn">适应</button>
+                        <button class="zoom-btn" id="zoomFitBtn" title="缩放到能看到全部节点 (Shift+1)">适应</button>
                     </div>
                 </div>
 
@@ -172,6 +248,20 @@
             this.bindElement('exportWorkflowBtn', 'click', () => this.exportWorkflow());
             this.bindElement('executeWorkflowBtn', 'click', () => this.executeWorkflow());
             this.bindElement('stopWorkflowBtn', 'click', () => this.stopWorkflow());
+            this.bindElement('undoWorkflowBtn', 'click', () => this.stateManager.undo());
+            this.bindElement('redoWorkflowBtn', 'click', () => this.stateManager.redo());
+            if (this.container) {
+                this.container.querySelectorAll('[data-window-action]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        if (window.electronAPI && typeof window.electronAPI.send === 'function') {
+                            window.electronAPI.send('window-control', btn.dataset.windowAction);
+                        }
+                    });
+                });
+            }
+            if (window.WorkflowEditor_RunPanel) {
+                window.WorkflowEditor_RunPanel.init(this.stateManager, document.getElementById('workflowRunPanel'));
+            }
             this.bindElement('pluginManagerBtn', 'click', () => this.showPluginManager());
             this.bindElement('apiConfigBtn', 'click', () => this.showApiConfig());
             this.bindElement('closeWorkflowBtn', 'click', () => this.hide());
@@ -275,6 +365,8 @@
                 if (e.key === 'Escape' && !isInputFocused) {
                     this.stateManager.clearSelection();
                 }
+
+                this.handleShortcut(e, isInputFocused);
             });
 
             // 状态管理器事件监听
@@ -339,6 +431,12 @@
 
             document.addEventListener('pluginManagerError', (e) => {
                 console.log('[UIManager] Plugin manager error:', e.detail.message);
+                const pm = window.WorkflowEditor_PluginManager;
+                if (pm && pm.catalogSource === 'local') {
+                    // 已退回本地工具清单，侧栏顶部会说明，不再弹错误
+                    this.renderCatalogHint(e.detail.message);
+                    return;
+                }
                 this.showToast(e.detail.message, 'error');
             });
         }
@@ -408,6 +506,7 @@
             const vcpToolBoxPlugins = pluginManager.getPluginsByCategory('vcpToolBox');
             this.renderPluginCategory('vcpToolBoxPlugins', vcpToolBoxPlugins, 'vcpToolBox');
             console.log('[UIManager] Loaded VCPToolBox plugins:', vcpToolBoxPlugins.length);
+            this.renderCatalogHint();
             
             // 加载自定义插件
             const customPlugins = pluginManager.getPluginsByCategory('custom');
@@ -424,11 +523,54 @@
             }
         }
 
+        // 插件来源说明：本地工具清单 / 服务器插件
+        renderCatalogHint(reason) {
+            const panel = document.getElementById('pluginPanel');
+            const pm = window.WorkflowEditor_PluginManager;
+            if (!panel || !pm) return;
+            let hint = document.getElementById('pluginCatalogHint');
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.id = 'pluginCatalogHint';
+                hint.className = 'wf-catalog-hint';
+                panel.insertBefore(hint, panel.firstChild);
+            }
+            if (pm.catalogSource === 'remote') {
+                hint.remove();
+                return;
+            }
+            const text = pm.catalogSource === 'local'
+                ? '正在使用工具箱自带的工具清单。连上 VCP 管理 API 后可列出服务器上的全部插件。'
+                : '没有可用的插件。请在「连接设置」里填写 VCP 管理 API。';
+            hint.innerHTML = '';
+            const p = document.createElement('div');
+            p.textContent = text;
+            hint.appendChild(p);
+            if (reason) {
+                const r = document.createElement('div');
+                r.className = 'wf-catalog-hint-reason';
+                r.textContent = reason;
+                hint.appendChild(r);
+            }
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'wf-catalog-hint-btn';
+            btn.textContent = '连接设置';
+            btn.addEventListener('click', () => this.showApiConfig());
+            hint.appendChild(btn);
+        }
+
         // 渲染插件分类
         renderPluginCategory(containerId, plugins, category) {
             const container = document.getElementById(containerId);
             if (!container) return;
 
+            const categoryEl = container.closest('.plugin-category');
+            if (categoryEl) {
+                categoryEl.classList.toggle('is-empty', plugins.length === 0);
+                const title = categoryEl.querySelector('.category-title');
+                if (title) title.dataset.count = String(plugins.length);
+            }
             container.innerHTML = '';
             plugins.forEach(plugin => {
                 const node = this.createPluginNode({
@@ -790,7 +932,8 @@
 				if (def && Object.prototype.hasOwnProperty.call(def, 'default')) {
 					result[k] = def.default;
 				} else {
-					result[k] = def && def.type === 'number' ? 0 : def && def.type === 'boolean' ? false : '';
+					// 数字参数没有默认值时留空：空值不会进请求，避免把 0 当成用户输入发给工具
+					result[k] = def && def.type === 'boolean' ? false : '';
 				}
 			});
 			return result;
@@ -975,7 +1118,7 @@
 					input.type = 'number';
 					if (field.min !== undefined) input.min = String(field.min);
 					if (field.max !== undefined) input.max = String(field.max);
-					input.value = current !== '' ? current : (field.default || 0);
+					input.value = current !== '' ? current : (field.default !== undefined ? field.default : '');
 					break;
 				}
 				case 'boolean': {
@@ -1223,8 +1366,23 @@
         }
 
         zoomFit() {
-            this.stateManager.setCanvasZoom(1);
-            this.stateManager.setCanvasOffset({ x: 0, y: 0 });
+            const canvas = document.getElementById('workflowCanvas');
+            const box = this._nodeBounds(this.stateManager.getAllNodes().map(n => n.id));
+            if (!canvas || !box || canvas.clientWidth === 0) {
+                this.stateManager.setCanvasZoom(1);
+                this.stateManager.setCanvasOffset({ x: 0, y: 0 });
+                return;
+            }
+            const pad = 48;
+            const zoom = Math.max(0.3, Math.min(1,
+                (canvas.clientWidth - pad * 2) / Math.max(box.width, 1),
+                (canvas.clientHeight - pad * 2) / Math.max(box.height, 1)));
+            const rounded = Math.round(zoom * 100) / 100;
+            this.stateManager.setCanvasZoom(rounded);
+            this.stateManager.setCanvasOffset({
+                x: Math.round((canvas.clientWidth - box.width * rounded) / 2 - box.minX * rounded),
+                y: Math.round((canvas.clientHeight - box.height * rounded) / 2 - box.minY * rounded)
+            });
         }
 
         // 更新缩放显示
@@ -2498,6 +2656,12 @@
                 this.showToast('工作流执行成功！', 'success');
 
             } catch (error) {
+                const engine = window.WorkflowEditor_ExecutionEngine;
+                if (engine && engine.stopRequested) {
+                    this.updateWorkflowStatus('stopped', '执行已停止');
+                    this.showToast('工作流已停止', 'info');
+                    return;
+                }
                 console.error('[UIManager] Workflow execution failed:', error);
                 this.updateWorkflowStatus('error', `执行失败: ${error.message}`);
                 this.showToast(`工作流执行失败: ${error.message}`, 'error');
@@ -2511,9 +2675,8 @@
             const executionEngine = window.WorkflowEditor_ExecutionEngine;
             if (executionEngine) {
                 executionEngine.stopExecution();
-                this.setExecutionState(false);
-                this.updateWorkflowStatus('stopped', '执行已停止');
-                this.showToast('工作流执行已停止', 'info');
+                this.updateWorkflowStatus('stopped', '正在停止：当前这一层跑完后不再继续');
+                this.showToast('将在当前这一层节点跑完后停止', 'info');
             }
         }
 
