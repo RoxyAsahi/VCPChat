@@ -289,6 +289,14 @@
      *    meta.z: 基础粒子半径缩放
      *    meta.w: 个人随机种子 seed ∈ [0,1]
      * ============================================================================ */
+    // One set of dimensions for each encounter: the point template and the
+    // solid body are built from the same numbers, so they coincide.
+    const ENTITY_SPECS = Object.freeze({
+        stationA: { p: 3, q: 5, radius: 25 }, stationB: { p: 4, q: 7, radius: 26 },
+        ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
+        planetA: { radius: 26 }, planetB: { radius: 24 },
+        shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
+    });
     const createManifoldTemplates = (pointsPerSlot) => {
         // A. 高维环面结流形 / 戴森星门遗迹 (Torus Knot (p,q) Manifold + Harmonic Filaments)
         const buildTorusKnotManifold = (count, p, q, radius, seedStr) => {
@@ -583,15 +591,16 @@
             return { pos, normal, meta };
         };
 
+        const S = ENTITY_SPECS;
         return {
-            stationA: buildTorusKnotManifold(pointsPerSlot, 3, 5, 25, 'manifold-knot-3-5'),
-            stationB: buildTorusKnotManifold(pointsPerSlot, 4, 7, 26, 'manifold-knot-4-7'),
-            ringsA:   buildRocheRings(pointsPerSlot, 22, 48, 'manifold-roche-a'),
-            ringsB:   buildRocheRings(pointsPerSlot, 24, 52, 'manifold-roche-b'),
-            planetA:  buildAbyssalPlanet(pointsPerSlot, 26, 'manifold-planet-a'),
-            planetB:  buildAbyssalPlanet(pointsPerSlot, 24, 'manifold-planet-b'),
-            shipA:    buildNomadFleet(pointsPerSlot, 1.0, 'manifold-nomad-a'),
-            shipB:    buildNomadFleet(pointsPerSlot, 0.92, 'manifold-nomad-b')
+            stationA: buildTorusKnotManifold(pointsPerSlot, S.stationA.p, S.stationA.q, S.stationA.radius, 'manifold-knot-3-5'),
+            stationB: buildTorusKnotManifold(pointsPerSlot, S.stationB.p, S.stationB.q, S.stationB.radius, 'manifold-knot-4-7'),
+            ringsA:   buildRocheRings(pointsPerSlot, S.ringsA.inner, S.ringsA.outer, 'manifold-roche-a'),
+            ringsB:   buildRocheRings(pointsPerSlot, S.ringsB.inner, S.ringsB.outer, 'manifold-roche-b'),
+            planetA:  buildAbyssalPlanet(pointsPerSlot, S.planetA.radius, 'manifold-planet-a'),
+            planetB:  buildAbyssalPlanet(pointsPerSlot, S.planetB.radius, 'manifold-planet-b'),
+            shipA:    buildNomadFleet(pointsPerSlot, S.shipA.scale, 'manifold-nomad-a'),
+            shipB:    buildNomadFleet(pointsPerSlot, S.shipB.scale, 'manifold-nomad-b')
         };
     };
 
@@ -1083,7 +1092,7 @@
                     vec4 worldPos = modelMatrix * vec4(localPos, 1.0);
                     vec3 worldNormal = normalize(mat3(modelMatrix) * nrm);
                     vec3 viewDir = normalize(cameraPosition - worldPos.xyz);
-                    vec3 lightDir = normalize(vec3(-0.62, 0.58, 0.52));
+                    vec3 lightDir = normalize(vec3(-0.78, 0.5, 0.22));
 
                     float ndotl = dot(worldNormal, lightDir);
                     // 晨昏线柔和过渡 + 背光边缘瑞利辉光 (Rim Halo)
@@ -1132,6 +1141,15 @@
                         ? seedFadeIn * (0.18 + 0.82 * localCohesion)
                         : uPresence * (0.28 + 0.72 * localCohesion);
                     vAlpha = nearClip * farClip * stageAlpha * (0.68 + seed * 0.32);
+
+                    // Once the body has formed, the points that sketched its
+                    // surface give way to the solid; haloes, field lines, jets
+                    // and wakes stay, and a few sparks ride on hulls and rings.
+                    float keep = uType < 0.5 ? (shade > 2.5 ? 1.0 : shade > 1.5 ? 0.35 : 0.3)
+                        : uType < 1.5 ? (shade > 2.5 ? 0.5 : shade > 1.5 ? 0.25 : 0.0)
+                        : uType < 2.5 ? 0.4
+                        : (shade > 2.5 ? 0.5 : 0.18);
+                    vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
                 }
             `,
             fragmentShader: `
@@ -1166,17 +1184,288 @@
             return { geo, mat, points };
         };
 
-        const slotTemplateMap = [
-            { tmpl: manifoldTemplates.stationA, code: 0 },
-            { tmpl: manifoldTemplates.planetA,  code: 1 },
-            { tmpl: manifoldTemplates.ringsA,   code: 2 },
-            { tmpl: manifoldTemplates.shipA,    code: 3 },
-            { tmpl: manifoldTemplates.stationB, code: 0 },
-            { tmpl: manifoldTemplates.planetB,  code: 1 },
-            { tmpl: manifoldTemplates.ringsB,   code: 2 },
-            { tmpl: manifoldTemplates.shipB,    code: 3 }
-        ];
+        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB']
+            .map((name, idx) => ({ tmpl: manifoldTemplates[name], spec: ENTITY_SPECS[name], code: idx % 4 }));
         const entityNodes = slotTemplateMap.map((item) => buildEntityMesh(item.tmpl, item.code));
+
+        /* ------------------------------------------------------------------------
+         * 层级 4b：天体与巨构的实体 (Solid Bodies)
+         * A point cloud alone reads as a sketch of a planet. Each encounter also
+         * owns a shaded body: the points show it gathering out of dust far away
+         * and tearing apart as the camera sweeps past; in between they give way
+         * to the solid, which hides the stars behind it like a real object.
+         * ------------------------------------------------------------------------ */
+        const fuse = (parts) => {
+            const position = [], normal = [], uv = [], part = [], index = [];
+            for (const [geometry, code] of parts) {
+                const base = position.length / 3;
+                const count = geometry.attributes.position.count;
+                position.push(...geometry.attributes.position.array);
+                normal.push(...geometry.attributes.normal.array);
+                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
+                for (let i = 0; i < count; i += 1) part.push(code);
+                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
+                else for (let i = 0; i < count; i += 1) index.push(i + base);
+                geometry.dispose();
+            }
+            const fused = new T.BufferGeometry();
+            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
+            fused.setIndex(index);
+            return fused;
+        };
+        // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane.
+        const makeBodyMaterial = (kind, seed) => new T.ShaderMaterial({
+            transparent: kind >= 2,
+            depthWrite: kind < 2,
+            side: kind >= 2 ? T.DoubleSide : T.FrontSide,
+            uniforms: {
+                uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
+                uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
+                uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
+                uRing: { value: new T.Vector2(1, 2) },
+                uLight: { value: new T.Vector3(-0.78, 0.5, 0.22).normalize() },
+                uLightLocal: { value: new T.Vector3(0, 1, 0) },
+                uViewport: { value: new T.Vector2(1280, 720) },
+                uColorPrimary: { value: new T.Color('#76bfae') },
+                uColorAccent: { value: new T.Color('#f2a900') },
+                uColorInk: { value: new T.Color('#f2f0e9') },
+                uColorEmber: { value: new T.Color('#e06c5f') },
+                uFloor: { value: new T.Color('#000000') }
+            },
+            vertexShader: `
+                attribute float aPart;
+                varying vec3 vLocal, vWorld, vNormal;
+                varying vec2 vUv;
+                varying float vPart, vDepth;
+                void main() {
+                    vLocal = position; vUv = uv; vPart = aPart;
+                    vec4 world = modelMatrix * vec4(position, 1.0);
+                    vWorld = world.xyz;
+                    vNormal = normalize(mat3(modelMatrix) * normal);
+                    vec4 mv = viewMatrix * world;
+                    vDepth = -mv.z;
+                    gl_Position = projectionMatrix * mv;
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius;
+                uniform vec2 uRing, uViewport;
+                uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
+                varying vec3 vLocal, vWorld, vNormal;
+                varying vec2 vUv;
+                varying float vPart, vDepth;
+
+                float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                float noise(vec3 p) {
+                    vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                        mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                        mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                        mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                }
+                float fbm(vec3 p) { return noise(p) * 0.55 + noise(p * 2.1) * 0.28 + noise(p * 4.3) * 0.17; }
+
+                void main() {
+                    // Gathering and tearing apart: a noise front eats the surface.
+                    float solid = smoothstep(0.42, 0.97, uCohesion) * 1.1;
+                    float grain = noise(vLocal * 0.31 + uSeed * 17.0);
+                    if (grain > solid) discard;
+                    float front = smoothstep(solid - 0.1, solid, grain) * step(solid, 1.0);
+                    float fade = uPresence * smoothstep(5.0, 30.0, vDepth);
+                    // Opaque bodies fade by an interleaved-gradient dither, not by blending.
+                    float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+                    if (uKind < 1.5 && dither > fade) discard;
+
+                    vec3 n = normalize(vNormal);
+                    if (uKind > 2.5) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                    vec3 v = normalize(cameraPosition - vWorld);
+                    if (dot(n, v) < 0.0) n = -n;
+                    float ndl = dot(n, uLight);
+                    float day = smoothstep(-0.18, 0.62, ndl);
+                    float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
+                    vec3 col = vec3(0.0);
+                    float alpha = 1.0;
+
+                    if (uKind < 0.5) {
+                        // Hull: dark plating with seams, lit ports, and a few luminous parts.
+                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 5.0));
+                        vec2 cell = floor(cells), inside = fract(cells);
+                        float seam = smoothstep(0.0, 0.08, inside.x) * smoothstep(0.0, 0.14, inside.y);
+                        float lit = step(0.83, hash(vec3(cell, uSeed)))
+                            * step(0.25, inside.x) * step(inside.x, 0.75) * step(0.3, inside.y) * step(inside.y, 0.7);
+                        vec3 plate = mix(uColorInk, uColorPrimary, 0.35) * (0.05 + 0.05 * hash(vec3(cell * 0.5, 3.0)));
+                        col = plate * seam * (0.35 + day * 2.4) + uColorPrimary * rim * (0.22 + day * 0.35);
+                        col += uColorAccent * lit * (0.75 + 0.35 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
+                        if (vPart > 0.5 && vPart < 1.5) {
+                            // Graduated gate ring: travelling marks.
+                            float mark = step(0.5, fract(vUv.x * 72.0 - uTime * 0.12));
+                            col = uColorAccent * (0.14 + mark * 0.7) * uGlow + uColorInk * rim * 0.25;
+                        } else if (vPart > 1.5 && vPart < 2.5) {
+                            // Core or engine: pure emission with a hot centre.
+                            float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
+                            float facing = clamp(dot(n, v), 0.0, 1.0);
+                            // A lattice shell around the glow keeps it a lamp, not a blob.
+                            vec3 q = normalize(vLocal - vec3(0.0)) * 5.0;
+                            float cage = smoothstep(0.38, 0.5, abs(fract(q.x + q.y) - 0.5))
+                                + smoothstep(0.38, 0.5, abs(fract(q.y - q.z) - 0.5));
+                            col = mix(uColorAccent, uColorInk, 0.3) * pow(facing, 2.2) * (0.3 + heat * 0.55) * uGlow
+                                + uColorEmber * (1.0 - facing) * 0.2;
+                            col *= 1.0 - 0.72 * clamp(cage, 0.0, 1.0);
+                        }
+                    } else if (uKind < 1.5) {
+                        // Gas giant: turbulent latitude bands, storms, a soft
+                        // terminator, a limb of atmosphere, aurora on the night pole.
+                        vec3 p = normalize(vLocal);
+                        float warp = fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0));
+                        float lat = p.y + (warp - 0.5) * 0.16;
+                        float bands = 0.5 + 0.5 * sin(lat * (15.0 + uSeed * 9.0) + sin(lat * 41.0) * 0.6);
+                        float fine = noise(vec3(p.x * 5.0, lat * 46.0, p.z * 5.0) + uSeed * 3.0);
+                        float storm = smoothstep(0.62, 0.86, fbm(vec3(p.x * 4.0, lat * 13.0, p.z * 4.0) + uSeed * 11.0));
+                        vec3 dark = mix(uColorPrimary, uColorInk, 0.12) * 0.26;
+                        vec3 pale = mix(uColorPrimary, uColorInk, 0.62) * 0.74;
+                        vec3 surface = mix(dark, pale, bands * (0.72 + fine * 0.28));
+                        surface = mix(surface, mix(uColorAccent, uColorInk, 0.25) * 0.8, storm * 0.5);
+                        surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
+                        vec3 air = mix(uColorPrimary, uColorInk, 0.3);
+                        col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
+                        float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
+                        float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
+                        col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
+                    } else if (uKind < 2.5) {
+                        // Ring system: ringlets, a wide division, spiral density
+                        // waves, the planet's shadow, and light scattered forward.
+                        float r = length(vLocal.xz);
+                        float t = clamp((r - uRing.x) / (uRing.y - uRing.x), 0.0, 1.0);
+                        float angle = atan(vLocal.z, vLocal.x);
+                        float ringlets = 0.25 + 0.75 * noise(vec3(t * 54.0, uSeed * 9.0, 0.0))
+                            * (0.6 + 0.4 * noise(vec3(t * 190.0, 4.0, uSeed)));
+                        float edges = smoothstep(0.0, 0.03, t) * (1.0 - smoothstep(0.94, 1.0, t));
+                        float division = 1.0 - 0.94 * smoothstep(0.27, 0.285, t) * (1.0 - smoothstep(0.34, 0.355, t));
+                        float wave = 0.82 + 0.18 * sin(angle * 2.0 - log(max(r, 1.0)) * 9.0 + uTime * 0.12);
+                        float dust = 0.82 + 0.18 * noise(vec3(vLocal.xz * 1.3, uSeed));
+                        float density = ringlets * edges * division * wave * dust;
+                        vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
+                        tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
+                        float along = -dot(vLocal, uLightLocal);
+                        float miss = length(vLocal + uLightLocal * along);
+                        float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
+                        float forward = pow(max(dot(-v, uLight), 0.0), 6.0);
+                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 1.6) * mix(0.05, 1.0, shadow);
+                        alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
+                    } else {
+                        // Light sail: a thin membrane on ribs, iridescent at grazing angles.
+                        float rib = max(smoothstep(0.86, 1.0, abs(fract(vUv.x * 11.0) * 2.0 - 1.0)),
+                            smoothstep(0.82, 1.0, abs(vUv.y * 2.0 - 1.0)));
+                        float graze = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0);
+                        vec3 film = mix(uColorPrimary, uColorAccent, 0.5 + 0.5 * sin(graze * 7.0 + vUv.x * 5.0 + uSeed * 6.0));
+                        col = film * (0.1 + 0.55 * pow(abs(ndl), 1.5) + graze * 0.5)
+                            + uColorInk * rib * (0.3 + day * 0.5)
+                            + uColorPrimary * smoothstep(0.8, 1.0, vUv.x) * 0.7 * uGlow;
+                        alpha = clamp(0.3 + rib * 0.55 + graze * 0.3, 0.0, 0.92) * fade;
+                    }
+                    // On a pale backdrop the night side is a deep tone, not a hole.
+                    col += uFloor;
+                    // Whatever drifts behind the reading area steps back.
+                    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                    col *= mix(0.3, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                    col += mix(uColorAccent, uColorInk, 0.4) * front * 1.6 * uGlow;
+                    gl_FragColor = vec4(col, alpha);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        });
+
+        const buildStationBody = ({ p, q, radius }, seed) => {
+            class KnotPath extends T.Curve {
+                getPoint(u, target = new T.Vector3()) {
+                    const t = u * TAU * p, phase = (q / p) * t;
+                    const core = radius * (0.72 + 0.28 * Math.cos(phase));
+                    return target.set(core * Math.cos(t), core * Math.sin(t),
+                        radius * (0.36 + 0.12 * Math.cos(phase)) * Math.sin(phase));
+                }
+            }
+            return [[fuse([
+                [new T.TubeGeometry(new KnotPath(), 640, 0.95, 7, true), 0],
+                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(0.38), 1],
+                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(-0.38), 1],
+                [new T.IcosahedronGeometry(radius * 0.12, 3), 2]
+            ]), makeBodyMaterial(0, seed)]];
+        };
+        const buildPlanetBody = ({ radius }, seed) =>
+            [[fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]), makeBodyMaterial(1, seed)]];
+        const buildRingedBody = ({ inner, outer }, seed) => {
+            const bodyRadius = inner / 1.32;
+            const disc = makeBodyMaterial(2, seed);
+            disc.uniforms.uRing.value.set(inner, outer);
+            disc.uniforms.uBodyRadius.value = bodyRadius;
+            return [
+                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37)],
+                [fuse([[new T.RingGeometry(inner, outer, 160, 6).rotateX(-Math.PI / 2), 0]]), disc]
+            ];
+        };
+        const buildShipBody = ({ scale }, seed) => {
+            // The same oblique cruising attitude the point template uses.
+            const attitude = new T.Matrix4().set(0.85, 0, 0.48, 0, 0, 1, 0, 0, -0.48, 0, 0.85, 0, 0, 0, 0, 1);
+            const profile = [];
+            for (let i = 0; i <= 16; i += 1) {
+                const z = (i / 16 - 0.5) * 34 * scale;
+                profile.push(new T.Vector2(Math.max(0.12, (1 - Math.abs(z) / (17.6 * scale)) * 2.1 * scale), z));
+            }
+            const hull = fuse([
+                [new T.LatheGeometry(profile, 14).rotateX(Math.PI / 2), 3],
+                [new T.TorusGeometry(4.6 * scale, 0.42 * scale, 8, 44), 3],
+                [new T.CylinderGeometry(1.5 * scale, 0.55 * scale, 3 * scale, 12)
+                    .rotateX(Math.PI / 2).translate(0, 0, 16.4 * scale), 2]
+            ]).applyMatrix4(attitude);
+            const position = [], uv = [], index = [];
+            const SPAN = 22, CHORD = 6;
+            for (let wing = 0; wing < 3; wing += 1) {
+                const angle = (wing / 3) * TAU + Math.PI * 0.5;
+                const base = position.length / 3;
+                for (let i = 0; i <= SPAN; i += 1) {
+                    for (let j = 0; j <= CHORD; j += 1) {
+                        const s = i / SPAN, chord = (j / CHORD * 2 - 1) * (1 - s * 0.72);
+                        const reach = (2.2 + s * 28) * scale, camber = Math.sin(s * Math.PI) * 3.2 * scale;
+                        const x = Math.cos(angle) * reach - Math.sin(angle) * camber;
+                        const y = Math.sin(angle) * reach + Math.cos(angle) * camber;
+                        const z = (-s * s * 16 + chord * 7.5) * scale;
+                        position.push(x * 0.85 + z * 0.48, y * 0.92, -x * 0.48 + z * 0.85);
+                        uv.push(s, j / CHORD);
+                        if (i < SPAN && j < CHORD) {
+                            const a = base + i * (CHORD + 1) + j, b = a + CHORD + 1;
+                            index.push(a, b, a + 1, a + 1, b, b + 1);
+                        }
+                    }
+                }
+            }
+            const sails = new T.BufferGeometry();
+            sails.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            sails.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            sails.setIndex(index);
+            sails.computeVertexNormals();
+            return [[hull, makeBodyMaterial(0, seed)], [fuse([[sails, 0]]), makeBodyMaterial(3, seed)]];
+        };
+        const bodyBuilders = [buildStationBody, buildPlanetBody, buildRingedBody, buildShipBody];
+        const bodyNodes = slotTemplateMap.map((item, idx) => {
+            const group = new T.Group();
+            group.visible = false;
+            const parts = bodyBuilders[item.code](item.spec, (idx * 0.618 + 0.11) % 1).map(([geo, mat]) => {
+                const mesh = new T.Mesh(geo, mat);
+                mesh.frustumCulled = false;
+                // Translucent rings and sails draw after the opaque bodies they wrap.
+                mesh.renderOrder = mat.transparent ? 6 : 0;
+                group.add(mesh);
+                return { geo, mat };
+            });
+            root.add(group);
+            return { group, parts };
+        });
+        const worldLight = new T.Vector3(-0.78, 0.5, 0.22).normalize();
+        const bodyTurn = new T.Quaternion();
 
         /* ------------------------------------------------------------------------
          * 层级 5：深空引力波纹环 (Gravitational Wave Ripples)
@@ -1753,6 +2042,19 @@
                 node.mat.uniforms.uColorInk.value.copy(colors.ink);
                 node.mat.uniforms.uColorEmber.value.copy(colors.ember);
             });
+            // Bodies are lit towards "ink". On a light theme ink is the dark
+            // colour, so they are lit towards paper and rest on a deep floor.
+            const luma = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+            const paper = luma(colors.background) > luma(colors.ink);
+            const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
+            const bodyFloor = paper ? colors.ink.clone().lerp(colors.secondary, 0.4).multiplyScalar(0.5) : new T.Color('#000000');
+            bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
+                mat.uniforms.uColorPrimary.value.copy(colors.secondary);
+                mat.uniforms.uColorAccent.value.copy(colors.accent);
+                mat.uniforms.uColorInk.value.copy(bodyInk);
+                mat.uniforms.uColorEmber.value.copy(colors.ember);
+                mat.uniforms.uFloor.value.copy(bodyFloor);
+            }));
 
             lyricParticleMat.uniforms.uTint.value.copy(colors.accent);
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
@@ -2046,6 +2348,8 @@
                     : slot.type === 'rings' ? showRings
                         : slot.type === 'ship' ? showShips
                             : showStations;
+                const body = bodyNodes[idx];
+                body.group.visible = false;
                 if (!enabled) {
                     node.points.visible = false;
                     return;
@@ -2107,6 +2411,22 @@
                 u.uDensity.value = objectDensity;
                 u.uAudioPulse.value = audioPulse;
                 u.uGlow.value = glowAmount;
+
+                // The solid shares the points' place, attitude and envelope.
+                body.group.visible = true;
+                body.group.position.copy(node.points.position);
+                body.group.rotation.copy(node.points.rotation);
+                body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
+                bodyTurn.copy(body.group.quaternion).invert();
+                for (const { mat } of body.parts) {
+                    const b = mat.uniforms;
+                    b.uTime.value = time;
+                    b.uCohesion.value = cohesion;
+                    b.uPresence.value = presence;
+                    b.uAudioPulse.value = audioPulse;
+                    b.uGlow.value = glowAmount;
+                    b.uLightLocal.value.copy(worldLight).applyQuaternion(bodyTurn);
+                }
             });
         };
 
@@ -2124,6 +2444,9 @@
                 filamentMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 lyricParticleMat.uniforms.uPixelRatio.value = ratio;
                 entityNodes.forEach((node) => { node.mat.uniforms.uPixelRatio.value = ratio; });
+                bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
+                    mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
+                }));
             },
             destroy() {
                 clearGlyphStage();
@@ -2134,6 +2457,7 @@
                     node.geo?.dispose?.();
                     node.mat?.dispose?.();
                 });
+                bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
                 ripples.forEach((r) => r.mat?.dispose?.());
             }
         };
