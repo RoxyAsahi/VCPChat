@@ -261,6 +261,9 @@
                 events = global.MusicStageDioramaEvents.create(T, scene);
                 optics = global.MusicStageDioramaOptics?.create(T);
                 resize();
+                // The environment map has to be in place before the warm-up, or every
+                // standard material recompiles the first time it appears.
+                world.prepareEnvironment?.(renderer);
                 // The lens draws the scene offscreen; without it only the water pass does.
                 await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
                 if (mode.destroyed || !renderer) return;
