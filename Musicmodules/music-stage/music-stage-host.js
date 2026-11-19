@@ -196,6 +196,7 @@
                 { key: 'showParticles', label: '天球星空', type: 'toggle' },
                 { key: 'geometryMode', label: '取景方式', type: 'select', options: [['clouds', '电影取景'], ['corridor', '全幅取景']] },
                 { key: 'cabinFrame', label: '车窗前景（侧望窗外时淡入）', type: 'toggle' },
+                { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
                 { key: 'glow', label: '辉光强度', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ],
             luminous: [
@@ -253,7 +254,7 @@
             tunnel: [
                 { key: 'cameraSpeed', label: '穿行速度', type: 'range', min: 0.55, max: 1.85, step: 0.05, unit: 'x' },
                 { key: 'motionAmount', label: '空间运动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
-                { key: 'pauseDuration', label: '镜头停驻', type: 'range', min: 0, max: 3, step: 0.05, unit: 's' },
+                { key: 'pauseDuration', label: '句尾停驻（唱完后停留）', type: 'range', min: 0, max: 3, step: 0.05, unit: 's' },
                 { key: 'cameraBreath', label: '镜头呼吸', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'cameraShake', label: '镜头晃动', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'objectDensity', label: '物体密度', type: 'range', min: 0.25, max: 2, step: 0.05, unit: 'x' },
@@ -265,6 +266,7 @@
                 { key: 'dissolveAmount', label: '点阵消散', type: 'range', min: 0, max: 1, step: 0.05, unit: '%' },
                 { key: 'textHoldRatio', label: '歌词驻留', type: 'range', min: 0, max: 0.8, step: 0.05, unit: '%' },
                 { key: 'fontScale', label: '歌词字号', type: 'range', min: 0.65, max: 1.5, step: 0.05, unit: 'x' },
+                { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
                 { key: 'glow', label: '点阵辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
                 { key: 'audioReactivity', label: '音频响应', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' }
             ]
@@ -280,6 +282,7 @@
             backgroundTimer: null,
             lastFrame: null,
             draggingProgress: false,
+            seekHold: null,
             lastTransportSignature: '',
             lastProgressWidth: '',
             lastCurrentTimeText: '',
@@ -445,7 +448,7 @@
             const modeFragment = document.createDocumentFragment();
             Modes.entries.forEach((entry) => {
                 const label = createElement('label', 'music-stage-mode-option', {
-                    title: `${entry.label} · ${entry.description}`
+                    title: entry.description ? `${entry.label} · ${entry.description}` : entry.label
                 });
                 const checkbox = createElement('input', '', {
                     type: 'checkbox',
@@ -883,6 +886,7 @@
 
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
+            applySeekHold();
             const frame = Runtime.createFrame(app, timestamp);
             state.lastFrame = frame;
             state.stats.frameUpdates += 1;
@@ -910,6 +914,43 @@
             state.modeInstance?.updateFrame?.(frame);
         };
 
+        // The player polls the engine every 250 ms. During a drag, and until the
+        // engine reports the committed position, those polls still carry the old
+        // position, so the target is re-asserted before every stage frame.
+        const holdSeek = (target, commit) => {
+            const now = Date.now();
+            state.seekHold = {
+                target,
+                stamp: now,
+                until: commit ? now + 1500 : Infinity,
+                origin: state.seekHold?.origin ?? (Number(app.lastKnownCurrentTime) || 0)
+            };
+            app.lastKnownCurrentTime = target;
+            app.lastStateUpdateTime = now;
+        };
+        const applySeekHold = () => {
+            const hold = state.seekHold;
+            if (!hold) return;
+            const now = Date.now();
+            const polled = Number(app.lastKnownCurrentTime) || 0;
+            const pollWrote = app.lastStateUpdateTime !== hold.stamp || polled !== hold.target;
+            if (hold.until !== Infinity
+                && (now > hold.until || (pollWrote && Math.abs(polled - hold.target) < 2))) {
+                state.seekHold = null;
+                return;
+            }
+            app.lastKnownCurrentTime = hold.target;
+            app.lastStateUpdateTime = now;
+            hold.stamp = now;
+        };
+        const cancelSeekHold = () => {
+            const hold = state.seekHold;
+            state.seekHold = null;
+            if (!hold || hold.until !== Infinity) return;
+            app.lastKnownCurrentTime = hold.origin;
+            app.lastStateUpdateTime = Date.now();
+        };
+
         const seekFromPointer = async (event, commit) => {
             const rect = elements.progressTrack.getBoundingClientRect();
             const ratio = clamp((event.clientX - rect.left) / Math.max(rect.width, 1));
@@ -922,8 +963,7 @@
             const currentTimeText = app.formatTime?.(target) || '0:00';
             state.lastCurrentTimeText = currentTimeText;
             elements.currentTime.textContent = currentTimeText;
-            app.lastKnownCurrentTime = target;
-            app.lastStateUpdateTime = Date.now();
+            holdSeek(target, commit);
             if (commit && duration > 0) await app.api?.seekMusic?.(target);
         };
 
@@ -1146,6 +1186,7 @@
         });
         scope.listen(elements.progressTrack, 'pointercancel', () => {
             state.draggingProgress = false;
+            cancelSeekHold();
         });
         scope.listen(elements.progressTrack, 'keydown', (event) => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -1157,8 +1198,8 @@
             if (event.key === 'Home') target = 0;
             if (event.key === 'End') target = duration;
             target = clamp(target, 0, duration);
-            app.lastKnownCurrentTime = target;
-            app.lastStateUpdateTime = Date.now();
+            state.seekHold = null;
+            holdSeek(target, true);
             app.api?.seekMusic?.(target);
         });
         scope.listen(global, 'keydown', onKeyDown);

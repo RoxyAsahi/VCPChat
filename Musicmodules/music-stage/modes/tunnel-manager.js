@@ -28,6 +28,22 @@
 
     const blendAngle = (a, b, weight) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
 
+    // Where the key light comes from, and where the sun that casts it hangs in
+    // the sky. The sun is drawn further into the frame than the light strictly
+    // allows, so bodies keep a lit face while it stays in the picture.
+    const unit = (v) => { const length = Math.hypot(...v); return v.map((n) => n / length); };
+    const KEY_LIGHT = unit([-0.78, 0.44, 0.26]);
+    const SUN_AT = unit([-0.5, 0.26, -0.83]);
+    // The galaxy's plane, tilted across the upper part of the view, and its bright middle.
+    const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
+    const GALAXY_CORE = unit([0.75, 0.21, -1]);
+    const glslVec3 = (v) => `vec3(${v.map((n) => n.toFixed(4)).join(', ')})`;
+    // Surface maps sit beside the modes, wherever the page that hosts them lives.
+    const ASSETS = (() => {
+        const here = global.document?.currentScript?.src;
+        return here ? new URL('../assets/', here).href : 'music-stage/assets/';
+    })();
+
     /* ============================================================================
      * 1. 深空分镜导演 (Deep-Space Cinematography & Shot Director)
      *    - 自动识别乐段 (Drift / Verse / Pre / Chorus / Interlude / Horizon)
@@ -192,7 +208,9 @@
             const idx = Math.min(count - 1, Math.floor(t / step));
             const t0 = idx * step;
             const span = Math.max(1e-5, Math.min(duration, (idx + 1) * step) - t0);
-            const baseDist = mix(distances[idx], distances[idx + 1], clamp((t - t0) / span));
+            let baseDist = mix(distances[idx], distances[idx + 1], clamp((t - t0) / span));
+            // Keep cruising if playback outlives the compiled timeline.
+            if (time > duration) baseDist += (time - duration) * Math.max(0.2, sampleState(duration).speed);
             return baseDist * clamp(speedScale, 0.25, 2.5);
         };
 
@@ -287,6 +305,14 @@
      *    meta.z: 基础粒子半径缩放
      *    meta.w: 个人随机种子 seed ∈ [0,1]
      * ============================================================================ */
+    // One set of dimensions for each encounter: the point template and the
+    // solid body are built from the same numbers, so they coincide.
+    const ENTITY_SPECS = Object.freeze({
+        stationA: { p: 3, q: 5, radius: 25 }, stationB: { p: 4, q: 7, radius: 26 },
+        ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
+        planetA: { radius: 26 }, planetB: { radius: 24 },
+        shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
+    });
     const createManifoldTemplates = (pointsPerSlot) => {
         // A. 高维环面结流形 / 戴森星门遗迹 (Torus Knot (p,q) Manifold + Harmonic Filaments)
         const buildTorusKnotManifold = (count, p, q, radius, seedStr) => {
@@ -581,15 +607,16 @@
             return { pos, normal, meta };
         };
 
+        const S = ENTITY_SPECS;
         return {
-            stationA: buildTorusKnotManifold(pointsPerSlot, 3, 5, 25, 'manifold-knot-3-5'),
-            stationB: buildTorusKnotManifold(pointsPerSlot, 4, 7, 26, 'manifold-knot-4-7'),
-            ringsA:   buildRocheRings(pointsPerSlot, 22, 48, 'manifold-roche-a'),
-            ringsB:   buildRocheRings(pointsPerSlot, 24, 52, 'manifold-roche-b'),
-            planetA:  buildAbyssalPlanet(pointsPerSlot, 26, 'manifold-planet-a'),
-            planetB:  buildAbyssalPlanet(pointsPerSlot, 24, 'manifold-planet-b'),
-            shipA:    buildNomadFleet(pointsPerSlot, 1.0, 'manifold-nomad-a'),
-            shipB:    buildNomadFleet(pointsPerSlot, 0.92, 'manifold-nomad-b')
+            stationA: buildTorusKnotManifold(pointsPerSlot, S.stationA.p, S.stationA.q, S.stationA.radius, 'manifold-knot-3-5'),
+            stationB: buildTorusKnotManifold(pointsPerSlot, S.stationB.p, S.stationB.q, S.stationB.radius, 'manifold-knot-4-7'),
+            ringsA:   buildRocheRings(pointsPerSlot, S.ringsA.inner, S.ringsA.outer, 'manifold-roche-a'),
+            ringsB:   buildRocheRings(pointsPerSlot, S.ringsB.inner, S.ringsB.outer, 'manifold-roche-b'),
+            planetA:  buildAbyssalPlanet(pointsPerSlot, S.planetA.radius, 'manifold-planet-a'),
+            planetB:  buildAbyssalPlanet(pointsPerSlot, S.planetB.radius, 'manifold-planet-b'),
+            shipA:    buildNomadFleet(pointsPerSlot, S.shipA.scale, 'manifold-nomad-a'),
+            shipB:    buildNomadFleet(pointsPerSlot, S.shipB.scale, 'manifold-nomad-b')
         };
     };
 
@@ -603,6 +630,7 @@
 
         let viewportAspect = 1.6;
         let pixelRatio = 1;
+        let viewportPixels = 720;
         let stagePalette = {};
         let timeline = compileTunnelTimeline([], 'init', 180);
         let totalTravelDistance = 0;
@@ -759,6 +787,153 @@
         const fieldPoints = new T.Points(fieldGeo, fieldMat);
         fieldPoints.frustumCulled = false;
         root.add(fieldPoints);
+
+        /* ------------------------------------------------------------------------
+         * Layer 0: the sky everything else is seen against. A galaxy crosses the
+         * upper part of the view, a warm cloud hangs round the sun and a cool one
+         * low on the far side. The clouds are worked out once into a small map of
+         * densities, so a frame costs one lookup, the sun and a layer of stars.
+         * ------------------------------------------------------------------------ */
+        const skyMasks = new T.WebGLRenderTarget(2048, 1024, {
+            depthBuffer: false, generateMipmaps: false,
+            minFilter: T.LinearFilter, magFilter: T.LinearFilter, wrapS: T.RepeatWrapping
+        });
+        const skyBakeMat = new T.ShaderMaterial({
+            depthTest: false, depthWrite: false, blending: T.NoBlending,
+            vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+            fragmentShader: `
+                varying vec2 vUv;
+                float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                float noise(vec3 p) {
+                    vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                        mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                        mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                        mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                }
+                float fbm(vec3 p) {
+                    float sum = 0.0, gain = 0.5;
+                    for (int i = 0; i < 5; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
+                    return sum;
+                }
+                float ridge(vec3 p) {
+                    float sum = 0.0, gain = 0.5;
+                    for (int i = 0; i < 5; i++) {
+                        sum += gain * (1.0 - abs(noise(p) * 2.0 - 1.0));
+                        p = p * 2.07 + vec3(1.7, 9.2, 4.4); gain *= 0.5;
+                    }
+                    return sum;
+                }
+                void main() {
+                    float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.14159265;
+                    vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat));
+                    vec3 w = d * 2.4 + vec3(fbm(d * 2.6 + 1.7), fbm(d * 2.6 + 9.2), fbm(d * 2.6 + 4.4)) * 1.1;
+                    // Red: the cool cloud. Green: the warm one round the sun.
+                    float coolAt = smoothstep(0.25, 0.95, dot(d, normalize(vec3(0.66, -0.36, -0.66))));
+                    float cool = coolAt * smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float warmAt = smoothstep(0.45, 0.98, dot(d, ${glslVec3(SUN_AT)}));
+                    float warm = warmAt * smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    // Blue: the galaxy, clumped, with its bulge. Alpha: dust that hides it.
+                    float h = dot(d, ${glslVec3(GALAXY_POLE)});
+                    float band = exp(-h * h / 0.022) * (0.35 + 0.9 * fbm(d * 6.0 + 20.0));
+                    float bulge = exp(-(1.0 - dot(d, ${glslVec3(GALAXY_CORE)})) * 14.0) * exp(-h * h / 0.05);
+                    float lanes = exp(-h * h / 0.006) * smoothstep(0.5, 0.78, ridge(d * 7.0 + 31.0)) * 0.9;
+                    lanes = max(lanes, coolAt * smoothstep(0.62, 0.85, ridge(w * 2.6 + 17.0)) * 0.5);
+                    gl_FragColor = vec4(cool, warm, clamp(band * 0.7 + bulge * 0.9, 0.0, 1.0), clamp(lanes, 0.0, 1.0));
+                }
+            `
+        });
+        const skyGeo = new T.SphereGeometry(1, 32, 16);
+        const skyMat = new T.ShaderMaterial({
+            side: T.BackSide, depthTest: false, depthWrite: false, fog: false,
+            uniforms: {
+                uMasks: { value: skyMasks.texture },
+                uBase: { value: new T.Color('#020305') },
+                uColorA: { value: new T.Color('#76bfae') },
+                uColorB: { value: new T.Color('#f2a900') },
+                uColorStar: { value: new T.Color('#b8c7d4') },
+                uColorSun: { value: new T.Color('#fff1d6') },
+                uInk: { value: new T.Color('#f2f0e9') },
+                uTime: { value: 0 }, uNebula: { value: 1 }, uPaper: { value: 0 },
+                uViewport: { value: new T.Vector2(1280, 720) }
+            },
+            vertexShader: `
+                varying vec3 vDir;
+                void main() {
+                    vDir = position;
+                    // Turned with the camera, never moved by it: the sky is infinitely far.
+                    vec4 clip = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
+                    gl_Position = clip.xyww;
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D uMasks;
+                uniform vec3 uBase, uColorA, uColorB, uColorStar, uColorSun, uInk;
+                uniform float uTime, uNebula, uPaper;
+                uniform vec2 uViewport;
+                varying vec3 vDir;
+                float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                void main() {
+                    vec3 d = normalize(vDir);
+                    float lat = asin(clamp(d.y, -1.0, 1.0));
+                    vec2 uv = vec2(atan(d.x, -d.z) / 6.2831853 + 0.5, lat / 3.14159265 + 0.5);
+                    vec4 m = texture2D(uMasks, uv);
+                    // Whatever lies behind the reading area steps back.
+                    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                    float read = mix(0.3, 1.0, smoothstep(0.12, 0.9, length(ndc * vec2(0.75, 1.4))));
+                    // One star to a cell of the sky, more of them along the galaxy, a pixel or two wide.
+                    vec2 g = uv * vec2(440.0, 220.0), cell = floor(g);
+                    float pick = hash(cell), mag = pow(hash(cell + 5.1), 7.0);
+                    vec2 at = 0.2 + 0.6 * vec2(hash(cell + 17.3), hash(cell + 41.7));
+                    float px = max(length(dFdx(g)), length(dFdy(g)));
+                    float dist = length((fract(g) - at) * vec2(cos(lat), 1.0));
+                    float star = step(0.86 - m.b * 0.3, pick) * smoothstep(px * (0.75 + mag * 0.9), px * 0.2, dist)
+                        * (0.1 + 0.9 * mag) * (0.8 + 0.2 * sin(uTime * (0.6 + pick * 2.0) + pick * 40.0));
+                    float angle = acos(clamp(dot(d, ${glslVec3(SUN_AT)}), -1.0, 1.0));
+                    float disc = smoothstep(0.024, 0.008, angle);
+                    float corona = exp(-angle * 24.0) * 0.8 + exp(-angle * 6.5) * 0.14 + exp(-angle * 2.2) * 0.03;
+                    // Six thin rays, as a lens draws a point of light.
+                    vec3 sunward = ${glslVec3(SUN_AT)};
+                    vec3 across = normalize(cross(vec3(0.0, 1.0, 0.0), sunward)), up = cross(sunward, across);
+                    vec2 offset = vec2(dot(d, across), dot(d, up));
+                    float rays = 0.0;
+                    for (int i = 0; i < 3; i++) {
+                        float turn = 0.35 + float(i) * 1.0472;
+                        vec2 axis = vec2(cos(turn), sin(turn));
+                        rays += exp(-abs(dot(offset, vec2(-axis.y, axis.x))) * 420.0) * exp(-abs(dot(offset, axis)) * 15.0);
+                    }
+                    corona += rays * 0.17 * step(0.0, dot(d, sunward));
+
+                    vec3 night = uBase + uColorStar * m.b * 0.055;
+                    night += (uColorA * m.r * 0.1 + uColorB * m.g * 0.075) * uNebula;
+                    night *= (1.0 - m.a * 0.8) * read;
+                    night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
+                    night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
+                    // On a pale theme the same sky is washes of colour on paper.
+                    vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
+                    paper = mix(paper, uColorB, m.g * 0.22 * uNebula);
+                    paper = mix(paper, uInk, m.a * 0.1 + star * 0.45);
+                    paper = mix(paper, vec3(1.0), clamp(disc + corona * 0.9, 0.0, 1.0) * 0.85);
+
+                    gl_FragColor = vec4(mix(night, paper, uPaper), 1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        });
+        const skyDome = new T.Mesh(skyGeo, skyMat);
+        skyDome.frustumCulled = false;
+        skyDome.renderOrder = -10;
+        root.add(skyDome);
+        // The cloud map is drawn once the renderer exists, and again after a lost context.
+        const prepare = (renderer) => {
+            const quad = new T.Mesh(new T.PlaneGeometry(2, 2), skyBakeMat);
+            const previous = renderer.getRenderTarget();
+            renderer.setRenderTarget(skyMasks);
+            renderer.render(quad, new T.Camera());
+            renderer.setRenderTarget(previous);
+            quad.geometry.dispose();
+        };
 
         /* ------------------------------------------------------------------------
          * 层级 2：深空结项引力丝束 (Geodesic Braided Filaments)
@@ -1080,7 +1255,7 @@
                     vec4 worldPos = modelMatrix * vec4(localPos, 1.0);
                     vec3 worldNormal = normalize(mat3(modelMatrix) * nrm);
                     vec3 viewDir = normalize(cameraPosition - worldPos.xyz);
-                    vec3 lightDir = normalize(vec3(-0.62, 0.58, 0.52));
+                    vec3 lightDir = ${glslVec3(KEY_LIGHT)};
 
                     float ndotl = dot(worldNormal, lightDir);
                     // 晨昏线柔和过渡 + 背光边缘瑞利辉光 (Rim Halo)
@@ -1129,6 +1304,15 @@
                         ? seedFadeIn * (0.18 + 0.82 * localCohesion)
                         : uPresence * (0.28 + 0.72 * localCohesion);
                     vAlpha = nearClip * farClip * stageAlpha * (0.68 + seed * 0.32);
+
+                    // Once the body has formed, the points that sketched its
+                    // surface give way to the solid; haloes, field lines, jets
+                    // and wakes stay, and a few sparks ride on hulls and rings.
+                    float keep = uType < 0.5 ? (shade > 2.5 ? 1.0 : shade > 1.5 ? 0.35 : 0.3)
+                        : uType < 1.5 ? (shade > 2.5 ? 0.5 : shade > 1.5 ? 0.25 : 0.0)
+                        : uType < 2.5 ? 0.4
+                        : (shade > 2.5 ? 0.5 : 0.18);
+                    vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
                 }
             `,
             fragmentShader: `
@@ -1163,17 +1347,366 @@
             return { geo, mat, points };
         };
 
-        const slotTemplateMap = [
-            { tmpl: manifoldTemplates.stationA, code: 0 },
-            { tmpl: manifoldTemplates.planetA,  code: 1 },
-            { tmpl: manifoldTemplates.ringsA,   code: 2 },
-            { tmpl: manifoldTemplates.shipA,    code: 3 },
-            { tmpl: manifoldTemplates.stationB, code: 0 },
-            { tmpl: manifoldTemplates.planetB,  code: 1 },
-            { tmpl: manifoldTemplates.ringsB,   code: 2 },
-            { tmpl: manifoldTemplates.shipB,    code: 3 }
-        ];
+        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB']
+            .map((name, idx) => ({ tmpl: manifoldTemplates[name], spec: ENTITY_SPECS[name], code: idx % 4 }));
         const entityNodes = slotTemplateMap.map((item) => buildEntityMesh(item.tmpl, item.code));
+
+        /* ------------------------------------------------------------------------
+         * 层级 4b：天体与巨构的实体 (Solid Bodies)
+         * A point cloud alone reads as a sketch of a planet. Each encounter also
+         * owns a shaded body: the points show it gathering out of dust far away
+         * and tearing apart as the camera sweeps past; in between they give way
+         * to the solid, which hides the stars behind it like a real object.
+         * ------------------------------------------------------------------------ */
+        const fuse = (parts) => {
+            const position = [], normal = [], uv = [], part = [], index = [];
+            for (const [geometry, code] of parts) {
+                const base = position.length / 3;
+                const count = geometry.attributes.position.count;
+                position.push(...geometry.attributes.position.array);
+                normal.push(...geometry.attributes.normal.array);
+                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
+                for (let i = 0; i < count; i += 1) part.push(code);
+                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
+                else for (let i = 0; i < count; i += 1) index.push(i + base);
+                geometry.dispose();
+            }
+            const fused = new T.BufferGeometry();
+            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
+            fused.setIndex(index);
+            return fused;
+        };
+        // Photographed cloud decks and a measured ring profile, kept as
+        // luminance only: the palette still decides every colour. Until a map
+        // arrives, and wherever it cannot be read, the procedural surface stands in.
+        const surfaceMaps = new Map();
+        let surfacesReleased = false;
+        const wearSurface = (material, file) => {
+            if (!file || !T.TextureLoader) return material;
+            let entry = surfaceMaps.get(file);
+            if (!entry) {
+                entry = { texture: null, wearers: [] };
+                surfaceMaps.set(file, entry);
+                new T.TextureLoader().load(ASSETS + file, (texture) => {
+                    if (surfacesReleased) { texture.dispose(); return; }
+                    texture.wrapS = T.RepeatWrapping;
+                    texture.anisotropy = 4;
+                    entry.texture = texture;
+                    entry.wearers.forEach((wearer) => {
+                        wearer.uniforms.uSurface.value = texture;
+                        wearer.uniforms.uMapped.value = 1;
+                    });
+                }, undefined, () => {});
+            }
+            if (entry.texture) {
+                material.uniforms.uSurface.value = entry.texture;
+                material.uniforms.uMapped.value = 1;
+            } else {
+                entry.wearers.push(material);
+            }
+            return material;
+        };
+        // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane, 4 air above the clouds.
+        const AIR_REACH = 1.045;
+        const makeBodyMaterial = (kind, seed, surface) => wearSurface(new T.ShaderMaterial({
+            transparent: kind >= 2,
+            depthWrite: kind < 2,
+            side: kind === 2 || kind === 3 ? T.DoubleSide : T.FrontSide,
+            uniforms: {
+                uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
+                uSurface: { value: null }, uMapped: { value: 0 },
+                uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
+                uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
+                uRing: { value: new T.Vector2(1, 2) },
+                uLight: { value: new T.Vector3(...KEY_LIGHT) },
+                uLightLocal: { value: new T.Vector3(0, 1, 0) },
+                uViewport: { value: new T.Vector2(1280, 720) },
+                uColorPrimary: { value: new T.Color('#76bfae') },
+                uColorAccent: { value: new T.Color('#f2a900') },
+                uColorInk: { value: new T.Color('#f2f0e9') },
+                uColorEmber: { value: new T.Color('#e06c5f') },
+                uFloor: { value: new T.Color('#000000') }
+            },
+            vertexShader: `
+                attribute float aPart;
+                varying vec3 vLocal, vWorld, vNormal;
+                varying vec2 vUv;
+                varying float vPart, vDepth;
+                void main() {
+                    vLocal = position; vUv = uv; vPart = aPart;
+                    vec4 world = modelMatrix * vec4(position, 1.0);
+                    vWorld = world.xyz;
+                    vNormal = normalize(mat3(modelMatrix) * normal);
+                    vec4 mv = viewMatrix * world;
+                    vDepth = -mv.z;
+                    gl_Position = projectionMatrix * mv;
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped;
+                uniform sampler2D uSurface;
+                uniform vec2 uRing, uViewport;
+                uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
+                varying vec3 vLocal, vWorld, vNormal;
+                varying vec2 vUv;
+                varying float vPart, vDepth;
+
+                float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                float noise(vec3 p) {
+                    vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                        mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                        mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                        mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                }
+                float fbm(vec3 p) { return noise(p) * 0.55 + noise(p * 2.1) * 0.28 + noise(p * 4.3) * 0.17; }
+                const vec3 SUN = ${glslVec3(SUN_AT)};
+                // Where the cloud tops' silhouette falls on the shell of air around them.
+                const float LIMB = ${Math.sqrt(1 - 1 / (AIR_REACH * AIR_REACH)).toFixed(4)};
+
+                void main() {
+                    // Gathering and tearing apart: a noise front eats the surface.
+                    float solid = smoothstep(0.42, 0.97, uCohesion) * 1.1;
+                    float grain = noise(vLocal * 0.31 + uSeed * 17.0);
+                    if (grain > solid) discard;
+                    float front = smoothstep(solid - 0.1, solid, grain) * step(solid, 1.0);
+                    float fade = uPresence * smoothstep(5.0, 30.0, vDepth);
+                    // Opaque bodies fade by an interleaved-gradient dither, not by blending.
+                    float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+                    if (uKind < 1.5 && dither > fade) discard;
+
+                    vec3 n = normalize(vNormal);
+                    if (uKind > 2.5 && uKind < 3.5) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                    vec3 v = normalize(cameraPosition - vWorld);
+                    if (dot(n, v) < 0.0) n = -n;
+                    float ndl = dot(n, uLight);
+                    float day = smoothstep(-0.18, 0.62, ndl);
+                    float rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
+                    vec3 col = vec3(0.0);
+                    float alpha = 1.0;
+
+                    if (uKind < 0.5) {
+                        // Hull: dark plating with seams, lit ports, and a few luminous parts.
+                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 5.0));
+                        vec2 cell = floor(cells), inside = fract(cells);
+                        float seam = smoothstep(0.0, 0.08, inside.x) * smoothstep(0.0, 0.14, inside.y);
+                        float lit = step(0.83, hash(vec3(cell, uSeed)))
+                            * step(0.25, inside.x) * step(inside.x, 0.75) * step(0.3, inside.y) * step(inside.y, 0.7);
+                        vec3 plate = mix(uColorInk, uColorPrimary, 0.35) * (0.05 + 0.05 * hash(vec3(cell * 0.5, 3.0)));
+                        col = plate * seam * (0.35 + day * 2.4) + uColorPrimary * rim * (0.22 + day * 0.35);
+                        col += uColorAccent * lit * (0.75 + 0.35 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
+                        if (vPart > 0.5 && vPart < 1.5) {
+                            // Graduated gate ring: travelling marks.
+                            float mark = step(0.5, fract(vUv.x * 72.0 - uTime * 0.12));
+                            col = uColorAccent * (0.14 + mark * 0.7) * uGlow + uColorInk * rim * 0.25;
+                        } else if (vPart > 1.5 && vPart < 2.5) {
+                            // Core or engine: pure emission with a hot centre.
+                            float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
+                            float facing = clamp(dot(n, v), 0.0, 1.0);
+                            // A lattice shell around the glow keeps it a lamp, not a blob.
+                            vec3 q = normalize(vLocal - vec3(0.0)) * 5.0;
+                            float cage = smoothstep(0.38, 0.5, abs(fract(q.x + q.y) - 0.5))
+                                + smoothstep(0.38, 0.5, abs(fract(q.y - q.z) - 0.5));
+                            col = mix(uColorAccent, uColorInk, 0.3) * pow(facing, 2.2) * (0.3 + heat * 0.55) * uGlow
+                                + uColorEmber * (1.0 - facing) * 0.2;
+                            col *= 1.0 - 0.72 * clamp(cage, 0.0, 1.0);
+                        }
+                    } else if (uKind < 1.5) {
+                        // Gas giant: turbulent latitude bands, storms, a soft
+                        // terminator, a limb of atmosphere, aurora on the night pole.
+                        vec3 p = normalize(vLocal);
+                        float warp = fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0));
+                        float lat = p.y + (warp - 0.5) * 0.16;
+                        float bands = 0.5 + 0.5 * sin(lat * (15.0 + uSeed * 9.0) + sin(lat * 41.0) * 0.6);
+                        float fine = noise(vec3(p.x * 5.0, lat * 46.0, p.z * 5.0) + uSeed * 3.0);
+                        float storm = smoothstep(0.62, 0.86, fbm(vec3(p.x * 4.0, lat * 13.0, p.z * 4.0) + uSeed * 11.0));
+                        vec3 dark = mix(uColorPrimary, uColorInk, 0.12) * 0.26;
+                        vec3 pale = mix(uColorPrimary, uColorInk, 0.62) * 0.74;
+                        float deck = bands * (0.72 + fine * 0.28);
+                        if (uMapped > 0.5) {
+                            // A real cloud deck turns slowly under the same light;
+                            // only its light and dark are kept.
+                            vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, vUv.y + (warp - 0.5) * 0.004);
+                            deck = smoothstep(0.04, 0.96, texture2D(uSurface, at).r);
+                            storm = 0.0;
+                            bands = deck;
+                        }
+                        vec3 surface = mix(dark, pale, deck);
+                        surface = mix(surface, mix(uColorAccent, uColorInk, 0.25) * 0.8, storm * 0.5);
+                        surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
+                        // Belts lean warm and the brightest zones catch the accent.
+                        surface = mix(surface, uColorEmber * 0.36, smoothstep(0.5, 0.12, deck) * 0.42 * uMapped);
+                        surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
+                        vec3 air = mix(uColorPrimary, uColorInk, 0.3);
+                        col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
+                        // Seen against the sun the air along the limb lights up.
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0);
+                        col += air * rim * against * (0.4 + 0.6 * smoothstep(-0.4, 0.5, dot(n, SUN))) * 2.6;
+                        float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
+                        float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
+                        col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
+                    } else if (uKind < 2.5) {
+                        // Ring system: ringlets, a wide division, spiral density
+                        // waves, the planet's shadow, and light scattered forward.
+                        float r = length(vLocal.xz);
+                        float t = clamp((r - uRing.x) / (uRing.y - uRing.x), 0.0, 1.0);
+                        float angle = atan(vLocal.z, vLocal.x);
+                        float ringlets = 0.25 + 0.75 * noise(vec3(t * 54.0, uSeed * 9.0, 0.0))
+                            * (0.6 + 0.4 * noise(vec3(t * 190.0, 4.0, uSeed)));
+                        float edges = smoothstep(0.0, 0.03, t) * (1.0 - smoothstep(0.94, 1.0, t));
+                        float division = 1.0 - 0.94 * smoothstep(0.27, 0.285, t) * (1.0 - smoothstep(0.34, 0.355, t));
+                        float wave = 0.82 + 0.18 * sin(angle * 2.0 - log(max(r, 1.0)) * 9.0 + uTime * 0.12);
+                        float dust = 0.82 + 0.18 * noise(vec3(vLocal.xz * 1.3, uSeed));
+                        float density = ringlets * edges * division * wave * dust;
+                        vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
+                        tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
+                        if (uMapped > 0.5) {
+                            // A measured profile: how much ice there is along the
+                            // radius, and how bright it is.
+                            vec4 profile = texture2D(uSurface, vec2(t, 0.5));
+                            float sand = 0.84 + 0.16 * noise(vec3(t * 420.0, uSeed * 5.0, 0.0));
+                            density = profile.r * sand * edges * (0.9 + 0.1 * wave) * dust;
+                            tone = mix(uColorAccent, mix(uColorPrimary, uColorInk, 0.4), smoothstep(0.05, 0.45, t))
+                                * (0.5 + 1.45 * profile.g);
+                            tone = mix(tone, uColorInk * 0.62, smoothstep(0.78, 1.0, t) * 0.6);
+                        }
+                        float along = -dot(vLocal, uLightLocal);
+                        float miss = length(vLocal + uLightLocal * along);
+                        float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
+                        float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
+                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 0.7) * mix(0.05, 1.0, shadow);
+                        alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
+                    } else if (uKind > 3.5) {
+                        // Air above the cloud tops: brightest along the limb, thinning
+                        // outwards, lit on the day side and glowing when the sun is behind.
+                        float facing = clamp(dot(n, v), 0.0, 1.0);
+                        float halo = facing < LIMB
+                            ? pow(facing / LIMB, 2.4)
+                            : pow(1.0 - (facing - LIMB) / (1.0 - LIMB), 7.0);
+                        float lit = smoothstep(-0.32, 0.45, ndl);
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.5, 0.3, dot(n, SUN));
+                        col = mix(uColorPrimary, uColorInk, 0.38) * (0.5 + lit)
+                            + mix(uColorAccent, uColorInk, 0.5) * against * 1.5;
+                        alpha = halo * (0.05 + 0.5 * lit + 0.55 * against) * fade * step(grain, solid - 0.04);
+                    } else {
+                        // Light sail: a thin membrane on ribs, iridescent at grazing angles.
+                        float rib = max(smoothstep(0.86, 1.0, abs(fract(vUv.x * 11.0) * 2.0 - 1.0)),
+                            smoothstep(0.82, 1.0, abs(vUv.y * 2.0 - 1.0)));
+                        float graze = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0);
+                        vec3 film = mix(uColorPrimary, uColorAccent, 0.5 + 0.5 * sin(graze * 7.0 + vUv.x * 5.0 + uSeed * 6.0));
+                        col = film * (0.1 + 0.55 * pow(abs(ndl), 1.5) + graze * 0.5)
+                            + uColorInk * rib * (0.3 + day * 0.5)
+                            + uColorPrimary * smoothstep(0.8, 1.0, vUv.x) * 0.7 * uGlow;
+                        alpha = clamp(0.3 + rib * 0.55 + graze * 0.3, 0.0, 0.92) * fade;
+                    }
+                    // On a pale backdrop the night side is a deep tone, not a hole.
+                    col += uFloor;
+                    // Whatever drifts behind the reading area steps back.
+                    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                    col *= mix(0.3, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                    col += mix(uColorAccent, uColorInk, 0.4) * front * 1.6 * uGlow;
+                    gl_FragColor = vec4(col, alpha);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        }), surface);
+
+        const buildStationBody = ({ p, q, radius }, seed) => {
+            class KnotPath extends T.Curve {
+                getPoint(u, target = new T.Vector3()) {
+                    const t = u * TAU * p, phase = (q / p) * t;
+                    const core = radius * (0.72 + 0.28 * Math.cos(phase));
+                    return target.set(core * Math.cos(t), core * Math.sin(t),
+                        radius * (0.36 + 0.12 * Math.cos(phase)) * Math.sin(phase));
+                }
+            }
+            return [[fuse([
+                [new T.TubeGeometry(new KnotPath(), 640, 0.95, 7, true), 0],
+                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(0.38), 1],
+                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(-0.38), 1],
+                [new T.IcosahedronGeometry(radius * 0.12, 3), 2]
+            ]), makeBodyMaterial(0, seed)]];
+        };
+        const buildPlanetBody = ({ radius }, seed) =>
+            [
+                [fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]),
+                    makeBodyMaterial(1, seed, seed < 0.5 ? 'gas-giant-b.webp' : 'gas-giant-a.webp')],
+                [fuse([[new T.SphereGeometry(radius * 0.985 * AIR_REACH, 56, 32), 0]]), makeBodyMaterial(4, seed)]
+            ];
+        const buildRingedBody = ({ inner, outer }, seed) => {
+            const bodyRadius = inner / 1.32;
+            const disc = makeBodyMaterial(2, seed, 'ring-system.png');
+            disc.uniforms.uRing.value.set(inner, outer);
+            disc.uniforms.uBodyRadius.value = bodyRadius;
+            return [
+                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp')],
+                [fuse([[new T.SphereGeometry(bodyRadius * AIR_REACH, 48, 28), 0]]), makeBodyMaterial(4, seed + 0.37)],
+                [fuse([[new T.RingGeometry(inner, outer, 160, 6).rotateX(-Math.PI / 2), 0]]), disc]
+            ];
+        };
+        const buildShipBody = ({ scale }, seed) => {
+            // The same oblique cruising attitude the point template uses.
+            const attitude = new T.Matrix4().set(0.85, 0, 0.48, 0, 0, 1, 0, 0, -0.48, 0, 0.85, 0, 0, 0, 0, 1);
+            const profile = [];
+            for (let i = 0; i <= 16; i += 1) {
+                const z = (i / 16 - 0.5) * 34 * scale;
+                profile.push(new T.Vector2(Math.max(0.12, (1 - Math.abs(z) / (17.6 * scale)) * 2.1 * scale), z));
+            }
+            const hull = fuse([
+                [new T.LatheGeometry(profile, 14).rotateX(Math.PI / 2), 3],
+                [new T.TorusGeometry(4.6 * scale, 0.42 * scale, 8, 44), 3],
+                [new T.CylinderGeometry(1.5 * scale, 0.55 * scale, 3 * scale, 12)
+                    .rotateX(Math.PI / 2).translate(0, 0, 16.4 * scale), 2]
+            ]).applyMatrix4(attitude);
+            const position = [], uv = [], index = [];
+            const SPAN = 22, CHORD = 6;
+            for (let wing = 0; wing < 3; wing += 1) {
+                const angle = (wing / 3) * TAU + Math.PI * 0.5;
+                const base = position.length / 3;
+                for (let i = 0; i <= SPAN; i += 1) {
+                    for (let j = 0; j <= CHORD; j += 1) {
+                        const s = i / SPAN, chord = (j / CHORD * 2 - 1) * (1 - s * 0.72);
+                        const reach = (2.2 + s * 28) * scale, camber = Math.sin(s * Math.PI) * 3.2 * scale;
+                        const x = Math.cos(angle) * reach - Math.sin(angle) * camber;
+                        const y = Math.sin(angle) * reach + Math.cos(angle) * camber;
+                        const z = (-s * s * 16 + chord * 7.5) * scale;
+                        position.push(x * 0.85 + z * 0.48, y * 0.92, -x * 0.48 + z * 0.85);
+                        uv.push(s, j / CHORD);
+                        if (i < SPAN && j < CHORD) {
+                            const a = base + i * (CHORD + 1) + j, b = a + CHORD + 1;
+                            index.push(a, b, a + 1, a + 1, b, b + 1);
+                        }
+                    }
+                }
+            }
+            const sails = new T.BufferGeometry();
+            sails.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            sails.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            sails.setIndex(index);
+            sails.computeVertexNormals();
+            return [[hull, makeBodyMaterial(0, seed)], [fuse([[sails, 0]]), makeBodyMaterial(3, seed)]];
+        };
+        const bodyBuilders = [buildStationBody, buildPlanetBody, buildRingedBody, buildShipBody];
+        const bodyNodes = slotTemplateMap.map((item, idx) => {
+            const group = new T.Group();
+            group.visible = false;
+            const parts = bodyBuilders[item.code](item.spec, (idx * 0.618 + 0.11) % 1).map(([geo, mat]) => {
+                const mesh = new T.Mesh(geo, mat);
+                mesh.frustumCulled = false;
+                // Translucent rings and sails draw after the opaque bodies they wrap.
+                mesh.renderOrder = mat.transparent ? 6 : 0;
+                group.add(mesh);
+                return { geo, mat };
+            });
+            root.add(group);
+            return { group, parts };
+        });
+        const worldLight = new T.Vector3(...KEY_LIGHT);
+        const bodyTurn = new T.Quaternion();
 
         /* ------------------------------------------------------------------------
          * 层级 5：深空引力波纹环 (Gravitational Wave Ripples)
@@ -1294,7 +1827,9 @@
 
                     float depth = max(1.0, -mv.z);
                     vSpark = vocalWave;
-                    gl_PointSize = clamp((1.55 + localCohesion * 0.85 + vocalWave * 1.15) * uPixelRatio * 320.0 / depth, 1.0, 26.0);
+                    // Settled points sit on the strokes: keep them finer than the strokes
+                    // so the glyph edge stays crisp, and let them swell only in flight.
+                    gl_PointSize = clamp((1.7 - localCohesion * 0.6 + vocalWave * 0.9) * uPixelRatio * 320.0 / depth, 1.0, 26.0);
 
                     float nearFade = smoothstep(4.0, 16.0, depth);
                     vAlpha = nearFade * (0.28 + localCohesion * 0.72) * (1.0 - smoothstep(0.65, 1.0, uDisperse));
@@ -1361,16 +1896,92 @@
         let glyphVocalEnd = 0;
         let activePointCount = 0;
 
+        // One atlas texture, one geometry and one material per lyric line. A
+        // line used to cost a canvas, texture, material and geometry per glyph.
+        const glyphMaterial = new T.ShaderMaterial({
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            uniforms: {
+                map: { value: null },
+                time: { value: 0 },
+                alpha: { value: 1 },
+                motion: { value: 1 },
+                glow: { value: 1 },
+                waitMain: { value: new T.Color() },
+                sungMain: { value: new T.Color() },
+                waitSub: { value: new T.Color() },
+                sungSub: { value: new T.Color() },
+                ink: { value: new T.Color() }
+            },
+            vertexShader: `
+                attribute vec2 aCenter, aLocal, aTiming;
+                attribute float aKind;
+                uniform float time, motion;
+                varying vec2 vUv, vLocal, vTiming;
+                varying float vActive, vKind;
+                void main() {
+                    vUv = uv;
+                    vLocal = aLocal;
+                    vTiming = aTiming;
+                    vKind = aKind;
+                    float p = clamp((time - aTiming.x) / max(0.001, aTiming.y - aTiming.x), 0.0, 1.0);
+                    float pulse = sin(p * 3.14159265) * motion;
+                    vActive = pulse;
+                    vec3 pos = position;
+                    pos.xy *= 1.0 + pulse * 0.06;
+                    pos.y += pulse * 0.24;
+                    pos.z += pulse * 0.35;
+                    pos.xy += aCenter;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D map;
+                uniform float time, alpha, glow;
+                uniform vec3 waitMain, sungMain, waitSub, sungSub, ink;
+                varying vec2 vUv, vLocal, vTiming;
+                varying float vActive, vKind;
+                void main() {
+                    float cov = texture2D(map, vUv).a;
+                    if (cov < 0.01) discard;
+                    float p = clamp((time - vTiming.x) / max(0.001, vTiming.y - vTiming.x), 0.0, 1.0);
+                    float wipe = 1.0 - smoothstep(p - 0.04, p + 0.04, vLocal.x);
+                    if (p <= 0.0) wipe = 0.0;
+                    if (p >= 1.0) wipe = 1.0;
+                    // 擦亮前沿高光游标 (Leading Edge Spark)
+                    float edgeGlow = exp(-pow((vLocal.x - p) * 14.0, 2.0)) * step(0.01, p) * step(p, 0.99);
+                    float core = smoothstep(0.16, 0.74, cov);
+                    float a = clamp(core + cov * (1.0 - core) * glow * 0.68, 0.0, 1.0) * alpha;
+                    vec3 wait = mix(waitMain, waitSub, vKind);
+                    vec3 sung = mix(sungMain, sungSub, vKind);
+                    vec3 baseCol = mix(wait, mix(sung, ink, 0.12), wipe);
+                    vec3 finalCol = baseCol + ink * edgeGlow * 0.65 + sung * vActive * 0.25;
+                    gl_FragColor = vec4(finalCol, a);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }
+            `
+        });
+        const glyphCanvas = document.createElement('canvas');
+        let glyphMesh = null;
+        let glyphTexture = null;
+
         const clearGlyphStage = () => {
-            while (glyphStage.children.length) {
-                const mesh = glyphStage.children[0];
-                glyphStage.remove(mesh);
-                mesh.material?.uniforms?.map?.value?.dispose?.();
-                mesh.material?.dispose?.();
-                mesh.geometry?.dispose?.();
+            if (glyphMesh) {
+                glyphStage.remove(glyphMesh);
+                glyphMesh.geometry.dispose();
+                glyphMesh = null;
             }
+            glyphTexture?.dispose();
+            glyphTexture = null;
+            glyphMaterial.uniforms.map.value = null;
             glyphCacheKey = '';
         };
+
+        // Glyph textures follow the output resolution so text stays sharp on
+        // large or high-density windows without paying for it on small ones.
+        const glyphResolution = () => Math.round(clamp(viewportPixels / 1000, 1, 2.5) * 4) / 4;
 
         const buildLyricStage = (line, settings) => {
             if (!line) {
@@ -1383,20 +1994,24 @@
             const scale = clamp(finiteNumber(settings?.fontScale, 1), 0.65, 1.5);
             const showTrans = settings?.showTranslation !== false;
             const subText = showTrans ? (R.resolveSupplementalText(line) || '') : '';
+            const res = glyphResolution();
             const cacheKey = JSON.stringify([
                 currentLineKey,
                 subText,
                 colors.inkHex,
                 colors.accentHex,
                 colors.secondaryHex,
-                scale.toFixed(2)
+                scale.toFixed(2),
+                res
             ]);
 
             if (cacheKey === glyphCacheKey) return;
             clearGlyphStage();
             glyphCacheKey = cacheKey;
 
-            const mainFont = '800 80px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const fontFamily = '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+            const mainFont = `800 80px ${fontFamily}`;
+            const subFont = `500 32px ${fontFamily}`;
             measureCtx.font = mainFont;
 
             let glyphs = buildGlyphTimeline(line);
@@ -1433,115 +2048,21 @@
             const unit = Math.min(0.024 * scale, 38 / maxRowWidth, 11.5 / (rows.length * 108 + 76));
             const rawSamples = [];
 
-            const addGlyphMesh = (label, px, py, advance, start, end, isSub = false, normOrder = 0.5) => {
-                if (!String(label || '').trim()) return null;
-                const canvas = document.createElement('canvas');
-                canvas.width = Math.max(32, Math.ceil(advance + 44));
-                canvas.height = isSub ? 92 : 148;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                if (!ctx) return null;
-
-                ctx.font = isSub ? '500 32px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif' : mainFont;
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowColor = '#ffffff';
-                ctx.shadowBlur = isSub ? 3 : 8;
-                ctx.fillText(label, 22, canvas.height * 0.5);
-
-                const map = new T.CanvasTexture(canvas);
-                map.generateMipmaps = false;
-                map.minFilter = T.LinearFilter;
-                map.magFilter = T.LinearFilter;
-
-                const wWorld = canvas.width * unit;
-                const hWorld = canvas.height * unit;
-                const centerX = px + (advance * unit) * 0.5;
-                const centerY = py;
-
-                const mat = new T.ShaderMaterial({
-                    transparent: true,
-                    depthTest: false,
-                    depthWrite: false,
-                    uniforms: {
-                        map: { value: map },
-                        time: { value: 0 },
-                        begin: { value: start },
-                        finish: { value: end },
-                        alpha: { value: 1 },
-                        motion: { value: 1 },
-                        glow: { value: 1 },
-                        wait: { value: isSub ? colors.secondary.clone().multiplyScalar(0.78) : colors.ink.clone().multiplyScalar(0.52) },
-                        sung: { value: isSub ? colors.secondary.clone() : colors.accent.clone() },
-                        ink: { value: colors.ink.clone() }
-                    },
-                    vertexShader: `
-                        uniform float time, begin, finish, motion;
-                        varying vec2 vUv;
-                        varying float vActive;
-                        void main() {
-                            vUv = uv;
-                            float p = clamp((time - begin) / max(0.001, finish - begin), 0.0, 1.0);
-                            float pulse = sin(p * 3.14159265) * motion;
-                            vActive = pulse;
-                            vec3 pos = position;
-                            pos.xy *= 1.0 + pulse * 0.06;
-                            pos.y += pulse * 0.24;
-                            pos.z += pulse * 0.35;
-                            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-                        }
-                    `,
-                    fragmentShader: `
-                        uniform sampler2D map;
-                        uniform float time, begin, finish, alpha, glow;
-                        uniform vec3 wait, sung, ink;
-                        varying vec2 vUv;
-                        varying float vActive;
-                        void main() {
-                            float cov = texture2D(map, vUv).a;
-                            if (cov < 0.01) discard;
-                            float p = clamp((time - begin) / max(0.001, finish - begin), 0.0, 1.0);
-                            float wipe = 1.0 - smoothstep(p - 0.04, p + 0.04, vUv.x);
-                            if (p <= 0.0) wipe = 0.0;
-                            if (p >= 1.0) wipe = 1.0;
-                            // 擦亮前沿高光游标 (Leading Edge Spark)
-                            float edgeGlow = exp(-pow((vUv.x - p) * 14.0, 2.0)) * step(0.01, p) * step(p, 0.99);
-                            float core = smoothstep(0.16, 0.74, cov);
-                            float a = clamp(core + cov * (1.0 - core) * glow * 0.68, 0.0, 1.0) * alpha;
-                            vec3 baseCol = mix(wait, mix(sung, ink, 0.22), wipe);
-                            vec3 finalCol = baseCol + ink * edgeGlow * 0.65 + sung * vActive * 0.25;
-                            gl_FragColor = vec4(finalCol, a);
-                            #include <tonemapping_fragment>
-                            #include <colorspace_fragment>
-                        }
-                    `
+            // Layout first: every glyph becomes a cell (design pixels at the 80px
+            // reference size) with a world-space centre.
+            const cells = [];
+            const addCell = (label, px, py, advance, start, end, isSub = false, normOrder = 0.5, fit = 1) => {
+                if (!String(label || '').trim()) return;
+                cells.push({
+                    label, start, end, isSub, order: normOrder, fit,
+                    w: Math.max(32, Math.ceil(advance + 44)),
+                    h: isSub ? 92 : 148,
+                    cx: px + advance * unit * fit * 0.5,
+                    cy: py
                 });
-
-                const mesh = new T.Mesh(new T.PlaneGeometry(wWorld, hWorld), mat);
-                mesh.position.set(centerX, centerY, 0);
-                mesh.renderOrder = 30;
-                glyphStage.add(mesh);
-
-                // 直接在创建字形时一次性采样 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
-                const imgData = ctx.getImageData?.(0, 0, canvas.width, canvas.height)?.data;
-                const pColor = isSub ? colors.secondary : colors.accent;
-                if (imgData && imgData.length >= canvas.width * canvas.height * 4) {
-                    const stride = isSub ? 6 : 5;
-                    for (let y = 0; y < canvas.height; y += stride) {
-                        for (let x = 0; x < canvas.width; x += stride) {
-                            if (imgData[(y * canvas.width + x) * 4 + 3] < 130) continue;
-                            rawSamples.push({
-                                x: centerX + ((x + 0.5) / canvas.width - 0.5) * wWorld,
-                                y: centerY + (0.5 - (y + 0.5) / canvas.height) * hWorld,
-                                color: pColor,
-                                order: normOrder
-                            });
-                        }
-                    }
-                }
-                return mesh;
             };
 
-            let totalGlyphCount = Math.max(1, rows.reduce((s, r) => s + r.length, 0));
+            const totalGlyphCount = Math.max(1, rows.reduce((s, r) => s + r.length, 0));
             let glyphCounter = 0;
             rows.forEach((row, ri) => {
                 let x = -row.reduce((s, g) => s + g.advance, 0) * unit * 0.5;
@@ -1549,34 +2070,153 @@
                 row.forEach((g) => {
                     const order = glyphCounter / totalGlyphCount;
                     glyphCounter += 1;
-                    addGlyphMesh(g.text, x, y, g.advance, g.startTime, g.endTime, false, order);
+                    addCell(g.text, x, y, g.advance, g.startTime, g.endTime, false, order);
                     x += g.advance * unit;
                 });
             });
 
             if (subText) {
-                measureCtx.font = '500 32px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
+                measureCtx.font = subFont;
                 const subLines = String(subText).split('\n').filter(Boolean).slice(0, 2);
                 subLines.forEach((subRowText, sri) => {
-                    const labels = splitGraphemes(subRowText);
-                    const advances = labels.map((ch) => Math.max(10, measureCtx.measureText(ch).width));
+                    // The translation has no per-glyph timing, so it is drawn in a
+                    // few wide runs instead of one cell per character.
+                    const runs = [];
+                    let run = '';
+                    splitGraphemes(subRowText).forEach((ch) => {
+                        run += ch;
+                        if (measureCtx.measureText(run).width >= 480) {
+                            runs.push(run);
+                            run = '';
+                        }
+                    });
+                    if (run) runs.push(run);
+                    const advances = runs.map((text) => Math.max(10, measureCtx.measureText(text).width));
                     const totalW = advances.reduce((a, b) => a + b, 0);
                     const fit = Math.min(1, 1360 / Math.max(1, totalW));
                     let x = -totalW * unit * fit * 0.5;
                     const y = -(rows.length * 54 + 44 + sri * 42) * unit;
-                    labels.forEach((ch, idx) => {
-                        const mesh = addGlyphMesh(ch, x, y, advances[idx], -1, -0.5, true, idx / Math.max(1, labels.length));
-                        if (mesh) {
-                            mesh.scale.x = fit;
-                            mesh.position.x = x + advances[idx] * unit * fit * 0.5;
-                        }
+                    let passed = 0;
+                    runs.forEach((text, idx) => {
+                        addCell(text, x, y, advances[idx], -1, -0.5, true,
+                            (passed + advances[idx] * 0.5) / Math.max(1, totalW), fit);
+                        passed += advances[idx];
                         x += advances[idx] * unit * fit;
                     });
                 });
             }
 
+            if (cells.length) {
+                // Shelf-pack the cells into one atlas and draw it once.
+                const shelfLimit = Math.floor(4096 / res);
+                let penX = 0, penY = 0, shelfH = 0, atlasW = 1;
+                cells.forEach((cell) => {
+                    if (penX + cell.w > shelfLimit && penX > 0) {
+                        penX = 0;
+                        penY += shelfH;
+                        shelfH = 0;
+                    }
+                    cell.ax = penX;
+                    cell.ay = penY;
+                    penX += cell.w;
+                    shelfH = Math.max(shelfH, cell.h);
+                    atlasW = Math.max(atlasW, penX);
+                });
+                const atlasH = penY + shelfH;
+                glyphCanvas.width = Math.ceil(atlasW * res);
+                glyphCanvas.height = Math.ceil(atlasH * res);
+                const ctx = glyphCanvas.getContext('2d', { willReadFrequently: true });
+                if (ctx) {
+                    ctx.setTransform(res, 0, 0, res, 0, 0);
+                    ctx.clearRect(0, 0, atlasW, atlasH);
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowColor = '#ffffff';
+                    cells.forEach((cell) => {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(cell.ax, cell.ay, cell.w, cell.h);
+                        ctx.clip?.();
+                        ctx.font = cell.isSub ? subFont : mainFont;
+                        // Shadow blur is measured in device pixels, not in the transform.
+                        ctx.shadowBlur = (cell.isSub ? 3 : 8) * res;
+                        ctx.fillText(cell.label, cell.ax + 22, cell.ay + cell.h * 0.5);
+                        ctx.restore();
+                    });
+
+                    const positions = [], centers = [], uvs = [], locals = [], timings = [], kinds = [], indices = [];
+                    cells.forEach((cell, index) => {
+                        const halfW = cell.w * unit * cell.fit * 0.5;
+                        const halfH = cell.h * unit * 0.5;
+                        for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+                            positions.push((u * 2 - 1) * halfW, (v * 2 - 1) * halfH, 0);
+                            centers.push(cell.cx, cell.cy);
+                            uvs.push((cell.ax + u * cell.w) / atlasW, 1 - (cell.ay + (1 - v) * cell.h) / atlasH);
+                            locals.push(u, v);
+                            timings.push(cell.start, cell.end);
+                            kinds.push(cell.isSub ? 1 : 0);
+                        }
+                        const first = index * 4;
+                        indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+                    });
+                    const geometry = new T.BufferGeometry();
+                    geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+                    geometry.setAttribute('aCenter', new T.Float32BufferAttribute(centers, 2));
+                    geometry.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2));
+                    geometry.setAttribute('aLocal', new T.Float32BufferAttribute(locals, 2));
+                    geometry.setAttribute('aTiming', new T.Float32BufferAttribute(timings, 2));
+                    geometry.setAttribute('aKind', new T.Float32BufferAttribute(kinds, 1));
+                    geometry.setIndex(indices);
+
+                    glyphTexture = new T.CanvasTexture(glyphCanvas);
+                    glyphTexture.generateMipmaps = false;
+                    glyphTexture.minFilter = T.LinearFilter;
+                    glyphTexture.magFilter = T.LinearFilter;
+                    const uniforms = glyphMaterial.uniforms;
+                    uniforms.map.value = glyphTexture;
+                    uniforms.waitMain.value.copy(colors.ink).multiplyScalar(0.52);
+                    uniforms.sungMain.value.copy(colors.accent);
+                    uniforms.waitSub.value.copy(colors.secondary).multiplyScalar(0.78);
+                    uniforms.sungSub.value.copy(colors.secondary);
+                    uniforms.ink.value.copy(colors.ink);
+
+                    glyphMesh = new T.Mesh(geometry, glyphMaterial);
+                    glyphMesh.frustumCulled = false;
+                    glyphMesh.renderOrder = 30;
+                    glyphStage.add(glyphMesh);
+
+                    // 一次性采样整张图集的 Alpha 通道供结项粒子使用（兼容无 getImageData 的测试桩）
+                    const pixelW = glyphCanvas.width;
+                    const imgData = ctx.getImageData?.(0, 0, pixelW, glyphCanvas.height)?.data;
+                    if (imgData && imgData.length >= pixelW * glyphCanvas.height * 4) {
+                        cells.forEach((cell) => {
+                            // Point sprites are wider than a translation stroke; left
+                            // on the small row they merge into a white smear over it.
+                            if (cell.isSub) return;
+                            const stride = 5;
+                            const pColor = colors.accent;
+                            const wWorld = cell.w * unit * cell.fit;
+                            const hWorld = cell.h * unit;
+                            for (let y = 0; y < cell.h; y += stride) {
+                                const row = Math.min(glyphCanvas.height - 1, Math.floor((cell.ay + y + 0.5) * res)) * pixelW;
+                                for (let x = 0; x < cell.w; x += stride) {
+                                    const column = Math.min(pixelW - 1, Math.floor((cell.ax + x + 0.5) * res));
+                                    if (imgData[(row + column) * 4 + 3] < 130) continue;
+                                    rawSamples.push({
+                                        x: cell.cx + ((x + 0.5) / cell.w - 0.5) * wWorld,
+                                        y: cell.cy + (0.5 - (y + 0.5) / cell.h) * hWorld,
+                                        color: pColor,
+                                        order: cell.order
+                                    });
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+
             // 若运行在无像素缓冲环境（如 JSDOM 冒烟测试），生成程序化李萨如字形骨架点位兜底
-            if (!rawSamples.length && glyphStage.children.length) {
+            if (!rawSamples.length && cells.length) {
                 const fallbackRand = seededRandom(`fallback-glyph:${currentLineKey}`);
                 for (let i = 0; i < 360; i += 1) {
                     const u = i / 360;
@@ -1630,6 +2270,17 @@
             fieldMat.uniforms.uNebulaA.value.copy(colors.secondary);
             fieldMat.uniforms.uNebulaB.value.copy(colors.accent);
 
+            const pale = colors.background.r * 0.2126 + colors.background.g * 0.7152 + colors.background.b * 0.0722
+                > colors.ink.r * 0.2126 + colors.ink.g * 0.7152 + colors.ink.b * 0.0722;
+            const sky = skyMat.uniforms;
+            sky.uBase.value.copy(abyssBg);
+            sky.uColorA.value.copy(colors.secondary);
+            sky.uColorB.value.copy(colors.ember).lerp(colors.accent, 0.3);
+            sky.uColorStar.value.copy(colors.ink).lerp(colors.muted, 0.35);
+            sky.uColorSun.value.copy(colors.accent).lerp(new T.Color('#ffffff'), 0.62);
+            sky.uInk.value.copy(colors.ink);
+            sky.uPaper.value = pale ? 1 : 0;
+
             filamentMat.uniforms.uColorA.value.copy(colors.secondary);
             filamentMat.uniforms.uColorB.value.copy(colors.accent);
             filamentMat.uniforms.uColorC.value.copy(colors.muted);
@@ -1643,6 +2294,19 @@
                 node.mat.uniforms.uColorInk.value.copy(colors.ink);
                 node.mat.uniforms.uColorEmber.value.copy(colors.ember);
             });
+            // Bodies are lit towards "ink". On a light theme ink is the dark
+            // colour, so they are lit towards paper and rest on a deep floor.
+            const luma = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+            const paper = luma(colors.background) > luma(colors.ink);
+            const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
+            const bodyFloor = paper ? colors.ink.clone().lerp(colors.secondary, 0.4).multiplyScalar(0.5) : new T.Color('#000000');
+            bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
+                mat.uniforms.uColorPrimary.value.copy(colors.secondary);
+                mat.uniforms.uColorAccent.value.copy(colors.accent);
+                mat.uniforms.uColorInk.value.copy(bodyInk);
+                mat.uniforms.uColorEmber.value.copy(colors.ember);
+                mat.uniforms.uFloor.value.copy(bodyFloor);
+            }));
 
             lyricParticleMat.uniforms.uTint.value.copy(colors.accent);
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
@@ -1650,12 +2314,12 @@
             glyphCacheKey = ''; // 触发当前句按新主题重绘
         };
 
-        const reset = (lines = [], identity = 'tunnel-track') => {
+        const reset = (lines = [], identity = 'tunnel-track', duration = 0) => {
             clearGlyphStage();
             currentLineKey = '';
             activePointCount = 0;
             lyricGeo.setDrawRange(0, 0);
-            timeline = compileTunnelTimeline(lines, identity);
+            timeline = compileTunnelTimeline(lines, identity, duration);
             totalTravelDistance = 0;
             cruiseSpeed = 1.0;
             bassSmooth = 0;
@@ -1685,7 +2349,7 @@
             const glowAmount = clamp(settingVal('glow', 1), 0, 2);
             const dissolveAmount = clamp(settingVal('dissolveAmount', 0.72), 0, 1);
             const holdRatio = clamp(settingVal('textHoldRatio', 0.32), 0, 0.8);
-            const pauseDur = clamp(settingVal('pauseDuration', 0.9), 0, 3);
+            const pauseDur = clamp(settingVal('pauseDuration', 0.4), 0, 3);
 
             if (audioState.seek) {
                 bassSmooth = 0;
@@ -1767,7 +2431,10 @@
             if (activeLine && activePointCount > 0) {
                 const start = finiteNumber(activeLine.startTime, time);
                 const vocalEnd = Math.max(start + 0.25, glyphVocalEnd);
-                const exitStart = vocalEnd + Math.min(0.95, holdRatio * 0.55 + pauseDur * 0.18);
+                // The dwell is the number of seconds the finished line stays whole
+                // before it dissolves; it used to be scaled down and capped to
+                // a fraction of a second, which made the control inert.
+                const exitStart = vocalEnd + holdRatio * 0.55 + pauseDur;
                 const exitDuration = 0.55 + dissolveAmount * 0.65;
 
                 const entryPhase = clamp((time - start) / 0.34);
@@ -1811,18 +2478,16 @@
                 lookZ = mix(lookZ, stageZ, 0.58);
 
                 glyphStage.visible = alive && glyphAlpha > 0.004;
-                glyphStage.children.forEach((mesh) => {
-                    mesh.material.uniforms.time.value = time;
-                    mesh.material.uniforms.alpha.value = glyphAlpha;
-                    mesh.material.uniforms.motion.value = motionAmount;
-                    mesh.material.uniforms.glow.value = glowAmount;
-                });
+                glyphMaterial.uniforms.time.value = time;
+                glyphMaterial.uniforms.alpha.value = glyphAlpha;
+                glyphMaterial.uniforms.motion.value = motionAmount;
+                glyphMaterial.uniforms.glow.value = glowAmount;
 
                 const releaseIn = smooth(exitPhase / 0.22);
                 const releaseOut = 1 - smooth((exitPhase - 0.58) / 0.42);
                 const particleOpacity = (!alive || settings.reducedMotion)
                     ? 0
-                    : clamp((1 - solidIn * 0.72) * 0.92 + solidIn * releaseIn * releaseOut * (0.45 + dissolveAmount * 0.55), 0, 1);
+                    : clamp((1 - solidIn * 0.8) * 0.92 + solidIn * releaseIn * releaseOut * (0.45 + dissolveAmount * 0.55), 0, 1);
 
                 lyricPoints.visible = particleOpacity > 0.005;
                 lyricParticleMat.uniforms.uTime.value = time;
@@ -1869,6 +2534,9 @@
             // 4. 更新深空星尘、体积星云与结项引力丝束
             const showStarfield = settings.starfield !== false;
             fieldPoints.visible = showStarfield;
+            skyDome.visible = showStarfield;
+            skyMat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
+            skyMat.uniforms.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
             filamentMesh.visible = showStarfield;
             streakLines.visible = showStarfield && !settings.reducedMotion;
 
@@ -1935,6 +2603,8 @@
                     : slot.type === 'rings' ? showRings
                         : slot.type === 'ship' ? showShips
                             : showStations;
+                const body = bodyNodes[idx];
+                body.group.visible = false;
                 if (!enabled) {
                     node.points.visible = false;
                     return;
@@ -1996,6 +2666,22 @@
                 u.uDensity.value = objectDensity;
                 u.uAudioPulse.value = audioPulse;
                 u.uGlow.value = glowAmount;
+
+                // The solid shares the points' place, attitude and envelope.
+                body.group.visible = true;
+                body.group.position.copy(node.points.position);
+                body.group.rotation.copy(node.points.rotation);
+                body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
+                bodyTurn.copy(body.group.quaternion).invert();
+                for (const { mat } of body.parts) {
+                    const b = mat.uniforms;
+                    b.uTime.value = time;
+                    b.uCohesion.value = cohesion;
+                    b.uPresence.value = presence;
+                    b.uAudioPulse.value = audioPulse;
+                    b.uGlow.value = glowAmount;
+                    b.uLightLocal.value.copy(worldLight).applyQuaternion(bodyTurn);
+                }
             });
         };
 
@@ -2004,24 +2690,34 @@
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
+            prepare,
             update,
             resize(w, h, ratio) {
                 viewportAspect = Math.max(0.2, Number(w) / Math.max(1, Number(h)));
                 pixelRatio = ratio;
+                viewportPixels = Math.max(1, Number(h) * ratio);
                 fieldMat.uniforms.uPixelRatio.value = ratio;
+                skyMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 filamentMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 lyricParticleMat.uniforms.uPixelRatio.value = ratio;
                 entityNodes.forEach((node) => { node.mat.uniforms.uPixelRatio.value = ratio; });
+                bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
+                    mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
+                }));
             },
             destroy() {
                 clearGlyphStage();
                 scene.remove(root);
-                [fieldGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
-                [fieldMat, filamentMat, streakMat, lyricParticleMat, ...frameArcMats].forEach((m) => m?.dispose?.());
+                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
+                [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, ...frameArcMats].forEach((m) => m?.dispose?.());
+                skyMasks.dispose();
                 entityNodes.forEach((node) => {
                     node.geo?.dispose?.();
                     node.mat?.dispose?.();
                 });
+                bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
+                surfacesReleased = true;
+                surfaceMaps.forEach((entry) => entry.texture?.dispose());
                 ripples.forEach((r) => r.mat?.dispose?.());
             }
         };
@@ -2044,12 +2740,17 @@
         let camera = null;
         let renderer = null;
         let world = null;
+        let optics = null;
         let initialized = false;
         let fallbackMode = false;
         let initializing = null;
         let latest = null;
         let source = null;
         let identity = '';
+        let compiledDuration = -1;
+        let contextRetries = 0;
+        let contextTimer = 0;
+        let lastContextLoss = 0;
         let width = 1;
         let height = 1;
         let lastTime = null;
@@ -2076,12 +2777,12 @@
             U.updateWords(Array.from(fallbackLine.children), frame?.wordStates || []);
         };
 
+        const renderScale = U.createRenderScale();
         const resize = () => {
             width = Math.max(1, mode.root.clientWidth || global.innerWidth || 1);
             height = Math.max(1, mode.root.clientHeight || global.innerHeight || 1);
             if (!renderer || !camera) return;
-            const cap = mode.config.quality === 'energy-saving' ? 1 : mode.config.quality === 'ultimate' ? 2 : 1.5;
-            const dpr = Math.min(cap, global.devicePixelRatio || 1);
+            const dpr = renderScale.ratio(mode.config.quality, width, height);
             renderer.setPixelRatio(dpr);
             renderer.setSize(width, height, false);
             camera.aspect = width / height;
@@ -2092,6 +2793,8 @@
         const disposeGraphics = () => {
             world?.destroy?.();
             world = null;
+            optics?.destroy();
+            optics = null;
             if (renderer) {
                 renderer.dispose?.();
                 renderer.forceContextLoss?.();
@@ -2101,6 +2804,27 @@
             camera = null;
             scene = null;
             initialized = false;
+        };
+
+        // A lost context (driver reset, sleep, remote desktop) is usually
+        // temporary. Show the text fallback, then rebuild on a fresh canvas a
+        // few times before settling for the fallback.
+        const recoverContext = () => {
+            const now = Date.now();
+            if (now - lastContextLoss > 60000) contextRetries = 0;
+            lastContextLoss = now;
+            fallbackMode = true;
+            disposeGraphics();
+            if (latest) renderFallback(latest);
+            if (mode.destroyed || contextRetries >= 3) return;
+            global.clearTimeout(contextTimer);
+            contextTimer = global.setTimeout(() => {
+                contextTimer = 0;
+                if (mode.destroyed || initialized) return;
+                fallbackMode = false;
+                initializing = null;
+                void initialize();
+            }, 800 * 2 ** contextRetries++);
         };
 
         const update = (frame) => {
@@ -2113,11 +2837,15 @@
             }
 
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
-            if (source !== frame.lines || identity !== nextIdentity) {
+            // The track length often arrives a moment after the track itself; the
+            // journey has to be compiled for the whole song, not just its lyrics.
+            const nextDuration = Math.round(finiteNumber(frame.duration, 0));
+            if (source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration) {
                 source = frame.lines;
                 identity = nextIdentity;
+                compiledDuration = nextDuration;
                 lastTime = null;
-                world?.reset?.(frame.lines || [], identity);
+                world?.reset?.(frame.lines || [], identity, nextDuration);
             }
 
             const settings = tuning();
@@ -2151,7 +2879,13 @@
             }, camera);
 
             fallback.hidden = true;
-            renderer.render(scene, camera);
+            if (frame.isPlaying && renderScale.tick(performance.now())) resize();
+            renderer.info.reset();
+            // The same lens as the diorama: the sun, the lamps and the lyric glow through it.
+            if (optics) {
+                optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config,
+                    { glow: clamp(settings.glow ?? 1, 0, 2) * 0.6, threshold: 1.05, grain: 0.05, vignette: 0.3 });
+            } else renderer.render(scene, camera);
             lastTime = time;
         };
 
@@ -2180,14 +2914,18 @@
                 renderer.domElement.className = 'tunnel-canvas';
                 mode.root.insertBefore(renderer.domElement, fallback);
 
-                mode.scope.listen(renderer.domElement, 'webglcontextlost', (event) => {
+                const canvas = renderer.domElement;
+                mode.scope.listen(canvas, 'webglcontextlost', (event) => {
                     event.preventDefault();
-                    fallbackMode = true;
-                    disposeGraphics();
-                    if (latest) renderFallback(latest);
+                    // Disposing the renderer loses its context on purpose.
+                    if (renderer?.domElement !== canvas) return;
+                    recoverContext();
                 });
 
+                renderer.info.autoReset = false;
+                optics = global.MusicStageDioramaOptics?.create(T) || null;
                 world = createTunnelWorld(T, scene, services?.app);
+                world.prepare(renderer);
                 initialized = true;
                 resize();
                 world.setPalette(services?.app?.stagePalette || {});
@@ -2213,17 +2951,19 @@
         mode.getDebugSnapshot = () => ({
             initialized,
             fallbackMode,
+            pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
+            drawCalls: renderer?.info.render.calls,
             distance: world?.distance || 0,
             currentSpeed: world?.currentSpeed || 0,
             cameraPos: camera?.position?.toArray() || null,
             activeLine: latest?.activeLine?.fullText || null
         });
-        mode.scope.add(() => { disposeGraphics(); latest = source = null; });
+        mode.scope.add(() => { global.clearTimeout(contextTimer); disposeGraphics(); latest = source = null; });
 
         resize();
         void initialize();
         return mode;
     };
 
-    global.MusicStageTunnelManager = Object.freeze({ create });
+    global.MusicStageTunnelManager = Object.freeze({ create, compileTimeline: compileTunnelTimeline });
 })(window);
