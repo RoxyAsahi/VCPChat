@@ -2704,6 +2704,12 @@
                 moonTint: { value: new T.Color('#cbdde8') },
                 glowTint: { value: new T.Color('#415266') },
                 moonGlow: { value: 1 },
+                // The ride starts at dusk, the last of the sun going down behind
+                // the far peak, and drifts into a dream later on.
+                dusk: { value: 0 }, dream: { value: 0 },
+                duskHigh: { value: new T.Color('#4a5878') }, sunset: { value: new T.Color('#c97a52') },
+                dreamTint: { value: new T.Color('#2a2350') },
+                sunDir: { value: new T.Vector3(Math.cos(FUJI.bearing + 0.03), 0, Math.sin(FUJI.bearing + 0.03)) },
                 horizonGlow: { value: 1 },
                 accent: { value: 0 },
                 auroraActive: { value: 1.0 },
@@ -2715,7 +2721,8 @@
             },
             vertexShader: `varying vec3 ray;
                 void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            fragmentShader: `varying vec3 ray;uniform vec3 night,horizon,cold;uniform float open;
+            fragmentShader: `varying vec3 ray;uniform vec3 night,horizon,cold,duskHigh,sunset,dreamTint,sunDir;
+                uniform float open,dusk,dream;
                 uniform vec3 moonDir,moonTint,glowTint;uniform float moonGlow,horizonGlow,accent;
                 uniform float auroraActive, auroraTime, auroraRhythm, auroraHeading;
                 uniform vec3 auroraGreen, auroraViolet;
@@ -2729,6 +2736,17 @@
                     vec3 d=normalize(ray);
                     float h=pow(max(d.y,0.0),0.45);
                     vec3 c=mix(horizon,night,clamp(h*1.7,0.0,1.0));
+                    // A dream deepens the zenith toward the theme's own night colour.
+                    c=mix(c,dreamTint,dream*0.35*clamp(h*1.4,0.0,1.0));
+                    if(dusk>0.0){
+                        // Afterglow: warm and low over the sun's bearing, a band of
+                        // rose above it, and the rest of the sky still blue, not black.
+                        float toward=0.5+0.5*dot(normalize(vec3(d.x,0.0,d.z)+vec3(0.0001)),sunDir);
+                        float low=exp(-max(d.y,0.0)*6.0);
+                        c=mix(c,duskHigh,dusk*0.55*(1.0-low));
+                        c=mix(c,sunset,low*(0.2+0.8*pow(toward,3.0))*dusk*0.85);
+                        c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-pow((d.y-0.13)*8.0,2.0))*pow(toward,1.5)*dusk*0.3);
+                    }
                     float band=exp(-pow(dot(d,normalize(vec3(0.35,0.8,0.48)))-0.18,2.0)*90.0);
                     float cloud=noise(d*12.0)*0.6+noise(d*33.0)*0.3+noise(d*91.0)*0.1;
                     c+=cold*band*pow(cloud,3.0)*(0.12+open*0.22);
@@ -2779,6 +2797,30 @@
         const sky = new T.Mesh(geometry(new T.SphereGeometry(850, 32, 20)), skyMat);
         sky.renderOrder = -100;
         root.add(sky);
+        // What the lit materials outside see in their gloss: the same sky,
+        // rendered small into a cube that the renderer blurs by roughness. The
+        // cube is made once and only redrawn, so no material recompiles when
+        // the palette, the dusk, the dream or the rain change what is in it.
+        const envTarget = new T.WebGLCubeRenderTarget(64, { type: T.HalfFloatType });
+        const envCamera = new T.CubeCamera(1, 2000, envTarget);
+        const envScene = new T.Scene();
+        const envSkyMat = material(new T.ShaderMaterial({
+            side: T.BackSide, depthWrite: false,
+            uniforms: { ...skyMat.uniforms, envGain: { value: 1 } },
+            vertexShader: skyMat.vertexShader,
+            fragmentShader: skyMat.fragmentShader.replace('uniform vec3 auroraGreen, auroraViolet;',
+                'uniform vec3 auroraGreen, auroraViolet;uniform float envGain;')
+                .replace('gl_FragColor=vec4(c,1.0);', 'gl_FragColor=vec4(c*envGain,1.0);')
+        }));
+        envScene.add(new T.Mesh(sky.geometry, envSkyMat));
+        scene.environment = envTarget.texture;
+        let envDirty = true, envKey = '';
+        const prepareEnvironment = renderer => {
+            if (dead || !envDirty || !renderer) return;
+            envDirty = false;
+            envCamera.update(renderer, envScene);
+            envTarget.texture.needsPMREMUpdate = true;
+        };
         const random = seededRandom('last-train-fixed-sky');
         const positions = [], colors = [], sizes = [], phases = [];
         // Lights of towns on the far shore come first in the buffer, so every
@@ -2924,11 +2966,11 @@
                 fogTint: { value: new T.Color('#415266') }, fogDensity: { value: 0.008 },
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
-                lampPower: { value: new Float32Array(4) }, rain: rainAmount },
+                lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 } },
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;
                 uniform vec3 lampPos[4];uniform float lampPower[4];
                 varying vec4 reflected;varying vec3 world;
@@ -2960,7 +3002,8 @@
                     g+=vec2(0.0,0.48)*-sin(world.x*0.48-time*0.32)*0.05;
                     g+=vec2(1.9,1.3)*cos(world.x*1.9+world.z*1.3+time*1.1)*0.018;
                     g+=vec2(-1.4,2.3)*cos(-world.x*1.4+world.z*2.3-time*0.9)*0.014;
-                    g*=damp*(1.0+energy*0.6);
+                    // In the dream the sea goes still enough to be a mirror for the stars.
+                    g*=damp*(1.0+energy*0.6)*(1.0-calm*0.75);
                     // Rain breaks the mirror up: rings near by, a fine roughness further off.
                     if(rain>0.0){
                         float nearRings=1.0-smoothstep(10.0,34.0,dist);
@@ -3224,7 +3267,7 @@
         let auroraTrack = null;
         let baseStarOpacity = 0.8;
         // Palette-derived baselines; chapter warmth modulates around them each frame.
-        let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1;
+        let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1, liveDusk = 0, liveDream = 0;
         // The lamps of a crossing light in turn, a little faster than once a second.
         const signalLit = new T.Color(SIGNAL_RED).multiplyScalar(3.2), signalDark = new T.Color(SIGNAL_RED).multiplyScalar(0.06);
         const buoyPaint = new T.Color(SIGNAL_RED).multiplyScalar(0.09);
@@ -3395,6 +3438,22 @@
             frameMat.color.copy(deep).lerp(structure, 0.35).multiplyScalar(0.4);
             if (light) frameMat.color.copy(muted).lerp(page, 0.15).multiplyScalar(0.72);
             haloMat.uniforms.color.value.copy(lamp);
+            // The page is bright enough already: by day the gloss is kept low,
+            // or every lit surface would be lifted by the white around it.
+            envSkyMat.uniforms.envGain.value = light ? 0.35 : 1.6;
+            envDirty = true;
+            // Dusk and dream colours. By day the afterglow is only a warm wash on the page.
+            const sunsetHue = new T.Color('#c47a55').lerp(emission, 0.2);
+            if (light) {
+                skyMat.uniforms.duskHigh.value.copy(page).lerp(muted, 0.12);
+                skyMat.uniforms.sunset.value.copy(page).lerp(sunsetHue, 0.55);
+                skyMat.uniforms.dreamTint.value.copy(page).lerp(tertiary, 0.12);
+            } else {
+                skyMat.uniforms.duskHigh.value.copy(skyMat.uniforms.night.value).lerp(tertiary, 0.3)
+                    .multiplyScalar(2.2).lerp(skyMat.uniforms.horizon.value, 0.35);
+                skyMat.uniforms.sunset.value.copy(sunsetHue);
+                skyMat.uniforms.dreamTint.value.copy(new T.Color('#241f48')).lerp(tertiary, 0.2).lerp(deep, 0.2);
+            }
             // Rain: pale streaks against the night, pencil-grey strokes on the page.
             rainMat.uniforms.colour.value.copy(light ? ink.clone().lerp(page, 0.3) : skyMat.uniforms.horizon.value.clone().lerp(white, 0.6));
             rainMat.uniforms.opacity.value = light ? 0.38 : 0.17;
@@ -3420,7 +3479,8 @@
             const toward = bias > 0 ? palBase.warm : palBase.cold;
             const amount = Math.abs(bias);
             const k = palBase.light ? 0.5 : 1;
-            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5);
+            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5)
+                .lerp(skyMat.uniforms.sunset.value, liveDusk * 0.3);
             skyMat.uniforms.horizon.value.copy(scratch);
             waterMat.uniforms.fogTint.value.copy(scratch);
             if (scene.fog) {
@@ -3428,7 +3488,7 @@
                 // Warm passages close in; open chapters and loud passages thin the haze.
                 // By day distant things fade into the page rather than darken.
                 scene.fog.density = 0.008 * (palBase.light ? 1.45 : 1) * (1 + Math.max(0, bias) * 0.18)
-                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06) * (1 + rainLevel * (palBase.light ? 0.45 : 0.9));
+                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06) * (1 + rainLevel * (palBase.light ? 0.45 : 0.9)) * (1 - liveDream * 0.3);
                 waterMat.uniforms.fogDensity.value = scene.fog.density;
             }
             skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k)
@@ -3457,7 +3517,7 @@
             rainLevel += Math.max(-step, Math.min(step, wanted - rainLevel));
             rainAmount.value = rainLevel;
             // Ground, platforms and fittings darken and shine as they get wet.
-            wetness.value = rainLevel;
+            if (!Number.isFinite(tuning.wetness)) wetness.value = rainLevel;
             const count = Math.round((RAIN_COUNTS[tier] ?? RAIN_COUNTS.standard) * rainLevel);
             rainDrops.visible = count > 0;
             rainGeometry.setDrawRange(0, count * 6);
@@ -3482,19 +3542,28 @@
             const saving = quality === 'energy-saving';
             const s = pose.distance;
             if (Number.isFinite(tuning.wetness)) wetness.value = clamp(tuning.wetness);
+            liveDusk = clamp(pose.state.dusk ?? 0);
+            liveDream = clamp(pose.state.dream ?? 0);
+            skyMat.uniforms.dusk.value = liveDusk;
+            skyMat.uniforms.dream.value = liveDream;
+            waterMat.uniforms.calm.value = liveDream * (1 - rainLevel);
+            // The gloss outside follows the sky in coarse steps, not every frame.
+            const key = `${Math.round(liveDusk * 8)}:${Math.round(liveDream * 8)}:${Math.round(rainLevel * 8)}`;
+            if (key !== envKey) { envKey = key; envDirty = true; }
             sky.position.set(pose.position.x, 0, pose.position.z);
             stars.position.copy(sky.position);
             ridge.position.copy(sky.position);
             moon.position.set(sky.position.x - 210, 300, sky.position.z - 420);
             water.position.set(pose.position.x, waterLevel, pose.position.z);
             stars.visible = tuning.showParticles !== false;
-            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0)) * (1 - rainLevel * 0.85);
+            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0)) * (1 - rainLevel * 0.85)
+                * (1 - liveDusk * 0.85) * (1 + liveDream * 0.6);
             starMat.uniforms.opacity.value = starMat.opacity;
             starMat.uniforms.time.value = time;
             starGeo.setDrawRange(0, townLights + (saving ? 1500 : quality === 'ultimate' ? 8000 : 4000));
             skyMat.uniforms.open.value = pose.state.openness;
             const auroraEnabled = tuning.aurora !== false;
-            skyMat.uniforms.auroraActive.value = auroraEnabled ? 1.0 - rainLevel * 0.95 : 0.0;
+            skyMat.uniforms.auroraActive.value = auroraEnabled ? (1.0 - rainLevel * 0.95) * (1 - liveDusk) * (1 + liveDream * 0.4) : 0.0;
             if (auroraTrack !== track) {
                 const opening = global.MusicStageDioramaCamera.pose(timeline, track, 0, tuning);
                 skyMat.uniforms.auroraHeading.value = opening.yaw - 0.34;
@@ -4367,6 +4436,7 @@
             dressRect.needsUpdate = dressLook.needsUpdate = dressCut.needsUpdate = true;
         };
         const renderReflection = (renderer, camera) => {
+            prepareEnvironment(renderer);
             if (dead || !reflectionEnabled) return;
             camera.updateMatrixWorld();
             mirror.position.copy(camera.position);
@@ -4418,7 +4488,7 @@
         };
         setPalette();
         return {
-            update, setPalette, renderReflection, updateCabin,
+            update, setPalette, renderReflection, updateCabin, prepareEnvironment,
             // How hard it is raining (0..1), for any shader that shows it.
             rain: rainAmount,
             setPixelRatio(ratio) {
@@ -4448,6 +4518,8 @@
                 geometries.forEach(g => g.dispose());
                 materials.forEach(m => m.dispose());
                 target.dispose();
+                envTarget.dispose();
+                if (scene.environment === envTarget.texture) scene.environment = null;
             }
         };
     };

@@ -403,3 +403,11 @@ test('the ride drifts into a dream from the second chorus, or once the words run
     assert.ok(Math.abs(short.dreamStart - 102) < 0.5, `dream starts at ${short.dreamStart}`);
     assert.ok(short.sample(150).dream > 0.99);
 });
+
+test('the ride sets out at dusk and the afterglow is gone by the first chorus', () => {
+    const a = D.compile({ lines, trackId: 'test', duration: 160 });
+    const first = a.acts.find(act => act.kind === 'Chorus');
+    assert.equal(a.sample(0).dusk, 1);
+    assert.equal(a.sample(Math.min(first.start, 160 * 0.4) + 0.01).dusk, 0);
+    for (let t = 0.25; t <= 60; t += 0.25) assert.ok(a.sample(t).dusk <= a.sample(t - 0.25).dusk);
+});
