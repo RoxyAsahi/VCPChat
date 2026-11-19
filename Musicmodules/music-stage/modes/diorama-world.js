@@ -1728,19 +1728,27 @@
         const carHorizon = { value: new T.Color('#9daebc') }, carWater = { value: new T.Color('#285a5e') };
         // Enamel under a clear lacquer: the physical model gives the coat its own sharp
         // reflection of the sky over the satin paint beneath.
-        const carMaterial = material(new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.06, roughness: 0.5,
+        const carMaterial = material(new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0, roughness: 0.5,
             clearcoat: 1, clearcoatRoughness: 0.12 }));
         carMaterial.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, { carHorizon, carWater, wetness });
+            Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal });
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nattribute float finish;varying vec3 vCarPaint;varying float vFinish;')
-                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;');
+                .replace('#include <common>', '#include <common>\nattribute float finish;varying vec3 vCarPaint;varying float vFinish,vCarLead;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;vCarLead=gl_InstanceID==0?1.0:0.0;');
             shader.fragmentShader = shader.fragmentShader
                 .replace('#include <common>', `#include <common>
                     uniform vec3 carHorizon,carWater;
                     uniform float wetness;
+                    uniform float cabReal;
                     varying vec3 vCarPaint;
-                    varying float vFinish;
+                    varying float vFinish,vCarLead;
+                    // The windscreen openings in the face, by their middle and half size across and up.
+                    float cabOpening(vec2 p){
+                        float open=0.0;
+                        ${CAB_WINDOWS.map(([l, r]) => `{vec2 q=abs(p-vec2(${((l + r) / 2).toFixed(3)},${CAB_WINDOW_Y.toFixed(3)}))-vec2(${((r - l) / 2 - 0.02).toFixed(3)},${(CAB_WINDOW_HEIGHT / 2 - 0.02).toFixed(3)})+0.05;
+                        open=max(open,step(length(max(q,0.0))+min(max(q.x,q.y),0.0),0.05));}`).join('\n                        ')}
+                        return open;
+                    }
                     float carGrain(vec2 uv){
                         vec2 cell=floor(uv),f=fract(uv);
                         f=f*f*(3.0-2.0*f);
@@ -1748,6 +1756,8 @@
                         return mix(mix(t.x,t.y,f.x),mix(t.z,t.w,f.x),f.y)-0.5;
                     }`)
                 .replace('#include <color_fragment>', `#include <color_fragment>
+                    // With the real cab drawn behind it, the leading face is open where the windscreens are.
+                    if(cabReal>0.5&&vCarLead>0.5&&vFinish<0.5&&vCarPaint.z<${(TIP + 0.62).toFixed(3)}&&cabOpening(vCarPaint.xy)>0.5)discard;
                     // Finishes: 0-1 enamel, 2 running gear, 3 roofing, 4 and 6 bright metal, 5 tread,
                     // 7 rubber, 8 grille, 9 lamp lens, 10 grey equipment paint.
                     float g=floor(vFinish+0.5);
@@ -1795,9 +1805,12 @@
                     // corners of the doorways, and the paler dust that dries on top of it.
                     float grime=pow(1.0-smoothstep(${CAR.sill.toFixed(3)},${(CAR.sill + 0.75).toFixed(3)},vCarPaint.y),1.6)
                         *(0.55+0.45*carGrain(at*vec2(3.0,9.0))+0.25*run);
-                    diffuseColor.rgb*=1.0-enamel*(sillShadow+eave-panelGrain*0.037-micro*0.031+rain*(0.13*underSill+0.08*sill)
-                        +seam*0.24-lap*0.06+panelTone*0.045+grime*0.10-rivetLit*0.5);
-                    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(0.93,0.9,0.84),enamel*grime*0.6);
+                    // The cream is kept clean: only the faintest panel shading, no road dirt.
+                    float cream=1.0-step(0.5,g);
+                    float soil=1.0-0.7*cream;
+                    diffuseColor.rgb*=1.0-enamel*(sillShadow+eave*soil-panelGrain*0.03-micro*0.025+rain*(0.13*underSill+0.08*sill)*soil
+                        +seam*0.2-lap*0.05+panelTone*0.03*soil+grime*0.06-rivetLit*0.5);
+                    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(0.95,0.93,0.89),enamel*grime*0.3*soil);
                     // Roofing: dull, laid in sheets across the car, dust and soot gathering towards the middle.
                     float sheetJoin=abs(fract(vCarPaint.z/0.64)-0.5)*0.64;
                     float join=(1.0-smoothstep(0.006,0.006+fwidth(vCarPaint.z)*1.5,sheetJoin))*roofing;
@@ -1834,7 +1847,7 @@
                     float wearZone=max((1.0-smoothstep(0.02,0.09,doorD))*(1.0-smoothstep(1.5,2.6,vCarPaint.y)),
                         1.0-smoothstep(0.0,0.07,vCarPaint.y-${(CAR.sill + 0.02).toFixed(3)}));
                     float chipNoise=carGrain(vec2(vCarPaint.z*70.0,vCarPaint.y*55.0))+carGrain(vec2(vCarPaint.z*19.0,vCarPaint.y*15.0))*0.8;
-                    float chip=smoothstep(0.18,0.26,chipNoise-0.55*(1.0-wearZone))*wearZone*(enamel+equipment)
+                    float chip=smoothstep(0.18,0.26,chipNoise-0.55*(1.0-wearZone))*wearZone*(enamel*(1.0-0.75*cream)+equipment)
                         *(1.0-smoothstep(0.3,1.0,fwidth(vCarPaint.z*70.0)));
                     vec3 primer=mix(diffuseColor.rgb,vec3(dot(diffuseColor.rgb,vec3(0.33))),0.75)*vec3(0.86,0.78,0.7);
                     diffuseColor.rgb=mix(diffuseColor.rgb,primer,chip*0.8);
@@ -1847,7 +1860,7 @@
                     float bead=(1.0-smoothstep(0.08,0.16,length(beadAt)))*step(0.3,carGrain(floor(beadCell)*0.9+3.1))*smoothstep(0.1,0.5,carGrain(at*vec2(2.0,3.0))+0.3)
                         *(1.0-smoothstep(0.3,0.8,fwidth(beadCell.x)));
                     float wetPaint=wetness*(enamel+roofing+equipment);
-                    diffuseColor.rgb*=1.0-wetPaint*(0.22+0.1*rivulet);
+                    diffuseColor.rgb*=1.0-wetPaint*(0.22+0.1*rivulet)*(1.0-0.45*cream);
                     diffuseColor.rgb*=1.0-wetness*trim*0.12;`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
                     // Satin enamel, a little rougher where the road dirt has settled; dull roofing and rubber.
@@ -1870,7 +1883,7 @@
                     metalnessFactor=mix(metalnessFactor,0.0,chip);`)
                 .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
                     // Only the lacquered enamel keeps a clear coat, dulled by the road dirt; rain glazes the rest.
-                    material.clearcoat=clamp(enamel*(1.0-grime*0.7)*(1.0-chip)*(1.0-seam)*0.75+wetness*(roofing+equipment)*0.8+wetPaint*0.25,0.0,1.0);
+                    material.clearcoat=clamp(enamel*(1.0-grime*0.7)*(1.0-chip)*(1.0-seam)*(0.5-0.15*cream)+wetness*(roofing+equipment)*0.8+wetPaint*0.25,0.0,1.0);
                     material.clearcoatRoughness=clamp(mix(0.14+micro*0.05,0.05,wetness),0.0,1.0);`)
                 .replace('#include <opaque_fragment>', `
                     // A wide cool highlight from the coast and a softer return from the water below.
@@ -1885,7 +1898,9 @@
                     float line=(slope-0.21)*4.1;
                     float skyStrip=exp(-line*line);
                     float seaStrip=exp(-abs(slope+0.22)*4.6);
-                    vec3 reflectedCoast=carHorizon*skyStrip*(0.036+0.070*gloss)
+                    // On the cream the coast reads as a neutral sheen, not a warm stain.
+                    vec3 coastTint=mix(carHorizon,vec3(dot(carHorizon,vec3(0.3,0.5,0.2))),0.6*cream);
+                    vec3 reflectedCoast=coastTint*skyStrip*(0.036+0.070*gloss)
                         +carWater*seaStrip*(0.022+0.085*gloss);
                     float sheen=enamel*(1.0-grime*0.6)*(1.0-seam)+trim*(1.5-scuff)+equipment*(0.7-dust*0.4);
                     // Rain glazes the paint: the coast reflection sharpens and brightens, every
@@ -2106,12 +2121,12 @@
             transparent: true, depthWrite: false,
             uniforms: { warm: { value: new T.Color('#ffd28c') }, head: { value: new T.Color('#fff3d6') }, cold: carHorizon,
                 red: { value: new T.Color('#ff3b2f') }, day: cabinDaylight, destination: { value: destinationGraphic },
-                rain: cabinMood.rain, clock: cabinMood.clock },
+                rain: cabinMood.rain, clock: cabinMood.clock, cabReal },
             vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 void main(){vUv=uv;vKind=kind;vTail=float(gl_InstanceID);
                     vPos=position;vEye=(inverse(modelMatrix*instanceMatrix)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
-            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day,rain,clock;uniform sampler2D destination;
+            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day,rain,clock,cabReal;uniform sampler2D destination;
                 ${RAIN_GLASS}
                 varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 // The cab behind the windscreen, traced through its few solid shapes: the
@@ -2306,12 +2321,26 @@
                         // Each drop is a lens: darker in its body, a bright rim of sky at its edge.
                         float dropRim=clamp(length(wet.xy)*90.0,0.0,1.0);
                         c=mix(c,c*0.75+mirror*0.25+cold*0.35*dropRim,wet.z*0.7);
-                        // Rain on the glass is laid on by the cab's own pass (rainOnGlass).
+                        if(cabReal>0.5&&tail<0.5){
+                            // Close to the leading end the real cab is drawn behind the glass, so the
+                            // pane keeps only what is on it: the reflection, its edge and the rain.
+                            float edgeLine=(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim);
+                            float cover=clamp(fresnel*1.3+0.07,0.0,0.8);
+                            vec3 surface=mirror*vec3(0.92,1.0,0.96);
+                            surface=mix(surface,mirror*0.6+cold*0.35*dropRim,wet.z);
+                            cover=max(cover,wet.z*(0.35+0.4*dropRim));
+                            cover=max(cover,edgeLine*0.6);
+                            surface+=cold*0.4*edgeLine;
+                            c=surface;
+                            a*=cover;
+                        }
                         if(vKind<0.5){
                             // The wiper parked low across the pane.
                             vec2 arm=vec2(1.05,0.10),from=p-vec2(-0.58,-0.8);
                             float armDist=length(from-arm*clamp(dot(from,arm)/dot(arm,arm),0.0,1.0));
-                            c=mix(c,vec3(0.012),1.0-smoothstep(0.016,0.032,armDist));
+                            float blade=1.0-smoothstep(0.016,0.032,armDist);
+                            c=mix(c,vec3(0.012),blade);
+                            a=max(a,blade*step(glassEdge,0.0));
                         }
                     }else if(vKind<1.5){
                         c=texture2D(destination,vec2(vUv.x,0.5+vUv.y*0.5)).rgb*(0.65+day*0.36);
@@ -2708,7 +2737,7 @@
                 sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway,
                 detail: { value: detailAtlas },
                 sky: carHorizon, shadowInk: glassMaterial.uniforms.shadowInk, day: cabinDaylight, power: glassMaterial.uniforms.power,
-                boards: planks.map, boardsReady: planks.ready },
+                boards: planks.map, boardsReady: planks.ready, cabReal },
             vertexShader: `attribute float paint;uniform float clock,sway;varying float vPaint;varying vec3 vNormal,vPos,vView;
                 void main(){vPaint=paint;vec3 p=position,nn=normal;
                     if(paint>21.5){
@@ -2727,7 +2756,7 @@
                     vNormal=nn;vPos=p;
                     vView=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz-p;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
-            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty;
+            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty,cabReal;
                 uniform sampler2D boards,detail;
                 varying float vPaint;varying vec3 vNormal,vPos,vView;
                 ${cabinLightFunctions}
@@ -2800,7 +2829,20 @@
                     lit*=smoothstep(0.012,0.02+soft,abs(h.y-2.76));
                     return lit*smoothstep(0.0,0.25,facing);
                 }
+                // Seen from outside, nothing of the saloon may stand out past the shell:
+                // the rounded nose in plan and the curve of the roof at the eaves.
+                float insideShell(vec3 p){
+                    float d=p.z-(${TIP.toFixed(3)});
+                    vec2 wr=vec2(${CAR.half.toFixed(3)},1.0);
+                    ${NOSE.slice(1).map(([z1, w1, r1], i) => { const [z0, w0, r0] = NOSE[i];
+                        return `if(d<${z1.toFixed(3)}&&wr.y==1.0&&wr.x==${CAR.half.toFixed(3)})wr=mix(vec2(${w0.toFixed(3)},${r0.toFixed(3)}),vec2(${w1.toFixed(3)},${r1.toFixed(3)}),clamp((d-${z0.toFixed(3)})/${(z1 - z0).toFixed(3)},0.0,1.0));`; }).join('\n                    ')}
+                    float wide=wr.x;
+                    float e=clamp((p.y-${CAR.cant.toFixed(3)})/(0.4*wr.y),0.0,1.0);
+                    float section=${(CAR.half - 0.42).toFixed(3)}+0.42*sqrt(1.0-e*e);
+                    return step(0.0,d)*step(abs(p.x),wide/${CAR.half.toFixed(3)}*section-0.03);
+                }
                 void main(){
+                    if(cabReal>0.5&&insideShell(vPos)<0.5)discard;
                     vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.74,0.70,0.58),day);
                     vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
                     vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
@@ -4429,6 +4471,8 @@
             const outside = (pose.chase ?? 0) > 0.002 && (pose.saloon ?? 0) <= 0.002;
             cabReal.value = outside && eyeAt && Math.hypot(eyeAt.x - nose.x, (eyeAt.y ?? 0) - 2.2, eyeAt.z - nose.z) < CAB_REAL_REACH ? 1 : 0;
             placeSaloon(track, front, tuning.showTrain !== false && ((pose.saloon ?? 0) > 0.002 || cabReal.value > 0));
+            // From outside the real cab's own inner panes would glaze the windscreen twice.
+            innerGlass.visible = cabReal.value === 0;
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
