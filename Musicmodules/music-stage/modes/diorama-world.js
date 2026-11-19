@@ -3045,45 +3045,80 @@
         halos.frustumCulled = false;
         root.add(halos);
         /*
-         * Where the sea has come over the line the train wades: its nose pushes
-         * a wave out to either side, the wheels throw spray that the lamps and
-         * windows catch, and a band of foam closes behind it. All of it is soft
-         * points, laid out again each frame from the train's place and speed.
+         * Where the sea has come over the line the train wades. The nose
+         * shoulders up a wave on either side, a curling crest with a slope of
+         * foam behind it that opens out the faster it runs; the water heaped
+         * against the sides breaks white; behind the last car a band of foam
+         * lies on the sea and slowly comes apart. The wheels fling water out in
+         * streaks that fall back. Everything is one mesh, laid out each frame
+         * from the train's place and pace; the foam itself is drawn by the shader.
          */
-        const SPLASH = { bow: 2 * 180, wheels: 8 * 2 * 26, hull: 2 * 110, wake: 360 };
-        const SPLASH_MAX = SPLASH.bow + SPLASH.wheels + SPLASH.hull + SPLASH.wake;
-        const splashPositions = new Float32Array(SPLASH_MAX * 3), splashLooks = new Float32Array(SPLASH_MAX * 2);
+        const SPLASH_VERTS = 2400, SPLASH_INDEX = 4200;
+        const splashPositions = new Float32Array(SPLASH_VERTS * 3), splashUv = new Float32Array(SPLASH_VERTS * 2);
+        const splashFoam = new Float32Array(SPLASH_VERTS * 2), splashLooks = new Float32Array(SPLASH_VERTS * 2);
+        const splashIndex = new Uint16Array(SPLASH_INDEX);
         const splashGeometry = geometry(new T.BufferGeometry());
-        splashGeometry.setAttribute('position', new T.BufferAttribute(splashPositions, 3).setUsage(T.DynamicDrawUsage));
-        splashGeometry.setAttribute('look', new T.BufferAttribute(splashLooks, 2).setUsage(T.DynamicDrawUsage));
+        [['position', splashPositions, 3], ['uv', splashUv, 2], ['foam', splashFoam, 2], ['look', splashLooks, 2]]
+            .forEach(([name, array, size]) => splashGeometry.setAttribute(name,
+                new T.BufferAttribute(array, size).setUsage(T.DynamicDrawUsage)));
+        splashGeometry.setIndex(new T.BufferAttribute(splashIndex, 1).setUsage(T.DynamicDrawUsage));
         splashGeometry.setDrawRange(0, 0);
         const splashSeeds = (() => {
             const r = seededRandom('wading');
-            return Float32Array.from({ length: SPLASH_MAX * 4 }, () => r());
+            return Float32Array.from({ length: 1024 }, () => r());
         })();
-        const splashTint = { value: new T.Color('#dfe6e8') };
+        const splashTint = { value: new T.Color('#dfe6e8') }, splashWarm = { value: new T.Color('#ffd28c') };
+        const splashClock = { value: 0 };
         const splashMaterial = material(new T.ShaderMaterial({
-            transparent: true, depthWrite: false,
-            uniforms: { tint: splashTint, pixelRatio: { value: 1 } },
-            vertexShader: `attribute vec2 look;uniform float pixelRatio;varying float vAlpha;
-                void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;
-                    float d=max(0.5,-mv.z);
-                    gl_PointSize=clamp(look.x*1500.0/d,1.5,14.0)*pixelRatio;
-                    vAlpha=look.y*(1.0-smoothstep(60.0,120.0,d));}`,
-            fragmentShader: `uniform vec3 tint;varying float vAlpha;
-                void main(){vec2 p=gl_PointCoord*2.0-1.0;float r=dot(p,p);
-                    if(r>1.0)discard;
-                    float a=min(1.0,vAlpha*exp(-r*3.0));
-                    gl_FragColor=vec4(tint,a);
+            transparent: true, depthWrite: false, side: T.DoubleSide,
+            uniforms: { tint: splashTint, warm: splashWarm, clock: splashClock },
+            vertexShader: `attribute vec2 foam,look;varying vec2 vUv,vFoam,vLook;varying float vFar;
+                void main(){vUv=uv;vFoam=foam;vLook=look;
+                    vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;
+                    vFar=1.0-smoothstep(70.0,140.0,-mv.z);}`,
+            fragmentShader: `uniform vec3 tint,warm;uniform float clock;varying vec2 vUv,vFoam,vLook;varying float vFar;
+                float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+                float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+                    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+                float cells(vec2 p){
+                    // Foam is a net of bubbles torn open into lace: ridges of a warped noise.
+                    vec2 w=p+vec2(noise(p*0.7+clock*0.3),noise(p*0.7-clock*0.25))*1.6;
+                    float n=noise(w*2.1)*0.55+noise(w*4.7)*0.3+noise(w*11.0)*0.15;
+                    return 1.0-abs(n*2.0-1.0);
+                }
+                void main(){
+                    float a;float lit=0.0;
+                    if(vLook.x<0.5){
+                        // Foam on the surface: v runs 0 at the hull to 1 at the far edge,
+                        // the crest a little way out; whitest there, lace beyond it.
+                        float v=vUv.y;
+                        float lace=cells(vFoam);
+                        float crest=exp(-pow((v-0.26)/0.05,2.0))*(0.55+0.45*noise(vFoam*3.0));
+                        float body=smoothstep(0.74+0.18*v,0.97,lace+0.22*(1.0-v));
+                        float film=smoothstep(0.5,0.9,lace)*0.12;
+                        a=(crest*0.85+body*(0.7-0.5*v)+film)*smoothstep(1.0,0.6,v)*smoothstep(0.0,0.06,v+0.06);
+                        a*=smoothstep(0.0,0.08,vUv.x)*smoothstep(1.0,0.7,vUv.x);
+                        lit=(1.0-v)*0.5;
+                    }else{
+                        // A streak of thrown water: dense at its head, thinning to its tail.
+                        float across=vUv.y*2.0-1.0;
+                        a=exp(-across*across*5.0)*(1.0-vUv.x)*(0.6+0.4*noise(vec2(vUv.x*6.0,vLook.y*40.0)));
+                        lit=0.6;
+                    }
+                    a*=vLook.y*vFar;
+                    if(a<0.004)discard;
+                    gl_FragColor=vec4(mix(tint,warm,lit*0.35),min(1.0,a));
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }`
         }));
-        const splash = new T.Points(splashGeometry, splashMaterial);
+        const splash = new T.Mesh(splashGeometry, splashMaterial);
         splash.frustumCulled = false;
+        splash.renderOrder = 3;
         splash.name = 'splash';
         root.add(splash);
         let splashSpeed = 0, splashFront = null, splashTime = 0, wading = 0;
+        const eye = new T.Vector3(), flight = new T.Vector3(), broad = new T.Vector3(), toEye = new T.Vector3(), ahead = new T.Vector3();
         const wade = (track, pose, time, level, saving, visible) => {
             const front = pose.trainFront ?? pose.distance;
             // The train's own pace along the line, steadied over a few frames.
@@ -3097,35 +3132,77 @@
             splash.visible = wading > 0.01;
             if (!splash.visible) return;
             const night = !palBase?.light;
-            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 1.1 : 1.08);
-            if (night) splashTint.value.lerp(roomGlow, 0.25);
-            splashMaterial.uniforms.pixelRatio.value = haloMat.uniforms.pixelRatio.value;
-            const share = saving ? 0.5 : 1;
+            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 1.25 : 1.1);
+            splashWarm.value.copy(night ? roomGlow : dressTones[TONE.pale]).multiplyScalar(night ? 2.2 : 1.1);
+            splashClock.value = time;
+            eye.set(pose.position.x, pose.position.y, pose.position.z);
             const pace = Math.min(1.6, Math.abs(speed) / 12);
-            let n = 0;
-            const put = (address, lateral, y, size, alpha) => {
-                const f = track.at(address);
-                splashPositions[n * 3] = f.position.x + f.right.x * lateral;
-                splashPositions[n * 3 + 1] = y;
-                splashPositions[n * 3 + 2] = f.position.z + f.right.z * lateral;
-                splashLooks[n * 2] = size;
-                splashLooks[n * 2 + 1] = alpha * wading;
-                n++;
+            let v = 0, n = 0;
+            const vertex = (x, y, z, u, w, fx, fz, kind, alpha) => {
+                splashPositions.set([x, y, z], v * 3);
+                splashUv.set([u, w], v * 2);
+                splashFoam.set([fx, fz], v * 2);
+                splashLooks.set([kind, alpha * wading], v * 2);
+                return v++;
             };
-            const seed = (i, k) => splashSeeds[i * 4 + k];
-            let i = 0;
-            // The bow wave: two arms opening back from the nose, longer the faster it goes.
-            const arm = 5 + 9 * pace, spread = 0.36;
-            for (let k = 0; k < SPLASH.bow; k++, i++) {
-                if (seed(i, 3) > share) continue;
-                const side = k % 2 ? 1 : -1;
-                const u = (seed(i, 0) + time * 0.6 * pace) % 1;
-                const behind = u * arm;
-                put(front - behind + 0.3, side * (1.25 + behind * spread + (seed(i, 1) - 0.5) * 0.25),
-                    level + 0.03 + (1 - u) * 0.08, 0.05 + (1 - u) * 0.05, (1 - u) * (0.55 + 0.4 * seed(i, 2)));
+            const at = (address, lateral) => {
+                const f = track.at(address);
+                return [f.position.x + f.right.x * lateral, f.position.z + f.right.z * lateral];
+            };
+            /*
+             * A band of foam on the water: rows along it, each row a cross-section
+             * of [lateral, height, across] points; `foamAt` says where on the water
+             * each point's lace is drawn.
+             */
+            const band = (rows, foamAt) => {
+                const width = rows[0].points.length, first = v;
+                if (v + rows.length * width > SPLASH_VERTS) return;
+                rows.forEach(({ address, u, points, alpha }) => points.forEach(([lateral, y, across]) => {
+                    const [x, z] = at(address, lateral);
+                    const [fx, fz] = foamAt(address, lateral);
+                    vertex(x, y, z, u, across, fx, fz, 0, alpha);
+                }));
+                for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < width - 1; k++) {
+                    if (n + 6 > SPLASH_INDEX) return;
+                    const a = first + r * width + k, b = a + width;
+                    splashIndex.set([a, b, a + 1, a + 1, b, b + 1], n);
+                    n += 6;
+                }
+            };
+            // Lace that travels with the train, churning as it goes.
+            const carried = (address, lateral) => [(front - address) * 0.9 - time * 2.4 * pace, Math.abs(lateral) * 1.3];
+            // Lace that stays where it was left on the sea.
+            const left = (address, lateral) => [address * 0.9, lateral * 1.3];
+            const length = SET_PITCH * CARS / 2, tail = front - length;
+            for (const side of [-1, 1]) {
+                // The bow wave: from the nose's shoulder out and back along an arm.
+                const arm = 7 + 11 * pace, open = 0.32 + 0.1 * pace, segments = saving ? 8 : 16;
+                band(Array.from({ length: segments + 1 }, (_, k) => {
+                    const u = k / segments, behind = u * arm - 0.4, reach = 1.32 + Math.max(0, behind) * open;
+                    const lift = (0.2 + 0.1 * pace) * (1 - u * 0.8);
+                    return { address: front - behind, u, alpha: 1 - u * 0.5, points: [
+                        [side * 1.3, level + lift * 0.7, 0], [side * (reach - 0.05), level + lift, 0.22],
+                        [side * reach, level + lift * 0.9, 0.3], [side * (reach + 0.5 + u), level + lift * 0.3, 0.6],
+                        [side * (reach + 0.9 + 1.5 * u), level + 0.01, 1]] };
+                }), carried);
+                // Water heaped and breaking along the sides of the train.
+                const hull = saving ? 10 : 24;
+                band(Array.from({ length: hull + 1 }, (_, k) => {
+                    const u = k / hull, address = front - arm * 0.3 - u * (length - arm * 0.3);
+                    return { address, u: 0.08 + u * 0.84, alpha: 0.5, points: [
+                        [side * 1.28, level + 0.09, 0], [side * 1.5, level + 0.06, 0.28], [side * 2.2, level + 0.01, 1]] };
+                }), carried);
             }
-            // Spray off the wheels: each bogie throws drops out and up, and the
-            // train runs on from under them so they trail back as they fall.
+            // The wake: foam left on the sea behind the last car, spreading and fading.
+            const trail = 22 + 34 * pace, wake = saving ? 12 : 30;
+            band(Array.from({ length: wake + 1 }, (_, k) => {
+                const u = k / wake, behind = u * trail, width = 1.5 + behind * 0.14;
+                return { address: tail - behind, u: 0.1 + u * 0.9, alpha: 0.7 * (1 - u), points: [
+                    [-width - 1, level + 0.01, 1], [-width * 0.4, level + 0.015, 0.3], [0, level + 0.02, 0.24],
+                    [width * 0.4, level + 0.015, 0.3], [width + 1, level + 0.01, 1]] };
+            }), left);
+            // Water thrown off the wheels: each streak flies out, up and back from
+            // its bogie, drawn along its own line of flight and turned to the eye.
             const bogies = [];
             for (let car = 0; car < CARS; car++) {
                 const set = car >> 1, second = car % 2 === 1;
@@ -3133,38 +3210,35 @@
                 bogies.push(joint + (second ? -1 : 1) * (CAR.length / 2 + CAR.joint / 2 + CAR.bogie));
                 if (!second) bogies.push(joint);
             }
-            const perWheel = SPLASH.wheels / 16;
-            for (let w = 0; w < 16; w++) for (let k = 0; k < perWheel; k++, i++) {
-                const at = bogies[w >> 1];
-                if (at === undefined || seed(i, 3) > share) continue;
-                const side = w % 2 ? 1 : -1;
-                const life = (seed(i, 0) + time * (1.6 + seed(i, 1))) % 1;
-                const flight = life * 0.55;
-                const out = 0.9 + (1.2 + seed(i, 2) * 1.4) * pace * flight;
-                const up = (1.8 + seed(i, 1) * 1.6) * pace * flight - 4.9 * flight * flight;
-                put(at - speed * flight * 0.85 + (seed(i, 2) - 0.5) * 2.2, side * out,
-                    level + Math.max(0, up), 0.012 + 0.016 * seed(i, 0), (1 - life) * 0.7);
-            }
-            // Churned water along the sides of the train.
-            const length = SET_PITCH * CARS / 2;
-            for (let k = 0; k < SPLASH.hull; k++, i++) {
-                if (seed(i, 3) > share) continue;
-                const side = k % 2 ? 1 : -1;
-                const along = (seed(i, 0) * length + time * 0.4) % length;
-                put(front - along, side * (1.35 + seed(i, 1) * 0.35), level + 0.02, 0.04 + seed(i, 2) * 0.03,
-                    0.2 + 0.25 * Math.sin(time * 3 + seed(i, 2) * 30) ** 2);
-            }
-            // The wake: foam left behind the last car, spreading and fading.
-            const tail = front - length, trail = 18 + 30 * pace;
-            for (let k = 0; k < SPLASH.wake; k++, i++) {
-                if (seed(i, 3) > share) continue;
-                const u = Math.pow(seed(i, 0), 0.7), behind = u * trail;
-                const width = 1.3 + behind * 0.12;
-                put(tail - behind, (seed(i, 1) * 2 - 1) * width, level + 0.015, 0.07 + u * 0.08,
-                    (1 - u) * (0.3 + 0.35 * seed(i, 2)));
+            const streaks = saving ? 7 : 16;
+            let s = 0;
+            for (const bogie of bogies) for (const side of [-1, 1]) for (let k = 0; k < streaks; k++, s = (s + 4) % 1020) {
+                if (v + 4 > SPLASH_VERTS || n + 6 > SPLASH_INDEX) break;
+                const life = (splashSeeds[s] + time * (1.4 + splashSeeds[s + 1])) % 1, t = life * 0.6;
+                const out = (1.6 + splashSeeds[s + 2] * 2.2) * pace, rise = (1.5 + splashSeeds[s + 3] * 2.4) * pace;
+                const lateral = side * (1.15 + out * t), height = level + Math.max(0, rise * t - 4.9 * t * t);
+                const address = bogie + (splashSeeds[s + 2] - 0.5) * 1.6 - speed * t * 0.7;
+                const [x, z] = at(address, lateral);
+                const f = track.at(address);
+                // Velocity relative to the water: outward, up or falling, and left behind.
+                flight.set(f.right.x * side * out, rise - 9.8 * t, f.right.z * side * out)
+                    .addScaledVector(ahead.set(f.right.z, 0, -f.right.x), -speed * 0.7);
+                const reach = 0.05 + flight.length() * 0.045;
+                flight.normalize();
+                toEye.set(eye.x - x, eye.y - height, eye.z - z).normalize();
+                broad.crossVectors(flight, toEye).normalize().multiplyScalar(0.012 + 0.02 * splashSeeds[s + 1]);
+                const alpha = (1 - life) * 0.8;
+                const head = [x, height, z], back = [x - flight.x * reach, height - flight.y * reach, z - flight.z * reach];
+                const a = vertex(head[0] + broad.x, head[1] + broad.y, head[2] + broad.z, 0, 0, 0, 0, 1, alpha);
+                vertex(head[0] - broad.x, head[1] - broad.y, head[2] - broad.z, 0, 1, 0, 0, 1, alpha);
+                vertex(back[0] + broad.x, back[1] + broad.y, back[2] + broad.z, 1, 0, 0, 0, 1, alpha);
+                vertex(back[0] - broad.x, back[1] - broad.y, back[2] - broad.z, 1, 1, 0, 0, 1, alpha);
+                splashIndex.set([a, a + 1, a + 2, a + 1, a + 3, a + 2], n);
+                n += 6;
             }
             splashGeometry.setDrawRange(0, n);
-            splashGeometry.attributes.position.needsUpdate = splashGeometry.attributes.look.needsUpdate = true;
+            for (const name of ['position', 'uv', 'foam', 'look']) splashGeometry.attributes[name].needsUpdate = true;
+            splashGeometry.index.needsUpdate = true;
         };
         // --- Rain (stage setting: off / light / heavy) ---
         // Streaks fall through a box that travels with the camera but stays
@@ -4585,7 +4659,7 @@
             },
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
             snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
-                wading, splashPoints: splash.visible ? splashGeometry.drawRange.count : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
+                wading, splashTriangles: splash.visible ? splashGeometry.drawRange.count / 3 : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
