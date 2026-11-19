@@ -349,11 +349,12 @@
                 tilt: [1.25, 0.6, 0.18], hold: true, world: WORLD.home, size: HOME_SIZE, clearFrom: 0, clearTo: distanceAt(16) });
         }
         // The close is an arrival: a ringed planet gathers far ahead through
-        // the last act and the song ends on the slow approach to it.
+        // the last act and the song ends on the slow approach to it. Far out,
+        // under a small sun, it is a cold ice giant with fine rings.
         const closing = acts[acts.length - 1];
         if (closing && closing.kind === 'Horizon' && closing.end - closing.start > 12) {
             heroPasses.push({ slotId: 2, distance: distanceAt(duration) + 150, side: -1, radial: 58, elev: -10,
-                tilt: [0.5, 0.2, -0.25], hold: true, world: WORLD.gas, clearFrom: distanceAt(duration - 16), clearTo: Infinity });
+                tilt: [0.5, 0.2, -0.25], hold: true, world: WORLD.iceGiant, clearFrom: distanceAt(duration - 16), clearTo: Infinity });
         }
 
         const usableDuration = durationHint > 0 ? Math.min(duration, durationHint) : duration;
@@ -978,12 +979,17 @@
                     }
                     float cometSide = step(0.0, dot(d, comet));
 
-                    vec3 night = uBase + uColorStar * m.b * mix(0.05, 0.16, smoothstep(0.35, 1.0, uJourney));
+                    // Out at the end of the voyage the galaxy is the brightest thing
+                    // in the sky after the sun: a band with a glowing core, and
+                    // the nearer clouds of gas fall back.
+                    float late = smoothstep(0.72, 0.98, uJourney);
+                    vec3 night = uBase + uColorStar * m.b * mix(0.05, 0.16, smoothstep(0.35, 1.0, uJourney))
+                        + mix(uColorStar, uColorSun, 0.35) * m.b * m.b * late * 0.1;
                     // Thin gas takes the cloud's colour; where it is dense it brightens
                     // and pales, as lit gas does.
                     float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
                     night += (uColorA * (m.r * 0.06 + coolCore * 0.07) + uColorB * (m.g * 0.05 + warmCore * 0.06)
-                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula;
+                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula * (1.0 - 0.45 * late);
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
                     night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail + jets) + uColorA * gasTail * 1.6)
@@ -2382,8 +2388,8 @@
                                 float w = 0.004 + 0.006 * hash(vec3(fi, uSeed, 5.0)) + (i == 8 ? 0.014 : 0.0);
                                 thin += exp(-(t - at) * (t - at) / (w * w));
                             }
-                            density = clamp(thin, 0.0, 1.0) * 0.5 + 0.04 * noise(vec3(t * 80.0, uSeed, 3.0));
-                            tone = mix(uColorInk, uColorPrimary, 0.3) * 0.32;
+                            density = clamp(thin, 0.0, 1.0) * 0.26 + 0.07 * noise(vec3(t * 80.0, uSeed, 3.0));
+                            tone = mix(uColorInk, uColorPrimary, 0.3) * 0.2;
                         }
                         // Fine ringlets, kept only while a pixel can still resolve them.
                         float grainT = uDetail > 0.5 ? fwidth(t) : 1.0;
