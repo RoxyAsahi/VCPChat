@@ -952,7 +952,9 @@
                     paper = mix(paper, uInk, m.a * 0.1 + star * 0.45);
                     // The sun on paper: a warm bloom with a white heart, since white
                     // alone would vanish into the page.
-                    paper = mix(paper, uColorSun, clamp(corona * 1.4, 0.0, 1.0) * 0.6);
+                    paper = mix(paper, uColorSun, clamp(corona * 1.6, 0.0, 1.0) * 0.8);
+                    // A wide, faint radiance around it fills the page with light.
+                    paper = mix(paper, mix(uColorSun, vec3(1.0), 0.45), exp(-angle * 1.5) * 0.5);
                     paper = mix(paper, vec3(1.0), clamp(disc, 0.0, 1.0));
 
                     vec3 background = mix(night, paper, uPaper);
@@ -2963,9 +2965,18 @@
                     glyphTexture.magFilter = T.LinearFilter;
                     const uniforms = glyphMaterial.uniforms;
                     uniforms.map.value = glyphTexture;
-                    uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, stagePalette.light ? 0.06 : 0.15);
-                    uniforms.sungMain.value.copy(colors.accent).lerp(colors.ink, 0.28);
-                    uniforms.sub.value.copy(colors.secondary).lerp(colors.ink, 0.48);
+                    if (stagePalette.light) {
+                        // On paper the line is written in ink: pale and waiting,
+                        // then full and deep as it is sung; the translation in a
+                        // quiet grey beneath. No colour, so nothing reads as dirt.
+                        uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, 0.22);
+                        uniforms.sungMain.value.copy(colors.ink).multiplyScalar(0.8);
+                        uniforms.sub.value.copy(colors.muted).lerp(colors.ink, 0.15);
+                    } else {
+                        uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, 0.15);
+                        uniforms.sungMain.value.copy(colors.accent).lerp(colors.ink, 0.28);
+                        uniforms.sub.value.copy(colors.secondary).lerp(colors.ink, 0.48);
+                    }
                     uniforms.ink.value.copy(colors.ink);
                     uniforms.outline.value.copy(colors.background);
 
@@ -2983,7 +2994,7 @@
                             // on the small row they merge into a white smear over it.
                             if (cell.isSub) return;
                             const stride = 5;
-                            const pColor = colors.accent;
+                            const pColor = stagePalette.light ? colors.ink : colors.accent;
                             const wWorld = cell.w * unit * cell.fit;
                             const hWorld = cell.h * unit;
                             for (let y = 0; y < cell.h; y += stride) {
@@ -3053,14 +3064,14 @@
             const luma = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
             const paper = luma(colors.background) > luma(colors.ink);
             // On a light theme the sky is the page itself, not a dimmed copy of it.
-            const abyssBg = colors.background.clone().multiplyScalar(paper ? 0.92 : 0.38);
+            const abyssBg = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.35) : colors.background.clone().multiplyScalar(0.38);
             // A pale page cannot carry the theme's saturated accents at full
             // strength on large shapes: on paper they are washed toward the
             // muted tone, as watercolour is, and the page shows through.
             const soften = (c, toMuted, toPage) => paper ? c.clone().lerp(colors.muted, toMuted).lerp(colors.background, toPage) : c.clone();
-            const washA = soften(colors.secondary, 0.2, 0.18);
-            const washB = soften(colors.accent, 0.5, 0.15);
-            const washEmber = soften(colors.ember, 0.5, 0.15);
+            const washA = soften(colors.secondary, 0.3, 0.3);
+            const washB = soften(colors.accent, 0.6, 0.3);
+            const washEmber = soften(colors.ember, 0.6, 0.3);
             if (scene?.background?.copy) scene.background.copy(abyssBg);
             else if (scene) scene.background = abyssBg;
             if (scene?.fog?.color?.copy) scene.fog.color.copy(abyssBg);
@@ -3072,11 +3083,14 @@
             const pale = paper;
             const sky = skyMat.uniforms;
             sky.uBase.value.copy(abyssBg);
-            sky.uColorA.value.copy(paper ? colors.secondary.clone().lerp(colors.background, 0.3) : colors.secondary);
-            sky.uColorB.value.copy(paper ? washB.clone().lerp(colors.muted, 0.4) : colors.ember.clone().lerp(colors.accent, 0.3));
+            sky.uColorA.value.copy(paper ? colors.secondary.clone().lerp(abyssBg, 0.55) : colors.secondary);
+            sky.uColorB.value.copy(paper ? colors.accent.clone().lerp(new T.Color('#ffffff'), 0.62).lerp(abyssBg, 0.3) : colors.ember.clone().lerp(colors.accent, 0.3));
             sky.uColorStar.value.copy(colors.ink).lerp(colors.muted, 0.35);
-            sky.uColorSun.value.copy(colors.accent).lerp(new T.Color('#ffffff'), 0.62);
-            sky.uInk.value.copy(colors.ink);
+            // On paper the sun's light is shown as a pale gold, since brightness alone
+            // cannot stand out from a white page.
+            if (paper) sky.uColorSun.value.set('#e3c27f');
+            else sky.uColorSun.value.copy(colors.accent).lerp(new T.Color('#ffffff'), 0.62);
+            sky.uInk.value.copy(paper ? colors.muted.clone().lerp(abyssBg, 0.3) : colors.ink);
             sky.uPaper.value = pale ? 1 : 0;
 
             filamentMat.uniforms.uColorA.value.copy(colors.secondary);
@@ -3089,14 +3103,14 @@
             entityNodes.forEach((node) => {
                 node.mat.uniforms.uColorPrimary.value.copy(washA);
                 node.mat.uniforms.uColorAccent.value.copy(washB);
-                node.mat.uniforms.uColorInk.value.copy(paper ? colors.muted : colors.ink);
+                node.mat.uniforms.uColorInk.value.copy(paper ? colors.muted.clone().lerp(abyssBg, 0.45) : colors.ink);
                 node.mat.uniforms.uColorEmber.value.copy(washEmber);
             });
             // Bodies are lit towards "ink". On a light theme ink is the dark
             // colour, so they are lit towards paper, and their shade is a
             // soft grey of the page rather than a hole in it.
-            const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
-            const bodyFloor = paper ? colors.muted.clone().lerp(colors.secondary, 0.25).lerp(colors.background, 0.2).multiplyScalar(0.55) : new T.Color('#000000');
+            const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.85) : colors.ink;
+            const bodyFloor = paper ? abyssBg.clone().lerp(colors.secondary, 0.1).multiplyScalar(0.6) : new T.Color('#000000');
             rockField.mat.uniforms.uColorPrimary.value.copy(washA);
             rockField.mat.uniforms.uColorAccent.value.copy(washB);
             rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
@@ -3111,7 +3125,7 @@
                 mat.uniforms.uFloor.value.copy(bodyFloor);
             }));
 
-            lyricParticleMat.uniforms.uTint.value.copy(colors.accent);
+            lyricParticleMat.uniforms.uTint.value.copy(paper ? colors.accent.clone().lerp(new T.Color('#ffffff'), 0.5) : colors.accent);
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
             ripples.forEach((r, idx) => r.mat.color.copy(idx % 2 === 0 ? colors.secondary : colors.accent));
             glyphCacheKey = ''; // 触发当前句按新主题重绘
