@@ -4518,7 +4518,7 @@
             const outside = (pose.chase ?? 0) > 0.002 && (pose.saloon ?? 0) <= 0.002;
             cabReal.value = outside && tuning.showTrain !== false ? 1 : 0;
             // Beyond this reach only the shell and the cab are drawn: the seats, lamps and people are too small to miss.
-            const CAB_FULL_REACH = 16;
+            const CAB_FULL_REACH = 9;
             const nose = track.at(front - 1.2).position, eyeAt = pose.position;
             const near = !outside || (eyeAt && Math.hypot(eyeAt.x - nose.x, (eyeAt.y ?? 0) - 2.2, eyeAt.z - nose.z) < CAB_FULL_REACH);
             saloonGeometry.setDrawRange(0, near ? Infinity : saloonGeometry.userData.coarse);
