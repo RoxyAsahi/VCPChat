@@ -183,10 +183,13 @@
         const box = new T.BoxGeometry(1, 1, 1);
         let palette = {}, timeline = null, track = null, options = {};
         // By day the theme's accent, full strength, jumps out of the pale
-        // scene: the words already sung take it with some of the ink in it.
+        // scene: the words being sung take a deeper, quieter shade of it, and
+        // the words already sung settle back toward the ink, not into a third colour.
         const sungColour = () => {
             const colour = new T.Color(palette.accent || '#f2a900');
-            return palette.light ? colour.lerp(new T.Color(palette.ink || '#2b2b2b'), 0.3) : colour;
+            if (!palette.light) return colour;
+            const hsl = colour.getHSL({});
+            return colour.setHSL(hsl.h, hsl.s * 0.7, hsl.l * 0.78);
         };
         let readingBounds = [], lastCamera = null, lastDiagnosticTime = 0;
         const sight = new T.Raycaster();
@@ -291,7 +294,7 @@
                     rest: { value: palette.light ? 0.82 : 0.48 },
                     accent: { value: sungColour() },
                     ink: { value: new T.Color(palette.ink || '#f2f0e9') },
-                    cold: { value: new T.Color(palette.secondary || '#76bfae') },
+                    cold: { value: new T.Color(palette.light ? palette.ink || '#2b2b2b' : palette.secondary || '#76bfae') },
                     ranges: { value: ranges }, starts: { value: starts }, ends: { value: ends }
                 },
                 vertexShader: `
