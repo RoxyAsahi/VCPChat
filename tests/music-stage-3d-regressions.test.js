@@ -211,3 +211,19 @@ test('3D modes draw to a pixel budget and step down while frames are slow', () =
     assert.ok(scale.factor > low, 'a long steady stretch tries the larger size again');
     dom.window.close();
 });
+
+test('a wobbling duration does not rebuild the diorama song', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: Utils } = loadStage(dom);
+    assert.equal(Utils.durationChanged(null, 215), true, 'nothing compiled yet');
+    assert.equal(Utils.durationChanged(0, 215), true, 'the real duration arriving after a placeholder');
+    assert.equal(Utils.durationChanged(215, 215.01), false);
+    assert.equal(Utils.durationChanged(215.01, 215), false);
+    assert.equal(Utils.durationChanged(215, 216), true);
+    assert.equal(Utils.durationChanged(undefined, undefined), false, 'an unknown duration stays unknown');
+    // The manager goes through this check rather than comparing the raw numbers.
+    const manager = read('Musicmodules/music-stage/modes/diorama-manager.js');
+    assert.match(manager, /U\.durationChanged\(compiledDuration, nextDuration\)/);
+    assert.doesNotMatch(manager, /compiledDuration !== nextDuration/);
+    dom.window.close();
+});

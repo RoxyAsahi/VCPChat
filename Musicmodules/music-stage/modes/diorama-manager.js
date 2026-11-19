@@ -116,7 +116,7 @@
             const nextOptions = JSON.stringify(REBUILD_KEYS.map(key => settings[key]));
             const nextPalette = JSON.stringify(palette());
             let recompile = false;
-            if (!timeline || source !== frame.lines || identity !== nextIdentity || compiledDuration !== nextDuration) {
+            if (!timeline || source !== frame.lines || identity !== nextIdentity || U.durationChanged(compiledDuration, nextDuration)) {
                 source = frame.lines;
                 identity = nextIdentity;
                 compiledDuration = nextDuration;

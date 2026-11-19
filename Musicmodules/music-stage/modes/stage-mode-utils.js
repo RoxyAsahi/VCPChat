@@ -213,6 +213,11 @@
      * otherwise have the stage drawn twice as often as anyone can follow a
      * camera move, at twice the power. Returns true when this frame is drawn.
      */
+    // The player's duration comes from polling and can wobble by a few
+    // milliseconds; only a real change is worth rebuilding the whole song for.
+    const durationChanged = (compiled, next) =>
+        Number.isFinite(compiled) && Number.isFinite(next) ? Math.abs(compiled - next) > 0.5 : !Object.is(compiled, next);
+
     const createFrameCap = () => {
         let last = -Infinity;
         return {
@@ -256,7 +261,7 @@
 
     global.MusicStageModeUtils = Object.freeze({
         createRenderScale,
-        createFrameCap,
+        createFrameCap, durationChanged,
         precompile,
         tier,
         clamp,
