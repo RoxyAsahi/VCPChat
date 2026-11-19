@@ -35,7 +35,7 @@
     const KEY_LIGHT = unit([-0.78, 0.44, 0.26]);
     const SUN_AT = unit([-0.5, 0.26, -0.83]);
     // What a body is made as: the surface kinds a planet can be given.
-    const WORLD = { gas: 0, moon: 1, ice: 2, volcanic: 3, home: 4, desert: 5, iceGiant: 6 };
+    const WORLD = { gas: 0, moon: 1, ice: 2, volcanic: 3, home: 4, desert: 5, iceGiant: 6, asteroid: 7 };
     // The galaxy's plane, tilted across the upper part of the view, and its bright middle.
     const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
     const GALAXY_CORE = unit([0.75, 0.21, -1]);
@@ -319,7 +319,7 @@
             { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 58, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
             { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5, worlds: [WORLD.desert, WORLD.iceGiant, WORLD.moon] },
-            { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8, worlds: [WORLD.iceGiant, WORLD.moon, WORLD.desert] },
+            { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8, worlds: [WORLD.iceGiant, WORLD.asteroid, WORLD.desert] },
             { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 25, elev: 5,   scale: 0.66, rotSpeed: 0.012, tilt: [0.35, 0.5 - 7 * 1.1, -0.95], p: 2, q: 3, hold: true },
             { slotId: 8, type: 'ship',    baseS: 1730, side:  1, radial: 25, elev: -4,  scale: 0.6,  rotSpeed: 0.01, tilt: [0.3, -0.55 - 8 * 1.1, 0.12], p: 3, q: 7, hold: true }
         ];
@@ -377,6 +377,8 @@
         };
         const asteroidBelt = findEncounter(0.23, 18, 0.14, 0.38);
         const blackHole = findEncounter(0.67, 22, 0.50, 0.83);
+        // Between the first two choruses the route passes close by a comet.
+        const cometPass = findEncounter(0.36, 30, 0.28, 0.46);
 
         return {
             seedHash,
@@ -389,6 +391,7 @@
             heroPasses,
             asteroidBelt,
             blackHole,
+            cometPass,
             ENCOUNTER_CYCLE,
             sampleState,
             distanceAt,
@@ -845,7 +848,7 @@
                 uColorStar: { value: new T.Color('#b8c7d4') },
                 uColorSun: { value: new T.Color('#fff1d6') },
                 uInk: { value: new T.Color('#f2f0e9') },
-                uTime: { value: 0 }, uNebula: { value: 1 }, uPaper: { value: 0 }, uJourney: { value: 0 },
+                uTime: { value: 0 }, uNebula: { value: 1 }, uPaper: { value: 0 }, uJourney: { value: 0 }, uComet: { value: 0 },
                 uHole: { value: new T.Vector2(0, 0.08) },
                 uHoleDir: { value: new T.Vector3(0, 0, -1) },
                 uHoleRight: { value: new T.Vector3(1, 0, 0) },
@@ -864,11 +867,15 @@
             fragmentShader: `
                 uniform sampler2D uMasks;
                 uniform vec3 uBase, uColorA, uColorB, uColorStar, uColorSun, uInk;
-                uniform float uTime, uNebula, uPaper, uJourney;
+                uniform float uTime, uNebula, uPaper, uJourney, uComet;
                 uniform vec2 uViewport, uHole;
                 uniform vec3 uHoleDir, uHoleRight, uHoleUp;
                 varying vec3 vDir;
                 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                float noise1(float x) {
+                    float i = floor(x), f = fract(x);
+                    return mix(hash(vec2(i, 0.0)), hash(vec2(i + 1.0, 0.0)), f * f * (3.0 - 2.0 * f));
+                }
                 vec3 accretion(vec2 x, vec3 background, float read) {
                     vec2 p = mat2(0.95, 0.312, -0.312, 0.95) * x;
                     float r = length(p);
@@ -946,10 +953,29 @@
                     vec3 away = normalize(comet * dot(comet, sunward) - sunward), side = cross(comet, away);
                     vec3 from = d - comet;
                     float along = dot(from, away), off = dot(from, side), gone = max(along, 0.0);
-                    float coma = exp(-length(from) * 190.0) * 0.9 + exp(-length(from) * 46.0) * 0.1;
-                    float bend = off - gone * gone * 0.55;
-                    float dustTail = exp(-bend * bend / (0.00006 + gone * 0.008)) * exp(-gone * 6.5) * step(0.0, along) * 0.2;
-                    float gasTail = exp(-off * off / (0.00001 + gone * 0.0005)) * exp(-gone * 4.2) * step(0.0, along) * 0.16;
+                    // Passing close, it grows: the coma swells, both tails stretch
+                    // across the sky, the dust tail shows striations, and jets of
+                    // gas fan out sunward from the nucleus.
+                    float grow = 1.0 + 3.0 * uComet;
+                    float coma = exp(-length(from) * 190.0 / grow) * 0.9 + exp(-length(from) * 46.0 / grow) * 0.1 * (1.0 + uComet);
+                    float bend = off - gone * gone * 0.55 / grow;
+                    float striae = 1.0 - 0.35 * uComet * smoothstep(0.3, 0.8, noise1(bend * 900.0 / grow + gone * 40.0));
+                    float dustTail = exp(-bend * bend / ((0.00006 + gone * 0.008) * grow)) * exp(-gone * 6.5 / grow)
+                        * step(0.0, along) * 0.2 * (1.0 + 0.8 * uComet) * striae;
+                    float gasTail = exp(-off * off / ((0.00001 + gone * 0.0005) * grow)) * exp(-gone * 4.2 / grow)
+                        * step(0.0, along) * 0.16 * (1.0 + uComet);
+                    float jets = 0.0;
+                    if (uComet > 0.001) {
+                        for (int i = 0; i < 3; i++) {
+                            float turn = 2.55 + float(i) * 0.48;
+                            vec2 aim = vec2(cos(turn), sin(turn));
+                            vec2 at = vec2(along, off);
+                            float reachOut = dot(at, aim), across = dot(at, vec2(-aim.y, aim.x));
+                            jets += exp(-across * across / (0.0000003 + reachOut * reachOut * 0.015)) * step(0.0, reachOut)
+                                * exp(-reachOut * 110.0 / grow);
+                        }
+                        jets *= uComet * 0.35;
+                    }
                     float cometSide = step(0.0, dot(d, comet));
 
                     vec3 night = uBase + uColorStar * m.b * mix(0.05, 0.16, smoothstep(0.35, 1.0, uJourney));
@@ -960,7 +986,7 @@
                         + uColorStar * (coolCore + warmCore) * 0.015) * uNebula;
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
-                    night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail) + uColorA * gasTail * 1.6)
+                    night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail + jets) + uColorA * gasTail * 1.6)
                         * cometSide * (0.45 + 0.55 * read);
                     vec3 sunTone = mix(uColorSun, mix(uColorStar, vec3(1.0), 0.4), far * 0.6);
                     night += sunTone * (disc * 16.0 + corona * (0.6 + 0.4 * read));
@@ -968,7 +994,8 @@
                     vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
                     paper = mix(paper, uColorB, m.g * 0.22 * uNebula);
                     paper = mix(paper, uInk, m.a * 0.1 + star * 0.45
-                        + m.b * smoothstep(0.35, 1.0, uJourney) * 0.07);
+                        + m.b * smoothstep(0.35, 1.0, uJourney) * 0.07
+                        + clamp(coma + dustTail + gasTail + jets, 0.0, 1.0) * 0.3 * cometSide);
                     // The sun on paper: a warm bloom with a white heart, since white
                     // alone would vanish into the page.
                     paper = mix(paper, uColorSun, clamp(corona * 1.6, 0.0, 1.0) * 0.8);
@@ -1829,12 +1856,31 @@
             },
             vertexShader: `
                 attribute float aPart;
+                uniform float uWorld, uSeed;
                 varying vec3 vLocal, vWorld, vNormal;
                 varying vec2 vUv;
                 varying float vPart, vDepth;
+                float vhash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                float vnoise(vec3 p) {
+                    vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                    return mix(mix(mix(vhash(i), vhash(i + vec3(1, 0, 0)), f.x),
+                        mix(vhash(i + vec3(0, 1, 0)), vhash(i + vec3(1, 1, 0)), f.x), f.y),
+                        mix(mix(vhash(i + vec3(0, 0, 1)), vhash(i + vec3(1, 0, 1)), f.x),
+                        mix(vhash(i + vec3(0, 1, 1)), vhash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                }
                 void main() {
-                    vLocal = position; vUv = uv; vPart = aPart;
-                    vec4 world = modelMatrix * vec4(position, 1.0);
+                    vec3 at = position;
+                    if (uWorld > 6.5 && aPart < 0.5) {
+                        // A small body is not round: a lumpy, elongated rubble pile
+                        // with a waist, like the asteroids probes have visited.
+                        vec3 d = normalize(position);
+                        float lump = 1.0 + (vnoise(d * 1.4 + uSeed * 7.0) - 0.5) * 0.7
+                            + (vnoise(d * 3.3 + uSeed * 3.0) - 0.5) * 0.24 + (vnoise(d * 8.0) - 0.5) * 0.06;
+                        float waist = 1.0 - 0.18 * exp(-d.x * d.x * 9.0);
+                        at = position * vec3(1.55, 0.8 * waist, 0.85 * waist) * lump;
+                    }
+                    vLocal = at; vUv = uv; vPart = aPart;
+                    vec4 world = modelMatrix * vec4(at, 1.0);
                     vWorld = world.xyz;
                     vNormal = normalize(mat3(modelMatrix) * normal);
                     vec4 mv = viewMatrix * world;
@@ -1902,7 +1948,7 @@
                     if (uKind < 1.5 && dither > fade) discard;
 
                     vec3 n = normalize(vNormal);
-                    if (uKind > 2.5 && uKind < 3.5) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                    if ((uKind > 2.5 && uKind < 3.5) || (uKind < 1.5 && uWorld > 6.5)) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
                     vec3 v = normalize(cameraPosition - vWorld);
                     if (dot(n, v) < 0.0) n = -n;
                     float ndl = dot(n, uLight);
@@ -2031,7 +2077,7 @@
                     } else if (uKind < 1.5) {
                         if (vPart > 0.5) {
                             // Only the giants keep moons in attendance.
-                            if (uWorld > 0.5 && uWorld < 5.5) discard;
+                            if (uWorld > 0.5 && (uWorld < 5.5 || uWorld > 6.5)) discard;
                             // A moon in attendance: airless rock, dark plains,
                             // craters with bright rims, lit hard from one side
                             // and faintly by the planet it circles.
@@ -2135,6 +2181,15 @@
                             vec3 dust = mix(uColorEmber, uColorInk, 0.4) * mix(0.55, 0.26, dark) * (0.88 + 0.24 * noise(p * 22.0 + s));
                             ground = mix(dust, uColorInk * 0.9, cap) * (1.0 - trench * 0.35);
                             airy = 0.3; hard = 0.75;
+                        } else if (uWorld > 6.5) {
+                            // An asteroid: dark carbon-rich rubble, boulders, craters
+                            // softened by regolith, brighter where fresh rock shows.
+                            vec2 c1 = craters(p * 4.0, 0.6, s);
+                            vec2 c2 = craters(p * 11.0, 0.7, s + 3.0);
+                            float boulders = smoothstep(0.72, 0.8, noise(p * 60.0 + s)) * uDetail;
+                            h = c1.x * 0.04 + c2.x * 0.015 + boulders * 0.006 + (noise(p * 25.0 + s) - 0.5) * 0.01;
+                            float albedo = 0.2 * (0.8 + 0.4 * noise(p * 14.0 + s)) + (c1.y + c2.y) * 0.12 + boulders * 0.08;
+                            ground = mix(uColorInk, uColorPrimary, 0.06) * albedo;
                         } else {
                             // An ice giant: deep haze, faint bands, one dark storm
                             // with a bright cloud riding beside it.
@@ -2149,6 +2204,10 @@
                         // Relief: the height field tilts the normal, so craters and
                         // canyons fill with shadow near the terminator.
                         vec3 nl = p;
+                        if (uWorld > 6.5) {
+                            nl = normalize(cross(dFdx(vLocal), dFdy(vLocal)));
+                            if (dot(nl, vLocal) < 0.0) nl = -nl;
+                        }
                         if (h != 0.0) {
                             vec3 dpx = dFdx(vLocal), dpy = dFdy(vLocal);
                             float hx = dFdx(h * R), hy = dFdy(h * R);
@@ -3572,6 +3631,7 @@
             const sky = skyMat.uniforms;
             sky.uTime.value = settings.reducedMotion ? 0 : time;
             sky.uJourney.value = clamp(time / Math.max(1, timeline.duration));
+            sky.uComet.value = timeline.cometPass ? encounterAmount(timeline.cometPass, time) : 0;
             sky.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
             const holeStrength = showStarfield ? encounterAmount(timeline.blackHole, time) : 0;
             sky.uHole.value.x = holeStrength;
