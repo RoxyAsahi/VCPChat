@@ -14,7 +14,7 @@
             group.rotation.y = -encounter.yaw;
             const backingColor = new T.Color(palette.surface || palette.background || '#111b1c')
                 .lerp(new T.Color(palette.deep || palette.background || '#111b1c'), 0.35);
-            const trimColor = new T.Color(palette.secondary || '#76bfae');
+            const trimColor = watercolour(palette.secondary || '#76bfae', 0.3, 0.3);
             // One material and one draw for the whole board: the backing parts
             // come first, the bright trim after them, each in its own colour.
             const back = new T.MeshStandardMaterial({
@@ -129,7 +129,7 @@
             const performance = new T.ShaderMaterial({
                 transparent: true, depthWrite: false,
                 uniforms: { bins: { value: new Float32Array(24) }, light: { value: 0 },
-                    closing: { value: 0 }, accent: { value: sungColour() } },
+                    closing: { value: 0 }, accent: { value: palette.light ? ink().lerp(page(), 0.35) : sungColour() } },
                 vertexShader: `varying vec2 vUv;void main(){vUv=uv;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
                 fragmentShader: `varying vec2 vUv;uniform float bins[24],light,closing;uniform vec3 accent;
@@ -182,15 +182,19 @@
         const plane = new T.PlaneGeometry(1, 1);
         const box = new T.BoxGeometry(1, 1, 1);
         let palette = {}, timeline = null, track = null, options = {};
-        // By day the theme's accent, full strength, jumps out of the pale
-        // scene: the words being sung take a deeper, quieter shade of it, and
-        // the words already sung settle back toward the ink, not into a third colour.
-        const sungColour = () => {
-            const colour = new T.Color(palette.accent || '#f2a900');
-            if (!palette.light) return colour;
-            const hsl = colour.getHSL({});
-            return colour.setHSL(hsl.h, hsl.s * 0.7, hsl.l * 0.78);
-        };
+        // By day the scene is a page, and a line on it is written in ink: pale
+        // and waiting, then full and deep as it is sung, the translation in a
+        // quiet grey beneath. No colour, so nothing on the page jumps out.
+        const ink = () => new T.Color(palette.ink || '#2b2b2b');
+        const page = () => new T.Color(palette.background || '#f2f0e9');
+        const sungColour = () => palette.light ? ink().multiplyScalar(0.8) : new T.Color(palette.accent || '#f2a900');
+        const waitingColour = () => palette.light ? ink().lerp(page(), 0.22) : new T.Color(palette.ink || '#f2f0e9');
+        const quietColour = () => palette.light ? new T.Color(palette.muted || '#8a8f93').lerp(ink(), 0.15)
+            : new T.Color(palette.ink || '#f2f0e9');
+        // Large coloured shapes are washed toward the muted tone and the page, as watercolour is.
+        const watercolour = (colour, toMuted, toPage) => palette.light
+            ? new T.Color(colour).lerp(new T.Color(palette.muted || '#8a8f93'), toMuted).lerp(page(), toPage)
+            : new T.Color(colour);
         let readingBounds = [], lastCamera = null, lastDiagnosticTime = 0;
         const sight = new T.Raycaster();
         const release = node => {
@@ -294,8 +298,8 @@
                     // still to be sung are laid on more heavily.
                     rest: { value: palette.light ? 0.82 : 0.48 },
                     accent: { value: sungColour() },
-                    ink: { value: new T.Color(palette.ink || '#f2f0e9') },
-                    cold: { value: new T.Color(palette.light ? palette.ink || '#2b2b2b' : palette.secondary || '#76bfae') },
+                    ink: { value: waitingColour() },
+                    cold: { value: palette.light ? sungColour() : new T.Color(palette.secondary || '#76bfae') },
                     ranges: { value: ranges }, starts: { value: starts }, ends: { value: ends }
                 },
                 vertexShader: `
@@ -455,7 +459,7 @@
                 rows.forEach((row, i) => sc.fillText(row, 1024, 128 + (i - (rows.length - 1) / 2) * px * 1.22, 1960));
                 const subTexture = texture(sub);
                 textures.push(subTexture);
-                const subMat = new T.MeshBasicMaterial({ map: subTexture, color: palette.ink || '#f2f0e9',
+                const subMat = new T.MeshBasicMaterial({ map: subTexture, color: quietColour(),
                     transparent: true, opacity: 0.7, depthWrite: false, depthTest: !constellation,
                     side: T.DoubleSide, forceSinglePass: true });
                 materials.push(subMat);
