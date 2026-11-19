@@ -777,10 +777,24 @@ body:not(:has(.md-pnl.md-open)) .md-sheet { right: 32px; }
 @media (max-width: 900px) {
   .md-sheet { right: 16px; left: 16px; width: auto; }
 }
-@media (max-width: 640px) {
+/* 紧凑档（窗口窄于 640）：胶囊收起和展开同宽，把手缩成 40 挂在胶囊右端，面板从胶囊右端往上长。 */
+@media (max-width: 639.98px) {
+  #music-dock-root { --md-cap-right: max(16px, calc((100vw - 480px) / 2)); }
   .md-np { display: none; }
-  .md-hdl { right: 16px; bottom: 32px; }
-  .md-pnl { right: 16px; }
+  .md-dock-in { padding-bottom: 16px; }
+  .md-cap { padding-right: 56px; }
+  .md-cap.md-ex { padding-right: 56px; }
+  .md-cap.md-ex .md-cap-e { column-gap: 10px; }
+  .md-ttl { padding: 0; }
+  .md-zone { width: 28px; }
+  .md-txt > div { left: 28px; right: 28px; }
+  .md-slots { gap: 0; }
+  .md-cap-e > .md-prow { padding: 0; gap: 8px; }
+  .md-cap-c { padding: 0 4px 0 12px; }
+  .md-hdl { right: calc(var(--md-cap-right) + 8px); bottom: 21px; width: 40px; height: 40px; z-index: calc(var(--mt-z-dock, 60) + 1); }
+  #music-dock-root .md-hdl button { width: 40px; height: 40px; box-shadow: none; }
+  .md-pnl { right: var(--md-cap-right); bottom: 100px; margin-bottom: 0; max-width: calc(100vw - 2 * var(--md-cap-right)); max-height: calc(100vh - 150px); transform-origin: calc(100% - 28px) calc(100% + 60px); }
+  .md-sheet { bottom: 100px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #music-dock-root *,
