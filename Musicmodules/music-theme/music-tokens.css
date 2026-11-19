@@ -7,11 +7,20 @@
  *   --ar-*  档案阵列页（3D 曲目卡阵列和浮在上面的文字）
  *   --md-*  底栏胶囊、快捷行、把手、统一面板、正在播放卡片
  *   --mt-*  两边共用的字体、动效、层级
+ *   --ar-*  也用于列表视图（侧栏、档案卡、声学处理、歌词栏），和档案页同一套纸面与墨色
+ *   --ms-*  舞台页上浮着的界面（顶部页签、舞台档案卡、舞台设置），
+ *           舞台背景深浅不定，所以单独一组，并在 body.music-stage-active 下生效
  */
 body {
   /* 共用 */
   --mt-font-archive: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --mt-font-ui: ui-sans-serif, system-ui, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --mt-font-label: "MiSans", "Mi Sans", "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --mt-font-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
+  --mt-dur-1: 120ms;       /* 悬停、按下 */
+  --mt-dur-2: 180ms;       /* 页签下划线、分段控件 */
+  --mt-dur-3: 280ms;       /* 抽屉展开 */
+  --mt-dur-4: 460ms;       /* 编号、曲名滚动替换 */
   --mt-ease: cubic-bezier(.22, 1, .36, 1);
   --mt-ease-std: cubic-bezier(.4, 0, .2, 1);
   --mt-z-archive: 1;       /* 3D 画布 */
@@ -44,6 +53,27 @@ body {
   --ar-count: #a6b0b1;
   --ar-slash: #a6b0b1;
   --ar-light: #e0e3dc;
+
+  /* 列表视图（深色）：纸面分层，发丝线分栏 */
+  --ar-panel: #151d21;
+  --ar-field: #1d282d;
+  --ar-ink-2: #c3cbc9;
+  --ar-hairline: #2b383d;
+  --ar-danger: #e2604c;
+  --ar-live: #4fc2bc;
+  --ar-on-ink: #11181b;
+  --ar-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+
+  /* 舞台页浮层（深色） */
+  --ms-ink: #f2f3ef;
+  --ms-muted: rgba(242, 243, 239, .66);
+  --ms-faint: rgba(242, 243, 239, .42);
+  --ms-line: rgba(242, 243, 239, .22);
+  --ms-glass: rgba(16, 18, 20, .46);
+  --ms-glass-strong: rgba(22, 24, 27, .86);
+  --ms-glass-edge: rgba(255, 255, 255, .08);
+  --ms-text-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 18px rgba(0, 0, 0, .35);
+  --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55);
 
   /* 底栏控件与面板（深色） */
   --md-tp: rgb(244, 244, 245);
@@ -86,6 +116,25 @@ body.light-theme {
   --ar-count: #726f67;
   --ar-slash: #8f8a80;
   --ar-light: #777b60;
+
+  --ar-panel: #f5f2ec;
+  --ar-field: #e3ded5;
+  --ar-ink-2: #3f403c;
+  --ar-hairline: #cdc7bc;
+  --ar-danger: #c8402f;
+  --ar-live: #2c8c88;
+  --ar-on-ink: #f5f2ec;
+  --ar-shadow: 0 12px 32px rgba(0, 0, 0, .14);
+
+  --ms-ink: #141517;
+  --ms-muted: rgba(20, 21, 23, .68);
+  --ms-faint: rgba(20, 21, 23, .46);
+  --ms-line: rgba(20, 21, 23, .2);
+  --ms-glass: rgba(246, 244, 240, .58);
+  --ms-glass-strong: rgba(246, 244, 240, .9);
+  --ms-glass-edge: rgba(0, 0, 0, .06);
+  --ms-text-shadow: 0 0 1px rgba(255, 255, 255, .6), 0 0 16px rgba(255, 255, 255, .45);
+  --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .22);
 
   --md-tp: rgb(28, 25, 23);
   --md-tp-rgb: 28, 25, 23;

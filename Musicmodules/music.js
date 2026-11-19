@@ -377,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupSidebar(app);
         setupUI(app);
         setupMusicStage(app);
+        window.setupMusicSkin?.(app);
 
         // --- Handlers & Listeners ---
         setupEventListeners();
@@ -442,6 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 app.updateVolumeSliderBackground(initialState.state.volume);
             }
             syncInitialSettings(initialState);
+            app.refreshAcousticSummary?.();
         }
         app.populateDeviceList(false);
 
