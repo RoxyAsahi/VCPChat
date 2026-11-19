@@ -3508,7 +3508,7 @@
                     float hh=max(h,0.0);
                     float wash=sin(hh*6.5-time*8.0+s*0.7)*exp(-hh*0.55);
                     g+=side*wash*0.3*beside;
-                    foam+=exp(-hh*1.4)*beside*(0.55+0.45*sin(s*1.3-time*5.0+hh*3.0));
+                    foam+=exp(-hh*2.6)*beside*(0.55+0.45*sin(s*1.3-time*5.0+hh*3.0));
                     // Two arms opening behind the nose at about twenty degrees.
                     float behind=max(s,0.0),arm=hh-0.36*behind;
                     float arms=sin(arm*4.5-time*5.0)*exp(-arm*arm*0.35)*exp(-behind/48.0)*smoothstep(-2.0,0.0,s);
@@ -3578,7 +3578,7 @@
                     }
                     // Broken water along the hull catches what light there is.
                     float lace=smoothstep(0.35,0.75,n21(world.xz*vec2(5.0,6.3)+vec2(time*1.3,-time*0.9)));
-                    c=mix(c,max(fogTint,r)*1.15+moonTint*0.04,churn*lace*0.5*strength);
+                    c=mix(c,c*1.35+fogTint*0.12+moonTint*0.03,churn*lace*0.4*strength);
                     // Match scene FogExp2 so the far plane melts into the horizon.
                     float fog=1.0-exp(-fogDensity*fogDensity*dist*dist);
                     c=mix(c,fogTint,clamp(fog,0.0,1.0));
@@ -3645,11 +3645,11 @@
         const splashMaterial = material(new T.ShaderMaterial({
             transparent: true, depthWrite: false, side: T.DoubleSide,
             uniforms: { tint: splashTint, warm: splashWarm, clock: splashClock },
-            vertexShader: `attribute vec2 foam,look;varying vec2 vUv,vFoam,vLook;varying float vFar;
+            vertexShader: `attribute vec2 foam,look;varying vec2 vUv,vFoam,vLook;varying float vFar,vNear;
                 void main(){vUv=uv;vFoam=foam;vLook=look;
                     vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;
-                    vFar=1.0-smoothstep(70.0,140.0,-mv.z);}`,
-            fragmentShader: `uniform vec3 tint,warm;uniform float clock;varying vec2 vUv,vFoam,vLook;varying float vFar;
+                    vFar=1.0-smoothstep(70.0,140.0,-mv.z);vNear=0.35+0.65*smoothstep(2.0,9.0,-mv.z);}`,
+            fragmentShader: `uniform vec3 tint,warm;uniform float clock;varying vec2 vUv,vFoam,vLook;varying float vFar,vNear;
                 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
                 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
                     return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
@@ -3669,8 +3669,10 @@
                         float crest=exp(-pow((v-0.26)/0.05,2.0))*(0.55+0.45*noise(vFoam*3.0));
                         float body=smoothstep(0.74+0.18*v,0.97,lace+0.22*(1.0-v));
                         float film=smoothstep(0.5,0.9,lace)*0.12;
-                        a=(crest*0.85+body*(0.7-0.5*v)+film)*smoothstep(1.0,0.6,v)*smoothstep(0.0,0.06,v+0.06);
-                        a*=smoothstep(0.0,0.08,vUv.x)*smoothstep(1.0,0.7,vUv.x);
+                        // The far edge is torn, never ruled: where it fades wanders with a broad noise.
+                        float edge=v+(noise(vFoam*0.9+3.1)-0.5)*0.55;
+                        a=(crest*0.85+body*(0.6-0.45*v)+film)*smoothstep(0.95,0.35,edge)*smoothstep(0.0,0.06,v+0.06);
+                        a*=smoothstep(0.0,0.22,vUv.x+(noise(vFoam*1.1)-0.5)*0.12)*smoothstep(1.0,0.65,vUv.x);
                         lit=(1.0-v)*0.5;
                     }else{
                         // A streak of thrown water: dense at its head, thinning to its tail.
@@ -3678,7 +3680,7 @@
                         a=exp(-across*across*5.0)*(1.0-vUv.x)*(0.6+0.4*noise(vec2(vUv.x*6.0,vLook.y*40.0)));
                         lit=0.6;
                     }
-                    a*=vLook.y*vFar;
+                    a*=vLook.y*vFar*vNear;
                     if(a<0.004)discard;
                     gl_FragColor=vec4(mix(tint,warm,lit*0.35),min(1.0,a));
                     #include <tonemapping_fragment>
@@ -3705,8 +3707,8 @@
             splash.visible = wading > 0.01;
             if (!splash.visible) return;
             const night = !palBase?.light;
-            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 1.25 : 1.1);
-            splashWarm.value.copy(night ? roomGlow : dressTones[TONE.pale]).multiplyScalar(night ? 2.2 : 1.1);
+            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 0.6 : 1.1);
+            splashWarm.value.copy(night ? roomGlow : dressTones[TONE.pale]).multiplyScalar(night ? 1.1 : 1.1);
             splashClock.value = time;
             eye.set(pose.position.x, pose.position.y, pose.position.z);
             const pace = Math.min(1.6, Math.abs(speed) / 12);
@@ -3770,7 +3772,7 @@
                 const hull = saving ? 10 : 24;
                 band(Array.from({ length: hull + 1 }, (_, k) => {
                     const u = k / hull, address = front - arm * 0.3 - u * (length - arm * 0.3);
-                    return { address, u: 0.08 + u * 0.84, alpha: 0.5, points: [
+                    return { address, u: 0.08 + u * 0.84, alpha: 0.32, points: [
                         [side * 1.28, level + 0.09, 0], [side * 1.5, level + 0.06, 0.28], [side * 2.2, level + 0.01, 1]] };
                 }), carried);
             }
@@ -4455,7 +4457,47 @@
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - (lookingBack ? 114 : 24) + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
+            // Timing and the dream are read every frame, so the water stands where
+            // it should even on the first frame after a seek.
+            const speed = tuning.cameraSpeed ?? 1;
+            // When the camera reaches an address along the line.
+            const timeAt = address => {
+                if (track.timeAt) return track.timeAt(address);
+                let lo = 0, hi = timeline.duration;
+                for (let j = 0; j < 18; j++) {
+                    const mid = (lo + hi) * 0.5;
+                    if (timeline.distanceAt(mid, speed) < address) lo = mid;
+                    else hi = mid;
+                }
+                return (lo + hi) * 0.5;
+            };
+            const stateAt = address => timeline.sample(timeAt(address));
+            /*
+             * As the song goes on the line turns to a dream: the water rises over
+             * the track, the busy shore falls away, and what is left is a lamp, a
+             * lit window far off, someone waiting. The director says how far into
+             * the dream an address is; failing that, the last part of the song is.
+             */
+            const dreamAt = address => {
+                const dream = stateAt(address).dream;
+                if (Number.isFinite(dream)) return clamp(dream);
+                return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
+            };
+            drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
+            waterLevel = drownLevel;
+            water.position.y = waterLevel;
             wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            // Even at a crawl the wheels stir it; at speed the arms open out behind.
+            const stirring = tuning.showTrain !== false
+                ? smooth((waterLevel - 0.3) / 0.12) * (0.4 + 0.6 * smooth(Math.abs(splashSpeed) / 7)) : 0;
+            waterMat.uniforms.wake.value = stirring;
+            if (stirring > 0) {
+                const head = pose.trainFront ?? pose.distance, reach = SET_PITCH * CARS / 2;
+                waterMat.uniforms.wakePath.value.forEach((point, i) => {
+                    const at = track.at(head - reach * i / 4).position;
+                    point.set(at.x, at.z);
+                });
+            }
             // The water the train stirs follows its length down the line.
             tideLine.value = waterLevel;
             splash.layers.set(saving ? 1 : 0);
@@ -4498,44 +4540,6 @@
                 dummy.updateMatrix();
                 rocks.setMatrixAt(rocks.count++, dummy.matrix);
             };
-            const speed = tuning.cameraSpeed ?? 1;
-            // When the camera reaches an address along the line.
-            const timeAt = address => {
-                if (track.timeAt) return track.timeAt(address);
-                let lo = 0, hi = timeline.duration;
-                for (let j = 0; j < 18; j++) {
-                    const mid = (lo + hi) * 0.5;
-                    if (timeline.distanceAt(mid, speed) < address) lo = mid;
-                    else hi = mid;
-                }
-                return (lo + hi) * 0.5;
-            };
-            const stateAt = address => timeline.sample(timeAt(address));
-            /*
-             * As the song goes on the line turns to a dream: the water rises over
-             * the track, the busy shore falls away, and what is left is a lamp, a
-             * lit window far off, someone waiting. The director says how far into
-             * the dream an address is; failing that, the last part of the song is.
-             */
-            const dreamAt = address => {
-                const dream = stateAt(address).dream;
-                if (Number.isFinite(dream)) return clamp(dream);
-                return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
-            };
-            drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
-            waterLevel = drownLevel;
-            water.position.y = waterLevel;
-            // Even at a crawl the wheels stir it; at speed the arms open out behind.
-            const stirring = tuning.showTrain !== false
-                ? smooth((waterLevel - 0.3) / 0.12) * (0.4 + 0.6 * smooth(Math.abs(splashSpeed) / 7)) : 0;
-            waterMat.uniforms.wake.value = stirring;
-            if (stirring > 0) {
-                const head = pose.trainFront ?? pose.distance, reach = SET_PITCH * CARS / 2;
-                waterMat.uniforms.wakePath.value.forEach((point, i) => {
-                    const at = track.at(head - reach * i / 4).position;
-                    point.set(at.x, at.z);
-                });
-            }
             // Where the camera is as it goes by an address: how far out to one
             // side of the line, and how high. In the cab it is on the line.
             if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
