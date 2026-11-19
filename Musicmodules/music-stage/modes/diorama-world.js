@@ -4294,10 +4294,13 @@
             else glassMaterial.uniforms.shadowInk.value.set('#24212a');
             // Cream window band and the deep green body learn a little of the current theme.
             const ivory = new T.Color('#eed6a1').lerp(light ? surface : ink, light ? 0.46 : 0.19);
-            const green = new T.Color('#426b3f').lerp(luminous(secondary.clone()), light ? 0.26 : 0.22);
-            const runningGear = watercolour(new T.Color('#45443d').lerp(deep, light ? 0.08 : 0.40), 0, 0.25);
-            const roof = watercolour(new T.Color('#484f45').lerp(structure, 0.37), 0.2, 0.25);
-            paintTrain(ivory, watercolour(green, 0.3, 0.18), runningGear, roof);
+            const green = new T.Color('#426b3f').lerp(luminous(secondary.clone()), light ? 0.1 : 0.22);
+            // On the page the train is drawn in ink wash: a grey-green body a
+            // shade darker than the paper round it, and the gear under it in
+            // ink, not left blank where the haze reaches it.
+            const runningGear = watercolour(new T.Color('#33322e').lerp(deep, light ? 0.08 : 0.40), 0.1, 0);
+            const roof = watercolour(new T.Color('#484f45').lerp(structure, 0.37), 0.25, 0.12);
+            paintTrain(ivory, light ? watercolour(green, 0.5, 0.06) : green, runningGear, roof);
 
             carHorizon.value.copy(light ? surface : muted).lerp(secondary, 0.3);
             carWater.value.copy(secondary).lerp(deep, 0.31);
