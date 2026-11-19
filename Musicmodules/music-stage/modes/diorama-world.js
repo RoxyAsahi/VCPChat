@@ -2032,14 +2032,30 @@
                         float grazing=pow(1.0-clamp(ray.z,0.0,1.0),2.0);
                         float dash=1.0-smoothstep(-0.59,-0.44,p.y+0.07*p.x);
                         c=cab(cabin,ray);
-                        c=mix(c,cold*(0.12+fall*0.33+day*0.19),(0.20+grazing*0.61)*fall);
                         c=mix(c,vec3(0.012,0.018,0.017),dash*0.92);
+                        // Glass: a thick, faintly green pane. What is behind it loses some light;
+                        // its face reflects the coast, more and more towards grazing.
+                        c*=vec3(0.80,0.86,0.83);
+                        vec3 paneNormal=normalize(vec3(vPos.x*0.42,0.07,-1.0));
+                        vec3 bounce=reflect(ray,paneNormal);
+                        float cosine=clamp(dot(-ray,paneNormal),0.0,1.0);
+                        float fresnel=0.05+0.95*pow(1.0-cosine,5.0);
+                        float horizon=exp(-abs(bounce.y+0.02)*26.0);
+                        vec3 sky=mix(cold*0.55,cold*(0.9+day*0.5),smoothstep(-0.02,0.35,bounce.y));
+                        vec3 sea=mix(vec3(0.012,0.024,0.03),cold*0.18,exp(-abs(bounce.y)*7.0));
+                        vec3 mirror=(bounce.y>-0.02?sky:sea)+cold*horizon*0.55;
+                        // A soft band where the brow over the glass is reflected.
+                        mirror*=1.0-0.55*smoothstep(0.55,0.95,p.y);
+                        c=mix(c,mirror,clamp(fresnel*1.6+0.06,0.0,0.85));
+                        // The edge of the glass seen through its thickness, a thin bright line inside the rubber.
+                        float rim=length(max(abs(p)-vec2(0.88),0.0))-0.12;
+                        c+=cold*0.22*(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim)*(0.4+fresnel*2.0);
+                        // Rain on the glass is laid on by the cab's own pass (rainOnGlass).
                         if(vKind<0.5){
-                            vec2 arm=vec2(0.62,0.54),from=p-vec2(-0.54,-0.66);
+                            // The wiper parked low across the pane.
+                            vec2 arm=vec2(1.05,0.10),from=p-vec2(-0.58,-0.8);
                             float armDist=length(from-arm*clamp(dot(from,arm)/dot(arm,arm),0.0,1.0));
-                            vec2 blade=vec2(0.42,0.40),join=from-arm*0.76;
-                            float bladeDist=length(join-blade*clamp(dot(join,blade)/dot(blade,blade),0.0,1.0));
-                            c=mix(c,vec3(0.012),1.0-smoothstep(0.015,0.033,min(armDist,bladeDist)));
+                            c=mix(c,vec3(0.012),1.0-smoothstep(0.016,0.032,armDist));
                         }
                     }else if(vKind<1.5){
                         c=texture2D(destination,vec2(vUv.x,0.5+vUv.y*0.5)).rgb*(0.65+day*0.36);
