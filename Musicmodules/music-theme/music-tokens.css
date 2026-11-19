@@ -121,7 +121,7 @@ body.light-theme {
   --ar-paper: #eae5e1;
   --ar-paper-rgb: 234, 229, 225;
   --ar-ink: #080a08;
-  --ar-muted: #77756d;
+  --ar-muted: #625f58;  /* 在 --ar-field 上 4.75:1，小字过 AA */
   --ar-line: #aaa59a;
   --ar-accent: #9b7247;
   --ar-rule: #504b41;
@@ -276,4 +276,13 @@ body.music-stage-active.music-stage-light {
   --md-capsule-bg: rgba(255, 255, 255, .7);
   --md-capsule-bg-open: rgba(255, 255, 255, .78);
   --md-capsule-bg-hover: rgba(255, 255, 255, .76);
+}
+
+/*
+ * 列表视图深色下底栏时间字：原值 rgb(113,113,122) 在纸面上约 3.9:1，提到 AA。
+ * 用 body:not(.light-theme) 提高优先级，压过底栏样式表里同名的默认值。
+ * 底栏的胶囊、快捷行、把手、面板其余取值不动。
+ */
+body:not(.light-theme):not(.music-stage-active) {
+  --md-time: rgb(161, 161, 170);
 }
