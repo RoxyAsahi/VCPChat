@@ -69,7 +69,7 @@
         // Without multisampling the edges are smoothed here instead, on the
         // pass that reads every pixel anyway: a few taps along the local edge.
         const material = pass(`uniform sampler2D image,glowMap;
-            uniform float time,grain,vignette,bloom,smoothing,grade;uniform vec2 texel;varying vec2 uvScreen;
+            uniform float time,grain,vignette,bloom,smoothing,grade,cabin;uniform vec2 texel;varying vec2 uvScreen;
             float luma(vec3 c){c=c/(1.0+c);return dot(c,vec3(0.299,0.587,0.114));}
             vec3 smoothed(vec2 uv){
                 vec3 m=texture2D(image,uv).rgb;
@@ -94,7 +94,13 @@
                 vec3 color=smoothed(uvScreen);
                 color+=texture2D(glowMap,uvScreen).rgb*bloom;
                 vec2 p=uvScreen*2.0-1.0;
-                color*=1.0-vignette*smoothstep(0.2,1.7,dot(p,p))*0.6;
+                color*=1.0-(vignette+cabin*0.3)*smoothstep(0.2,1.7,dot(p,p))*0.6;
+                // In the saloon: colour settles towards warm white, and what the
+                // ceiling strips do not reach falls into real shadow.
+                float cl=dot(color,vec3(0.2126,0.7152,0.0722));
+                vec3 settled=mix(vec3(cl),color,0.82)*vec3(1.0,0.98,0.92);
+                settled*=0.5+0.5*smoothstep(0.0,0.5,cl);
+                color=mix(color,settled,cabin);
                 // Grade, as film stock does: shadows a little cool, lights a little
                 // warm, a touch more colour, and a black that is lifted and tinted
                 // rather than empty.
@@ -112,7 +118,7 @@
             }`, {
             image: { value: target.texture }, glowMap: { value: chain[0].texture },
             time: { value: 0 }, grain: { value: 0.08 }, vignette: { value: 0.22 }, bloom: { value: 0.6 },
-            smoothing: { value: 0 }, texel: { value: new T.Vector2() }, grade: { value: 1 }
+            smoothing: { value: 0 }, texel: { value: new T.Vector2() }, grade: { value: 1 }, cabin: { value: 0 }
         });
         const quad = new T.Mesh(geometry, material);
         scene.add(quad);
@@ -153,8 +159,14 @@
                 material.uniforms.time.value = time;
                 material.uniforms.grain.value = tuning.grain ?? 0.08;
                 material.uniforms.vignette.value = tuning.vignette ?? 0.22;
-                material.uniforms.bloom.value = (tuning.glow ?? 1) * 0.6;
-                prefilter.uniforms.threshold.value = tuning.threshold ?? 0.82;
+                // In the saloon the ceiling strips bloom over the cream panels round them.
+                const cabin = Math.min(1, Math.max(0, tuning.cabin || 0));
+                material.uniforms.cabin.value = cabin;
+                material.uniforms.bloom.value = (tuning.glow ?? 1) * 0.6 * (1 + cabin * 0.9);
+                const threshold = tuning.threshold ?? 0.82;
+                // By day the walls are near the paper's white, so only the strips themselves may bloom.
+                const inside = Math.min(threshold, threshold > 1 ? 1.12 : 0.62);
+                prefilter.uniforms.threshold.value = threshold - (threshold - inside) * cabin;
                 // The day lens raises the threshold; by day the grade is lighter too.
                 material.uniforms.grade.value = (tuning.threshold ?? 0.82) > 1 ? 0.45 : 1;
                 const previous = renderer.getRenderTarget();
