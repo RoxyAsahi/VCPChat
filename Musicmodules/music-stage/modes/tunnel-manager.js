@@ -979,17 +979,15 @@
                     }
                     float cometSide = step(0.0, dot(d, comet));
 
-                    // Out at the end of the voyage the galaxy is the brightest thing
-                    // in the sky after the sun: a band with a glowing core, and
-                    // the nearer clouds of gas fall back.
+                    // Out at the end of the voyage the nearer clouds of gas fall back
+                    // a little; the galaxy shows through them in its stars.
                     float late = smoothstep(0.72, 0.98, uJourney);
-                    vec3 night = uBase + uColorStar * m.b * mix(0.05, 0.16, smoothstep(0.35, 1.0, uJourney))
-                        + mix(uColorStar, uColorSun, 0.35) * m.b * m.b * late * 0.1;
+                    vec3 night = uBase + uColorStar * m.b * 0.055;
                     // Thin gas takes the cloud's colour; where it is dense it brightens
                     // and pales, as lit gas does.
                     float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
                     night += (uColorA * (m.r * 0.06 + coolCore * 0.07) + uColorB * (m.g * 0.05 + warmCore * 0.06)
-                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula * (1.0 - 0.45 * late);
+                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula * (1.0 - 0.15 * late);
                     night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
                     night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail + jets) + uColorA * gasTail * 1.6)
@@ -2197,7 +2195,7 @@
                                 * smoothstep(-0.6, -0.2, sin(lon + s)) ;
                             float cap = smoothstep(0.84, 0.88, p.y + (noise(p * 10.0 + s) - 0.5) * 0.06);
                             h = c1.x * 0.03 + c2.x * 0.01 - trench * 0.02;
-                            vec3 dust = mix(uColorEmber, uColorInk, 0.4) * mix(0.55, 0.26, dark) * (0.88 + 0.24 * noise(p * 22.0 + s));
+                            vec3 dust = mix(uColorEmber, uColorInk, 0.62) * mix(0.55, 0.26, dark) * (0.88 + 0.24 * noise(p * 22.0 + s));
                             ground = mix(dust, uColorInk * 0.9, cap) * (1.0 - trench * 0.35);
                             airy = 0.3; hard = 0.75;
                         } else if (uWorld > 6.5) {
@@ -2268,8 +2266,8 @@
                         float bands = 0.5 + 0.5 * sin(lat * (15.0 + uSeed * 9.0) + sin(lat * 41.0) * 0.6);
                         float fine = noise(vec3(p.x * 5.0, lat * 46.0, p.z * 5.0) + uSeed * 3.0);
                         float storm = smoothstep(0.62, 0.86, fbm(vec3(p.x * 4.0, lat * 13.0, p.z * 4.0) + uSeed * 11.0));
-                        vec3 dark = mix(uColorPrimary, uColorInk, 0.12) * 0.26;
-                        vec3 pale = mix(uColorPrimary, uColorInk, 0.62) * 0.74;
+                        vec3 dark = mix(uColorPrimary, uColorInk, 0.38) * 0.26;
+                        vec3 pale = mix(uColorPrimary, uColorInk, 0.8) * 0.74;
                         float deck = bands * (0.72 + fine * 0.28);
                         if (uMapped > 0.0) {
                             // A real cloud deck turns slowly under the same light;
@@ -2306,9 +2304,9 @@
                         }
                         vec3 surface = mix(dark, pale, deck);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.25) * 0.8, storm * 0.5);
-                        surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
+                        surface = mix(surface, mix(uColorEmber, uColorInk, 0.5) * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.18);
                         // Belts lean warm and the brightest zones catch the accent.
-                        surface = mix(surface, uColorEmber * 0.36, (1.0 - smoothstep(0.12, 0.5, deck)) * 0.42 * uMapped);
+                        surface = mix(surface, mix(uColorEmber, uColorInk, 0.45) * 0.36, (1.0 - smoothstep(0.12, 0.5, deck)) * 0.28 * uMapped);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
                         // The disc dims towards its edge, where the light has
@@ -2361,7 +2359,7 @@
                         float wave = 0.82 + 0.18 * sin(angle * 2.0 - log(max(r, 1.0)) * 9.0 + uTime * 0.12);
                         float dust = 0.82 + 0.18 * noise(vec3(vLocal.xz * 1.3, uSeed));
                         float density = ringlets * division * wave * dust;
-                        vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
+                        vec3 tone = mix(mix(uColorAccent, uColorInk, 0.5), mix(uColorPrimary, uColorInk, 0.5), smoothstep(0.0, 0.3, t));
                         tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
                         if (uMapped > 0.0) {
                             // A measured profile: how much ice there is along the
@@ -2371,7 +2369,7 @@
                             density = mix(density, profile.r * sand * (0.94 + 0.06 * wave), uMapped);
                             // Dusty and warm near the planet, pale ice in the broad
                             // middle ring, greyer and cooler outside the division.
-                            vec3 dusty = mix(uColorAccent, uColorEmber, 0.35) * 0.55;
+                            vec3 dusty = mix(uColorInk, mix(uColorAccent, uColorEmber, 0.35), 0.4) * 0.5;
                             vec3 ice = mix(uColorInk, uColorAccent, 0.14);
                             vec3 outerIce = mix(uColorInk, uColorPrimary, 0.3) * 0.8;
                             vec3 mappedTone = mix(dusty, ice, smoothstep(0.12, 0.3, t));
