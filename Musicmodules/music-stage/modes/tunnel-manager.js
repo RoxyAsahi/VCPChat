@@ -1804,7 +1804,8 @@
                 uColorAccent: { value: new T.Color('#f2a900') },
                 uColorInk: { value: new T.Color('#f2f0e9') },
                 uColorEmber: { value: new T.Color('#e06c5f') },
-                uFloor: { value: new T.Color('#000000') }
+                uFloor: { value: new T.Color('#000000') },
+                uPage: { value: new T.Color('#000000') }, uPaper: { value: 0 }
             },
             vertexShader: `
                 attribute float aPart;
@@ -1826,7 +1827,8 @@
                 uniform vec3 uBounceDir;
                 uniform sampler2D uSurface, uRingMap;
                 uniform vec2 uRing, uViewport;
-                uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
+                uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor, uPage;
+                uniform float uPaper;
                 varying vec3 vLocal, vWorld, vNormal;
                 varying vec2 vUv;
                 varying float vPart, vDepth;
@@ -2193,11 +2195,19 @@
                         col = mix(col, uColorInk * (0.1 + 0.5 * lam), clamp(hem, 0.0, 1.0) * 0.8);
                         alpha = (0.9 + 0.1 * (1.0 - facing)) * fade;
                     }
-                    // On a pale backdrop the night side is a deep tone, not a hole.
-                    col += uFloor;
                     // Whatever drifts behind the reading area steps back.
                     vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
-                    col *= mix(0.3, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                    float forward = smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5)));
+                    if (uPaper > 0.5) {
+                        // On paper a body is a wash, never darker than a soft grey:
+                        // its shade is lifted toward the page, and behind the
+                        // lyrics or far off it fades into the page instead of darkening.
+                        col = uFloor + col * (vec3(1.0) - uFloor);
+                        col = mix(col, uPage, (1.0 - forward) * 0.3);
+                        col = mix(col, uPage, smoothstep(700.0, 1700.0, vDepth) * 0.45);
+                    } else {
+                        col *= mix(0.3, 1.0, forward);
+                    }
                     col += mix(uColorAccent, uColorInk, 0.4) * front * 1.6 * uGlow;
                     gl_FragColor = vec4(col, alpha);
                     #include <tonemapping_fragment>
@@ -2325,6 +2335,7 @@
                     uLight: { value: new T.Vector3(...KEY_LIGHT) },
                     uColorPrimary: { value: new T.Color('#76bfae') }, uColorInk: { value: new T.Color('#f2f0e9') },
                     uColorAccent: { value: new T.Color('#f2a900') }, uFloor: { value: new T.Color('#000000') },
+                    uPage: { value: new T.Color('#000000') }, uPaper: { value: 0 },
                     uViewport: { value: new T.Vector2(1280, 720) }
                 },
                 vertexShader: `
@@ -2358,8 +2369,8 @@
                     }
                 `,
                 fragmentShader: `
-                    uniform float uAmount, uBelt;
-                    uniform vec3 uLight, uColorPrimary, uColorInk, uColorAccent, uFloor;
+                    uniform float uAmount, uBelt, uPaper;
+                    uniform vec3 uLight, uColorPrimary, uColorInk, uColorAccent, uFloor, uPage;
                     uniform vec2 uViewport;
                     varying vec3 vWorld, vLocal;
                     varying float vSeed, vDepth, vCycleDepth;
@@ -2386,10 +2397,17 @@
                         float pit = smoothstep(0.62, 0.7, noise(vLocal * 1.3 + vSeed * 7.0));
                         vec3 stone = mix(uColorPrimary, uColorInk, 0.55) * (0.2 + 0.14 * vSeed) * grain * (1.0 - 0.45 * pit);
                         vec3 col = stone * (mix(uColorInk, uColorAccent, 0.2) * lit * 1.5
-                            + uColorPrimary * (0.05 + 0.07 * clamp(0.5 - 0.5 * dot(n, uLight), 0.0, 1.0))) + uFloor;
+                            + uColorPrimary * (0.05 + 0.07 * clamp(0.5 - 0.5 * dot(n, uLight), 0.0, 1.0)));
+                        col = uPaper > 0.5 ? uFloor + col * (vec3(1.0) - uFloor) : col + uFloor;
                         col += uColorPrimary * uBelt * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0) * (0.035 + grain * 0.055);
                         vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
-                        col *= mix(0.35, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                        float forward = smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5)));
+                        if (uPaper > 0.5) {
+                            col = mix(col, uPage, (1.0 - forward) * 0.3);
+                            col = mix(col, uPage, smoothstep(250.0, 800.0, vDepth) * 0.45);
+                        } else {
+                            col *= mix(0.35, 1.0, forward);
+                        }
                         gl_FragColor = vec4(col, 1.0);
                         #include <tonemapping_fragment>
                         #include <colorspace_fragment>
@@ -3110,11 +3128,13 @@
             // colour, so they are lit towards paper, and their shade is a
             // soft grey of the page rather than a hole in it.
             const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.85) : colors.ink;
-            const bodyFloor = paper ? abyssBg.clone().lerp(colors.secondary, 0.1).multiplyScalar(0.6) : new T.Color('#000000');
+            const bodyFloor = paper ? abyssBg.clone().lerp(colors.secondary, 0.12).multiplyScalar(0.42) : new T.Color('#000000');
             rockField.mat.uniforms.uColorPrimary.value.copy(washA);
             rockField.mat.uniforms.uColorAccent.value.copy(washB);
             rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
             rockField.mat.uniforms.uFloor.value.copy(bodyFloor);
+            rockField.mat.uniforms.uPage.value.copy(abyssBg);
+            rockField.mat.uniforms.uPaper.value = paper ? 1 : 0;
             beltDust.mat.uniforms.uDust.value.copy(washA).lerp(bodyInk, 0.35);
             beltDust.mat.uniforms.uGlint.value.copy(washB).lerp(bodyInk, 0.24);
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
@@ -3123,6 +3143,8 @@
                 mat.uniforms.uColorInk.value.copy(bodyInk);
                 mat.uniforms.uColorEmber.value.copy(washEmber);
                 mat.uniforms.uFloor.value.copy(bodyFloor);
+                mat.uniforms.uPage.value.copy(abyssBg);
+                mat.uniforms.uPaper.value = paper ? 1 : 0;
             }));
 
             lyricParticleMat.uniforms.uTint.value.copy(paper ? colors.accent.clone().lerp(new T.Color('#ffffff'), 0.5) : colors.accent);
