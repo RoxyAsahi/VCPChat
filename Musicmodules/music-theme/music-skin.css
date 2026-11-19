@@ -28,8 +28,10 @@ body.light-theme {
     --music-highlight-rgb: 8, 10, 8;
 }
 
-/* 列表视图不再铺主题壁纸、模糊封面和声纹，安静的纸面 */
-body:not(.music-stage-active) {
+/* 不再铺主题壁纸：列表视图是安静的纸面；进舞台时舞台淡入的那半秒里，
+   底下露出的也是纸面而不是壁纸（否则会闪一下壁纸上的大字和弧线） */
+body,
+body.light-theme {
     background-image: none;
 }
 
@@ -553,12 +555,11 @@ body.music-playing .sidebar-playlist li.active::before {
 }
 
 /* 底栏浮在窗口底部：中栏和歌单底部让出它的高度，抽屉标题、最后几首歌不被胶囊和药丸压住 */
-body.music-dock-on .main-content {
+body.music-dock-on .left-sidebar,
+body.music-dock-on .main-content,
+body.music-dock-on .right-sidebar {
     padding-bottom: var(--music-dock-safe-bottom, 96px);
-}
-
-body.music-dock-on .sidebar-playlist {
-    padding-bottom: var(--music-dock-safe-bottom, 96px);
+    box-sizing: border-box;
 }
 
 /* 新底栏在页面上时，列表视图里重复的进度和按钮收起来 */
@@ -948,11 +949,7 @@ body.music-dock-sheet-open .main-content #visualizer {
 /* ---------- 减少动态 ---------- */
 @media (prefers-reduced-motion: reduce) {
     .is-rolling,
-    .main-content:has(.acoustic-drawer.is-open) #visualizer {
-    display: none;
-}
-
-.acoustic-drawer.is-open .acoustic-drawer-body {
+    .acoustic-drawer.is-open .acoustic-drawer-body {
         animation: none;
     }
 
@@ -1015,8 +1012,20 @@ body.music-dock-sheet-open .main-content #visualizer {
         border-top: 1px solid var(--ar-hairline);
     }
 
-    /* 给底栏胶囊留出位置 */
+    /* 单列时整页一起滚，只在最底部给底栏留一次位置 */
     body.music-dock-on .music-player-container {
         padding-bottom: var(--music-dock-safe-bottom, 96px);
     }
+
+    body.music-dock-on .left-sidebar,
+    body.music-dock-on .main-content,
+    body.music-dock-on .right-sidebar {
+        padding-bottom: 0;
+    }
+}
+
+/* 档案阵列主视图：标题栏不压一条纸色横带，让阵列一直铺到窗口顶边 */
+body.music-archive-on:not(.music-stage-active) #custom-title-bar {
+    background: transparent;
+    border-bottom-color: transparent;
 }
