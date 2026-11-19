@@ -633,6 +633,22 @@
                 WINDOWS.forEach(z => {
                     sash(side, z, SIDE_PANES);
                     boxAt(0.032, 0.028, 1.026, side * (CAR.half + 0.016), 2.189, z, 4);
+                    // Two-stage sash: a short fixed upper light set back, the tall
+                    // lower light that lifts in front of it, the meeting rail between.
+                    const [y, width, height] = SIDE_PANES, low = y - height / 2, rail = y + height * 0.14;
+                    const outer = side * (CAR.half + 0.021), inner = side * (CAR.half + 0.015);
+                    for (const edge of [-1, 1]) {
+                        boxAt(0.02, rail - low - 0.01, 0.034, outer, (rail + low) / 2, z + edge * (width / 2 - 0.035), 4);
+                        boxAt(0.014, y + height / 2 - rail - 0.02, 0.026, inner, (y + height / 2 + rail) / 2, z + edge * (width / 2 - 0.03), 4);
+                    }
+                    boxAt(0.02, 0.03, width - 0.05, outer, low + 0.03, z, 4);
+                    boxAt(0.026, 0.044, width - 0.04, outer, rail, z, 4);
+                    boxAt(0.014, 0.022, width - 0.06, inner, y + height / 2 - 0.025, z, 4);
+                    // Latches on the meeting rail and finger lifts on the bottom rail.
+                    for (const edge of [-0.27, 0.27]) {
+                        boxAt(0.03, 0.022, 0.05, side * (CAR.half + 0.036), rail + 0.004, z + edge * width, 6);
+                        boxAt(0.026, 0.018, 0.06, side * (CAR.half + 0.033), low + 0.06, z + edge * width, 6);
+                    }
                 });
                 for (const z of DOORS) {
                     // Door frame, the drip strip over it, and the step.
@@ -1186,7 +1202,7 @@
          * needed, in the same tones the lit windows show from outside.
          * Paints: panel, dado, moquette, floor, metal, tube, ceiling, gangway,
          * printed card (9), luggage (10/11), dials (12/13), route diagram (14),
-         * silhouette (15), heater (16), vent (17), trim (18), piping (19).
+         * silhouette (15), heater (16), vent (17), trim (18), piping (19), stainless (20).
          */
         const SITTERS = [
             [-1, -2.9, 'doze', 1.05], [-1, -0.7, 'bag', 0.94], [1, -1.9, 'read', 1.0],
@@ -1387,8 +1403,8 @@
                     moulded(0.042, 0.056, run, 0.016, side * (WALL - 0.431), F + 0.386, middle, 4);
                     moulded(0.018, 0.256, run - 0.09, 0.008, side * (WALL - 0.429), F + 0.205, middle, 16);
                     // Luggage rack: tubes on brackets, not a shelf.
-                    for (const out of [0.05, 0.13, 0.21, 0.31]) {
-                        add(new T.CylinderGeometry(0.008, 0.008, run, 8).rotateX(Math.PI / 2)
+                    for (let out = 0.05; out < 0.34; out += 0.037) {
+                        add(new T.CylinderGeometry(0.006, 0.006, run, 6).rotateX(Math.PI / 2)
                             .translate(side * (WALL - out), 3.1, middle), 4);
                     }
                     for (let z = a + 0.1; z <= b - 0.05; z += (run - 0.2) / Math.max(1, Math.round(run / 1.25))) {
@@ -1402,7 +1418,10 @@
                             [side * (WALL - 0.05), F + 1.01],
                         ].map(([rx, y]) => new T.Vector3(rx, y, end)), false, 'centripetal');
                         add(new T.TubeGeometry(rail, 16, 0.018, 8, false), 4);
-                        moulded(0.49, 0.36, 0.038, 0.014, side * (WALL - 0.29), F + 0.233, end, 4);
+                        // Stainless screen at the bench end, up inside the curve of the rail, on a dark kick strip.
+                        moulded(0.5, 0.66, 0.03, 0.024, side * (WALL - 0.29), F + 0.42, end, 20);
+                        moulded(0.49, 0.07, 0.036, 0.01, side * (WALL - 0.29), F + 0.06, end, 13);
+                        moulded(0.47, 0.016, 0.04, 0.006, side * (WALL - 0.3), F + 0.74, end, 4);
                         boxAt(0.10, 0.03, 0.087, aisle, F + 0.017, end, 4);
                         boxAt(0.035, 0.093, 0.076, side * (WALL - 0.043), F + 1.01, end, 4);
                     }
@@ -1622,6 +1641,12 @@
                         float slat=smoothstep(0.23,0.35+fwidth(vPos.x)*16.0,slot+n.x*0.016);
                         float lip=1.0-smoothstep(0.012,0.064,abs(slot-0.34));
                         c=cream*mix(0.059,0.52,slat)+light*lip*0.035;
+                    }else if(vPaint>19.5){
+                        // Brushed stainless: it takes the cream of the car and the wood of the floor, grained across.
+                        float grain=0.93+0.07*sin(vPos.y*1430.0+sin(vPos.x*37.0)*2.0);
+                        float low=smoothstep(FLOOR+0.05,FLOOR+0.62,vPos.y);
+                        c=mix(vec3(0.19,0.13,0.08),mix(cream*0.5,vec3(0.47,0.5,0.52),0.55),low)*grain;
+                        shine=reflectTubes(vPos,reflect(-v,n),0.16)*0.32;
                     }else{
                         c=mix(seat,vec3(0.061,0.084,0.035),0.58)*0.66;
                         shine=reflectTubes(vPos,reflect(-v,n),0.28)*0.06;
