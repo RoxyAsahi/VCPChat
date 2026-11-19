@@ -184,8 +184,8 @@
         }
         return scenes;
     };
-    // Where the saloon camera stands, measured back from the nose of the train.
-    const SALOON = Object.freeze({ back: 9.1, travel: 2.4, lateral: 0.2, height: 2.66, sill: 2.35 });
+    // The saloon camera rides at seated eye level, measured back from the nose.
+    const SALOON = Object.freeze({ back: 9.1, travel: 2.4, lateral: 0.11, height: 2.34, sill: 2.35 });
     const TRACKSIDE = Object.freeze({ lateral: 6.5, height: 1.5 });
     const sceneAt = (track, t) => {
         const scenes = track.scenes || [];
@@ -375,8 +375,7 @@
             fov = mix(fov, 52, aside);
         }
         if (inside && inside.weight > 0) {
-            // Standing in the aisle a few windows back from the cab, drifting
-            // forward, looking along one row of windows at what goes by.
+            // Ride low in the aisle, so the leading benches frame the view.
             const w = inside.weight, side = inside.scene.side;
             const along = distance - SALOON.back + SALOON.travel * inside.progress;
             const car = track.at(along);
@@ -384,9 +383,9 @@
             position.x = mix(position.x, car.position.x + car.right.x * offset, w);
             position.z = mix(position.z, car.position.z + car.right.z * offset, w);
             position.y = mix(position.y, SALOON.height + Math.sin(t * 1.7) * 0.006, w);
-            yaw = blendAngle(yaw, car.yaw + side * 0.42 + Math.sin(t * 0.23) * 0.05, w);
-            pitch = mix(pitch, -0.05, w);
-            fov = mix(fov, 60, w);
+            yaw = blendAngle(yaw, car.yaw + side * 0.24 + Math.sin(t * 0.23) * 0.05, w);
+            pitch = mix(pitch, 0.028, w);
+            fov = mix(fov, 61, w);
             roll = mix(roll, Math.sin(t * 1.1) * 0.004, w);
         }
         const cp = Math.cos(pitch);
