@@ -1993,30 +1993,84 @@
                     gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
             fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day;uniform sampler2D destination;
                 varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
-                vec3 cab(vec3 cabin,vec3 ray){
-                    float dz=max(ray.z,0.045),dx=max(abs(ray.x),0.012),dy=max(abs(ray.y),0.012);
-                    float back=(${(TIP+1.35).toFixed(2)}-vPos.z)/dz;
-                    float wall=(1.23-vPos.x*sign(ray.x))/dx;
-                    float ceiling=ray.y>0.0?(3.317-vPos.y)/dy:100.0;
-                    float floorHit=ray.y<0.0?(vPos.y-1.37)/dy:100.0;
-                    float t=min(min(back,wall),min(ceiling,floorHit));
-                    vec3 hit=vPos+ray*t;
-                    vec3 c;
-                    if(t==back){
-                        float hatch=1.0-smoothstep(0.32,0.37,abs(hit.x));
-                        float opening=smoothstep(2.20,2.25,hit.y)*(1.0-smoothstep(2.98,3.035,hit.y));
-                        c=cabin*(0.11+0.09*hatch+opening*(0.18+0.18*hatch));
-                        float centre=1.0-smoothstep(0.013,0.031,abs(abs(hit.x)-0.44));
-                        c=mix(c,cabin*0.09,centre*opening);
-                    }else if(t==wall){
-                        float window=smoothstep(2.28,2.34,hit.y)*(1.0-smoothstep(2.91,3.01,hit.y));
-                        c=mix(cabin*0.24,cold*0.105,window*0.79);
-                    }else if(t==ceiling){
-                        float tube=1.0-smoothstep(0.032,0.088,abs(hit.x+0.32));
-                        c=cabin*(0.25+tube*0.66);
-                    }else{
-                        c=cabin*0.094;
+                // The cab behind the windscreen, traced through its few solid shapes: the
+                // driver's desk with its cowl and gauges, controller and brake handle, the
+                // seat and the driver on it (the leading end only), the cabinet opposite,
+                // and the bulkhead whose glazed door shows the lit saloon.
+                const float FRONT=${(TIP + 0.26).toFixed(3)},CF=${CAR.floor.toFixed(3)},BACK=${(TIP + 1.35).toFixed(3)};
+                float hitBox(vec3 o,vec3 d,vec3 lo,vec3 hi,inout float best,inout vec3 n){
+                    vec3 inv=1.0/d,t0=(lo-o)*inv,t1=(hi-o)*inv,tn=min(t0,t1),tf=max(t0,t1);
+                    float near=max(max(tn.x,tn.y),tn.z),far=min(min(tf.x,tf.y),tf.z);
+                    if(near<far&&near>0.0&&near<best){
+                        best=near;
+                        n=near==tn.x?vec3(-sign(d.x),0,0):near==tn.y?vec3(0,-sign(d.y),0):vec3(0,0,-sign(d.z));
+                        return 1.0;
                     }
+                    return 0.0;
+                }
+                float hitBall(vec3 o,vec3 d,vec3 c,float r,inout float best,inout vec3 n){
+                    vec3 oc=o-c;float b=dot(oc,d),q=dot(oc,oc)-r*r,h=b*b-q;
+                    if(h<0.0)return 0.0;
+                    float t=-b-sqrt(h);
+                    if(t>0.0&&t<best){best=t;n=normalize(oc+d*t);return 1.0;}
+                    return 0.0;
+                }
+                vec3 cab(vec3 cabin,vec3 ray,float tail){
+                    vec3 o=vPos,d=ray;
+                    d.x=abs(d.x)<0.0001?0.0001:d.x;d.y=abs(d.y)<0.0001?0.0001:d.y;
+                    // The room: walls, floor, ceiling and the bulkhead.
+                    float dz=max(d.z,0.045);
+                    float back=(BACK-o.z)/dz,wall=(1.23-o.x*sign(d.x))/abs(d.x);
+                    float ceiling=d.y>0.0?(3.317-o.y)/d.y:100.0,floorHit=d.y<0.0?(o.y-CF)/(-d.y):100.0;
+                    float best=min(min(back,wall),min(ceiling,floorHit));
+                    vec3 n=best==back?vec3(0,0,-1):best==wall?vec3(-sign(d.x),0,0):best==ceiling?vec3(0,-1,0):vec3(0,1,0);
+                    float what=0.0;
+                    // 1 desk, 2 cowl, 3 handles, 4 seat, 5 driver, 6 cabinet.
+                    if(hitBox(o,d,vec3(-1.22,CF,FRONT-0.05),vec3(-0.36,2.02,FRONT+0.44),best,n)>0.0)what=1.0;
+                    if(hitBox(o,d,vec3(-1.12,2.02,FRONT-0.05),vec3(-0.5,2.2,FRONT+0.16),best,n)>0.0)what=2.0;
+                    if(hitBox(o,d,vec3(-1.12,2.02,FRONT+0.26),vec3(-1.04,2.2,FRONT+0.34),best,n)>0.0)what=3.0;
+                    if(hitBox(o,d,vec3(-0.56,2.02,FRONT+0.26),vec3(-0.48,2.14,FRONT+0.34),best,n)>0.0)what=3.0;
+                    if(hitBox(o,d,vec3(-1.0,CF+0.36,FRONT+0.62),vec3(-0.6,CF+0.5,FRONT+1.02),best,n)>0.0)what=4.0;
+                    if(hitBox(o,d,vec3(-1.0,CF+0.5,FRONT+0.98),vec3(-0.6,CF+1.12,FRONT+1.08),best,n)>0.0)what=4.0;
+                    if(tail<0.5){
+                        if(hitBox(o,d,vec3(-0.98,CF+0.5,FRONT+0.7),vec3(-0.62,CF+1.16,FRONT+0.97),best,n)>0.0)what=5.0;
+                        if(hitBall(o,d,vec3(-0.8,CF+1.31,FRONT+0.84),0.115,best,n)>0.0)what=5.0;
+                        if(hitBox(o,d,vec3(-0.94,CF+1.38,FRONT+0.68),vec3(-0.66,CF+1.43,FRONT+0.98),best,n)>0.0)what=5.0;
+                        if(hitBox(o,d,vec3(-0.98,CF+0.9,FRONT+0.4),vec3(-0.9,CF+1.02,FRONT+0.78),best,n)>0.0)what=5.0;
+                    }
+                    if(hitBox(o,d,vec3(0.42,CF,FRONT-0.05),vec3(1.22,CF+0.78,FRONT+0.5),best,n)>0.0)what=6.0;
+                    vec3 hit=o+d*best;
+                    // Painted grey-green fittings, a darker floor, a pale ceiling.
+                    vec3 paint=mix(vec3(0.165,0.2,0.18),vec3(0.86,0.83,0.74),day*0.8);
+                    vec3 albedo=what>0.5?paint:best==floorHit?paint*0.45:best==ceiling?vec3(0.8,0.78,0.72):vec3(0.62,0.6,0.55)*mix(0.5,1.0,day);
+                    if(what>1.5&&what<2.5)albedo*=0.55;
+                    if(what>2.5&&what<3.5)albedo=vec3(0.06);
+                    if(what>3.5&&what<4.5)albedo=vec3(0.12,0.2,0.14);
+                    if(what>4.5&&what<5.5)albedo=vec3(0.035,0.04,0.05);
+                    // One lamp over the desk and the glow through the bulkhead door.
+                    vec3 lamp=vec3(-0.3,3.25,FRONT+0.7)-hit;
+                    float fall=1.0/(1.0+dot(lamp,lamp)*0.9);
+                    float lit=0.22+0.78*max(dot(n,normalize(lamp)),0.0)*fall*2.2;
+                    vec3 c=albedo*cabin*lit*(0.55+day*0.6);
+                    if(best==back&&what<0.5){
+                        float door=(1.0-smoothstep(0.32,0.36,abs(hit.x)))*smoothstep(1.62,1.68,hit.y)*(1.0-smoothstep(3.0,3.05,hit.y));
+                        float pane=(1.0-smoothstep(0.24,0.27,abs(hit.x)))*smoothstep(2.2,2.24,hit.y)*(1.0-smoothstep(2.95,2.99,hit.y));
+                        c=mix(c,c*0.7,door);
+                        c=mix(c,cabin*(0.5+day*0.3),pane);
+                    }
+                    if(best==wall&&what<0.5){
+                        float window=smoothstep(2.28,2.34,hit.y)*(1.0-smoothstep(2.91,3.01,hit.y));
+                        c=mix(c,cold*0.12,window*0.79);
+                    }
+                    if(best==ceiling&&what<0.5)c+=cabin*0.5*(1.0-smoothstep(0.03,0.09,abs(hit.x+0.32)))*step(hit.z,FRONT+1.0);
+                    // Gauges, faintly lit, on the cowl's sloping face.
+                    if(what>1.5&&what<2.5){
+                        vec2 g1=hit.xy-vec2(-0.95,2.12),g2=hit.xy-vec2(-0.67,2.12);
+                        float gauge=max(1.0-smoothstep(0.035,0.045,length(g1)),1.0-smoothstep(0.035,0.045,length(g2)));
+                        c=mix(c,vec3(0.85,0.95,0.8)*0.55,gauge);
+                    }
+                    // The driver is a silhouette with the saloon light on the shoulders.
+                    if(what>4.5&&what<5.5)c=vec3(0.018,0.02,0.026)*(0.6+day)+cabin*(0.1*max(n.y,0.0)+0.05*max(-n.z,0.0));
                     return c;
                 }
                 void main(){
@@ -2031,7 +2085,7 @@
                         vec3 ray=normalize(vPos-vEye);
                         float grazing=pow(1.0-clamp(ray.z,0.0,1.0),2.0);
                         float dash=1.0-smoothstep(-0.59,-0.44,p.y+0.07*p.x);
-                        c=cab(cabin,ray);
+                        c=cab(cabin,ray,tail);
                         c=mix(c,vec3(0.012,0.018,0.017),dash*0.92);
                         // Glass: a thick, faintly green pane. What is behind it loses some light;
                         // its face reflects the coast, more and more towards grazing.
