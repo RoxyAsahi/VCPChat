@@ -2872,7 +2872,7 @@
                 }
                 void main(){
                     if(cabReal>0.5&&insideShell(vPos)<0.5)discard;
-                    vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.74,0.70,0.58),day);
+                    vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.79,0.77,0.72),day);
                     vec3 light=lampColour(warm,day*0.45),n=normalize(vNormal),v=normalize(vView);
                     vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
                     // What the metal sees: the lamps, fading at sunset to the amber of the windows.
@@ -3044,7 +3044,7 @@
                         shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.12;
                     }else if(vPaint>20.5){
                         // The cab is painted a quiet grey-green, smooth, a little gloss.
-                        c=mix(mix(vec3(0.13,0.16,0.14),cream*0.4,0.25),cream*0.62,day);
+                        c=mix(mix(vec3(0.13,0.16,0.14),cream*0.4,0.25),vec3(0.55,0.555,0.55),day);
                         shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.08;
                     }else if(vPaint>19.5){
                         // Brushed stainless: it takes the cream of the car and the wood of the floor, grained across.
@@ -3119,8 +3119,8 @@
                     vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
                     colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
                     if(vPaint>4.5&&vPaint<6.5)colour=c*(1.0-0.6*sunset);
-                    // The cab sits a shade darker than the saloon behind it.
-                    if(vPos.z<${(TIP + 1.38).toFixed(2)}&&!(vPaint>4.5&&vPaint<5.5))colour*=0.8;
+                    // At night the cab sits a shade darker than the saloon behind it.
+                    if(vPos.z<${(TIP + 1.38).toFixed(2)}&&!(vPaint>4.5&&vPaint<5.5))colour*=mix(0.8,1.0,day);
                     if(figure){
                         // People thin out as the car empties (the driver stays): a dither, so it stays one opaque pass.
                         const float B[16]=float[](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -3128,6 +3128,8 @@
                         if((B[cell.x+cell.y*4]+0.5)/16.0<empty&&vPos.z>${(TIP + 1.35).toFixed(2)})discard;
                         colour=mix(c*0.83,cream*light*0.1*(0.6+0.4*smoothstep(-0.3,0.8,n.y)),0.4*(1.0-day))+sunlight*0.03*sunset;
                     }
+                    // On the light page the car keeps to quiet paper tones.
+                    colour=mix(colour,vec3(dot(colour,vec3(0.3,0.55,0.15))),0.28*day);
                     gl_FragColor=vec4(colour*power*0.82,1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
