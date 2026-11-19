@@ -931,7 +931,7 @@
         // How the saloon feels: low sun through the windows, the car emptying of
         // people, and the straps swinging with the ride. The director can set
         // pose.cabinSunset and pose.cabinEmpty (0 to 1); the stage tuning can too.
-        const cabinMood = { sunset: { value: 0 }, empty: { value: 0 }, clock: { value: 0 }, sway: { value: 1 } };
+        const cabinMood = { sunset: { value: 0 }, empty: { value: 0 }, clock: { value: 0 }, sway: { value: 1 }, rain: { value: 0 } };
         /*
          * A small detail map made here, not loaded: R is woven pile for the
          * seats, G brushed streaks for stainless, B soft grime and wear, A a
@@ -2162,16 +2162,22 @@
                         const z = a + bay * (i + 0.5);
                         // A thick cushion with a rolled front edge, a fuller back with a roll along its top.
                         moulded(0.57, 0.165, bay - 0.006, 0.072, side * (WALL - 0.3), F + 0.445, z, 2);
-                        add(roundedPanel(0.19, 0.34, bay - 0.004, 0.075).rotateZ(-side * 0.12)
-                            .translate(side * (WALL - 0.13), F + 0.68, z), 2);
-                        add(roundedPanel(0.12, 0.085, bay - 0.004, 0.042)
-                            .translate(side * (WALL - 0.075), F + 0.8, z), 2);
                     }
+                    // The back is one long upholstered piece the length of the bench, rolled along its top.
+                    add(roundedPanel(0.19, 0.34, run - 0.01, 0.075).rotateZ(-side * 0.12)
+                        .translate(side * (WALL - 0.13), F + 0.68, middle), 2);
+                    add(roundedPanel(0.12, 0.085, run - 0.01, 0.042)
+                        .translate(side * (WALL - 0.075), F + 0.8, middle), 2);
                     moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.575), F + 0.378, middle, 19);
                     moulded(0.40, 0.355, run, 0.022, side * (WALL - 0.24), F + 0.19, middle, 18);
                     moulded(0.05, 0.03, run, 0.012, side * (WALL - 0.445), F + 0.352, middle, 4);
                     moulded(0.016, 0.29, run - 0.06, 0.006, side * (WALL - 0.442), F + 0.183, middle, 16);
                     boxAt(0.02, 0.022, run, side * (WALL - 0.452), F + 0.011, middle, 13);
+                    // Polished strips between the three slotted bands of the heater cover.
+                    for (const y of [-0.137, -0.045, 0.045, 0.137]) {
+                        add(new T.CylinderGeometry(0.0055, 0.0055, run - 0.07, 6).rotateX(Math.PI / 2)
+                            .translate(side * (WALL - 0.452), F + 0.183 + y, middle), 4);
+                    }
                     // Luggage rack: tubes on brackets, not a shelf.
                     for (let out = 0.05; out < 0.34; out += 0.037) {
                         add(new T.CylinderGeometry(0.006, 0.006, run, 6).rotateX(Math.PI / 2)
@@ -2293,6 +2299,10 @@
             // The inner end, and the dark of the gangway through to the next car.
             boxAt(2.6, TOP - F, 0.06, 0, (TOP + F) / 2, END - 0.03, 0);
             boxAt(0.84, 1.9, 0.02, 0, F + 0.95, END - 0.07, 7);
+            // A dark rubber frame round the open gangway, and a threshold plate.
+            for (const x of [-0.45, 0.45]) moulded(0.07, 1.95, 0.05, 0.02, x, F + 0.975, END - 0.08, 13);
+            moulded(0.97, 0.07, 0.05, 0.02, 0, F + 1.935, END - 0.08, 13);
+            moulded(0.9, 0.012, 0.3, 0.004, 0, F + 0.006, END - 0.2, 4);
             const shape = new T.BufferGeometry();
             shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
             shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
@@ -2342,6 +2352,37 @@
                     float t=(TUBE_Y-p.y)/ray.y;
                     return tubes(p.xz+ray.xz*t,width)*smoothstep(0.0,0.15,t)*(1.0-smoothstep(5.0,10.0,t));
                 }
+                // The car as a box seen along a ray: lamp strips on a cream ceiling, cream
+                // walls with dark windows over green benches and slotted heaters, the
+                // honey floor. Polished metal reflects it; the open gangway looks into it.
+                vec3 cabinScene(vec3 o,vec3 d,vec3 cream,vec3 lamp,float far){
+                    float dx=abs(d.x)<1e-4?1e-4:d.x,dy=abs(d.y)<1e-4?1e-4:d.y,dz=abs(d.z)<1e-4?1e-4:d.z;
+                    float tx=((dx>0.0?1.24:-1.24)-o.x)/dx,ty=((dy>0.0?CEILING:FLOOR)-o.y)/dy;
+                    float tz=far>0.0?(far-o.z)/dz:1e4;if(tz<0.0)tz=1e4;
+                    float t=max(min(min(tx,ty),tz),0.0);vec3 p=o+d*t,c;
+                    vec3 green=mix(mix(seat,vec3(0.11,0.27,0.028),0.8),mix(seat,vec3(0.36,0.52,0.30),0.55),day);
+                    if(t==tz){
+                        // The far end: cream, with the dark of the next gangway.
+                        c=cream*0.6*lamp;
+                        c=mix(c,vec3(0.02,0.022,0.03),step(abs(p.x),0.42)*step(p.y,FLOOR+1.9));
+                    }else if(ty<tx){
+                        if(dy>0.0){
+                            float vent=step(abs(p.x),0.25)*step(0.5,fract(p.x*30.0));
+                            c=cream*(0.55-0.25*vent)*lamp+lamp*tubes(p.xz,0.06)*2.6;
+                        }else{
+                            float joint=step(0.93,fract(p.x/0.11));
+                            c=mix(vec3(0.36,0.25,0.14),vec3(0.42,0.33,0.22),day)*(0.95-0.4*joint)*lamp*0.75;
+                        }
+                    }else{
+                        float y=p.y-FLOOR;
+                        float w=abs(fract((p.z+2.95)/1.25+0.5)-0.5)*1.25;
+                        float glass=step(w,0.47)*step(2.24,p.y)*step(p.y,3.02);
+                        if(y<0.37)c=cream*0.5*lamp;
+                        else if(y<0.86)c=green*1.2*lamp;
+                        else c=mix(cream*0.66*lamp,mix(sky*0.35,sky*0.9,day),glass);
+                    }
+                    return mix(c,cream*0.42*lamp,smoothstep(6.0,16.0,t)*0.6);
+                }
                 // Low sun from the left of the car, through the side windows: whether a
                 // point can see it, traced back to the glass, with the sash rail across it.
                 const vec3 SUN_TO=normalize(vec3(-1.0,0.6,0.95));
@@ -2368,7 +2409,9 @@
                 void main(){
                     vec3 cream=mix(vec3(0.62,0.55,0.42),vec3(0.74,0.70,0.61),day);
                     vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
-                    vec3 c;float shine=0.0;
+                    vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
+                    // What the metal sees: the lamps, fading at sunset to the amber of the windows.
+                    vec3 seen=light*(1.0-0.62*sunset)+mix(vec3(0.5,0.26,0.1),vec3(0.3,0.28,0.24),day)*sunset;
                     bool cushion=vPaint>1.5&&vPaint<2.5;
                     bool floorboards=vPaint>2.5&&vPaint<3.5;
                     bool metal=vPaint>3.5&&vPaint<4.5;
@@ -2424,17 +2467,23 @@
                         shine=reflectTubes(vPos,r,0.22)*(0.03+0.2*pow(max(1.0-r.y,0.0),2.4))
                             *(1.0-0.36*seam*fade)*mix(1.0,0.6,wear);
                     }else if(vPaint<4.5){
+                        // Polished chrome: it is the car, seen bent round the tube.
                         vec3 reflected=reflect(-v,n);
                         float grazing=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0);
-                        float horizon=exp(-abs(reflected.y-0.10)*5.2);
-                        float edge=exp(-abs(reflected.y+0.33)*9.0);
-                        float finish=1.0+0.038*sin(vPos.z*131.0+vPos.y*210.0);
-                        c=(vec3(0.058,0.062,0.065)+sky*horizon*0.13+light*edge*0.16)*finish;
-                        shine=reflectTubes(vPos,reflected,0.105)*0.70+grazing*0.21;
+                        c=vec3(0.06,0.062,0.065);
+                        env=cabinScene(vPos+n*0.02,reflected,cream,seen,0.0)*(0.72+0.28*grazing);
+                        chrome=0.9;
+                        shine=reflectTubes(vPos,reflected,0.06)*1.1;
                     }
                     else if(vPaint<5.5)c=light*2.8;
-                    else if(vPaint<6.5)c=cream*(0.26+1.02*tubes(vPos.xz,0.25));
-                    else if(vPaint<7.5)c=vec3(0.035,0.04,0.055)+warm*0.03;
+                    else if(vPaint<6.5)c=cream*(0.46+0.9*tubes(vPos.xz,0.3))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
+                    else if(vPaint<7.5){
+                        // The open gangway: through the bellows into the next car, in perspective.
+                        vec3 d=-v,o=vPos+d*(0.7/max(d.z,0.05))-vec3(0.0,0.0,${CAR.length.toFixed(2)}+0.7);
+                        float tunnel=1.0-smoothstep(0.30,0.42,max(abs(vPos.x)*0.98,abs(vPos.y-FLOOR-0.95)*0.44));
+                        c=cabinScene(o,d,cream,seen,${(CAR.length / 2).toFixed(2)})*mix(0.25,0.9,tunnel);
+                        chrome=1.0;env=c;
+                    }
                     else if(vPaint<8.5)c=warm*0.4+vec3(0.08);
                     else if(vPaint<9.5){
                         // Printed excursion cards with miniature coastal illustrations.
@@ -2498,23 +2547,24 @@
                         float rim=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),2.2)*smoothstep(-0.15,0.8,n.y);
                         c=shadowInk+cream*rim*0.021;
                     }else if(vPaint<16.5){
-                        // The heater cover under the bench: cream sheet with two bands
-                        // of long slots, each band two rows staggered like brickwork.
+                        // The heater cover under the bench: glossy cream sheet with three
+                        // bands of long slots, each band two rows staggered like brickwork.
                         float y=vPos.y-(FLOOR+0.183);
-                        float band=abs(abs(y)-0.062);
-                        float inBand=1.0-smoothstep(0.034,0.037,band);
-                        float u=abs(y)-0.062,row=step(0.0,u);
-                        vec2 cell=vec2(vPos.z/0.064+row*0.5+step(0.0,y)*0.25,0.0);
-                        vec2 slot=vec2((fract(cell.x)-0.5)*0.064,u-(row*2.0-1.0)*0.017);
-                        vec2 d=abs(slot)-vec2(0.024,0.006);
-                        float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0045;
+                        float bandC=clamp(floor(y/0.09+0.5),-1.0,1.0)*0.09;
+                        float u=y-bandC,band=abs(u);
+                        float inBand=1.0-smoothstep(0.029,0.032,band);
+                        float row=step(0.0,u);
+                        vec2 cell=vec2(vPos.z/0.058+row*0.5+bandC*2.8,0.0);
+                        vec2 slot=vec2((fract(cell.x)-0.5)*0.058,u-(row*2.0-1.0)*0.0135);
+                        vec2 d=abs(slot)-vec2(0.021,0.0042);
+                        float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0035;
                         float soft=max(fwidth(vPos.z),fwidth(vPos.y))*1.2;
                         float hole=(1.0-smoothstep(-soft,soft,sd))*inBand;
                         hole=mix(hole,0.34*inBand,smoothstep(0.25,1.0,fwidth(cell.x)*2.0));
-                        float frame=1.0-smoothstep(0.0,0.004+soft,abs(band-0.036));
-                        c=cream*mix(0.7,0.6,inBand)*(1.0-0.12*frame);
+                        float frame=1.0-smoothstep(0.0,0.003+soft,abs(band-0.031));
+                        c=cream*mix(0.78,0.7,inBand)*(1.0-0.12*frame);
                         c=mix(c,vec3(0.012,0.012,0.014),hole);
-                        shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.05*(1.0-hole);
+                        shine=reflectTubes(vPos,reflect(-v,n),0.12)*0.22*(1.0-hole);
                     }else if(vPaint<17.5){
                         float slot=abs(fract(vPos.x*33.0)-0.5);
                         float slat=smoothstep(0.23,0.35+fwidth(vPos.x)*16.0,slot+n.x*0.016);
@@ -2535,7 +2585,12 @@
                         vec3 r=reflect(-v,n);
                         float low=smoothstep(-0.35,0.25,r.y)*smoothstep(FLOOR+0.03,FLOOR+0.4,vPos.y);
                         c=mix(vec3(0.30,0.21,0.12),mix(cream*0.62,vec3(0.56,0.58,0.6),0.5),low)*grain;
-                        shine=reflectTubes(vPos,r,0.18)*0.55+pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0)*0.12;
+                        // Brushed: the reflection is drawn out along the grain, so take it twice, spread.
+                        vec3 along=normalize(cross(n,vec3(1.0,0.0,0.0))+vec3(1e-4));
+                        env=(cabinScene(vPos+n*0.02,normalize(r+along*0.16),cream,seen,0.0)
+                            +cabinScene(vPos+n*0.02,normalize(r-along*0.16),cream,seen,0.0))*0.5*grain;
+                        chrome=0.55;
+                        shine=reflectTubes(vPos,r,0.14)*0.45;
                     }else{
                         c=mix(seat,vec3(0.061,0.084,0.035),0.58)*0.66;
                         shine=reflectTubes(vPos,reflect(-v,n),0.28)*0.06;
@@ -2551,6 +2606,10 @@
                     // At sunset the car is lit from outside: an amber fill, the lamps nearly out.
                     fill=mix(fill,mix(vec3(0.20,0.105,0.06),vec3(0.46,0.42,0.36),day)*(0.75+0.25*windowFill),sunset*0.85);
                     float lit=wall;
+                    // Corners gather shadow: where the walls meet the floor and the ceiling.
+                    if(!floorboards)lit*=0.78+0.22*smoothstep(FLOOR,FLOOR+0.35,vPos.y);
+                    else lit*=1.0-0.3*smoothstep(1.02,1.25,abs(vPos.x));
+                    lit*=1.0-0.22*smoothstep(3.05,3.32,vPos.y)*smoothstep(1.05,1.26,abs(vPos.x));
                     if(vPaint<2.5||enamel){
                         float overhead=exp(-abs(vPos.y-3.09)*23.0)*smoothstep(0.90,1.12,abs(vPos.x));
                         lit*=1.0-0.14*overhead;
@@ -2577,6 +2636,7 @@
                     if(floorboards){lit*=1.0-0.4*stood;shine*=1.0-0.7*stood;}
                     vec3 lamp=light*(0.15*(1.0-0.6*sunset)+direct);
                     vec3 colour=c*lit*(fill+lamp)+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12)*(1.0-0.5*sunset);
+                    colour=mix(colour,env+shine*light*0.5,chrome);
                     float sun=sunPatch(vPos,n)*sunset;
                     vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
                     colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
@@ -2598,23 +2658,27 @@
         // For the viewer only: from outside the windows already show it.
         saloon.layers.set(1);
         const innerGlassMaterial = material(new T.ShaderMaterial({
-            side: T.BackSide,
+            side: T.DoubleSide,
             transparent: true,
             depthWrite: false,
-            uniforms: { warm: glassMaterial.uniforms.warm, night: glassMaterial.uniforms.night, day: cabinDaylight },
+            uniforms: { warm: glassMaterial.uniforms.warm, night: glassMaterial.uniforms.night, day: cabinDaylight,
+                rain: cabinMood.rain, clock: cabinMood.clock },
             vertexShader: `varying vec3 vPos,vEye;
                 void main(){
                     vPos=position;
                     vEye=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
                 }`,
-            fragmentShader: `uniform vec3 warm,night;uniform float day;
+            fragmentShader: `uniform vec3 warm,night;uniform float day,rain,clock;
                 varying vec3 vPos,vEye;
                 ${cabinLightFunctions}
+                ${RAIN_GLASS}
                 void main(){
                     vec3 ray=normalize(vPos-vEye);
-                    float grazing=pow(1.0-abs(ray.x),2.6);
-                    ray.x=-ray.x;
+                    // The windscreen faces along the car; the rest face across it.
+                    bool screen=abs(vPos.z-(${(TIP + 0.26).toFixed(3)}))<0.01&&abs(vPos.x)<1.2;
+                    float grazing=pow(1.0-abs(screen?ray.z:ray.x),2.6);
+                    if(screen)ray.z=-ray.z;else ray.x=-ray.x;
                     float hot=0.0;
                     if(ray.y>0.015){
                         float t=(TUBE_Y-vPos.y)/ray.y;
@@ -2624,12 +2688,31 @@
                     }
                     vec3 pane=mix(night*1.7+vec3(0.018,0.014,0.008),lampColour(warm,day)*0.86,clamp(hot*0.95,0.0,1.0));
                     float alpha=clamp(mix(0.23,0.14,day)+grazing*0.18+hot*0.46,0.0,0.78);
+                    // Rain on the outside of the glass: beads and runnels catch the lamps at their rims.
+                    vec3 wet=rainOnGlass(screen?vPos.xy:vec2(vPos.z*sign(vPos.x),vPos.y),clock,rain);
+                    float rim=clamp(length(wet.xy)*90.0,0.0,1.0);
+                    pane=mix(pane,lampColour(warm,day)*(0.12+0.75*rim)+night*0.8,wet.z*0.55);
+                    alpha=max(alpha,wet.z*(0.1+0.32*rim));
                     gl_FragColor=vec4(pane,alpha);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }`
         }));
-        const innerGlass = new T.Mesh(glassGeometry, innerGlassMaterial);
+        // The side panes, and the three panes of the windscreen seen from the cab side.
+        const innerPaneGeometry = (() => {
+            const position = Array.from(glassGeometry.attributes.position.array), index = Array.from(glassGeometry.index.array);
+            const z = TIP + 0.26;
+            CAB_WINDOWS.forEach(([x0, x1]) => {
+                const b = position.length / 3;
+                position.push(x0, 2.2, z, x1, 2.2, z, x1, 3.05, z, x0, 3.05, z);
+                index.push(b, b + 1, b + 2, b, b + 2, b + 3);
+            });
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            shape.setIndex(index);
+            return geometry(shape);
+        })();
+        const innerGlass = new T.Mesh(innerPaneGeometry, innerGlassMaterial);
         innerGlass.layers.set(1);
         innerGlass.frustumCulled = false;
         innerGlass.renderOrder = 2;
@@ -3132,13 +3215,19 @@
             depthTest: false, depthWrite: false, fog: false, blending: T.AdditiveBlending }));
         const sheenMat = material(new T.ShaderMaterial({
             transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending,
-            uniforms: { color: { value: new T.Color('#ffd28c') }, opacity: { value: 0 } },
+            uniforms: { color: { value: new T.Color('#ffd28c') }, opacity: { value: 0 },
+                rain: cabinMood.rain, clock: cabinMood.clock, size: { value: new T.Vector2(1, 1) }, wet: { value: 0 } },
             vertexShader: `varying vec2 vUv;void main(){vUv=uv;
                 gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            // Faint reflection of the lit carriage in the glass, pooled at the sill.
-            fragmentShader: `uniform vec3 color;uniform float opacity;varying vec2 vUv;
+            // Faint reflection of the lit carriage in the glass, pooled at the sill,
+            // and rain on the windscreen catching the cab light at its rims.
+            fragmentShader: `uniform vec3 color;uniform float opacity,rain,clock,wet;uniform vec2 size;varying vec2 vUv;
+                ${RAIN_GLASS}
                 void main(){float a=(pow(1.0-vUv.y,3.0)*0.8+pow(abs(vUv.x-0.5)*2.0,4.0)*0.3)*opacity;
-                    gl_FragColor=vec4(color*a,a);}`
+                    vec3 drop=rainOnGlass(vUv*size*1.6,clock,rain);
+                    float rim=clamp(length(drop.xy)*90.0,0.0,1.0);
+                    float d=drop.z*(0.05+0.3*rim)*wet;
+                    gl_FragColor=vec4(color*(a+d),a+d);}`
         }));
         const cabinPart = mat => {
             const mesh = new T.Mesh(panel, mat);
@@ -3184,6 +3273,8 @@
             sill.scale.set(w * 2.4, bh * 1.3, 1);
             sill.position.set(0, -h - bh * 0.65 + bh * 1.3 * e, z);
             sheen.scale.set(w * 2, h * 2, 1);
+            sheenMat.uniforms.size.value.set(w * 2, h * 2);
+            sheenMat.uniforms.wet.value = e;
             sheen.position.set(0, 0, z);
             frameMat.opacity = e;
             rimMat.opacity = e * 0.35;
@@ -3537,6 +3628,7 @@
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
+            cabinMood.rain.value = rainAmount.value;
             cabinMood.sway.value = time > 0 ? 1 : 0;
             cabinGlow.intensity = saving || tuning.showTrain === false ? 0 : 4.5 * (palBase?.light ? 0.4 : 1) * clamp(pose.chase ?? 0);
             // The permanent way slides forward in long strides; scenery is laid
