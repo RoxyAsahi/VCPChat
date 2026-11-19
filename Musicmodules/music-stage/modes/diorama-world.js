@@ -819,6 +819,48 @@
                 add(new T.BoxGeometry(0.15, 0.09, 0.018).rotateY(heading)
                     .translate(x, CAB_TAIL_Y, fascia(x, 0.07)), 2);
             }
+            // The face, finished: a drip strip over the windscreens, a seam along the
+            // waist, grab handles either side, wipers parked on the outer panes, the
+            // washer jets, and the jumper sockets with their cables on the buffer beam.
+            {
+                const across = (from, to, y, lip, radius, group, steps = 24) => {
+                    const points = Array.from({ length: steps + 1 }, (_, i) => {
+                        const x = from + (to - from) * i / steps;
+                        return new T.Vector3(x, y, fascia(x, lip));
+                    });
+                    add(new T.TubeGeometry(new T.CatmullRomCurve3(points), steps, radius, 5, false), group);
+                };
+                across(-1.27, 1.27, CAB_WINDOW_Y + CAB_WINDOW_HEIGHT / 2 + 0.085, 0.012, 0.014, 4);
+                across(-1.29, 1.29, CAR.waist, 0.004, 0.009, 1);
+                across(-1.29, 1.29, CAR.sill + 0.36, 0.004, 0.007, 1);
+                for (const side of [-1, 1]) {
+                    // Grab handle on stand-offs beside the headlamp.
+                    const x = side * 1.12, lip = fascia(x, 0.06), base = fascia(x, 0.002);
+                    add(new T.CylinderGeometry(0.012, 0.012, 0.5, 8).translate(x, 1.86, lip), 4);
+                    for (const y of [1.64, 2.08]) beam(x, y, base, x, y, lip, 0.02, 4);
+                    // Wiper parked along the bottom of the outer pane: pivot, arm and blade.
+                    const pivotX = side * 0.56, pivotY = CAB_WINDOW_Y - CAB_WINDOW_HEIGHT / 2 - 0.03;
+                    const tipX = side * 0.98, tipY = pivotY + 0.1;
+                    add(new T.CylinderGeometry(0.026, 0.03, 0.04, 10).rotateX(Math.PI / 2)
+                        .translate(pivotX, pivotY, fascia(pivotX, 0.03)), 6);
+                    beam(pivotX, pivotY, fascia(pivotX, 0.05), tipX, tipY, fascia(tipX, 0.05), 0.016, 6);
+                    beam(side * 0.6, pivotY + 0.085, fascia(side * 0.6, 0.06), side * 1.1, pivotY + 0.105, fascia(side * 1.1, 0.06), 0.016, 7);
+                    add(new T.CylinderGeometry(0.012, 0.012, 0.02, 6).rotateX(Math.PI / 2)
+                        .translate(side * 0.3, pivotY, fascia(side * 0.3, 0.03)), 6);
+                    // Jumper socket and its cable looped down to the beam.
+                    const jx = side * 0.66;
+                    boxAt(0.14, 0.12, 0.1, jx, CAR.sill - 0.06, TIP - 0.03, 2);
+                    add(new T.CylinderGeometry(0.04, 0.04, 0.05, 10).rotateX(Math.PI / 2).translate(jx, CAR.sill - 0.06, TIP - 0.1), 6);
+                    const cable = new T.CatmullRomCurve3([
+                        [jx, CAR.sill - 0.06, TIP - 0.12], [jx + side * 0.04, CAR.sill - 0.3, TIP - 0.2],
+                        [jx - side * 0.12, CAR.sill - 0.38, TIP - 0.14], [jx - side * 0.2, CAR.sill - 0.14, TIP - 0.06]
+                    ].map(([x, y, z]) => new T.Vector3(x, y, z)));
+                    add(new T.TubeGeometry(cable, 12, 0.018, 6, false), 7);
+                }
+                // A step rung under the destination box, for reaching the board.
+                boxAt(0.36, 0.022, 0.06, 0, 1.5, fascia(0, 0.04), 5);
+                for (const end of [-0.17, 0.17]) beam(end, 1.5, fascia(end, 0.004), end, 1.5, fascia(end, 0.06), 0.02, 4);
+            }
             // Roof. Two pressed-steel cooler housings in tandem: rounded hoods with
             // slotted grilles at either end of their flanks, lid seams and lifting
             // eyes, bolted down on a flange. Near the cab a ventilator can on its
