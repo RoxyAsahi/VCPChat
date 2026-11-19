@@ -2243,19 +2243,28 @@
             const emission = new T.Color(palette.emission || palette.accent || '#f2a900');
             const structure = new T.Color(palette.material || palette.surface || '#2a3035');
             const border = new T.Color(palette.border || palette.muted || '#3b4449');
+            // By day the scene is a page: the sky is the page itself, not a
+            // dimmed copy of it, saturated colours are washed toward the muted
+            // tone and the page as watercolour is, and nothing is darker than a
+            // soft grey. The night keeps the theme's colours as they are.
+            const page = background.clone().lerp(white, 0.35);
+            const watercolour = (colour, toMuted, toPage) => light
+                ? colour.clone().lerp(muted, toMuted).lerp(page, toPage) : colour.clone();
             // Separate substrate, atmospheric fill and luminous accents.
-            skyMat.uniforms.night.value.copy(deep).lerp(tertiary, light ? 0.025 : 0.045)
-                .multiplyScalar(light ? 0.85 : 0.42);
-            skyMat.uniforms.horizon.value.copy(background).lerp(muted, light ? 0.08 : 0.2)
-                .lerp(tertiary, light ? 0.035 : 0.06);
+            skyMat.uniforms.night.value.copy(deep).lerp(tertiary, 0.045).multiplyScalar(0.42);
+            skyMat.uniforms.horizon.value.copy(background).lerp(muted, 0.2).lerp(tertiary, 0.06);
+            if (light) {
+                skyMat.uniforms.night.value.copy(page).lerp(tertiary, 0.03);
+                skyMat.uniforms.horizon.value.copy(page).lerp(muted, 0.05);
+            }
             skyMat.uniforms.cold.value.copy(tertiary);
             // Theme-native spectral pair; keep luminance bounded, retaining hue.
             const luminous = color => {
                 const hsl = color.getHSL({});
                 return color.setHSL(hsl.h, clamp(hsl.s, 0.25, 0.88), clamp(hsl.l, 0.42, 0.66));
             };
-            skyMat.uniforms.auroraGreen.value.copy(luminous(secondary.clone()));
-            skyMat.uniforms.auroraViolet.value.copy(luminous(emission.clone().lerp(tertiary, 0.12)));
+            skyMat.uniforms.auroraGreen.value.copy(watercolour(luminous(secondary.clone()), 0.3, 0.3));
+            skyMat.uniforms.auroraViolet.value.copy(watercolour(luminous(emission.clone().lerp(tertiary, 0.12)), 0.6, 0.3));
             waterMat.uniforms.tint.value.copy(deep).lerp(secondary, light ? 0.04 : 0.025)
                 .multiplyScalar(light ? 0.78 : 0.48);
             scene.fog = new T.FogExp2(skyMat.uniforms.horizon.value, 0.008);
@@ -2264,8 +2273,10 @@
             waterMat.uniforms.glitter.value = light ? 0.25 : 1;
             waterMat.uniforms.lampTint.value.copy(emission);
             steel.color.copy(structure).lerp(muted, light ? 0.45 : 0.5);
+            if (light) steel.color.lerp(page, 0.3);
             concrete.color.copy(surface).lerp(border, light ? 0.2 : 0.45);
             timber.color.copy(deep).lerp(structure, 0.55).lerp(emission, 0.025);
+            if (light) timber.color.lerp(page, 0.42);
             // Rust takes a little of the lamp colour.
             railMaterial.color.copy(steel.color).lerp(emission, light ? 0.04 : 0.1);
             wood.color.copy(timber.color);
@@ -2280,26 +2291,29 @@
             // By day they are pale and only warm, not the theme's accent shining
             // out of the mist: everything saturated is taken down by day, so
             // nothing jumps out of the white.
-            const lamp = light ? emission.clone().lerp(surface, 0.6) : emission;
+            // On a page a lamp's light is a pale gold: brightness alone does not stand out from white.
+            const lamp = light ? new T.Color('#e3c27f') : emission;
             lampMaterial.color.copy(lamp).multiplyScalar(light ? 1.5 : LAMP_GAIN);
             coldLampMaterial.color.copy(luminous(secondary.clone())).multiplyScalar(1.7);
             // Paint does not shine: a marking is a little lighter than what it is painted on.
             warmPaint.copy(emission).lerp(concrete.color, light ? 0.8 : 0.4).multiplyScalar(light ? 0.92 : 0.2);
             palePaint.copy(light ? surface : ink).lerp(concrete.color, 0.3).multiplyScalar(light ? 0.95 : 0.3);
-            lights.forEach(l => l.color.copy(lamp));
-            const signal = new T.Color(SIGNAL_RED);
-            if (light) signal.lerp(surface, 0.45).lerp(muted, 0.15);
+            // By day lamps hardly light what is round them: their light is near white.
+            lights.forEach(l => l.color.copy(lamp).lerp(white, light ? 0.65 : 0));
+            const signal = watercolour(new T.Color(SIGNAL_RED), 0.5, 0.3);
             signalLit.copy(signal).multiplyScalar(light ? 1.25 : 3.2);
             signalDark.copy(signal).multiplyScalar(light ? 0.45 : 0.06);
             buoyPaint.copy(signal).multiplyScalar(light ? 0.6 : 0.09);
-            glassMaterial.uniforms.shadowInk.value.set(light ? '#56585f' : '#24212a');
+            // By day a figure is a soft grey wash, not a hole in the page.
+            if (light) glassMaterial.uniforms.shadowInk.value.copy(muted).lerp(page, 0.2).multiplyScalar(0.62);
+            else glassMaterial.uniforms.shadowInk.value.set('#24212a');
             // Cream window band and the deep green body learn a little of the current theme.
             const ivory = new T.Color('#eed6a1').lerp(light ? surface : ink, light ? 0.46 : 0.19);
             const green = new T.Color('#426b3f').lerp(luminous(secondary.clone()), light ? 0.26 : 0.22);
-            if (light) { const hsl = green.getHSL({}); green.setHSL(hsl.h, hsl.s * 0.5, Math.min(0.5, hsl.l * 1.15)); }
-            const runningGear = new T.Color('#45443d').lerp(deep, light ? 0.08 : 0.40);
-            const roof = new T.Color('#484f45').lerp(structure, 0.37);
-            paintTrain(ivory, green, runningGear, roof);
+            const runningGear = watercolour(new T.Color('#45443d').lerp(deep, light ? 0.08 : 0.40), 0, 0.25);
+            const roof = watercolour(new T.Color('#484f45').lerp(structure, 0.37), 0.2, 0.25);
+            paintTrain(ivory, watercolour(green, 0.3, 0.18), runningGear, roof);
+
             carHorizon.value.copy(light ? surface : muted).lerp(secondary, 0.3);
             carWater.value.copy(secondary).lerp(deep, 0.31);
             cabinDaylight.value = light ? 1 : 0;
@@ -2307,8 +2321,7 @@
             glassMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
             if (light) glassMaterial.uniforms.warm.value.copy(surface).lerp(lamp, 0.2);
             glassMaterial.uniforms.seat.value.copy(secondary).multiplyScalar(0.3);
-            if (light) { const hsl = glassMaterial.uniforms.seat.value.getHSL({});
-                glassMaterial.uniforms.seat.value.setHSL(hsl.h, hsl.s * 0.55, hsl.l * 1.25); }
+            if (light) glassMaterial.uniforms.seat.value.copy(watercolour(secondary, 0.4, 0.2)).multiplyScalar(0.45);
             glassMaterial.uniforms.night.value.copy(deep).multiplyScalar(0.5);
             endMaterial.uniforms.warm.value.copy(glassMaterial.uniforms.warm.value);
             cabinGlow.color.copy(emission);
@@ -2322,9 +2335,10 @@
             skyMat.uniforms.horizonGlow.value = light ? 0.35 : 1;
             ridgeMaterial.color.copy(skyMat.uniforms.horizon.value).lerp(deep, 0.35)
                 .multiplyScalar(light ? 0.8 : 0.55);
-            wireMaterial.color.copy(border).lerp(secondary, 0.25);
+            wireMaterial.color.copy(watercolour(border.clone().lerp(secondary, 0.25), 0, 0.2));
             haloBase = light ? 0.35 : 1;
-            frameMat.color.copy(deep).lerp(structure, 0.35).multiplyScalar(light ? 0.55 : 0.4);
+            frameMat.color.copy(deep).lerp(structure, 0.35).multiplyScalar(0.4);
+            if (light) frameMat.color.copy(muted).lerp(page, 0.15).multiplyScalar(0.72);
             haloMat.uniforms.color.value.copy(lamp);
             palBase = {
                 light,
@@ -2349,7 +2363,8 @@
             if (scene.fog) {
                 scene.fog.color.copy(scratch);
                 // Warm passages close in; open chapters and loud passages thin the haze.
-                scene.fog.density = 0.008 * (1 + Math.max(0, bias) * 0.18)
+                // By day distant things fade into the page rather than darken.
+                scene.fog.density = 0.008 * (palBase.light ? 1.45 : 1) * (1 + Math.max(0, bias) * 0.18)
                     * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06);
                 waterMat.uniforms.fogDensity.value = scene.fog.density;
             }
@@ -2358,7 +2373,7 @@
             hemisphere.intensity = palBase.hemiIntensity * (1 + Math.max(0, -bias) * 0.12);
             // Warm chapters deepen lamps toward amber, cold ones bleach them slightly.
             scratch.copy(palBase.lamp).lerp(white, Math.max(0, -bias) * 0.22);
-            lights.forEach(l => l.color.copy(scratch));
+            lights.forEach(l => l.color.copy(scratch).lerp(white, palBase.light ? 0.65 : 0));
             waterMat.uniforms.lampTint.value.copy(scratch);
             haloMat.uniforms.color.value.copy(scratch);
             lampMaterial.color.copy(scratch).multiplyScalar((palBase.light ? 1.5 : LAMP_GAIN) * (1 + Math.max(0, bias) * 0.15));
