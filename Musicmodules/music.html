@@ -661,10 +661,15 @@
         <aside class="music-stage-id3" aria-label="当前曲目信息">
             <div class="music-stage-cover" role="img"></div>
             <div class="music-stage-track-copy">
-                <div class="music-stage-track-kicker">NOW PERFORMING</div>
+                <div class="music-stage-track-kicker" aria-hidden="true">
+                    <span>TRACK DATABASE</span>
+                    <span class="music-stage-track-file" data-track-field="file-number">FILE NUMBER: TRK-0000</span>
+                </div>
                 <div class="music-stage-track-title">未选择歌曲</div>
+                <div class="music-stage-track-rule" aria-hidden="true"><i></i></div>
                 <div class="music-stage-track-artist">未知艺术家</div>
                 <div class="music-stage-track-album" hidden></div>
+                <div class="music-stage-track-specs" data-track-field="specs"></div>
             </div>
         </aside>
 

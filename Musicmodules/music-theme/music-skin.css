@@ -550,8 +550,8 @@ body.music-playing .sidebar-playlist li.active::before {
 }
 
 /* 新底栏在页面上时，列表视图里重复的进度和按钮收起来 */
-body.has-music-dock .music-player .progress-section,
-body.has-music-dock .music-player .controls {
+body.music-dock-on .music-player .progress-section,
+body.music-dock-on .music-player .controls {
     display: none;
 }
 
@@ -764,6 +764,22 @@ body.has-music-dock .music-player .controls {
     font-family: var(--mt-font-mono);
     font-variant-numeric: tabular-nums;
     color: var(--ar-ink);
+}
+
+/* 底栏的「音效设置」会把整块抽屉搬进它的面板：那里不需要再折叠一层 */
+.md-sheet-body .acoustic-drawer-toggle {
+    display: none;
+}
+
+.md-sheet-body .acoustic-drawer-body {
+    display: block;
+    padding: 0 4px 8px;
+    animation: none;
+}
+
+/* 抽屉被搬走时，列表视图里中栏下半部分不留空 */
+body.music-dock-sheet-open .main-content #visualizer {
+    display: block;
 }
 
 /* ---------- 歌词栏 ---------- */
@@ -988,7 +1004,7 @@ body.has-music-dock .music-player .controls {
     }
 
     /* 给底栏胶囊留出位置 */
-    body.has-music-dock .music-player-container {
-        padding-bottom: 96px;
+    body.music-dock-on .music-player-container {
+        padding-bottom: var(--music-dock-safe-bottom, 96px);
     }
 }

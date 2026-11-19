@@ -22,11 +22,22 @@
         return match ? match[1].toUpperCase() : '';
     };
 
-    const CODEC_NAMES = { MPEG: 'MP3', 'MPEG 1 LAYER 3': 'MP3', 'MPEG-4/AAC': 'AAC', 'MPEG-4 AAC': 'AAC', VORBIS: 'OGG' };
+    // 解析库给的编码名比较啰嗦（如 "MPEG 1 Layer 3"、"Vorbis I"），收成常见叫法。
+    const CODEC_RULES = [
+        [/^MPEG[ -]?[12](\.5)?[ -]LAYER[ -]?3/, 'MP3'],
+        [/AAC/, 'AAC'],
+        [/^VORBIS/, 'VORBIS'],
+        [/^OPUS/, 'OPUS'],
+        [/^ALAC/, 'ALAC'],
+        [/^PCM/, 'PCM'],
+    ];
     const format = (track) => {
         const raw = String(track?.codec || '').trim().toUpperCase();
-        const name = CODEC_NAMES[raw] || raw.replace(/^MPEG 1 LAYER 3$/, 'MP3');
-        return name || extensionOf(track) || '';
+        if (raw) {
+            const rule = CODEC_RULES.find(([pattern]) => pattern.test(raw));
+            return rule ? rule[1] : raw;
+        }
+        return extensionOf(track);
     };
 
     const sampleRate = (track) => {
@@ -84,7 +95,7 @@
             setText('album', track.album || '未分类', '未分类');
             setText('format', format(track));
             setText('sample-rate', sampleRate(track));
-            setText('bit-depth', bitDepth(track), track.bitsPerSample === undefined && !track.sampleRate ? '—' : '有损');
+            setText('bit-depth', bitDepth(track), track.lossless === false ? '有损' : '—');
             setText('bitrate', bitrate(track));
             setText('specs', summary(track), '');
             if (changed) {
@@ -144,6 +155,72 @@
             // 设置从引擎读回后由 music.js 调一次，程序赋值不会触发 change。
             app.refreshAcousticSummary = describe;
             describe();
+        }
+
+        setupStageSkin();
+    };
+
+    // 舞台设置里选项不多的下拉框换成分段控件：一眼看到全部选项，点一下就切。
+    // 原 <select> 保留并继续接收值和 change 事件，舞台代码不需要知道有这一层。
+    const SEGMENT_MAX_OPTIONS = 4;
+    const SEGMENT_MAX_CHARS = 18;
+    const enhanceSelect = (select) => {
+        if (select.dataset.segmented) return;
+        const options = Array.from(select.options);
+        const chars = options.reduce((sum, option) => sum + option.textContent.trim().length, 0);
+        if (options.length < 2 || options.length > SEGMENT_MAX_OPTIONS || chars > SEGMENT_MAX_CHARS) return;
+        select.dataset.segmented = '1';
+        select.classList.add('music-skin-segmented-source');
+        select.tabIndex = -1;
+        const group = document.createElement('div');
+        group.className = 'music-skin-segmented';
+        group.setAttribute('role', 'group');
+        const label = select.getAttribute('aria-label') || select.closest('label')?.querySelector('.music-stage-tuning-label')?.textContent;
+        if (label) group.setAttribute('aria-label', label);
+        const sync = () => {
+            for (const button of group.children) button.setAttribute('aria-pressed', String(button.dataset.value === select.value));
+        };
+        for (const option of options) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.value = option.value;
+            button.textContent = option.textContent.trim();
+            button.disabled = option.disabled;
+            button.addEventListener('click', (event) => {
+                // 外层是 <label>，不拦住的话点击会转给下拉框本身。
+                event.preventDefault();
+                if (select.value === option.value) return;
+                select.value = option.value;
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                sync();
+            });
+            group.appendChild(button);
+        }
+        select.addEventListener('change', sync);
+        select.after(group);
+        sync();
+    };
+
+    const setupStageSkin = () => {
+        const card = document.getElementById('music-stage-settings-card');
+        if (card) {
+            const scan = () => card.querySelectorAll('select:not([data-segmented])').forEach(enhanceSelect);
+            // 舞台切换模式时会重建「模式调制」里的控件，跟着重新替换。
+            new MutationObserver(scan).observe(card, { childList: true, subtree: true });
+            scan();
+        }
+
+        // 舞台可以单独选深浅主题（stage-theme-light/dark 只挂在舞台根节点上）；
+        // 同步一份到 body，舞台里的底栏和面板也能按舞台的深浅取色。
+        const stage = document.getElementById('music-stage');
+        if (stage) {
+            const mirror = () => {
+                document.body.classList.toggle('music-stage-light', stage.classList.contains('stage-theme-light'));
+                document.body.classList.toggle('music-stage-dark', stage.classList.contains('stage-theme-dark'));
+            };
+            new MutationObserver(mirror).observe(stage, { attributes: true, attributeFilter: ['class'] });
+            mirror();
         }
     };
 })();

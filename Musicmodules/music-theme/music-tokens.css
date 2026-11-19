@@ -25,9 +25,11 @@ body {
   --mt-ease-std: cubic-bezier(.4, 0, .2, 1);
   --mt-z-archive: 1;       /* 3D 画布 */
   --mt-z-archive-hud: 5;   /* 浮在阵列上的文字 */
+  /* 下面三个只在底栏整层（--mt-z-dock-layer）内部比较：整层在舞台 800 之上、弹窗 1000 之下 */
   --mt-z-dock: 60;         /* 底栏胶囊、把手 */
-  --mt-z-panel: 59;
-  --mt-z-popover: 70;
+  --mt-z-panel: 59;        /* 统一面板 */
+  --mt-z-popover: 70;      /* 面板弹层、音效设置 */
+  --mt-z-dock-layer: 850;  /* 底栏整层，舞台是 800 */
 
   /* 档案阵列（深色） */
   --ar-paper: #11181b;
@@ -92,6 +94,27 @@ body {
   --md-capsule-bg-open: rgba(0, 0, 0, .4);
   --md-pill-bg: rgba(0, 0, 0, .35);
   --md-handle-bg: rgba(0, 0, 0, .4);
+  /* 底栏细分色 */
+  --md-time: rgb(113, 113, 122);
+  --md-track: rgba(255, 255, 255, .1);
+  --md-hover: rgba(255, 255, 255, .15);
+  --md-slot-hover: rgba(255, 255, 255, .1);
+  --md-slot-on-bg: rgba(255, 255, 255, .2);
+  --md-slot-on-fg: inherit;
+  --md-capsule-border: rgba(255, 255, 255, .05);
+  --md-capsule-bg-hover: rgba(0, 0, 0, .3);
+  --md-capsule-shadow: 0 25px 50px -12px rgba(0, 0, 0, .25);
+  --md-capsule-shadow-open: 0 25px 50px -12px rgba(0, 0, 0, .25);
+  --md-quick-bg: rgba(0, 0, 0, .4);
+  --md-pill-fg: #fff;
+  --md-pill-border: rgba(255, 255, 255, .1);
+  --md-pill-bg-hover: rgba(0, 0, 0, .55);
+  --md-pill-kicker: rgba(255, 255, 255, .45);
+  --md-pill-sub: rgba(255, 255, 255, .5);
+  --md-pill-cover: #27272a;
+  --md-handle-fg: #fff;
+  --md-handle-open-bg: #fff;
+  --md-handle-open-fg: #000;
 }
 
 body.light-theme {
@@ -136,6 +159,87 @@ body.light-theme {
   --ms-text-shadow: 0 0 1px rgba(255, 255, 255, .6), 0 0 16px rgba(255, 255, 255, .45);
   --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .22);
 
+  --md-tp: rgb(28, 25, 23);
+  --md-tp-rgb: 28, 25, 23;
+  --md-on-tp: rgb(245, 245, 244);
+  --md-accent: #ea580c;
+  --md-on-accent: #fff;
+  --md-raise: #ffffff;
+  --md-knob: #ffffff;
+  --md-menu: #ffffff;
+  --md-glass: rgba(244, 244, 245, .8);
+  --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .24), 0 0 0 1px rgba(0, 0, 0, .06);
+  --md-like: #e0354f;
+  --md-edge: rgba(0, 0, 0, .06);
+  --md-capsule-bg: rgba(255, 255, 255, .4);
+  --md-capsule-bg-open: rgba(255, 255, 255, .6);
+  --md-pill-bg: rgba(255, 255, 255, .35);
+  --md-handle-bg: rgba(255, 255, 255, .7);
+  --md-time: rgb(68, 64, 60);
+  --md-track: rgba(0, 0, 0, .05);
+  --md-hover: rgba(0, 0, 0, .1);
+  --md-slot-hover: rgba(0, 0, 0, .05);
+  --md-slot-on-bg: rgba(0, 0, 0, .1);
+  --md-slot-on-fg: #000;
+  --md-capsule-border: rgba(255, 255, 255, .2);
+  --md-capsule-bg-hover: rgba(255, 255, 255, .5);
+  --md-capsule-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1);
+  --md-capsule-shadow-open: 0 20px 25px -5px rgba(0, 0, 0, .1), 0 8px 10px -6px rgba(0, 0, 0, .1);
+  --md-quick-bg: rgba(255, 255, 255, .6);
+  --md-pill-fg: #18181b;
+  --md-pill-border: rgba(0, 0, 0, .1);
+  --md-pill-bg-hover: rgba(255, 255, 255, .55);
+  --md-pill-kicker: rgba(0, 0, 0, .45);
+  --md-pill-sub: rgba(0, 0, 0, .55);
+  --md-pill-cover: #e4e4e7;
+  --md-handle-fg: #18181b;
+  --md-handle-open-bg: #fff;
+  --md-handle-open-fg: #000;
+}
+
+/*
+ * 舞台可以单独选深浅（舞台设置里的「舞台主题」）。music-skin.js 把舞台根节点的
+ * stage-theme-light/dark 同步成 body 上的 music-stage-light/dark，这里让舞台浮层、
+ * 底栏和面板跟舞台的深浅走，而不是跟应用主题。
+ */
+body.music-stage-active.music-stage-dark {
+  --ms-ink: #f2f3ef;
+  --ms-muted: rgba(242, 243, 239, .66);
+  --ms-faint: rgba(242, 243, 239, .42);
+  --ms-line: rgba(242, 243, 239, .22);
+  --ms-glass: rgba(16, 18, 20, .46);
+  --ms-glass-strong: rgba(22, 24, 27, .86);
+  --ms-glass-edge: rgba(255, 255, 255, .08);
+  --ms-text-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 18px rgba(0, 0, 0, .35);
+  --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55);
+  --md-tp: rgb(244, 244, 245);
+  --md-tp-rgb: 244, 244, 245;
+  --md-on-tp: rgb(9, 9, 11);
+  --md-accent: #f4f4f5;
+  --md-on-accent: #18181b;
+  --md-raise: rgba(255, 255, 255, .18);
+  --md-knob: #ececee;
+  --md-menu: #2b2b30;
+  --md-glass: rgba(28, 28, 31, .8);
+  --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .09);
+  --md-like: #f2607a;
+  --md-edge: rgba(255, 255, 255, .09);
+  --md-capsule-bg: rgba(0, 0, 0, .2);
+  --md-capsule-bg-open: rgba(0, 0, 0, .4);
+  --md-pill-bg: rgba(0, 0, 0, .35);
+  --md-handle-bg: rgba(0, 0, 0, .4);
+}
+
+body.music-stage-active.music-stage-light {
+  --ms-ink: #141517;
+  --ms-muted: rgba(20, 21, 23, .68);
+  --ms-faint: rgba(20, 21, 23, .46);
+  --ms-line: rgba(20, 21, 23, .2);
+  --ms-glass: rgba(246, 244, 240, .58);
+  --ms-glass-strong: rgba(246, 244, 240, .9);
+  --ms-glass-edge: rgba(0, 0, 0, .06);
+  --ms-text-shadow: 0 0 1px rgba(255, 255, 255, .6), 0 0 16px rgba(255, 255, 255, .45);
+  --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .22);
   --md-tp: rgb(28, 25, 23);
   --md-tp-rgb: 28, 25, 23;
   --md-on-tp: rgb(245, 245, 244);
