@@ -85,6 +85,12 @@
         const wetness = { value: 0 };
         // Where the sea stands: what is in it is darker and glossy up to a tide line just above.
         const tideLine = { value: 0 };
+        // The lamps nearest the camera light what stands round them: a pool on
+        // the paving under each, the wall beside it, the underside of a roof.
+        const SPILLS = 12;
+        const spills = { value: Array.from({ length: SPILLS }, () => new T.Vector4()) };
+        const spillTint = { value: new T.Color() };
+        let spillList = [];
         // Boards are laid along the longer side of whatever they clad, an
         // edge of the piece falling on a gap between two boards.
         const grained = bed => {
@@ -530,7 +536,7 @@
         const dressSky = { value: new T.Color() };
         dressedMaterial.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, { dressSheet: { value: sheetTexture }, dressTones: { value: dressTones },
-                dressSky, wetness, tideLine, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
+                dressSky, wetness, tideLine, spills, spillTint, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
             shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
                 attribute vec3 inset;
                 attribute vec4 dressRect, dressLook, dressCut;
@@ -568,6 +574,8 @@
                 uniform vec3 dressSky;
                 uniform vec4 dressPuddles;
                 uniform float wetness, tideLine;
+                uniform vec4 spills[${SPILLS}];
+                uniform vec3 spillTint;
                 varying vec3 vDressWorld, vDressUp;
                 float dressPuddle = 0.0;
                 varying vec2 vDressUv;
@@ -608,6 +616,16 @@
                 }`)
                 .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
                 totalEmissiveRadiance += vDressTone * dressTexel.r * 1.3 * dressTexel.b * vDressGlow;
+                {
+                    vec3 spill = vec3(0.0);
+                    for (int i = 0; i < ${SPILLS}; i++) {
+                        vec3 toLamp = spills[i].xyz - vDressWorld;
+                        float d2 = dot(toLamp, toLamp);
+                        float facing = max(0.0, dot(normalize(vDressUp), toLamp * inversesqrt(max(d2, 0.0001))));
+                        spill += vec3(spills[i].w * facing / (1.0 + d2 * 0.3));
+                    }
+                    totalEmissiveRadiance += diffuseColor.rgb * spillTint * spill;
+                }
                 if (vDressGlass > 0.5) {
                     // Glass gives back the sky, more of it the flatter it is seen.
                     float facing = max(0.0, abs(dot(normalize(vViewPosition), normal)));
@@ -3159,7 +3177,7 @@
                 if (v + rows.length * width > SPLASH_VERTS) return;
                 rows.forEach(({ address, u, points, alpha }) => points.forEach(([lateral, y, across]) => {
                     const [x, z] = at(address, lateral);
-                    const [fx, fz] = foamAt(address, lateral);
+                    const [fx, fz] = foamAt(address, lateral, y);
                     vertex(x, y, z, u, across, fx, fz, 0, alpha);
                 }));
                 for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < width - 1; k++) {
@@ -3176,15 +3194,23 @@
             const length = SET_PITCH * CARS / 2, tail = front - length;
             for (const side of [-1, 1]) {
                 // The bow wave: from the nose's shoulder out and back along an arm.
-                const arm = 7 + 11 * pace, open = 0.32 + 0.1 * pace, segments = saving ? 8 : 16;
+                const arm = 5 + 7 * pace, open = 0.24 + 0.08 * pace, segments = saving ? 8 : 16;
                 band(Array.from({ length: segments + 1 }, (_, k) => {
                     const u = k / segments, behind = u * arm - 0.4, reach = 1.32 + Math.max(0, behind) * open;
-                    const lift = (0.2 + 0.1 * pace) * (1 - u * 0.8);
+                    const lift = (0.12 + 0.06 * pace) * (1 - u * 0.8);
                     return { address: front - behind, u, alpha: 1 - u * 0.5, points: [
                         [side * 1.3, level + lift * 0.7, 0], [side * (reach - 0.05), level + lift, 0.22],
                         [side * reach, level + lift * 0.9, 0.3], [side * (reach + 0.5 + u), level + lift * 0.3, 0.6],
                         [side * (reach + 0.9 + 1.5 * u), level + 0.01, 1]] };
                 }), carried);
+                // The wave stands up off its crest near the nose in a thin, torn sheet.
+                band(Array.from({ length: segments + 1 }, (_, k) => {
+                    const u = k / segments * 0.6, behind = u * arm - 0.4, reach = 1.32 + Math.max(0, behind) * open;
+                    const lift = (0.12 + 0.06 * pace) * (1 - u * 0.8), rise = (0.14 + 0.2 * pace) * Math.pow(1 - u / 0.6, 1.4);
+                    return { address: front - behind, u: u / 0.6, alpha: 0.85, points: [
+                        [side * reach, level + lift * 0.9, 0.24], [side * (reach + 0.1), level + lift + rise * 0.55, 0.4],
+                        [side * (reach + 0.28), level + lift + rise, 0.8]] };
+                }), (address, lateral, y) => [(front - address) * 1.4 - time * 3 * pace, y * 6]);
                 // Water heaped and breaking along the sides of the train.
                 const hull = saving ? 10 : 24;
                 band(Array.from({ length: hull + 1 }, (_, k) => {
@@ -3453,6 +3479,7 @@
                     : kind === 3 ? warmPaint : kind === 4 ? palePaint : kind === 5 ? roomGlow : ceilingGlow);
             }
             glow.instanceColor.needsUpdate = true;
+            spillTint.value.copy(lampMaterial.color).multiplyScalar(palBase?.light ? 0.05 : 0.9);
             // The fittings take the same tones as the plain pools, and glass the sky.
             const night = !palBase?.light;
             [steel.color, concrete.color, wood.color, palePaint, warmPaint, null, lampMaterial.color, roomGlow,
@@ -3786,6 +3813,11 @@
             const span = (mesh, address, l0, y0, l1, y1, thick, depth = thick) => part(mesh, address,
                 (l0 + l1) / 2, (y0 + y1) / 2, Math.hypot(l1 - l0, y1 - y0), thick, depth, Math.atan2(y1 - y0, l1 - l0));
             const rawPart = part, rawSpan = span;
+            spillList = [];
+            const spillAt = (address, lateral, y, power = 1) => {
+                const f = track.at(address);
+                spillList.push([f.position.x + f.right.x * lateral, y, f.position.z + f.right.z * lateral, power]);
+            };
             // A pile of shore rocks, turned and sized so no two read as the same one.
             const rock = (address, lateral, size, turn, sunk = 0.12) => {
                 if (!rocks || rocks.count >= (saving ? 6 : rocks.instanceMatrix.count)) return;
@@ -3972,6 +4004,7 @@
                     part(LOOK.paint, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
                     part(LOOK.paint, address, L(LAMP_OFFSET - 0.02), lampY + 0.235, 0.7, 0.04, 0.24, side * 0.08);
                     part(glowParts, address, L(LAMP_OFFSET), lampY + 0.105, 0.66, 0.04, 0.2);
+                    spillAt(address, L(LAMP_OFFSET), lampY - 0.2, 2.2);
                     const hf = track.at(address);
                     haloPositions[haloCount * 3] = hf.position.x + hf.right.x * L(LAMP_OFFSET);
                     haloPositions[haloCount * 3 + 1] = lampY;
@@ -4112,6 +4145,7 @@
                     if (!whole(z, offset, 2.93)) return;
                     fit(LOOK.paint, z, offset, 2.015, 0.7, 1.83, 1.02);
                     fit(LOOK.vending, z, offset - 0.36, 2.0, 0.02, 1.7, 0.9);
+                    spillAt(z, lateral(offset - 0.9), 1.9, 0.7);
                     fit(LOOK.paint, z, offset - 0.1, 2.97, 0.86, 0.06, 1.08);
                     fit(LOOK.ink, z, offset, 1.14, 0.74, 0.08, 1.06);
                 };
@@ -4134,7 +4168,10 @@
                     fit(LOOK.paint, z, back + 0.38, roofY + 0.02, 0.05, 0.2, half * 2 + 0.5);
                     for (const end of [-1, 1]) fit(LOOK.paint, z + end * (half + 0.25), mid + 0.15, roofY, back - front + 0.75, 0.22, 0.05);
                     fit(LOOK.ink, z, mid, roofY - 0.05, 0.22, 0.03, half * 2 - 0.3);
-                    if ((id + index) % 5 !== 3) fit(LOOK.lamp, z, mid, roofY - 0.07, 0.1, 0.012, half * 2 - 0.5);
+                    if ((id + index) % 5 !== 3) {
+                        fit(LOOK.lamp, z, mid, roofY - 0.07, 0.1, 0.012, half * 2 - 0.5);
+                        spillAt(z, lateral(mid), roofY - 0.25, 1.2);
+                    }
                     // Back wall: three bays, perforated below the rail and glazed above.
                     for (let bay = -1; bay <= 1; bay++) {
                         const at = z + bay * half * 2 / 3;
@@ -4174,6 +4211,7 @@
                     fit(LOOK.paint, z, 7.5, 3.6, 0.14, 0.05, 1.5);
                     if ((id + index) % 5 !== 3) {
                         fit(LOOK.lamp, z, 7.5, 3.565, 0.07, 0.03, 1.3);
+                        spillAt(z, lateral(7.5), 3.35, 1.0);
                         rawPart(windowLight, z, lateral(8.575), 2.85, 0.012, 1.2, 4.0);
                     }
                     fit(LOOK.paint, z - 1.0, 8.555, 2.6, 0.03, 0.74, 1.0);
@@ -4193,6 +4231,7 @@
                         strut(LOOK.tube, lamp, 6.6, 3.8, 5.9, 3.95, 0.04);
                         fit(LOOK.paint, lamp, 5.85, 3.95, 0.36, 0.14, 0.36);
                         fit(LOOK.lamp, lamp, 5.85, 3.86, 0.26, 0.04, 0.26);
+                        spillAt(lamp, lateral(5.85), 3.6, 1.6);
                     }
                     bench(address + 1.5, 6.9, 1.6);
                     figure(address - 1.2, 5.1, 0);
@@ -4253,6 +4292,7 @@
                         part(LOOK.paint, z, lateral(7), 4.18, 0.3, 0.2, 0.3);
                         if ((id + bay) % 7 !== 3) {
                             part(glowParts, z + 2.75, lateral(5.5), 5.3, 0.1, 0.04, 2.3);
+                            spillAt(z + 2.75, lateral(5.5), 5.1, 1.6);
                             // The batten the tube is fixed to, and its two drops.
                             if (!saving) part(LOOK.paint, z + 2.75, lateral(5.5), 5.345, 0.16, 0.05, 2.5);
                         }
@@ -4404,6 +4444,7 @@
                         for (const at of [-4.2, 0, 4.2]) {
                             fit(LOOK.paint, address + at, 7.8, 3.5, 0.3, 0.04, 0.3);
                             fit(LOOK.lamp, address + at, 7.8, 3.44, 0.12, 0.06, 0.12);
+                            spillAt(address + at, lateral(7.8), 3.2, 0.9);
                         }
                     }
                     if (!saving) machine(address + 7.6, 8.0);
@@ -4592,6 +4633,14 @@
                 part(beacons, address, lateral, 2.2, 0.2, 0.28, 0.2);
             }
             haloGeometry.setDrawRange(0, haloCount);
+            {
+                const eyeX = pose.position.x, eyeZ = pose.position.z;
+                spillList.sort((a, b) => Math.hypot(a[0] - eyeX, a[2] - eyeZ) - Math.hypot(b[0] - eyeX, b[2] - eyeZ));
+                spills.value.forEach((slot, i) => {
+                    const lamp = spillList[i];
+                    if (lamp && !saving) slot.set(lamp[0], lamp[1], lamp[2], lamp[3]); else slot.set(0, -100, 0, 0);
+                });
+            }
             flyGulls(track, s, time);
             tintGlow(time);
             updateLights(track, s, saving, audio);
