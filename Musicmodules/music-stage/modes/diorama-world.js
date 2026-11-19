@@ -4455,7 +4455,47 @@
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - (lookingBack ? 114 : 24) + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
+            // Timing and the dream are read every frame, so the water stands where
+            // it should even on the first frame after a seek.
+            const speed = tuning.cameraSpeed ?? 1;
+            // When the camera reaches an address along the line.
+            const timeAt = address => {
+                if (track.timeAt) return track.timeAt(address);
+                let lo = 0, hi = timeline.duration;
+                for (let j = 0; j < 18; j++) {
+                    const mid = (lo + hi) * 0.5;
+                    if (timeline.distanceAt(mid, speed) < address) lo = mid;
+                    else hi = mid;
+                }
+                return (lo + hi) * 0.5;
+            };
+            const stateAt = address => timeline.sample(timeAt(address));
+            /*
+             * As the song goes on the line turns to a dream: the water rises over
+             * the track, the busy shore falls away, and what is left is a lamp, a
+             * lit window far off, someone waiting. The director says how far into
+             * the dream an address is; failing that, the last part of the song is.
+             */
+            const dreamAt = address => {
+                const dream = stateAt(address).dream;
+                if (Number.isFinite(dream)) return clamp(dream);
+                return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
+            };
+            drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
+            waterLevel = drownLevel;
+            water.position.y = waterLevel;
             wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            // Even at a crawl the wheels stir it; at speed the arms open out behind.
+            const stirring = tuning.showTrain !== false
+                ? smooth((waterLevel - 0.3) / 0.12) * (0.4 + 0.6 * smooth(Math.abs(splashSpeed) / 7)) : 0;
+            waterMat.uniforms.wake.value = stirring;
+            if (stirring > 0) {
+                const head = pose.trainFront ?? pose.distance, reach = SET_PITCH * CARS / 2;
+                waterMat.uniforms.wakePath.value.forEach((point, i) => {
+                    const at = track.at(head - reach * i / 4).position;
+                    point.set(at.x, at.z);
+                });
+            }
             // The water the train stirs follows its length down the line.
             tideLine.value = waterLevel;
             splash.layers.set(saving ? 1 : 0);
@@ -4498,44 +4538,6 @@
                 dummy.updateMatrix();
                 rocks.setMatrixAt(rocks.count++, dummy.matrix);
             };
-            const speed = tuning.cameraSpeed ?? 1;
-            // When the camera reaches an address along the line.
-            const timeAt = address => {
-                if (track.timeAt) return track.timeAt(address);
-                let lo = 0, hi = timeline.duration;
-                for (let j = 0; j < 18; j++) {
-                    const mid = (lo + hi) * 0.5;
-                    if (timeline.distanceAt(mid, speed) < address) lo = mid;
-                    else hi = mid;
-                }
-                return (lo + hi) * 0.5;
-            };
-            const stateAt = address => timeline.sample(timeAt(address));
-            /*
-             * As the song goes on the line turns to a dream: the water rises over
-             * the track, the busy shore falls away, and what is left is a lamp, a
-             * lit window far off, someone waiting. The director says how far into
-             * the dream an address is; failing that, the last part of the song is.
-             */
-            const dreamAt = address => {
-                const dream = stateAt(address).dream;
-                if (Number.isFinite(dream)) return clamp(dream);
-                return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
-            };
-            drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
-            waterLevel = drownLevel;
-            water.position.y = waterLevel;
-            // Even at a crawl the wheels stir it; at speed the arms open out behind.
-            const stirring = tuning.showTrain !== false
-                ? smooth((waterLevel - 0.3) / 0.12) * (0.4 + 0.6 * smooth(Math.abs(splashSpeed) / 7)) : 0;
-            waterMat.uniforms.wake.value = stirring;
-            if (stirring > 0) {
-                const head = pose.trainFront ?? pose.distance, reach = SET_PITCH * CARS / 2;
-                waterMat.uniforms.wakePath.value.forEach((point, i) => {
-                    const at = track.at(head - reach * i / 4).position;
-                    point.set(at.x, at.z);
-                });
-            }
             // Where the camera is as it goes by an address: how far out to one
             // side of the line, and how high. In the cab it is on the line.
             if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
