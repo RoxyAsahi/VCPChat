@@ -2160,38 +2160,113 @@
                         if(hitBox(o,d,vec3(-0.98,CF+0.9,FRONT+0.4),vec3(-0.9,CF+1.02,FRONT+0.78),best,n)>0.0)what=5.0;
                     }
                     if(hitBox(o,d,vec3(0.42,CF,FRONT-0.05),vec3(1.22,CF+0.78,FRONT+0.5),best,n)>0.0)what=6.0;
+                    // 7 chrome knobs on the handles, 8 the roller blind, 9 the radio set on the cabinet,
+                    // 10 the extinguisher by the bulkhead, 11 a grab pole, 12 the ceiling fan.
+                    if(hitBall(o,d,vec3(-1.08,2.23,FRONT+0.3),0.035,best,n)>0.0)what=7.0;
+                    if(hitBall(o,d,vec3(-0.52,2.16,FRONT+0.3),0.03,best,n)>0.0)what=7.0;
+                    if(hitBox(o,d,vec3(-1.22,3.12,FRONT-0.02),vec3(1.22,3.28,FRONT+0.07),best,n)>0.0)what=8.0;
+                    if(hitBox(o,d,vec3(-1.18,2.88,FRONT-0.01),vec3(-0.42,3.12,FRONT+0.01),best,n)>0.0)what=8.0;
+                    if(hitBox(o,d,vec3(0.55,CF+0.78,FRONT+0.05),vec3(0.98,CF+0.98,FRONT+0.34),best,n)>0.0)what=9.0;
+                    if(hitBox(o,d,vec3(0.86,CF,BACK-0.2),vec3(1.0,CF+0.5,BACK-0.06),best,n)>0.0)what=10.0;
+                    if(hitBox(o,d,vec3(0.36,CF,FRONT+0.6),vec3(0.4,3.317,FRONT+0.64),best,n)>0.0)what=11.0;
+                    if(hitBox(o,d,vec3(0.12,3.25,FRONT+0.5),vec3(0.48,3.317,FRONT+0.86),best,n)>0.0)what=12.0;
                     vec3 hit=o+d*best;
                     // Painted grey-green fittings, a darker floor, a pale ceiling.
                     vec3 paint=mix(vec3(0.165,0.2,0.18),vec3(0.86,0.83,0.74),day*0.8);
-                    vec3 albedo=what>0.5?paint:best==floorHit?paint*0.45:best==ceiling?vec3(0.8,0.78,0.72):vec3(0.62,0.6,0.55)*mix(0.5,1.0,day);
+                    vec3 wallTone=hit.y<2.05?paint*1.15:vec3(0.58,0.55,0.48)*mix(0.6,1.0,day);
+                    vec3 albedo=what>0.5?paint:best==floorHit?paint*0.45:best==ceiling?vec3(0.7,0.68,0.62):wallTone;
+                    float shine=0.35,metal=0.0;
                     if(what>1.5&&what<2.5)albedo*=0.55;
-                    if(what>2.5&&what<3.5)albedo=vec3(0.06);
-                    if(what>3.5&&what<4.5)albedo=vec3(0.12,0.2,0.14);
+                    if(what>2.5&&what<3.5){albedo=vec3(0.05);shine=0.6;}
+                    if(what>3.5&&what<4.5){albedo=vec3(0.12,0.2,0.14);shine=0.15;}
                     if(what>4.5&&what<5.5)albedo=vec3(0.035,0.04,0.05);
-                    // One lamp over the desk and the glow through the bulkhead door.
-                    vec3 lamp=vec3(-0.3,3.25,FRONT+0.7)-hit;
+                    if(what>6.5&&what<7.5){albedo=vec3(0.75,0.74,0.7);metal=1.0;shine=1.0;}
+                    if(what>7.5&&what<8.5){albedo=mix(vec3(0.09,0.14,0.11),vec3(0.6,0.62,0.55),day*0.7);shine=0.1;}
+                    if(what>8.5&&what<9.5){albedo=vec3(0.06,0.065,0.07);shine=0.5;}
+                    if(what>9.5&&what<10.5){albedo=vec3(0.55,0.06,0.04);shine=0.8;}
+                    if(what>10.5&&what<11.5){albedo=vec3(0.7,0.7,0.68);metal=1.0;shine=1.0;}
+                    if(what>11.5)albedo=vec3(0.7,0.7,0.66);
+                    // Checker plate on the floor.
+                    if(best==floorHit&&what<0.5){
+                        vec2 q=hit.xz*vec2(28.0,20.0);q.x+=mod(floor(q.y),2.0)*0.5;
+                        vec2 f=(fract(q)-0.5)*vec2(1.6,0.6);
+                        albedo*=1.0+0.5*(1.0-smoothstep(0.12,0.24,abs(f.x)+abs(f.y)));
+                        shine=0.5;
+                    }
+                    // Panel seams and a vent in the desk front, rivet-headed seams on the cabinet doors.
+                    if((what>0.5&&what<1.5)||(what>5.5&&what<6.5)){
+                        float seamZ=abs(fract((hit.x+hit.z)*3.2)-0.5);
+                        albedo*=1.0-0.4*(1.0-smoothstep(0.015,0.03,seamZ))*step(0.5,abs(n.z));
+                        float vent=step(0.5,abs(n.z))*step(abs(hit.y-(CF+0.25)),0.08)*step(0.5,fract(hit.x*30.0));
+                        albedo*=1.0-0.55*vent;
+                    }
+                    // Ambient shading: darker into the corners and under the desk.
+                    float occlusion=smoothstep(0.0,0.25,hit.y-CF)*0.6+0.4;
+                    occlusion*=0.55+0.45*smoothstep(0.0,0.3,1.23-abs(hit.x));
+                    occlusion*=1.0-0.35*step(hit.y,2.02)*step(hit.x,-0.36)*step(hit.z,FRONT+0.6)*step(0.5,abs(n.y))*step(what,0.5);
+                    // One lamp over the desk, with a gloss highlight on paint and a sharp one on chrome.
+                    vec3 lampAt=vec3(-0.3,3.25,FRONT+0.7);
+                    vec3 lamp=lampAt-hit;
                     float fall=1.0/(1.0+dot(lamp,lamp)*0.9);
-                    float lit=0.22+0.78*max(dot(n,normalize(lamp)),0.0)*fall*2.2;
-                    vec3 c=albedo*cabin*lit*(0.55+day*0.6);
+                    vec3 l=normalize(lamp);
+                    float lit=0.1*occlusion+0.9*max(dot(n,l),0.0)*fall*2.4*occlusion;
+                    vec3 halfway=normalize(l-d);
+                    float spec=pow(max(dot(n,halfway),0.0),mix(18.0,90.0,metal))*shine*fall*2.4;
+                    vec3 c=albedo*cabin*lit*(0.55+day*0.6)*mix(1.0,0.35,metal)+cabin*spec*mix(vec3(0.25),albedo,metal);
+                    // Chrome also shows the windows behind the viewer.
+                    c+=metal*cold*0.25*smoothstep(-0.2,0.6,reflect(d,n).z*-1.0);
                     if(best==back&&what<0.5){
                         float door=(1.0-smoothstep(0.32,0.36,abs(hit.x)))*smoothstep(1.62,1.68,hit.y)*(1.0-smoothstep(3.0,3.05,hit.y));
                         float pane=(1.0-smoothstep(0.24,0.27,abs(hit.x)))*smoothstep(2.2,2.24,hit.y)*(1.0-smoothstep(2.95,2.99,hit.y));
+                        float notice=step(abs(hit.x+0.75),0.22)*step(abs(hit.y-2.55),0.17);
+                        float handle=step(abs(hit.x-0.26),0.015)*step(abs(hit.y-2.0),0.08);
                         c=mix(c,c*0.7,door);
-                        c=mix(c,cabin*(0.5+day*0.3),pane);
+                        // Through the door glass: the saloon, its tubes, the dark band of the seats and standing people.
+                        vec3 saloon=cabin*(0.28+day*0.3)*(0.8+0.4*smoothstep(2.2,2.95,hit.y));
+                        saloon+=cabin*0.6*(1.0-smoothstep(0.004,0.012,abs(hit.y-2.9)));
+                        saloon*=1.0-0.6*step(hit.y,2.42);
+                        float person=(1.0-smoothstep(0.05,0.06,abs(hit.x-0.06)))*step(hit.y,2.78)+(1.0-smoothstep(0.045,0.055,length(vec2(hit.x-0.06,hit.y-2.82))));
+                        saloon=mix(saloon,saloon*0.25,clamp(person,0.0,1.0));
+                        c=mix(c,saloon,pane);
+                        // A grab rail across the bulkhead and the line where cream meets the lower paint.
+                        c*=1.0-0.45*(1.0-smoothstep(0.008,0.016,abs(hit.y-2.05)));
+                        c+=cabin*0.25*(1.0-smoothstep(0.006,0.012,abs(hit.y-2.6)))*step(0.36,abs(hit.x));
+                        c=mix(c,mix(vec3(0.75,0.72,0.62),vec3(0.3,0.42,0.5),step(0.5,fract(hit.y*24.0))*step(abs(hit.x+0.75),0.18))*cabin*0.55,notice);
+                        c=mix(c,cabin*0.9,handle);
                     }
                     if(best==wall&&what<0.5){
                         float window=smoothstep(2.28,2.34,hit.y)*(1.0-smoothstep(2.91,3.01,hit.y));
                         c=mix(c,cold*0.12,window*0.79);
+                        c*=1.0-0.5*(1.0-smoothstep(0.01,0.025,abs(hit.y-2.3)))-0.5*(1.0-smoothstep(0.01,0.025,abs(hit.y-2.98)));
                     }
                     if(best==ceiling&&what<0.5)c+=cabin*0.5*(1.0-smoothstep(0.03,0.09,abs(hit.x+0.32)))*step(hit.z,FRONT+1.0);
-                    // Gauges, faintly lit, on the cowl's sloping face.
+                    if(what>11.5)c*=0.6+0.4*step(0.5,fract(length(hit.xz-vec2(0.3,FRONT+0.68))*40.0));
+                    // Gauges on the cowl's face: bezel, dial and a needle; a row of pilot lamps below.
                     if(what>1.5&&what<2.5){
-                        vec2 g1=hit.xy-vec2(-0.95,2.12),g2=hit.xy-vec2(-0.67,2.12);
-                        float gauge=max(1.0-smoothstep(0.035,0.045,length(g1)),1.0-smoothstep(0.035,0.045,length(g2)));
-                        c=mix(c,vec3(0.85,0.95,0.8)*0.55,gauge);
+                        for(int i=0;i<2;i++){
+                            vec2 g=hit.xy-vec2(i==0?-0.95:-0.67,2.12);
+                            float dist=length(g);
+                            float dial=1.0-smoothstep(0.036,0.042,dist);
+                            float bezel=(1.0-smoothstep(0.042,0.05,dist))*smoothstep(0.036,0.042,dist);
+                            vec2 needle=vec2(cos(i==0?2.2:1.1),sin(i==0?2.2:1.1));
+                            float needleD=length(g-needle*clamp(dot(g,needle),0.0,0.032));
+                            c=mix(c,vec3(0.85,0.92,0.78)*0.6*(0.6+0.4*day),dial);
+                            c=mix(c,vec3(0.02),dial*(1.0-smoothstep(0.002,0.004,needleD)));
+                            c=mix(c,vec3(0.02),dial*(1.0-smoothstep(0.03,0.032,dist))*smoothstep(0.028,0.03,dist)*step(0.5,fract(atan(g.y,g.x)*6.0/3.1416)));
+                            c+=cabin*bezel*0.5;
+                        }
+                    }
+                    // The desk top: rows of switches and pilot lamps, some lit.
+                    if(what>0.5&&what<1.5&&n.y>0.5){
+                        vec2 q=vec2(hit.x*30.0,(hit.z-FRONT)*26.0);
+                        vec2 id=floor(q),f=fract(q)-0.5;
+                        float on=fract(sin(dot(id,vec2(41.3,17.9)))*921.7);
+                        float key=(1.0-smoothstep(0.18,0.26,max(abs(f.x),abs(f.y))))*step(hit.z,FRONT+0.2)*step(-1.18,hit.x)*step(hit.x,-0.4);
+                        vec3 lampTint=on>0.8?vec3(1.0,0.25,0.15):on>0.6?vec3(0.4,1.0,0.5):on>0.45?vec3(1.0,0.7,0.25):vec3(0.0);
+                        c=mix(c,vec3(0.04)+lampTint*1.1,key);
                     }
                     // The driver is a silhouette with the saloon light on the shoulders.
-                    if(what>4.5&&what<5.5)c=vec3(0.018,0.02,0.026)*(0.6+day)+cabin*(0.1*max(n.y,0.0)+0.05*max(-n.z,0.0));
+                    if(what>4.5&&what<5.5)c=vec3(0.012,0.013,0.018)*(0.6+day*2.0)+cabin*(0.05*max(n.y,0.0)+0.03*max(n.x,0.0));
                     return c;
                 }
                 void main(){
@@ -2210,7 +2285,7 @@
                         vec3 wet=rainOnGlass(vPos.xy,clock,rain);
                         ray=normalize(ray+vec3(wet.xy*9.0,0.0));
                         c=cab(cabin,ray,tail);
-                        c=mix(c,vec3(0.012,0.018,0.017),dash*0.92);
+                        c=mix(c,vec3(0.012,0.018,0.017),dash*0.3);
                         // Glass: a thick, faintly green pane. What is behind it loses some light;
                         // its face reflects the coast, more and more towards grazing.
                         c*=vec3(0.80,0.86,0.83);
@@ -2224,7 +2299,7 @@
                         vec3 mirror=(bounce.y>-0.02?sky:sea)+cold*horizon*0.55;
                         // A soft band where the brow over the glass is reflected.
                         mirror*=1.0-0.55*smoothstep(0.55,0.95,p.y);
-                        c=mix(c,mirror,clamp(fresnel*1.6+0.06,0.0,0.85));
+                        c=mix(c,mirror,clamp(fresnel*1.3+0.03,0.0,0.8));
                         // The edge of the glass seen through its thickness, a thin bright line inside the rubber.
                         float rim=length(max(abs(p)-vec2(0.88),0.0))-0.12;
                         c+=cold*0.22*(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim)*(0.4+fresnel*2.0);
