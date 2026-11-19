@@ -129,7 +129,7 @@
             const performance = new T.ShaderMaterial({
                 transparent: true, depthWrite: false,
                 uniforms: { bins: { value: new Float32Array(24) }, light: { value: 0 },
-                    closing: { value: 0 }, accent: { value: new T.Color(palette.accent || '#f2a900') } },
+                    closing: { value: 0 }, accent: { value: sungColour() } },
                 vertexShader: `varying vec2 vUv;void main(){vUv=uv;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
                 fragmentShader: `varying vec2 vUv;uniform float bins[24],light,closing;uniform vec3 accent;
@@ -182,6 +182,12 @@
         const plane = new T.PlaneGeometry(1, 1);
         const box = new T.BoxGeometry(1, 1, 1);
         let palette = {}, timeline = null, track = null, options = {};
+        // By day the theme's accent, full strength, jumps out of the pale
+        // scene: the words already sung take it with some of the ink in it.
+        const sungColour = () => {
+            const colour = new T.Color(palette.accent || '#f2a900');
+            return palette.light ? colour.lerp(new T.Color(palette.ink || '#2b2b2b'), 0.3) : colour;
+        };
         let readingBounds = [], lastCamera = null, lastDiagnosticTime = 0;
         const sight = new T.Raycaster();
         const release = node => {
@@ -235,8 +241,9 @@
             const style = !constellation ? 0 : actEnd - phrase.end < 4 ? 3 : act.act === 'Chorus' ? 2 : 1;
             const encounter = !constellation
                 ? track.encounters[track.pageEncounter.get(phrase.id)] : null;
-            const travel = timeline.distanceAt(phrase.end, options.cameraSpeed)
-                - timeline.distanceAt(phrase.start, options.cameraSpeed);
+            // How far the camera itself goes while the line is up.
+            const at = time => track.addressAt ? track.addressAt(time) : timeline.distanceAt(time, options.cameraSpeed);
+            const travel = at(phrase.end) - at(phrase.start);
             const distance = 24 + travel * 1.3 + (constellation ? 12 : 0);
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -282,7 +289,7 @@
                     // far paler than their opacity suggests, so by day the words
                     // still to be sung are laid on more heavily.
                     rest: { value: palette.light ? 0.82 : 0.48 },
-                    accent: { value: new T.Color(palette.accent || '#f2a900') },
+                    accent: { value: sungColour() },
                     ink: { value: new T.Color(palette.ink || '#f2f0e9') },
                     cold: { value: new T.Color(palette.secondary || '#76bfae') },
                     ranges: { value: ranges }, starts: { value: starts }, ends: { value: ends }
@@ -602,7 +609,7 @@
                 if (!timeline) return;
                 camera?.updateMatrixWorld();
                 lastCamera = camera; lastDiagnosticTime = time;
-                const distance = timeline.distanceAt(time, options.cameraSpeed ?? 1);
+                const distance = track.addressAt ? track.addressAt(time) : timeline.distanceAt(time, options.cameraSpeed ?? 1);
                 // Hood lamps are a night thing, and they dim while a line is up.
                 // A line written on the sky is drawn over whatever stands behind
                 // it, and a lit board there would eat its contrast: while one is

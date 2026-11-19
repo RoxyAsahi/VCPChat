@@ -293,6 +293,9 @@ test('break scenes are planned in long silences only, and the camera moves into 
             const step = Math.hypot(pose.position.x - previous.position.x, pose.position.y - previous.position.y,
                 pose.position.z - previous.position.z);
             assert.ok(step < 0.25, `camera jumps ${step.toFixed(2)} m at ${t.toFixed(2)}`);
+            // Neither the train nor the camera ever goes back down the line.
+            assert.ok(pose.trainFront >= previous.trainFront - 1e-9, `the train runs backwards at ${t.toFixed(2)}`);
+            assert.ok(pose.distance >= previous.distance - 0.02, `the camera flies backwards at ${t.toFixed(2)}`);
             const turn = Math.abs(Math.atan2(Math.sin(pose.yaw - previous.yaw), Math.cos(pose.yaw - previous.yaw)));
             assert.ok(turn < 0.03, `camera whips ${turn.toFixed(3)} rad at ${t.toFixed(2)}`);
         }
@@ -310,7 +313,8 @@ test('each chorus is seen from somewhere else, and the train never runs through 
     const track = C.createTrack(timeline, 1, { aspect: 1.78 });
     const choruses = timeline.acts.filter(act => act.kind === 'Chorus');
     assert.equal(choruses.length, 3);
-    const held = choruses.map(act => C.pose(timeline, track, act.end - 2, { aspect: 1.78 }));
+    // Held a little before the end: before a short act the way back starts early.
+    const held = choruses.map(act => C.pose(timeline, track, act.end - 4, { aspect: 1.78 }));
     assert.deepEqual(plain(held.map(pose => pose.chaseRig)), ['QUARTER', 'BOW', 'ALONGSIDE']);
     const beside = pose => {
         const f = track.at(pose.distance);
@@ -347,6 +351,9 @@ test('each chorus is seen from somewhere else, and the train never runs through 
             const step = Math.hypot(pose.position.x - previous.position.x, pose.position.y - previous.position.y,
                 pose.position.z - previous.position.z);
             assert.ok(step < 0.25, `camera jumps ${step.toFixed(2)} m at ${t.toFixed(2)}`);
+            // Neither the train nor the camera ever goes back down the line.
+            assert.ok(pose.trainFront >= previous.trainFront - 1e-9, `the train runs backwards at ${t.toFixed(2)}`);
+            assert.ok(pose.distance >= previous.distance - 0.02, `the camera flies backwards at ${t.toFixed(2)}`);
             const turn = Math.abs(Math.atan2(Math.sin(pose.yaw - previous.yaw), Math.cos(pose.yaw - previous.yaw)));
             assert.ok(turn < 0.03, `camera whips ${turn.toFixed(3)} rad at ${t.toFixed(2)}`);
         }
