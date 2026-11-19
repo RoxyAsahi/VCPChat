@@ -1725,6 +1725,8 @@
             return finish();
         })();
         carGeometry.setAttribute('finish', new T.Float32BufferAttribute(carGeometry.userData.groups, 1));
+        // Which car leads, as an attribute per car rather than from the instance index.
+        carGeometry.setAttribute('carLead', new T.InstancedBufferAttribute(new Float32Array([1, 0, 0, 0]), 1));
         const carHorizon = { value: new T.Color('#9daebc') }, carWater = { value: new T.Color('#285a5e') };
         // Enamel under a clear lacquer: the physical model gives the coat its own sharp
         // reflection of the sky over the satin paint beneath.
@@ -1733,8 +1735,8 @@
         carMaterial.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal, paperDay: cabinDaylight });
             shader.vertexShader = shader.vertexShader
-                .replace('#include <common>', '#include <common>\nattribute float finish;varying vec3 vCarPaint;varying float vFinish,vCarLead;')
-                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;vCarLead=gl_InstanceID==0?1.0:0.0;');
+                .replace('#include <common>', '#include <common>\nattribute float finish,carLead;varying vec3 vCarPaint;varying float vFinish,vCarLead;')
+                .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;vCarLead=carLead;');
             shader.fragmentShader = shader.fragmentShader
                 .replace('#include <common>', `#include <common>
                     uniform vec3 carHorizon,carWater;
@@ -3207,6 +3209,7 @@
             saloon.position.set(j.x + dx / span * reach, 0, j.z + dz / span * reach);
             saloon.rotation.set(0, Math.atan2(-dx, -dz), 0);
         };
+        const cabEye = new T.Vector3();
         const paintTrain = (upper, lower, gear, roof) => {
             const trim = roof.clone().lerp(upper, 0.46);
             // The roof is dressed in dull roofing, near black; its equipment is a pale weathered grey.
@@ -4513,7 +4516,14 @@
             placeTrain(track, front, tuning.showTrain !== false && (pose.chase ?? 0) > 0.002);
             // From outside, at any distance, the real cab shows through clear windscreens,
             // so the glass never turns from clear to painted as the camera moves.
-            const outside = (pose.chase ?? 0) > 0.002 && (pose.saloon ?? 0) <= 0.002;
+            // Outside means the eye is not within the leading car's shell. The director
+            // raises pose.saloon a little before the camera goes in, so it cannot say.
+            placeSaloon(track, front, true);
+            saloon.updateMatrixWorld();
+            const eyeLocal = pose.position ? saloon.worldToLocal(cabEye.set(pose.position.x, pose.position.y ?? 0, pose.position.z)) : null;
+            const eyeInside = eyeLocal && Math.abs(eyeLocal.x) < CAR.half + 0.05 && eyeLocal.y < CAR.crown + 0.1
+                && eyeLocal.z > TIP - 0.1 && eyeLocal.z < CAR.length / 2 + 0.1;
+            const outside = (pose.chase ?? 0) > 0.002 && !eyeInside;
             cabReal.value = outside && tuning.showTrain !== false ? 1 : 0;
             // Beyond this reach only the shell and the cab are drawn: the seats, lamps and people are too small to miss.
             const CAB_FULL_REACH = 9;
