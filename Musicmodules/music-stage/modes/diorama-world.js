@@ -1731,7 +1731,7 @@
         const carMaterial = material(new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0, roughness: 0.5,
             clearcoat: 1, clearcoatRoughness: 0.12 }));
         carMaterial.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal });
+            Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal, paperDay: cabinDaylight });
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', '#include <common>\nattribute float finish;varying vec3 vCarPaint;varying float vFinish,vCarLead;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;vCarLead=gl_InstanceID==0?1.0:0.0;');
@@ -1739,7 +1739,7 @@
                 .replace('#include <common>', `#include <common>
                     uniform vec3 carHorizon,carWater;
                     uniform float wetness;
-                    uniform float cabReal;
+                    uniform float cabReal,paperDay;
                     varying vec3 vCarPaint;
                     varying float vFinish,vCarLead;
                     // The windscreen openings in the face, by their middle and half size across and up.
@@ -1884,6 +1884,9 @@
                 .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
                     // Only the lacquered enamel keeps a clear coat, dulled by the road dirt; rain glazes the rest.
                     material.clearcoat=clamp(enamel*(1.0-grime*0.7)*(1.0-chip)*(1.0-seam)*(0.5-0.15*cream)+wetness*(roofing+equipment)*0.8+wetPaint*0.25,0.0,1.0);
+                    // On the light page the paint keeps the colour it was given: the lacquer
+                    // would only lift it towards the white paper sky.
+                    material.clearcoat*=1.0-0.7*paperDay;
                     material.clearcoatRoughness=clamp(mix(0.14+micro*0.05,0.05,wetness),0.0,1.0);`)
                 .replace('#include <opaque_fragment>', `
                     // A wide cool highlight from the coast and a softer return from the water below.
@@ -1909,7 +1912,7 @@
                     outgoingLight+=carHorizon*wetPaint*(skyStrip*0.10+gloss*0.08+bead*(0.12+0.3*gloss)+rivulet*0.07*(0.4+skyStrip));
                     // Metal edges catch the sky as a crisp rim.
                     outgoingLight+=trim*carHorizon*(pow(1.0-facing,4.0)*0.22+skyStrip*0.06)*(1.0-scuff);
-                    outgoingLight+=reflectedCoast*sheen+(1.0-enamel-trim)*(1.0-roofing-rubber-grille)*carHorizon*gloss*0.022;
+                    outgoingLight+=reflectedCoast*sheen*(1.0-0.65*paperDay)+(1.0-enamel-trim)*(1.0-roofing-rubber-grille)*carHorizon*gloss*0.022;
                     #include <opaque_fragment>`);
         };
         const cars = instances(carMaterial, CARS, carGeometry);
@@ -2325,8 +2328,9 @@
                             // Close to the leading end the real cab is drawn behind the glass, so the
                             // pane keeps only what is on it: the reflection, its edge and the rain.
                             float edgeLine=(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim);
-                            float cover=clamp(fresnel*1.3+0.07,0.0,0.8);
-                            vec3 surface=mirror*vec3(0.92,1.0,0.96);
+                            // On the light page the glass gives back more of the paper sky, so the cab is a soft layer behind it.
+                            float cover=clamp(fresnel*1.3+0.07+0.3*day,0.0,0.8+0.05*day);
+                            vec3 surface=mix(mirror*vec3(0.92,1.0,0.96),cold,0.5*day);
                             surface=mix(surface,mirror*0.6+cold*0.35*dropRim,wet.z);
                             cover=max(cover,wet.z*(0.35+0.4*dropRim));
                             cover=max(cover,edgeLine*0.6);
@@ -2390,9 +2394,13 @@
             [1, 0.9, 'bag', 0.92], [-1, 2.3, 'rest', 1.08], [1, 4.9, 'doze', 0.96]
         ];
         const saloonGeometry = (() => {
-            const positions = [], normals = [], paints = [];
+            // Two lists: the shell and the cab, drawn at any distance through the
+            // windscreen, then the fittings, drawn only when the camera is close.
+            const lists = { coarse: [[], [], []], fine: [[], [], []] };
+            let coarse = false;
             const add = (shape, paint) => {
                 const flat = shape.index ? shape.toNonIndexed() : shape;
+                const [positions, normals, paints] = coarse ? lists.coarse : lists.fine;
                 positions.push(...flat.attributes.position.array);
                 normals.push(...flat.attributes.normal.array);
                 for (let i = 0; i < flat.attributes.position.count; i++) paints.push(paint);
@@ -2436,8 +2444,10 @@
             };
             const F = CAR.floor, WALL = CAR.half - 0.04, END = CAR.length / 2, TOP = CABIN.ceiling, SILL = 2.2, HEAD = 3.06;
             const BULKHEAD = TIP + 1.35, FRONT = TIP + 0.26;
+            coarse = true;
             boxAt(2.6, 0.06, CAR.length, 0, F - 0.03, 0, 3);
             boxAt(2.6, 0.06, CAR.length, 0, TOP + 0.03, 0, 6);
+            coarse = false;
             for (let lamp = 0; lamp < CABIN.lamps; lamp += 1) {
                 const z = CABIN.first + lamp * CABIN.pitch;
                 moulded(0.54, 0.035, 1.08, 0.011, 0, TOP - 0.018, z, 18);
@@ -2531,15 +2541,19 @@
             const doorMetal = sashRim(0.629, 0.856, 0.018, 0.077, 0.017).rotateY(Math.PI / 2);
             for (const side of [-1, 1]) {
                 const x = side * WALL;
+                coarse = true;
                 boxAt(0.08, SILL - F, CAR.length, x, (SILL + F) / 2, 0, 1);
                 boxAt(0.08, TOP - HEAD, CAR.length, x, (TOP + HEAD) / 2, 0, 0);
+                coarse = false;
                 moulded(0.088, 0.12, CAR.length - 0.15, 0.033, side * (WALL - 0.049), TOP - 0.065, 0, 18);
                 // The posts between one opening and the next.
                 let from = TIP;
                 for (const [a, b] of [...openings, [END, END]]) {
                     const bay = a - from;
                     if (bay > 0) {
+                        coarse = true;
                         boxAt(0.08, HEAD - SILL, bay, x, (HEAD + SILL) / 2, (a + from) / 2, 0);
+                        coarse = false;
                         moulded(0.033, HEAD - SILL + 0.047, bay - 0.013, 0.012,
                             side * (WALL - 0.042), (HEAD + SILL) / 2, (a + from) / 2, 18);
                     }
@@ -2649,6 +2663,7 @@
             // A rucksack and a parcel left up on the racks.
             boxAt(0.22, 0.17, 0.32, -(WALL - 0.17), 3.2, 0.4, 11);
             boxAt(0.22, 0.14, 0.3, WALL - 0.17, 3.18, -2.6, 10);
+            coarse = true;
             // Cab bulkhead and the front of the cab: a glazed door or pane in the middle, one either side.
             for (const [z, post, paint] of [[BULKHEAD, 0.12, 0], [FRONT, 0.09, 21]]) {
                 boxAt(2.6, SILL - F, 0.06, 0, (SILL + F) / 2, z, 1);
@@ -2739,9 +2754,11 @@
             moulded(0.97, 0.07, 0.05, 0.02, 0, F + 1.935, END - 0.08, 13);
             moulded(0.9, 0.012, 0.3, 0.004, 0, F + 0.006, END - 0.2, 4);
             const shape = new T.BufferGeometry();
+            const [positions, normals, paints] = [0, 1, 2].map(i => lists.coarse[i].concat(lists.fine[i]));
             shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
             shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
             shape.setAttribute('paint', new T.Float32BufferAttribute(paints, 1));
+            shape.userData.coarse = lists.coarse[2].length;
             return geometry(shape);
         })();
         const saloonMaterial = material(new T.ShaderMaterial({
@@ -4294,10 +4311,13 @@
             else glassMaterial.uniforms.shadowInk.value.set('#24212a');
             // Cream window band and the deep green body learn a little of the current theme.
             const ivory = new T.Color('#eed6a1').lerp(light ? surface : ink, light ? 0.46 : 0.19);
-            const green = new T.Color('#426b3f').lerp(luminous(secondary.clone()), light ? 0.26 : 0.22);
-            const runningGear = watercolour(new T.Color('#45443d').lerp(deep, light ? 0.08 : 0.40), 0, 0.25);
-            const roof = watercolour(new T.Color('#484f45').lerp(structure, 0.37), 0.2, 0.25);
-            paintTrain(ivory, watercolour(green, 0.3, 0.18), runningGear, roof);
+            const green = new T.Color('#426b3f').lerp(luminous(secondary.clone()), light ? 0.1 : 0.22);
+            // On the page the train is drawn in ink wash: a grey-green body a
+            // shade darker than the paper round it, and the gear under it in
+            // ink, not left blank where the haze reaches it.
+            const runningGear = watercolour(new T.Color('#33322e').lerp(deep, light ? 0.08 : 0.40), 0.1, 0);
+            const roof = watercolour(new T.Color('#484f45').lerp(structure, 0.37), 0.25, 0.12);
+            paintTrain(ivory, light ? watercolour(green, 0.5, 0.06) : green, runningGear, roof);
 
             carHorizon.value.copy(light ? surface : muted).lerp(secondary, 0.3);
             carWater.value.copy(secondary).lerp(deep, 0.31);
@@ -4491,14 +4511,20 @@
             headlight.position.set(ahead.position.x, 0.7, ahead.position.z);
             // From the cab the train is all behind the lens: nothing of it to draw.
             placeTrain(track, front, tuning.showTrain !== false && (pose.chase ?? 0) > 0.002);
-            // Within this reach of the nose the real cab shows through the windscreen.
-            const CAB_REAL_REACH = 16;
-            const nose = track.at(front - 1.2).position, eyeAt = pose.position;
+            // From outside, at any distance, the real cab shows through clear windscreens,
+            // so the glass never turns from clear to painted as the camera moves.
             const outside = (pose.chase ?? 0) > 0.002 && (pose.saloon ?? 0) <= 0.002;
-            cabReal.value = outside && eyeAt && Math.hypot(eyeAt.x - nose.x, (eyeAt.y ?? 0) - 2.2, eyeAt.z - nose.z) < CAB_REAL_REACH ? 1 : 0;
+            cabReal.value = outside && tuning.showTrain !== false ? 1 : 0;
+            // Beyond this reach only the shell and the cab are drawn: the seats, lamps and people are too small to miss.
+            const CAB_FULL_REACH = 16;
+            const nose = track.at(front - 1.2).position, eyeAt = pose.position;
+            const near = !outside || (eyeAt && Math.hypot(eyeAt.x - nose.x, (eyeAt.y ?? 0) - 2.2, eyeAt.z - nose.z) < CAB_FULL_REACH);
+            saloonGeometry.setDrawRange(0, near ? Infinity : saloonGeometry.userData.coarse);
             placeSaloon(track, front, tuning.showTrain !== false && ((pose.saloon ?? 0) > 0.002 || cabReal.value > 0));
-            // From outside the real cab's own inner panes would glaze the windscreen twice.
+            // From outside the real cab's own inner panes would glaze the windscreen twice,
+            // and the saloon is culled like any other mesh when it is out of view.
             innerGlass.visible = cabReal.value === 0;
+            saloon.frustumCulled = cabReal.value > 0;
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
