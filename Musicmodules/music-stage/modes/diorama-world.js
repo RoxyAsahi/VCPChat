@@ -670,6 +670,7 @@
             ink: look({ sheet: 'weathered', tile: 1.6, tone: TONE.ink, rough: 0.6, metal: 0.2 }),
             pale: look({ sheet: 'weathered', tile: 1.6, tone: TONE.pale, rough: 0.6, metal: 0.1 }),
             warm: look({ sheet: 'weathered', tile: 1.6, tone: TONE.warm, rough: 0.6, metal: 0.1 }),
+            warmTube: look({ sheet: 'weathered', tile: 1.6, tone: TONE.warm, rough: 0.6, metal: 0.1, bevel: 'round' }),
             nameboard: look({ sheet: 'nameboard', tone: TONE.pale, rough: 0.5, metal: 0, glow: 0.6, bevel: 0.004 }),
             timetable: look({ sheet: 'timetable', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
             route: look({ sheet: 'route', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
@@ -3155,12 +3156,17 @@
                 const { id, address, side } = pole;
                 const L = value => side * value;
                 const stagger = id % 2 ? 0.18 : -0.18;
-                part(concreteParts, address, L(POLE_OFFSET), 0.3, 0.6, 0.6, 0.6);
+                part(LOOK.concrete, address, L(POLE_OFFSET), 0.3, 0.6, 0.6, 0.6);
                 if (!saving) {
-                    // Base flange, the switch box on the far side, and the pole's number plate.
-                    part(steelParts, address, L(POLE_OFFSET), 0.63, 0.32, 0.06, 0.32);
-                    part(steelParts, address, L(POLE_OFFSET + 0.17), 1.45, 0.14, 0.42, 0.24);
-                    part(paleMarks, address, L(POLE_OFFSET - 0.115), 2.0, 0.012, 0.24, 0.1);
+                    // Base flange and its bolts, the louvred switch box on the far
+                    // side with its conduit, and the pole's number plate.
+                    part(LOOK.paint, address, L(POLE_OFFSET), 0.63, 0.32, 0.06, 0.32);
+                    for (const [bx, bz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]])
+                        part(LOOK.paint, address + bz, L(POLE_OFFSET + bx), 0.68, 0.04, 0.05, 0.04);
+                    part(LOOK.louvre, address, L(POLE_OFFSET + 0.17), 1.45, 0.14, 0.42, 0.24);
+                    part(LOOK.paint, address, L(POLE_OFFSET + 0.17), 1.68, 0.18, 0.04, 0.28);
+                    part(LOOK.tube, address, L(POLE_OFFSET + 0.13), 0.98, 0.035, 0.55, 0.035);
+                    part(LOOK.plate, address, L(POLE_OFFSET - 0.115), 2.0, 0.012, 0.24, 0.12);
                 }
                 if (pole.wired) {
                     part(masts, address, L(POLE_OFFSET), 4.3, 1, 7.4, 1);
@@ -3169,7 +3175,9 @@
                     span(steelParts, address, L(POLE_OFFSET), 7.85, L(1.4), 7.13, 0.03);
                     span(steelParts, address, L(POLE_OFFSET), 6.25, L(0.6), 6.95, 0.07);
                     span(steelParts, address, L(1.9), 6.6, stagger, CONTACT_Y + 0.05, 0.04);
-                    for (const y of [7.22, 6.3]) part(concreteParts, address, L(POLE_OFFSET - 0.42), y, 0.34, 0.15, 0.15);
+                    // Insulators: a stack of sheds on each tube where it meets the mast.
+                    for (const y of [7.22, 6.3]) for (let shed = 0; shed < 3; shed++)
+                        part(LOOK.coping, address, L(POLE_OFFSET - 0.3 - shed * 0.08), y + (y > 7 ? -0.01 : 0.012) * shed, 0.035, 0.15, 0.15);
                     part(steelParts, address, L(POLE_OFFSET), 7.93, 0.5, 0.05, 0.05);
                 } else part(masts, address, L(POLE_OFFSET), 2.55, 0.85, 3.9, 0.85);
                 // Over open water the camera flies at 5 to 7 m and the line is
@@ -3184,7 +3192,9 @@
                         span(steelParts, address, L(POLE_OFFSET), lampY - 0.4, L(LAMP_OFFSET + 0.3), lampY + 0.12, 0.025);
                         part(steelParts, address, L(POLE_OFFSET), lampY - 0.19, 0.2, 0.5, 0.2);
                     }
-                    part(steelParts, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
+                    // Hooded housing: a lid sloping off the front, the body, the lit diffuser under it.
+                    part(LOOK.paint, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
+                    part(LOOK.paint, address, L(LAMP_OFFSET - 0.02), lampY + 0.235, 0.7, 0.04, 0.24, side * 0.08);
                     part(glowParts, address, L(LAMP_OFFSET), lampY + 0.105, 0.66, 0.04, 0.2);
                     const hf = track.at(address);
                     haloPositions[haloCount * 3] = hf.position.x + hf.right.x * L(LAMP_OFFSET);
@@ -3196,8 +3206,8 @@
                 // A block signal on every eleventh pole, its lamp in the cold palette colour.
                 if (id % 11 === 5 && !saving && !dreaming && !atStation(address, side, 2) && !inSight(track, address, 2.3, side)) {
                     part(masts, address + 1.2, L(2.3), 1.9, 0.7, 3.8, 0.7);
-                    part(steelParts, address + 1.2, L(2.3), 3.55, 0.36, 1.0, 0.16);
-                    part(steelParts, address + 1.08, L(2.3), 3.86, 0.3, 0.04, 0.22);
+                    part(LOOK.ink, address + 1.2, L(2.3), 3.55, 0.36, 1.0, 0.16);
+                    part(LOOK.paint, address + 1.08, L(2.3), 3.86, 0.3, 0.04, 0.22);
                     part(coldGlowParts, address + 1.1, L(2.3), 3.72, 0.15, 0.15, 0.03);
                     part(steelParts, address + 1.08, L(2.3), 3.5, 0.3, 0.04, 0.22);
                     part(glowParts, address + 1.1, L(2.3), 3.36, 0.11, 0.11, 0.03);
@@ -3539,21 +3549,21 @@
                         // that lifts towards its ends.
                         const gate = lateral(15.5);
                         for (const z of [-2.9, 2.9]) {
-                            part(masts, address + z * 0.975, gate, 3.0, 3.1, 5.9, 3.1, 0, z > 0 ? 0.045 : -0.045);
+                            part(LOOK.warmTube, address + z * 0.975, gate, 3.0, 0.46, 5.9, 0.46, 0, z > 0 ? 0.045 : -0.045);
                             part(LOOK.concrete, address + z, gate, 0.16, 1.05, 0.5, 1.05);
                             part(LOOK.concrete, address + z, gate, 0.5, 0.82, 0.18, 0.82);
                             part(steelParts, address + z * 0.96, gate, 4.92, 0.6, 0.05, 0.16);
                         }
-                        part(steelParts, address, gate, 4.7, 0.22, 0.38, 7.5);
-                        part(steelParts, address, gate, 5.27, 0.18, 0.76, 0.3);
-                        part(timberParts, address, lateral(15.36), 5.27, 0.05, 0.84, 0.58);
-                        part(steelParts, address, gate, 5.8, 0.36, 0.3, 6.9);
-                        part(steelParts, address, gate, 6.08, 0.54, 0.2, 4.4);
+                        part(LOOK.warm, address, gate, 4.7, 0.22, 0.38, 7.5);
+                        part(LOOK.warm, address, gate, 5.27, 0.18, 0.76, 0.3);
+                        part(LOOK.timber, address, lateral(15.36), 5.27, 0.05, 0.84, 0.58);
+                        part(LOOK.warm, address, gate, 5.8, 0.36, 0.3, 6.9);
+                        part(LOOK.warm, address, gate, 6.08, 0.54, 0.2, 4.4);
                         for (const end of [-1, 1]) {
-                            part(steelParts, address + end * 3.3, gate, 6.17, 0.54, 0.2, 2.3, 0, end * 0.08);
-                            part(steelParts, address + end * 3.3, gate, 6.3, 0.62, 0.05, 2.34, 0, end * 0.08);
+                            part(LOOK.warm, address + end * 3.3, gate, 6.17, 0.54, 0.2, 2.3, 0, end * 0.08);
+                            part(LOOK.ink, address + end * 3.3, gate, 6.3, 0.62, 0.05, 2.34, 0, end * 0.08);
                         }
-                        part(steelParts, address, gate, 6.2, 0.62, 0.05, 4.44);
+                        part(LOOK.ink, address, gate, 6.2, 0.62, 0.05, 4.44);
                         part(coldGlowParts, address, gate, 4.3, 0.2, 0.3, 0.2);
                         part(steelParts, address, gate, 4.47, 0.26, 0.04, 0.26);
                     }
@@ -3646,18 +3656,18 @@
                 const address = cell * crossingPitch + spacing * 5.5;
                 if ([-1, 1].some(side => atStation(address, side, 10)) || dreamAt(address) > 0.3) continue;
                 crossings.push(address);
-                part(timberParts, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
+                part(LOOK.timber, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
                 for (const side of [-1, 1]) {
                     const L = value => side * value;
-                    part(concreteParts, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
-                    span(concreteParts, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
+                    part(LOOK.concrete, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
+                    span(LOOK.concrete, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
                     for (const edge of [-1, 1]) {
-                        part(concreteParts, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
+                        part(LOOK.concrete, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
                         // The road's edge line, and a guard rail down the ramp.
                         part(paleMarks, address + edge * (ROAD - 0.22), L(2.0), 0.406, 2.4, 0.012, 0.1);
-                        span(steelParts, address + edge * (ROAD + 0.1), L(5.5), 0.86, L(8.1), 0.36, 0.05, 0.05);
+                        span(LOOK.tube, address + edge * (ROAD + 0.1), L(5.5), 0.86, L(8.1), 0.36, 0.06, 0.06);
                         for (const post of [5.6, 6.8, 8.0])
-                            part(steelParts, address + edge * (ROAD + 0.1), L(post), 0.5 - (post - 5.6) * 0.19, 0.06, 0.7, 0.06);
+                            part(LOOK.tube, address + edge * (ROAD + 0.1), L(post), 0.5 - (post - 5.6) * 0.19, 0.07, 0.7, 0.07);
                     }
                     // The stop line.
                     part(paleMarks, address, L(3.05), 0.406, 0.28, 0.012, ROAD * 2 - 0.5);
@@ -3666,26 +3676,26 @@
                     // The road stays; its signal and barrier give way to the camera.
                     if (inTheWay(post, L(3.6), 3.7, 1.3, 5)) continue;
                     const tall = !inSight(track, post, 3.3, side, 4);
-                    part(concreteParts, post, at, 0.34, 0.5, 0.5, 0.5);
+                    part(LOOK.concrete, post, at, 0.34, 0.5, 0.5, 0.5);
                     part(masts, post, at, tall ? 2.0 : 1.4, 0.95, tall ? 2.9 : 1.7, 0.95);
-                    for (const band of [0.85, 1.25]) part(concreteParts, post, at, band, 0.2, 0.2, 0.2);
+                    for (const band of [0.85, 1.25]) part(LOOK.stripes, post, at, band, 0.2, 0.2, 0.2);
                     // Two lamps side by side on a dark board, each under its hood.
-                    part(steelParts, post, at, 1.95, 0.07, 0.38, 0.98);
+                    part(LOOK.ink, post, at, 1.95, 0.07, 0.38, 0.98);
                     for (const lamp of [-0.27, 0.27]) {
                         part(signalLamps, post + lamp, at, 1.95, 0.13, 0.21, 0.21);
-                        part(steelParts, post + lamp, at, 2.09, 0.3, 0.03, 0.27);
+                        part(LOOK.ink, post + lamp, at, 2.09, 0.3, 0.03, 0.27);
+                        part(LOOK.ink, post + lamp, at, 1.95, 0.24, 0.26, 0.26);
                     }
                     if (tall) {
                         // The crossed boards, and the bell on top.
-                        for (const lean of [-0.6, 0.6]) part(concreteParts, post, at, 2.72, 0.045, 0.15, 1.28, 0, lean);
-                        part(steelParts, post, at, 3.5, 0.24, 0.16, 0.24);
+                        for (const lean of [-0.6, 0.6]) part(LOOK.stripes, post, at, 2.72, 0.045, 0.15, 1.28, 0, lean);
+                        part(LOOK.paint, post, at, 3.5, 0.24, 0.16, 0.24);
+                        part(LOOK.ink, post, at, 3.4, 0.14, 0.06, 0.14);
                     }
                     // The barrier machine and its arm, down across the road in bands of light and dark.
-                    part(steelParts, post, L(3.85), 0.78, 0.34, 0.8, 0.5);
-                    for (let band = 0; band < 6; band++) {
-                        part(band % 2 ? concreteParts : steelParts, post + side * (0.45 + band * 0.85), L(3.85),
-                            1.08, 0.07, 0.07, 0.85);
-                    }
+                    part(LOOK.louvre, post, L(3.85), 0.78, 0.34, 0.8, 0.5);
+                    part(LOOK.paint, post, L(3.85), 1.2, 0.4, 0.05, 0.56);
+                    part(LOOK.stripes, post + side * 2.6, L(3.85), 1.08, 0.08, 0.08, 4.3);
                     part(signalLamps, post + side * 3.0, L(3.85), 0.98, 0.07, 0.09, 0.09);
                     rock(address - side * (ROAD + 1.6), L(7.4), 0.75, cell * 2.4 + side);
                     rock(address + side * (ROAD + 1.1), L(6.1), 0.5, cell * 1.3 - side);
