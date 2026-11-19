@@ -3038,6 +3038,128 @@
         const halos = new T.Points(haloGeometry, haloMat);
         halos.frustumCulled = false;
         root.add(halos);
+        /*
+         * Where the sea has come over the line the train wades: its nose pushes
+         * a wave out to either side, the wheels throw spray that the lamps and
+         * windows catch, and a band of foam closes behind it. All of it is soft
+         * points, laid out again each frame from the train's place and speed.
+         */
+        const SPLASH = { bow: 2 * 180, wheels: 8 * 2 * 26, hull: 2 * 110, wake: 360 };
+        const SPLASH_MAX = SPLASH.bow + SPLASH.wheels + SPLASH.hull + SPLASH.wake;
+        const splashPositions = new Float32Array(SPLASH_MAX * 3), splashLooks = new Float32Array(SPLASH_MAX * 2);
+        const splashGeometry = geometry(new T.BufferGeometry());
+        splashGeometry.setAttribute('position', new T.BufferAttribute(splashPositions, 3).setUsage(T.DynamicDrawUsage));
+        splashGeometry.setAttribute('look', new T.BufferAttribute(splashLooks, 2).setUsage(T.DynamicDrawUsage));
+        splashGeometry.setDrawRange(0, 0);
+        const splashSeeds = (() => {
+            const r = seededRandom('wading');
+            return Float32Array.from({ length: SPLASH_MAX * 4 }, () => r());
+        })();
+        const splashTint = { value: new T.Color('#dfe6e8') };
+        const splashMaterial = material(new T.ShaderMaterial({
+            transparent: true, depthWrite: false,
+            uniforms: { tint: splashTint, pixelRatio: { value: 1 } },
+            vertexShader: `attribute vec2 look;uniform float pixelRatio;varying float vAlpha;
+                void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;
+                    float d=max(0.5,-mv.z);
+                    gl_PointSize=clamp(look.x*1500.0/d,1.5,14.0)*pixelRatio;
+                    vAlpha=look.y*(1.0-smoothstep(60.0,120.0,d));}`,
+            fragmentShader: `uniform vec3 tint;varying float vAlpha;
+                void main(){vec2 p=gl_PointCoord*2.0-1.0;float r=dot(p,p);
+                    if(r>1.0)discard;
+                    float a=min(1.0,vAlpha*exp(-r*3.0));
+                    gl_FragColor=vec4(tint,a);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }`
+        }));
+        const splash = new T.Points(splashGeometry, splashMaterial);
+        splash.frustumCulled = false;
+        splash.name = 'splash';
+        root.add(splash);
+        let splashSpeed = 0, splashFront = null, splashTime = 0, wading = 0;
+        const wade = (track, pose, time, level, saving, visible) => {
+            const front = pose.trainFront ?? pose.distance;
+            // The train's own pace along the line, steadied over a few frames.
+            let speed = splashSpeed;
+            if (track.trainAt) speed = (track.trainAt(time + 0.15) - track.trainAt(time - 0.15)) / 0.3;
+            else if (splashFront !== null && time > splashTime && time - splashTime < 0.5)
+                speed = splashSpeed * 0.85 + 0.15 * (front - splashFront) / (time - splashTime);
+            splashFront = front; splashTime = time; splashSpeed = speed;
+            // The rail head is at 0.41: nothing until the water is over it.
+            wading = visible ? smooth((level - 0.3) / 0.12) * smooth(Math.abs(speed) / 7) : 0;
+            splash.visible = wading > 0.01;
+            if (!splash.visible) return;
+            const night = !palBase?.light;
+            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 1.1 : 1.08);
+            if (night) splashTint.value.lerp(roomGlow, 0.25);
+            splashMaterial.uniforms.pixelRatio.value = haloMat.uniforms.pixelRatio.value;
+            const share = saving ? 0.5 : 1;
+            const pace = Math.min(1.6, Math.abs(speed) / 12);
+            let n = 0;
+            const put = (address, lateral, y, size, alpha) => {
+                const f = track.at(address);
+                splashPositions[n * 3] = f.position.x + f.right.x * lateral;
+                splashPositions[n * 3 + 1] = y;
+                splashPositions[n * 3 + 2] = f.position.z + f.right.z * lateral;
+                splashLooks[n * 2] = size;
+                splashLooks[n * 2 + 1] = alpha * wading;
+                n++;
+            };
+            const seed = (i, k) => splashSeeds[i * 4 + k];
+            let i = 0;
+            // The bow wave: two arms opening back from the nose, longer the faster it goes.
+            const arm = 5 + 9 * pace, spread = 0.36;
+            for (let k = 0; k < SPLASH.bow; k++, i++) {
+                if (seed(i, 3) > share) continue;
+                const side = k % 2 ? 1 : -1;
+                const u = (seed(i, 0) + time * 0.6 * pace) % 1;
+                const behind = u * arm;
+                put(front - behind + 0.3, side * (1.25 + behind * spread + (seed(i, 1) - 0.5) * 0.25),
+                    level + 0.03 + (1 - u) * 0.08, 0.05 + (1 - u) * 0.05, (1 - u) * (0.55 + 0.4 * seed(i, 2)));
+            }
+            // Spray off the wheels: each bogie throws drops out and up, and the
+            // train runs on from under them so they trail back as they fall.
+            const bogies = [];
+            for (let car = 0; car < CARS; car++) {
+                const set = car >> 1, second = car % 2 === 1;
+                const joint = front - set * SET_PITCH - CAR.length - CAR.joint / 2;
+                bogies.push(joint + (second ? -1 : 1) * (CAR.length / 2 + CAR.joint / 2 + CAR.bogie));
+                if (!second) bogies.push(joint);
+            }
+            const perWheel = SPLASH.wheels / 16;
+            for (let w = 0; w < 16; w++) for (let k = 0; k < perWheel; k++, i++) {
+                const at = bogies[w >> 1];
+                if (at === undefined || seed(i, 3) > share) continue;
+                const side = w % 2 ? 1 : -1;
+                const life = (seed(i, 0) + time * (1.6 + seed(i, 1))) % 1;
+                const flight = life * 0.55;
+                const out = 0.9 + (1.2 + seed(i, 2) * 1.4) * pace * flight;
+                const up = (1.8 + seed(i, 1) * 1.6) * pace * flight - 4.9 * flight * flight;
+                put(at - speed * flight * 0.85 + (seed(i, 2) - 0.5) * 2.2, side * out,
+                    level + Math.max(0, up), 0.012 + 0.016 * seed(i, 0), (1 - life) * 0.7);
+            }
+            // Churned water along the sides of the train.
+            const length = SET_PITCH * CARS / 2;
+            for (let k = 0; k < SPLASH.hull; k++, i++) {
+                if (seed(i, 3) > share) continue;
+                const side = k % 2 ? 1 : -1;
+                const along = (seed(i, 0) * length + time * 0.4) % length;
+                put(front - along, side * (1.35 + seed(i, 1) * 0.35), level + 0.02, 0.04 + seed(i, 2) * 0.03,
+                    0.2 + 0.25 * Math.sin(time * 3 + seed(i, 2) * 30) ** 2);
+            }
+            // The wake: foam left behind the last car, spreading and fading.
+            const tail = front - length, trail = 18 + 30 * pace;
+            for (let k = 0; k < SPLASH.wake; k++, i++) {
+                if (seed(i, 3) > share) continue;
+                const u = Math.pow(seed(i, 0), 0.7), behind = u * trail;
+                const width = 1.3 + behind * 0.12;
+                put(tail - behind, (seed(i, 1) * 2 - 1) * width, level + 0.015, 0.07 + u * 0.08,
+                    (1 - u) * (0.3 + 0.35 * seed(i, 2)));
+            }
+            splashGeometry.setDrawRange(0, n);
+            splashGeometry.attributes.position.needsUpdate = splashGeometry.attributes.look.needsUpdate = true;
+        };
         // --- Rain (stage setting: off / light / heavy) ---
         // Streaks fall through a box that travels with the camera but stays
         // put in the world, so they slide past as the camera moves. All of the
@@ -3560,6 +3682,8 @@
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - (lookingBack ? 114 : 24) + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
+            wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            splash.layers.set(saving ? 1 : 0);
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
                 flyGulls(track, s, time);
@@ -4441,7 +4565,8 @@
                 haloMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
             },
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
-            snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
+            snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
+                wading, splashPoints: splash.visible ? splashGeometry.drawRange.count : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
