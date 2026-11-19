@@ -1,0 +1,91 @@
+/*
+ * 音乐窗口共享设计令牌（档案阵列 + 底栏控件 + 面板）。
+ * 默认是深色；浅色跟随 VCPChat 的 body.light-theme。
+ * 只放变量，不放选择器样式。三处界面都只读这里的变量，别各自定义主色。
+ *
+ * 前缀约定：
+ *   --ar-*  档案阵列页（3D 曲目卡阵列和浮在上面的文字）
+ *   --md-*  底栏胶囊、快捷行、把手、统一面板、正在播放卡片
+ *   --mt-*  两边共用的字体、动效、层级
+ */
+body {
+  /* 共用 */
+  --mt-font-archive: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mt-font-ui: ui-sans-serif, system-ui, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --mt-ease: cubic-bezier(.22, 1, .36, 1);
+  --mt-ease-std: cubic-bezier(.4, 0, .2, 1);
+  --mt-z-archive: 1;       /* 3D 画布 */
+  --mt-z-archive-hud: 5;   /* 浮在阵列上的文字 */
+  --mt-z-dock: 60;         /* 底栏胶囊、把手 */
+  --mt-z-panel: 59;
+  --mt-z-popover: 70;
+
+  /* 档案阵列（深色） */
+  --ar-paper: #11181b;
+  --ar-paper-rgb: 17, 24, 27;
+  --ar-ink: #e0e3dc;
+  --ar-muted: #a6b0b1;
+  --ar-line: #536166;
+  --ar-accent: #c5a16b;
+  --ar-rule: #536166;
+  --ar-square: #e0e3dc;
+  --ar-hover: #2a363b;
+  --ar-key: #536166;
+  /* 3D 场景颜色（JS 读 getComputedStyle 取用） */
+  --ar-card: #3b4448;
+  --ar-floor: #192125;
+  --ar-badge: #5d676b;
+  --ar-groove: #4a5559;
+
+  /* 底栏控件与面板（深色） */
+  --md-tp: rgb(244, 244, 245);
+  --md-tp-rgb: 244, 244, 245;
+  --md-on-tp: rgb(9, 9, 11);
+  --md-accent: #f4f4f5;
+  --md-on-accent: #18181b;
+  --md-raise: rgba(255, 255, 255, .18);
+  --md-knob: #ececee;
+  --md-menu: #2b2b30;
+  --md-glass: rgba(28, 28, 31, .8);
+  --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .09);
+  --md-like: #f2607a;
+  --md-edge: rgba(255, 255, 255, .09);
+  --md-capsule-bg: rgba(0, 0, 0, .2);
+  --md-capsule-bg-open: rgba(0, 0, 0, .4);
+  --md-pill-bg: rgba(0, 0, 0, .35);
+  --md-handle-bg: rgba(0, 0, 0, .4);
+}
+
+body.light-theme {
+  --ar-paper: #eae5e1;
+  --ar-paper-rgb: 234, 229, 225;
+  --ar-ink: #080a08;
+  --ar-muted: #77756d;
+  --ar-line: #aaa59a;
+  --ar-accent: #9b7247;
+  --ar-rule: #504b41;
+  --ar-square: #282a24;
+  --ar-hover: #e4d5c1;
+  --ar-key: #a6a49c;
+  --ar-card: #efe1cf;
+  --ar-floor: #d8c9b9;
+  --ar-badge: #8e8981;
+  --ar-groove: #b9ab9a;
+
+  --md-tp: rgb(28, 25, 23);
+  --md-tp-rgb: 28, 25, 23;
+  --md-on-tp: rgb(245, 245, 244);
+  --md-accent: #ea580c;
+  --md-on-accent: #fff;
+  --md-raise: #ffffff;
+  --md-knob: #ffffff;
+  --md-menu: #ffffff;
+  --md-glass: rgba(244, 244, 245, .8);
+  --md-panel-shadow: 0 30px 80px rgba(0, 0, 0, .24), 0 0 0 1px rgba(0, 0, 0, .06);
+  --md-like: #e0354f;
+  --md-edge: rgba(0, 0, 0, .06);
+  --md-capsule-bg: rgba(255, 255, 255, .4);
+  --md-capsule-bg-open: rgba(255, 255, 255, .6);
+  --md-pill-bg: rgba(255, 255, 255, .35);
+  --md-handle-bg: rgba(255, 255, 255, .7);
+}
