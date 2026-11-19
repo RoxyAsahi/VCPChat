@@ -3456,6 +3456,8 @@
             rainClock = now;
             rainLevel += Math.max(-step, Math.min(step, wanted - rainLevel));
             rainAmount.value = rainLevel;
+            // Ground, platforms and fittings darken and shine as they get wet.
+            wetness.value = rainLevel;
             const count = Math.round((RAIN_COUNTS[tier] ?? RAIN_COUNTS.standard) * rainLevel);
             rainDrops.visible = count > 0;
             rainGeometry.setDrawRange(0, count * 6);
@@ -3611,6 +3613,8 @@
                 return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
             };
             drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
+            waterLevel = drownLevel;
+            water.position.y = waterLevel;
             // Where the camera is as it goes by an address: how far out to one
             // side of the line, and how high. In the cab it is on the line.
             if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
