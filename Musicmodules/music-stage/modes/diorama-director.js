@@ -115,9 +115,18 @@
         return phrases;
     };
 
+    const CREDIT = /^\s*(作词|作詞|作曲|编曲|編曲|词|詞|曲|填词|制作人|監製|监制|混音|和声|演唱|歌|原唱|翻唱|lyrics?|lyricist|composer|composed by|written by|arranger|arranged by|producer|vocals?)\s*[:：]/i;
+    // How long before the end of the music the arrival begins, at the latest.
+    const TERMINUS = 20;
     const compile = (input = {}) => {
-        const lines = (input.lines || []).filter(line => Number.isFinite(line.startTime))
+        const sorted = (input.lines || []).filter(line => Number.isFinite(line.startTime))
             .slice().sort((a, b) => a.startTime - b.startTime);
+        // Credit lines ahead of the first sung line (lyricist, composer...) are
+        // not sung: they would take the opening ride in the car and put a
+        // screen up for a name. They are left to the lyric panel.
+        const credit = line => CREDIT.test(String(line.fullText ?? line.text ?? ''));
+        const firstSung = sorted.findIndex(line => !credit(line));
+        const lines = firstSung > 0 ? sorted.slice(firstSung) : sorted;
         const seed = String(input.trackId || 'last-train');
         const lastEnd = lines.reduce((end, line) => Math.max(end, vocalEnd(line),
             finiteNumber(line.renderHints?.renderEndTime, 0)), 0);
@@ -143,8 +152,19 @@
                 const end = Math.min(next, Math.max(vocalEnd(line),
                     finiteNumber(line.renderHints?.renderEndTime, vocalEnd(line))));
                 push(kinds[index], line.startTime, index === lines.length - 1 || next - end > 6 ? end : next);
-                if (index === lines.length - 1) push('Terminus', end, duration);
-                else if (next - end > 6) push('Interlude', end, next);
+                if (index === lines.length - 1) {
+                    // Lyrics that stop long before the music (a short version's
+                    // words on the full track) leave the journey going: the
+                    // camera takes turns riding along and rising over the water,
+                    // and only the last stretch of the song is the arrival.
+                    let cursor = end;
+                    for (let turn = 0; duration - TERMINUS - cursor > 20; turn++) {
+                        const length = Math.min(28, duration - TERMINUS - cursor);
+                        push(turn % 2 ? 'Open' : 'Interlude', cursor, cursor + length);
+                        cursor += length;
+                    }
+                    push('Terminus', cursor, duration);
+                } else if (next - end > 6) push('Interlude', end, next);
             });
         }
         if (!acts.length) push('Open', 0, duration);

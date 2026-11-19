@@ -2303,12 +2303,14 @@
             carHorizon.value.copy(light ? surface : muted).lerp(secondary, 0.3);
             carWater.value.copy(secondary).lerp(deep, 0.31);
             cabinDaylight.value = light ? 1 : 0;
+            // By day the inside of the car is lit from the windows, not by its lamps.
             glassMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
+            if (light) glassMaterial.uniforms.warm.value.copy(surface).lerp(lamp, 0.2);
             glassMaterial.uniforms.seat.value.copy(secondary).multiplyScalar(0.3);
             if (light) { const hsl = glassMaterial.uniforms.seat.value.getHSL({});
                 glassMaterial.uniforms.seat.value.setHSL(hsl.h, hsl.s * 0.55, hsl.l * 1.25); }
             glassMaterial.uniforms.night.value.copy(deep).multiplyScalar(0.5);
-            endMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
+            endMaterial.uniforms.warm.value.copy(glassMaterial.uniforms.warm.value);
             cabinGlow.color.copy(emission);
             starMat.uniforms.tint.value.copy(light ? surface : ink).lerp(tertiary, 0.08);
             baseStarOpacity = light ? 0.15 : 0.8;
