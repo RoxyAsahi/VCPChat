@@ -590,6 +590,8 @@
             roll, fov, eventFocus, finale,
             // How far the saloon has to be there to be seen or passed through.
             saloon: inside ? inside.raised : 0,
+            // How much of the picture is the lit saloon itself, for the lens.
+            cabinView: inside ? inside.weight : 0,
             scene: staged && staged.weight > 0 ? { id: staged.scene.id, kind: staged.scene.kind, weight: staged.weight } : null,
             shot: openness > 0.6 ? 'rising-traverse' : 'window-tracking',
             rig: !motion ? 'CAB' : staged && staged.weight > 0.5 ? staged.scene.kind : rig,

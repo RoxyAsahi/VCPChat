@@ -274,6 +274,10 @@ test('break scenes are planned in long silences only, and the camera moves into 
     const inside = C.pose(timeline, track, middle, { aspect: 1.78 });
     assert.equal(inside.rig, 'SALOON');
     assert.ok(inside.saloon > 0.99);
+    // The lens is told when the picture is the lit saloon, and only then.
+    assert.ok(inside.cabinView > 0.99);
+    const outside = track.scenes.find(scene => scene.kind === 'TRACKSIDE');
+    assert.equal(C.pose(timeline, track, (outside.start + outside.end) / 2, { aspect: 1.78 }).cabinView, 0);
     const back = inside.trainFront - inside.distance;
     assert.ok(Math.abs(back + 0.4) < 1e-9, 'the train stays where the cab view left it');
     const car = track.at(inside.distance - 8);

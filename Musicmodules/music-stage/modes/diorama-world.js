@@ -3909,9 +3909,11 @@
             cabinDaylight.value = light ? 1 : 0;
             // By day the inside of the car is lit from the windows, not by its lamps.
             glassMaterial.uniforms.warm.value.copy(emission).lerp(white, 0.18);
-            if (light) glassMaterial.uniforms.warm.value.copy(surface).lerp(lamp, 0.2);
+            // By day too the saloon keeps the warm white of its own strips and the
+            // full green of its moquette: the page washes the world, not the car.
+            if (light) glassMaterial.uniforms.warm.value.set('#f3dfb8').lerp(surface, 0.3);
             glassMaterial.uniforms.seat.value.copy(secondary).multiplyScalar(0.3);
-            if (light) glassMaterial.uniforms.seat.value.copy(watercolour(secondary, 0.4, 0.2)).multiplyScalar(0.45);
+            if (light) glassMaterial.uniforms.seat.value.copy(secondary).multiplyScalar(0.36);
             glassMaterial.uniforms.night.value.copy(deep).multiplyScalar(0.5);
             endMaterial.uniforms.warm.value.copy(glassMaterial.uniforms.warm.value);
             cabinGlow.color.copy(emission);
