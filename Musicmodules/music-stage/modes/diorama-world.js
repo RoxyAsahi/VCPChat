@@ -2300,8 +2300,8 @@
                 for (const sign of [-1, 1]) {
                     const foot = sign * 0.084;
                     limb(parts, [0.025, 0.09, foot], [0.37, 0.07, foot], 0.084);
-                    limb(parts, [0.37, 0.08, foot], [0.41, -0.47, foot], 0.061);
-                    parts.push(oval(0.117, 0.046, 0.065, 0.47, -0.476, foot));
+                    limb(parts, [0.37, 0.08, foot], [0.41, -0.39, foot], 0.061);
+                    parts.push(oval(0.117, 0.046, 0.065, 0.47, -0.4, foot));
                     const elbow = [0.055, 0.23, sign * 0.18];
                     const grip = pose === 'rest' ? [0.31, 0.19, sign * 0.11] : [0.25, 0.33, sign * 0.07];
                     limb(parts, [0, shoulder - 0.09, sign * 0.15], elbow, 0.058);
@@ -2309,7 +2309,7 @@
                 }
                 if (pose === 'bag') parts.push(oval(0.105, 0.129, 0.16, 0.24, 0.22, 0));
                 if (pose === 'read') parts.push(new T.BoxGeometry(0.16, 0.016, 0.23).rotateZ(0.42).translate(0.3, 0.33, 0));
-                placeFigure(parts, side * (WALL - 0.36), F + 0.54, z, side > 0 ? Math.PI : 0);
+                placeFigure(parts, side * (WALL - 0.36), F + 0.46, z, side > 0 ? Math.PI : 0);
             };
             const stander = () => {
                 const parts = [];
@@ -2382,22 +2382,22 @@
                     for (let i = 0; i < seats; i++) {
                         const z = a + bay * (i + 0.5);
                         // A thick cushion with a rolled front edge, a fuller back with a roll along its top.
-                        moulded(0.57, 0.165, bay - 0.006, 0.072, side * (WALL - 0.3), F + 0.445, z, 2);
+                        moulded(0.56, 0.16, bay - 0.006, 0.052, side * (WALL - 0.3), F + 0.37, z, 2);
                     }
                     // The back is one long upholstered piece the length of the bench, rolled along its top.
-                    add(roundedPanel(0.19, 0.34, run - 0.01, 0.075).rotateZ(-side * 0.12)
-                        .translate(side * (WALL - 0.13), F + 0.68, middle), 2);
-                    add(roundedPanel(0.12, 0.085, run - 0.01, 0.042)
-                        .translate(side * (WALL - 0.075), F + 0.8, middle), 2);
-                    moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.575), F + 0.378, middle, 19);
-                    moulded(0.40, 0.355, run, 0.022, side * (WALL - 0.24), F + 0.19, middle, 18);
-                    moulded(0.05, 0.03, run, 0.012, side * (WALL - 0.445), F + 0.352, middle, 4);
-                    moulded(0.016, 0.29, run - 0.06, 0.006, side * (WALL - 0.442), F + 0.183, middle, 16);
+                    add(roundedPanel(0.2, 0.42, run - 0.01, 0.08).rotateZ(-side * 0.1)
+                        .translate(side * (WALL - 0.135), F + 0.635, middle), 2);
+                    add(roundedPanel(0.13, 0.08, run - 0.01, 0.04)
+                        .translate(side * (WALL - 0.08), F + 0.81, middle), 2);
+                    moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.57), F + 0.3, middle, 19);
+                    moulded(0.40, 0.29, run, 0.022, side * (WALL - 0.24), F + 0.155, middle, 18);
+                    moulded(0.05, 0.03, run, 0.012, side * (WALL - 0.445), F + 0.285, middle, 4);
+                    moulded(0.016, 0.25, run - 0.06, 0.006, side * (WALL - 0.442), F + 0.15, middle, 16);
                     boxAt(0.02, 0.022, run, side * (WALL - 0.452), F + 0.011, middle, 13);
                     // Polished strips between the three slotted bands of the heater cover.
-                    for (const y of [-0.137, -0.045, 0.045, 0.137]) {
+                    for (const y of [-0.117, -0.039, 0.039, 0.117]) {
                         add(new T.CylinderGeometry(0.0055, 0.0055, run - 0.07, 6).rotateX(Math.PI / 2)
-                            .translate(side * (WALL - 0.452), F + 0.183 + y, middle), 4);
+                            .translate(side * (WALL - 0.452), F + 0.15 + y, middle), 4);
                     }
                     // Luggage rack: tubes on brackets, not a shelf.
                     for (let out = 0.05; out < 0.34; out += 0.037) {
@@ -2409,21 +2409,29 @@
                         boxAt(0.02, 0.14, 0.02, side * (WALL - 0.05), 3.02, z, 4);
                     }
                     for (const end of [a, b]) {
-                        const aisle = side * (WALL - 0.58);
+                        // The bench end: under the seat a mirror-polished panel, an upside-down
+                        // trapezoid (full depth at the top, cut back towards the floor); above the
+                        // seat nothing but the grab rail, a post that bends over to the wall, and a
+                        // bar from the post to the wall at seat height.
+                        const aisle = side * (WALL - 0.6), at = u => side * (WALL - u);
+                        const outline = new T.Shape();
+                        [[0.02, F + 0.035], [0.47, F + 0.035], [0.585, F + 0.28], [0.02, F + 0.28]]
+                            .forEach(([u, y], i) => (i ? outline.lineTo(at(u), y) : outline.moveTo(at(u), y)));
+                        add(new T.ExtrudeGeometry(outline, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.004,
+                            bevelSize: 0.004, bevelSegments: 2 }).translate(0, 0, end - 0.006), 4);
                         const rail = new T.CatmullRomCurve3([
-                            [aisle, F + 0.03], [aisle, F + 0.86], [aisle + side * 0.05, F + 1.04],
-                            [aisle + side * 0.2, F + 1.12], [side * (WALL - 0.05), F + 1.14],
+                            [aisle, F + 0.02], [aisle, F + 0.74], [aisle + side * 0.025, F + 0.84],
+                            [aisle + side * 0.12, F + 0.895], [at(0.05), F + 0.9],
                         ].map(([rx, y]) => new T.Vector3(rx, y, end)), false, 'centripetal');
-                        add(new T.TubeGeometry(rail, 20, 0.019, 8, false), 20);
-                        // A cross bar from the post to the wall at arm height, over the screen.
-                        add(new T.CylinderGeometry(0.015, 0.015, 0.5, 8).rotateZ(Math.PI / 2)
-                            .translate(side * (WALL - 0.31), F + 0.83, end), 20);
-                        // Stainless screen at the bench end, up inside the curve of the rail, on a dark kick strip.
-                        moulded(0.52, 0.76, 0.03, 0.026, side * (WALL - 0.3), F + 0.43, end, 20);
-                        moulded(0.51, 0.055, 0.036, 0.01, side * (WALL - 0.3), F + 0.045, end, 13);
-                        add(new T.CylinderGeometry(0.034, 0.042, 0.03, 12).translate(aisle, F + 0.015, end), 4);
-                        add(new T.CylinderGeometry(0.03, 0.03, 0.1, 10).rotateZ(Math.PI / 2)
-                            .translate(side * (WALL - 0.03), F + 1.14, end), 4);
+                        add(new T.TubeGeometry(rail, 24, 0.017, 10, false), 4);
+                        add(new T.CylinderGeometry(0.0145, 0.0145, 0.55, 10).rotateZ(Math.PI / 2)
+                            .translate(at(0.325), F + 0.43, end), 4);
+                        // Floor flange under the post, wall roses where the bars meet the wall.
+                        add(new T.CylinderGeometry(0.03, 0.038, 0.018, 14).translate(aisle, F + 0.009, end), 4);
+                        for (const y of [F + 0.43, F + 0.9]) {
+                            add(new T.CylinderGeometry(0.03, 0.03, 0.03, 12).rotateZ(Math.PI / 2)
+                                .translate(at(0.035), y, end), 4);
+                        }
                     }
                 }
                 add(new T.CylinderGeometry(0.015, 0.015, CAR.length - 2.6, 10).rotateX(Math.PI / 2)
@@ -2581,7 +2589,7 @@
                     float tx=((dx>0.0?1.24:-1.24)-o.x)/dx,ty=((dy>0.0?CEILING:FLOOR)-o.y)/dy;
                     float tz=far>0.0?(far-o.z)/dz:1e4;if(tz<0.0)tz=1e4;
                     float t=max(min(min(tx,ty),tz),0.0);vec3 p=o+d*t,c;
-                    vec3 green=mix(mix(seat,vec3(0.11,0.27,0.028),0.8),mix(seat,vec3(0.36,0.52,0.30),0.55),day);
+                    vec3 green=mix(seat,vec3(0.15,0.31,0.014),0.85);
                     if(t==tz){
                         // The far end: cream, with the dark of the next gangway.
                         c=cream*0.6*lamp;
@@ -2628,7 +2636,7 @@
                     return lit*smoothstep(0.0,0.25,facing);
                 }
                 void main(){
-                    vec3 cream=mix(vec3(0.62,0.55,0.42),vec3(0.74,0.70,0.61),day);
+                    vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.74,0.70,0.58),day);
                     vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
                     vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
                     // What the metal sees: the lamps, fading at sunset to the amber of the windows.
@@ -2650,8 +2658,8 @@
                     else if(vPaint<1.5)c=cream*0.43;
                     else if(vPaint<2.5){
                         // Looped wool catches grazing light along the rolled edge.
-                        vec3 moquette=mix(seat,vec3(0.11,0.27,0.028),0.8*(1.0-day));
-                        moquette=mix(moquette,mix(seat,vec3(0.36,0.52,0.30),0.55),day);
+                        vec3 moquette=mix(seat,vec3(0.15,0.31,0.014),0.85*(1.0-day));
+                        moquette=mix(moquette,vec3(0.15,0.31,0.014),0.85*day);
                         vec2 fibre=vec2(vPos.z,vPos.x+vPos.y)*vec2(284.0,321.0);
                         float fibreFade=1.0-smoothstep(0.7,3.4,max(fwidth(fibre.x),fwidth(fibre.y)));
                         vec4 cloth=texture2D(detail,vec2(vPos.z,vPos.y+vPos.x)*vec2(4.6,4.6));
@@ -2679,25 +2687,26 @@
                         vec2 woodUv=vec2((floor(sampleId*9.0)+0.30+fract(board)*0.40)/9.0,
                             vPos.z*0.63+sampleId*4.1);
                         float scanned=texture2D(boards,woodUv).r;
-                        float patina=mix(1.0,mix(0.695,1.29,scanned),boardsReady);
+                        float patina=mix(1.0,mix(0.8,1.18,scanned),boardsReady);
                         float scuff=texture2D(detail,vPos.xz*vec2(0.9,0.22)).b;
                         patina*=mix(0.86,1.12,scuff)*(1.0-0.16*smoothstep(0.75,1.2,abs(vPos.x))*(1.0-scuff));
-                        c=mix(vec3(0.36,0.25,0.14),vec3(0.42,0.33,0.22),day)*mix(1.0,tone+0.095*wood-0.09*grainDetail,fade)
+                        c=mix(vec3(0.33,0.285,0.21),vec3(0.42,0.33,0.22),day)*mix(1.0,0.5+0.5*tone+0.05*wood-0.05*grainDetail,fade)
                             *(1.0-0.40*max(seam,butt)*fade)*(0.89+0.19*wear)*patina;
                         vec3 r=reflect(-v,n);
-                        shine=reflectTubes(vPos,r,0.22)*(0.03+0.2*pow(max(1.0-r.y,0.0),2.4))
+                        // The varnish holds a long soft streak of each lamp row down the aisle.
+                        shine=reflectTubes(vPos,r,0.32)*(0.05+0.3*pow(max(1.0-r.y,0.0),2.4))
                             *(1.0-0.36*seam*fade)*mix(1.0,0.6,wear);
                     }else if(vPaint<4.5){
                         // Polished chrome: it is the car, seen bent round the tube.
                         vec3 reflected=reflect(-v,n);
                         float grazing=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0);
                         c=vec3(0.06,0.062,0.065);
-                        env=cabinScene(vPos+n*0.02,reflected,cream,seen,0.0)*(0.72+0.28*grazing);
+                        env=mix(cabinScene(vPos+n*0.02,reflected,cream,seen,0.0),cream*seen*0.5,0.35)*(0.72+0.28*grazing);
                         chrome=0.9;
                         shine=reflectTubes(vPos,reflected,0.06)*1.1;
                     }
                     else if(vPaint<5.5)c=light*2.8;
-                    else if(vPaint<6.5)c=cream*(0.46+0.9*tubes(vPos.xz,0.3))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
+                    else if(vPaint<6.5)c=cream*(mix(0.3,0.46,day)+mix(1.15,0.9,day)*tubes(vPos.xz,0.3))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
                     else if(vPaint<7.5){
                         // The open gangway: through the bellows into the next car, in perspective.
                         vec3 d=-v,o=vPos+d*(0.7/max(d.z,0.05))-vec3(0.0,0.0,${CAR.length.toFixed(2)}+0.7);
@@ -2770,19 +2779,19 @@
                     }else if(vPaint<16.5){
                         // The heater cover under the bench: glossy cream sheet with three
                         // bands of long slots, each band two rows staggered like brickwork.
-                        float y=vPos.y-(FLOOR+0.183);
-                        float bandC=clamp(floor(y/0.09+0.5),-1.0,1.0)*0.09;
+                        float y=vPos.y-(FLOOR+0.15);
+                        float bandC=clamp(floor(y/0.078+0.5),-1.0,1.0)*0.078;
                         float u=y-bandC,band=abs(u);
-                        float inBand=1.0-smoothstep(0.029,0.032,band);
+                        float inBand=1.0-smoothstep(0.025,0.028,band);
                         float row=step(0.0,u);
-                        vec2 cell=vec2(vPos.z/0.058+row*0.5+bandC*2.8,0.0);
-                        vec2 slot=vec2((fract(cell.x)-0.5)*0.058,u-(row*2.0-1.0)*0.0135);
-                        vec2 d=abs(slot)-vec2(0.021,0.0042);
+                        vec2 cell=vec2(vPos.z/0.058+row*0.5+bandC*3.2,0.0);
+                        vec2 slot=vec2((fract(cell.x)-0.5)*0.058,u-(row*2.0-1.0)*0.012);
+                        vec2 d=abs(slot)-vec2(0.02,0.0042);
                         float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0035;
                         float soft=max(fwidth(vPos.z),fwidth(vPos.y))*1.2;
                         float hole=(1.0-smoothstep(-soft,soft,sd))*inBand;
                         hole=mix(hole,0.34*inBand,smoothstep(0.25,1.0,fwidth(cell.x)*2.0));
-                        float frame=1.0-smoothstep(0.0,0.003+soft,abs(band-0.031));
+                        float frame=1.0-smoothstep(0.0,0.003+soft,abs(band-0.027));
                         c=cream*mix(0.78,0.7,inBand)*(1.0-0.12*frame);
                         c=mix(c,vec3(0.012,0.012,0.014),hole);
                         shine=reflectTubes(vPos,reflect(-v,n),0.12)*0.22*(1.0-hole);
@@ -2790,7 +2799,7 @@
                         float slot=abs(fract(vPos.x*33.0)-0.5);
                         float slat=smoothstep(0.23,0.35+fwidth(vPos.x)*16.0,slot+n.x*0.016);
                         float lip=1.0-smoothstep(0.012,0.064,abs(slot-0.34));
-                        c=cream*mix(0.059,0.52,slat)+light*lip*0.035;
+                        c=cream*mix(0.22,0.6,slat)+light*lip*0.035;
                     }else if(vPaint>21.5){
                         // Hand straps: white moulded grips on pale bands.
                         c=cream*0.86+vec3(0.03);
@@ -2806,11 +2815,14 @@
                         vec3 r=reflect(-v,n);
                         float low=smoothstep(-0.35,0.25,r.y)*smoothstep(FLOOR+0.03,FLOOR+0.4,vPos.y);
                         c=mix(vec3(0.30,0.21,0.12),mix(cream*0.62,vec3(0.56,0.58,0.6),0.5),low)*grain;
-                        // Brushed: the reflection is drawn out along the grain, so take it twice, spread.
-                        vec3 along=normalize(cross(n,vec3(1.0,0.0,0.0))+vec3(1e-4));
-                        env=(cabinScene(vPos+n*0.02,normalize(r+along*0.16),cream,seen,0.0)
-                            +cabinScene(vPos+n*0.02,normalize(r-along*0.16),cream,seen,0.0))*0.5*grain;
-                        chrome=0.55;
+                        // Brushed: too rough for a picture, it holds the floor's warmth below,
+                        // the wall across, the lit roof above, and a bright line along its top.
+                        vec3 floorTone=mix(vec3(0.33,0.285,0.21),vec3(0.42,0.33,0.22),day)*seen*0.8;
+                        vec3 soft=mix(floorTone,cream*0.62*seen,smoothstep(-0.45,0.05,r.y));
+                        soft=mix(soft,cream*seen*1.1,smoothstep(0.25,0.8,r.y));
+                        float lip=smoothstep(FLOOR+0.57,FLOOR+0.625,vPos.y);
+                        env=(soft*(0.85+0.15*grain)+seen*lip*0.6)*0.9;
+                        chrome=0.8;
                         shine=reflectTubes(vPos,r,0.14)*0.45;
                     }else{
                         c=mix(seat,vec3(0.061,0.084,0.035),0.58)*0.66;
@@ -2819,7 +2831,7 @@
                     // Two tube rows and a cooler ambient contribution entering through the windows.
                     float direct=(tubeLux(vPos,n,-1.0)+tubeLux(vPos,n,1.0))*0.77*(1.0-0.72*sunset);
                     float wall=1.0-smoothstep(0.93,1.27,abs(vPos.x))*smoothstep(2.8,3.18,vPos.y)*0.24;
-                    vec3 fill=mix(vec3(0.105,0.082,0.066),vec3(0.42,0.48,0.52),day);
+                    vec3 fill=mix(vec3(0.075,0.072,0.045),vec3(0.40,0.38,0.32),day);
                     fill*=0.70+0.30*smoothstep(FLOOR,2.7,vPos.y);
                     float windowFill=smoothstep(0.35,1.24,abs(vPos.x))
                         *(1.0-smoothstep(0.22,1.22,abs(vPos.y-2.55)));
@@ -2828,7 +2840,7 @@
                     fill=mix(fill,mix(vec3(0.20,0.105,0.06),vec3(0.46,0.42,0.36),day)*(0.75+0.25*windowFill),sunset*0.85);
                     float lit=wall;
                     // Corners gather shadow: where the walls meet the floor and the ceiling.
-                    if(!floorboards)lit*=0.78+0.22*smoothstep(FLOOR,FLOOR+0.35,vPos.y);
+                    if(!floorboards)lit*=0.55+0.45*smoothstep(FLOOR,FLOOR+0.3,vPos.y);
                     else lit*=1.0-0.3*smoothstep(1.02,1.25,abs(vPos.x));
                     lit*=1.0-0.22*smoothstep(3.05,3.32,vPos.y)*smoothstep(1.05,1.26,abs(vPos.x));
                     if(vPaint<2.5||enamel){
@@ -2837,7 +2849,7 @@
                     }
                     // Under the benches the floor is in their shadow.
                     float bench=step(-3.65,vPos.z)*step(vPos.z,2.9)+step(4.2,vPos.z);
-                    if(floorboards)lit*=mix(1.0,1.0-0.55*smoothstep(0.6,0.92,abs(vPos.x)),bench);
+                    if(floorboards)lit*=mix(1.0,1.0-0.78*smoothstep(0.62,0.9,abs(vPos.x)),bench);
                     // Whoever sits on a bench darkens it under and behind them, and the floor at their feet.
                     float sat=0.0,stood=0.0;
                     if(cushion||floorboards){
@@ -2850,11 +2862,18 @@
                         }
                     }
                     if(cushion){
-                        float crease=exp(-abs(vPos.y-(FLOOR+0.53))*25.0)*smoothstep(0.92,1.12,abs(vPos.x));
+                        float crease=exp(-abs(vPos.y-(FLOOR+0.45))*25.0)*smoothstep(0.92,1.12,abs(vPos.x));
                         lit*=(1.0-0.42*sat)*(1.0-0.37*crease);
                     }
                     sat*=1.0-empty;stood*=1.0-empty;
                     if(floorboards){lit*=1.0-0.4*stood;shine*=1.0-0.7*stood;}
+                    // By night the lamps are up by the roof: what is low down is in their dusk,
+                    // the underside of a cushion is dark, and its rolled top shines like satin.
+                    if(!floorboards&&!cushion&&vPaint<15.5||vPaint>16.5)lit*=mix(mix(0.6,1.06,smoothstep(FLOOR+0.35,CEILING-0.1,vPos.y)),1.0,day*0.6);
+                    if(cushion){
+                        lit*=0.5+0.5*smoothstep(-0.7,0.35,n.y)+0.25*smoothstep(0.5,0.95,n.y);
+                        shine=max(shine,reflectTubes(vPos,reflect(-v,n),0.45)*0.22*smoothstep(0.2,0.9,n.y));
+                    }
                     vec3 lamp=light*(0.15*(1.0-0.6*sunset)+direct);
                     vec3 colour=c*lit*(fill+lamp)+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12)*(1.0-0.5*sunset);
                     colour=mix(colour,env+shine*light*0.5,chrome);
@@ -2867,7 +2886,7 @@
                         const float B[16]=float[](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
                         ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.0));
                         if((B[cell.x+cell.y*4]+0.5)/16.0<empty)discard;
-                        colour=mix(c*0.83,c*0.83+sunlight*0.05*sunset,0.5);
+                        colour=mix(c*0.83,cream*light*0.1*(0.6+0.4*smoothstep(-0.3,0.8,n.y)),0.4*(1.0-day))+sunlight*0.03*sunset;
                     }
                     gl_FragColor=vec4(colour*power*0.82,1.0);
                     #include <tonemapping_fragment>
