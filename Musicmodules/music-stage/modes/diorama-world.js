@@ -260,6 +260,8 @@
         const windowLight = tinted(5), roomGlow = new T.Color();
         // A ceiling with lamps under it: far dimmer than a lamp, and one even tone.
         const litSurface = tinted(6), ceilingGlow = new T.Color();
+        // A buoy's light, a short wink every few seconds, and the red paint under it.
+        const beacons = tinted(7), signalBody = tinted(8);
         const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow];
         Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glow })
             .forEach(([name, mesh]) => { mesh.name = name; });
@@ -2078,7 +2080,7 @@
         water.rotation.x = -Math.PI / 2;
         root.add(water);
         // Additive lamp halos: one soft point per lit lamp, reflected by the mirror pass too.
-        const haloPositions = new Float32Array(48 * 3);
+        const haloPositions = new Float32Array(64 * 3);
         const haloGeometry = geometry(new T.BufferGeometry());
         haloGeometry.setAttribute('position', new T.BufferAttribute(haloPositions, 3).setUsage(T.DynamicDrawUsage));
         haloGeometry.setDrawRange(0, 0);
@@ -2182,6 +2184,7 @@
         let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1;
         // The lamps of a crossing light in turn, a little faster than once a second.
         const signalLit = new T.Color(SIGNAL_RED).multiplyScalar(3.2), signalDark = new T.Color(SIGNAL_RED).multiplyScalar(0.06);
+        const buoyPaint = new T.Color(SIGNAL_RED).multiplyScalar(0.09);
         const tintGlow = time => {
             const turn = Math.floor(time * 2.2) & 1;
             // By day a window is only a little warmer than the wall it is in.
@@ -2196,7 +2199,11 @@
                     // Every third is the lamp on a barrier arm, lit with whichever is nearer.
                     glow.setColorAt(i, signal % 3 === 2 || signal % 3 === turn ? signalLit : signalDark);
                     signal++;
-                } else glow.setColorAt(i, kind === 0 ? lampMaterial.color : kind === 1 ? coldLampMaterial.color
+                } else if (kind === 7) {
+                    // Each buoy keeps its own time, so they do not wink together.
+                    glow.setColorAt(i, (time * 0.31 + i * 0.37) % 1 < 0.14 ? signalLit : signalDark);
+                } else if (kind === 8) glow.setColorAt(i, buoyPaint);
+                else glow.setColorAt(i, kind === 0 ? lampMaterial.color : kind === 1 ? coldLampMaterial.color
                     : kind === 3 ? warmPaint : kind === 4 ? palePaint : kind === 5 ? roomGlow : ceilingGlow);
             }
             glow.instanceColor.needsUpdate = true;
@@ -2990,6 +2997,55 @@
                     }
                 }
             }
+            // --- Out on the water: squid boats under their lamps, and channel buoys ---
+            // A boat works the dark well off the line, a row of bare bulbs strung
+            // over its deck from bow to stern; the water doubles every one of them.
+            for (let cell = Math.floor((s - 80) / 95); cell <= Math.floor((s + 320) / 95) && enabled && !saving; cell++) {
+                if (cell < 0) continue;
+                const random = seededRandom(`isaribi:${cell}`);
+                if (random() > 0.55) continue;
+                const address = cell * 95 + random() * 40;
+                const side = random() > 0.5 ? 1 : -1, reach = 32 + random() * 40;
+                const lateral = side * reach, length = 10 + random() * 3, bulbs = 7 + Math.floor(random() * 3);
+                // Farther out than any screen stands, so a boat can only ever be behind one.
+                const bow = random() > 0.5 ? 1 : -1;
+                // Hull, its sheer stepping up to the bow, wheelhouse aft, masts fore and aft.
+                part(concreteParts, address, lateral, 0.35, 2.7, 0.75, length);
+                part(concreteParts, address + bow * length * 0.36, lateral, 0.86, 2.4, 0.3, length * 0.26);
+                part(steelParts, address, lateral, 0.76, 2.76, 0.06, length + 0.04);
+                part(concreteParts, address - bow * length * 0.3, lateral, 1.45, 1.8, 1.5, 2.2);
+                part(windowLight, address - bow * (length * 0.3 - 1.12), lateral, 1.62, 1.3, 0.42, 0.02);
+                for (const end of [-0.42, 0.4]) part(steelParts, address + bow * length * end, lateral, 2.2, 0.09, 3.6, 0.09);
+                // The lamp wire runs between the masts, a bulb under it every metre or so.
+                part(steelParts, address - bow * length * 0.01, lateral, 3.55, 0.03, 0.03, length * 0.82);
+                for (let i = 0; i < bulbs; i++) {
+                    const along = address + bow * length * (-0.38 + 0.76 * (i + 0.5) / bulbs);
+                    part(glowParts, along, lateral, 3.32, 0.24, 0.3, 0.24);
+                    // Every other bulb throws a halo, so the row reads from far off.
+                    if (i % 2 === 0 && haloCount < haloPositions.length / 3) {
+                        const f = track.at(along);
+                        haloPositions.set([f.position.x + f.right.x * lateral, 3.2, f.position.z + f.right.z * lateral], haloCount * 3);
+                        haloCount++;
+                    }
+                }
+            }
+            // Buoys mark the channel along the line, a red light winking on each.
+            for (let cell = Math.floor((s - 60) / 130); cell <= Math.floor((s + 260) / 130) && enabled && !saving; cell++) {
+                if (cell < 0) continue;
+                const random = seededRandom(`buoy:${cell}`);
+                if (random() > 0.7) continue;
+                const address = cell * 130 + random() * 50, side = poleSide(track, address, random() > 0.5 ? 1 : -1);
+                const reach = 15 + random() * 10, lateral = side * reach;
+                if (atStation(address, side, 20) || inSight(track, address, reach, side, 3)
+                    || inTheWay(address, lateral, 3, 1.2)) continue;
+                part(steelParts, address, lateral, 0.15, 1.3, 0.7, 1.3);
+                part(signalBody, address, lateral, 0.62, 0.9, 0.3, 0.9);
+                for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]])
+                    part(steelParts, address + z, lateral + x, 1.35, 0.05, 1.3, 0.05, x * 0.35, -z * 0.35);
+                part(steelParts, address, lateral, 2.02, 0.42, 0.05, 0.42);
+                part(beacons, address, lateral, 2.2, 0.2, 0.28, 0.2);
+            }
+            haloGeometry.setDrawRange(0, haloCount);
             tintGlow(time);
             updateLights(track, s, saving, audio);
             sceneryPools.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
