@@ -187,6 +187,10 @@
         const wordsRunOut = lines.length && duration - lastEnd > 30 ? lastEnd : Infinity;
         const dreamStart = Math.max(duration * 0.35, Math.min(secondChorus, wordsRunOut, duration * 0.6));
         const dreamAt = time => smooth((clamp(time, 0, duration) - dreamStart + 6) / 36);
+        // And it sets out at dusk: the afterglow fades by the first chorus.
+        const firstChorus = acts.find(act => act.kind === 'Chorus')?.start ?? duration * 0.3;
+        const duskEnd = clamp(firstChorus, Math.min(25, duration * 0.5), duration * 0.4);
+        const duskAt = time => 1 - smooth(clamp(time, 0, duration) / duskEnd);
         const sample = time => {
             const t = clamp(time, 0, duration);
             const index = Math.max(0, upperBound(acts, t, 'start') - 1);
@@ -196,7 +200,7 @@
             const params = {};
             for (const key of Object.keys(act.params)) params[key] = mix(previous.params[key], act.params[key], blend);
             if (act.kind === 'Departure') params.speed *= smooth(t / Math.max(1, act.end));
-            return { ...params, act: act.kind, actIndex: index, visit: act.visit, blend, dream: dreamAt(t) };
+            return { ...params, act: act.kind, actIndex: index, visit: act.visit, blend, dream: dreamAt(t), dusk: duskAt(t) };
         };
         // Fixed offline quadrature: sample order, refresh rate and seeks cannot
         // change distance. Long recordings retain a bounded integration table.
@@ -262,7 +266,7 @@
         return {
             seed, seedHash: hashString(seed), lines, duration, acts, cuts,
             phrases: compilePhrases(lines), beats, rhythmSource, protectedIntervals,
-            sample, distanceAt, isSinging, dreamStart, dreamAt,
+            sample, distanceAt, isSinging, dreamStart, dreamAt, duskEnd,
             // Chapter accent: a one-shot swell entering each chorus / open passage.
             // Pure function of time, so seeking mid-swell reproduces the same frame.
             accentAt(time) {

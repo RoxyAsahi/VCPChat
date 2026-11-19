@@ -83,6 +83,8 @@
         // How wet the line is after rain, 0 to 1: surfaces darken, flat ones
         // turn glossy and hold standing water that gives back the lamps.
         const wetness = { value: 0 };
+        // Where the sea stands: what is in it is darker and glossy up to a tide line just above.
+        const tideLine = { value: 0 };
         // Boards are laid along the longer side of whatever they clad, an
         // edge of the piece falling on a gap between two boards.
         const grained = bed => {
@@ -528,7 +530,7 @@
         const dressSky = { value: new T.Color() };
         dressedMaterial.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, { dressSheet: { value: sheetTexture }, dressTones: { value: dressTones },
-                dressSky, wetness, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
+                dressSky, wetness, tideLine, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
             shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
                 attribute vec3 inset;
                 attribute vec4 dressRect, dressLook, dressCut;
@@ -565,7 +567,7 @@
                 uniform sampler2D dressSheet;
                 uniform vec3 dressSky;
                 uniform vec4 dressPuddles;
-                uniform float wetness;
+                uniform float wetness, tideLine;
                 varying vec3 vDressWorld, vDressUp;
                 float dressPuddle = 0.0;
                 varying vec2 vDressUv;
@@ -580,6 +582,8 @@
                     dressTexel = textureGrad(dressSheet, vDressRect.xy + cell * vDressRect.zw,
                         dFdx(vDressUv) * grad, dFdy(vDressUv) * grad).rgb;
                     diffuseColor.rgb = vDressTone * dressTexel.r * 1.3 * (1.0 - vDressGlow * dressTexel.b);
+                    float soaked = 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y);
+                    diffuseColor.rgb *= 1.0 - 0.45 * soaked * (1.0 - vDressGlow);
                     if (wetness > 0.0) {
                         // Water stands in the low, stained patches of anything flat and open to the sky.
                         float level = smoothstep(0.8, 0.95, vDressUp.y);
@@ -589,7 +593,8 @@
                     }
                 }`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));`)
+                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));
+                roughnessFactor = mix(roughnessFactor, 0.2, 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y));`)
                 .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                 metalnessFactor = vDressMetal;`)
                 .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -670,6 +675,7 @@
             ink: look({ sheet: 'weathered', tile: 1.6, tone: TONE.ink, rough: 0.6, metal: 0.2 }),
             pale: look({ sheet: 'weathered', tile: 1.6, tone: TONE.pale, rough: 0.6, metal: 0.1 }),
             warm: look({ sheet: 'weathered', tile: 1.6, tone: TONE.warm, rough: 0.6, metal: 0.1 }),
+            warmTube: look({ sheet: 'weathered', tile: 1.6, tone: TONE.warm, rough: 0.6, metal: 0.1, bevel: 'round' }),
             nameboard: look({ sheet: 'nameboard', tone: TONE.pale, rough: 0.5, metal: 0, glow: 0.6, bevel: 0.004 }),
             timetable: look({ sheet: 'timetable', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
             route: look({ sheet: 'route', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
@@ -680,6 +686,7 @@
                 look({ sheet, tone: TONE.poster, rough: 0.3, metal: 0, glow: 1, bevel: 0.002 })),
             lamp: look({ tone: TONE.lamp, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
             coldLamp: look({ tone: TONE.cold, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
+            lantern: look({ tone: TONE.lamp, rough: 0.6, metal: 0, glow: 0.45, bevel: 0.06 }),
             window: look({ tone: TONE.room, rough: 0.4, metal: 0, glow: 1, bevel: 0.002 }),
             figure: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.04 }),
             head: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.07 })
@@ -931,7 +938,7 @@
         // How the saloon feels: low sun through the windows, the car emptying of
         // people, and the straps swinging with the ride. The director can set
         // pose.cabinSunset and pose.cabinEmpty (0 to 1); the stage tuning can too.
-        const cabinMood = { sunset: { value: 0 }, empty: { value: 0 }, clock: { value: 0 }, sway: { value: 1 } };
+        const cabinMood = { sunset: { value: 0 }, empty: { value: 0 }, clock: { value: 0 }, sway: { value: 1 }, rain: { value: 0 } };
         /*
          * A small detail map made here, not loaded: R is woven pile for the
          * seats, G brushed streaks for stainless, B soft grime and wear, A a
@@ -2346,16 +2353,22 @@
                         const z = a + bay * (i + 0.5);
                         // A thick cushion with a rolled front edge, a fuller back with a roll along its top.
                         moulded(0.57, 0.165, bay - 0.006, 0.072, side * (WALL - 0.3), F + 0.445, z, 2);
-                        add(roundedPanel(0.19, 0.34, bay - 0.004, 0.075).rotateZ(-side * 0.12)
-                            .translate(side * (WALL - 0.13), F + 0.68, z), 2);
-                        add(roundedPanel(0.12, 0.085, bay - 0.004, 0.042)
-                            .translate(side * (WALL - 0.075), F + 0.8, z), 2);
                     }
+                    // The back is one long upholstered piece the length of the bench, rolled along its top.
+                    add(roundedPanel(0.19, 0.34, run - 0.01, 0.075).rotateZ(-side * 0.12)
+                        .translate(side * (WALL - 0.13), F + 0.68, middle), 2);
+                    add(roundedPanel(0.12, 0.085, run - 0.01, 0.042)
+                        .translate(side * (WALL - 0.075), F + 0.8, middle), 2);
                     moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.575), F + 0.378, middle, 19);
                     moulded(0.40, 0.355, run, 0.022, side * (WALL - 0.24), F + 0.19, middle, 18);
                     moulded(0.05, 0.03, run, 0.012, side * (WALL - 0.445), F + 0.352, middle, 4);
                     moulded(0.016, 0.29, run - 0.06, 0.006, side * (WALL - 0.442), F + 0.183, middle, 16);
                     boxAt(0.02, 0.022, run, side * (WALL - 0.452), F + 0.011, middle, 13);
+                    // Polished strips between the three slotted bands of the heater cover.
+                    for (const y of [-0.137, -0.045, 0.045, 0.137]) {
+                        add(new T.CylinderGeometry(0.0055, 0.0055, run - 0.07, 6).rotateX(Math.PI / 2)
+                            .translate(side * (WALL - 0.452), F + 0.183 + y, middle), 4);
+                    }
                     // Luggage rack: tubes on brackets, not a shelf.
                     for (let out = 0.05; out < 0.34; out += 0.037) {
                         add(new T.CylinderGeometry(0.006, 0.006, run, 6).rotateX(Math.PI / 2)
@@ -2477,6 +2490,10 @@
             // The inner end, and the dark of the gangway through to the next car.
             boxAt(2.6, TOP - F, 0.06, 0, (TOP + F) / 2, END - 0.03, 0);
             boxAt(0.84, 1.9, 0.02, 0, F + 0.95, END - 0.07, 7);
+            // A dark rubber frame round the open gangway, and a threshold plate.
+            for (const x of [-0.45, 0.45]) moulded(0.07, 1.95, 0.05, 0.02, x, F + 0.975, END - 0.08, 13);
+            moulded(0.97, 0.07, 0.05, 0.02, 0, F + 1.935, END - 0.08, 13);
+            moulded(0.9, 0.012, 0.3, 0.004, 0, F + 0.006, END - 0.2, 4);
             const shape = new T.BufferGeometry();
             shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
             shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
@@ -2526,6 +2543,37 @@
                     float t=(TUBE_Y-p.y)/ray.y;
                     return tubes(p.xz+ray.xz*t,width)*smoothstep(0.0,0.15,t)*(1.0-smoothstep(5.0,10.0,t));
                 }
+                // The car as a box seen along a ray: lamp strips on a cream ceiling, cream
+                // walls with dark windows over green benches and slotted heaters, the
+                // honey floor. Polished metal reflects it; the open gangway looks into it.
+                vec3 cabinScene(vec3 o,vec3 d,vec3 cream,vec3 lamp,float far){
+                    float dx=abs(d.x)<1e-4?1e-4:d.x,dy=abs(d.y)<1e-4?1e-4:d.y,dz=abs(d.z)<1e-4?1e-4:d.z;
+                    float tx=((dx>0.0?1.24:-1.24)-o.x)/dx,ty=((dy>0.0?CEILING:FLOOR)-o.y)/dy;
+                    float tz=far>0.0?(far-o.z)/dz:1e4;if(tz<0.0)tz=1e4;
+                    float t=max(min(min(tx,ty),tz),0.0);vec3 p=o+d*t,c;
+                    vec3 green=mix(mix(seat,vec3(0.11,0.27,0.028),0.8),mix(seat,vec3(0.36,0.52,0.30),0.55),day);
+                    if(t==tz){
+                        // The far end: cream, with the dark of the next gangway.
+                        c=cream*0.6*lamp;
+                        c=mix(c,vec3(0.02,0.022,0.03),step(abs(p.x),0.42)*step(p.y,FLOOR+1.9));
+                    }else if(ty<tx){
+                        if(dy>0.0){
+                            float vent=step(abs(p.x),0.25)*step(0.5,fract(p.x*30.0));
+                            c=cream*(0.55-0.25*vent)*lamp+lamp*tubes(p.xz,0.06)*2.6;
+                        }else{
+                            float joint=step(0.93,fract(p.x/0.11));
+                            c=mix(vec3(0.36,0.25,0.14),vec3(0.42,0.33,0.22),day)*(0.95-0.4*joint)*lamp*0.75;
+                        }
+                    }else{
+                        float y=p.y-FLOOR;
+                        float w=abs(fract((p.z+2.95)/1.25+0.5)-0.5)*1.25;
+                        float glass=step(w,0.47)*step(2.24,p.y)*step(p.y,3.02);
+                        if(y<0.37)c=cream*0.5*lamp;
+                        else if(y<0.86)c=green*1.2*lamp;
+                        else c=mix(cream*0.66*lamp,mix(sky*0.35,sky*0.9,day),glass);
+                    }
+                    return mix(c,cream*0.42*lamp,smoothstep(6.0,16.0,t)*0.6);
+                }
                 // Low sun from the left of the car, through the side windows: whether a
                 // point can see it, traced back to the glass, with the sash rail across it.
                 const vec3 SUN_TO=normalize(vec3(-1.0,0.6,0.95));
@@ -2552,7 +2600,9 @@
                 void main(){
                     vec3 cream=mix(vec3(0.62,0.55,0.42),vec3(0.74,0.70,0.61),day);
                     vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
-                    vec3 c;float shine=0.0;
+                    vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
+                    // What the metal sees: the lamps, fading at sunset to the amber of the windows.
+                    vec3 seen=light*(1.0-0.62*sunset)+mix(vec3(0.5,0.26,0.1),vec3(0.3,0.28,0.24),day)*sunset;
                     bool cushion=vPaint>1.5&&vPaint<2.5;
                     bool floorboards=vPaint>2.5&&vPaint<3.5;
                     bool metal=vPaint>3.5&&vPaint<4.5;
@@ -2608,17 +2658,23 @@
                         shine=reflectTubes(vPos,r,0.22)*(0.03+0.2*pow(max(1.0-r.y,0.0),2.4))
                             *(1.0-0.36*seam*fade)*mix(1.0,0.6,wear);
                     }else if(vPaint<4.5){
+                        // Polished chrome: it is the car, seen bent round the tube.
                         vec3 reflected=reflect(-v,n);
                         float grazing=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0);
-                        float horizon=exp(-abs(reflected.y-0.10)*5.2);
-                        float edge=exp(-abs(reflected.y+0.33)*9.0);
-                        float finish=1.0+0.038*sin(vPos.z*131.0+vPos.y*210.0);
-                        c=(vec3(0.058,0.062,0.065)+sky*horizon*0.13+light*edge*0.16)*finish;
-                        shine=reflectTubes(vPos,reflected,0.105)*0.70+grazing*0.21;
+                        c=vec3(0.06,0.062,0.065);
+                        env=cabinScene(vPos+n*0.02,reflected,cream,seen,0.0)*(0.72+0.28*grazing);
+                        chrome=0.9;
+                        shine=reflectTubes(vPos,reflected,0.06)*1.1;
                     }
                     else if(vPaint<5.5)c=light*2.8;
-                    else if(vPaint<6.5)c=cream*(0.26+1.02*tubes(vPos.xz,0.25));
-                    else if(vPaint<7.5)c=vec3(0.035,0.04,0.055)+warm*0.03;
+                    else if(vPaint<6.5)c=cream*(0.46+0.9*tubes(vPos.xz,0.3))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
+                    else if(vPaint<7.5){
+                        // The open gangway: through the bellows into the next car, in perspective.
+                        vec3 d=-v,o=vPos+d*(0.7/max(d.z,0.05))-vec3(0.0,0.0,${CAR.length.toFixed(2)}+0.7);
+                        float tunnel=1.0-smoothstep(0.30,0.42,max(abs(vPos.x)*0.98,abs(vPos.y-FLOOR-0.95)*0.44));
+                        c=cabinScene(o,d,cream,seen,${(CAR.length / 2).toFixed(2)})*mix(0.25,0.9,tunnel);
+                        chrome=1.0;env=c;
+                    }
                     else if(vPaint<8.5)c=warm*0.4+vec3(0.08);
                     else if(vPaint<9.5){
                         // Printed excursion cards with miniature coastal illustrations.
@@ -2682,23 +2738,24 @@
                         float rim=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),2.2)*smoothstep(-0.15,0.8,n.y);
                         c=shadowInk+cream*rim*0.021;
                     }else if(vPaint<16.5){
-                        // The heater cover under the bench: cream sheet with two bands
-                        // of long slots, each band two rows staggered like brickwork.
+                        // The heater cover under the bench: glossy cream sheet with three
+                        // bands of long slots, each band two rows staggered like brickwork.
                         float y=vPos.y-(FLOOR+0.183);
-                        float band=abs(abs(y)-0.062);
-                        float inBand=1.0-smoothstep(0.034,0.037,band);
-                        float u=abs(y)-0.062,row=step(0.0,u);
-                        vec2 cell=vec2(vPos.z/0.064+row*0.5+step(0.0,y)*0.25,0.0);
-                        vec2 slot=vec2((fract(cell.x)-0.5)*0.064,u-(row*2.0-1.0)*0.017);
-                        vec2 d=abs(slot)-vec2(0.024,0.006);
-                        float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0045;
+                        float bandC=clamp(floor(y/0.09+0.5),-1.0,1.0)*0.09;
+                        float u=y-bandC,band=abs(u);
+                        float inBand=1.0-smoothstep(0.029,0.032,band);
+                        float row=step(0.0,u);
+                        vec2 cell=vec2(vPos.z/0.058+row*0.5+bandC*2.8,0.0);
+                        vec2 slot=vec2((fract(cell.x)-0.5)*0.058,u-(row*2.0-1.0)*0.0135);
+                        vec2 d=abs(slot)-vec2(0.021,0.0042);
+                        float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0035;
                         float soft=max(fwidth(vPos.z),fwidth(vPos.y))*1.2;
                         float hole=(1.0-smoothstep(-soft,soft,sd))*inBand;
                         hole=mix(hole,0.34*inBand,smoothstep(0.25,1.0,fwidth(cell.x)*2.0));
-                        float frame=1.0-smoothstep(0.0,0.004+soft,abs(band-0.036));
-                        c=cream*mix(0.7,0.6,inBand)*(1.0-0.12*frame);
+                        float frame=1.0-smoothstep(0.0,0.003+soft,abs(band-0.031));
+                        c=cream*mix(0.78,0.7,inBand)*(1.0-0.12*frame);
                         c=mix(c,vec3(0.012,0.012,0.014),hole);
-                        shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.05*(1.0-hole);
+                        shine=reflectTubes(vPos,reflect(-v,n),0.12)*0.22*(1.0-hole);
                     }else if(vPaint<17.5){
                         float slot=abs(fract(vPos.x*33.0)-0.5);
                         float slat=smoothstep(0.23,0.35+fwidth(vPos.x)*16.0,slot+n.x*0.016);
@@ -2719,7 +2776,12 @@
                         vec3 r=reflect(-v,n);
                         float low=smoothstep(-0.35,0.25,r.y)*smoothstep(FLOOR+0.03,FLOOR+0.4,vPos.y);
                         c=mix(vec3(0.30,0.21,0.12),mix(cream*0.62,vec3(0.56,0.58,0.6),0.5),low)*grain;
-                        shine=reflectTubes(vPos,r,0.18)*0.55+pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0)*0.12;
+                        // Brushed: the reflection is drawn out along the grain, so take it twice, spread.
+                        vec3 along=normalize(cross(n,vec3(1.0,0.0,0.0))+vec3(1e-4));
+                        env=(cabinScene(vPos+n*0.02,normalize(r+along*0.16),cream,seen,0.0)
+                            +cabinScene(vPos+n*0.02,normalize(r-along*0.16),cream,seen,0.0))*0.5*grain;
+                        chrome=0.55;
+                        shine=reflectTubes(vPos,r,0.14)*0.45;
                     }else{
                         c=mix(seat,vec3(0.061,0.084,0.035),0.58)*0.66;
                         shine=reflectTubes(vPos,reflect(-v,n),0.28)*0.06;
@@ -2735,6 +2797,10 @@
                     // At sunset the car is lit from outside: an amber fill, the lamps nearly out.
                     fill=mix(fill,mix(vec3(0.20,0.105,0.06),vec3(0.46,0.42,0.36),day)*(0.75+0.25*windowFill),sunset*0.85);
                     float lit=wall;
+                    // Corners gather shadow: where the walls meet the floor and the ceiling.
+                    if(!floorboards)lit*=0.78+0.22*smoothstep(FLOOR,FLOOR+0.35,vPos.y);
+                    else lit*=1.0-0.3*smoothstep(1.02,1.25,abs(vPos.x));
+                    lit*=1.0-0.22*smoothstep(3.05,3.32,vPos.y)*smoothstep(1.05,1.26,abs(vPos.x));
                     if(vPaint<2.5||enamel){
                         float overhead=exp(-abs(vPos.y-3.09)*23.0)*smoothstep(0.90,1.12,abs(vPos.x));
                         lit*=1.0-0.14*overhead;
@@ -2761,6 +2827,7 @@
                     if(floorboards){lit*=1.0-0.4*stood;shine*=1.0-0.7*stood;}
                     vec3 lamp=light*(0.15*(1.0-0.6*sunset)+direct);
                     vec3 colour=c*lit*(fill+lamp)+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12)*(1.0-0.5*sunset);
+                    colour=mix(colour,env+shine*light*0.5,chrome);
                     float sun=sunPatch(vPos,n)*sunset;
                     vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
                     colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
@@ -2782,23 +2849,27 @@
         // For the viewer only: from outside the windows already show it.
         saloon.layers.set(1);
         const innerGlassMaterial = material(new T.ShaderMaterial({
-            side: T.BackSide,
+            side: T.DoubleSide,
             transparent: true,
             depthWrite: false,
-            uniforms: { warm: glassMaterial.uniforms.warm, night: glassMaterial.uniforms.night, day: cabinDaylight },
+            uniforms: { warm: glassMaterial.uniforms.warm, night: glassMaterial.uniforms.night, day: cabinDaylight,
+                rain: cabinMood.rain, clock: cabinMood.clock },
             vertexShader: `varying vec3 vPos,vEye;
                 void main(){
                     vPos=position;
                     vEye=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
                 }`,
-            fragmentShader: `uniform vec3 warm,night;uniform float day;
+            fragmentShader: `uniform vec3 warm,night;uniform float day,rain,clock;
                 varying vec3 vPos,vEye;
                 ${cabinLightFunctions}
+                ${RAIN_GLASS}
                 void main(){
                     vec3 ray=normalize(vPos-vEye);
-                    float grazing=pow(1.0-abs(ray.x),2.6);
-                    ray.x=-ray.x;
+                    // The windscreen faces along the car; the rest face across it.
+                    bool screen=abs(vPos.z-(${(TIP + 0.26).toFixed(3)}))<0.01&&abs(vPos.x)<1.2;
+                    float grazing=pow(1.0-abs(screen?ray.z:ray.x),2.6);
+                    if(screen)ray.z=-ray.z;else ray.x=-ray.x;
                     float hot=0.0;
                     if(ray.y>0.015){
                         float t=(TUBE_Y-vPos.y)/ray.y;
@@ -2808,12 +2879,31 @@
                     }
                     vec3 pane=mix(night*1.7+vec3(0.018,0.014,0.008),lampColour(warm,day)*0.86,clamp(hot*0.95,0.0,1.0));
                     float alpha=clamp(mix(0.23,0.14,day)+grazing*0.18+hot*0.46,0.0,0.78);
+                    // Rain on the outside of the glass: beads and runnels catch the lamps at their rims.
+                    vec3 wet=rainOnGlass(screen?vPos.xy:vec2(vPos.z*sign(vPos.x),vPos.y),clock,rain);
+                    float rim=clamp(length(wet.xy)*90.0,0.0,1.0);
+                    pane=mix(pane,lampColour(warm,day)*(0.12+0.75*rim)+night*0.8,wet.z*0.55);
+                    alpha=max(alpha,wet.z*(0.1+0.32*rim));
                     gl_FragColor=vec4(pane,alpha);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }`
         }));
-        const innerGlass = new T.Mesh(glassGeometry, innerGlassMaterial);
+        // The side panes, and the three panes of the windscreen seen from the cab side.
+        const innerPaneGeometry = (() => {
+            const position = Array.from(glassGeometry.attributes.position.array), index = Array.from(glassGeometry.index.array);
+            const z = TIP + 0.26;
+            CAB_WINDOWS.forEach(([x0, x1]) => {
+                const b = position.length / 3;
+                position.push(x0, 2.2, z, x1, 2.2, z, x1, 3.05, z, x0, 3.05, z);
+                index.push(b, b + 1, b + 2, b, b + 2, b + 3);
+            });
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            shape.setIndex(index);
+            return geometry(shape);
+        })();
+        const innerGlass = new T.Mesh(innerPaneGeometry, innerGlassMaterial);
         innerGlass.layers.set(1);
         innerGlass.frustumCulled = false;
         innerGlass.renderOrder = 2;
@@ -2891,6 +2981,12 @@
                 moonTint: { value: new T.Color('#cbdde8') },
                 glowTint: { value: new T.Color('#415266') },
                 moonGlow: { value: 1 },
+                // The ride starts at dusk, the last of the sun going down behind
+                // the far peak, and drifts into a dream later on.
+                dusk: { value: 0 }, dream: { value: 0 },
+                duskHigh: { value: new T.Color('#4a5878') }, sunset: { value: new T.Color('#c97a52') },
+                dreamTint: { value: new T.Color('#2a2350') },
+                sunDir: { value: new T.Vector3(Math.cos(FUJI.bearing + 0.03), 0, Math.sin(FUJI.bearing + 0.03)) },
                 horizonGlow: { value: 1 },
                 accent: { value: 0 },
                 auroraActive: { value: 1.0 },
@@ -2902,7 +2998,8 @@
             },
             vertexShader: `varying vec3 ray;
                 void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            fragmentShader: `varying vec3 ray;uniform vec3 night,horizon,cold;uniform float open;
+            fragmentShader: `varying vec3 ray;uniform vec3 night,horizon,cold,duskHigh,sunset,dreamTint,sunDir;
+                uniform float open,dusk,dream;
                 uniform vec3 moonDir,moonTint,glowTint;uniform float moonGlow,horizonGlow,accent;
                 uniform float auroraActive, auroraTime, auroraRhythm, auroraHeading;
                 uniform vec3 auroraGreen, auroraViolet;
@@ -2916,6 +3013,17 @@
                     vec3 d=normalize(ray);
                     float h=pow(max(d.y,0.0),0.45);
                     vec3 c=mix(horizon,night,clamp(h*1.7,0.0,1.0));
+                    // A dream deepens the zenith toward the theme's own night colour.
+                    c=mix(c,dreamTint,dream*0.35*clamp(h*1.4,0.0,1.0));
+                    if(dusk>0.0){
+                        // Afterglow: warm and low over the sun's bearing, a band of
+                        // rose above it, and the rest of the sky still blue, not black.
+                        float toward=0.5+0.5*dot(normalize(vec3(d.x,0.0,d.z)+vec3(0.0001)),sunDir);
+                        float low=exp(-max(d.y,0.0)*6.0);
+                        c=mix(c,duskHigh,dusk*0.55*(1.0-low));
+                        c=mix(c,sunset,low*(0.2+0.8*pow(toward,3.0))*dusk*0.85);
+                        c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-pow((d.y-0.13)*8.0,2.0))*pow(toward,1.5)*dusk*0.3);
+                    }
                     float band=exp(-pow(dot(d,normalize(vec3(0.35,0.8,0.48)))-0.18,2.0)*90.0);
                     float cloud=noise(d*12.0)*0.6+noise(d*33.0)*0.3+noise(d*91.0)*0.1;
                     c+=cold*band*pow(cloud,3.0)*(0.12+open*0.22);
@@ -2966,6 +3074,30 @@
         const sky = new T.Mesh(geometry(new T.SphereGeometry(850, 32, 20)), skyMat);
         sky.renderOrder = -100;
         root.add(sky);
+        // What the lit materials outside see in their gloss: the same sky,
+        // rendered small into a cube that the renderer blurs by roughness. The
+        // cube is made once and only redrawn, so no material recompiles when
+        // the palette, the dusk, the dream or the rain change what is in it.
+        const envTarget = new T.WebGLCubeRenderTarget(64, { type: T.HalfFloatType });
+        const envCamera = new T.CubeCamera(1, 2000, envTarget);
+        const envScene = new T.Scene();
+        const envSkyMat = material(new T.ShaderMaterial({
+            side: T.BackSide, depthWrite: false,
+            uniforms: { ...skyMat.uniforms, envGain: { value: 1 } },
+            vertexShader: skyMat.vertexShader,
+            fragmentShader: skyMat.fragmentShader.replace('uniform vec3 auroraGreen, auroraViolet;',
+                'uniform vec3 auroraGreen, auroraViolet;uniform float envGain;')
+                .replace('gl_FragColor=vec4(c,1.0);', 'gl_FragColor=vec4(c*envGain,1.0);')
+        }));
+        envScene.add(new T.Mesh(sky.geometry, envSkyMat));
+        scene.environment = envTarget.texture;
+        let envDirty = true, envKey = '';
+        const prepareEnvironment = renderer => {
+            if (dead || !envDirty || !renderer) return;
+            envDirty = false;
+            envCamera.update(renderer, envScene);
+            envTarget.texture.needsPMREMUpdate = true;
+        };
         const random = seededRandom('last-train-fixed-sky');
         const positions = [], colors = [], sizes = [], phases = [];
         // Lights of towns on the far shore come first in the buffer, so every
@@ -3111,11 +3243,11 @@
                 fogTint: { value: new T.Color('#415266') }, fogDensity: { value: 0.008 },
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
-                lampPower: { value: new Float32Array(4) }, rain: rainAmount },
+                lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 } },
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;
                 uniform vec3 lampPos[4];uniform float lampPower[4];
                 varying vec4 reflected;varying vec3 world;
@@ -3147,7 +3279,8 @@
                     g+=vec2(0.0,0.48)*-sin(world.x*0.48-time*0.32)*0.05;
                     g+=vec2(1.9,1.3)*cos(world.x*1.9+world.z*1.3+time*1.1)*0.018;
                     g+=vec2(-1.4,2.3)*cos(-world.x*1.4+world.z*2.3-time*0.9)*0.014;
-                    g*=damp*(1.0+energy*0.6);
+                    // In the dream the sea goes still enough to be a mirror for the stars.
+                    g*=damp*(1.0+energy*0.6)*(1.0-calm*0.75);
                     // Rain breaks the mirror up: rings near by, a fine roughness further off.
                     if(rain>0.0){
                         float nearRings=1.0-smoothstep(10.0,34.0,dist);
@@ -3224,6 +3357,202 @@
         const halos = new T.Points(haloGeometry, haloMat);
         halos.frustumCulled = false;
         root.add(halos);
+        /*
+         * Where the sea has come over the line the train wades. The nose
+         * shoulders up a wave on either side, a curling crest with a slope of
+         * foam behind it that opens out the faster it runs; the water heaped
+         * against the sides breaks white; behind the last car a band of foam
+         * lies on the sea and slowly comes apart. The wheels fling water out in
+         * streaks that fall back. Everything is one mesh, laid out each frame
+         * from the train's place and pace; the foam itself is drawn by the shader.
+         */
+        const SPLASH_VERTS = 2400, SPLASH_INDEX = 4200;
+        const splashPositions = new Float32Array(SPLASH_VERTS * 3), splashUv = new Float32Array(SPLASH_VERTS * 2);
+        const splashFoam = new Float32Array(SPLASH_VERTS * 2), splashLooks = new Float32Array(SPLASH_VERTS * 2);
+        const splashIndex = new Uint16Array(SPLASH_INDEX);
+        const splashGeometry = geometry(new T.BufferGeometry());
+        [['position', splashPositions, 3], ['uv', splashUv, 2], ['foam', splashFoam, 2], ['look', splashLooks, 2]]
+            .forEach(([name, array, size]) => splashGeometry.setAttribute(name,
+                new T.BufferAttribute(array, size).setUsage(T.DynamicDrawUsage)));
+        splashGeometry.setIndex(new T.BufferAttribute(splashIndex, 1).setUsage(T.DynamicDrawUsage));
+        splashGeometry.setDrawRange(0, 0);
+        const splashSeeds = (() => {
+            const r = seededRandom('wading');
+            return Float32Array.from({ length: 1024 }, () => r());
+        })();
+        const splashTint = { value: new T.Color('#dfe6e8') }, splashWarm = { value: new T.Color('#ffd28c') };
+        const splashClock = { value: 0 };
+        const splashMaterial = material(new T.ShaderMaterial({
+            transparent: true, depthWrite: false, side: T.DoubleSide,
+            uniforms: { tint: splashTint, warm: splashWarm, clock: splashClock },
+            vertexShader: `attribute vec2 foam,look;varying vec2 vUv,vFoam,vLook;varying float vFar;
+                void main(){vUv=uv;vFoam=foam;vLook=look;
+                    vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;
+                    vFar=1.0-smoothstep(70.0,140.0,-mv.z);}`,
+            fragmentShader: `uniform vec3 tint,warm;uniform float clock;varying vec2 vUv,vFoam,vLook;varying float vFar;
+                float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+                float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+                    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+                float cells(vec2 p){
+                    // Foam is a net of bubbles torn open into lace: ridges of a warped noise.
+                    vec2 w=p+vec2(noise(p*0.7+clock*0.3),noise(p*0.7-clock*0.25))*1.6;
+                    float n=noise(w*2.1)*0.55+noise(w*4.7)*0.3+noise(w*11.0)*0.15;
+                    return 1.0-abs(n*2.0-1.0);
+                }
+                void main(){
+                    float a;float lit=0.0;
+                    if(vLook.x<0.5){
+                        // Foam on the surface: v runs 0 at the hull to 1 at the far edge,
+                        // the crest a little way out; whitest there, lace beyond it.
+                        float v=vUv.y;
+                        float lace=cells(vFoam);
+                        float crest=exp(-pow((v-0.26)/0.05,2.0))*(0.55+0.45*noise(vFoam*3.0));
+                        float body=smoothstep(0.74+0.18*v,0.97,lace+0.22*(1.0-v));
+                        float film=smoothstep(0.5,0.9,lace)*0.12;
+                        a=(crest*0.85+body*(0.7-0.5*v)+film)*smoothstep(1.0,0.6,v)*smoothstep(0.0,0.06,v+0.06);
+                        a*=smoothstep(0.0,0.08,vUv.x)*smoothstep(1.0,0.7,vUv.x);
+                        lit=(1.0-v)*0.5;
+                    }else{
+                        // A streak of thrown water: dense at its head, thinning to its tail.
+                        float across=vUv.y*2.0-1.0;
+                        a=exp(-across*across*5.0)*(1.0-vUv.x)*(0.6+0.4*noise(vec2(vUv.x*6.0,vLook.y*40.0)));
+                        lit=0.6;
+                    }
+                    a*=vLook.y*vFar;
+                    if(a<0.004)discard;
+                    gl_FragColor=vec4(mix(tint,warm,lit*0.35),min(1.0,a));
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                }`
+        }));
+        const splash = new T.Mesh(splashGeometry, splashMaterial);
+        splash.frustumCulled = false;
+        splash.renderOrder = 3;
+        splash.name = 'splash';
+        root.add(splash);
+        let splashSpeed = 0, splashFront = null, splashTime = 0, wading = 0;
+        const eye = new T.Vector3(), flight = new T.Vector3(), broad = new T.Vector3(), toEye = new T.Vector3(), ahead = new T.Vector3();
+        const wade = (track, pose, time, level, saving, visible) => {
+            const front = pose.trainFront ?? pose.distance;
+            // The train's own pace along the line, steadied over a few frames.
+            let speed = splashSpeed;
+            if (track.trainAt) speed = (track.trainAt(time + 0.15) - track.trainAt(time - 0.15)) / 0.3;
+            else if (splashFront !== null && time > splashTime && time - splashTime < 0.5)
+                speed = splashSpeed * 0.85 + 0.15 * (front - splashFront) / (time - splashTime);
+            splashFront = front; splashTime = time; splashSpeed = speed;
+            // The rail head is at 0.41: nothing until the water is over it.
+            wading = visible ? smooth((level - 0.3) / 0.12) * smooth(Math.abs(speed) / 7) : 0;
+            splash.visible = wading > 0.01;
+            if (!splash.visible) return;
+            const night = !palBase?.light;
+            splashTint.value.copy(dressTones[TONE.pale]).multiplyScalar(night ? 1.25 : 1.1);
+            splashWarm.value.copy(night ? roomGlow : dressTones[TONE.pale]).multiplyScalar(night ? 2.2 : 1.1);
+            splashClock.value = time;
+            eye.set(pose.position.x, pose.position.y, pose.position.z);
+            const pace = Math.min(1.6, Math.abs(speed) / 12);
+            let v = 0, n = 0;
+            const vertex = (x, y, z, u, w, fx, fz, kind, alpha) => {
+                splashPositions.set([x, y, z], v * 3);
+                splashUv.set([u, w], v * 2);
+                splashFoam.set([fx, fz], v * 2);
+                splashLooks.set([kind, alpha * wading], v * 2);
+                return v++;
+            };
+            const at = (address, lateral) => {
+                const f = track.at(address);
+                return [f.position.x + f.right.x * lateral, f.position.z + f.right.z * lateral];
+            };
+            /*
+             * A band of foam on the water: rows along it, each row a cross-section
+             * of [lateral, height, across] points; `foamAt` says where on the water
+             * each point's lace is drawn.
+             */
+            const band = (rows, foamAt) => {
+                const width = rows[0].points.length, first = v;
+                if (v + rows.length * width > SPLASH_VERTS) return;
+                rows.forEach(({ address, u, points, alpha }) => points.forEach(([lateral, y, across]) => {
+                    const [x, z] = at(address, lateral);
+                    const [fx, fz] = foamAt(address, lateral);
+                    vertex(x, y, z, u, across, fx, fz, 0, alpha);
+                }));
+                for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < width - 1; k++) {
+                    if (n + 6 > SPLASH_INDEX) return;
+                    const a = first + r * width + k, b = a + width;
+                    splashIndex.set([a, b, a + 1, a + 1, b, b + 1], n);
+                    n += 6;
+                }
+            };
+            // Lace that travels with the train, churning as it goes.
+            const carried = (address, lateral) => [(front - address) * 0.9 - time * 2.4 * pace, Math.abs(lateral) * 1.3];
+            // Lace that stays where it was left on the sea.
+            const left = (address, lateral) => [address * 0.9, lateral * 1.3];
+            const length = SET_PITCH * CARS / 2, tail = front - length;
+            for (const side of [-1, 1]) {
+                // The bow wave: from the nose's shoulder out and back along an arm.
+                const arm = 7 + 11 * pace, open = 0.32 + 0.1 * pace, segments = saving ? 8 : 16;
+                band(Array.from({ length: segments + 1 }, (_, k) => {
+                    const u = k / segments, behind = u * arm - 0.4, reach = 1.32 + Math.max(0, behind) * open;
+                    const lift = (0.2 + 0.1 * pace) * (1 - u * 0.8);
+                    return { address: front - behind, u, alpha: 1 - u * 0.5, points: [
+                        [side * 1.3, level + lift * 0.7, 0], [side * (reach - 0.05), level + lift, 0.22],
+                        [side * reach, level + lift * 0.9, 0.3], [side * (reach + 0.5 + u), level + lift * 0.3, 0.6],
+                        [side * (reach + 0.9 + 1.5 * u), level + 0.01, 1]] };
+                }), carried);
+                // Water heaped and breaking along the sides of the train.
+                const hull = saving ? 10 : 24;
+                band(Array.from({ length: hull + 1 }, (_, k) => {
+                    const u = k / hull, address = front - arm * 0.3 - u * (length - arm * 0.3);
+                    return { address, u: 0.08 + u * 0.84, alpha: 0.5, points: [
+                        [side * 1.28, level + 0.09, 0], [side * 1.5, level + 0.06, 0.28], [side * 2.2, level + 0.01, 1]] };
+                }), carried);
+            }
+            // The wake: foam left on the sea behind the last car, spreading and fading.
+            const trail = 22 + 34 * pace, wake = saving ? 12 : 30;
+            band(Array.from({ length: wake + 1 }, (_, k) => {
+                const u = k / wake, behind = u * trail, width = 1.5 + behind * 0.14;
+                return { address: tail - behind, u: 0.1 + u * 0.9, alpha: 0.7 * (1 - u), points: [
+                    [-width - 1, level + 0.01, 1], [-width * 0.4, level + 0.015, 0.3], [0, level + 0.02, 0.24],
+                    [width * 0.4, level + 0.015, 0.3], [width + 1, level + 0.01, 1]] };
+            }), left);
+            // Water thrown off the wheels: each streak flies out, up and back from
+            // its bogie, drawn along its own line of flight and turned to the eye.
+            const bogies = [];
+            for (let car = 0; car < CARS; car++) {
+                const set = car >> 1, second = car % 2 === 1;
+                const joint = front - set * SET_PITCH - CAR.length - CAR.joint / 2;
+                bogies.push(joint + (second ? -1 : 1) * (CAR.length / 2 + CAR.joint / 2 + CAR.bogie));
+                if (!second) bogies.push(joint);
+            }
+            const streaks = saving ? 7 : 16;
+            let s = 0;
+            for (const bogie of bogies) for (const side of [-1, 1]) for (let k = 0; k < streaks; k++, s = (s + 4) % 1020) {
+                if (v + 4 > SPLASH_VERTS || n + 6 > SPLASH_INDEX) break;
+                const life = (splashSeeds[s] + time * (1.4 + splashSeeds[s + 1])) % 1, t = life * 0.6;
+                const out = (1.6 + splashSeeds[s + 2] * 2.2) * pace, rise = (1.5 + splashSeeds[s + 3] * 2.4) * pace;
+                const lateral = side * (1.15 + out * t), height = level + Math.max(0, rise * t - 4.9 * t * t);
+                const address = bogie + (splashSeeds[s + 2] - 0.5) * 1.6 - speed * t * 0.7;
+                const [x, z] = at(address, lateral);
+                const f = track.at(address);
+                // Velocity relative to the water: outward, up or falling, and left behind.
+                flight.set(f.right.x * side * out, rise - 9.8 * t, f.right.z * side * out)
+                    .addScaledVector(ahead.set(f.right.z, 0, -f.right.x), -speed * 0.7);
+                const reach = 0.05 + flight.length() * 0.045;
+                flight.normalize();
+                toEye.set(eye.x - x, eye.y - height, eye.z - z).normalize();
+                broad.crossVectors(flight, toEye).normalize().multiplyScalar(0.012 + 0.02 * splashSeeds[s + 1]);
+                const alpha = (1 - life) * 0.8;
+                const head = [x, height, z], back = [x - flight.x * reach, height - flight.y * reach, z - flight.z * reach];
+                const a = vertex(head[0] + broad.x, head[1] + broad.y, head[2] + broad.z, 0, 0, 0, 0, 1, alpha);
+                vertex(head[0] - broad.x, head[1] - broad.y, head[2] - broad.z, 0, 1, 0, 0, 1, alpha);
+                vertex(back[0] + broad.x, back[1] + broad.y, back[2] + broad.z, 1, 0, 0, 0, 1, alpha);
+                vertex(back[0] - broad.x, back[1] - broad.y, back[2] - broad.z, 1, 1, 0, 0, 1, alpha);
+                splashIndex.set([a, a + 1, a + 2, a + 1, a + 3, a + 2], n);
+                n += 6;
+            }
+            splashGeometry.setDrawRange(0, n);
+            for (const name of ['position', 'uv', 'foam', 'look']) splashGeometry.attributes[name].needsUpdate = true;
+            splashGeometry.index.needsUpdate = true;
+        };
         // --- Rain (stage setting: off / light / heavy) ---
         // Streaks fall through a box that travels with the camera but stays
         // put in the world, so they slide past as the camera moves. All of the
@@ -3254,10 +3583,13 @@
             uniforms: { time: { value: 0 }, amount: rainAmount, centre: { value: new T.Vector3() },
                 colour: { value: new T.Color('#c9d6e0') }, opacity: { value: 0.3 },
                 wind: { value: new T.Vector2(0.9, 0.35) },
-                shelterA: { value: new T.Vector3() }, shelterB: { value: new T.Vector3() }, shelter: { value: 0 } },
+                shelterA: { value: new T.Vector3() }, shelterB: { value: new T.Vector3() }, shelter: { value: 0 },
+                lampAt: { value: Array.from({ length: 4 }, () => new T.Vector3(0, -100, 0)) },
+                lampTint: { value: new T.Color('#ffd28c') }, lampGain: { value: 1 } },
             vertexShader: `attribute vec2 corner;
-                uniform float time,amount,shelter;uniform vec3 centre,shelterA,shelterB;uniform vec2 wind;
-                varying float vAlpha;varying float vAcross;
+                uniform float time,amount,shelter,lampGain;uniform vec3 centre,shelterA,shelterB;uniform vec2 wind;
+                uniform vec3 lampAt[4];
+                varying float vAlpha;varying float vAcross;varying float vGlow;
                 const float BOX=${RAIN_BOX.toFixed(1)},HEIGHT=${RAIN_HEIGHT.toFixed(1)};
                 void main(){
                     float fall=7.5+position.z*2.5;
@@ -3284,14 +3616,19 @@
                     vAlpha=(1.0-inside)*smoothstep(0.6,3.5,dist)*(1.0-smoothstep(BOX*0.18,BOX*0.5,dist))
                         *step(0.0,p.y)*(0.35+0.65*fract(position.x*91.3));
                     vAcross=corner.x;
+                    // Drops falling through a lamp's light catch it.
+                    vGlow=0.0;
+                    for(int i=0;i<4;i++){vec3 l=p-lampAt[i];vGlow+=1.0/(1.0+dot(l,l)*0.35);}
+                    vGlow*=lampGain;
                     gl_Position=projectionMatrix*viewMatrix*vec4(head,1.0);
                     if(vAlpha<=0.0)gl_Position=vec4(2.0,2.0,2.0,1.0);
                 }`,
-            fragmentShader: `uniform vec3 colour;uniform float opacity;varying float vAlpha;varying float vAcross;
+            fragmentShader: `uniform vec3 colour,lampTint;uniform float opacity;
+                varying float vAlpha;varying float vAcross;varying float vGlow;
                 void main(){
-                    float a=vAlpha*opacity*(1.0-vAcross*vAcross);
+                    float a=vAlpha*opacity*(1.0-vAcross*vAcross)*(1.0+vGlow*2.5);
                     if(a<0.004)discard;
-                    gl_FragColor=vec4(colour,a);
+                    gl_FragColor=vec4(colour+lampTint*vGlow*1.5,min(a,0.9));
                     #include <colorspace_fragment>
                 }`
         }));
@@ -3304,6 +3641,37 @@
         root.add(rainDrops);
         // Every tier rains; the saving tier with far fewer streaks.
         const RAIN_COUNTS = { 'energy-saving': 4000, standard: 9000, ultimate: RAIN_MAX };
+        // The light under each of the nearest lamps, seen as a cone in the
+        // haze: faint on a clear night, plain in the rain. One draw for all.
+        const BEAMS = 6;
+        const beamMat = material(new T.ShaderMaterial({
+            transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+            uniforms: { haze: { value: 0 } },
+            vertexShader: `varying vec3 vColour;varying float vDown;varying vec3 vNormal;varying vec3 vView;
+                void main(){
+                    vColour=instanceColor;vDown=uv.y;
+                    vec4 world=modelMatrix*instanceMatrix*vec4(position,1.0);
+                    vNormal=normalize(mat3(modelMatrix*instanceMatrix)*normal);
+                    vView=normalize(cameraPosition-world.xyz);
+                    gl_Position=projectionMatrix*viewMatrix*world;
+                }`,
+            fragmentShader: `uniform float haze;varying vec3 vColour;varying float vDown;varying vec3 vNormal;varying vec3 vView;
+                void main(){
+                    // Brightest down the middle of the cone as seen, fading to the ground.
+                    float edge=abs(dot(normalize(vNormal),vView));
+                    float a=pow(edge,1.5)*pow(vDown,1.6)*haze;
+                    gl_FragColor=vec4(vColour*a,1.0);
+                }`
+        }));
+        const beams = new T.InstancedMesh(geometry(new T.ConeGeometry(2.1, 5.4, 20, 1, true).translate(0, -2.7, 0)),
+            beamMat, BEAMS);
+        beams.instanceMatrix.setUsage(T.DynamicDrawUsage);
+        for (let i = 0; i < BEAMS; i++) beams.setColorAt(i, new T.Color(0, 0, 0));
+        beams.frustumCulled = false;
+        beams.count = 0;
+        beams.layers.set(1);
+        root.add(beams);
+        const beamMatrix = new T.Matrix4(), beamColour = new T.Color();
         const RAIN_LEVELS = { off: 0, light: 0.45, heavy: 1 };
         let rainLevel = 0, rainClock = 0;
         // The sea's height. Scenery may raise it a little where the line runs
@@ -3319,13 +3687,19 @@
             depthTest: false, depthWrite: false, fog: false, blending: T.AdditiveBlending }));
         const sheenMat = material(new T.ShaderMaterial({
             transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending,
-            uniforms: { color: { value: new T.Color('#ffd28c') }, opacity: { value: 0 } },
+            uniforms: { color: { value: new T.Color('#ffd28c') }, opacity: { value: 0 },
+                rain: cabinMood.rain, clock: cabinMood.clock, size: { value: new T.Vector2(1, 1) }, wet: { value: 0 } },
             vertexShader: `varying vec2 vUv;void main(){vUv=uv;
                 gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            // Faint reflection of the lit carriage in the glass, pooled at the sill.
-            fragmentShader: `uniform vec3 color;uniform float opacity;varying vec2 vUv;
+            // Faint reflection of the lit carriage in the glass, pooled at the sill,
+            // and rain on the windscreen catching the cab light at its rims.
+            fragmentShader: `uniform vec3 color;uniform float opacity,rain,clock,wet;uniform vec2 size;varying vec2 vUv;
+                ${RAIN_GLASS}
                 void main(){float a=(pow(1.0-vUv.y,3.0)*0.8+pow(abs(vUv.x-0.5)*2.0,4.0)*0.3)*opacity;
-                    gl_FragColor=vec4(color*a,a);}`
+                    vec3 drop=rainOnGlass(vUv*size*1.6,clock,rain);
+                    float rim=clamp(length(drop.xy)*90.0,0.0,1.0);
+                    float d=drop.z*(0.05+0.3*rim)*wet;
+                    gl_FragColor=vec4(color*(a+d),a+d);}`
         }));
         const cabinPart = mat => {
             const mesh = new T.Mesh(panel, mat);
@@ -3371,6 +3745,8 @@
             sill.scale.set(w * 2.4, bh * 1.3, 1);
             sill.position.set(0, -h - bh * 0.65 + bh * 1.3 * e, z);
             sheen.scale.set(w * 2, h * 2, 1);
+            sheenMat.uniforms.size.value.set(w * 2, h * 2);
+            sheenMat.uniforms.wet.value = e;
             sheen.position.set(0, 0, z);
             frameMat.opacity = e;
             rimMat.opacity = e * 0.35;
@@ -3411,7 +3787,7 @@
         let auroraTrack = null;
         let baseStarOpacity = 0.8;
         // Palette-derived baselines; chapter warmth modulates around them each frame.
-        let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1;
+        let palBase = null, liveWarmth = 0.5, liveAccent = 0, haloBase = 1, liveDusk = 0, liveDream = 0;
         // The lamps of a crossing light in turn, a little faster than once a second.
         const signalLit = new T.Color(SIGNAL_RED).multiplyScalar(3.2), signalDark = new T.Color(SIGNAL_RED).multiplyScalar(0.06);
         const buoyPaint = new T.Color(SIGNAL_RED).multiplyScalar(0.09);
@@ -3460,6 +3836,32 @@
                     f.position.z + f.right.z * LAMP_OFFSET * side);
                 lights[i].intensity = anchor && !saving ? 24 * (1 + clamp(audio.impact) * 0.12) : 0;
             }
+            // Cones of light in the haze under the nearest lamps, and the rain
+            // lit where it falls through them. Not by day: the page has no haze to light.
+            const night = palBase && !palBase.light && !saving;
+            beams.count = 0;
+            for (let i = 0; i < BEAMS && night; i++) {
+                const anchor = lightAnchors[i];
+                if (!anchor || Math.abs(anchor.address - s) > 90) break;
+                const f = track.at(anchor.address);
+                beamMatrix.makeTranslation(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, (anchor.y ?? LAMP_Y) - 0.15,
+                    f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
+                beams.setMatrixAt(beams.count, beamMatrix);
+                beams.setColorAt(beams.count, beamColour.copy(lampMaterial.color).multiplyScalar(0.06));
+                beams.count++;
+            }
+            beams.instanceMatrix.needsUpdate = true;
+            if (beams.instanceColor) beams.instanceColor.needsUpdate = true;
+            beamMat.uniforms.haze.value = 0.25 + rainLevel * 0.55;
+            for (let i = 0; i < 4; i++) {
+                const anchor = night ? lightAnchors[i] : null;
+                const at = rainMat.uniforms.lampAt.value[i];
+                if (!anchor) { at.set(0, -100, 0); continue; }
+                const f = track.at(anchor.address);
+                at.set(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, (anchor.y ?? LAMP_Y) - 1.5,
+                    f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
+            }
+            rainMat.uniforms.lampTint.value.copy(lampMaterial.color).multiplyScalar(0.25);
             // Water streaks only for lamps still ahead of the camera.
             const ahead = lightAnchors.filter(a => a.address > s + 2);
             for (let i = 0; i < 4; i++) {
@@ -3582,6 +3984,22 @@
             frameMat.color.copy(deep).lerp(structure, 0.35).multiplyScalar(0.4);
             if (light) frameMat.color.copy(muted).lerp(page, 0.15).multiplyScalar(0.72);
             haloMat.uniforms.color.value.copy(lamp);
+            // The page is bright enough already: by day the gloss is kept low,
+            // or every lit surface would be lifted by the white around it.
+            envSkyMat.uniforms.envGain.value = light ? 0.35 : 0.6;
+            envDirty = true;
+            // Dusk and dream colours. By day the afterglow is only a warm wash on the page.
+            const sunsetHue = new T.Color('#c47a55').lerp(emission, 0.2);
+            if (light) {
+                skyMat.uniforms.duskHigh.value.copy(page).lerp(muted, 0.12);
+                skyMat.uniforms.sunset.value.copy(page).lerp(sunsetHue, 0.55);
+                skyMat.uniforms.dreamTint.value.copy(page).lerp(tertiary, 0.12);
+            } else {
+                skyMat.uniforms.duskHigh.value.copy(skyMat.uniforms.night.value).lerp(tertiary, 0.3)
+                    .multiplyScalar(2.2).lerp(skyMat.uniforms.horizon.value, 0.35);
+                skyMat.uniforms.sunset.value.copy(sunsetHue);
+                skyMat.uniforms.dreamTint.value.copy(new T.Color('#241f48')).lerp(tertiary, 0.2).lerp(deep, 0.2);
+            }
             // Rain: pale streaks against the night, pencil-grey strokes on the page.
             rainMat.uniforms.colour.value.copy(light ? ink.clone().lerp(page, 0.3) : skyMat.uniforms.horizon.value.clone().lerp(white, 0.6));
             rainMat.uniforms.opacity.value = light ? 0.38 : 0.17;
@@ -3607,7 +4025,8 @@
             const toward = bias > 0 ? palBase.warm : palBase.cold;
             const amount = Math.abs(bias);
             const k = palBase.light ? 0.5 : 1;
-            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5);
+            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5)
+                .lerp(skyMat.uniforms.sunset.value, liveDusk * 0.3);
             skyMat.uniforms.horizon.value.copy(scratch);
             waterMat.uniforms.fogTint.value.copy(scratch);
             if (scene.fog) {
@@ -3615,7 +4034,7 @@
                 // Warm passages close in; open chapters and loud passages thin the haze.
                 // By day distant things fade into the page rather than darken.
                 scene.fog.density = 0.008 * (palBase.light ? 1.45 : 1) * (1 + Math.max(0, bias) * 0.18)
-                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06) * (1 + rainLevel * (palBase.light ? 0.45 : 0.9));
+                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06) * (1 + rainLevel * (palBase.light ? 0.45 : 0.9)) * (1 - liveDream * 0.3);
                 waterMat.uniforms.fogDensity.value = scene.fog.density;
             }
             skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k)
@@ -3644,7 +4063,7 @@
             rainLevel += Math.max(-step, Math.min(step, wanted - rainLevel));
             rainAmount.value = rainLevel;
             // Ground, platforms and fittings darken and shine as they get wet.
-            wetness.value = rainLevel;
+            if (!Number.isFinite(tuning.wetness)) wetness.value = rainLevel;
             const count = Math.round((RAIN_COUNTS[tier] ?? RAIN_COUNTS.standard) * rainLevel);
             rainDrops.visible = count > 0;
             rainGeometry.setDrawRange(0, count * 6);
@@ -3669,19 +4088,28 @@
             const saving = quality === 'energy-saving';
             const s = pose.distance;
             if (Number.isFinite(tuning.wetness)) wetness.value = clamp(tuning.wetness);
+            liveDusk = clamp(pose.state.dusk ?? 0);
+            liveDream = clamp(pose.state.dream ?? 0);
+            skyMat.uniforms.dusk.value = liveDusk;
+            skyMat.uniforms.dream.value = liveDream;
+            waterMat.uniforms.calm.value = liveDream * (1 - rainLevel);
+            // The gloss outside follows the sky in coarse steps, not every frame.
+            const key = `${Math.round(liveDusk * 8)}:${Math.round(liveDream * 8)}:${Math.round(rainLevel * 8)}`;
+            if (key !== envKey) { envKey = key; envDirty = true; }
             sky.position.set(pose.position.x, 0, pose.position.z);
             stars.position.copy(sky.position);
             ridge.position.copy(sky.position);
             moon.position.set(sky.position.x - 210, 300, sky.position.z - 420);
             water.position.set(pose.position.x, waterLevel, pose.position.z);
             stars.visible = tuning.showParticles !== false;
-            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0)) * (1 - rainLevel * 0.85);
+            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0)) * (1 - rainLevel * 0.85)
+                * (1 - liveDusk * 0.85) * (1 + liveDream * 0.6);
             starMat.uniforms.opacity.value = starMat.opacity;
             starMat.uniforms.time.value = time;
             starGeo.setDrawRange(0, townLights + (saving ? 1500 : quality === 'ultimate' ? 8000 : 4000));
             skyMat.uniforms.open.value = pose.state.openness;
             const auroraEnabled = tuning.aurora !== false;
-            skyMat.uniforms.auroraActive.value = auroraEnabled ? 1.0 - rainLevel * 0.95 : 0.0;
+            skyMat.uniforms.auroraActive.value = auroraEnabled ? (1.0 - rainLevel * 0.95) * (1 - liveDusk) * (1 + liveDream * 0.4) : 0.0;
             if (auroraTrack !== track) {
                 const opening = global.MusicStageDioramaCamera.pose(timeline, track, 0, tuning);
                 skyMat.uniforms.auroraHeading.value = opening.yaw - 0.34;
@@ -3724,6 +4152,7 @@
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
+            cabinMood.rain.value = rainAmount.value;
             cabinMood.sway.value = time > 0 ? 1 : 0;
             cabinGlow.intensity = saving || tuning.showTrain === false ? 0 : 4.5 * (palBase?.light ? 0.4 : 1) * clamp(pose.chase ?? 0);
             // The permanent way slides forward in long strides; scenery is laid
@@ -3742,10 +4171,13 @@
                             0.335, 1, 1, 2.04);
                     }
                 }
-                sleepers.count = saving ? 200 : 400;
+                sleepers.count = saving ? 140 : 400;
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - (lookingBack ? 114 : 24) + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
+            wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            tideLine.value = waterLevel;
+            splash.layers.set(saving ? 1 : 0);
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
                 flyGulls(track, s, time);
@@ -3756,6 +4188,9 @@
             instanceTrack = track; sceneryKey = nextSceneryKey; instanceRebuilds++;
             const enabled = tuning.narrativeStations !== false && (tuning.stationIntensity ?? 1) > 0;
             sceneryPools.forEach(mesh => { mesh.count = 0; });
+            // On the saving tier the fittings and the rocks are left out of the reflection.
+            dressed.layers.set(saving ? 1 : 0);
+            if (rocks) rocks.layers.set(saving ? 1 : 0);
             const part = (mesh, address, lateral, y, sx, sy, sz, roll = 0, pitch = 0) => {
                 if (mesh.count >= mesh.instanceMatrix.count) return;
                 place(mesh, mesh.count++, track, address, lateral, y, sx, sy, sz, roll, pitch);
@@ -3766,7 +4201,9 @@
             const rawPart = part, rawSpan = span;
             // A pile of shore rocks, turned and sized so no two read as the same one.
             const rock = (address, lateral, size, turn, sunk = 0.12) => {
-                if (!rocks || rocks.count >= rocks.instanceMatrix.count) return;
+                if (!rocks || rocks.count >= (saving ? 6 : rocks.instanceMatrix.count)) return;
+                // On the saving tier only the larger rocks are kept.
+                if (saving && size < 0.9) return;
                 if (inTheWay(address, lateral, size * 1.7, size * 3, size * 3 + 1)) return;
                 const f = track.at(address);
                 dummy.position.set(f.position.x + f.right.x * lateral, -sunk * size, f.position.z + f.right.z * lateral);
@@ -3908,12 +4345,17 @@
                 const { id, address, side } = pole;
                 const L = value => side * value;
                 const stagger = id % 2 ? 0.18 : -0.18;
-                part(concreteParts, address, L(POLE_OFFSET), 0.3, 0.6, 0.6, 0.6);
+                part(LOOK.concrete, address, L(POLE_OFFSET), 0.3, 0.6, 0.6, 0.6);
                 if (!saving) {
-                    // Base flange, the switch box on the far side, and the pole's number plate.
-                    part(steelParts, address, L(POLE_OFFSET), 0.63, 0.32, 0.06, 0.32);
-                    part(steelParts, address, L(POLE_OFFSET + 0.17), 1.45, 0.14, 0.42, 0.24);
-                    part(paleMarks, address, L(POLE_OFFSET - 0.115), 2.0, 0.012, 0.24, 0.1);
+                    // Base flange and its bolts, the louvred switch box on the far
+                    // side with its conduit, and the pole's number plate.
+                    part(LOOK.paint, address, L(POLE_OFFSET), 0.63, 0.32, 0.06, 0.32);
+                    for (const [bx, bz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]])
+                        part(LOOK.paint, address + bz, L(POLE_OFFSET + bx), 0.68, 0.04, 0.05, 0.04);
+                    part(LOOK.louvre, address, L(POLE_OFFSET + 0.17), 1.45, 0.14, 0.42, 0.24);
+                    part(LOOK.paint, address, L(POLE_OFFSET + 0.17), 1.68, 0.18, 0.04, 0.28);
+                    part(LOOK.tube, address, L(POLE_OFFSET + 0.13), 0.98, 0.035, 0.55, 0.035);
+                    part(LOOK.plate, address, L(POLE_OFFSET - 0.115), 2.0, 0.012, 0.24, 0.12);
                 }
                 if (pole.wired) {
                     part(masts, address, L(POLE_OFFSET), 4.3, 1, 7.4, 1);
@@ -3922,7 +4364,9 @@
                     span(steelParts, address, L(POLE_OFFSET), 7.85, L(1.4), 7.13, 0.03);
                     span(steelParts, address, L(POLE_OFFSET), 6.25, L(0.6), 6.95, 0.07);
                     span(steelParts, address, L(1.9), 6.6, stagger, CONTACT_Y + 0.05, 0.04);
-                    for (const y of [7.22, 6.3]) part(concreteParts, address, L(POLE_OFFSET - 0.42), y, 0.34, 0.15, 0.15);
+                    // Insulators: a stack of sheds on each tube where it meets the mast.
+                    for (const y of [7.22, 6.3]) for (let shed = 0; shed < 3; shed++)
+                        part(LOOK.coping, address, L(POLE_OFFSET - 0.3 - shed * 0.08), y + (y > 7 ? -0.01 : 0.012) * shed, 0.035, 0.15, 0.15);
                     part(steelParts, address, L(POLE_OFFSET), 7.93, 0.5, 0.05, 0.05);
                 } else part(masts, address, L(POLE_OFFSET), 2.55, 0.85, 3.9, 0.85);
                 // Over open water the camera flies at 5 to 7 m and the line is
@@ -3937,7 +4381,9 @@
                         span(steelParts, address, L(POLE_OFFSET), lampY - 0.4, L(LAMP_OFFSET + 0.3), lampY + 0.12, 0.025);
                         part(steelParts, address, L(POLE_OFFSET), lampY - 0.19, 0.2, 0.5, 0.2);
                     }
-                    part(steelParts, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
+                    // Hooded housing: a lid sloping off the front, the body, the lit diffuser under it.
+                    part(LOOK.paint, address, L(LAMP_OFFSET), lampY + 0.17, 0.82, 0.09, 0.3);
+                    part(LOOK.paint, address, L(LAMP_OFFSET - 0.02), lampY + 0.235, 0.7, 0.04, 0.24, side * 0.08);
                     part(glowParts, address, L(LAMP_OFFSET), lampY + 0.105, 0.66, 0.04, 0.2);
                     const hf = track.at(address);
                     haloPositions[haloCount * 3] = hf.position.x + hf.right.x * L(LAMP_OFFSET);
@@ -3949,8 +4395,8 @@
                 // A block signal on every eleventh pole, its lamp in the cold palette colour.
                 if (id % 11 === 5 && !saving && !dreaming && !atStation(address, side, 2) && !inSight(track, address, 2.3, side)) {
                     part(masts, address + 1.2, L(2.3), 1.9, 0.7, 3.8, 0.7);
-                    part(steelParts, address + 1.2, L(2.3), 3.55, 0.36, 1.0, 0.16);
-                    part(steelParts, address + 1.08, L(2.3), 3.86, 0.3, 0.04, 0.22);
+                    part(LOOK.ink, address + 1.2, L(2.3), 3.55, 0.36, 1.0, 0.16);
+                    part(LOOK.paint, address + 1.08, L(2.3), 3.86, 0.3, 0.04, 0.22);
                     part(coldGlowParts, address + 1.1, L(2.3), 3.72, 0.15, 0.15, 0.03);
                     part(steelParts, address + 1.08, L(2.3), 3.5, 0.3, 0.04, 0.22);
                     part(glowParts, address + 1.1, L(2.3), 3.36, 0.11, 0.11, 0.03);
@@ -4292,21 +4738,21 @@
                         // that lifts towards its ends.
                         const gate = lateral(15.5);
                         for (const z of [-2.9, 2.9]) {
-                            part(masts, address + z * 0.975, gate, 3.0, 3.1, 5.9, 3.1, 0, z > 0 ? 0.045 : -0.045);
+                            part(LOOK.warmTube, address + z * 0.975, gate, 3.0, 0.46, 5.9, 0.46, 0, z > 0 ? 0.045 : -0.045);
                             part(LOOK.concrete, address + z, gate, 0.16, 1.05, 0.5, 1.05);
                             part(LOOK.concrete, address + z, gate, 0.5, 0.82, 0.18, 0.82);
                             part(steelParts, address + z * 0.96, gate, 4.92, 0.6, 0.05, 0.16);
                         }
-                        part(steelParts, address, gate, 4.7, 0.22, 0.38, 7.5);
-                        part(steelParts, address, gate, 5.27, 0.18, 0.76, 0.3);
-                        part(timberParts, address, lateral(15.36), 5.27, 0.05, 0.84, 0.58);
-                        part(steelParts, address, gate, 5.8, 0.36, 0.3, 6.9);
-                        part(steelParts, address, gate, 6.08, 0.54, 0.2, 4.4);
+                        part(LOOK.warm, address, gate, 4.7, 0.22, 0.38, 7.5);
+                        part(LOOK.warm, address, gate, 5.27, 0.18, 0.76, 0.3);
+                        part(LOOK.timber, address, lateral(15.36), 5.27, 0.05, 0.84, 0.58);
+                        part(LOOK.warm, address, gate, 5.8, 0.36, 0.3, 6.9);
+                        part(LOOK.warm, address, gate, 6.08, 0.54, 0.2, 4.4);
                         for (const end of [-1, 1]) {
-                            part(steelParts, address + end * 3.3, gate, 6.17, 0.54, 0.2, 2.3, 0, end * 0.08);
-                            part(steelParts, address + end * 3.3, gate, 6.3, 0.62, 0.05, 2.34, 0, end * 0.08);
+                            part(LOOK.warm, address + end * 3.3, gate, 6.17, 0.54, 0.2, 2.3, 0, end * 0.08);
+                            part(LOOK.ink, address + end * 3.3, gate, 6.3, 0.62, 0.05, 2.34, 0, end * 0.08);
                         }
-                        part(steelParts, address, gate, 6.2, 0.62, 0.05, 4.44);
+                        part(LOOK.ink, address, gate, 6.2, 0.62, 0.05, 4.44);
                         part(coldGlowParts, address, gate, 4.3, 0.2, 0.3, 0.2);
                         part(steelParts, address, gate, 4.47, 0.26, 0.04, 0.26);
                     }
@@ -4399,18 +4845,18 @@
                 const address = cell * crossingPitch + spacing * 5.5;
                 if ([-1, 1].some(side => atStation(address, side, 10)) || dreamAt(address) > 0.3) continue;
                 crossings.push(address);
-                part(timberParts, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
+                part(LOOK.timber, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
                 for (const side of [-1, 1]) {
                     const L = value => side * value;
-                    part(concreteParts, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
-                    span(concreteParts, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
+                    part(LOOK.concrete, address, L(2.0), 0.3, 2.4, 0.2, ROAD * 2);
+                    span(LOOK.concrete, address, L(3.2), 0.3, L(8.2), -0.22, 0.2, ROAD * 2);
                     for (const edge of [-1, 1]) {
-                        part(concreteParts, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
+                        part(LOOK.concrete, address + edge * (ROAD + 0.1), L(4.3), 0.32, 2.2, 0.34, 0.2);
                         // The road's edge line, and a guard rail down the ramp.
                         part(paleMarks, address + edge * (ROAD - 0.22), L(2.0), 0.406, 2.4, 0.012, 0.1);
-                        span(steelParts, address + edge * (ROAD + 0.1), L(5.5), 0.86, L(8.1), 0.36, 0.05, 0.05);
+                        span(LOOK.tube, address + edge * (ROAD + 0.1), L(5.5), 0.86, L(8.1), 0.36, 0.06, 0.06);
                         for (const post of [5.6, 6.8, 8.0])
-                            part(steelParts, address + edge * (ROAD + 0.1), L(post), 0.5 - (post - 5.6) * 0.19, 0.06, 0.7, 0.06);
+                            part(LOOK.tube, address + edge * (ROAD + 0.1), L(post), 0.5 - (post - 5.6) * 0.19, 0.07, 0.7, 0.07);
                     }
                     // The stop line.
                     part(paleMarks, address, L(3.05), 0.406, 0.28, 0.012, ROAD * 2 - 0.5);
@@ -4419,26 +4865,26 @@
                     // The road stays; its signal and barrier give way to the camera.
                     if (inTheWay(post, L(3.6), 3.7, 1.3, 5)) continue;
                     const tall = !inSight(track, post, 3.3, side, 4);
-                    part(concreteParts, post, at, 0.34, 0.5, 0.5, 0.5);
+                    part(LOOK.concrete, post, at, 0.34, 0.5, 0.5, 0.5);
                     part(masts, post, at, tall ? 2.0 : 1.4, 0.95, tall ? 2.9 : 1.7, 0.95);
-                    for (const band of [0.85, 1.25]) part(concreteParts, post, at, band, 0.2, 0.2, 0.2);
+                    for (const band of [0.85, 1.25]) part(LOOK.stripes, post, at, band, 0.2, 0.2, 0.2);
                     // Two lamps side by side on a dark board, each under its hood.
-                    part(steelParts, post, at, 1.95, 0.07, 0.38, 0.98);
+                    part(LOOK.ink, post, at, 1.95, 0.07, 0.38, 0.98);
                     for (const lamp of [-0.27, 0.27]) {
                         part(signalLamps, post + lamp, at, 1.95, 0.13, 0.21, 0.21);
-                        part(steelParts, post + lamp, at, 2.09, 0.3, 0.03, 0.27);
+                        part(LOOK.ink, post + lamp, at, 2.09, 0.3, 0.03, 0.27);
+                        part(LOOK.ink, post + lamp, at, 1.95, 0.24, 0.26, 0.26);
                     }
                     if (tall) {
                         // The crossed boards, and the bell on top.
-                        for (const lean of [-0.6, 0.6]) part(concreteParts, post, at, 2.72, 0.045, 0.15, 1.28, 0, lean);
-                        part(steelParts, post, at, 3.5, 0.24, 0.16, 0.24);
+                        for (const lean of [-0.6, 0.6]) part(LOOK.stripes, post, at, 2.72, 0.045, 0.15, 1.28, 0, lean);
+                        part(LOOK.paint, post, at, 3.5, 0.24, 0.16, 0.24);
+                        part(LOOK.ink, post, at, 3.4, 0.14, 0.06, 0.14);
                     }
                     // The barrier machine and its arm, down across the road in bands of light and dark.
-                    part(steelParts, post, L(3.85), 0.78, 0.34, 0.8, 0.5);
-                    for (let band = 0; band < 6; band++) {
-                        part(band % 2 ? concreteParts : steelParts, post + side * (0.45 + band * 0.85), L(3.85),
-                            1.08, 0.07, 0.07, 0.85);
-                    }
+                    part(LOOK.louvre, post, L(3.85), 0.78, 0.34, 0.8, 0.5);
+                    part(LOOK.paint, post, L(3.85), 1.2, 0.4, 0.05, 0.56);
+                    part(LOOK.stripes, post + side * 2.6, L(3.85), 1.08, 0.08, 0.08, 4.3);
                     part(signalLamps, post + side * 3.0, L(3.85), 0.98, 0.07, 0.09, 0.09);
                     rock(address - side * (ROAD + 1.6), L(7.4), 0.75, cell * 2.4 + side);
                     rock(address + side * (ROAD + 1.1), L(6.1), 0.5, cell * 1.3 - side);
@@ -4504,6 +4950,18 @@
                     // In the dream the boats are gone. Now and then a house stands on
                     // a rock far out, one window lit.
                     if (cell % 3 === 0) house(address, side * (reach + 10), side, random);
+                    // Paper lanterns set adrift, a few together, lit from within.
+                    else if (cell % 3 === 1) for (let k = 0; k < 4 + Math.floor(random() * 4); k++) {
+                        const at = address + (random() - 0.5) * 30, out = side * (6 + random() * 22);
+                        if (inTheWay(at, out, 1, 0.6)) continue;
+                        rawPart(LOOK.paint, at, out, waterLevel + 0.03, 0.34, 0.06, 0.34);
+                        rawPart(LOOK.lantern, at, out, waterLevel + 0.22, 0.28, 0.32, 0.28);
+                        if (haloCount < haloPositions.length / 3) {
+                            const f = track.at(at);
+                            haloPositions.set([f.position.x + f.right.x * out, waterLevel + 0.24, f.position.z + f.right.z * out], haloCount * 3);
+                            haloCount++;
+                        }
+                    }
                     continue;
                 }
                 const lateral = side * reach, length = 10 + random() * 3, bulbs = 7 + Math.floor(random() * 3);
@@ -4554,6 +5012,7 @@
             dressRect.needsUpdate = dressLook.needsUpdate = dressCut.needsUpdate = true;
         };
         const renderReflection = (renderer, camera) => {
+            prepareEnvironment(renderer);
             if (dead || !reflectionEnabled) return;
             camera.updateMatrixWorld();
             mirror.position.copy(camera.position);
@@ -4605,7 +5064,7 @@
         };
         setPalette();
         return {
-            update, setPalette, renderReflection, updateCabin,
+            update, setPalette, renderReflection, updateCabin, prepareEnvironment,
             // How hard it is raining (0..1), for any shader that shows it.
             rain: rainAmount,
             setPixelRatio(ratio) {
@@ -4613,7 +5072,8 @@
                 haloMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
             },
             setWetness(amount) { wetness.value = clamp(amount ?? 0); },
-            snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
+            snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel,
+                wading, splashTriangles: splash.visible ? splashGeometry.drawRange.count / 3 : 0, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
@@ -4635,6 +5095,8 @@
                 geometries.forEach(g => g.dispose());
                 materials.forEach(m => m.dispose());
                 target.dispose();
+                envTarget.dispose();
+                if (scene.environment === envTarget.texture) scene.environment = null;
             }
         };
     };
