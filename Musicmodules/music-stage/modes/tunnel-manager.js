@@ -950,7 +950,10 @@
                     vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
                     paper = mix(paper, uColorB, m.g * 0.22 * uNebula);
                     paper = mix(paper, uInk, m.a * 0.1 + star * 0.45);
-                    paper = mix(paper, vec3(1.0), clamp(disc + corona * 0.9, 0.0, 1.0) * 0.85);
+                    // The sun on paper: a warm bloom with a white heart, since white
+                    // alone would vanish into the page.
+                    paper = mix(paper, uColorSun, clamp(corona * 1.4, 0.0, 1.0) * 0.6);
+                    paper = mix(paper, vec3(1.0), clamp(disc, 0.0, 1.0));
 
                     vec3 background = mix(night, paper, uPaper);
                     if (lensRange < 5.1) {
@@ -3047,7 +3050,17 @@
         const setPalette = (palette) => {
             stagePalette = palette || {};
             const colors = parsePalette();
-            const abyssBg = colors.background.clone().multiplyScalar(0.38);
+            const luma = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+            const paper = luma(colors.background) > luma(colors.ink);
+            // On a light theme the sky is the page itself, not a dimmed copy of it.
+            const abyssBg = colors.background.clone().multiplyScalar(paper ? 0.92 : 0.38);
+            // A pale page cannot carry the theme's saturated accents at full
+            // strength on large shapes: on paper they are washed toward the
+            // muted tone, as watercolour is, and the page shows through.
+            const soften = (c, toMuted, toPage) => paper ? c.clone().lerp(colors.muted, toMuted).lerp(colors.background, toPage) : c.clone();
+            const washA = soften(colors.secondary, 0.2, 0.18);
+            const washB = soften(colors.accent, 0.5, 0.15);
+            const washEmber = soften(colors.ember, 0.5, 0.15);
             if (scene?.background?.copy) scene.background.copy(abyssBg);
             else if (scene) scene.background = abyssBg;
             if (scene?.fog?.color?.copy) scene.fog.color.copy(abyssBg);
@@ -3056,12 +3069,11 @@
             fieldMat.uniforms.uNebulaA.value.copy(colors.secondary);
             fieldMat.uniforms.uNebulaB.value.copy(colors.accent);
 
-            const pale = colors.background.r * 0.2126 + colors.background.g * 0.7152 + colors.background.b * 0.0722
-                > colors.ink.r * 0.2126 + colors.ink.g * 0.7152 + colors.ink.b * 0.0722;
+            const pale = paper;
             const sky = skyMat.uniforms;
             sky.uBase.value.copy(abyssBg);
-            sky.uColorA.value.copy(colors.secondary);
-            sky.uColorB.value.copy(colors.ember).lerp(colors.accent, 0.3);
+            sky.uColorA.value.copy(paper ? colors.secondary.clone().lerp(colors.background, 0.3) : colors.secondary);
+            sky.uColorB.value.copy(paper ? washB.clone().lerp(colors.muted, 0.4) : colors.ember.clone().lerp(colors.accent, 0.3));
             sky.uColorStar.value.copy(colors.ink).lerp(colors.muted, 0.35);
             sky.uColorSun.value.copy(colors.accent).lerp(new T.Color('#ffffff'), 0.62);
             sky.uInk.value.copy(colors.ink);
@@ -3075,28 +3087,27 @@
             streakMat.uniforms.uColorB.value.copy(colors.secondary);
 
             entityNodes.forEach((node) => {
-                node.mat.uniforms.uColorPrimary.value.copy(colors.secondary);
-                node.mat.uniforms.uColorAccent.value.copy(colors.accent);
-                node.mat.uniforms.uColorInk.value.copy(colors.ink);
-                node.mat.uniforms.uColorEmber.value.copy(colors.ember);
+                node.mat.uniforms.uColorPrimary.value.copy(washA);
+                node.mat.uniforms.uColorAccent.value.copy(washB);
+                node.mat.uniforms.uColorInk.value.copy(paper ? colors.muted : colors.ink);
+                node.mat.uniforms.uColorEmber.value.copy(washEmber);
             });
             // Bodies are lit towards "ink". On a light theme ink is the dark
-            // colour, so they are lit towards paper and rest on a deep floor.
-            const luma = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
-            const paper = luma(colors.background) > luma(colors.ink);
+            // colour, so they are lit towards paper, and their shade is a
+            // soft grey of the page rather than a hole in it.
             const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
-            const bodyFloor = paper ? colors.ink.clone().lerp(colors.secondary, 0.4).multiplyScalar(0.5) : new T.Color('#000000');
-            rockField.mat.uniforms.uColorPrimary.value.copy(colors.secondary);
-            rockField.mat.uniforms.uColorAccent.value.copy(colors.accent);
+            const bodyFloor = paper ? colors.muted.clone().lerp(colors.secondary, 0.25).lerp(colors.background, 0.2).multiplyScalar(0.55) : new T.Color('#000000');
+            rockField.mat.uniforms.uColorPrimary.value.copy(washA);
+            rockField.mat.uniforms.uColorAccent.value.copy(washB);
             rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
             rockField.mat.uniforms.uFloor.value.copy(bodyFloor);
-            beltDust.mat.uniforms.uDust.value.copy(colors.secondary).lerp(bodyInk, 0.35);
-            beltDust.mat.uniforms.uGlint.value.copy(colors.accent).lerp(bodyInk, 0.24);
+            beltDust.mat.uniforms.uDust.value.copy(washA).lerp(bodyInk, 0.35);
+            beltDust.mat.uniforms.uGlint.value.copy(washB).lerp(bodyInk, 0.24);
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
-                mat.uniforms.uColorPrimary.value.copy(colors.secondary);
-                mat.uniforms.uColorAccent.value.copy(colors.accent);
+                mat.uniforms.uColorPrimary.value.copy(washA);
+                mat.uniforms.uColorAccent.value.copy(washB);
                 mat.uniforms.uColorInk.value.copy(bodyInk);
-                mat.uniforms.uColorEmber.value.copy(colors.ember);
+                mat.uniforms.uColorEmber.value.copy(washEmber);
                 mat.uniforms.uFloor.value.copy(bodyFloor);
             }));
 
