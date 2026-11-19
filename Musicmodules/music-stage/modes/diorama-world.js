@@ -1026,7 +1026,7 @@
         // 1 while the camera is close to the nose from outside: the saloon's real
         // cab is drawn then and the windscreen is clear glass in front of it;
         // further off the windscreen paints its own cab and the saloon is not drawn.
-        const cabReal = { value: 0 };
+        const cabReal = { value: 0 }, tailReal = { value: 0 };
         // The rounded end in plan: distance behind the face, half width, share of the roof's rise.
         const NOSE = [[0, 0.46, 0.59], [0.058, 0.76, 0.73], [0.139, 1.02, 0.87],
             [0.253, 1.205, 0.96], [0.39, 1.274, 1], [0.59, CAR.half, 1]];
@@ -1725,15 +1725,16 @@
             return finish();
         })();
         carGeometry.setAttribute('finish', new T.Float32BufferAttribute(carGeometry.userData.groups, 1));
-        // Which car leads, as an attribute per car rather than from the instance index.
-        carGeometry.setAttribute('carLead', new T.InstancedBufferAttribute(new Float32Array([1, 0, 0, 0]), 1));
+        // Which car carries an outer cab: 1 the leading car, 2 the last, as an attribute per
+        // car rather than from the instance index.
+        carGeometry.setAttribute('carLead', new T.InstancedBufferAttribute(new Float32Array([1, 0, 0, 2]), 1));
         const carHorizon = { value: new T.Color('#9daebc') }, carWater = { value: new T.Color('#285a5e') };
         // Enamel under a clear lacquer: the physical model gives the coat its own sharp
         // reflection of the sky over the satin paint beneath.
         const carMaterial = material(new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0, roughness: 0.5,
             clearcoat: 1, clearcoatRoughness: 0.12 }));
         carMaterial.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal, paperDay: cabinDaylight });
+            Object.assign(shader.uniforms, { carHorizon, carWater, wetness, cabReal, tailReal, paperDay: cabinDaylight });
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', '#include <common>\nattribute float finish,carLead;varying vec3 vCarPaint;varying float vFinish,vCarLead;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;vCarLead=carLead;');
@@ -1741,7 +1742,7 @@
                 .replace('#include <common>', `#include <common>
                     uniform vec3 carHorizon,carWater;
                     uniform float wetness;
-                    uniform float cabReal,paperDay;
+                    uniform float cabReal,tailReal,paperDay;
                     varying vec3 vCarPaint;
                     varying float vFinish,vCarLead;
                     // The windscreen openings in the face, by their middle and half size across and up.
@@ -1759,7 +1760,7 @@
                     }`)
                 .replace('#include <color_fragment>', `#include <color_fragment>
                     // With the real cab drawn behind it, the leading face is open where the windscreens are.
-                    if(cabReal>0.5&&vCarLead>0.5&&vFinish<0.5&&vCarPaint.z<${(TIP + 0.62).toFixed(3)}&&cabOpening(vCarPaint.xy)>0.5)discard;
+                    if((vCarLead>1.5?tailReal:vCarLead>0.5?cabReal:0.0)>0.5&&vFinish<0.5&&vCarPaint.z<${(TIP + 0.62).toFixed(3)}&&cabOpening(vCarPaint.xy)>0.5)discard;
                     // Finishes: 0-1 enamel, 2 running gear, 3 roofing, 4 and 6 bright metal, 5 tread,
                     // 7 rubber, 8 grille, 9 lamp lens, 10 grey equipment paint.
                     float g=floor(vFinish+0.5);
@@ -2126,12 +2127,12 @@
             transparent: true, depthWrite: false,
             uniforms: { warm: { value: new T.Color('#ffd28c') }, head: { value: new T.Color('#fff3d6') }, cold: carHorizon,
                 red: { value: new T.Color('#ff3b2f') }, day: cabinDaylight, destination: { value: destinationGraphic },
-                rain: cabinMood.rain, clock: cabinMood.clock, cabReal },
+                rain: cabinMood.rain, clock: cabinMood.clock, cabReal, tailReal },
             vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 void main(){vUv=uv;vKind=kind;vTail=float(gl_InstanceID);
                     vPos=position;vEye=(inverse(modelMatrix*instanceMatrix)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
-            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day,rain,clock,cabReal;uniform sampler2D destination;
+            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day,rain,clock,cabReal,tailReal;uniform sampler2D destination;
                 ${RAIN_GLASS}
                 varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 // The cab behind the windscreen, traced through its few solid shapes: the
@@ -2326,7 +2327,7 @@
                         // Each drop is a lens: darker in its body, a bright rim of sky at its edge.
                         float dropRim=clamp(length(wet.xy)*90.0,0.0,1.0);
                         c=mix(c,c*0.75+mirror*0.25+cold*0.35*dropRim,wet.z*0.7);
-                        if(cabReal>0.5&&tail<0.5){
+                        if((tail<0.5?cabReal:tailReal)>0.5){
                             // Close to the leading end the real cab is drawn behind the glass, so the
                             // pane keeps only what is on it: the reflection, its edge and the rain.
                             float edgeLine=(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim);
@@ -2768,7 +2769,7 @@
                 sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway,
                 detail: { value: detailAtlas },
                 sky: carHorizon, shadowInk: glassMaterial.uniforms.shadowInk, day: cabinDaylight, power: glassMaterial.uniforms.power,
-                boards: planks.map, boardsReady: planks.ready, cabReal },
+                boards: planks.map, boardsReady: planks.ready, cabReal, tailCab: { value: 0 } },
             vertexShader: `attribute float paint;uniform float clock,sway;varying float vPaint;varying vec3 vNormal,vPos,vView;
                 void main(){vPaint=paint;vec3 p=position,nn=normal;
                     if(paint>21.5){
@@ -2787,7 +2788,7 @@
                     vNormal=nn;vPos=p;
                     vView=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz-p;
                     gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
-            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty,cabReal;
+            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty,cabReal,tailCab;
                 uniform sampler2D boards,detail;
                 varying float vPaint;varying vec3 vNormal,vPos,vView;
                 ${cabinLightFunctions}
@@ -2873,7 +2874,9 @@
                     return step(0.0,d)*step(abs(p.x),wide/${CAR.half.toFixed(3)}*section-0.03);
                 }
                 void main(){
-                    if(cabReal>0.5&&insideShell(vPos)<0.5)discard;
+                    if((cabReal>0.5||tailCab>0.5)&&insideShell(vPos)<0.5)discard;
+                    // Nobody drives from the cab at the back.
+                    if(tailCab>0.5&&vPaint>14.5&&vPaint<15.5&&vPos.z<${(TIP + 1.35).toFixed(3)})discard;
                     vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.79,0.77,0.72),day);
                     vec3 light=lampColour(warm,day*0.45),n=normalize(vNormal),v=normalize(vView);
                     vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
@@ -3202,6 +3205,23 @@
         innerGlass.renderOrder = 2;
         saloon.add(innerGlass);
         root.add(saloon);
+        // The cab at the back of the train, seen through its own clear windscreens:
+        // the same saloon, sharing its buffers, with a draw range of its own.
+        const tailGeometry = new T.BufferGeometry();
+        for (const name of Object.keys(saloonGeometry.attributes)) tailGeometry.setAttribute(name, saloonGeometry.attributes[name]);
+        tailGeometry.userData.coarse = saloonGeometry.userData.coarse;
+        geometry(tailGeometry);
+        const tailSaloon = new T.Mesh(tailGeometry, saloonMaterial);
+        tailSaloon.name = 'trainTailCab'; tailSaloon.visible = false; tailSaloon.matrixAutoUpdate = false;
+        tailSaloon.layers.set(1);
+        const flagTail = value => () => {
+            if (saloonMaterial.uniforms.tailCab.value === value) return;
+            saloonMaterial.uniforms.tailCab.value = value;
+            saloonMaterial.uniformsNeedUpdate = true;
+        };
+        saloon.onBeforeRender = flagTail(0);
+        tailSaloon.onBeforeRender = flagTail(1);
+        root.add(tailSaloon);
         const placeSaloon = (track, front, visible) => {
             saloon.visible = visible;
             if (!visible) return;
@@ -3211,7 +3231,7 @@
             saloon.position.set(j.x + dx / span * reach, 0, j.z + dz / span * reach);
             saloon.rotation.set(0, Math.atan2(-dx, -dz), 0);
         };
-        const cabEye = new T.Vector3();
+        const cabEye = new T.Vector3(), tailMatrixInverse = new T.Matrix4();
         const paintTrain = (upper, lower, gear, roof) => {
             const trim = roof.clone().lerp(upper, 0.46);
             // The roof is dressed in dull roofing, near black; its equipment is a pale weathered grey.
@@ -4537,6 +4557,24 @@
             // and the saloon is culled like any other mesh when it is out of view.
             innerGlass.visible = cabReal.value === 0;
             saloon.frustumCulled = cabReal.value > 0;
+            // The last car's cab, the same way: clear glass whenever the train is seen from outside it.
+            const showTail = tuning.showTrain !== false && (pose.chase ?? 0) > 0.002;
+            tailSaloon.visible = false;
+            tailReal.value = 0;
+            if (showTail) {
+                cars.getMatrixAt(CARS - 1, tailSaloon.matrix);
+                tailSaloon.matrixWorld.multiplyMatrices(root.matrixWorld, tailSaloon.matrix);
+                const tailEye = pose.position ? cabEye.set(pose.position.x, pose.position.y ?? 0, pose.position.z)
+                    .applyMatrix4(tailMatrixInverse.copy(tailSaloon.matrixWorld).invert()) : null;
+                const insideTail = tailEye && Math.abs(tailEye.x) < CAR.half + 0.05 && tailEye.y < CAR.crown + 0.1
+                    && tailEye.z > TIP - 0.1 && tailEye.z < CAR.length / 2 + 0.1;
+                if (!insideTail) {
+                    tailReal.value = 1;
+                    tailSaloon.visible = true;
+                    const tailNear = tailEye && Math.hypot(tailEye.x, tailEye.y - 2.2, tailEye.z - TIP) < CAB_FULL_REACH;
+                    tailGeometry.setDrawRange(0, tailNear ? Infinity : tailGeometry.userData.coarse);
+                }
+            }
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
