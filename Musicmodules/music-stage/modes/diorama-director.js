@@ -262,6 +262,8 @@
     const planEncounters = (timeline, options = {}) => {
         const speed = clamp(options.cameraSpeed ?? 1, 0.55, 1.85);
         const aspect = clamp(options.aspect ?? 1.6, 0.35, 3);
+        // Where the camera is along the line at a time; the cab's schedule unless told otherwise.
+        const addressAt = options.addressAt || (time => timeline.distanceAt(time, speed));
         const horizontalFov = 2 * Math.atan(Math.tan(48 * Math.PI / 360) * aspect);
         // Screens stand close enough to the line, and far enough ahead of where
         // their last page ends, that reading one never turns the camera far from
@@ -276,8 +278,8 @@
                 && !['Chorus', 'Open'].includes(timeline.sample(phrase.start).act);
         for (const phrase of timeline.phrases) {
             if (!isSign(phrase)) { current = null; continue; }
-            const startDistance = timeline.distanceAt(phrase.start, speed);
-            const endDistance = timeline.distanceAt(phrase.end, speed);
+            const startDistance = addressAt(phrase.start);
+            const endDistance = addressAt(phrase.end);
             const gap = current ? phrase.start - current.end : Infinity;
             const travelled = current ? endDistance - current.startDistance : Infinity;
             // Never split a spoken/sung phrase. Prefer an actual breath for the
