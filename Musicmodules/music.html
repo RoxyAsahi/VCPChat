@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
     <link rel="stylesheet" href="../styles/themes.css">
+    <!-- 新界面皮肤放在主题之后：只读令牌，不跟随主题的强调色 -->
+    <link rel="stylesheet" href="music-theme/music-skin.css">
+    <link rel="stylesheet" href="music-theme/music-stage-skin.css">
 </head>
 
 <body>
@@ -112,12 +115,19 @@
         <div class="main-content">
             <!-- 上方的播放器核心控制区 -->
             <div class="music-player glass-panel">
+                <div class="track-file-head" aria-hidden="true">
+                    <span class="track-file-kicker">TRACK DATABASE</span>
+                    <span class="track-file-slash">/</span>
+                    <span class="track-file-album" data-track-field="album">曲目档案</span>
+                </div>
                 <div class="track-info">
                     <div class="album-art-wrapper">
                         <div class="album-art"></div>
                     </div>
                     <div class="track-details">
+                        <div class="track-file-number" data-track-field="file-number">FILE NUMBER: TRK-0000</div>
                         <div class="track-title">未选择歌曲</div>
+                        <div class="track-rule" aria-hidden="true"><i></i></div>
                         <div class="track-artist">未知艺术家</div>
                         <div class="track-bitrate"></div>
                     </div>
@@ -129,6 +139,13 @@
                         </svg>
                     </button>
                 </div>
+
+                <dl class="track-specs" aria-label="音频规格">
+                    <div><dt>FORMAT</dt><dd data-track-field="format">—</dd></div>
+                    <div><dt>SAMPLE RATE</dt><dd data-track-field="sample-rate">—</dd></div>
+                    <div><dt>BIT DEPTH</dt><dd data-track-field="bit-depth">—</dd></div>
+                    <div><dt>BITRATE</dt><dd data-track-field="bitrate">—</dd></div>
+                </dl>
 
                 <div class="progress-section">
                     <canvas id="visualizer"></canvas>
@@ -191,7 +208,17 @@
             </div>
 
             <!-- 高级设置面板 - 位于播放控件下方 -->
-            <div class="settings-container glass-panel">
+            <div class="settings-container glass-panel acoustic-drawer" id="acoustic-drawer">
+                <button class="acoustic-drawer-toggle" type="button" aria-expanded="false"
+                    aria-controls="acoustic-drawer-body">
+                    <span class="acoustic-drawer-kicker">ACOUSTIC PROCESSING</span>
+                    <span class="acoustic-drawer-title">声学处理</span>
+                    <span class="acoustic-drawer-summary" data-acoustic-summary></span>
+                    <svg class="acoustic-drawer-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                        <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                    </svg>
+                </button>
+                <div class="acoustic-drawer-body" id="acoustic-drawer-body">
                 <!-- 顶部：音频设备 (单独一行，因为设备名可能很长) -->
                 <div class="setting-row full-width">
                     <label for="device-select">音频设备</label>
@@ -516,18 +543,16 @@
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
 
         <div class="right-sidebar">
-            <div id="vocal-visualizer-container" class="vocal-visualizer-container glass-panel">
-                <div class="vocal-viz-header">
-                    <span class="vocal-viz-title">VOCAL PERFORMANCE</span>
-                    <div class="vocal-viz-status">ACTIVE</div>
-                </div>
-                <canvas id="vocal-visualizer"></canvas>
-            </div>
             <div id="lyrics-container" class="lyrics-container glass-panel">
+                <div class="lyrics-head" aria-hidden="true">
+                    <span class="lyrics-head-kicker">LYRICS</span>
+                    <span class="lyrics-head-title">歌词</span>
+                </div>
                 <!-- 歌词渲染区域 -->
                 <ul id="lyrics-list">
                     <li class="no-lyrics">暂无歌词</li>
@@ -641,10 +666,15 @@
         <aside class="music-stage-id3" aria-label="当前曲目信息">
             <div class="music-stage-cover" role="img"></div>
             <div class="music-stage-track-copy">
-                <div class="music-stage-track-kicker">NOW PERFORMING</div>
+                <div class="music-stage-track-kicker" aria-hidden="true">
+                    <span>TRACK DATABASE</span>
+                    <span class="music-stage-track-file" data-track-field="file-number">FILE NUMBER: TRK-0000</span>
+                </div>
                 <div class="music-stage-track-title">未选择歌曲</div>
+                <div class="music-stage-track-rule" aria-hidden="true"><i></i></div>
                 <div class="music-stage-track-artist">未知艺术家</div>
                 <div class="music-stage-track-album" hidden></div>
+                <div class="music-stage-track-specs" data-track-field="specs"></div>
             </div>
         </aside>
 
@@ -883,12 +913,20 @@
     <script src="music-webdav.js"></script>
     <script src="music-sidebar.js"></script>
     <script src="music-ui.js"></script>
+    <script src="music-theme/music-skin.js"></script>
     <!-- music-archive -->
     <script src="music-archive/archive-model.js"></script>
     <script src="music-archive/archive-scene.js"></script>
     <script src="music-archive/archive-view.js"></script>
     <!-- /music-archive -->
     <script src="music.js"></script>
+
+    <!-- music-dock -->
+    <link rel="stylesheet" href="music-dock/music-dock.css">
+    <div id="music-dock-root"></div>
+    <script src="music-dock/music-dock-icons.js"></script>
+    <script src="music-dock/music-dock.js"></script>
+    <!-- /music-dock -->
 
 </body>
 

@@ -54,7 +54,14 @@ parentPort.on('message', async (filePath) => {
                 artist: metadata.common.artist,
                 album: metadata.common.album,
                 albumArt: coverPath, // Now this is a file path, not raw data
-                bitrate: metadata.format.bitrate
+                bitrate: metadata.format.bitrate,
+                // 曲目档案卡显示的规格；旧歌单没有这些字段时界面按扩展名降级
+                sampleRate: metadata.format.sampleRate,
+                bitsPerSample: metadata.format.bitsPerSample,
+                codec: metadata.format.codec || metadata.format.container,
+                lossless: metadata.format.lossless,
+                numberOfChannels: metadata.format.numberOfChannels,
+                duration: metadata.format.duration
             }
         });
     } catch (error) {
