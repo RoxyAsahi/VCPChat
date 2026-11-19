@@ -8,7 +8,7 @@
         scene.add(root);
         const live = new Map();
         const signs = new Map();
-        const buildSign = encounter => {
+        const buildSign = (encounter, standby) => {
             const group = new T.Group();
             group.position.set(encounter.position.x, encounter.position.y, encounter.position.z);
             group.rotation.y = -encounter.yaw;
@@ -17,12 +17,17 @@
             const trimColor = new T.Color(palette.secondary || '#76bfae');
             // One material and one draw for the whole board: the backing parts
             // come first, the bright trim after them, each in its own colour.
-            const back = new T.MeshStandardMaterial({ roughness: 0.58, metalness: 0.35 });
+            const back = new T.MeshStandardMaterial({
+                roughness: 0.58, metalness: 0.35,
+                emissive: palette.accent || '#f2a900', emissiveIntensity: 0
+            });
             // A board with nothing on it is still a made thing: cabinet seams
             // across its face, glass that picks up the sky at a glancing view,
             // and at night the hood lamps washing down it, a pool under each.
             const sheen = { value: new T.Color(palette.secondary || '#76bfae') };
-            const wash = { value: new T.Color() }, pitch = { value: 3 }, backings = { value: 0 };
+            // New boards can be rendered immediately, even on a paused frame.
+            const wash = { value: back.emissive.clone().multiplyScalar(standby) };
+            const pitch = { value: 3 }, backings = { value: 0 };
             back.onBeforeCompile = shader => {
                 Object.assign(shader.uniforms, { sheen, wash, pitch, backings });
                 shader.vertexShader = shader.vertexShader
@@ -57,7 +62,8 @@
                         float grain = length(fwidth(vPanel));
                         float seam = (1.0 - smoothstep(0.004, 0.02 + grain, 0.48 - max(cabinet.x, cabinet.y)))
                             * 0.03 / (0.03 + grain);
-                        float glance = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
+                        float grazing = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0);
+                        float glance = grazing * grazing * grazing;
                         totalEmissiveRadiance += sheen * (0.01 + 0.16 * glance) * (1.0 - 0.7 * seam) * plain;
                         float below = vFace.y - vPanel.y;
                         float lamp = 0.5 + 0.5 * cos(6.2832 * vPanel.x / pitch - 3.1416);
@@ -166,7 +172,6 @@
             strip.scale.set(encounter.width, 0.55, 1);
             strip.position.set(0, -encounter.height / 2 - 0.58, 0.025);
             group.add(strip);
-            back.emissive.set(palette.accent || '#f2a900');
             root.add(group);
             group.updateMatrixWorld(true);
             return { group, materials: [back, performance], textures: [], performance, back, wash,
@@ -601,7 +606,7 @@
                     if ((encounter.address < distance - 85 || encounter.address > distance + 145)
                         && (time < encounter.previewStart || time > encounter.releaseAfter)) continue;
                     desiredSigns.add(encounter.id);
-                    if (!signs.has(encounter.id)) signs.set(encounter.id, buildSign(encounter));
+                    if (!signs.has(encounter.id)) signs.set(encounter.id, buildSign(encounter, standby));
                 }
                 for (let i = Math.max(0, center - 2); i <= Math.min(phrases.length - 1, center + 3); i++) {
                     if (time > phrases[i].end + 12 || time < phrases[i].start - 8) continue;
@@ -609,7 +614,7 @@
                     if (encounterId !== undefined && !signs.has(encounterId)) {
                         const encounter = track.encounters[encounterId];
                         desiredSigns.add(encounterId);
-                        signs.set(encounterId, buildSign(encounter));
+                        signs.set(encounterId, buildSign(encounter, standby));
                     }
                     wanted.add(i);
                     if (!live.has(i)) live.set(i, build(phrases[i]));
