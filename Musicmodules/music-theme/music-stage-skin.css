@@ -612,3 +612,13 @@ body.music-dock-on .music-stage .music-stage-chrome {
         font-size: 18px;
     }
 }
+
+/* ---------- 标题栏里的舞台开关：单色实心点，不再发金光 ---------- */
+.stage-toggle-btn.is-active,
+body.music-stage-active #custom-title-bar #stage-toggle-btn {
+    color: var(--ms-ink);
+}
+
+.stage-toggle-btn.is-active .stage-toggle-orbit {
+    box-shadow: none;
+}
