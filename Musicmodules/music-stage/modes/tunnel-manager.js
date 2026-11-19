@@ -879,7 +879,7 @@
                 uniform vec3 uHoleDir, uHoleRight, uHoleUp;
                 varying vec3 vDir;
                 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-                float noise1(float x) {
+                float bandNoise(float x) {
                     float i = floor(x), f = fract(x);
                     return mix(hash(vec2(i, 0.0)), hash(vec2(i + 1.0, 0.0)), f * f * (3.0 - 2.0 * f));
                 }
@@ -966,7 +966,7 @@
                     float grow = 1.0 + 3.0 * uComet;
                     float coma = exp(-length(from) * 190.0 / grow) * 0.9 + exp(-length(from) * 46.0 / grow) * 0.1 * (1.0 + uComet);
                     float bend = off - gone * gone * 0.55 / grow;
-                    float striae = 1.0 - 0.35 * uComet * smoothstep(0.3, 0.8, noise1(bend * 900.0 / grow + gone * 40.0));
+                    float striae = 1.0 - 0.35 * uComet * smoothstep(0.3, 0.8, bandNoise(bend * 900.0 / grow + gone * 40.0));
                     float dustTail = exp(-bend * bend / ((0.00006 + gone * 0.008) * grow)) * exp(-gone * 6.5 / grow)
                         * step(0.0, along) * 0.2 * (1.0 + 0.8 * uComet) * striae;
                     float gasTail = exp(-off * off / ((0.00001 + gone * 0.0005) * grow)) * exp(-gone * 4.2 / grow)
@@ -1994,6 +1994,7 @@
         // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane, 4 air above the clouds.
         const AIR_REACH = 1.045;
         const makeBodyMaterial = (kind, seed, surface) => wearSurface(new T.ShaderMaterial({
+            defines: { BODY_KIND: kind },
             transparent: kind >= 2,
             depthWrite: kind < 2,
             side: kind === 2 || kind === 3 ? T.DoubleSide : T.FrontSide,
@@ -2032,6 +2033,7 @@
                 }
                 void main() {
                     vec3 at = position;
+                    #if BODY_KIND == 1
                     if (uWorld > 6.5 && aPart < 0.5) {
                         // A small body is not round: a lumpy, elongated rubble pile
                         // with a waist, like the asteroids probes have visited.
@@ -2041,8 +2043,10 @@
                         float waist = 1.0 - 0.18 * exp(-d.x * d.x * 9.0);
                         at = position * vec3(1.55, 0.8 * waist, 0.85 * waist) * lump;
                     }
+                    #endif
                     vRise = 0.0;
-                    if (uKind > 3.5 && (abs(uWorld - 2.0) < 0.5 || abs(uWorld - 3.0) < 0.5)) {
+                    #if BODY_KIND == 4
+                    if (abs(uWorld - 2.0) < 0.5 || abs(uWorld - 3.0) < 0.5) {
                         // The shell of air becomes plumes: on an ice moon, curtains of
                         // vapour over the cracks at the south pole; on a volcanic
                         // moon, the umbrella of one great eruption.
@@ -2054,6 +2058,7 @@
                         vRise = tall * exp(-off * off / (wide * wide));
                         at = position * (1.0 + vRise);
                     }
+                    #endif
                     vLocal = at; vUv = uv; vPart = aPart;
                     vec4 world = modelMatrix * vec4(at, 1.0);
                     vWorld = world.xyz;
@@ -2132,7 +2137,9 @@
                     vec3 col = vec3(0.0);
                     float alpha = 1.0;
 
-                    if (uKind < 0.5) {
+                    // Each kind of surface compiles only its own code.
+                    #if BODY_KIND == 0
+                    {
                         // Hull, as spacecraft are finished: white thermal panels,
                         // gold foil blankets, bare truss metal, glass ports in rows.
                         // Sunlight is hard in vacuum; the sky fills the shade a little
@@ -2249,7 +2256,9 @@
                             float flash = smoothstep(0.88, 0.9, beat) * (1.0 - smoothstep(0.95, 1.0, beat));
                             col = mix(uColorAccent, uColorInk, 0.45) * (0.22 + 2.4 * flash) * uGlow;
                         }
-                    } else if (uKind < 1.5) {
+                    }
+                    #elif BODY_KIND == 1
+                    {
                         if (vPart > 0.5) {
                             // Only the giants keep moons in attendance.
                             if (uWorld > 0.5 && (uWorld < 5.5 || uWorld > 6.5)) discard;
@@ -2277,13 +2286,22 @@
                         vec3 ground = vec3(0.5);
                         vec3 glow = vec3(0.0);
                         float gloss = 0.0, cover = 0.0, airy = 0.0, hard = 1.0;
+                        // Craters at up to three sizes, sized for whichever world
+                        // this is, so the shader holds one copy of the search.
+                        bool moon = uWorld < 1.5, volcanic = abs(uWorld - 3.0) < 0.5;
+                        bool desert = abs(uWorld - 5.0) < 0.5, rubble = uWorld > 6.5;
+                        vec2 c1 = vec2(0.0), c2 = vec2(0.0), c3 = vec2(0.0);
+                        if (moon || volcanic || desert || rubble) {
+                            float f1 = moon ? 5.0 : volcanic ? 6.0 : desert ? 7.0 : 4.0;
+                            float k1 = moon ? 0.55 : volcanic ? 0.6 : desert ? 0.5 : 0.6;
+                            c1 = craters(p * f1, k1, s);
+                            if (!volcanic) c2 = craters(p * (moon ? 13.0 : desert ? 20.0 : 11.0), desert ? 0.65 : 0.7, s + 3.0);
+                            if (moon && uDetail > 0.5) c3 = craters(p * 34.0, 0.8, s + 7.0);
+                        }
                         if (uWorld < 1.5) {
                             // Dark lava seas over bright highlands, craters within
                             // craters, and young ones with bright aprons.
                             float seas = smoothstep(0.5, 0.6, fbm(p * 1.7 + s));
-                            vec2 c1 = craters(p * 5.0, 0.55, s);
-                            vec2 c2 = craters(p * 13.0, 0.7, s + 3.0);
-                            vec2 c3 = uDetail > 0.5 ? craters(p * 34.0, 0.8, s + 7.0) : vec2(0.0);
                             h = c1.x * 0.05 + c2.x * 0.018 * (1.0 - seas * 0.6) + c3.x * 0.007 * (1.0 - seas * 0.5);
                             float albedo = mix(0.6, 0.22, seas) * (0.86 + 0.28 * noise(p * 24.0 + s))
                                 + (c1.y + c2.y + c3.y * 0.5) * 0.2;
@@ -2301,7 +2319,7 @@
                         } else if (uWorld < 3.5) {
                             // Sulphur plains mottled light and dark, calderas with
                             // dark floors and rings of fallout; lava glows at night.
-                            vec2 cal = craters(p * 6.0, 0.6, s);
+                            vec2 cal = c1;
                             float mottle = fbm(p * 4.0 + s) + (noise(p * 18.0 + s) - 0.5) * 0.15;
                             float pit = smoothstep(-0.2, -0.45, cal.x);
                             h = cal.x * 0.008;
@@ -2346,8 +2364,6 @@
                             // A cold desert: rust dust, dark basalt, frost at one
                             // pole, and a canyon system along the equator.
                             float dark = smoothstep(0.5, 0.66, fbm(p * 2.4 + s + 11.0));
-                            vec2 c1 = craters(p * 7.0, 0.5, s + 2.0);
-                            vec2 c2 = uDetail > 0.5 ? craters(p * 20.0, 0.65, s + 5.0) : vec2(0.0);
                             float lon = atan(p.z, p.x);
                             float trench = (1.0 - smoothstep(0.0, 0.025 + 0.02 * noise(p * 12.0), abs(p.y + 0.08 + 0.05 * sin(lon * 3.0 + s))))
                                 * smoothstep(-0.6, -0.2, sin(lon + s)) ;
@@ -2359,8 +2375,6 @@
                         } else if (uWorld > 6.5) {
                             // An asteroid: dark carbon-rich rubble, boulders, craters
                             // softened by regolith, brighter where fresh rock shows.
-                            vec2 c1 = craters(p * 4.0, 0.6, s);
-                            vec2 c2 = craters(p * 11.0, 0.7, s + 3.0);
                             float boulders = smoothstep(0.72, 0.8, noise(p * 60.0 + s)) * uDetail;
                             h = c1.x * 0.04 + c2.x * 0.015 + boulders * 0.006 + (noise(p * 25.0 + s) - 0.5) * 0.01;
                             float albedo = 0.2 * (0.8 + 0.4 * noise(p * 14.0 + s)) + (c1.y + c2.y) * 0.12 + boulders * 0.08;
@@ -2383,12 +2397,14 @@
                             nl = normalize(cross(dFdx(vLocal), dFdy(vLocal)));
                             if (dot(nl, vLocal) < 0.0) nl = -nl;
                         }
-                        if (h != 0.0) {
+                        // Derivatives are taken outside any branch that varies across pixels.
+                        {
                             vec3 dpx = dFdx(vLocal), dpy = dFdy(vLocal);
                             float hx = dFdx(h * R), hy = dFdy(h * R);
                             vec3 r1 = cross(dpy, nl), r2 = cross(nl, dpx);
                             float det = dot(dpx, r1);
-                            nl = normalize(abs(det) * nl - sign(det) * (hx * r1 + hy * r2));
+                            vec3 bumped = abs(det) * nl - sign(det) * (hx * r1 + hy * r2);
+                            if (dot(bumped, bumped) > 1e-12) nl = normalize(bumped);
                         }
                         float lam = dot(nl, normalize(uLightLocal));
                         float sunlit = mix(clamp(lam, 0.0, 1.0), smoothstep(-0.12, 0.65, lam), 1.0 - hard);
@@ -2504,7 +2520,9 @@
                                 * (1.0 - day) * 0.55 * uGlow;
                         }
                         }
-                    } else if (uKind < 2.5) {
+                    }
+                    #elif BODY_KIND == 2
+                    {
                         // Ring system: ringlets, a wide division, spiral density
                         // waves, the planet's shadow, and light scattered forward.
                         float r = length(vLocal.xz);
@@ -2584,7 +2602,9 @@
                         // Seen edge-on a thin sheet still hides what is behind it.
                         float across = max(0.22, abs(dot(n, v)));
                         alpha = (1.0 - exp(-depthOf * 0.8 / across)) * edges * fade;
-                    } else if (uKind > 3.5) {
+                    }
+                    #elif BODY_KIND == 4
+                    {
                         // Air above the cloud tops: brightest along the limb, thinning
                         // outwards, lit on the day side and glowing when the sun is behind.
                         float facing = clamp(dot(n, v), 0.0, 1.0);
@@ -2612,7 +2632,9 @@
                             alpha = body * 0.22 * (1.0 - smoothstep(0.15, 0.9, top)) * smoothstep(0.05, 0.5, facing)
                                 * fade * step(grain, solid - 0.04);
                         }
-                    } else {
+                    }
+                    #else
+                    {
                         // Sail film: aluminised on the sunward face, bare gold
                         // polymer behind; fold creases, slack wrinkles, strips
                         // of thin solar cells, taped edges. It mirrors the sky.
@@ -2652,6 +2674,7 @@
                         col = mix(col, uColorInk * (0.1 + 0.5 * lam), clamp(hem, 0.0, 1.0) * 0.8);
                         alpha = (0.9 + 0.1 * (1.0 - facing)) * fade;
                     }
+                    #endif
                     // Whatever drifts behind the reading area steps back.
                     vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
                     float forward = smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5)));
@@ -3193,6 +3216,12 @@
             `
         });
         const fadingGlyphMaterial = glyphMaterial.clone();
+        // A hidden stand-in carries the glyph material from the start, so it is
+        // compiled with the rest of the scene and not at the first lyric.
+        const glyphWarmup = new T.Mesh(new T.PlaneGeometry(1, 1), glyphMaterial);
+        glyphWarmup.visible = false;
+        glyphWarmup.frustumCulled = false;
+        root.add(glyphWarmup);
         const glyphColorUniforms = ['waitMain', 'sungMain', 'sub', 'ink', 'outline'];
         let glyphCanvas = document.createElement('canvas');
         let glyphMesh = null;
@@ -4171,7 +4200,7 @@
                 clearFadingGlyph();
                 clearGlyphStage();
                 scene.remove(root);
-                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
+                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, glyphWarmup.geometry, ...frameArcGeos].forEach((g) => g?.dispose?.());
                 [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, fadingGlyphMaterial,
                     ...frameArcMats].forEach((m) => m?.dispose?.());
                 skyMasks.dispose();
