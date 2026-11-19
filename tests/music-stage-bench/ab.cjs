@@ -6,7 +6,8 @@
  * are repeatable and need no GPU, which is the point.
  *
  *   node tests/music-stage-bench/ab.cjs [--mode=diorama] [--t=56] [--size=1600x900]
- *       [--quality=standard] [--frames=40] [--set=overlays|scene|all] [--out=<file.json>]
+ *       [--quality=standard] [--frames=40] [--set=overlays|edge|cover|scene|all] [--wallpaper]
+ *       [--out=<file.json>]
  */
 const path = require('node:path');
 const fs = require('node:fs');
@@ -43,6 +44,14 @@ const SETS = {
         { name: 'edge: no group/contain', css: '.music-stage-edge-spectrum{opacity:1!important;transition:none!important;contain:none!important;overflow:visible!important}' },
         { name: 'edge: canvas+ring only', css: '.music-stage-edge-spectrum{opacity:1!important;transition:none!important}.music-stage-edge-flow,.music-stage-edge-corners{display:none!important}' }
     ],
+    cover: [
+        { name: 'base' },
+        { name: 'no cover backdrop', css: '.music-stage-backdrop{display:none!important}' },
+        { name: 'cover: still', css: '.music-stage-backdrop-layer{transform:scale(1.13)!important}' },
+        { name: 'cover: no blur', css: '.music-stage-backdrop-layer,.music-stage-backdrop::before{filter:none!important}' },
+        { name: 'cover: no noise', css: '.music-stage-backdrop-noise{display:none!important}' },
+        { name: 'cover: no shade', css: '.music-stage-shade{display:none!important}' }
+    ],
     scene: [
         { name: 'base', css: overlaysOff },
         { name: 'no post-processing', css: overlaysOff, stage: { postProcess: false } },
@@ -64,6 +73,8 @@ const run = async (page, origin, variant) => {
     }, { mode: MODE, config });
     await page.goto(`${origin}/Musicmodules/harness.html?lyrics=song&duration=215&t=${AT}`);
     await page.waitForTimeout(400);
+    // A theme wallpaper, as most themes have one: the stage blurs it behind the 2D modes.
+    if (args.wallpaper) await page.addStyleTag({ content: 'body{background-image:url("/assets/musicdark.jpeg")}' });
     await page.evaluate(() => __h.app.stageHost.enter());
     if (variant.css) await page.addStyleTag({ content: variant.css });
     if (variant.script) await page.evaluate(variant.script);
