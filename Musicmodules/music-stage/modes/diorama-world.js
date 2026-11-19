@@ -528,6 +528,15 @@
                             coil(x, 0.985, z + axle + wing, 0.05, 0.19, 4);
                             boxAt(0.13, 0.03, 0.12, x, 0.88, z + axle + wing, group);
                         }
+                        // The axle-box cover, bolted on, with its lubricator plug.
+                        add(new T.CylinderGeometry(0.085, 0.085, 0.03, 14).rotateZ(Math.PI / 2)
+                            .translate(side * 0.995, 0.79, z + axle), group);
+                        add(new T.CylinderGeometry(0.03, 0.03, 0.03, 8).rotateZ(Math.PI / 2)
+                            .translate(side * 1.02, 0.79, z + axle), group === 2 ? 6 : group);
+                        for (let bolt = 0; bolt < 4; bolt++) {
+                            const a = bolt / 4 * Math.PI * 2 + Math.PI / 4;
+                            boxAt(0.02, 0.018, 0.018, side * 1.012, 0.79 + Math.sin(a) * 0.062, z + axle + Math.cos(a) * 0.062, group === 2 ? 6 : group);
+                        }
                         // Brake blocks on their hangers, outside each wheel.
                         const out = axle + Math.sign(axle) * 0.47;
                         boxAt(0.1, 0.2, 0.06, side * 0.7175, 0.8, z + out, group);
@@ -540,6 +549,13 @@
                         coil(x, 0.83, z + end * 0.15, 0.072, 0.3, 5);
                     }
                     boxAt(0.2, 0.04, 0.66, x, 0.66, z, group);
+                    // A brake cylinder on each frame, its rod to the hanger and its hose up to the body.
+                    add(new T.CylinderGeometry(0.065, 0.065, 0.2, 12).rotateX(Math.PI / 2).translate(side * 0.78, 1.0, z + 0.48), group);
+                    add(new T.CylinderGeometry(0.075, 0.075, 0.025, 12).rotateX(Math.PI / 2).translate(side * 0.78, 1.0, z + 0.37), group);
+                    beam(side * 0.78, 1.0, z + 0.58, side * 0.76, 1.08, z + 1.32, 0.018, group === 2 ? 6 : group);
+                    const hose = new T.CatmullRomCurve3([[side * 0.78, 1.06, z + 0.4], [side * 0.82, 1.14, z + 0.24],
+                        [side * 0.86, 1.1, z + 0.08], [side * 0.9, 1.2, z - 0.05]].map(([hx, hy, hz]) => new T.Vector3(hx, hy, hz)));
+                    add(new T.TubeGeometry(hose, 8, 0.016, 5, false), group === 2 ? 7 : group);
                     for (const end of [-0.3, 0.3]) beam(x, 0.66, z + end, x, 1.04, z + end * 1.25, 0.03, group);
                 }
             };
@@ -872,7 +888,7 @@
                 // Rounded in section (a squarish superellipse) and in plan at both ends.
                 const ring = (scaleX, scaleY, grow = 0, thetas = HOOD_RING) => thetas.map(theta => {
                     const c = Math.cos(theta), sn = Math.sin(theta);
-                    return [Math.sign(c) * Math.abs(c) ** 0.5 * (half * scaleX + grow), base + Math.abs(sn) ** 0.5 * (height * scaleY + grow)];
+                    return [Math.sign(c) * Math.abs(c) ** 0.32 * (half * scaleX + grow), base + Math.abs(sn) ** 0.32 * (height * scaleY + grow)];
                 });
                 const stations = [];
                 for (let i = 0; i <= 4; i++) {
@@ -903,8 +919,8 @@
                     }
                 }
             };
-            hood(-0.95, 1.35, 1.36, 0.34);
-            hood(1.55, 3.85, 1.36, 0.34);
+            hood(-0.95, 1.35, 1.36, 0.3);
+            hood(1.55, 3.85, 1.36, 0.3);
             // Ventilator can on three feet, its cap and the rain lip under the cap.
             {
                 const x = 0.36, z = -5.0, foot = roofAt(x);
@@ -969,6 +985,12 @@
                         boxAt(0.12, 0.02, 0.12, x, CAR.crown - 0.02, z, 2);
                         beam(x, base, centre - end * 0.14, x * 0.9, knee, centre + end * 0.92, 0.036, 2);
                         beam(x * 0.9, knee, centre + end * 0.92, x * 0.72, top, centre + end * 0.17, 0.03, 2);
+                        // Knuckles at the knee and bearings at the foot, and a braided shunt across the foot.
+                        add(new T.CylinderGeometry(0.034, 0.034, 0.075, 10).rotateZ(Math.PI / 2).translate(x * 0.9, knee, centre + end * 0.92), 6);
+                        add(new T.CylinderGeometry(0.046, 0.046, 0.11, 10).rotateZ(Math.PI / 2).translate(x, base + 0.005, centre - end * 0.14), 10);
+                        const shunt = new T.CatmullRomCurve3([[x, base + 0.02, centre - end * 0.2], [x + 0.06 * Math.sign(x), base - 0.06, centre - end * 0.3],
+                            [x, base - 0.02, centre - end * 0.42]].map(([px, py, pz]) => new T.Vector3(px, py, pz)));
+                        add(new T.TubeGeometry(shunt, 6, 0.012, 5, false), 7);
                         // Braced across from one side's foot to the other side's knee.
                         beam(x, base + 0.04, centre - end * 0.14, -x * 0.9, knee - 0.04, centre + end * 0.92, 0.018, 2);
                     }
@@ -978,10 +1000,19 @@
                 for (const end of [-1, 1]) {
                     boxAt(0.9, 0.04, 0.04, 0, base, centre + end * 0.62, 2);
                     boxAt(0.8, 0.036, 0.036, 0, knee, centre + end * 0.92, 2);
-                    boxAt(1.16, 0.03, 0.06, 0, top, centre + end * 0.17, 4);
+                    // Collector: a channel holding the carbon strip, horns curling down at either end,
+                    // carried on two small springs over the head frame.
+                    const z = centre + end * 0.17;
+                    boxAt(1.12, 0.032, 0.07, 0, top, z, 4);
+                    boxAt(1.0, 0.022, 0.042, 0, top + 0.026, z, 7);
                     for (const side of [-1, 1]) {
-                        beam(side * 0.58, top, centre + end * 0.17, side * 0.72, top - 0.045, centre + end * 0.17, 0.028, 4);
-                        beam(side * 0.72, top - 0.045, centre + end * 0.17, side * 0.8, top - 0.19, centre + end * 0.17, 0.028, 4);
+                        const horn = new T.CatmullRomCurve3([[0.55, 0], [0.66, -0.004], [0.74, -0.04], [0.79, -0.11], [0.8, -0.2]]
+                            .map(([x, y]) => new T.Vector3(side * x, top + y, z)));
+                        add(new T.TubeGeometry(horn, 10, 0.016, 6, false), 4);
+                        for (let turn = 0; turn < 4; turn++) {
+                            add(new T.CylinderGeometry(0.022, 0.022, 0.012, 8).translate(side * 0.3, top - 0.075 + turn * 0.018, z), 6);
+                        }
+                        add(new T.CylinderGeometry(0.012, 0.012, 0.08, 6).translate(side * 0.3, top - 0.05, z), 6);
                     }
                 }
                 for (const side of [-1, 1]) boxAt(0.03, 0.03, 0.34, side * 0.3, top - 0.03, centre, 2);
@@ -1075,26 +1106,34 @@
                     slot=mix(slot,0.55,smoothstep(0.3,0.9,fwidth(slotsU)));
                     diffuseColor.rgb*=1.0-grille*(0.78-0.62*slot);
                     // Equipment paint picks up the same dirt as the roof.
-                    diffuseColor.rgb*=1.0-equipment*(0.05+0.09*dust);
+                    float runs=max(0.0,carGrain(vec2(vCarPaint.z*18.0+vCarPaint.x*18.0,vCarPaint.y*1.5)))*(1.0-smoothstep(0.2,0.8,fwidth(vCarPaint.z*18.0)));
+                    diffuseColor.rgb*=1.0-equipment*(0.04+0.12*dust+0.18*runs);
+                    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(1.08,1.02,0.9),equipment*max(0.0,dust)*0.8);
                     vec2 stamp=vec2(vCarPaint.x*58.0,vCarPaint.z*43.0);
                     stamp.x+=mod(floor(stamp.y),2.0)*0.5;
                     vec2 raised=(fract(stamp)-0.5)*vec2(1.55,0.66);
                     float bump=(1.0-smoothstep(0.15,0.30,abs(raised.x)+abs(raised.y)))
                         *(1.0-smoothstep(0.25,1.0,max(fwidth(stamp.x),fwidth(stamp.y))));
-                    diffuseColor.rgb*=1.0-tread*(0.23-0.44*bump);`)
+                    diffuseColor.rgb*=1.0-tread*(0.23-0.44*bump);
+                    // Bright metal is brushed: fine streaks one way, a few duller scuffs across.
+                    vec2 brushAt=vec2((vCarPaint.z+vCarPaint.x)*2.5,vCarPaint.y*240.0);
+                    float brush=carGrain(brushAt)*(1.0-smoothstep(0.3,1.0,fwidth(brushAt.y)));
+                    float scuff=max(0.0,carGrain(vCarPaint.zy*vec2(14.0,9.0)))*trim;
+                    diffuseColor.rgb*=1.0+trim*(brush*0.22-scuff*0.18);`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
                     // Satin enamel, a little rougher where the road dirt has settled; dull roofing and rubber.
                     float paintRough=0.50+panelGrain*0.10+micro*0.05+grime*0.16+seam*0.2;
                     roughnessFactor=0.68;
                     roughnessFactor=mix(roughnessFactor,paintRough,enamel);
-                    roughnessFactor=mix(roughnessFactor,0.36+micro*0.05,trim);
+                    roughnessFactor=mix(roughnessFactor,0.28+brush*0.10+scuff*0.25+micro*0.04,trim);
                     roughnessFactor=mix(roughnessFactor,0.86+dust*0.08,roofing);
                     roughnessFactor=mix(roughnessFactor,0.8,rubber+grille);
-                    roughnessFactor=mix(roughnessFactor,0.58+dust*0.1,equipment);
+                    roughnessFactor=mix(roughnessFactor,0.42+dust*0.22+panelGrain*0.1,equipment);
                     roughnessFactor=mix(roughnessFactor,0.67-0.18*bump,tread);`)
                 .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                     metalnessFactor=mix(metalnessFactor,0.62,trim);
-                    metalnessFactor=mix(metalnessFactor,0.0,rubber+grille+roofing);`)
+                    metalnessFactor=mix(metalnessFactor,0.0,rubber+grille+roofing);
+                    metalnessFactor=mix(metalnessFactor,0.45-dust*0.2,equipment);`)
                 .replace('#include <opaque_fragment>', `
                     // A wide cool highlight from the coast and a softer return from the water below.
                     vec3 eye=normalize(vViewPosition);
@@ -1110,7 +1149,9 @@
                     float seaStrip=exp(-abs(slope+0.22)*4.6);
                     vec3 reflectedCoast=carHorizon*skyStrip*(0.036+0.070*gloss)
                         +carWater*seaStrip*(0.022+0.085*gloss);
-                    float sheen=enamel*(1.0-grime*0.6)*(1.0-seam)+trim*1.2;
+                    float sheen=enamel*(1.0-grime*0.6)*(1.0-seam)+trim*(1.5-scuff)+equipment*(0.7-dust*0.4);
+                    // Metal edges catch the sky as a crisp rim.
+                    outgoingLight+=trim*carHorizon*(pow(1.0-facing,4.0)*0.22+skyStrip*0.06)*(1.0-scuff);
                     outgoingLight+=reflectedCoast*sheen+(1.0-enamel-trim)*(1.0-roofing-rubber-grille)*carHorizon*gloss*0.022;
                     #include <opaque_fragment>`);
         };
@@ -1963,7 +2004,8 @@
             // The roof is dressed in dull roofing, near black; its equipment is a pale weathered grey.
             const roofing = roof.clone().lerp(gear, 0.55).multiplyScalar(0.82);
             const rubber = gear.clone().lerp(roofing, 0.5).multiplyScalar(0.55);
-            const equipment = trim.clone().lerp(upper, 0.12).lerp(gear, 0.34);
+            // Pressed-steel equipment on the roof: a dark weathered gunmetal, warmer than the roofing.
+            const equipment = gear.clone().lerp(trim, 0.42).lerp(new T.Color('#5a5446'), 0.25);
             const lens = new T.Color('#c27a34').lerp(upper, 0.25);
             const colours = [upper, lower, gear, roofing, trim, trim.clone().lerp(gear, 0.32), gear.clone().lerp(trim, 0.38),
                     rubber, rubber.clone().lerp(equipment, 0.35), lens, equipment],
