@@ -1607,15 +1607,19 @@
         })();
         carGeometry.setAttribute('finish', new T.Float32BufferAttribute(carGeometry.userData.groups, 1));
         const carHorizon = { value: new T.Color('#9daebc') }, carWater = { value: new T.Color('#285a5e') };
-        const carMaterial = material(new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.06, roughness: 0.5 }));
+        // Enamel under a clear lacquer: the physical model gives the coat its own sharp
+        // reflection of the sky over the satin paint beneath.
+        const carMaterial = material(new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.06, roughness: 0.5,
+            clearcoat: 1, clearcoatRoughness: 0.12 }));
         carMaterial.onBeforeCompile = shader => {
-            Object.assign(shader.uniforms, { carHorizon, carWater });
+            Object.assign(shader.uniforms, { carHorizon, carWater, wetness });
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', '#include <common>\nattribute float finish;varying vec3 vCarPaint;varying float vFinish;')
                 .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPaint=position;vFinish=finish;');
             shader.fragmentShader = shader.fragmentShader
                 .replace('#include <common>', `#include <common>
                     uniform vec3 carHorizon,carWater;
+                    uniform float wetness;
                     varying vec3 vCarPaint;
                     varying float vFinish;
                     float carGrain(vec2 uv){
@@ -1701,7 +1705,31 @@
                     vec2 brushAt=vec2((vCarPaint.z+vCarPaint.x)*2.5,vCarPaint.y*240.0);
                     float brush=carGrain(brushAt)*(1.0-smoothstep(0.3,1.0,fwidth(brushAt.y)));
                     float scuff=max(0.0,carGrain(vCarPaint.zy*vec2(14.0,9.0)))*trim;
-                    diffuseColor.rgb*=1.0+trim*(brush*0.22-scuff*0.18);`)
+                    diffuseColor.rgb*=1.0+trim*(brush*0.22-scuff*0.18);
+                    // Chipped paint where hands, boots and brooms meet the body: along the
+                    // doorway edges, the foot of the doors and the sill lip, the grey-brown
+                    // primer showing through.
+                    float doorD=min(min(abs(abs(vCarPaint.z-(${DOORS[0].toFixed(3)}))-${DOOR_HALF.toFixed(3)}),
+                        abs(abs(vCarPaint.z-(${DOORS[1].toFixed(3)}))-${DOOR_HALF.toFixed(3)})),
+                        abs(abs(vCarPaint.z-(${CREW_DOOR.toFixed(3)}))-${CREW_DOOR_HALF.toFixed(3)}));
+                    float wearZone=max((1.0-smoothstep(0.02,0.09,doorD))*(1.0-smoothstep(1.5,2.6,vCarPaint.y)),
+                        1.0-smoothstep(0.0,0.07,vCarPaint.y-${(CAR.sill + 0.02).toFixed(3)}));
+                    float chipNoise=carGrain(vec2(vCarPaint.z*70.0,vCarPaint.y*55.0))+carGrain(vec2(vCarPaint.z*19.0,vCarPaint.y*15.0))*0.8;
+                    float chip=smoothstep(0.18,0.26,chipNoise-0.55*(1.0-wearZone))*wearZone*(enamel+equipment)
+                        *(1.0-smoothstep(0.3,1.0,fwidth(vCarPaint.z*70.0)));
+                    vec3 primer=mix(diffuseColor.rgb,vec3(dot(diffuseColor.rgb,vec3(0.33))),0.75)*vec3(0.86,0.78,0.7);
+                    diffuseColor.rgb=mix(diffuseColor.rgb,primer,chip*0.8);
+                    // Wet: the paint darkens, and water runs in threads down from the window
+                    // sills and the eaves, gathering in beads on the flanks.
+                    float rivulet=smoothstep(0.28,0.42,carGrain(vec2(along*36.0,vCarPaint.y*1.4)))
+                        *(1.0-smoothstep(0.4,1.0,fwidth(along*36.0)));
+                    vec2 beadCell=vec2(along*34.0,vCarPaint.y*30.0);
+                    vec2 beadAt=fract(beadCell)-0.5+vec2(carGrain(floor(beadCell)*1.7),carGrain(floor(beadCell)*2.3))*0.5;
+                    float bead=(1.0-smoothstep(0.08,0.16,length(beadAt)))*step(0.3,carGrain(floor(beadCell)*0.9+3.1))*smoothstep(0.1,0.5,carGrain(at*vec2(2.0,3.0))+0.3)
+                        *(1.0-smoothstep(0.3,0.8,fwidth(beadCell.x)));
+                    float wetPaint=wetness*(enamel+roofing+equipment);
+                    diffuseColor.rgb*=1.0-wetPaint*(0.22+0.1*rivulet);
+                    diffuseColor.rgb*=1.0-wetness*trim*0.12;`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
                     // Satin enamel, a little rougher where the road dirt has settled; dull roofing and rubber.
                     float paintRough=0.50+panelGrain*0.10+micro*0.05+grime*0.16+seam*0.2;
@@ -1711,11 +1739,20 @@
                     roughnessFactor=mix(roughnessFactor,0.86+dust*0.08,roofing);
                     roughnessFactor=mix(roughnessFactor,0.8,rubber+grille);
                     roughnessFactor=mix(roughnessFactor,0.42+dust*0.22+panelGrain*0.1,equipment);
-                    roughnessFactor=mix(roughnessFactor,0.67-0.18*bump,tread);`)
+                    roughnessFactor=mix(roughnessFactor,0.67-0.18*bump,tread);
+                    // Chips are dull primer; wet surfaces turn glassy, beads and threads most of all.
+                    roughnessFactor=mix(roughnessFactor,0.75,chip);
+                    roughnessFactor=mix(roughnessFactor,mix(0.2,0.06,max(rivulet,bead)),wetPaint*0.85);
+                    roughnessFactor=mix(roughnessFactor,roughnessFactor*0.6,wetness*trim);`)
                 .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                     metalnessFactor=mix(metalnessFactor,0.62,trim);
                     metalnessFactor=mix(metalnessFactor,0.0,rubber+grille+roofing);
-                    metalnessFactor=mix(metalnessFactor,0.45-dust*0.2,equipment);`)
+                    metalnessFactor=mix(metalnessFactor,0.45-dust*0.2,equipment);
+                    metalnessFactor=mix(metalnessFactor,0.0,chip);`)
+                .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+                    // Only the lacquered enamel keeps a clear coat, dulled by the road dirt; rain glazes the rest.
+                    material.clearcoat=clamp(enamel*(1.0-grime*0.7)*(1.0-chip)*(1.0-seam)*0.75+wetness*(roofing+equipment)*0.8+wetPaint*0.25,0.0,1.0);
+                    material.clearcoatRoughness=clamp(mix(0.14+micro*0.05,0.05,wetness),0.0,1.0);`)
                 .replace('#include <opaque_fragment>', `
                     // A wide cool highlight from the coast and a softer return from the water below.
                     vec3 eye=normalize(vViewPosition);
@@ -1732,6 +1769,10 @@
                     vec3 reflectedCoast=carHorizon*skyStrip*(0.036+0.070*gloss)
                         +carWater*seaStrip*(0.022+0.085*gloss);
                     float sheen=enamel*(1.0-grime*0.6)*(1.0-seam)+trim*(1.5-scuff)+equipment*(0.7-dust*0.4);
+                    // Rain glazes the paint: the coast reflection sharpens and brightens, every
+                    // thread of water and bead catches a point of sky.
+                    sheen*=1.0+wetPaint*1.6;
+                    outgoingLight+=carHorizon*wetPaint*(skyStrip*0.10+gloss*0.08+bead*(0.12+0.3*gloss)+rivulet*0.07*(0.4+skyStrip));
                     // Metal edges catch the sky as a crisp rim.
                     outgoingLight+=trim*carHorizon*(pow(1.0-facing,4.0)*0.22+skyStrip*0.06)*(1.0-scuff);
                     outgoingLight+=reflectedCoast*sheen+(1.0-enamel-trim)*(1.0-roofing-rubber-grille)*carHorizon*gloss*0.022;
