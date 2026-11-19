@@ -2006,6 +2006,8 @@
         const target = new T.WebGLRenderTarget(512, 320, { depthBuffer: true, type: T.HalfFloatType });
         const mirror = new T.PerspectiveCamera();
         const textureMatrix = new T.Matrix4();
+        // How hard it is raining, 0..1; shared with every shader that shows it.
+        const rainAmount = { value: 0 };
         const waterMat = material(new T.ShaderMaterial({
             depthWrite: true, transparent: false,
             uniforms: { reflection: { value: target.texture }, textureMatrix: { value: textureMatrix },
@@ -2016,17 +2018,33 @@
                 fogTint: { value: new T.Color('#415266') }, fogDensity: { value: 0.008 },
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
-                lampPower: { value: new Float32Array(4) } },
+                lampPower: { value: new Float32Array(4) }, rain: rainAmount },
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain;
                 uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;
                 uniform vec3 lampPos[4];uniform float lampPower[4];
                 varying vec4 reflected;varying vec3 world;
                 float h21(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
                 float n21(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
                     return mix(mix(h21(i),h21(i+vec2(1.0,0.0)),f.x),mix(h21(i+vec2(0.0,1.0)),h21(i+vec2(1.0,1.0)),f.x),f.y);}
+                // Rings spreading from where drops land: one drop per cell per
+                // cycle, at its own place and time. Returns the slope of the surface.
+                vec2 rings(vec2 p,float t,float seed){
+                    vec2 cell=floor(p),g=vec2(0.0);
+                    for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+                        vec2 c=cell+vec2(float(i),float(j));
+                        float h=h21(c+seed);
+                        vec2 centre=c+vec2(h21(c*1.7+seed+3.1),h21(c*2.3+seed+7.9));
+                        float age=fract(t*(0.9+h*0.4)+h*7.0);
+                        vec2 d=p-centre;float r=length(d);
+                        float front=r-age*1.1;
+                        float wave=sin(front*31.0)*exp(-front*front*90.0)*(1.0-age)*(1.0-age);
+                        g+=d/max(r,0.001)*wave;
+                    }
+                    return g;
+                }
                 void main(){
                     vec3 toCam=cameraPosition-world;float dist=length(toCam);vec3 v=toCam/max(dist,0.001);
                     // Analytic ripple normal: two swells and fine chop, damped with distance.
@@ -2037,8 +2055,15 @@
                     g+=vec2(1.9,1.3)*cos(world.x*1.9+world.z*1.3+time*1.1)*0.018;
                     g+=vec2(-1.4,2.3)*cos(-world.x*1.4+world.z*2.3-time*0.9)*0.014;
                     g*=damp*(1.0+energy*0.6);
+                    // Rain breaks the mirror up: rings near by, a fine roughness further off.
+                    if(rain>0.0){
+                        float nearRings=1.0-smoothstep(10.0,34.0,dist);
+                        vec2 r=rings(world.xz*1.6,time,0.0)+rings(world.xz*2.3+17.0,time*1.13,5.0)*0.7;
+                        g+=r*0.09*rain*nearRings;
+                        g+=(vec2(n21(world.xz*7.0+time*3.0),n21(world.zx*6.0-time*2.7))-0.5)*0.05*rain*(1.0-nearRings*0.5);
+                    }
                     vec3 n=normalize(vec3(-g.x,1.0,-g.y));
-                    vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008);
+                    vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03);
                     float valid=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0)*step(0.0,reflected.w);
                     vec3 r=texture2D(reflection,clamp(uv,0.001,0.999)).rgb;
                     // Schlick Fresnel for water (F0 ~ 0.02), lifted so the mirror reads at night.
@@ -2106,6 +2131,91 @@
         const halos = new T.Points(haloGeometry, haloMat);
         halos.frustumCulled = false;
         root.add(halos);
+        // --- Rain (stage setting: off / light / heavy) ---
+        // Streaks fall through a box that travels with the camera but stays
+        // put in the world, so they slide past as the camera moves. All of the
+        // motion is in the vertex shader; the CPU only sets a few uniforms.
+        // Nothing falls inside the car the camera is riding in.
+        const RAIN_MAX = 14000, RAIN_BOX = 34, RAIN_HEIGHT = 18;
+        const rainSeeds = new Float32Array(RAIN_MAX * 4 * 3), rainCorners = new Float32Array(RAIN_MAX * 4 * 2);
+        const rainIndex = new Uint32Array(RAIN_MAX * 6);
+        {
+            const drop = seededRandom('diorama-rain');
+            for (let i = 0; i < RAIN_MAX; i++) {
+                const seed = [drop(), drop(), drop()];
+                [[-1, 0], [1, 0], [1, 1], [-1, 1]].forEach(([x, y], k) => {
+                    rainSeeds.set(seed, (i * 4 + k) * 3);
+                    rainCorners.set([x, y], (i * 4 + k) * 2);
+                });
+                rainIndex.set([0, 1, 2, 0, 2, 3].map(v => v + i * 4), i * 6);
+            }
+        }
+        const rainGeometry = geometry(new T.BufferGeometry());
+        rainGeometry.setAttribute('position', new T.BufferAttribute(rainSeeds, 3));
+        rainGeometry.setAttribute('corner', new T.BufferAttribute(rainCorners, 2));
+        rainGeometry.setIndex(new T.BufferAttribute(rainIndex, 1));
+        rainGeometry.setDrawRange(0, 0);
+        const rainMat = material(new T.ShaderMaterial({
+            // A streak's two sides swap with the angle it is seen at; draw both.
+            transparent: true, depthWrite: false, side: T.DoubleSide,
+            uniforms: { time: { value: 0 }, amount: rainAmount, centre: { value: new T.Vector3() },
+                colour: { value: new T.Color('#c9d6e0') }, opacity: { value: 0.3 },
+                wind: { value: new T.Vector2(0.9, 0.35) },
+                shelterA: { value: new T.Vector3() }, shelterB: { value: new T.Vector3() }, shelter: { value: 0 } },
+            vertexShader: `attribute vec2 corner;
+                uniform float time,amount,shelter;uniform vec3 centre,shelterA,shelterB;uniform vec2 wind;
+                varying float vAlpha;varying float vAcross;
+                const float BOX=${RAIN_BOX.toFixed(1)},HEIGHT=${RAIN_HEIGHT.toFixed(1)};
+                void main(){
+                    float fall=7.5+position.z*2.5;
+                    vec3 p;
+                    p.x=centre.x+(fract((position.x*BOX-centre.x)/BOX)-0.5)*BOX;
+                    p.z=centre.z+(fract((position.z*BOX*1.618-centre.z)/BOX)-0.5)*BOX;
+                    float drop=fract(position.y-time*fall/HEIGHT);
+                    p.y=max(centre.y,2.0)-HEIGHT*0.4+drop*HEIGHT;
+                    vec3 v=vec3(wind.x,-fall,wind.y);
+                    // A streak is as long as the drop falls while the shutter is open.
+                    vec3 tail=p-v*(0.03+fract(position.y*13.7)*0.025);
+                    vec3 head=mix(p,tail,corner.y);
+                    vec3 toCam=normalize(cameraPosition-head);
+                    vec3 side=normalize(cross(normalize(v),toCam));
+                    float dist=distance(cameraPosition,p);
+                    float width=0.003+dist*0.0011;
+                    head+=side*corner.x*width;
+                    // Inside the car the camera rides in, nothing falls.
+                    vec3 ab=shelterB-shelterA;
+                    float k=clamp(dot(p-shelterA,ab)/max(dot(ab,ab),0.001),0.0,1.0);
+                    vec3 q=p-(shelterA+ab*k);
+                    float inside=shelter*step(length(q.xz),1.45)*step(p.y,4.1);
+                    // Close drops are out of focus and faint; far ones thin into the haze.
+                    vAlpha=(1.0-inside)*smoothstep(0.6,3.5,dist)*(1.0-smoothstep(BOX*0.18,BOX*0.5,dist))
+                        *step(0.0,p.y)*(0.35+0.65*fract(position.x*91.3));
+                    vAcross=corner.x;
+                    gl_Position=projectionMatrix*viewMatrix*vec4(head,1.0);
+                    if(vAlpha<=0.0)gl_Position=vec4(2.0,2.0,2.0,1.0);
+                }`,
+            fragmentShader: `uniform vec3 colour;uniform float opacity;varying float vAlpha;varying float vAcross;
+                void main(){
+                    float a=vAlpha*opacity*(1.0-vAcross*vAcross);
+                    if(a<0.004)discard;
+                    gl_FragColor=vec4(colour,a);
+                    #include <colorspace_fragment>
+                }`
+        }));
+        const rainDrops = new T.Mesh(rainGeometry, rainMat);
+        rainDrops.frustumCulled = false;
+        rainDrops.visible = false;
+        rainDrops.renderOrder = 5;
+        // For the viewer only: the mirror pass would draw every streak twice.
+        rainDrops.layers.set(1);
+        root.add(rainDrops);
+        // Every tier rains; the saving tier with far fewer streaks.
+        const RAIN_COUNTS = { 'energy-saving': 4000, standard: 9000, ultimate: RAIN_MAX };
+        const RAIN_LEVELS = { off: 0, light: 0.45, heavy: 1 };
+        let rainLevel = 0, rainClock = 0;
+        // The sea's height. Scenery may raise it a little where the line runs
+        // through shallow water; the mirror follows it.
+        let waterLevel = 0;
         // Cabin window foreground (layer 1: viewer only, never mirrored).
         const cabin = new T.Group();
         cabin.renderOrder = 1000;
@@ -2340,8 +2450,16 @@
             frameMat.color.copy(deep).lerp(structure, 0.35).multiplyScalar(0.4);
             if (light) frameMat.color.copy(muted).lerp(page, 0.15).multiplyScalar(0.72);
             haloMat.uniforms.color.value.copy(lamp);
+            // Rain: pale streaks against the night, pencil-grey strokes on the page.
+            rainMat.uniforms.colour.value.copy(light ? ink.clone().lerp(page, 0.3) : skyMat.uniforms.horizon.value.clone().lerp(white, 0.6));
+            rainMat.uniforms.opacity.value = light ? 0.38 : 0.17;
+            // An overcast sky is greyer and, at night, a little lower and closer.
+            const overcast = skyMat.uniforms.horizon.value.clone();
+            const greyed = overcast.getHSL({});
+            overcast.setHSL(greyed.h, greyed.s * 0.35, greyed.l * (light ? 0.93 : 0.8));
             palBase = {
-                light,
+                light, overcast, moon: moonColor.clone(), moonGlow: skyMat.uniforms.moonGlow.value,
+                glitter: waterMat.uniforms.glitter.value,
                 horizon: skyMat.uniforms.horizon.value.clone(),
                 night: skyMat.uniforms.night.value.clone(),
                 hemi: hemisphere.color.clone(), hemiIntensity: hemisphere.intensity,
@@ -2357,7 +2475,7 @@
             const toward = bias > 0 ? palBase.warm : palBase.cold;
             const amount = Math.abs(bias);
             const k = palBase.light ? 0.5 : 1;
-            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k);
+            scratch.copy(palBase.horizon).lerp(toward, amount * 0.12 * k).lerp(palBase.overcast, rainLevel * 0.5);
             skyMat.uniforms.horizon.value.copy(scratch);
             waterMat.uniforms.fogTint.value.copy(scratch);
             if (scene.fog) {
@@ -2365,18 +2483,50 @@
                 // Warm passages close in; open chapters and loud passages thin the haze.
                 // By day distant things fade into the page rather than darken.
                 scene.fog.density = 0.008 * (palBase.light ? 1.45 : 1) * (1 + Math.max(0, bias) * 0.18)
-                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06);
+                    * (1 - clamp(openness) * 0.18) * (1 - clamp(energy) * 0.06) * (1 + rainLevel * (palBase.light ? 0.45 : 0.9));
                 waterMat.uniforms.fogDensity.value = scene.fog.density;
             }
-            skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k);
+            skyMat.uniforms.night.value.copy(palBase.night).lerp(palBase.cold, Math.max(0, -bias) * 0.05 * k)
+                .lerp(palBase.overcast, rainLevel * 0.3);
             hemisphere.color.copy(palBase.hemi).lerp(toward, amount * 0.16 * k);
-            hemisphere.intensity = palBase.hemiIntensity * (1 + Math.max(0, -bias) * 0.12);
+            hemisphere.intensity = palBase.hemiIntensity * (1 + Math.max(0, -bias) * 0.12) * (1 - rainLevel * 0.2);
+            // The moon goes behind the rain clouds, and its path on the water with it.
+            moonColor.copy(palBase.moon).multiplyScalar(1 - rainLevel * 0.75);
+            skyMat.uniforms.moonGlow.value = palBase.moonGlow * (1 - rainLevel * 0.8);
+            waterMat.uniforms.glitter.value = palBase.glitter * (1 - rainLevel * 0.7);
             // Warm chapters deepen lamps toward amber, cold ones bleach them slightly.
             scratch.copy(palBase.lamp).lerp(white, Math.max(0, -bias) * 0.22);
             lights.forEach(l => l.color.copy(scratch).lerp(white, palBase.light ? 0.65 : 0));
             waterMat.uniforms.lampTint.value.copy(scratch);
             haloMat.uniforms.color.value.copy(scratch);
             lampMaterial.color.copy(scratch).multiplyScalar((palBase.light ? 1.5 : LAMP_GAIN) * (1 + Math.max(0, bias) * 0.15));
+        };
+        // The setting eases in and out over a couple of seconds of wall-clock
+        // time, but the first frame after entering the stage starts as set.
+        const updateRain = (track, pose, time, tuning, tier) => {
+            const wanted = RAIN_LEVELS[tuning.rain] ?? 0;
+            const now = (global.performance?.now?.() ?? Date.now()) / 1000;
+            if (!rainClock) rainLevel = wanted;
+            const step = clamp(now - (rainClock || now), 0, 0.25) * 0.5;
+            rainClock = now;
+            rainLevel += Math.max(-step, Math.min(step, wanted - rainLevel));
+            rainAmount.value = rainLevel;
+            const count = Math.round((RAIN_COUNTS[tier] ?? RAIN_COUNTS.standard) * rainLevel);
+            rainDrops.visible = count > 0;
+            rainGeometry.setDrawRange(0, count * 6);
+            if (!count) return;
+            const u = rainMat.uniforms;
+            u.time.value = time;
+            u.centre.value.set(pose.position.x, pose.position.y, pose.position.z);
+            // The train, front to back, as one straight run: it is nearly straight over its length.
+            const front = pose.trainFront ?? pose.distance - 0.4, back = front - SET_PITCH * 2;
+            const a = track.at(front), b = track.at(back);
+            u.shelterA.value.set(a.position.x, 0, a.position.z);
+            u.shelterB.value.set(b.position.x, 0, b.position.z);
+            const here = track.at(clamp(pose.distance, back, front));
+            const lateral = Math.abs((pose.position.x - here.position.x) * here.right.x + (pose.position.z - here.position.z) * here.right.z);
+            const inside = pose.distance <= front + 0.5 && pose.distance >= back - 0.5 && lateral < 1.45 && pose.position.y < 4.1;
+            u.shelter.value = inside || (pose.chase ?? 0) > 0.002 || (pose.saloon ?? 0) > 0.002 ? 1 : 0;
         };
         const update = (timeline, track, pose, time, config, audio = {}) => {
             if (dead) return;
@@ -2388,15 +2538,15 @@
             stars.position.copy(sky.position);
             ridge.position.copy(sky.position);
             moon.position.set(sky.position.x - 210, 300, sky.position.z - 420);
-            water.position.set(pose.position.x, 0, pose.position.z);
+            water.position.set(pose.position.x, waterLevel, pose.position.z);
             stars.visible = tuning.showParticles !== false;
-            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0));
+            starMat.opacity = baseStarOpacity * (1 - clamp(pose.finale ?? 0)) * (1 - rainLevel * 0.85);
             starMat.uniforms.opacity.value = starMat.opacity;
             starMat.uniforms.time.value = time;
             starGeo.setDrawRange(0, townLights + (saving ? 1500 : quality === 'ultimate' ? 8000 : 4000));
             skyMat.uniforms.open.value = pose.state.openness;
             const auroraEnabled = tuning.aurora !== false;
-            skyMat.uniforms.auroraActive.value = auroraEnabled ? 1.0 : 0.0;
+            skyMat.uniforms.auroraActive.value = auroraEnabled ? 1.0 - rainLevel * 0.95 : 0.0;
             if (auroraTrack !== track) {
                 const opening = global.MusicStageDioramaCamera.pose(timeline, track, 0, tuning);
                 skyMat.uniforms.auroraHeading.value = opening.yaw - 0.34;
@@ -2416,13 +2566,15 @@
                 : (0.5 - 0.5 * Math.cos(phase * Math.PI / 8)) * gain;
             waterMat.uniforms.time.value = time;
             waterMat.uniforms.energy.value = clamp(audio.energy);
+            updateRain(track, pose, time, tuning, quality);
             // Analytic chapter swell (seek-exact) plus frozen-on-pause audio response.
             const accent = motion ? (timeline.accentAt?.(time) ?? 0) : 0;
             liveAccent = accent;
             skyMat.uniforms.accent.value = accent;
             starMat.uniforms.accent.value = accent;
             applyWarmth(pose.state.warmth ?? 0.5, pose.state.openness, audio.energy);
-            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25);
+            // Lamps spread wider in the wet air.
+            haloMat.uniforms.intensity.value = haloBase * (1 + clamp(audio.impact) * 0.35 + accent * 0.25) * (1 + rainLevel * 0.3);
             reflectionEnabled = tuning.waterReflection !== false && (tuning.waterStrength ?? 1) > 0;
             waterMat.uniforms.strength.value = reflectionEnabled ? clamp(tuning.waterStrength ?? 1, 0, 2) : 0;
             const spacing = 16 / clamp(tuning.stationIntensity ?? 1, 0.5, 2);
@@ -3090,7 +3242,7 @@
             if (dead || !reflectionEnabled) return;
             camera.updateMatrixWorld();
             mirror.position.copy(camera.position);
-            mirror.position.y *= -1;
+            mirror.position.y = 2 * waterLevel - mirror.position.y;
             const direction = camera.getWorldDirection(new T.Vector3());
             direction.y *= -1;
             mirror.up.set(0, 1, 0).transformDirection(camera.matrixWorld);
@@ -3102,7 +3254,7 @@
             mirror.updateMatrixWorld();
             textureMatrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1)
                 .multiply(mirror.projectionMatrix).multiply(mirror.matrixWorldInverse);
-            const plane = new T.Plane(new T.Vector3(0, 1, 0), 0).applyMatrix4(mirror.matrixWorldInverse);
+            const plane = new T.Plane(new T.Vector3(0, 1, 0), -waterLevel).applyMatrix4(mirror.matrixWorldInverse);
             const clip = new T.Vector4(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
             const e = mirror.projectionMatrix.elements;
             const q = new T.Vector4((Math.sign(clip.x) + e[8]) / e[0],
@@ -3139,12 +3291,15 @@
         setPalette();
         return {
             update, setPalette, renderReflection, updateCabin,
+            // How hard it is raining (0..1), for any shader that shows it.
+            rain: rainAmount,
             setPixelRatio(ratio) {
                 starMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
                 haloMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
             },
             snapshot: () => ({ liveStations, stationTypes, waterVisible: water.visible, reflectionEnabled,
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
+                rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
                 cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible,
                 auroraVisible: Boolean(skyMat.uniforms.auroraActive.value > 0.5),
@@ -3167,5 +3322,38 @@
             }
         };
     };
-    global.MusicStageDioramaWorld = Object.freeze({ create, poleSide, inSight });
+    // Rain on a pane of glass, for the shaders that draw windows. p is a point
+    // on the pane in metres (y up), t the playback clock, rain 0..1. Returns
+    // the refraction offset in metres (xy) and how much of the point is under
+    // water (z): still beads that come and go, and runnels that slide down,
+    // each clearing a path through the beads.
+    const RAIN_GLASS = `
+        float rainHash(vec2 c){return fract(sin(dot(c,vec2(12.9898,78.233)))*43758.5453);}
+        vec3 rainOnGlass(vec2 p,float t,float rain){
+            if(rain<=0.0)return vec3(0.0);
+            vec3 o=vec3(0.0);
+            float column=floor(p.x/0.11),hc=rainHash(vec2(column,3.7));
+            float cycle=1.4,q=mod(p.y+hc*cycle,cycle);
+            float head=cycle*(1.0-fract(t*(0.18+hc*0.22)+hc*5.0));
+            float x=p.x-(column+0.5)*0.11-sin(p.y*8.0+hc*6.0)*0.012;
+            float runs=step(hc,rain*0.55);
+            vec2 d=vec2(x,(q-head)*0.75);
+            float drop=smoothstep(0.016,0.009,length(d))*runs;
+            float above=q-head;
+            float trail=smoothstep(0.0045,0.0015,abs(x))*step(0.0,above)*(1.0-smoothstep(0.0,0.45,above))*runs;
+            float cleared=step(0.0,above)*step(above,0.6)*smoothstep(0.022,0.01,abs(x))*runs;
+            o.xy+=d*drop*0.8+vec2(x*trail*0.6,0.0);
+            o.z=max(drop,trail*0.7);
+            vec2 g=p/0.03,c=floor(g),f=fract(g)-0.5;
+            float h=rainHash(c);
+            vec2 at=f-(vec2(rainHash(c+1.3),rainHash(c+7.1))-0.5)*0.5;
+            float life=fract(t*0.07+h*9.0);
+            float present=step(h,rain*0.6)*smoothstep(0.0,0.08,life)*(1.0-smoothstep(0.8,1.0,life))*(1.0-cleared);
+            float r=0.1+0.2*rainHash(c+4.4);
+            float bead=smoothstep(r,r*0.55,length(at))*present;
+            o.xy+=at*bead*0.03*0.7;
+            o.z=max(o.z,bead);
+            return o;
+        }`;
+    global.MusicStageDioramaWorld = Object.freeze({ create, poleSide, inSight, RAIN_GLASS });
 })(window);

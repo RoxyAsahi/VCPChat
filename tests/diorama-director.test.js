@@ -383,3 +383,23 @@ test('lyrics that stop long before the music do not end the journey early', () =
     assert.equal(track.scenes[0].start, 0);
     assert.ok(track.scenes.some(scene => scene.start > 101 && scene.kind === 'SALOON'));
 });
+
+test('the ride drifts into a dream from the second chorus, or once the words run out', () => {
+    const a = D.compile({ lines, trackId: 'test', duration: 160 });
+    const second = a.acts.find(act => act.kind === 'Chorus' && act.visit === 2);
+    assert.equal(a.sample(0).dream, 0);
+    assert.equal(a.sample(160 * 0.3).dream, 0);
+    assert.ok(Math.abs(a.dreamStart - Math.max(160 * 0.35, Math.min(second.start, 160 * 0.6))) < 1e-9);
+    assert.equal(a.sample(160).dream, 1);
+    let previous = 0;
+    for (let t = 0; t <= 160; t += 0.25) {
+        const dream = a.sample(t).dream;
+        assert.ok(dream >= previous && dream - previous < 0.02, `dream jumps at ${t}`);
+        previous = dream;
+    }
+    // A short version's words on the full track: the dream begins when they stop.
+    const short = D.compile({ lines: R.normalizeLines(Array.from({ length: 18 }, (_, i) => ({
+        startTime: 13 + i * 5, endTime: 13 + i * 5 + 4, fullText: `第${i}句 地图上没有的路口` }))), trackId: 'short', duration: 204 });
+    assert.ok(Math.abs(short.dreamStart - 102) < 0.5, `dream starts at ${short.dreamStart}`);
+    assert.ok(short.sample(150).dream > 0.99);
+});
