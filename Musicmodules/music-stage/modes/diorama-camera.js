@@ -96,7 +96,7 @@
      */
     const CHASE_RIGS = Object.freeze([
         { name: 'QUARTER', lateral: CHASE_LATERAL, lead: CHASE_LEAD, height: null, yaw: -0.075, pitch: 0, fov: 0,
-            skyYaw: 0, skyPitch: 0 },
+            skyYaw: 0, skyPitch: 0.1 },
         // Out over the water ahead of the train and turned to face it: the
         // lamps and the lit cab come on, the whole train strung out behind.
         { name: 'BOW', lateral: -5.4, lead: -13, height: 1.5, yaw: 2.82, pitch: 0.07, fov: -22,
@@ -406,7 +406,9 @@
         const direction = { x: Math.sin(yaw) * cp, y: Math.sin(pitch), z: -Math.cos(yaw) * cp };
         // Where a line on the sky is written for this view.
         const out = motion ? move.out : 0;
-        const skyYaw = yaw + move.rig.skyYaw * out, skyPitch = pitch + move.rig.skyPitch * out;
+        // Even from the cab a line on the sky is written above the horizon, clear of
+        // the poles and the far shore that gather where the line ahead runs out.
+        const skyYaw = yaw + move.rig.skyYaw * out, skyPitch = pitch + mix(0.08, move.rig.skyPitch, out);
         const sky = { x: Math.sin(skyYaw) * Math.cos(skyPitch), y: Math.sin(skyPitch),
             z: -Math.cos(skyYaw) * Math.cos(skyPitch) };
         return {
