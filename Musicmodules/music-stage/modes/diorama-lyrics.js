@@ -174,7 +174,9 @@
             group.add(strip);
             root.add(group);
             group.updateMatrixWorld(true);
-            return { group, materials: [back, performance], textures: [], performance, back, wash,
+            // held starts at rest: a board built partway through a frame is
+            // lit by it before the next frame's reset reaches it.
+            return { group, materials: [back, performance], textures: [], performance, back, wash, held: 0,
                 size: { x: W / 2, y: H / 2 } };
         };
         const plane = new T.PlaneGeometry(1, 1);
@@ -239,7 +241,9 @@
             const canvas = document.createElement('canvas');
             // Drawn on the CPU: an accelerated canvas has to be read back from the GPU to become a texture.
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            const font = `${constellation ? '500' : '700'} 144px "Microsoft YaHei","PingFang SC",sans-serif`;
+            // Microsoft YaHei has only regular and bold: anything under 600 is the
+            // thin regular face, which loses its strokes against the sky.
+            const font = `700 144px "Microsoft YaHei","PingFang SC",sans-serif`;
             ctx.font = font;
             const advances = phrase.glyphs.map(g => Math.max(1, ctx.measureText(g.text).width));
             const total = advances.reduce((a, b) => a + b, 0);
@@ -496,7 +500,7 @@
             } else root.add(group);
             const subtitle = group.userData.subtitle;
             return { group, materials, textures, mat, phrase, constellation, text, encounter, glyphGeometry,
-                echo, echoMat, style, home: group.position.clone(),
+                echo, echoMat, style, home: group.position.clone(), homeYaw: group.rotation.y,
                 halfWidth: width / 2, halfHeight: height * scale / 2,
                 // Lower edge of the block once the translation rows are included.
                 subtitleDrop: subtitle ? subtitle.scale.y * 0.3 - subtitle.position.y : 0,
@@ -508,9 +512,32 @@
         // out of the picture. Slide the block just far enough to stay readable;
         // the correction is a pure function of the current camera pose.
         const corner = new T.Vector3(), slide = new T.Vector3(), axis = new T.Vector3();
+        const swung = new T.Vector3();
         const keepInFrame = (node, camera, frame) => {
             const group = node.group;
-            group.position.copy(node.home);
+            // When the camera turns away from where a line was written, the edge
+            // of the picture carries the line round with it, still facing the
+            // camera, so a sung line is never left behind the lens.
+            const home = swung.copy(node.home);
+            group.rotation.y = node.homeYaw;
+            if (camera) {
+                const m = camera.matrixWorld.elements;
+                const ox = home.x - m[12], oz = home.z - m[14], reach = Math.hypot(ox, oz);
+                const fx = -m[8], fz = -m[10];
+                if (reach > 1e-3 && Math.hypot(fx, fz) > 1e-3) {
+                    const heading = Math.atan2(ox, -oz), gaze = Math.atan2(fx, -fz);
+                    const off = Math.atan2(Math.sin(heading - gaze), Math.cos(heading - gaze));
+                    const edge = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect * (frame?.x ?? 0.94));
+                    const allowed = Math.max(0, edge - Math.atan(node.halfWidth / reach));
+                    if (Math.abs(off) > allowed) {
+                        const turn = off - Math.sign(off) * allowed, carried = heading - turn;
+                        home.x = m[12] + Math.sin(carried) * reach;
+                        home.z = m[14] - Math.cos(carried) * reach;
+                        group.rotation.y = node.homeYaw + turn;
+                    }
+                }
+            }
+            group.position.copy(home);
             if (camera) {
                 const tanV = Math.tan(camera.fov * Math.PI / 360);
                 const tanH = tanV * camera.aspect;
@@ -520,9 +547,9 @@
                     ? Math.max(node.halfHeight, node.subtitleDrop) : node.halfHeight;
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, behind = false;
                 for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-                    corner.set(node.home.x + Math.cos(ry) * node.halfWidth * sx,
-                        node.home.y + (sy > 0 ? node.halfHeight : -drop),
-                        node.home.z - Math.sin(ry) * node.halfWidth * sx).applyMatrix4(camera.matrixWorldInverse);
+                    corner.set(home.x + Math.cos(ry) * node.halfWidth * sx,
+                        home.y + (sy > 0 ? node.halfHeight : -drop),
+                        home.z - Math.sin(ry) * node.halfWidth * sx).applyMatrix4(camera.matrixWorldInverse);
                     if (corner.z > -1) behind = true;
                     minX = Math.min(minX, corner.x / (-corner.z * tanH));
                     maxX = Math.max(maxX, corner.x / (-corner.z * tanH));
@@ -531,7 +558,7 @@
                 }
                 const correction = (low, high, limit) => high - low >= limit * 2 ? -(high + low) / 2
                     : high > limit ? limit - high : low < -limit ? -limit - low : 0;
-                corner.copy(node.home).applyMatrix4(camera.matrixWorldInverse);
+                corner.copy(home).applyMatrix4(camera.matrixWorldInverse);
                 const depth = -corner.z;
                 // A display board nearer than the line would hide it: the line
                 // rises clear of the board for as long as the two overlap.
