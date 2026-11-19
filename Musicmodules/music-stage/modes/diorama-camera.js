@@ -97,6 +97,10 @@
     const CHASE_RIGS = Object.freeze([
         { name: 'QUARTER', lateral: CHASE_LATERAL, lead: CHASE_LEAD, height: null, yaw: -0.075, pitch: 0, fov: 0,
             skyYaw: 0, skyPitch: 0 },
+        // Out over the water ahead of the train and turned to face it: the
+        // lamps and the lit cab come on, the whole train strung out behind.
+        { name: 'BOW', lateral: -5.4, lead: -13, height: 1.5, yaw: 2.82, pitch: 0.07, fov: -22,
+            skyYaw: -0.17, skyPitch: 0.2 },
         { name: 'ALONGSIDE', lateral: -CHASE_LATERAL, lead: 44, height: 1.7, yaw: 0.3, pitch: 0.13, fov: -4,
             skyYaw: -0.12, skyPitch: 0.16 },
         { name: 'OVERHEAD', lateral: 1.8, lead: 60, height: 8.6, yaw: -0.02, pitch: -0.2, fov: 0,
@@ -184,8 +188,8 @@
         }
         return scenes;
     };
-    // Where the saloon camera stands, measured back from the nose of the train.
-    const SALOON = Object.freeze({ back: 9.1, travel: 2.4, lateral: 0.2, height: 2.66, sill: 2.35 });
+    // The saloon camera rides at seated eye level, measured back from the nose.
+    const SALOON = Object.freeze({ back: 9.1, travel: 2.4, lateral: 0.11, height: 2.34, sill: 2.35 });
     const TRACKSIDE = Object.freeze({ lateral: 6.5, height: 1.5 });
     const sceneAt = (track, t) => {
         const scenes = track.scenes || [];
@@ -375,8 +379,7 @@
             fov = mix(fov, 52, aside);
         }
         if (inside && inside.weight > 0) {
-            // Standing in the aisle a few windows back from the cab, drifting
-            // forward, looking along one row of windows at what goes by.
+            // Ride low in the aisle, so the leading benches frame the view.
             const w = inside.weight, side = inside.scene.side;
             const along = distance - SALOON.back + SALOON.travel * inside.progress;
             const car = track.at(along);
@@ -384,9 +387,9 @@
             position.x = mix(position.x, car.position.x + car.right.x * offset, w);
             position.z = mix(position.z, car.position.z + car.right.z * offset, w);
             position.y = mix(position.y, SALOON.height + Math.sin(t * 1.7) * 0.006, w);
-            yaw = blendAngle(yaw, car.yaw + side * 0.42 + Math.sin(t * 0.23) * 0.05, w);
-            pitch = mix(pitch, -0.05, w);
-            fov = mix(fov, 60, w);
+            yaw = blendAngle(yaw, car.yaw + side * 0.24 + Math.sin(t * 0.23) * 0.05, w);
+            pitch = mix(pitch, 0.028, w);
+            fov = mix(fov, 61, w);
             roll = mix(roll, Math.sin(t * 1.1) * 0.004, w);
         }
         const cp = Math.cos(pitch);
@@ -406,7 +409,8 @@
             rig: !motion ? 'CAB' : staged && staged.weight > 0.5 ? staged.scene.kind : rig,
             encounterId, reading, distance, state, chase, chaseRig: chase > 0.5 ? move.rig.name : null,
             // Where the front of the train is along the line.
-            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead), mix(-0.4, CHASE_LEAD, passed)) : -0.4),
+            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead),
+                mix(Math.min(-0.4, move.rig.lead * move.lead), CHASE_LEAD, passed)) : -0.4),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }
         };
