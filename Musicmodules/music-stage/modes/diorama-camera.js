@@ -281,8 +281,18 @@
         const swing = motion ? move.rig.lateral * move.out + TRACKSIDE.lateral * aside : 0;
         position.x += frame.right.x * swing;
         position.z += frame.right.z * swing;
+        // A rig that looks back at the train turns as the train falls behind it,
+        // keeping the cab in view as it goes by instead of spinning round in its path.
+        const lookBack = (() => {
+            if (!motion) return 0;
+            if (Math.abs(move.rig.yaw) <= 1.5) return move.out;
+            const across = Math.abs(move.rig.lateral) * move.out;
+            const behind = Math.max(0.01, -mix(-0.4, move.rig.lead, move.lead));
+            const settled = Math.PI - Math.atan2(Math.abs(move.rig.lateral), -move.rig.lead);
+            return Math.min(1, (Math.PI - Math.atan2(across, behind)) / settled) * ease(move.lead / 0.7);
+        })();
         let yaw = frame.yaw + yawBias + n(0.55, 3) * 0.003 * handheld
-            + directionSign * arch * openness * 0.012 * strength + move.rig.yaw * (motion ? move.out : 0);
+            + directionSign * arch * openness * 0.012 * strength + move.rig.yaw * lookBack;
         let pitch = mix(-0.025, -0.12, state.openness) + move.rig.pitch * (motion ? move.out : 0);
         const finale = state.act === 'Terminus' && motion && !timeline.isSinging(t)
             ? smooth((t - act.start) / Math.max(1, act.end - act.start)) : 0;
