@@ -97,6 +97,10 @@
     const CHASE_RIGS = Object.freeze([
         { name: 'QUARTER', lateral: CHASE_LATERAL, lead: CHASE_LEAD, height: null, yaw: -0.075, pitch: 0, fov: 0,
             skyYaw: 0, skyPitch: 0 },
+        // Out over the water ahead of the train and turned to face it: the
+        // lamps and the lit cab come on, the whole train strung out behind.
+        { name: 'BOW', lateral: -5.4, lead: -13, height: 1.5, yaw: 2.82, pitch: 0.07, fov: -22,
+            skyYaw: -0.17, skyPitch: 0.2 },
         { name: 'ALONGSIDE', lateral: -CHASE_LATERAL, lead: 44, height: 1.7, yaw: 0.3, pitch: 0.13, fov: -4,
             skyYaw: -0.12, skyPitch: 0.16 },
         { name: 'OVERHEAD', lateral: 1.8, lead: 60, height: 8.6, yaw: -0.02, pitch: -0.2, fov: 0,
@@ -405,7 +409,8 @@
             rig: !motion ? 'CAB' : staged && staged.weight > 0.5 ? staged.scene.kind : rig,
             encounterId, reading, distance, state, chase, chaseRig: chase > 0.5 ? move.rig.name : null,
             // Where the front of the train is along the line.
-            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead), mix(-0.4, CHASE_LEAD, passed)) : -0.4),
+            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead),
+                mix(Math.min(-0.4, move.rig.lead * move.lead), CHASE_LEAD, passed)) : -0.4),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }
         };

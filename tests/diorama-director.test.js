@@ -311,15 +311,23 @@ test('each chorus is seen from somewhere else, and the train never runs through 
     const choruses = timeline.acts.filter(act => act.kind === 'Chorus');
     assert.equal(choruses.length, 3);
     const held = choruses.map(act => C.pose(timeline, track, act.end - 2, { aspect: 1.78 }));
-    assert.deepEqual(plain(held.map(pose => pose.chaseRig)), ['QUARTER', 'ALONGSIDE', 'OVERHEAD']);
+    assert.deepEqual(plain(held.map(pose => pose.chaseRig)), ['QUARTER', 'BOW', 'ALONGSIDE']);
     const beside = pose => {
         const f = track.at(pose.distance);
         return (pose.position.x - f.position.x) * f.right.x + (pose.position.z - f.position.z) * f.right.z;
     };
-    // High and to one side; low over the water on the other; up over the roofs.
+    // High and to one side; out over the water ahead of the train, turned
+    // to face it; low over the water alongside.
     assert.ok(beside(held[0]) > 6 && held[0].position.y > 6);
-    assert.ok(beside(held[1]) < -6 && held[1].position.y < 3);
-    assert.ok(Math.abs(beside(held[2])) < 3.5 && held[2].position.y > 8);
+    assert.ok(beside(held[1]) < -4.5 && held[1].position.y < 3);
+    // Half way through its chorus the bow rig is turned to face the train coming up behind it.
+    const facing = C.pose(timeline, track, (choruses[1].start + choruses[1].end) / 2, { aspect: 1.78 });
+    const heading = track.at(facing.distance).yaw;
+    assert.ok(facing.direction.x * Math.sin(heading) - facing.direction.z * Math.cos(heading) < -0.8,
+        'the bow rig looks back at the train');
+    assert.ok(facing.trainFront < facing.distance - 8, 'the train is behind the bow rig');
+    assert.ok(beside(held[2]) < -6 && held[2].position.y < 3);
+    assert.ok(held[2].trainFront > held[2].distance + 30);
     // Beside the train the line on the sky is written above the gaze, clear of the windows.
     assert.ok(held[1].sky.y > held[1].direction.y + 0.1);
     assert.equal(held[0].sky.y, held[0].direction.y);
