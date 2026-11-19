@@ -996,13 +996,18 @@
         `;
         // Shapes gathered into one geometry, each vertex remembering which paint it takes.
         const fuser = () => {
-            const positions = [], normals = [], groups = [], indices = [];
+            const positions = [], normals = [], groups = [], indices = [], fineIndices = [];
+            // Small fittings can be marked fine: they go at the end of the index
+            // buffer, so the saving tier can stop drawing short of them.
+            let fine = false;
+            const detail = on => { fine = on; };
             const add = (shape, group = 0) => {
                 const flat = shape.index ? shape.toNonIndexed() : shape;
                 const base = positions.length / 3;
                 positions.push(...flat.attributes.position.array);
                 normals.push(...flat.attributes.normal.array);
-                for (let i = 0; i < flat.attributes.position.count; i++) { groups.push(group); indices.push(base + i); }
+                const into = fine ? fineIndices : indices;
+                for (let i = 0; i < flat.attributes.position.count; i++) { groups.push(group); into.push(base + i); }
                 if (flat !== shape) flat.dispose();
                 shape.dispose();
             };
@@ -1065,10 +1070,12 @@
                 // A coil spring: the bar wound in turns, each standing proud of the core.
                 const coil = (x, y, at, radius, height, turns) => {
                     add(new T.CylinderGeometry(radius * 0.8, radius * 0.8, height, 8).translate(x, y, at), group);
+                    const plainCoil = !fine; fine = true;
                     for (let turn = 0; turn < turns; turn++) {
                         add(new T.CylinderGeometry(radius, radius, height / turns * 0.42, 8)
                             .translate(x, y - height / 2 + height * (turn + 0.5) / turns, at), group === 2 ? 6 : group);
                     }
+                    if (plainCoil) fine = false;
                 };
                 for (const side of [-1, 1]) {
                     const x = side * 0.93;
@@ -1078,6 +1085,7 @@
                             coil(x, 0.985, z + axle + wing, 0.05, 0.19, 4);
                             boxAt(0.13, 0.03, 0.12, x, 0.88, z + axle + wing, group);
                         }
+                        const coarse = !fine; fine = true;
                         // The axle-box cover, bolted on, with its lubricator plug.
                         add(new T.CylinderGeometry(0.085, 0.085, 0.03, 14).rotateZ(Math.PI / 2)
                             .translate(side * 0.995, 0.79, z + axle), group);
@@ -1087,6 +1095,7 @@
                             const a = bolt / 4 * Math.PI * 2 + Math.PI / 4;
                             boxAt(0.02, 0.018, 0.018, side * 1.012, 0.79 + Math.sin(a) * 0.062, z + axle + Math.cos(a) * 0.062, group === 2 ? 6 : group);
                         }
+                        if (coarse) fine = false;
                         // Brake blocks on their hangers, outside each wheel.
                         const out = axle + Math.sign(axle) * 0.47;
                         boxAt(0.1, 0.2, 0.06, side * 0.7175, 0.8, z + out, group);
@@ -1099,6 +1108,7 @@
                         coil(x, 0.83, z + end * 0.15, 0.072, 0.3, 5);
                     }
                     boxAt(0.2, 0.04, 0.66, x, 0.66, z, group);
+                    const plain = !fine; fine = true;
                     // A brake cylinder on each frame, its rod to the hanger and its hose up to the body.
                     add(new T.CylinderGeometry(0.065, 0.065, 0.2, 12).rotateX(Math.PI / 2).translate(side * 0.78, 1.0, z + 0.48), group);
                     add(new T.CylinderGeometry(0.075, 0.075, 0.025, 12).rotateX(Math.PI / 2).translate(side * 0.78, 1.0, z + 0.37), group);
@@ -1106,6 +1116,7 @@
                     const hose = new T.CatmullRomCurve3([[side * 0.78, 1.06, z + 0.4], [side * 0.82, 1.14, z + 0.24],
                         [side * 0.86, 1.1, z + 0.08], [side * 0.9, 1.2, z - 0.05]].map(([hx, hy, hz]) => new T.Vector3(hx, hy, hz)));
                     add(new T.TubeGeometry(hose, 8, 0.016, 5, false), group === 2 ? 7 : group);
+                    if (plain) fine = false;
                     for (const end of [-0.3, 0.3]) beam(x, 0.66, z + end, x, 1.04, z + end * 1.25, 0.03, group);
                 }
             };
@@ -1114,11 +1125,12 @@
                 shape.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
                 shape.setAttribute('normal', new T.Float32BufferAttribute(normals, 3));
                 shape.setAttribute('color', new T.Float32BufferAttribute(new Float32Array(positions.length).fill(1), 3));
-                shape.setIndex(indices);
+                shape.setIndex([...indices, ...fineIndices]);
                 shape.userData.groups = groups;
+                shape.userData.coarse = indices.length;
                 return geometry(shape);
             };
-            return { add, boxAt, beam, sheet, bogie, finish };
+            return { add, boxAt, beam, sheet, bogie, finish, detail };
         };
         const roundedOutline = (path, width, height, radius) => {
             const x = width * 0.5, y = height * 0.5;
@@ -1131,7 +1143,7 @@
         };
         // Paint groups: 0 upper body, 1 lower body, 2 running gear, 3 roof, 4 brushed trim, 5 tread, 6 spring steel.
         const carGeometry = (() => {
-            const { add, boxAt, beam, sheet, bogie, finish } = fuser();
+            const { add, boxAt, beam, sheet, bogie, finish, detail } = fuser();
             const sash = (side, z, [y, width, height]) => {
                 // Three visible faces of the surround, with the back buried in the bodywork.
                 const profile = [[0.009, 0.074, 0.105], [0.027, 0.064, 0.101],
@@ -1258,6 +1270,7 @@
                 WINDOWS.forEach(z => {
                     sash(side, z, SIDE_PANES);
                     boxAt(0.032, 0.028, 1.026, side * (CAR.half + 0.016), 2.189, z, 4);
+                    detail(true);
                     // Two-stage sash: a short fixed upper light set back, the tall
                     // lower light that lifts in front of it, the meeting rail between.
                     const [y, width, height] = SIDE_PANES, low = y - height / 2, rail = y + height * 0.14;
@@ -1269,11 +1282,14 @@
                     boxAt(0.02, 0.03, width - 0.05, outer, low + 0.03, z, 4);
                     boxAt(0.026, 0.044, width - 0.04, outer, rail, z, 4);
                     boxAt(0.014, 0.022, width - 0.06, inner, y + height / 2 - 0.025, z, 4);
+                    detail(false);
+                    detail(true);
                     // Latches on the meeting rail and finger lifts on the bottom rail.
                     for (const edge of [-0.27, 0.27]) {
                         boxAt(0.03, 0.022, 0.05, side * (CAR.half + 0.036), rail + 0.004, z + edge * width, 6);
                         boxAt(0.026, 0.018, 0.06, side * (CAR.half + 0.033), low + 0.06, z + edge * width, 6);
                     }
+                    detail(false);
                 });
                 for (const z of DOORS) {
                     doorway(side, z, DOOR_HALF, DOOR_PANES, true);
@@ -1284,6 +1300,7 @@
                     for (const edge of [-0.47, 0.47]) {
                         beam(side * 1.16, CAR.sill - 0.19, z + edge, side * 1.39, CAR.sill + 0.031, z + edge, 0.037, 2);
                     }
+                    detail(true);
                     // Grab rails on the body either side of the opening, stood off on round feet.
                     for (const edge of [-1, 1]) {
                         const rail = z + edge * (DOOR_HALF + 0.075);
@@ -1302,6 +1319,7 @@
                         .translate(side * (CAR.half + 0.016), 3.28, z + DOOR_HALF - 0.12), 7);
                     add(new T.SphereGeometry(0.03, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(-side * Math.PI / 2)
                         .translate(side * (CAR.half + 0.03), 3.28, z + DOOR_HALF - 0.12), 9);
+                    detail(false);
                 }
                 doorway(side, CREW_DOOR, CREW_DOOR_HALF, CAB_PANE, false);
                 // Rolled drip rail above the glazing, and the lower seam between the doors.
@@ -1314,6 +1332,7 @@
                 boxAt(0.6, 0.42, 1.9, side * 0.8, 0.84, 0.2, 2);
                 boxAt(0.6, 0.34, 1.15, side * 0.8, 0.88, 2.2 + side * 0.25, 2);
                 boxAt(0.5, 0.3, 0.85, side * 0.82, 0.9, 4.3, 2);
+                detail(true);
                 // Each case has a lid with a rim, hinges along its top and a catch.
                 for (const [z, long, y, tall] of [[0.2, 1.9, 0.84, 0.42], [2.2 + side * 0.25, 1.15, 0.88, 0.34], [4.3, 0.85, 0.9, 0.3]]) {
                     const face = side * 1.105;
@@ -1328,6 +1347,7 @@
                 add(new T.CylinderGeometry(0.022, 0.022, 9.6, 6).rotateX(Math.PI / 2).translate(side * 1.16, CAR.sill - 0.07, 0.6), 6);
                 add(new T.CylinderGeometry(0.014, 0.014, 9.6, 6).rotateX(Math.PI / 2).translate(side * 1.16, CAR.sill - 0.125, 0.6), 2);
                 for (let clip = -3.8; clip < 5.2; clip += 1.5) boxAt(0.04, 0.1, 0.03, side * 1.16, CAR.sill - 0.09, clip, 2);
+                detail(false);
                 // The crew door behind the cab: its seams, a rail to climb by on either side, and the steps below.
                 for (const edge of [-0.34, 0.34]) {
                     const rail = -5.2 + edge * 1.34;
@@ -1385,6 +1405,7 @@
                 add(new T.BoxGeometry(0.15, 0.09, 0.018).rotateY(heading)
                     .translate(x, CAB_TAIL_Y, fascia(x, 0.07)), 2);
             }
+            detail(true);
             // The face, finished: a drip strip over the windscreens, a seam along the
             // waist, grab handles either side, wipers parked on the outer panes, the
             // washer jets, and the jumper sockets with their cables on the buffer beam.
@@ -1427,6 +1448,7 @@
                 boxAt(0.36, 0.022, 0.06, 0, 1.5, fascia(0, 0.04), 5);
                 for (const end of [-0.17, 0.17]) beam(end, 1.5, fascia(end, 0.004), end, 1.5, fascia(end, 0.06), 0.02, 4);
             }
+            detail(false);
             // Roof. Two pressed-steel cooler housings in tandem: rounded hoods with
             // slotted grilles at either end of their flanks, lid seams and lifting
             // eyes, bolted down on a flange. Near the cab a ventilator can on its
@@ -1455,6 +1477,7 @@
                     sheet(rows, 8);
                     sheet(rows.slice().reverse(), 8);
                 }
+                detail(true);
                 // Lid seams across the top, lifting eyes, and the flange it is bolted down on.
                 const length = to - from;
                 for (const seam of [0.36, 0.64]) boxAt(wide * 0.7, 0.012, 0.022, 0, base + height + 0.003, from + seam * length, 6);
@@ -1468,9 +1491,11 @@
                             .translate(side * (half + 0.035), base + 0.038, from + 0.25 + bolt * (length - 0.5) / 5), 6);
                     }
                 }
+                detail(false);
             };
             hood(-0.95, 1.35, 1.36, 0.3);
             hood(1.55, 3.85, 1.36, 0.3);
+            detail(true);
             // Ventilator can on three feet, its cap and the rain lip under the cap.
             {
                 const x = 0.36, z = -5.0, foot = roofAt(x);
@@ -1504,6 +1529,7 @@
                 add(new T.CylinderGeometry(0.018, 0.018, CAR.length - 1.0, 6).rotateX(Math.PI / 2)
                     .translate(side * (edgeX - 0.02), edgeY + 0.02, 0.5), 1);
             }
+            detail(false);
             // The pantograph stands near the cab end of every car: a frame on
             // four insulators, a lozenge braced across its lower arms, and a
             // head of two strips with their horns turned down.
@@ -1526,21 +1552,25 @@
                     boxAt(0.06, 0.05, 1.56, x, base, centre, 2);
                     for (const end of [-1, 1]) {
                         const z = centre + end * 0.62;
+                        detail(true);
                         // A porcelain insulator of three sheds, capped in metal top and bottom.
                         add(new T.CylinderGeometry(0.04, 0.05, 0.17, 10).translate(x, base - 0.105, z), 10);
                         for (const shed of [-0.16, -0.115, -0.07]) {
                             add(new T.CylinderGeometry(0.06, 0.085, 0.022, 12).translate(x, base + shed, z), 10);
                         }
                         add(new T.CylinderGeometry(0.05, 0.05, 0.025, 10).translate(x, base - 0.03, z), 6);
+                        detail(false);
                         boxAt(0.12, 0.02, 0.12, x, CAR.crown - 0.02, z, 2);
                         beam(x, base, centre - end * 0.14, x * 0.9, knee, centre + end * 0.92, 0.036, 2);
                         beam(x * 0.9, knee, centre + end * 0.92, x * 0.72, top, centre + end * 0.17, 0.03, 2);
+                        detail(true);
                         // Knuckles at the knee and bearings at the foot, and a braided shunt across the foot.
                         add(new T.CylinderGeometry(0.034, 0.034, 0.075, 10).rotateZ(Math.PI / 2).translate(x * 0.9, knee, centre + end * 0.92), 6);
                         add(new T.CylinderGeometry(0.046, 0.046, 0.11, 10).rotateZ(Math.PI / 2).translate(x, base + 0.005, centre - end * 0.14), 10);
                         const shunt = new T.CatmullRomCurve3([[x, base + 0.02, centre - end * 0.2], [x + 0.06 * Math.sign(x), base - 0.06, centre - end * 0.3],
                             [x, base - 0.02, centre - end * 0.42]].map(([px, py, pz]) => new T.Vector3(px, py, pz)));
                         add(new T.TubeGeometry(shunt, 6, 0.012, 5, false), 7);
+                        detail(false);
                         // Braced across from one side's foot to the other side's knee.
                         beam(x, base + 0.04, centre - end * 0.14, -x * 0.9, knee - 0.04, centre + end * 0.92, 0.018, 2);
                     }
@@ -1559,10 +1589,12 @@
                         const horn = new T.CatmullRomCurve3([[0.55, 0], [0.66, -0.004], [0.74, -0.04], [0.79, -0.11], [0.8, -0.2]]
                             .map(([x, y]) => new T.Vector3(side * x, top + y, z)));
                         add(new T.TubeGeometry(horn, 10, 0.016, 6, false), 4);
+                        detail(true);
                         for (let turn = 0; turn < 4; turn++) {
                             add(new T.CylinderGeometry(0.022, 0.022, 0.012, 8).translate(side * 0.3, top - 0.075 + turn * 0.018, z), 6);
                         }
                         add(new T.CylinderGeometry(0.012, 0.012, 0.08, 6).translate(side * 0.3, top - 0.05, z), 6);
+                        detail(false);
                     }
                 }
                 for (const side of [-1, 1]) boxAt(0.03, 0.03, 0.34, side * 0.3, top - 0.03, centre, 2);
@@ -2703,6 +2735,8 @@
             trainParts.forEach(mesh => { mesh.visible = visible; });
             if (!visible) { cars.count = glass.count = kits.count = trainEnds.count = 0; return; }
             cars.count = glass.count = CARS;
+            // The saving tier stops short of the small fittings at the end of the car's index buffer.
+            carGeometry.setDrawRange(0, quality === 'energy-saving' ? carGeometry.userData.coarse : Infinity);
             kits.count = CARS / 2;
             trainEnds.count = 2;
             const reach = (CAR.length + CAR.joint) / 2;
