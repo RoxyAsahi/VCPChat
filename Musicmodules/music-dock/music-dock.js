@@ -25,6 +25,7 @@
     const PROGRESS_TICK_MS = 250;
     const QUEUE_ROW_H = 48;
     const SAFE_BOTTOM_PX = 96;
+    const COMPACT_BELOW = 640;
 
     const TABS = Object.freeze(['封面', '歌词', '控制', '播放列表', '音质']);
     const MODE_LABELS = Object.freeze({ repeat: '列表循环', 'repeat-one': '单曲循环', shuffle: '随机播放' });
@@ -204,7 +205,8 @@
         let springLast = 0;
         const capsuleTarget = () => {
             const max = Math.min(CAPSULE_MAX_W, Math.max(0, global.innerWidth - 32));
-            const ratio = global.innerWidth >= 768 ? 0.6 : 0.8;
+            // 窄窗口（紧凑档）收起和展开同宽，面板把手挂在胶囊右端。
+            const ratio = global.innerWidth < COMPACT_BELOW ? 1 : global.innerWidth >= 768 ? 0.6 : 0.8;
             return state.expanded
                 ? { w: max, h: CAPSULE_H_EXPANDED }
                 : { w: Math.round(max * ratio), h: CAPSULE_H_COLLAPSED };
