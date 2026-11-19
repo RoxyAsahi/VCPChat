@@ -3193,6 +3193,12 @@
             `
         });
         const fadingGlyphMaterial = glyphMaterial.clone();
+        // A hidden stand-in carries the glyph material from the start, so it is
+        // compiled with the rest of the scene and not at the first lyric.
+        const glyphWarmup = new T.Mesh(new T.PlaneGeometry(1, 1), glyphMaterial);
+        glyphWarmup.visible = false;
+        glyphWarmup.frustumCulled = false;
+        root.add(glyphWarmup);
         const glyphColorUniforms = ['waitMain', 'sungMain', 'sub', 'ink', 'outline'];
         let glyphCanvas = document.createElement('canvas');
         let glyphMesh = null;
@@ -4171,7 +4177,7 @@
                 clearFadingGlyph();
                 clearGlyphStage();
                 scene.remove(root);
-                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
+                [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, glyphWarmup.geometry, ...frameArcGeos].forEach((g) => g?.dispose?.());
                 [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, fadingGlyphMaterial,
                     ...frameArcMats].forEach((m) => m?.dispose?.());
                 skyMasks.dispose();
