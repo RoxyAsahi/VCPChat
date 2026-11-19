@@ -72,7 +72,7 @@ body {
   --ms-faint: rgba(242, 243, 239, .42);
   --ms-line: rgba(242, 243, 239, .22);
   --ms-glass: rgba(16, 18, 20, .56);
-  --ms-glass-strong: rgba(22, 24, 27, .86);
+  --ms-glass-strong: rgba(22, 24, 27, .93);
   --ms-glass-edge: rgba(255, 255, 255, .08);
   --ms-text-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 18px rgba(0, 0, 0, .35);
   --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55);
@@ -154,7 +154,7 @@ body.light-theme {
   --ms-faint: rgba(20, 21, 23, .46);
   --ms-line: rgba(20, 21, 23, .2);
   --ms-glass: rgba(246, 244, 240, .78);
-  --ms-glass-strong: rgba(246, 244, 240, .9);
+  --ms-glass-strong: rgba(246, 244, 240, .95);
   --ms-glass-edge: rgba(0, 0, 0, .06);
   --ms-text-shadow: 0 0 1px rgba(255, 255, 255, .6), 0 0 16px rgba(255, 255, 255, .45);
   --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .22);
@@ -208,7 +208,7 @@ body.music-stage-active.music-stage-dark {
   --ms-faint: rgba(242, 243, 239, .42);
   --ms-line: rgba(242, 243, 239, .22);
   --ms-glass: rgba(16, 18, 20, .56);
-  --ms-glass-strong: rgba(22, 24, 27, .86);
+  --ms-glass-strong: rgba(22, 24, 27, .93);
   --ms-glass-edge: rgba(255, 255, 255, .08);
   --ms-text-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 18px rgba(0, 0, 0, .35);
   --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .55);
@@ -236,7 +236,7 @@ body.music-stage-active.music-stage-light {
   --ms-faint: rgba(20, 21, 23, .46);
   --ms-line: rgba(20, 21, 23, .2);
   --ms-glass: rgba(246, 244, 240, .78);
-  --ms-glass-strong: rgba(246, 244, 240, .9);
+  --ms-glass-strong: rgba(246, 244, 240, .95);
   --ms-glass-edge: rgba(0, 0, 0, .06);
   --ms-text-shadow: 0 0 1px rgba(255, 255, 255, .6), 0 0 16px rgba(255, 255, 255, .45);
   --ms-panel-shadow: 0 30px 80px rgba(0, 0, 0, .22);

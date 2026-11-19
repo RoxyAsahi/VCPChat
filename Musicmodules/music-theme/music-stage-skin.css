@@ -312,7 +312,7 @@ body.music-dock-on .music-stage .music-stage-chrome {
 .music-stage-settings-card {
     top: 92px;
     right: 32px;
-    bottom: 120px;
+    bottom: calc(var(--music-dock-safe-bottom, 96px) + 8px);
     width: min(440px, calc(100vw - 64px));
     border: 1px solid var(--ms-glass-edge);
     border-radius: 4px;
@@ -490,8 +490,10 @@ body.music-dock-on .music-stage .music-stage-chrome {
 
 .music-skin-segmented {
     display: inline-flex;
-    flex-wrap: wrap;
-    justify-self: end;
+    flex-wrap: nowrap;
+    grid-column: 1 / -1;
+    justify-self: start;
+    width: max-content;
     max-width: 100%;
     border: 1px solid var(--ms-line);
     border-radius: 2px;
