@@ -494,13 +494,13 @@
                     boxAt(0.1, 0.2, 2.5, side * 0.87, 0.8, z, group);
                     boxAt(0.16, 0.28, 0.52, side * 0.91, 0.9, z, group);
                     for (const axle of [-0.95, 0.95]) {
-                        add(new T.CylinderGeometry(0.4, 0.4, 0.12, 14).rotateZ(Math.PI / 2)
+                        add(new T.CylinderGeometry(0.4, 0.4, 0.12, 28).rotateZ(Math.PI / 2)
                             .translate(side * 0.7175, 0.79, z + axle), group);
                         boxAt(0.14, 0.2, 0.26, side * 0.91, 0.79, z + axle, group);
                         if (group === 2) {
                             add(new T.CylinderGeometry(0.136, 0.16, 0.046, 12).rotateZ(Math.PI / 2)
                                 .translate(side * 0.807, 0.79, z + axle), 4);
-                            add(new T.TorusGeometry(0.358, 0.013, 4, 16).rotateY(Math.PI / 2)
+                            add(new T.TorusGeometry(0.358, 0.013, 4, 28).rotateY(Math.PI / 2)
                                 .translate(side * 0.785, 0.79, z + axle), 4);
                         }
                     }
@@ -1060,7 +1060,7 @@
                     float grime=pow(1.0-smoothstep(${CAR.sill.toFixed(3)},${(CAR.sill + 0.75).toFixed(3)},vCarPaint.y),1.6)
                         *(0.55+0.45*carGrain(at*vec2(3.0,9.0))+0.25*run);
                     diffuseColor.rgb*=1.0-enamel*(sillShadow+eave-panelGrain*0.037-micro*0.031+rain*(0.13*underSill+0.08*sill)
-                        +seam*0.42-lap*0.05+panelTone*0.045+grime*0.10-rivetLit*0.5);
+                        +seam*0.24-lap*0.06+panelTone*0.045+grime*0.10-rivetLit*0.5);
                     diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(0.93,0.9,0.84),enamel*grime*0.6);
                     // Roofing: dull, laid in sheets across the car, dust and soot gathering towards the middle.
                     float sheetJoin=abs(fract(vCarPaint.z/0.64)-0.5)*0.64;
