@@ -1856,10 +1856,10 @@
             },
             vertexShader: `
                 attribute float aPart;
-                uniform float uWorld, uSeed;
+                uniform float uWorld, uSeed, uKind;
                 varying vec3 vLocal, vWorld, vNormal;
                 varying vec2 vUv;
-                varying float vPart, vDepth;
+                varying float vPart, vDepth, vRise;
                 float vhash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
                 float vnoise(vec3 p) {
                     vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1878,6 +1878,19 @@
                             + (vnoise(d * 3.3 + uSeed * 3.0) - 0.5) * 0.24 + (vnoise(d * 8.0) - 0.5) * 0.06;
                         float waist = 1.0 - 0.18 * exp(-d.x * d.x * 9.0);
                         at = position * vec3(1.55, 0.8 * waist, 0.85 * waist) * lump;
+                    }
+                    vRise = 0.0;
+                    if (uKind > 3.5 && (abs(uWorld - 2.0) < 0.5 || abs(uWorld - 3.0) < 0.5)) {
+                        // The shell of air becomes plumes: on an ice moon, curtains of
+                        // vapour over the cracks at the south pole; on a volcanic
+                        // moon, the umbrella of one great eruption.
+                        vec3 d = normalize(position);
+                        vec3 vent = uWorld < 2.5 ? vec3(0.0, -1.0, 0.0) : normalize(vec3(0.62, 0.55, 0.56));
+                        float off = acos(clamp(dot(d, vent), -1.0, 1.0));
+                        float tall = uWorld < 2.5 ? 0.5 : 0.28;
+                        float wide = uWorld < 2.5 ? 0.42 : 0.3;
+                        vRise = tall * exp(-off * off / (wide * wide));
+                        at = position * (1.0 + vRise);
                     }
                     vLocal = at; vUv = uv; vPart = aPart;
                     vec4 world = modelMatrix * vec4(at, 1.0);
@@ -1898,7 +1911,7 @@
                 uniform float uPaper;
                 varying vec3 vLocal, vWorld, vNormal;
                 varying vec2 vUv;
-                varying float vPart, vDepth;
+                varying float vPart, vDepth, vRise;
 
                 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
                 float noise(vec3 p) {
@@ -2217,6 +2230,8 @@
                         }
                         float lam = dot(nl, normalize(uLightLocal));
                         float sunlit = mix(clamp(lam, 0.0, 1.0), smoothstep(-0.12, 0.65, lam), 1.0 - hard);
+                        // Relief cannot lift the night side into the light.
+                        sunlit *= smoothstep(-0.08, 0.06, dot(p, normalize(uLightLocal)));
                         float facing = clamp(dot(n, v), 0.0, 1.0);
                         // From low over home only the horizon wears the air.
                         float lowOrbit = step(3.5, uWorld) * step(uWorld, 4.5);
@@ -2315,6 +2330,17 @@
                         float polarLight = smoothstep(0.77, 0.94, abs(p.y));
                         float curtain = mix(0.55, 1.0, noise(vec3(p.xz * 5.0, uTime * 0.14 + uSeed)));
                         col += mix(uColorPrimary, uColorAccent, 0.3) * polarLight * curtain * (1.0 - day) * 0.20 * uGlow;
+                        if (uDetail > 0.5) {
+                            // Lightning deep in the storm belts of the night side:
+                            // brief flashes that light a patch of cloud from below.
+                            vec3 g = vec3(p.x * 16.0, lat * 30.0, p.z * 16.0), cell = floor(g);
+                            float cellSeed = hash(cell + uSeed * 7.0);
+                            float beat = uTime * (1.5 + cellSeed * 2.0) + cellSeed * 31.0;
+                            float strike = step(0.93, hash(vec3(floor(beat), cellSeed, 3.0))) * pow(1.0 - fract(beat), 6.0);
+                            float glowAt = exp(-length(g - cell - 0.5) * 3.2);
+                            col += mix(uColorInk, uColorPrimary, 0.25) * strike * glowAt * step(0.55, cellSeed)
+                                * (1.0 - day) * 0.55 * uGlow;
+                        }
                         }
                     } else if (uKind < 2.5) {
                         // Ring system: ringlets, a wide division, spiral density
@@ -2408,6 +2434,22 @@
                         col = mix(uColorPrimary, uColorInk, 0.38) * (0.5 + lit)
                             + mix(uColorAccent, uColorInk, 0.5) * against * 1.5;
                         alpha = halo * (0.012 + 0.42 * lit + 0.5 * against) * fade * step(grain, solid - 0.04);
+                        if (abs(uWorld - 2.0) < 0.5 || abs(uWorld - 3.0) < 0.5) {
+                            // Plumes: fine streaks rising from the vents, thinning with
+                            // height, lit by the sun and brightest seen against it.
+                            vec3 q = normalize(vLocal);
+                            float streaks = noise(vec3(atan(q.z, q.x) * 26.0, vRise * 3.0, uSeed * 5.0)) * 0.6
+                                + noise(vec3(atan(q.z, q.x) * 70.0, vRise * 8.0 - uTime * 0.3, uSeed)) * 0.4;
+                            float body = smoothstep(0.01, 0.06, vRise) * (0.4 + 0.6 * smoothstep(0.35, 0.8, streaks));
+                            float sunPart = smoothstep(-0.3, 0.4, ndl) + against * 2.5;
+                            col = mix(uColorInk, uColorPrimary, uWorld < 2.5 ? 0.25 : 0.05)
+                                * (uWorld < 2.5 ? 1.0 : 0.85) * (0.15 + sunPart);
+                            if (uWorld > 2.5) col = mix(col, mix(uColorAccent, uColorInk, 0.5) * (0.15 + sunPart), 0.4);
+                            // Thinning to nothing at the top and along the outline, so no edge shows.
+                            float top = vRise / (uWorld < 2.5 ? 0.5 : 0.28);
+                            alpha = body * 0.22 * (1.0 - smoothstep(0.15, 0.9, top)) * smoothstep(0.05, 0.5, facing)
+                                * fade * step(grain, solid - 0.04);
+                        }
                     } else {
                         // Sail film: aluminised on the sunward face, bare gold
                         // polymer behind; fold creases, slack wrinkles, strips
@@ -3862,6 +3904,7 @@
                     : slot.worlds ? slot.worlds[Math.max(0, cycleIndex) % slot.worlds.length] : 0;
                 // Air only round worlds that have it, rings only round giants.
                 const air = world === WORLD.desert ? 0.35 : world === WORLD.home ? 0.3
+                    : world === WORLD.ice || world === WORLD.volcanic ? 1
                     : world === 0 || world === WORLD.home || world === WORLD.iceGiant ? 1 : 0;
                 for (const { mat, mesh } of body.parts) {
                     const b = mat.uniforms;
