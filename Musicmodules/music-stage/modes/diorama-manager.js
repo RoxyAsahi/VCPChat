@@ -19,6 +19,11 @@
         let width = 1, height = 1, lastTime = null;
         let pendingOptions = null, pendingSince = 0, settleTimer = 0, builtSettings = {}, rebuilds = 0;
         let contextRetries = 0, contextTimer = 0, lastContextLoss = 0;
+        // Something other than the clock changed since the last drawn frame.
+        let dirty = true, canvasSmoothing = null;
+        const cap = U.createFrameCap();
+        const Optics = () => global.MusicStageDioramaOptics;
+        const wantsCanvasSmoothing = () => !(Optics()?.active(mode.config) ?? false);
         const onset = R.createAudioOnset();
         const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
         const palette = () => services?.app?.stagePalette || {};
@@ -62,6 +67,7 @@
             renderer?.domElement.remove();
             renderer = camera = scene = null;
             initialized = false;
+            dirty = true;
             // A rebuilt stage starts with empty layers: compile the journey into them again.
             timeline = null;
             paletteKey = '';
@@ -73,6 +79,7 @@
             const now = Date.now();
             if (now - lastContextLoss > 60000) contextRetries = 0;
             lastContextLoss = now;
+            console.warn(`[MusicStage:Diorama] WebGL context lost (retry ${contextRetries} of 3)`);
             fallbackMode = true;
             disposeGraphics();
             if (latest) renderFallback(latest);
@@ -90,7 +97,7 @@
         const REBUILD_KEYS = ['cameraSpeed', 'motionAmount', 'animationIntensity', 'reducedMotion',
             'cameraCuts', 'aspect', 'lyricCarrier', 'showTranslation', 'fireworks',
             'narrativeStations', 'stationIntensity'];
-        const update = frame => {
+        const update = (frame, force = false) => {
             if (mode.destroyed || mode.suspended) return;
             latest = frame;
             if (!initialized) {
@@ -98,13 +105,19 @@
                 if (!fallbackMode) void initialize();
                 return;
             }
+            // Paused with nothing changed: the last picture is still right, so
+            // the GPU can rest. Playing: no more often than the tier's rate.
+            const still = !frame.isPlaying && lastTime !== null
+                && R.finiteNumber(frame.playbackTime) === lastTime;
+            if (!force && !dirty && (still || !cap.take(performance.now(), mode.config.quality))) return;
+            dirty = false;
             const nextIdentity = frame.track?.path || frame.track?.title || 'last-train';
             const nextDuration = R.finiteNumber(frame.duration, R.finiteNumber(frame.track?.duration));
             const settings = options();
             const nextOptions = JSON.stringify(REBUILD_KEYS.map(key => settings[key]));
             const nextPalette = JSON.stringify(palette());
             let recompile = false;
-            if (!timeline || source !== frame.lines || identity !== nextIdentity || compiledDuration !== nextDuration) {
+            if (!timeline || source !== frame.lines || identity !== nextIdentity || U.durationChanged(compiledDuration, nextDuration)) {
                 source = frame.lines;
                 identity = nextIdentity;
                 compiledDuration = nextDuration;
@@ -133,7 +146,7 @@
                     for (const key of REBUILD_KEYS) settings[key] = builtSettings[key];
                     // Paused stages still get frames, but do not rely on it.
                     global.clearTimeout(settleTimer);
-                    settleTimer = global.setTimeout(() => { if (latest && !mode.destroyed) update(latest); }, 200);
+                    settleTimer = global.setTimeout(() => { if (latest && !mode.destroyed) update(latest, true); }, 200);
                 }
             }
             if (recompile || nextOptions !== optionsKey && !hold) {
@@ -202,7 +215,7 @@
             events.update(time, settings, mode.config.quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
-            if (frame.isPlaying && renderScale.tick(performance.now())) resize();
+            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(mode.config.quality))) resize();
             renderer.info.reset();
             world.renderReflection(renderer, camera);
             // By day the paper-white sky is brighter than the lens's usual
@@ -230,7 +243,10 @@
                 camera = new T.PerspectiveCamera(48, 1, 0.1, 1800);
                 // Layer 1 = cabin foreground: seen by the viewer, excluded from the mirror pass.
                 camera.layers.enable(1);
-                renderer = new T.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+                canvasSmoothing = wantsCanvasSmoothing();
+                renderer = new T.WebGLRenderer({ antialias: canvasSmoothing, alpha: false, powerPreference: 'high-performance' });
+                // Checking every program's log reads back from the GPU process and stalls.
+                renderer.debug.checkShaderErrors = false;
                 renderer.outputColorSpace = T.SRGBColorSpace;
                 renderer.toneMapping = T.ACESFilmicToneMapping;
                 renderer.toneMappingExposure = 1.15;
@@ -248,9 +264,16 @@
                 lyrics = global.MusicStageDioramaLyrics.create(T, scene);
                 events = global.MusicStageDioramaEvents.create(T, scene);
                 optics = global.MusicStageDioramaOptics?.create(T);
-                initialized = true;
                 resize();
-                if (latest) update(latest);
+                // The environment map has to be in place before the warm-up, or every
+                // standard material recompiles the first time it appears.
+                world.prepareEnvironment?.(renderer);
+                // The lens draws the scene offscreen; without it only the water pass does.
+                await U.precompile(T, renderer, scene, camera, { canvas: canvasSmoothing, offscreen: true });
+                if (mode.destroyed || !renderer) return;
+                initialized = true;
+                dirty = true;
+                if (latest) update(latest, true);
             }).catch(error => {
                 disposeGraphics();
                 fallbackMode = true;
@@ -261,26 +284,37 @@
             });
             return initializing;
         };
-        mode.updateFrame = update;
-        mode.resize = () => { resize(); if (latest && initialized) update(latest); };
+        mode.updateFrame = frame => update(frame);
+        mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
         mode.updateConfig = config => {
             baseConfig(config);
+            // The canvas is antialiased only when the lens is off; that is fixed
+            // when the context is made, so a change of tier rebuilds it.
+            if (initialized && canvasSmoothing !== wantsCanvasSmoothing()) {
+                disposeGraphics();
+                initializing = null;
+                void initialize();
+                return;
+            }
             resize();
-            if (latest) update(latest);
+            if (latest) update(latest, true);
         };
-        mode.updateTheme = () => { if (latest) update(latest); };
+        mode.updateTheme = () => { if (latest) update(latest, true); };
         const resume = mode.resume;
-        mode.resume = () => { resume(); if (latest) update(latest); };
+        mode.resume = () => { resume(); cap.reset(); if (latest) update(latest, true); };
+        // The layers hold nothing to describe until shaders are warm and the first frame has run.
         mode.getDebugSnapshot = () => ({
-            initialized, fallbackMode, rebuilds, ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera),
+            initialized, fallbackMode, rebuilds,
+            ...(initialized ? { ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera) } : null),
             camera: camera?.position.toArray(), quaternion: camera?.quaternion.toArray(),
             act: pose?.state.act, rig: pose?.rig, distance: pose?.distance,
             acts: timeline?.acts.map(a => ({ kind: a.kind, start: a.start, end: a.end })),
             cutsCount: timeline?.cuts.length || 0, rhythmSource: timeline?.rhythmSource,
             pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
-            drawCalls: renderer?.info.render.calls, geometries: renderer?.info.memory.geometries,
-            textures: renderer?.info.memory.textures,
+            drawCalls: renderer?.info.render.calls, triangles: renderer?.info.render.triangles,
+            geometries: renderer?.info.memory.geometries, textures: renderer?.info.memory.textures,
+            programs: renderer?.info.programs?.length, canvasSmoothing,
             signSpectrum: Array.from(audio.spectrum)
         });
         mode.scope.add(() => {

@@ -5509,7 +5509,9 @@
             const size = renderer.getSize(new T.Vector2());
             // Half the picture's own resolution, within a ceiling per tier.
             const buffer = size.x * renderer.getPixelRatio();
-            const width = Math.round(Math.min(buffer * 0.5,
+            // The ripples blur the mirror image anyway; below the top tier it
+            // is drawn at a sixth of the picture's pixels rather than a quarter.
+            const width = Math.round(Math.min(buffer * (quality === 'ultimate' ? 0.5 : 0.4),
                 quality === 'ultimate' ? 1440 : quality === 'energy-saving' ? 384 : 960));
             const height = Math.max(1, Math.round(width * size.y / Math.max(1, size.x)));
             if (target.width !== width || target.height !== height) target.setSize(width, height);
