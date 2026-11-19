@@ -33,6 +33,23 @@ function setupPlayer(app) {
     const RAPID_SWITCH_SETTLE_MS = 180;
     app.engineTrackPath = null;
 
+    // --- 引擎推送（协议 2）---
+    // 新引擎连上 WebSocket 后先发 hello，之后播放状态由引擎主动推送 playback_state，
+    // 不再需要轮询。每条控制指令在引擎里拿到一个递增的 cmd_seq，推送里的 applied_seq
+    // 表示音频线程已经执行到哪一条：小于本窗口最后一条指令序号的推送一定是旧状态，直接丢弃。
+    // 旧引擎没有 hello，继续走轮询。
+    app.enginePush = false;
+    app.latestEnginePush = null;
+    app.lastIssuedCmdSeq = 0;
+    app.controlsInFlight = 0;
+    app.isBuffering = false;
+
+    app.noteCommandResult = (result) => {
+        const seq = Number(result?.state?.cmd_seq);
+        if (Number.isFinite(seq) && seq > app.lastIssuedCmdSeq) app.lastIssuedCmdSeq = seq;
+        return result;
+    };
+
     // 播放/暂停只有“最后一次”有意义：排着队还没发出去的那条，直接被后来的顶替。
     // 这样不管是谁在短时间内反复触发（连点、媒体键、别的窗口发来的指令），
     // 队列里最多只有一条待发的播放/暂停，不会越积越多，引擎也不会被一串过期指令轮番折腾。
@@ -48,12 +65,65 @@ function setupPlayer(app) {
         if (kind === 'transport') queuedTransport = slot;
         controlChain = controlChain.then(() => {
             if (queuedTransport === slot) queuedTransport = null;
+            app.controlsInFlight++;
             return Promise.resolve().then(() => slot.send()).catch(error => ({
                 status: 'error',
                 message: error?.message || String(error)
-            })).then(value => slot.resolve(value));
+            })).then(value => {
+                app.controlsInFlight--;
+                app.noteCommandResult(value);
+                // 指令在路上时到达的推送被搁置了；如果它已经反映了这条指令，现在补用。
+                if (app.controlsInFlight === 0 && app.latestEnginePush) {
+                    const latest = app.latestEnginePush;
+                    Promise.resolve().then(() => app.handleEnginePlaybackState(latest));
+                }
+                slot.resolve(value);
+            });
         });
         return result;
+    };
+
+    app.handleEngineHello = (message) => {
+        const features = Array.isArray(message?.features) ? message.features : [];
+        app.enginePush = Number(message?.protocol) >= 2 && features.includes('playback_state');
+        app.latestEnginePush = null;
+        if (app.enginePush) {
+            console.log('[Music.js] Engine pushes playback state; polling off.');
+            app.stopStatePolling();
+        }
+    };
+
+    // WebSocket 断开时退回轮询，重连收到 hello 后再关掉。
+    app.handleEngineDisconnected = () => {
+        const hadPush = app.enginePush;
+        app.enginePush = false;
+        if (hadPush && app.isPlaying && !app.isTrackLoading) app.startStatePolling();
+    };
+
+    app.handleEnginePlaybackState = (message) => {
+        if (!app.enginePush || !message) return;
+        if (app.latestEnginePush && Number(message.rev) < Number(app.latestEnginePush.rev)) return;
+        app.latestEnginePush = message;
+        // 指令还在路上，或者推送反映的是本窗口最后一条指令之前的状态：不用。
+        if (app.controlsInFlight > 0) return;
+        if (Number(message.applied_seq) < app.lastIssuedCmdSeq) return;
+        // 加载期间由 loadTrack 等 load_complete，推送不碰界面。
+        if (app.isTrackLoading) return;
+
+        const buffering = message.state === 'buffering';
+        if (buffering !== app.isBuffering) {
+            app.isBuffering = buffering;
+            document.body.classList.toggle('music-buffering', buffering);
+        }
+        // 已确认的状态，不需要乐观更新的防抖保护。
+        app.isChangingState = false;
+        app.updateUIWithState({
+            is_playing: message.is_playing === true,
+            is_loading: message.state === 'loading',
+            current_time: Number(message.position) || 0,
+            duration: Number(message.duration) || 0,
+            file_path: message.file_path
+        }, { confirmed: true });
     };
 
     const freezePlaybackClock = (wasPlaying) => {
@@ -653,6 +723,9 @@ function setupPlayer(app) {
     let hiddenPollSkips = 0;
     app.startStatePolling = () => {
         if (app.statePollInterval) clearInterval(app.statePollInterval);
+        app.statePollInterval = null;
+        // 引擎会推送状态时不轮询。
+        if (app.enginePush) return;
         app.statePollInterval = setInterval(() => {
             if (document.hidden && ++hiddenPollSkips % 4 !== 0) return;
             app.pollState();
