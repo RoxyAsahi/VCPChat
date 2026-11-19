@@ -276,6 +276,9 @@ test('break scenes are planned in long silences only, and the camera moves into 
     assert.ok(inside.saloon > 0.99);
     // The lens is told when the picture is the lit saloon, and only then.
     assert.ok(inside.cabinView > 0.99);
+    // The opening saloon is already thinning out, and keeps the low sun.
+    assert.ok(inside.cabinEmpty >= 0.6 && inside.cabinEmpty <= 1);
+    assert.ok(inside.cabinSunset > 0.5);
     const outside = track.scenes.find(scene => scene.kind === 'TRACKSIDE');
     assert.equal(C.pose(timeline, track, (outside.start + outside.end) / 2, { aspect: 1.78 }).cabinView, 0);
     const back = inside.trainFront - inside.distance;
