@@ -792,8 +792,18 @@
          * runs through. It is one mesh in one material, shown only while it is
          * needed, in the same tones the lit windows show from outside.
          * Paints: 0 panel, 1 dado, 2 seat, 3 floor, 4 metal, 5 tube, 6 ceiling, 7 dark cloth, 8 skin,
-         * 9 printed card, 10 pale cloth, 11 brown cloth, 12 shirt, 13 dark hair, 14 route diagram.
+         * 9 printed card, 10 pale cloth, 11 brown cloth, 12 shirt, 13 dark hair, 14 route diagram,
+         * 15 a lit screen, 16 the shade of a mouth.
          */
+        // Who is aboard: which bench, how far along the car, and what they are like.
+        const SITTERS = [
+            [-1, -2.9, { coat: 7, legs: 7, pose: 'doze', suit: true, glasses: true, tilt: 0.16 }],
+            [-1, -0.7, { build: 0.93, coat: 10, legs: 11, hair: 4, cut: 'thin', pose: 'bag', bag: 11 }],
+            [1, -1.9, { coat: 12, legs: 7, pose: 'phone' }],
+            [1, 0.9, { build: 0.95, coat: 11, legs: 7, cut: 'bob', pose: 'bag', bag: 7, turn: -0.35 }],
+            [-1, 2.3, { build: 1.03, coat: 7, legs: 10, cut: 'bob', turn: 0.4 }],
+            [1, 4.9, { build: 0.9, coat: 10, legs: 7, hair: 4, cut: 'thin', pose: 'doze', tilt: -0.2 }]
+        ];
         const saloonGeometry = (() => {
             const positions = [], normals = [], paints = [];
             const add = (shape, paint) => {
@@ -819,49 +829,132 @@
                 boxAt(0.62, 0.02, 0.02, 0, TOP - 0.05, z, 4);
                 boxAt(0.58, 0.3, 0.008, 0, TOP - 0.21, z, 9);
             }
-            // A seated figure on a bench, knees towards the aisle: trunk, two
-            // thighs and shins, arms down to the lap, a head with its hair.
-            const limb = (radius, length, x, y, z, lean, paint) => add(new T.CapsuleGeometry(radius, length, 3, 8)
-                .rotateZ(lean).translate(x, y, z), paint);
-            const head = (x, y, z, side, hair) => {
-                add(new T.CylinderGeometry(0.042, 0.048, 0.09, 8).translate(x, y - 0.11, z), 8);
-                add(new T.SphereGeometry(0.1, 14, 10).scale(0.92, 1.08, 1).translate(x - side * 0.01, y, z), 8);
-                add(new T.SphereGeometry(0.02, 6, 5).translate(x - side * 0.1, y - 0.012, z), 8);
-                add(new T.SphereGeometry(0.108, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(0.94, 1.06, 1.02)
-                    .translate(x + side * 0.014, y + 0.012, z), hair);
+            /*
+             * People. Each is shaped about a point of their own, facing +x,
+             * then turned and set down, so a head can nod or look aside and
+             * a whole figure can face wherever its seat does.
+             */
+            const UP = new T.Vector3(0, 1, 0);
+            const bone = (parts, from, to, radius, paint) => {
+                const a = new T.Vector3(...from), span = new T.Vector3(...to).sub(a), length = span.length();
+                parts.push([new T.CapsuleGeometry(radius, length, 3, 8)
+                    .applyQuaternion(new T.Quaternion().setFromUnitVectors(UP, span.clone().divideScalar(length)))
+                    .translate(a.x + span.x / 2, a.y + span.y / 2, a.z + span.z / 2), paint]);
             };
-            const sitter = (side, z, build, coat = 7, legs = 7, hair = 13, bag = false) => {
-                const x = side * (WALL - 0.3), seat = F + 0.52, neck = seat + 0.5 * build;
-                limb(0.15, 0.3 * build, x, seat + 0.26 * build, z, side * 0.06, coat);
-                // Shoulders, so the trunk is not a plain pill.
-                add(new T.CapsuleGeometry(0.075, 0.26, 3, 8).rotateX(Math.PI / 2)
-                    .translate(x - side * 0.01, seat + 0.42 * build, z), coat);
+            const ball = (parts, radius, sx, sy, sz, x, y, z, paint, detail = 8) =>
+                parts.push([new T.SphereGeometry(radius, detail, Math.max(4, detail - 2)).scale(sx, sy, sz).translate(x, y, z), paint]);
+            const block = (parts, sx, sy, sz, x, y, z, paint) =>
+                parts.push([new T.BoxGeometry(sx, sy, sz).translate(x, y, z), paint]);
+            const settle = (parts, matrix) => parts.forEach(([shape, paint]) => add(shape.applyMatrix4(matrix), paint));
+            const stance = (x, y, z, yaw) => new T.Matrix4().makeRotationY(yaw).setPosition(x, y, z);
+            // A head on its neck, from the base of the neck up: skull, jaw,
+            // ears, nose, brows, eyes shut or lowered, a mouth, and hair cut
+            // one of three ways. It turns about the neck.
+            const head = (parts, at, hair, { nod = 0, turn = 0, tilt = 0, cut = 'short', glasses = false, shut = false, peaked = false } = {}) => {
+                const own = [];
+                own.push([new T.CylinderGeometry(0.046, 0.056, 0.13, 10).translate(-0.012, 0.045, 0), 8]);
+                ball(own, 0.1, 0.97, 1, 0.8, 0, 0.2, 0, 8, 16);
+                ball(own, 0.075, 0.95, 1.05, 0.86, 0.022, 0.135, 0, 8, 14);
+                ball(own, 0.014, 1, 1.5, 0.8, 0.099, 0.157, 0, 8, 8);
+                block(own, 0.004, 0.004, 0.03, 0.0905, 0.112, 0, 16);
+                for (const z of [-1, 1]) {
+                    ball(own, 0.02, 0.55, 1, 0.45, -0.008, 0.172, z * 0.079, 8, 8);
+                    ball(own, 0.008, 0.4, shut ? 0.4 : 0.95, shut ? 1.8 : 1.35, 0.0885, 0.181, z * 0.033, 13, 6);
+                    own.push([new T.BoxGeometry(0.005, 0.005, 0.03).rotateX(z * 0.12).translate(0.0895, 0.203, z * 0.034), hair]);
+                    if (glasses) own.push([new T.TorusGeometry(0.018, 0.0022, 4, 14).rotateY(Math.PI / 2)
+                        .translate(0.097, 0.181, z * 0.034), 4]);
+                }
+                if (glasses) block(own, 0.003, 0.003, 0.034, 0.097, 0.184, 0, 4);
+                // Hair is a cap tipped back: high over the brow, low at the nape.
+                const cap = (radius, reach, tip, wide, back = 0) => own.push([
+                    new T.SphereGeometry(radius, 16, 10, 0, Math.PI * 2, 0, Math.PI * reach)
+                        .scale(1, 1, wide).rotateZ(tip).translate(-back, 0.2, 0), hair]);
+                // Bobbed to the jaw with a fringe, thinning from the brow back, or short.
+                if (cut === 'bob') cap(0.109, 0.7, 0.72, 0.86, 0.004);
+                else if (cut === 'thin') cap(0.1035, 0.56, 0.82, 0.82, 0.002);
+                else cap(0.1045, 0.56, 0.5, 0.83, 0.002);
+                if (peaked) {
+                    // A uniform cap: crown, band and peak.
+                    own.push([new T.CylinderGeometry(0.116, 0.104, 0.062, 16).scale(1, 1, 0.88).translate(-0.004, 0.297, 0), 7]);
+                    own.push([new T.CylinderGeometry(0.105, 0.105, 0.024, 16).scale(1, 1, 0.88).translate(-0.004, 0.256, 0), 13]);
+                    block(own, 0.085, 0.01, 0.15, 0.125, 0.247, 0, 13);
+                }
+                const pose = new T.Matrix4().makeRotationY(turn)
+                    .multiply(new T.Matrix4().makeRotationX(tilt)).multiply(new T.Matrix4().makeRotationZ(-nod))
+                    .setPosition(...at);
+                own.forEach(([shape, paint]) => parts.push([shape.applyMatrix4(pose), paint]));
+            };
+            // The trunk of someone in a coat or shirt: flatter than it is
+            // wide, shoulders set on it, a collar, and for a suit the shirt
+            // front and tie showing.
+            const trunk = (parts, base, top, lean, coat, { suit = false } = {}) => {
+                const height = top - base;
+                const own = [[new T.CapsuleGeometry(0.108, height - 0.19, 4, 14).scale(1, 1, 1.5).translate(0, height / 2 - 0.005, 0), coat],
+                    [new T.CapsuleGeometry(0.066, 0.27, 3, 8).rotateX(Math.PI / 2).translate(-0.012, height - 0.03, 0), coat],
+                    [new T.TorusGeometry(0.052, 0.014, 6, 14).rotateX(Math.PI / 2).scale(1.05, 1, 1).translate(-0.01, height + 0.035, 0), suit ? 12 : coat]];
+                if (suit) {
+                    own.push([new T.CylinderGeometry(0.062, 0.002, 0.17, 3).rotateY(Math.PI / 2).scale(0.12, 1, 1)
+                        .translate(0.106, height - 0.11, 0), 12]);
+                    own.push([new T.BoxGeometry(0.008, 0.15, 0.022).translate(0.112, height - 0.12, 0), 13]);
+                }
+                const pose = new T.Matrix4().makeRotationZ(lean).setPosition(0, base, 0);
+                own.forEach(([shape, paint]) => parts.push([shape.applyMatrix4(pose), paint]));
+            };
+            const hand = (parts, x, y, z, paint = 8) => ball(parts, 0.04, 1.2, 0.62, 0.92, x, y, z, paint);
+            const shoe = (parts, x, y, z) => parts.push([new T.CapsuleGeometry(0.043, 0.13, 3, 8).rotateZ(Math.PI / 2)
+                .scale(1, 0.78, 1).translate(x, y, z), 13]);
+            // Seated on a bench, knees to the aisle. What the hands are doing
+            // is the pose: at rest on the knees, folded while dozing, round a
+            // telephone, or on a bag in the lap.
+            const sitter = (side, z, { build = 1, coat = 7, legs = 7, hair = 13, pose = 'rest', bag = 0, ...looks } = {}) => {
+                const parts = [], drop = -0.52, shoulder = 0.56 * build;
+                parts.push([new T.CapsuleGeometry(0.1, 0.15, 3, 8).rotateX(Math.PI / 2).translate(-0.01, 0.1, 0), legs]);
+                trunk(parts, 0.08, shoulder, 0.07, coat, looks);
                 for (const leg of [-0.09, 0.09]) {
-                    limb(0.075, 0.3, x - side * 0.24, seat + 0.06, z + leg, Math.PI / 2, legs);
-                    limb(0.06, 0.36, x - side * 0.44, F + 0.26, z + leg, side * -0.05, legs);
-                    boxAt(0.22, 0.07, 0.09, x - side * 0.5, F + 0.035, z + leg, 13);
+                    bone(parts, [0, 0.09, leg * 0.95], [0.37, 0.1, leg], 0.077, legs);
+                    bone(parts, [0.385, 0.075, leg], [0.43, drop + 0.09, leg], 0.058, legs);
+                    shoe(parts, 0.49, drop + 0.034, leg);
                 }
-                for (const arm of [-0.2, 0.2]) {
-                    limb(0.05, 0.24, x - side * 0.05, seat + 0.3 * build, z + arm, side * -0.25, coat);
-                    limb(0.043, 0.2, x - side * 0.2, seat + 0.17, z + arm * 0.7, side * -1.15, coat);
-                    add(new T.SphereGeometry(0.045, 8, 6).translate(x - side * 0.31, seat + 0.14, z + arm * 0.5), 8);
+                const grip = { rest: [0.27, 0.185, 0.09], doze: [0.15, 0.2, 0.03], phone: [0.2, 0.33, 0.04], bag: [0.2, 0.34, 0.11] }[pose];
+                for (const arm of [-1, 1]) {
+                    const elbow = [0.045, 0.2, arm * 0.2];
+                    bone(parts, [-0.035, shoulder - 0.045, arm * 0.185], elbow, 0.05, coat);
+                    bone(parts, elbow, [grip[0] - 0.04, grip[1], arm * (grip[2] + 0.012)], 0.042, coat);
+                    hand(parts, grip[0], grip[1] + 0.004, arm * grip[2]);
                 }
-                if (bag) boxAt(0.2, 0.2, 0.3, x - side * 0.27, seat + 0.2, z, bag);
-                head(x, neck + 0.16, z, side, hair);
+                if (pose === 'phone') {
+                    const tip = new T.Matrix4().makeRotationZ(0.55).setPosition(0.235, 0.375, 0);
+                    parts.push([new T.BoxGeometry(0.011, 0.14, 0.07).applyMatrix4(tip), 13]);
+                    parts.push([new T.BoxGeometry(0.003, 0.128, 0.06).translate(-0.006, 0, 0).applyMatrix4(tip), 15]);
+                }
+                if (bag) {
+                    block(parts, 0.2, 0.2, 0.3, 0.2, 0.235, 0, bag);
+                    block(parts, 0.205, 0.02, 0.305, 0.2, 0.3, 0, 13);
+                    parts.push([new T.TorusGeometry(0.06, 0.008, 5, 12, Math.PI).rotateY(Math.PI / 2).translate(0.2, 0.31, 0), 13]);
+                }
+                head(parts, [-0.048, shoulder + 0.012, 0], hair,
+                    { nod: pose === 'doze' ? 0.5 : pose === 'phone' ? 0.42 : 0.06, shut: pose === 'doze', ...looks });
+                settle(parts, stance(side * (WALL - 0.3), F + 0.52, z, side > 0 ? Math.PI : 0));
             };
             // Someone standing at the door, a hand up on the rail.
-            const stander = (side, z, coat, legs, hair) => {
-                const x = side * 0.84, hip = F + 0.84;
+            const stander = (side, z, { coat = 10, legs = 7, hair = 13, ...looks } = {}) => {
+                const parts = [], hip = 0.86, shoulder = hip + 0.52;
                 for (const leg of [-0.085, 0.085]) {
-                    limb(0.068, 0.7, x, F + 0.44, z + leg, 0, legs);
-                    boxAt(0.22, 0.07, 0.09, x + side * 0.03, F + 0.035, z + leg, 13);
+                    bone(parts, [0, hip, leg], [0.005, 0.1, leg], 0.064, legs);
+                    shoe(parts, 0.04, 0.034, leg);
                 }
-                limb(0.15, 0.34, x, hip + 0.3, z, 0, coat);
-                add(new T.CapsuleGeometry(0.075, 0.26, 3, 8).rotateX(Math.PI / 2).translate(x, hip + 0.52, z), coat);
-                limb(0.05, 0.46, x - side * 0.02, hip + 0.3, z - 0.2, 0, coat);
-                limb(0.048, 0.3, x - side * 0.1, hip + 0.72, z + 0.2, side * 0.55, coat);
-                add(new T.SphereGeometry(0.045, 8, 6).translate(side * 0.63, 3.1, z + 0.2), 8);
-                head(x, hip + 0.76, z, -side, hair);
+                parts.push([new T.CapsuleGeometry(0.098, 0.15, 3, 8).rotateX(Math.PI / 2).translate(0, hip + 0.02, 0), legs]);
+                trunk(parts, hip, shoulder, 0, coat, looks);
+                // One arm hangs, the other reaches the rail overhead.
+                bone(parts, [-0.02, shoulder - 0.045, -0.185], [0, hip + 0.2, -0.2], 0.05, coat);
+                bone(parts, [0, hip + 0.2, -0.2], [0.03, hip - 0.04, -0.19], 0.042, coat);
+                hand(parts, 0.035, hip - 0.09, -0.19);
+                const rail = [-(0.84 - 0.62), 3.1 - F, 0.2];
+                bone(parts, [-0.02, shoulder - 0.045, 0.185], [-0.1, shoulder + 0.17, 0.22], 0.05, coat);
+                bone(parts, [-0.1, shoulder + 0.17, 0.22], [rail[0], rail[1] - 0.05, rail[2]], 0.042, coat);
+                hand(parts, ...rail);
+                head(parts, [-0.012, shoulder + 0.012, 0], hair, looks);
+                settle(parts, stance(side * 0.84, F, z, side > 0 ? 0 : Math.PI));
             };
             const openings = [...WINDOWS.map(z => [z - 0.5, z + 0.5]), ...DOORS.map(z => [z - 0.3, z + 0.3]), [-5.44, -4.98]]
                 .sort((a, b) => a[0] - b[0]);
@@ -917,10 +1010,8 @@
                     add(new T.TorusGeometry(0.05, 0.009, 6, 18).rotateY(Math.PI / 2).translate(side * 0.62, 2.87, z), 0);
                 }
             }
-            [[-1, -2.9, 1, 7, 7, 13], [-1, -0.7, 0.92, 10, 11, 4, 11], [1, -1.9, 1, 12, 7, 13],
-                [1, 0.9, 0.95, 11, 7, 4, 7], [-1, 2.3, 1.04, 7, 10, 13], [1, 4.9, 0.9, 10, 7, 4]]
-                .forEach(figure => sitter(...figure));
-            stander(1, -4.02, 10, 7, 13);
+            SITTERS.forEach(([side, z, looks]) => sitter(side, z, looks));
+            stander(1, -4.02, { coat: 10, legs: 7, hair: 13, turn: -0.5, nod: 0.1 });
             // A rucksack and a parcel left up on the racks.
             boxAt(0.22, 0.17, 0.32, -(WALL - 0.17), 3.2, 0.4, 11);
             boxAt(0.22, 0.14, 0.3, WALL - 0.17, 3.18, -2.6, 10);
@@ -945,19 +1036,25 @@
                 add(new T.CapsuleGeometry(0.016, 0.16, 2, 6).rotateX(Math.PI / 2).rotateY(tilt).translate(x, 2.23, FRONT + 0.36), 4);
             }
             boxAt(0.4, 0.5, 0.4, -0.8, F + 0.3, FRONT + 0.8, 4);
-            add(new T.CapsuleGeometry(0.15, 0.3, 3, 8).translate(-0.8, F + 0.84, FRONT + 0.86), 7);
-            add(new T.CapsuleGeometry(0.075, 0.26, 3, 8).rotateZ(Math.PI / 2).translate(-0.8, F + 1.02, FRONT + 0.86), 7);
-            for (const arm of [-0.2, 0.2]) {
-                add(new T.CapsuleGeometry(0.048, 0.34, 3, 8).rotateX(Math.PI / 2 - 0.5)
-                    .translate(-0.8 + arm * 1.2, F + 0.92, FRONT + 0.62), 7);
-                add(new T.SphereGeometry(0.045, 8, 6).translate(-0.81 + arm * 1.35, 2.22, FRONT + 0.4), 12);
+            {
+                // Seated square to the desk, a gloved hand on each handle.
+                const parts = [], shoulder = 0.56;
+                parts.push([new T.CapsuleGeometry(0.1, 0.15, 3, 8).rotateX(Math.PI / 2).translate(-0.01, 0.1, 0), 7]);
+                trunk(parts, 0.08, shoulder, 0.02, 7, { suit: true });
+                for (const leg of [-0.09, 0.09]) {
+                    bone(parts, [0, 0.085, leg], [0.34, 0.09, leg], 0.07, 7);
+                    bone(parts, [0.355, 0.07, leg], [0.38, -0.46, leg], 0.053, 7);
+                    shoe(parts, 0.44, -0.516, leg);
+                }
+                for (const [arm, reach] of [[-1, -0.28], [1, 0.26]]) {
+                    const elbow = [0.13, 0.27, arm * 0.23];
+                    bone(parts, [-0.02, shoulder - 0.045, arm * 0.185], elbow, 0.05, 7);
+                    bone(parts, elbow, [0.4, 0.34, reach], 0.042, 7);
+                    hand(parts, 0.44, 0.35, reach, 12);
+                }
+                head(parts, [-0.02, shoulder + 0.012, 0], 13, { peaked: true });
+                settle(parts, stance(-0.8, F + 0.55, FRONT + 0.86, Math.PI / 2));
             }
-            add(new T.CylinderGeometry(0.042, 0.048, 0.09, 8).translate(-0.8, F + 1.2, FRONT + 0.85), 8);
-            add(new T.SphereGeometry(0.1, 14, 10).scale(1, 1.08, 0.92).translate(-0.8, F + 1.31, FRONT + 0.84), 8);
-            // Cap: crown, band and peak.
-            add(new T.CylinderGeometry(0.118, 0.105, 0.07, 16).translate(-0.8, F + 1.42, FRONT + 0.85), 7);
-            add(new T.CylinderGeometry(0.106, 0.106, 0.025, 16).translate(-0.8, F + 1.375, FRONT + 0.85), 13);
-            boxAt(0.17, 0.012, 0.09, -0.8, F + 1.365, FRONT + 0.73, 13);
             // The inner end, and the dark of the gangway through to the next car.
             boxAt(2.6, TOP - F, 0.06, 0, (TOP + F) / 2, END - 0.03, 0);
             boxAt(0.84, 1.9, 0.02, 0, F + 0.95, END - 0.07, 7);
@@ -976,6 +1073,7 @@
             fragmentShader: `uniform vec3 warm,seat;uniform float power;
                 varying float vPaint;varying vec3 vNormal,vPos,vView;
                 const float TOP=3.34,FLOOR=${CAR.floor.toFixed(2)},TUBE0=${(TIP + 1.35 + 0.85).toFixed(3)},PITCH=${WINDOW_PITCH.toFixed(2)};
+                const vec2 SAT[${SITTERS.length}]=vec2[](${SITTERS.map(([side, z]) => `vec2(${side.toFixed(1)},${z.toFixed(2)})`).join(',')});
                 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
                 // How much of a tube lies at this spot on the ceiling.
                 float tubes(vec2 at,float soft){
@@ -991,7 +1089,7 @@
                         // Moquette: a seam between cushions, and the nap catching the light at a glance.
                         float edge=(0.5-abs(fract(vPos.z/1.31)-0.5))*1.31;
                         c=(seat*1.05+warm*0.02)*(1.0-0.4*(1.0-smoothstep(0.0,0.012+fwidth(vPos.z),edge)));
-                        c*=1.0+0.55*pow(1.0-abs(dot(n,v)),2.0);
+                        c*=1.0+0.55*pow(max(1.0-abs(dot(n,v)),0.0),2.0);
                     }else if(vPaint<3.5){
                         // Boards laid along the car, butt joints staggered, varnish worn dull.
                         float board=vPos.x/0.11,id=floor(board),grain=fwidth(board);
@@ -1004,7 +1102,7 @@
                         // The tubes overhead, seen in the varnish.
                         vec3 r=reflect(-v,vec3(0.0,1.0,0.0));
                         vec2 hit=vPos.xz+r.xz*(TOP-vPos.y)/max(r.y,0.05);
-                        shine=tubes(hit,0.1)*(0.03+0.4*pow(1.0-r.y,3.0))*(1.0-0.5*seam*fade)*1.5;
+                        shine=tubes(hit,0.1)*(0.03+0.4*pow(max(1.0-r.y,0.0),3.0))*(1.0-0.5*seam*fade)*1.5;
                     }else if(vPaint<4.5)c=warm*0.16+vec3(0.02);
                     else if(vPaint<5.5)c=vec3(1.0,0.97,0.9)*2.3;
                     else if(vPaint<6.5)c=cream*(0.56+0.3*tubes(vPos.xz,0.5));
@@ -1026,7 +1124,7 @@
                             *step(split+0.14,q.x)*step(q.x,0.25+0.6*hash(vec2(row,id)))*step(abs(row),1.5);
                         c=mix(cream*0.86,ink,block*inside);
                         c=mix(c,cream*0.22,type*inside*0.75*0.4/(0.4+soft*8.0));
-                    }else if(vPaint>13.5){
+                    }else if(vPaint>13.5&&vPaint<14.5){
                         // The line over the door: every station a dot, this one filled in.
                         vec2 q=vec2(fract((vPos.z+4.3)/7.85+0.5)-0.5,vPos.y-3.2)*vec2(7.85,1.0);
                         float soft=fwidth(q.y)*1.2,stop=(fract(q.x/0.055+0.5)-0.5)*0.055;
@@ -1040,7 +1138,12 @@
                     }else if(vPaint<10.5)c=cream*0.36;
                     else if(vPaint<11.5)c=warm*0.2+seat*0.04;
                     else if(vPaint<12.5)c=cream*0.64;
-                    else c=vec3(0.016,0.016,0.02)+warm*0.012;
+                    else if(vPaint<13.5)c=vec3(0.016,0.016,0.02)+warm*0.012;
+                    else if(vPaint<15.5)c=vec3(0.62,0.8,1.0)*1.5;
+                    else c=warm*0.2+vec3(0.03,0.012,0.01);
+                    // Cloth and skin turn away softly at their edges.
+                    bool worn=vPaint>6.5&&vPaint<8.5||vPaint>9.5&&vPaint<13.5;
+                    if(worn)c*=1.0+0.4*pow(max(1.0-abs(dot(n,v)),0.0),2.5);
                     // Lit from the row of tubes down the middle of the ceiling,
                     // with the cream walls throwing some of it back.
                     vec2 lamp=vec2(-vPos.x,TOP-0.05-vPos.y);
@@ -1050,7 +1153,18 @@
                     // Under the benches the floor is in their shadow.
                     float bench=step(-3.65,vPos.z)*step(vPos.z,2.9)+step(4.2,vPos.z);
                     if(vPaint>2.5&&vPaint<3.5)lit*=mix(1.0,mix(0.45,1.0,smoothstep(0.92,0.6,abs(vPos.x))),bench);
-                    if(vPaint>4.5&&vPaint<6.5)lit=1.0;
+                    // Whoever sits on a bench darkens it under and behind them, and the floor at their feet.
+                    float sat=0.0,stood=0.0;
+                    for(int i=0;i<${SITTERS.length};i++){
+                        vec2 who=SAT[i];
+                        float along=vPos.z-who.y,across=abs(vPos.x)-${(CAR.half - 0.04 - 0.3).toFixed(3)};
+                        if(who.x*vPos.x<0.0)continue;
+                        sat=max(sat,exp(-along*along/0.05-across*across/0.08));
+                        stood=max(stood,exp(-along*along/0.05-(across+0.46)*(across+0.46)/0.03));
+                    }
+                    if(vPaint>1.5&&vPaint<2.5)lit*=1.0-0.42*sat;
+                    if(vPaint>2.5&&vPaint<3.5){lit*=1.0-0.4*stood;shine*=1.0-0.7*stood;}
+                    if(vPaint>4.5&&vPaint<6.5||vPaint>14.5&&vPaint<15.5)lit=1.0;
                     gl_FragColor=vec4((c*lit+vec3(1.0,0.97,0.9)*shine)*power*0.82,1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
