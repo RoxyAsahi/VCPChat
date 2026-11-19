@@ -36,6 +36,14 @@ body {
   --ar-floor: #192125;
   --ar-badge: #5d676b;
   --ar-groove: #4a5559;
+  /* 档案页次级文字 */
+  --ar-sel: #e0e3dc;
+  --ar-summary: #a6b0b1;
+  --ar-hint: #a6b0b1;
+  --ar-foot: #a6b0b1;
+  --ar-count: #a6b0b1;
+  --ar-slash: #a6b0b1;
+  --ar-light: #e0e3dc;
 
   /* 底栏控件与面板（深色） */
   --md-tp: rgb(244, 244, 245);
@@ -71,6 +79,13 @@ body.light-theme {
   --ar-floor: #d8c9b9;
   --ar-badge: #8e8981;
   --ar-groove: #b9ab9a;
+  --ar-sel: #24261f;
+  --ar-summary: #666257;
+  --ar-hint: #858077;
+  --ar-foot: #78776e;
+  --ar-count: #726f67;
+  --ar-slash: #8f8a80;
+  --ar-light: #777b60;
 
   --md-tp: rgb(28, 25, 23);
   --md-tp-rgb: 28, 25, 23;
