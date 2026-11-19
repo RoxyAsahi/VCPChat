@@ -624,3 +624,23 @@ body.music-stage-active #custom-title-bar #stage-toggle-btn {
 .stage-toggle-btn.is-active .stage-toggle-orbit {
     box-shadow: none;
 }
+
+/* ---------- 镜台遮幅条接上标题栏 ----------
+ * 舞台模式层从标题栏下方开始，标题栏后面露出的是舞台底色；遮幅条原来是纯黑，
+ * 浅色时变成「纸色标题栏 + 黑条」两截。遮幅条改用同一个舞台底色，顶部连成一整条，
+ * 深色下与原来的黑几乎看不出差别。 */
+.music-stage .diorama-letterbox::before,
+.music-stage .diorama-letterbox::after {
+    background: var(--stage-bg);
+}
+
+/* ---------- 标题栏按键的键盘焦点 ----------
+ * 退出舞台后焦点回到舞台开关。全局焦点框取 --highlight-text（主题强调色），
+ * 在单色界面里是一圈红/金；只在标题栏按键上把它换成墨色。 */
+#custom-title-bar button {
+    --highlight-text: var(--ar-ink);
+}
+
+body.music-stage-active #custom-title-bar button {
+    --highlight-text: var(--ms-ink);
+}
