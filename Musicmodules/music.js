@@ -377,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupSidebar(app);
         setupUI(app);
         setupMusicStage(app);
+        window.MusicArchive?.init(app);
 
         // --- Handlers & Listeners ---
         setupEventListeners();
