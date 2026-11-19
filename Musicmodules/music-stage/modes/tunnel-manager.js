@@ -37,6 +37,7 @@
     // The galaxy's plane, tilted across the upper part of the view, and its bright middle.
     const GALAXY_POLE = unit([0.18, 0.93, 0.33]);
     const GALAXY_CORE = unit([0.75, 0.21, -1]);
+    const COMET_AT = unit([0.52, -0.2, -0.83]);
     const glslVec3 = (v) => `vec3(${v.map((n) => n.toFixed(4)).join(', ')})`;
     // Surface maps sit beside the modes, wherever the page that hosts them lives.
     const ASSETS = (() => {
@@ -51,12 +52,12 @@
      *    - 为每句歌词分配三维空间遭遇锚点 (Spatial Encounter) 与机位运镜 (Shot Rig)
      * ============================================================================ */
     const ACT_PRESETS = Object.freeze({
-        Drift:     { speed: 15.0, fov: 46, knotFlow: 0.32, nebulaAlpha: 0.48, warp: 0.08, lateralAmp: 0.55, rollAmp: 0.018 },
-        Verse:     { speed: 22.0, fov: 50, knotFlow: 0.55, nebulaAlpha: 0.65, warp: 0.22, lateralAmp: 0.85, rollAmp: 0.028 },
-        Pre:       { speed: 29.0, fov: 53, knotFlow: 0.78, nebulaAlpha: 0.78, warp: 0.45, lateralAmp: 1.05, rollAmp: 0.036 },
-        Chorus:    { speed: 38.0, fov: 60, knotFlow: 1.00, nebulaAlpha: 0.95, warp: 0.88, lateralAmp: 1.30, rollAmp: 0.048 },
-        Interlude: { speed: 18.0, fov: 44, knotFlow: 0.68, nebulaAlpha: 0.72, warp: 0.16, lateralAmp: 1.15, rollAmp: 0.042 },
-        Horizon:   { speed: 11.0, fov: 48, knotFlow: 0.40, nebulaAlpha: 0.55, warp: 0.05, lateralAmp: 0.45, rollAmp: 0.015 }
+        Drift:     { speed: 15.0, fov: 46, knotFlow: 0.32, nebulaAlpha: 0.48, warp: 0.08, lateralAmp: 0.55, rollAmp: 0.018, rocks: 0.55 },
+        Verse:     { speed: 22.0, fov: 50, knotFlow: 0.55, nebulaAlpha: 0.65, warp: 0.22, lateralAmp: 0.85, rollAmp: 0.028, rocks: 0.00 },
+        Pre:       { speed: 29.0, fov: 53, knotFlow: 0.78, nebulaAlpha: 0.78, warp: 0.45, lateralAmp: 1.05, rollAmp: 0.036, rocks: 0.00 },
+        Chorus:    { speed: 38.0, fov: 60, knotFlow: 1.00, nebulaAlpha: 0.95, warp: 0.88, lateralAmp: 1.30, rollAmp: 0.048, rocks: 0.00 },
+        Interlude: { speed: 18.0, fov: 44, knotFlow: 0.68, nebulaAlpha: 0.72, warp: 0.16, lateralAmp: 1.15, rollAmp: 0.042, rocks: 1.00 },
+        Horizon:   { speed: 11.0, fov: 48, knotFlow: 0.40, nebulaAlpha: 0.55, warp: 0.05, lateralAmp: 0.45, rollAmp: 0.015, rocks: 0.70 }
     });
 
     const SHOT_RIGS = Object.freeze([
@@ -272,16 +273,45 @@
         //   - 'planet'  -> 幽暗晨昏线气态巨行星與极光磁层 (Abyssal Terminator Planet)
         //   - 'ship'    -> 远航张拉星帆孤舟群与离子弦尾迹 (Nomad Solar-Sail Monolith)
         const ENCOUNTER_CYCLE = 2400;
+        // Each station keeps close company with a planet: it comes up small
+        // against the disc, then passes near the camera.
         const encounterSlots = [
-            { slotId: 0, type: 'station', baseS: 560,  side: -1, radial: 38, elev: 10,  scale: 1.15, rotSpeed: 0.11, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
+            { slotId: 0, type: 'station', baseS: 792,  side:  1, radial: 21, elev: 7,   scale: 0.58, rotSpeed: 0.05, tilt: [0.42, 0.18, -0.28], p: 3, q: 5 },
             { slotId: 1, type: 'planet',  baseS: 860,  side:  1, radial: 56, elev: 18,  scale: 1.25, rotSpeed: 0.05, tilt: [0.22, -0.12, 0.16], p: 2, q: 3 },
-            { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0.34], p: 2, q: 5 },
-            { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 30, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
-            { slotId: 4, type: 'station', baseS: 1760, side:  1, radial: 42, elev: 14,  scale: 1.28, rotSpeed: -0.10, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
+            { slotId: 2, type: 'rings',   baseS: 1160, side: -1, radial: 50, elev: -12, scale: 1.32, rotSpeed: 0.09, tilt: [0.68, 0.24, 0], p: 2, q: 5 },
+            { slotId: 3, type: 'ship',    baseS: 1460, side:  1, radial: 58, elev: -9,  scale: 1.10, rotSpeed: 0.04, tilt: [-0.08, 0.14, -0.12], p: 3, q: 4 },
+            { slotId: 4, type: 'station', baseS: 1985, side: -1, radial: 23, elev: -5,  scale: 0.62, rotSpeed: -0.05, tilt: [-0.52, 0.31, 0.22], p: 4, q: 7 },
             { slotId: 5, type: 'planet',  baseS: 2060, side: -1, radial: 60, elev: -16, scale: 1.18, rotSpeed: 0.06, tilt: [0.31, 0.15, -0.24], p: 3, q: 5 },
             { slotId: 6, type: 'rings',   baseS: 2360, side:  1, radial: 46, elev: 12,  scale: 1.22, rotSpeed: -0.08, tilt: [-0.62, -0.20, 0.29], p: 5, q: 8 },
-            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 32, elev: 8,   scale: 1.05, rotSpeed: 0.05, tilt: [0.06, -0.18, 0.10], p: 2, q: 3 }
+            { slotId: 7, type: 'ship',    baseS: 2660, side: -1, radial: 25, elev: 5,   scale: 0.66, rotSpeed: 0.012, tilt: [0.35, 0.5 - 7 * 1.1, -0.95], p: 2, q: 3, hold: true },
+            { slotId: 8, type: 'ship',    baseS: 1730, side:  1, radial: 25, elev: -4,  scale: 0.6,  rotSpeed: 0.01, tilt: [0.3, -0.55 - 8 * 1.1, 0.12], p: 3, q: 7, hold: true }
         ];
+
+        // The first chorus is flown through a ring system. The whole procession
+        // of encounters is slid along the route so that the first ringed planet
+        // (whose ring plane the route pierces, between planet and outer edge)
+        // is reached a few seconds into that chorus.
+        const choruses = acts.filter((act) => act.kind === 'Chorus' && act.end - act.start > 4);
+        const passTime = (act) => act.start + Math.min(5, (act.end - act.start) * 0.5);
+        const passAt = (act) => distanceAt(passTime(act));
+        // A pass has the sky to itself: nothing else arrives within a few seconds of it.
+        const hero = (act, place) => act && { ...place, distance: passAt(act), hold: true,
+            clearFrom: distanceAt(Math.max(0, passTime(act) - 4.5)), clearTo: distanceAt(passTime(act) + 3.5) };
+        const ringPass = choruses[0] ? { distance: passAt(choruses[0]), baseS: 1160 } : null;
+        // The later choruses each get a pass of their own, placed outside the
+        // procession: the second skims the sunlit cloud tops of a gas giant,
+        // the third goes up through a ring system from its shaded side.
+        const heroPasses = [
+            hero(choruses[1], { slotId: 5, side: 1, radial: 35, elev: -5, tilt: [0.31, 0.15, -0.24] }),
+            hero(choruses[2], { slotId: 6, side: 1, radial: 46, elev: 12, tilt: [-0.62, -0.2, 0] })
+        ].filter(Boolean);
+        // The close is an arrival: a ringed planet gathers far ahead through
+        // the last act and the song ends on the slow approach to it.
+        const closing = acts[acts.length - 1];
+        if (closing && closing.kind === 'Horizon' && closing.end - closing.start > 12) {
+            heroPasses.push({ slotId: 2, distance: distanceAt(duration) + 150, side: -1, radial: 58, elev: -10,
+                tilt: [0.5, 0.2, -0.25], hold: true, clearFrom: distanceAt(duration - 16), clearTo: Infinity });
+        }
 
         return {
             seedHash,
@@ -290,6 +320,8 @@
             lines,
             lineShots,
             encounterSlots,
+            ringPass,
+            heroPasses,
             ENCOUNTER_CYCLE,
             sampleState,
             distanceAt,
@@ -308,106 +340,33 @@
     // One set of dimensions for each encounter: the point template and the
     // solid body are built from the same numbers, so they coincide.
     const ENTITY_SPECS = Object.freeze({
-        stationA: { p: 3, q: 5, radius: 25 }, stationB: { p: 4, q: 7, radius: 26 },
+        stationA: { radius: 25, plan: 'truss' }, stationB: { radius: 26, plan: 'cross' },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
-        shipA: { scale: 1.0 }, shipB: { scale: 0.92 }
+        shipA: { scale: 1.0 }, shipB: { scale: 0.92, radius: 25, plan: 'probe' },
+        scope: { radius: 25, plan: 'telescope' }
     });
-    const createManifoldTemplates = (pointsPerSlot) => {
-        // A. 高维环面结流形 / 戴森星门遗迹 (Torus Knot (p,q) Manifold + Harmonic Filaments)
-        const buildTorusKnotManifold = (count, p, q, radius, seedStr) => {
-            const rand = seededRandom(seedStr);
-            const pos = new Float32Array(count * 3);
-            const normal = new Float32Array(count * 3);
-            const meta = new Float32Array(count * 4);
-            const strands = 3;
-
-            for (let i = 0; i < count; i += 1) {
-                const u = rand();
-                const t = (i / count) * TAU * p + (rand() - 0.5) * 0.04;
-                const pqPhase = (q / p) * t;
-                const tubeR = radius * (0.36 + 0.12 * Math.cos(pqPhase));
-                const coreR = radius * (0.72 + 0.28 * Math.cos(pqPhase));
-
-                // 环面结主曲线中心与切向基
-                const cx = coreR * Math.cos(t);
-                const cy = coreR * Math.sin(t);
-                const cz = tubeR * Math.sin(pqPhase);
-
-                const idx3 = i * 3;
-                const idx4 = i * 4;
-
-                if (u < 0.62) {
-                    // 1. 结项主谐波丝束 (Harmonic Ribbon Strands)
-                    const strandIdx = i % strands;
-                    const twist = t * 2.5 + (strandIdx / strands) * TAU;
-                    const minorR = (1.2 + rand() * 2.4) * (0.65 + 0.35 * Math.sin(t * 3.0));
-                    const nx = Math.cos(twist) * Math.cos(t) - Math.sin(twist) * Math.sin(t) * 0.5;
-                    const ny = Math.cos(twist) * Math.sin(t) + Math.sin(twist) * Math.cos(t) * 0.5;
-                    const nz = Math.sin(twist);
-                    pos[idx3] = cx + nx * minorR;
-                    pos[idx3 + 1] = cy + ny * minorR;
-                    pos[idx3 + 2] = cz + nz * minorR;
-                    normal[idx3] = nx;
-                    normal[idx3 + 1] = ny;
-                    normal[idx3 + 2] = nz;
-                    meta[idx4] = (t / (TAU * p)) % 1;
-                    meta[idx4 + 1] = strandIdx === 0 ? 1 : 0; // 0=主骨白弦, 1=松石谐波弦
-                    meta[idx4 + 2] = 1.15 + rand() * 0.85;
-                    meta[idx4 + 3] = rand();
-                } else if (u < 0.86) {
-                    // 2. 相位引力包络环与张拉弦 (Phase Containment Halo)
-                    const ringAngle = rand() * TAU;
-                    const ringR = radius * (1.02 + (rand() - 0.5) * 0.08);
-                    const planeTilt = (i % 2 === 0 ? 0.38 : -0.38);
-                    const rx = Math.cos(ringAngle) * ringR;
-                    const ry = Math.sin(ringAngle) * ringR * Math.cos(planeTilt);
-                    const rz = Math.sin(ringAngle) * ringR * Math.sin(planeTilt);
-                    pos[idx3] = rx;
-                    pos[idx3 + 1] = ry;
-                    pos[idx3 + 2] = rz;
-                    const inv = 1 / Math.max(0.001, Math.hypot(rx, ry, rz));
-                    normal[idx3] = rx * inv;
-                    normal[idx3 + 1] = ry * inv;
-                    normal[idx3 + 2] = rz * inv;
-                    meta[idx4] = ringAngle / TAU;
-                    meta[idx4 + 1] = 2; // 2=琥珀星门刻度环
-                    meta[idx4 + 2] = 1.3 + rand() * 0.7;
-                    meta[idx4 + 3] = rand();
-                } else {
-                    // 3. 奇点核心与轴向射流 (Singularity Core & Axial Jet)
-                    const jet = rand() < 0.55;
-                    if (jet) {
-                        const side = rand() < 0.5 ? -1 : 1;
-                        const zDist = side * Math.pow(rand(), 1.4) * radius * 1.45;
-                        const spread = (0.4 + Math.abs(zDist) * 0.06) * rand();
-                        const a = rand() * TAU;
-                        pos[idx3] = Math.cos(a) * spread;
-                        pos[idx3 + 1] = Math.sin(a) * spread;
-                        pos[idx3 + 2] = zDist;
-                        normal[idx3] = Math.cos(a);
-                        normal[idx3 + 1] = Math.sin(a);
-                        normal[idx3 + 2] = side * 0.4;
-                    } else {
-                        const r = Math.pow(rand(), 1.8) * radius * 0.22;
-                        const theta = rand() * TAU;
-                        const phi = Math.acos(2 * rand() - 1);
-                        pos[idx3] = r * Math.sin(phi) * Math.cos(theta);
-                        pos[idx3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-                        pos[idx3 + 2] = r * Math.cos(phi);
-                        normal[idx3] = Math.sin(phi) * Math.cos(theta);
-                        normal[idx3 + 1] = Math.sin(phi) * Math.sin(theta);
-                        normal[idx3 + 2] = Math.cos(phi);
-                    }
-                    meta[idx4] = rand();
-                    meta[idx4 + 1] = 3; // 3=核心辉光
-                    meta[idx4 + 2] = 1.6 + rand() * 1.1;
-                    meta[idx4 + 3] = rand();
-                }
+    // A solar sail, after the square sails that have flown: a thin film in
+    // four quadrants, slack between four diagonal booms, and a small drum of
+    // a spacecraft at the centre. The film lies across Z, turned to cruise
+    // at a slant.
+    const sailPlan = (scale) => {
+        const half = 23 * scale;
+        return {
+            half, bus: 1.5 * scale, busLength: 2.6 * scale, boom: 0.16 * scale,
+            // Each quadrant sags between the booms that hold it.
+            billow(x, y) {
+                const ax = Math.abs(x) / half, ay = Math.abs(y) / half;
+                return -half * 0.13 * Math.abs(ax - ay) * (1 - Math.max(ax, ay)) * 4 * Math.min(1, Math.max(ax, ay) * 3);
+            },
+            pose(x, y, z, out) {
+                const y1 = y * 0.94 - z * 0.34, z1 = y * 0.34 + z * 0.94;
+                out[0] = x * 0.85 + z1 * 0.48; out[1] = y1; out[2] = -x * 0.48 + z1 * 0.85;
+                return out;
             }
-            return { pos, normal, meta };
         };
-
+    };
+    const createManifoldTemplates = (pointsPerSlot) => {
         // B. 洛希吸积盘与螺旋密度波星环 (Roche Accretion Vortex & Spiral Density Waves)
         const buildRocheRings = (count, innerR, outerR, seedStr) => {
             const rand = seededRandom(seedStr);
@@ -526,97 +485,45 @@
         };
 
         // D. 远航张拉星帆孤舟与离子弦尾迹 (Nomad Solar-Sail Monolith & Ion Wake)
-        const buildNomadFleet = (count, scale, seedStr) => {
+        // D. 太阳帆：方形薄膜、四根对角桁、中心鼓形舱，点云与实体同一套尺寸
+        const buildSolarSail = (count, scale, seedStr) => {
             const rand = seededRandom(seedStr);
             const pos = new Float32Array(count * 3);
             const normal = new Float32Array(count * 3);
             const meta = new Float32Array(count * 4);
-
+            const plan = sailPlan(scale);
+            const at = new Float32Array(3);
             for (let i = 0; i < count; i += 1) {
-                const idx3 = i * 3;
-                const idx4 = i * 4;
                 const u = rand();
-
-                if (u < 0.48) {
-                    // 双曲面张拉光帆翼 (Hyperbolic Paraboloid Solar Sails, 3 片对称星帆)
-                    const wing = i % 3;
-                    const wingAngle = (wing / 3) * TAU + Math.PI * 0.5;
-                    const s = Math.pow(rand(), 0.75); // 展向 [0,1]
-                    const chord = (rand() - 0.5) * 2.0 * (1 - s * 0.72); // 弦向收尖
-                    const spanLen = s * 28.0 * scale;
-                    const sweepZ = -s * s * 16.0 * scale + chord * 7.5 * scale;
-                    const camber = Math.sin(s * Math.PI) * 3.2 * scale;
-
-                    const localX = Math.cos(wingAngle) * (2.2 * scale + spanLen) - Math.sin(wingAngle) * camber;
-                    const localY = Math.sin(wingAngle) * (2.2 * scale + spanLen) + Math.cos(wingAngle) * camber;
-                    const localZ = sweepZ;
-
-                    // 旋转使星帆孤舟呈优雅斜切巡航角
-                    pos[idx3] = localX * 0.85 + localZ * 0.48;
-                    pos[idx3 + 1] = localY * 0.92;
-                    pos[idx3 + 2] = -localX * 0.48 + localZ * 0.85;
-
-                    normal[idx3] = Math.cos(wingAngle);
-                    normal[idx3 + 1] = Math.sin(wingAngle);
-                    normal[idx3 + 2] = 0.35;
-
-                    meta[idx4] = s;
-                    meta[idx4 + 1] = s > 0.78 ? 1 : 0; // 翼尖松石导光，翼面骨白微光
-                    meta[idx4 + 2] = 1.1 + (1 - s) * 0.65;
-                    meta[idx4 + 3] = rand();
-                } else if (u < 0.68) {
-                    // 中轴棱镜龙骨与引力环 (Prism Spine & Ring Core)
-                    const zSpine = (rand() - 0.5) * 34.0 * scale;
-                    const rSpine = (1 - Math.abs(zSpine) / (19.0 * scale)) * 2.2 * scale;
-                    const a = rand() * TAU;
-                    const lx = Math.cos(a) * Math.max(0.3, rSpine);
-                    const ly = Math.sin(a) * Math.max(0.3, rSpine);
-                    const lz = zSpine;
-                    pos[idx3] = lx * 0.85 + lz * 0.48;
-                    pos[idx3 + 1] = ly;
-                    pos[idx3 + 2] = -lx * 0.48 + lz * 0.85;
-                    normal[idx3] = 0;
-                    normal[idx3 + 1] = 1;
-                    normal[idx3 + 2] = 0;
-                    meta[idx4] = (zSpine / (34.0 * scale)) + 0.5;
-                    meta[idx4 + 1] = 2; // 琥珀核心龙骨
-                    meta[idx4 + 2] = 1.5 + rand() * 0.7;
-                    meta[idx4 + 3] = rand();
+                let x, y, z, shade;
+                if (u < 0.72) {
+                    x = (rand() * 2 - 1) * plan.half; y = (rand() * 2 - 1) * plan.half;
+                    z = plan.billow(x, y);
+                    shade = Math.max(Math.abs(x), Math.abs(y)) > plan.half * 0.9 ? 1 : 0;
+                } else if (u < 0.9) {
+                    const r = rand() * plan.half, sx = rand() < 0.5 ? -1 : 1, sy = rand() < 0.5 ? -1 : 1;
+                    x = sx * r; y = sy * r; z = 0; shade = 2;
                 } else {
-                    // 螺旋双股离子尾迹弦 (Helical Ion Wake Plume)
-                    const wakeT = Math.pow(rand(), 1.25);
-                    const wakeLen = (14.0 + wakeT * 68.0) * scale;
-                    const strand = i % 2 === 0 ? 1 : -1;
-                    const helixAngle = wakeT * 14.0 + (strand > 0 ? 0 : Math.PI);
-                    const helixR = (0.8 + wakeT * 4.8) * scale;
-                    const lx = Math.cos(helixAngle) * helixR;
-                    const ly = Math.sin(helixAngle) * helixR;
-                    const lz = wakeLen;
-                    pos[idx3] = lx * 0.85 + lz * 0.48;
-                    pos[idx3 + 1] = ly;
-                    pos[idx3 + 2] = -lx * 0.48 + lz * 0.85;
-                    normal[idx3] = 0;
-                    normal[idx3 + 1] = 0;
-                    normal[idx3 + 2] = 1;
-                    meta[idx4] = wakeT;
-                    meta[idx4 + 1] = 3; // 离子尾焰渐隐
-                    meta[idx4 + 2] = (1 - wakeT * 0.65) * 1.9;
-                    meta[idx4 + 3] = rand();
+                    const a = rand() * TAU;
+                    x = Math.cos(a) * plan.bus; y = Math.sin(a) * plan.bus; z = (rand() - 0.3) * plan.busLength; shade = 2;
                 }
+                plan.pose(x, y, z, at);
+                pos.set(at, i * 3);
+                plan.pose(0, 0, 1, at);
+                normal.set(at, i * 3);
+                meta.set([rand(), shade, 1.0 + rand() * 0.7, rand()], i * 4);
             }
             return { pos, normal, meta };
         };
 
         const S = ENTITY_SPECS;
         return {
-            stationA: buildTorusKnotManifold(pointsPerSlot, S.stationA.p, S.stationA.q, S.stationA.radius, 'manifold-knot-3-5'),
-            stationB: buildTorusKnotManifold(pointsPerSlot, S.stationB.p, S.stationB.q, S.stationB.radius, 'manifold-knot-4-7'),
             ringsA:   buildRocheRings(pointsPerSlot, S.ringsA.inner, S.ringsA.outer, 'manifold-roche-a'),
             ringsB:   buildRocheRings(pointsPerSlot, S.ringsB.inner, S.ringsB.outer, 'manifold-roche-b'),
             planetA:  buildAbyssalPlanet(pointsPerSlot, S.planetA.radius, 'manifold-planet-a'),
             planetB:  buildAbyssalPlanet(pointsPerSlot, S.planetB.radius, 'manifold-planet-b'),
-            shipA:    buildNomadFleet(pointsPerSlot, S.shipA.scale, 'manifold-nomad-a'),
-            shipB:    buildNomadFleet(pointsPerSlot, S.shipB.scale, 'manifold-nomad-b')
+            shipA:    buildSolarSail(pointsPerSlot, S.shipA.scale, 'manifold-sail-a'),
+            shipB:    buildSolarSail(pointsPerSlot, S.shipB.scale, 'manifold-sail-b')
         };
     };
 
@@ -778,8 +685,14 @@
                         float cross = exp(-abs(p.x) * 18.0) * exp(-abs(p.y) * 4.5)
                                     + exp(-abs(p.y) * 18.0) * exp(-abs(p.x) * 4.5);
                         float airy = vLayer > 0.5 ? cross * 0.16 * (1.0 - r2) : 0.0;
-                        vec3 col = mix(uStarColor, mix(uNebulaA, uNebulaB, vSeed), 0.28);
-                        gl_FragColor = vec4(col * (core * 1.55 + halo + airy), (core + halo + airy) * vAlpha);
+                        // Stars have temperatures: a few cool orange ones, many
+                        // warm and white, some hot and blue. The halo keeps the
+                        // tint; the core burns towards white.
+                        float heat = fract(vSeed * 7.31);
+                        vec3 tint = heat < 0.14 ? vec3(1.0, 0.66, 0.42) : heat < 0.45 ? vec3(1.0, 0.9, 0.74)
+                            : heat < 0.8 ? vec3(1.0) : vec3(0.7, 0.82, 1.0);
+                        vec3 col = mix(uStarColor, mix(uNebulaA, uNebulaB, vSeed), 0.12) * tint;
+                        gl_FragColor = vec4(mix(col, vec3(1.0), core * 0.6) * (core * 1.55 + halo + airy), (core + halo + airy) * vAlpha);
                     }
                 }
             `
@@ -813,12 +726,12 @@
                 }
                 float fbm(vec3 p) {
                     float sum = 0.0, gain = 0.5;
-                    for (int i = 0; i < 5; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
+                    for (int i = 0; i < 7; i++) { sum += gain * noise(p); p = p * 2.03 + vec3(7.1, 3.3, 5.7); gain *= 0.5; }
                     return sum;
                 }
                 float ridge(vec3 p) {
                     float sum = 0.0, gain = 0.5;
-                    for (int i = 0; i < 5; i++) {
+                    for (int i = 0; i < 7; i++) {
                         sum += gain * (1.0 - abs(noise(p) * 2.0 - 1.0));
                         p = p * 2.07 + vec3(1.7, 9.2, 4.4); gain *= 0.5;
                     }
@@ -828,17 +741,25 @@
                     float lon = (vUv.x - 0.5) * 6.2831853, lat = (vUv.y - 0.5) * 3.14159265;
                     vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat));
                     vec3 w = d * 2.4 + vec3(fbm(d * 2.6 + 1.7), fbm(d * 2.6 + 9.2), fbm(d * 2.6 + 4.4)) * 1.1;
-                    // Red: the cool cloud. Green: the warm one round the sun.
+                    // Folded a second time, the gas draws out into sheets and threads.
+                    w += (vec3(fbm(w * 2.1 + 3.1), fbm(w * 2.1 + 7.7), fbm(w * 2.1 + 1.3)) - 0.5) * 0.9;
+                    // Red: the cool cloud. Green: the warm one round the sun. Each
+                    // is a soft body of gas with bright threads where it is compressed.
                     float coolAt = smoothstep(0.25, 0.95, dot(d, normalize(vec3(0.66, -0.36, -0.66))));
-                    float cool = coolAt * smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float coolBody = smoothstep(0.4, 0.86, fbm(w * 1.2 + 3.0) * 0.6 + ridge(w * 1.6) * 0.55);
+                    float coolThread = pow(ridge(w * 3.4 + 2.0), 4.0);
+                    float cool = coolAt * clamp(coolBody * 0.62 + sqrt(coolBody) * coolThread * 1.5, 0.0, 1.0);
                     float warmAt = smoothstep(0.45, 0.98, dot(d, ${glslVec3(SUN_AT)}));
-                    float warm = warmAt * smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    float warmBody = smoothstep(0.42, 0.9, fbm(w * 1.5 + 11.0) * 0.55 + ridge(w * 2.2 + 5.0) * 0.55);
+                    float warmThread = pow(ridge(w * 4.1 + 8.0), 4.0);
+                    float warm = warmAt * clamp(warmBody * 0.62 + sqrt(warmBody) * warmThread * 1.5, 0.0, 1.0);
                     // Blue: the galaxy, clumped, with its bulge. Alpha: dust that hides it.
                     float h = dot(d, ${glslVec3(GALAXY_POLE)});
                     float band = exp(-h * h / 0.022) * (0.35 + 0.9 * fbm(d * 6.0 + 20.0));
                     float bulge = exp(-(1.0 - dot(d, ${glslVec3(GALAXY_CORE)})) * 14.0) * exp(-h * h / 0.05);
                     float lanes = exp(-h * h / 0.006) * smoothstep(0.5, 0.78, ridge(d * 7.0 + 31.0)) * 0.9;
-                    lanes = max(lanes, coolAt * smoothstep(0.62, 0.85, ridge(w * 2.6 + 17.0)) * 0.5);
+                    // Dark dust threads through both clouds, sharp-edged against the glow.
+                    lanes = max(lanes, max(coolAt, warmAt * 0.8) * smoothstep(0.6, 0.76, ridge(w * 2.6 + 17.0)) * 0.72);
                     gl_FragColor = vec4(cool, warm, clamp(band * 0.7 + bulge * 0.9, 0.0, 1.0), clamp(lanes, 0.0, 1.0));
                 }
             `
@@ -904,10 +825,28 @@
                     }
                     corona += rays * 0.17 * step(0.0, dot(d, sunward));
 
+                    // A comet low on the far side: a small bright coma, a broad dust
+                    // tail curving away from the sun and a thin straight one of gas.
+                    vec3 comet = ${glslVec3(COMET_AT)};
+                    vec3 away = normalize(comet * dot(comet, sunward) - sunward), side = cross(comet, away);
+                    vec3 from = d - comet;
+                    float along = dot(from, away), off = dot(from, side), gone = max(along, 0.0);
+                    float coma = exp(-length(from) * 190.0) * 0.9 + exp(-length(from) * 46.0) * 0.1;
+                    float bend = off - gone * gone * 0.55;
+                    float dustTail = exp(-bend * bend / (0.00006 + gone * 0.008)) * exp(-gone * 6.5) * step(0.0, along) * 0.2;
+                    float gasTail = exp(-off * off / (0.00001 + gone * 0.0005)) * exp(-gone * 4.2) * step(0.0, along) * 0.16;
+                    float cometSide = step(0.0, dot(d, comet));
+
                     vec3 night = uBase + uColorStar * m.b * 0.055;
-                    night += (uColorA * m.r * 0.1 + uColorB * m.g * 0.075) * uNebula;
-                    night *= (1.0 - m.a * 0.8) * read;
+                    // Thin gas takes the cloud's colour; where it is dense it brightens
+                    // and pales, as lit gas does.
+                    float coolCore = m.r * m.r * m.r, warmCore = m.g * m.g * m.g;
+                    night += (uColorA * (m.r * 0.06 + coolCore * 0.07) + uColorB * (m.g * 0.05 + warmCore * 0.06)
+                        + uColorStar * (coolCore + warmCore) * 0.015) * uNebula;
+                    night *= (1.0 - m.a * 0.86) * read;
                     night += mix(uColorStar, vec3(1.0), 0.5) * star * (0.5 + 0.5 * read) * 1.3;
+                    night += (mix(uColorStar, uColorSun, 0.5) * (coma + dustTail) + uColorA * gasTail * 1.6)
+                        * cometSide * (0.45 + 0.55 * read);
                     night += uColorSun * (disc * 16.0 + corona * (0.6 + 0.4 * read));
                     // On a pale theme the same sky is washes of colour on paper.
                     vec3 paper = mix(uBase, uColorA, m.r * 0.3 * uNebula);
@@ -1156,6 +1095,351 @@
          * ------------------------------------------------------------------------ */
         const POINTS_PER_ENTITY = 2200;
         const manifoldTemplates = createManifoldTemplates(POINTS_PER_ENTITY);
+        const fuse = (parts) => {
+            const position = [], normal = [], uv = [], part = [], index = [];
+            for (const [geometry, code] of parts) {
+                const base = position.length / 3;
+                const count = geometry.attributes.position.count;
+                position.push(...geometry.attributes.position.array);
+                normal.push(...geometry.attributes.normal.array);
+                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
+                for (let i = 0; i < count; i += 1) part.push(code);
+                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
+                else for (let i = 0; i < count; i += 1) index.push(i + base);
+                geometry.dispose();
+            }
+            const fused = new T.BufferGeometry();
+            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
+            fused.setIndex(index);
+            return fused;
+        };
+
+        // Stations are built the way the ones in orbit are: pressurised
+        // cylinders joined at nodes, a truss, solar wings, radiators, a
+        // visiting ship on a port. Part codes: 3 module, 4 solar wing, 5 truss,
+        // 6 radiator, 2 lamp. Module and truss maps are laid out in real
+        // lengths so plating stays the same size on every piece.
+        const stationGeometries = new Map();
+        const stationGeometry = (spec) => {
+            if (stationGeometries.has(spec)) return stationGeometries.get(spec);
+            const k = spec.radius / 25;
+            const parts = [];
+            let serial = 0;
+            const sized = (geometry, around, along) => {
+                const uv = geometry.attributes.uv;
+                serial += 1;
+                for (let i = 0; i < uv.count; i += 1) uv.setXY(i, uv.getX(i) * around / 8, uv.getY(i) * Math.min(1.9, along / 8) + serial * 2);
+                return geometry;
+            };
+            // axis: 'x' | 'y' | 'z'; at: centre
+            const turn = (geometry, axis) => axis === 'x' ? geometry.rotateZ(Math.PI / 2) : axis === 'z' ? geometry.rotateX(Math.PI / 2) : geometry;
+            const module = (r, length, axis, at, code = 3) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, 18, 1), TAU * r, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+            };
+            const cone = (r0, r1, length, axis, at) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r0 * k, r1 * k, length * k, 16, 1), TAU * r1, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            const beam = (r, length, axis, at, sides = 4) => {
+                parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, sides, 1), 4, length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), r >= 0.5 ? 5 : 7]);
+            };
+            const node = (r, at) => {
+                parts.push([sized(new T.SphereGeometry(r * k, 16, 10), TAU * r, r * 3).translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            // Stowage and experiments bolted along a truss or a hull.
+            const crate = (size, at) => {
+                parts.push([sized(new T.BoxGeometry(size[0] * k, size[1] * k, size[2] * k), size[0] * 4, size[1] * 2)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), 3]);
+            };
+            // A dish on a short mast, and a jointed arm.
+            const dish = (r, at, tilt) => {
+                parts.push([new T.ConeGeometry(r * k, r * 0.45 * k, 20, 1, true).rotateX(tilt).translate(at[0] * k, at[1] * k, at[2] * k), 7]);
+                parts.push([new T.CylinderGeometry(0.06 * k, 0.06 * k, r * 1.4 * k, 5, 1, true).translate(at[0] * k, (at[1] - r * 0.8) * k, at[2] * k), 7]);
+            };
+            const arm = (from, elbow, to) => {
+                for (const [a, b] of [[from, elbow], [elbow, to]]) {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = new T.CylinderGeometry(0.11 * k, 0.11 * k, span.length() * k, 6, 1, true);
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), 7]);
+                }
+                node(0.2, elbow);
+            };
+            // A flat panel: long side along `axis`, lying in the plane that holds `across`.
+            const panel = (length, width, axis, across, at, code) => {
+                const g = new T.BoxGeometry(length * k, 0.06 * k, width * k);
+                if (axis === 'z') g.rotateY(Math.PI / 2);
+                if (axis === 'y') { g.rotateZ(Math.PI / 2); if (across === 'x') g.rotateY(Math.PI / 2); }
+                if (axis === 'x' && across === 'y') g.rotateX(Math.PI / 2);
+                if (axis === 'z' && across === 'y') g.rotateZ(Math.PI / 2);
+                parts.push([g.translate(at[0] * k, at[1] * k, at[2] * k), code]);
+            };
+            const visitor = (z, facing) => {
+                // A capsule on a docking port: service module, crew cone, two small wings.
+                module(1.0, 2.6, 'z', [0, 0, z]);
+                cone(facing > 0 ? 1.0 : 0.45, facing > 0 ? 0.45 : 1.0, 1.5, 'z', [0, 0, z - facing * 2.05]);
+                panel(3.2, 1.1, 'x', 'z', [2.7, 0, z + facing * 0.6], 4);
+                panel(3.2, 1.1, 'x', 'z', [-2.7, 0, z + facing * 0.6], 4);
+            };
+            if (spec.plan === 'truss') {
+                // A long truss across, eight solar wings, radiators, and a
+                // spine of modules fore and aft with laboratories off a node.
+                beam(0.85, 46, 'x', [0, 1.6, 0]);
+                for (const x of [-21, -14.5, 14.5, 21]) {
+                    beam(0.22, 23, 'z', [x, 1.6, 0], 6);
+                    for (const side of [-1, 1]) {
+                        for (const dx of [-1.45, 1.45]) panel(10.2, 2.5, 'z', 'x', [x + dx, 1.6, side * 6.6], 4);
+                    }
+                }
+                for (const x of [-6.2, 6.2]) {
+                    for (const dx of [-1.9, 0, 1.9]) panel(6.6, 1.7, 'z', 'y', [x + dx, 1.6, -5.2], 6);
+                }
+                module(1.35, 5.4, 'z', [0, 0, 8.3]);
+                module(1.05, 1.6, 'z', [0, 0, 4.8]);
+                module(1.35, 4.6, 'z', [0, 0, 1.6]);
+                module(1.15, 2.2, 'z', [0, 0, -1.9]);
+                module(1.3, 5.6, 'z', [0, 0, -5.9]);
+                module(1.2, 5.0, 'z', [0, 0, -11.3]);
+                module(1.3, 4.4, 'x', [3.5, 0, 8.4]);
+                module(1.3, 5.2, 'x', [-3.9, 0, 8.4]);
+                panel(4.2, 2.4, 'x', 'z', [-8.6, 0.3, 8.4], 7);
+                node(1.5, [0, 0, 4.8]);
+                node(1.3, [0, 0, -1.9]);
+                for (const [x, up] of [[-17.8, 1], [-10.5, -1], [-3.2, 1], [3.4, -1], [10.3, 1], [17.6, -1], [-8, 1], [8.4, 1]]) {
+                    crate([1.5, 0.8, 1.1], [x, 1.6 + up * 1.25, 0.2 * up]);
+                }
+                crate([1.0, 0.7, 2.4], [1.7, 0.4, -6.2]);
+                crate([0.9, 0.6, 1.8], [-1.6, 0.5, 2.0]);
+                dish(1.3, [3.2, 4.4, 1.2], -0.5);
+                dish(0.8, [-1.2, 2.6, -11.0], 0.4);
+                arm([1.2, 2.5, 3.2], [4.6, 5.0, 5.2], [3.0, 1.6, 8.2]);
+                module(1.1, 3.4, 'y', [0, -2.7, 1.6]);
+                module(1.0, 3.0, 'y', [0, -2.5, -5.9]);
+                for (const side of [-1, 1]) panel(7.4, 1.5, 'x', 'z', [side * 5.2, 0, -11.6], 4);
+                visitor(13.8, -1);
+                visitor(-16.0, 1);
+                for (const at of [[0, 3.1, 0], [-23.3, 1.6, 0], [23.3, 1.6, 0], [0, 0, 16.4], [0, 0, -19.4]]) {
+                    parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
+                }
+            } else if (spec.plan === 'telescope') {
+                // A space telescope of the cold, far kind: a mirror of eighteen
+                // gold hexagons standing on a kite-shaped sunshield of five
+                // spaced films, a secondary mirror out on a tripod, and the
+                // spacecraft bus on the sunward side. Part code 10: mirror.
+                const strut = (a, b, r, code = 7, sides = 5) => {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = new T.CylinderGeometry(r * k, r * k, span.length() * k, sides, 1, true);
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), code]);
+                };
+                const box = (size, at, code) => {
+                    parts.push([sized(new T.BoxGeometry(size[0] * k, size[1] * k, size[2] * k), size[0] * 2, size[1] * 2)
+                        .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+                };
+                // Sunshield: five films, each a little smaller and higher than the last.
+                for (let layer = 0; layer < 5; layer += 1) {
+                    const grow = 1 - layer * 0.035;
+                    const outline = [[-21, 0], [-13.5, 6.6], [0, 7.6], [13.5, 6.6], [21, 0], [13.5, -6.6], [0, -7.6], [-13.5, -6.6]];
+                    const film = new T.ShapeGeometry(new T.Shape(outline.map(([x, z]) => new T.Vector2(x * grow * k, z * grow * k))));
+                    const uv = film.attributes.uv;
+                    for (let i = 0; i < uv.count; i += 1) uv.setXY(i, uv.getX(i) / (11 * k) + layer * 3, uv.getY(i) / (11 * k));
+                    parts.push([film.rotateX(-Math.PI / 2).translate(0, layer * 0.42 * k, 0), 11]);
+                }
+                // The booms and spreader bars that hold the films out.
+                strut([-21, 0.8, 0], [21, 0.8, 0], 0.16);
+                strut([0, 0.8, -7.6], [0, 0.8, 7.6], 0.16);
+                for (const sx of [-1, 1]) for (const sz of [-1, 1]) strut([0, 0.8, 0], [sx * 13.5, 0.8, sz * 6.6], 0.08);
+                // Mirror: two rings of hexagons round an open centre, facing +Z.
+                const HEX = 1.42, MIRROR_Y = 9.2, MIRROR_Z = 0.6;
+                for (let q = -2; q <= 2; q += 1) {
+                    for (let r = -2; r <= 2; r += 1) {
+                        if (Math.abs(q + r) > 2 || (q === 0 && r === 0)) continue;
+                        const x = HEX * Math.sqrt(3) * (q + r / 2), y = HEX * 1.5 * r;
+                        parts.push([new T.CylinderGeometry(HEX * 0.965 * k, HEX * 0.965 * k, 0.16 * k, 6, 1).rotateX(Math.PI / 2)
+                            .translate(x * k, (MIRROR_Y + y) * k, MIRROR_Z * k), 10]);
+                    }
+                }
+                // Backplane, the instrument module behind it, and the tower down to the shield.
+                box([7.6, 7.2, 0.7], [0, MIRROR_Y, MIRROR_Z - 0.55], 7);
+                box([4.6, 4.4, 2.6], [0, MIRROR_Y - 0.6, MIRROR_Z - 2.2], 9);
+                box([3.4, 1.6, 0.12], [0, MIRROR_Y + 2.6, MIRROR_Z - 3.6], 6);
+                box([1.5, 4.4, 1.5], [0, 3.6, MIRROR_Z - 1.4], 8);
+                // Secondary mirror on three long struts; the baffle cone at the centre.
+                const SECOND = [0, MIRROR_Y, MIRROR_Z + 8.6];
+                strut([-3.5, MIRROR_Y - 3.2, MIRROR_Z], SECOND, 0.09);
+                strut([3.5, MIRROR_Y - 3.2, MIRROR_Z], SECOND, 0.09);
+                strut([0, MIRROR_Y + 4.3, MIRROR_Z], SECOND, 0.09);
+                parts.push([new T.CylinderGeometry(0.55 * k, 0.55 * k, 0.14 * k, 16, 1).rotateX(Math.PI / 2)
+                    .translate(SECOND[0] * k, SECOND[1] * k, SECOND[2] * k), 10]);
+                parts.push([new T.ConeGeometry(0.75 * k, 2.2 * k, 12, 1, true).rotateX(Math.PI / 2)
+                    .translate(0, MIRROR_Y * k, (MIRROR_Z + 1.2) * k), 7]);
+                // Bus on the sunward side: a box, a solar array, a dish, a trim flap aft.
+                box([3.2, 1.8, 3.2], [0, -1.3, 0], 9);
+                panel(7.2, 2.2, 'z', 'x', [0, -2.6, -5.4], 4);
+                parts.push([new T.ConeGeometry(0.9 * k, 0.45 * k, 16, 1, true).translate(1.2 * k, -3.0 * k, 1.0 * k), 7]);
+                strut([1.2, -2.2, 1.0], [1.2, -3.2, 1.0], 0.07);
+                strut([0, 0.4, -7.6], [0, -1.6, -11.6], 0.1);
+                panel(3.6, 2.2, 'z', 'x', [0, -2.2, -12.6], 6);
+                box([0.5, 0.5, 0.8], [-1.3, -2.4, 1.2], 8);
+                box([0.5, 0.5, 0.8], [-0.6, -2.4, 1.5], 8);
+            } else if (spec.plan === 'probe') {
+                // A deep-space probe of the kind sent past the outer planets:
+                // a great white dish over a ten-sided bus, three isotope
+                // generators on one boom, the instruments on another, a long
+                // lattice mast for the magnetometers and two whip antennas.
+                // Part codes 8 and 9: painted and foil-wrapped, without ports.
+                const strut = (a, b, r, code = 7, sides = 5) => {
+                    const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                    const g = sized(new T.CylinderGeometry(r * k, r * k, span.length() * k, sides, 1, true), 4, span.length());
+                    g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                    parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), code]);
+                };
+                const drum = (r, length, axis, at, code, sides = 16) => {
+                    parts.push([turn(sized(new T.CylinderGeometry(r * k, r * k, length * k, sides, 1), TAU * r, length), axis)
+                        .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+                };
+                // The dish opens along +Y: a paraboloid with a rolled rim.
+                const DISH = 11, DEPTH = 3.1;
+                const profile = [];
+                for (let i = 0; i <= 14; i += 1) {
+                    const r = DISH * i / 14;
+                    profile.push(new T.Vector2(r * k, DEPTH * (r / DISH) * (r / DISH) * k));
+                }
+                parts.push([sized(new T.LatheGeometry(profile, 48), 8, 8).translate(0, 2.4 * k, 0), 8]);
+                parts.push([new T.TorusGeometry(DISH * k, 0.16 * k, 6, 48).rotateX(Math.PI / 2).translate(0, (2.4 + DEPTH) * k, 0), 7]);
+                // Feed and subreflector on a tripod above the dish.
+                for (let i = 0; i < 3; i += 1) {
+                    const a = i * TAU / 3 + 0.5;
+                    strut([Math.cos(a) * 7.6, 2.4 + DEPTH * 0.48, Math.sin(a) * 7.6], [Math.cos(a) * 0.9, 9.6, Math.sin(a) * 0.9], 0.1);
+                }
+                parts.push([new T.ConeGeometry(1.5 * k, 1.0 * k, 20, 1).translate(0, 9.9 * k, 0), 8]);
+                parts.push([new T.CylinderGeometry(0.5 * k, 0.8 * k, 1.6 * k, 12, 1).translate(0, 3.3 * k, 0), 9]);
+                // Six struts carry the dish on the bus; a fuel sphere sits in its middle.
+                drum(4.6, 2.3, 'y', [0, -0.4, 0], 9, 10);
+                for (let i = 0; i < 6; i += 1) {
+                    const a = i * TAU / 6, b = a + TAU / 12;
+                    strut([Math.cos(a) * 4.3, 0.7, Math.sin(a) * 4.3], [Math.cos(b) * 5.6, 2.4 + DEPTH * 0.26, Math.sin(b) * 5.6], 0.11);
+                }
+                node(2.1, [0, -1.7, 0]);
+                for (let i = 0; i < 4; i += 1) {
+                    const a = i * TAU / 4 + 0.4;
+                    parts.push([new T.ConeGeometry(0.36 * k, 0.8 * k, 8, 1, true).translate(Math.cos(a) * 4.4 * k, -2.0 * k, Math.sin(a) * 4.4 * k), 7]);
+                }
+                // The record on the side of the bus.
+                parts.push([new T.CylinderGeometry(1.05 * k, 1.05 * k, 0.1 * k, 24, 1).rotateZ(Math.PI / 2).translate(4.5 * k, -0.4 * k, 1.2 * k), 9]);
+                // Isotope generators: three finned drums in line, out on a boom.
+                strut([-3.6, -0.6, -1.4], [-10.5, -3.4, -4.2], 0.5, 5, 4);
+                strut([-3.2, -1.4, 0.6], [-10.5, -3.4, -4.2], 0.09);
+                for (let i = 0; i < 3; i += 1) {
+                    const along = 11.9 + i * 3.1;
+                    const at = [-along * 0.9, -3.4 - (along - 10.5) * 0.36, -4.2 - (along - 10.5) * 0.36];
+                    const from = [at[0] + 1.3, at[1] + 0.52, at[2] + 0.52], to = [at[0] - 1.3, at[1] - 0.52, at[2] - 0.52];
+                    strut(from, to, 0.85, 9, 12);
+                    for (let f = 0; f < 6; f += 1) {
+                        const fin = new T.BoxGeometry(0.05 * k, 2.5 * k, 0.8 * k).translate(0, 0, 1.2 * k).rotateY(f * TAU / 6);
+                        fin.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0),
+                            new T.Vector3(to[0] - from[0], to[1] - from[1], to[2] - from[2]).normalize()));
+                        parts.push([fin.translate(at[0] * k, at[1] * k, at[2] * k), 6]);
+                    }
+                }
+                // Science boom: a lattice arm to a platform that turns its cameras.
+                strut([3.8, -0.4, -1.0], [14.5, -1.2, -3.6], 0.5, 5, 4);
+                crate([1.6, 1.2, 1.4], [8.2, 0.2, -2.3]);
+                drum(0.5, 3.2, 'y', [15.0, -1.6, -3.7], 8, 10);
+                crate([2.6, 1.5, 1.3], [15.2, 0.6, -3.7]);
+                drum(0.62, 2.8, 'z', [14.4, 0.7, -5.4], 9, 14);
+                drum(0.4, 2.2, 'z', [15.9, 0.9, -5.1], 8, 12);
+                crate([1.1, 1.9, 0.9], [15.4, -3.6, -3.5]);
+                parts.push([new T.ConeGeometry(0.9 * k, 0.5 * k, 16, 1, true).rotateX(-1.2).translate(13.2 * k, 1.9 * k, -3.0 * k), 7]);
+                // Magnetometer mast: far longer than the craft, a sensor midway and one at the tip.
+                strut([-1.6, -1.2, 3.6], [-9.5, -6.5, 38], 0.5, 5, 3);
+                crate([0.9, 0.9, 0.9], [-5.6, -3.9, 21]);
+                crate([1.0, 1.0, 1.0], [-9.6, -6.6, 38.4]);
+                // Two whips at right angles for the radio and plasma-wave receivers.
+                strut([0.6, -1.6, -2.4], [15, -13, -21], 0.07);
+                strut([-0.6, -1.6, -2.4], [-13, -15, -21], 0.07);
+                // Louvred radiators and electronics bays round the bus.
+                for (let i = 0; i < 10; i += 1) {
+                    if (i % 3 === 0) continue;
+                    const a = i * TAU / 10 + TAU / 20;
+                    parts.push([new T.BoxGeometry(2.1 * k, 1.5 * k, 0.12 * k).translate(0, -0.4 * k, 4.5 * k).rotateY(a), i % 2 ? 6 : 8]);
+                }
+            } else {
+                // A core with two laboratories off its forward node, each
+                // carrying a great pair of wings at its far end.
+                module(2.05, 7.4, 'z', [0, 0, -3.4]);
+                module(1.4, 5.6, 'z', [0, 0, 3.0]);
+                module(1.5, 2.6, 'z', [0, 0, 7.0]);
+                for (const side of [-1, 1]) {
+                    module(2.05, 8.6, 'x', [side * 5.8, 0, 7.0]);
+                    module(1.35, 5.4, 'x', [side * 12.7, 0, 7.0]);
+                    beam(0.28, 7.5, 'x', [side * 18.8, 0, 7.0], 6);
+                    for (const up of [-1, 1]) panel(13.5, 3.3, 'y', 'z', [side * 20.5, up * 7.4, 7.0], 4);
+                    panel(5.4, 1.5, 'x', 'z', [side * 4.6, 0, 1.6], 4);
+                    panel(4.4, 1.4, 'z', 'y', [side * 2.2, 0.4, -4.2], 6);
+                }
+                beam(0.2, 5.2, 'y', [0, 4.0, -5.8], 6);
+                panel(2.6, 2.6, 'x', 'z', [0, 6.7, -5.8], 7);
+                node(1.75, [0, 0, 7.0]);
+                crate([1.2, 0.7, 2.6], [0, 2.2, -3.0]);
+                crate([0.9, 0.6, 1.6], [0, -2.2, -4.4]);
+                for (const side of [-1, 1]) {
+                    crate([2.4, 0.7, 1.0], [side * 6.4, 2.2, 7.0]);
+                    crate([1.4, 0.6, 0.9], [side * 12.4, -1.5, 7.0]);
+                    for (const up of [-1, 1]) beam(0.1, 13.5, 'y', [side * 18.7, up * 7.4, 7.0], 5);
+                }
+                dish(1.1, [1.9, 3.6, 1.0], -0.6);
+                arm([0, 2.1, -1.0], [0, 5.4, 2.2], [3.4, 3.0, 5.6]);
+                visitor(10.4, -1);
+                module(1.55, 5.6, 'z', [0, 0, -10.2]);
+                for (const side of [-1, 1]) panel(5.6, 1.4, 'x', 'z', [side * 4.4, 0, -10.6], 4);
+                for (const at of [[0, 2.5, 3.0], [-22.7, 0, 7.0], [22.7, 0, 7.0], [0, 6.9, -5.8], [0, 0, -13.3]]) {
+                    parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
+                }
+            }
+            const geometry = fuse(parts);
+            stationGeometries.set(spec, geometry);
+            return geometry;
+        };
+        // Gathering points for a built thing are scattered over its own surface.
+        const scatterOver = (geometry, count, seedStr) => {
+            const rand = seededRandom(seedStr);
+            const p = geometry.attributes.position, n = geometry.attributes.normal, part = geometry.attributes.aPart;
+            const index = geometry.index.array, faces = index.length / 3;
+            const edge = (a, b, axis) => p.array[b * 3 + axis] - p.array[a * 3 + axis];
+            const cumulative = new Float32Array(faces);
+            let total = 0;
+            for (let f = 0; f < faces; f += 1) {
+                const a = index[f * 3], b = index[f * 3 + 1], c = index[f * 3 + 2];
+                const ux = edge(a, b, 0), uy = edge(a, b, 1), uz = edge(a, b, 2);
+                const vx = edge(a, c, 0), vy = edge(a, c, 1), vz = edge(a, c, 2);
+                total += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+                cumulative[f] = total;
+            }
+            const pos = new Float32Array(count * 3), normal = new Float32Array(count * 3), meta = new Float32Array(count * 4);
+            for (let i = 0; i < count; i += 1) {
+                const f = Math.min(faces - 1, upperBound(cumulative, rand() * total));
+                const a = index[f * 3], b = index[f * 3 + 1], c = index[f * 3 + 2];
+                let u = rand(), v = rand();
+                if (u + v > 1) { u = 1 - u; v = 1 - v; }
+                for (let axis = 0; axis < 3; axis += 1) {
+                    pos[i * 3 + axis] = p.array[a * 3 + axis] + edge(a, b, axis) * u + edge(a, c, axis) * v;
+                    normal[i * 3 + axis] = n.array[a * 3 + axis];
+                }
+                const code = part.array[a];
+                meta.set([rand(), code === 4 ? 2 : code === 2 ? 3 : i % 4 === 0 ? 1 : 0, 1.1 + rand() * 0.8, rand()], i * 4);
+            }
+            return { pos, normal, meta };
+        };
+        manifoldTemplates.stationA = scatterOver(stationGeometry(ENTITY_SPECS.stationA), POINTS_PER_ENTITY, 'manifold-station-a');
+        manifoldTemplates.stationB = scatterOver(stationGeometry(ENTITY_SPECS.stationB), POINTS_PER_ENTITY, 'manifold-station-b');
+        manifoldTemplates.scope = scatterOver(stationGeometry(ENTITY_SPECS.scope), POINTS_PER_ENTITY, 'manifold-telescope');
+        manifoldTemplates.shipB = scatterOver(stationGeometry(ENTITY_SPECS.shipB), POINTS_PER_ENTITY, 'manifold-probe');
 
         const makeEntityMaterial = (typeCode) => new T.ShaderMaterial({
             transparent: true,
@@ -1209,20 +1493,14 @@
 
                     // 1. 结项相位流动与天体内部动力学 (Internal Manifold Dynamics)
                     if (uType < 0.5) {
-                        // Torus Knot 谐波呼吸
+                        // 轮站：成形前的尘埃随音乐轻微起伏，成形后静止
                         float harmonic = sin(uTime * 1.4 + phase * 18.8495 + seed * 6.28);
-                        localPos += nrm * harmonic * (0.45 + uAudioPulse * 0.55);
+                        localPos += nrm * harmonic * (0.45 + uAudioPulse * 0.55) * (1.0 - localCohesion);
                     } else if (uType > 1.5 && uType < 2.5) {
                         // Roche Rings 开普勒差速旋转微扰
                         float kepler = uTime * (0.35 + (1.0 - phase) * 0.45);
                         float cs = cos(kepler * 0.15), sn = sin(kepler * 0.15);
                         localPos.xz = mat2(cs, -sn, sn, cs) * localPos.xz;
-                    } else if (uType > 2.5) {
-                        // Nomad Ship 离子尾迹推进波动
-                        if (shade > 2.5) {
-                            float wave = sin(uTime * 3.8 - phase * 14.0 + seed * 6.28);
-                            localPos.xy += vec2(cos(seed * 6.28), sin(seed * 6.28)) * wave * phase * 1.4;
-                        }
                     }
 
                     // 2. 丝滑星云流线孕育与近场涡流解体 (Streamline Birth & Curl-Swirl Dissolve)
@@ -1306,13 +1584,12 @@
                     vAlpha = nearClip * farClip * stageAlpha * (0.68 + seed * 0.32);
 
                     // Once the body has formed, the points that sketched its
-                    // surface give way to the solid; haloes, field lines, jets
-                    // and wakes stay, and a few sparks ride on hulls and rings.
-                    float keep = uType < 0.5 ? (shade > 2.5 ? 1.0 : shade > 1.5 ? 0.35 : 0.3)
-                        : uType < 1.5 ? (shade > 2.5 ? 0.5 : shade > 1.5 ? 0.25 : 0.0)
-                        : uType < 2.5 ? 0.4
-                        : (shade > 2.5 ? 0.5 : 0.18);
-                    vAlpha *= mix(1.0, keep, smoothstep(0.55, 0.98, uCohesion));
+                    // surface give way to the solid. Planets and rings are left
+                    // clean; field lines, jets and wakes stay on the built things.
+                    float keep = uType < 0.5 ? (shade > 2.5 ? 0.5 : 0.0)
+                        : uType < 2.5 ? 0.0
+                        : 0.0;
+                    vAlpha *= mix(1.0, keep, smoothstep(0.5, 0.86, uCohesion));
                 }
             `,
             fragmentShader: `
@@ -1347,7 +1624,7 @@
             return { geo, mat, points };
         };
 
-        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB']
+        const slotTemplateMap = ['stationA', 'planetA', 'ringsA', 'shipA', 'stationB', 'planetB', 'ringsB', 'shipB', 'scope']
             .map((name, idx) => ({ tmpl: manifoldTemplates[name], spec: ENTITY_SPECS[name], code: idx % 4 }));
         const entityNodes = slotTemplateMap.map((item) => buildEntityMesh(item.tmpl, item.code));
 
@@ -1358,33 +1635,12 @@
          * and tearing apart as the camera sweeps past; in between they give way
          * to the solid, which hides the stars behind it like a real object.
          * ------------------------------------------------------------------------ */
-        const fuse = (parts) => {
-            const position = [], normal = [], uv = [], part = [], index = [];
-            for (const [geometry, code] of parts) {
-                const base = position.length / 3;
-                const count = geometry.attributes.position.count;
-                position.push(...geometry.attributes.position.array);
-                normal.push(...geometry.attributes.normal.array);
-                uv.push(...(geometry.attributes.uv?.array || new Float32Array(count * 2)));
-                for (let i = 0; i < count; i += 1) part.push(code);
-                if (geometry.index) for (const i of geometry.index.array) index.push(i + base);
-                else for (let i = 0; i < count; i += 1) index.push(i + base);
-                geometry.dispose();
-            }
-            const fused = new T.BufferGeometry();
-            fused.setAttribute('position', new T.Float32BufferAttribute(position, 3));
-            fused.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
-            fused.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-            fused.setAttribute('aPart', new T.Float32BufferAttribute(part, 1));
-            fused.setIndex(index);
-            return fused;
-        };
         // Photographed cloud decks and a measured ring profile, kept as
         // luminance only: the palette still decides every colour. Until a map
         // arrives, and wherever it cannot be read, the procedural surface stands in.
         const surfaceMaps = new Map();
         let surfacesReleased = false;
-        const wearSurface = (material, file) => {
+        const wearSurface = (material, file, slot = 'uSurface', flag = 'uMapped') => {
             if (!file || !T.TextureLoader) return material;
             let entry = surfaceMaps.get(file);
             if (!entry) {
@@ -1395,17 +1651,17 @@
                     texture.wrapS = T.RepeatWrapping;
                     texture.anisotropy = 4;
                     entry.texture = texture;
-                    entry.wearers.forEach((wearer) => {
-                        wearer.uniforms.uSurface.value = texture;
-                        wearer.uniforms.uMapped.value = 1;
+                    entry.wearers.forEach(([wearer, into, mark]) => {
+                        wearer.uniforms[into].value = texture;
+                        wearer.uniforms[mark].value = 1;
                     });
                 }, undefined, () => {});
             }
             if (entry.texture) {
-                material.uniforms.uSurface.value = entry.texture;
-                material.uniforms.uMapped.value = 1;
+                material.uniforms[slot].value = entry.texture;
+                material.uniforms[flag].value = 1;
             } else {
-                entry.wearers.push(material);
+                entry.wearers.push([material, slot, flag]);
             }
             return material;
         };
@@ -1418,6 +1674,8 @@
             uniforms: {
                 uTime: { value: 0 }, uKind: { value: kind }, uSeed: { value: seed },
                 uSurface: { value: null }, uMapped: { value: 0 },
+                uRingMap: { value: null }, uRingMapped: { value: 0 }, uRinged: { value: 0 }, uDetail: { value: 1 },
+                uBounceDir: { value: new T.Vector3(0, 1, 0) }, uBounce: { value: 0 },
                 uCohesion: { value: 1 }, uPresence: { value: 1 }, uGlow: { value: 1 },
                 uAudioPulse: { value: 0 }, uBodyRadius: { value: 0 },
                 uRing: { value: new T.Vector2(1, 2) },
@@ -1446,8 +1704,9 @@
                 }
             `,
             fragmentShader: `
-                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped;
-                uniform sampler2D uSurface;
+                uniform float uTime, uKind, uSeed, uCohesion, uPresence, uGlow, uAudioPulse, uBodyRadius, uMapped, uRingMapped, uRinged, uDetail, uBounce;
+                uniform vec3 uBounceDir;
+                uniform sampler2D uSurface, uRingMap;
                 uniform vec2 uRing, uViewport;
                 uniform vec3 uLight, uLightLocal, uColorPrimary, uColorAccent, uColorInk, uColorEmber, uFloor;
                 varying vec3 vLocal, vWorld, vNormal;
@@ -1489,36 +1748,141 @@
                     float alpha = 1.0;
 
                     if (uKind < 0.5) {
-                        // Hull: dark plating with seams, lit ports, and a few luminous parts.
-                        vec2 cells = vUv * (vPart > 2.5 ? vec2(18.0, 46.0) : vec2(240.0, 5.0));
+                        // Hull, as spacecraft are finished: white thermal panels,
+                        // gold foil blankets, bare truss metal, glass ports in rows.
+                        // Sunlight is hard in vacuum; the sky fills the shade a little
+                        // and shows in whatever is polished.
+                        bool tube = vPart < 2.5;
+                        bool lattice = vPart > 4.5 && vPart < 5.5;
+                        bool plain = vPart > 7.5;
+                        bool truss = lattice || (vPart > 6.5 && !plain);
+                        vec2 cells = vUv * (tube ? vec2(96.0, 12.0) : truss ? vec2(8.0, 14.0) : vec2(16.0, 16.0));
                         vec2 cell = floor(cells), inside = fract(cells);
-                        float seam = smoothstep(0.0, 0.08, inside.x) * smoothstep(0.0, 0.14, inside.y);
-                        float lit = step(0.83, hash(vec3(cell, uSeed)))
-                            * step(0.25, inside.x) * step(inside.x, 0.75) * step(0.3, inside.y) * step(inside.y, 0.7);
-                        vec3 plate = mix(uColorInk, uColorPrimary, 0.35) * (0.05 + 0.05 * hash(vec3(cell * 0.5, 3.0)));
-                        col = plate * seam * (0.35 + day * 2.4) + uColorPrimary * rim * (0.22 + day * 0.35);
-                        col += uColorAccent * lit * (0.75 + 0.35 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
-                        if (vPart > 0.5 && vPart < 1.5) {
-                            // Graduated gate ring: travelling marks.
-                            float mark = step(0.5, fract(vUv.x * 72.0 - uTime * 0.12));
-                            col = uColorAccent * (0.14 + mark * 0.7) * uGlow + uColorInk * rim * 0.25;
+                        float seam = smoothstep(0.0, 0.05, inside.x) * smoothstep(0.0, 0.07, inside.y)
+                            * smoothstep(0.0, 0.05, 1.0 - inside.x) * smoothstep(0.0, 0.07, 1.0 - inside.y);
+                        // An open truss: longerons along the edges, a batten and a
+                        // diagonal in every bay, and nothing between them.
+                        if (lattice && uDetail > 0.5) {
+                            float member = max(max(step(0.4, abs(inside.x - 0.5)), step(0.42, abs(inside.y - 0.5))),
+                                1.0 - smoothstep(0.06, 0.09, abs(inside.x - inside.y)));
+                            if (member < 0.5) discard;
+                        }
+                        float tone = hash(vec3(cell, uSeed + 3.0));
+                        // Blankets wrap whole sections; a painted band runs round the rim.
+                        float section = tube ? hash(vec3(floor(vUv.x * 16.0), floor(vUv.y * 2.0), uSeed))
+                            : hash(vec3(floor(vUv.y * 0.5), 7.0, uSeed));
+                        float foil = truss ? 0.0 : plain ? step(8.5, vPart) : step(tube ? 0.86 : 0.66, section);
+                        float band = tube ? step(5.5, cell.y) * step(cell.y, 6.5) : 0.0;
+                        float portRow = tube ? step(1.5, mod(cell.y, 6.0)) * step(mod(cell.y, 6.0), 2.5) : step(0.5, mod(cell.y, 4.0)) * step(mod(cell.y, 4.0), 1.5);
+                        float port = truss || plain ? 0.0 : portRow * (1.0 - foil)
+                            * step(0.22, inside.x) * step(inside.x, 0.78) * step(0.28, inside.y) * step(inside.y, 0.72);
+                        float lit = port * step(tube ? 0.3 : 0.7, hash(vec3(cell, uSeed)));
+
+                        // Foil is crinkled: its mirror wanders.
+                        vec3 crease = vec3(noise(vLocal * 7.0 + 11.0), noise(vLocal * 7.0 + 37.0), noise(vLocal * 7.0 + 71.0)) - 0.5;
+                        vec3 nn = normalize(n + crease * 0.4 * foil);
+                        float lam = clamp(dot(nn, uLight) * 1.15 + 0.04, 0.0, 1.0);
+                        float facing = clamp(dot(nn, v), 0.0, 1.0);
+                        vec3 bounce = reflect(-v, nn);
+                        // What a polished surface sees: the warm side of the sky
+                        // towards the sun, the cool nebula away from it, and the sun.
+                        vec3 sky = mix(uColorPrimary * 0.16, mix(uColorEmber, uColorAccent, 0.4) * 0.3,
+                            smoothstep(-0.6, 0.7, dot(bounce, SUN)));
+                        float sun = max(dot(normalize(uLight + v), nn), 0.0);
+                        float fresnel = 0.04 + 0.96 * pow(1.0 - facing, 5.0);
+
+                        // The finishes differ in value and gloss, hardly in hue:
+                        // the colour on them is the scene's own, warm from the
+                        // sun on one side and the nebula's on the other.
+                        vec3 key = mix(uColorInk, uColorAccent, 0.2) * lam;
+                        vec3 fill = uColorPrimary * (0.035 + 0.06 * clamp(0.5 - 0.5 * dot(nn, uLight), 0.0, 1.0));
+                        // A planet close by throws its own pale light back.
+                        vec3 shine = mix(uColorPrimary, uColorInk, 0.45) * uBounce * 0.42
+                            * pow(clamp(dot(nn, uBounceDir) * 0.5 + 0.5, 0.0, 1.0), 2.0);
+                        vec3 light = key + fill + shine;
+                        vec3 shell = mix(uColorPrimary, uColorInk, 0.72);
+                        float pale = (0.5 + 0.12 * tone) * mix(1.0, 0.7, step(0.93, tone)) * mix(1.0, 0.55, band);
+                        vec3 painted = shell * pale * mix(0.66, 1.0, seam) * light + uColorInk * pow(sun, 48.0) * lam * 0.22
+                            + sky * fresnel * 1.3;
+                        // Blankets are a darker, glossier wrap; only their highlights run warm.
+                        vec3 wrap = mix(shell, uColorAccent, 0.22) * 0.24;
+                        vec3 foiled = wrap * mix(0.8, 1.0, seam) * light + sky * (0.5 + 1.2 * fresnel)
+                            + mix(uColorInk, uColorAccent, 0.4) * pow(sun, 26.0) * lam * 0.75;
+                        vec3 metal = shell * 0.26 * light * (0.55 + 0.45 * step(0.5, abs(fract(cells.y + cells.x) - 0.5) * 2.0))
+                            + uColorInk * pow(sun, 30.0) * lam * 0.45 + sky * 0.5;
+                        col = truss ? metal : mix(painted, foiled, foil);
+                        // Glass: dark, with the sky in it, unless someone is home.
+                        col = mix(col, sky * (0.4 + 3.0 * fresnel) + uColorInk * pow(sun, 90.0) * lam, port);
+                        col += mix(uColorAccent, uColorInk, 0.45) * lit * 0.8
+                            * (0.85 + 0.15 * sin(uTime * 0.9 + hash(vec3(cell, 9.0)) * 6.28)) * uGlow;
+                        if (vPart > 10.5) {
+                            // Sunshield film: aluminised, slack between its
+                            // spreader bars, creased where it was folded.
+                            float crease = max(1.0 - smoothstep(0.0, 0.04, abs(fract(vUv.x * 6.0) - 0.5) * 2.0),
+                                1.0 - smoothstep(0.0, 0.04, abs(fract(vUv.y * 6.0) - 0.5) * 2.0));
+                            vec3 slackN = normalize(n + (vec3(noise(vLocal * 0.9 + 3.0), 0.0, noise(vLocal * 0.9 + 17.0)) - 0.5) * 0.3);
+                            float filmLit = clamp(abs(dot(slackN, uLight)), 0.0, 1.0);
+                            vec3 filmSky = mix(mix(uColorPrimary, uColorInk, 0.4) * 0.12, mix(uColorEmber, uColorAccent, 0.4) * 0.3,
+                                smoothstep(-0.6, 0.7, dot(reflect(-v, slackN), SUN)));
+                            col = (shell * (0.1 + 0.34 * filmLit) * mix(uColorInk, uColorAccent, 0.2) + filmSky * 1.3
+                                + uColorInk * pow(max(dot(normalize(uLight + v), slackN), 0.0), 14.0) * 0.5 * filmLit)
+                                * (1.0 - 0.3 * crease);
+                        } else if (vPart > 9.5) {
+                            // Telescope mirror: nearly all reflection, faintly warm.
+                            vec3 flatN = normalize(n);
+                            vec3 seen = reflect(-v, flatN);
+                            vec3 mirrored = mix(mix(uColorPrimary, uColorInk, 0.55) * 0.1, mix(uColorEmber, uColorAccent, 0.5) * 0.42,
+                                smoothstep(-0.6, 0.7, dot(seen, SUN)));
+                            col = mix(mirrored, mirrored * mix(uColorInk, uColorAccent, 0.45) * 2.2, 0.7)
+                                + mix(uColorInk, uColorAccent, 0.35) * pow(max(dot(normalize(uLight + v), flatN), 0.0), 200.0) * 2.0
+                                + shell * 0.05 * light;
+                        } else if (vPart > 5.5 && vPart < 6.5) {
+                            // Radiator: white ribbed panels that shed heat edge-on to the sun.
+                            float rib = smoothstep(0.0, 0.12, abs(fract(vUv.x * 9.0) - 0.5));
+                            float flatLit = clamp(abs(dot(n, uLight)), 0.0, 1.0);
+                            col = shell * 0.62 * (uColorPrimary * 0.05 + mix(uColorInk, uColorAccent, 0.2) * flatLit) * mix(0.6, 1.0, rib)
+                                + sky * (0.5 + 2.0 * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 4.0));
+                        } else if (vPart > 3.5 && vPart < 4.5) {
+                            // Solar wing: deep blue cells under glass, silver busbars, a hard glint.
+                            vec2 at = vUv * vec2(16.0, 6.0);
+                            vec2 grid = fract(at);
+                            float frame = 1.0 - smoothstep(0.0, 0.06, min(min(grid.x, 1.0 - grid.x), min(grid.y, 1.0 - grid.y)));
+                            float bus = 1.0 - smoothstep(0.0, 0.05, abs(fract(at.x * 3.0) - 0.5));
+                            float flat_ = clamp(dot(n, uLight), 0.0, 1.0);
+                            float face = clamp(dot(n, v), 0.0, 1.0);
+                            // Cells are near black with the nebula's tint; what shows
+                            // is the grid, the sky in the glass and a glint.
+                            vec3 silicon = mix(vec3(0.015, 0.03, 0.07), uColorPrimary * 0.1, 0.6)
+                                * (0.85 + 0.3 * hash(vec3(floor(at), uSeed)));
+                            vec3 wing = silicon * (0.35 + flat_ * 1.6) + sky * (0.05 + 0.9 * pow(1.0 - face, 3.0));
+                            wing = mix(wing, shell * (0.04 + 0.3 * flat_), max(frame, bus * 0.3));
+                            col = wing + mix(uColorInk, uColorAccent, 0.25)
+                                * pow(max(dot(normalize(uLight + v), n), 0.0), 120.0) * 1.6 * flat_;
                         } else if (vPart > 1.5 && vPart < 2.5) {
-                            // Core or engine: pure emission with a hot centre.
-                            float heat = 0.75 + 0.25 * sin(uTime * 2.3 + uSeed * 6.0) + uAudioPulse * 0.6;
-                            float facing = clamp(dot(n, v), 0.0, 1.0);
-                            // A lattice shell around the glow keeps it a lamp, not a blob.
-                            vec3 q = normalize(vLocal - vec3(0.0)) * 5.0;
-                            float cage = smoothstep(0.38, 0.5, abs(fract(q.x + q.y) - 0.5))
-                                + smoothstep(0.38, 0.5, abs(fract(q.y - q.z) - 0.5));
-                            col = mix(uColorAccent, uColorInk, 0.3) * pow(facing, 2.2) * (0.3 + heat * 0.55) * uGlow
-                                + uColorEmber * (1.0 - facing) * 0.2;
-                            col *= 1.0 - 0.72 * clamp(cage, 0.0, 1.0);
+                            // Navigation strobes: dim, then a short flash, each on its own beat.
+                            float beat = fract(uTime * 0.7 + hash(floor(vLocal * 0.35) + uSeed));
+                            float flash = smoothstep(0.88, 0.9, beat) * (1.0 - smoothstep(0.95, 1.0, beat));
+                            col = mix(uColorAccent, uColorInk, 0.45) * (0.22 + 2.4 * flash) * uGlow;
                         }
                     } else if (uKind < 1.5) {
+                        if (vPart > 0.5) {
+                            // A moon in attendance: airless rock, dark plains,
+                            // craters with bright rims, lit hard from one side
+                            // and faintly by the planet it circles.
+                            float plains = smoothstep(0.42, 0.62, fbm(vLocal * 0.8 + uSeed * 9.0));
+                            float pit = noise(vLocal * 2.9 + 4.0 + uSeed * 3.0);
+                            float small = noise(vLocal * 7.5 + 9.0);
+                            float bowl = smoothstep(0.66, 0.72, pit) - smoothstep(0.72, 0.8, pit) * 1.7
+                                + (smoothstep(0.7, 0.75, small) - smoothstep(0.75, 0.82, small) * 1.6) * 0.5;
+                            float rock = mix(0.46, 0.2, plains) * (0.85 + 0.3 * noise(vLocal * 15.0)) + bowl * 0.14;
+                            float sunlit = clamp(ndl * 1.2 + 0.02, 0.0, 1.0);
+                            col = mix(uColorInk, uColorPrimary, 0.12) * max(rock, 0.03) * sunlit * 1.25
+                                + uColorPrimary * 0.012;
+                        } else {
                         // Gas giant: turbulent latitude bands, storms, a soft
                         // terminator, a limb of atmosphere, aurora on the night pole.
                         vec3 p = normalize(vLocal);
-                        float warp = fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0));
+                        float warp = uDetail > 0.5 ? fbm(p * 3.1 + uSeed * 5.0 + vec3(uTime * 0.012, 0.0, 0.0)) : 0.5;
                         float lat = p.y + (warp - 0.5) * 0.16;
                         float bands = 0.5 + 0.5 * sin(lat * (15.0 + uSeed * 9.0) + sin(lat * 41.0) * 0.6);
                         float fine = noise(vec3(p.x * 5.0, lat * 46.0, p.z * 5.0) + uSeed * 3.0);
@@ -1530,7 +1894,21 @@
                             // A real cloud deck turns slowly under the same light;
                             // only its light and dark are kept.
                             vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, vUv.y + (warp - 0.5) * 0.004);
-                            deck = smoothstep(0.04, 0.96, texture2D(uSurface, at).r);
+                            float shade = texture2D(uSurface, at).r;
+                            if (uDetail > 0.5) {
+                                // Belts and zones run at different speeds. The map is
+                                // carried along each jet in two overlapping passes, so
+                                // the shear never winds it up.
+                                float jet = sin(vUv.y * 31.0 + uSeed * 6.0) * 0.016;
+                                float pass = fract(uTime * 0.02);
+                                float a = texture2D(uSurface, at + vec2(jet * (pass - 0.5), 0.0)).r;
+                                float b = texture2D(uSurface, at + vec2(jet * (fract(pass + 0.5) - 0.5), 0.0)).r;
+                                shade = mix(a, b, abs(1.0 - 2.0 * pass));
+                                // Close up, the cloud tops break into finer eddies.
+                                shade += (noise(p * vec3(34.0, 90.0, 34.0) + warp * 6.0) - 0.5) * 0.07
+                                    * (1.0 - smoothstep(0.0005, 0.004, fwidth(vUv.y)));
+                            }
+                            deck = smoothstep(0.04, 0.96, shade);
                             storm = 0.0;
                             bands = deck;
                         }
@@ -1541,13 +1919,32 @@
                         surface = mix(surface, uColorEmber * 0.36, smoothstep(0.5, 0.12, deck) * 0.42 * uMapped);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
-                        col = surface * (0.012 + day * 0.99) + air * rim * (0.1 + day * 1.05);
+                        // The disc dims towards its edge, where the light has
+                        // more air to cross, and the terminator runs warm.
+                        float facing = clamp(dot(n, v), 0.0, 1.0);
+                        surface *= mix(0.5, 1.0, pow(facing, 0.55));
+                        surface = mix(surface, surface * mix(vec3(1.0), uColorEmber * 1.6, 0.55),
+                            smoothstep(0.5, 0.0, ndl) * smoothstep(-0.2, 0.1, ndl));
+                        // The rings lay their shadow across the cloud tops.
+                        float veil = 1.0;
+                        if (uRinged > 0.5 && abs(uLightLocal.y) > 0.01) {
+                            float reach = -vLocal.y / uLightLocal.y;
+                            vec3 hit = vLocal + uLightLocal * reach;
+                            float rt = (length(hit.xz) - uRing.x) / (uRing.y - uRing.x);
+                            if (reach > 0.0 && rt > 0.0 && rt < 1.0) {
+                                float ice = uRingMapped > 0.5 ? texture2D(uRingMap, vec2(rt, 0.5)).r
+                                    : 0.75 - 0.7 * smoothstep(0.27, 0.285, rt) * (1.0 - smoothstep(0.34, 0.355, rt));
+                                veil = 1.0 - 0.82 * ice * smoothstep(0.0, 0.03, rt) * (1.0 - smoothstep(0.95, 1.0, rt));
+                            }
+                        }
+                        col = surface * (0.006 + day * 0.99 * veil) + air * rim * (0.012 + day * 0.8 * veil);
                         // Seen against the sun the air along the limb lights up.
                         float against = pow(max(dot(-v, SUN), 0.0), 4.0);
-                        col += air * rim * against * (0.4 + 0.6 * smoothstep(-0.4, 0.5, dot(n, SUN))) * 2.6;
+                        col += air * rim * against * smoothstep(-0.1, 0.7, dot(n, SUN)) * 2.2;
                         float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
                         float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
                         col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
+                        }
                     } else if (uKind < 2.5) {
                         // Ring system: ringlets, a wide division, spiral density
                         // waves, the planet's shadow, and light scattered forward.
@@ -1560,7 +1957,7 @@
                         float division = 1.0 - 0.94 * smoothstep(0.27, 0.285, t) * (1.0 - smoothstep(0.34, 0.355, t));
                         float wave = 0.82 + 0.18 * sin(angle * 2.0 - log(max(r, 1.0)) * 9.0 + uTime * 0.12);
                         float dust = 0.82 + 0.18 * noise(vec3(vLocal.xz * 1.3, uSeed));
-                        float density = ringlets * edges * division * wave * dust;
+                        float density = ringlets * division * wave * dust;
                         vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
                         tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
                         if (uMapped > 0.5) {
@@ -1568,17 +1965,53 @@
                             // radius, and how bright it is.
                             vec4 profile = texture2D(uSurface, vec2(t, 0.5));
                             float sand = 0.84 + 0.16 * noise(vec3(t * 420.0, uSeed * 5.0, 0.0));
-                            density = profile.r * sand * edges * (0.9 + 0.1 * wave) * dust;
-                            tone = mix(uColorAccent, mix(uColorPrimary, uColorInk, 0.4), smoothstep(0.05, 0.45, t))
-                                * (0.5 + 1.45 * profile.g);
-                            tone = mix(tone, uColorInk * 0.62, smoothstep(0.78, 1.0, t) * 0.6);
+                            density = profile.r * sand * (0.94 + 0.06 * wave);
+                            // Dusty and warm near the planet, pale ice in the broad
+                            // middle ring, greyer and cooler outside the division.
+                            vec3 dusty = mix(uColorAccent, uColorEmber, 0.35) * 0.55;
+                            vec3 ice = mix(uColorInk, uColorAccent, 0.14);
+                            vec3 outerIce = mix(uColorInk, uColorPrimary, 0.3) * 0.8;
+                            tone = mix(dusty, ice, smoothstep(0.12, 0.3, t));
+                            tone = mix(tone, outerIce, smoothstep(0.66, 0.76, t));
+                            tone *= 0.45 + 0.75 * profile.g;
+                        }
+                        // Fine ringlets, kept only while a pixel can still resolve them.
+                        float grainT = uDetail > 0.5 ? fwidth(t) : 1.0;
+                        density *= 1.0 - 0.3 * (1.0 - smoothstep(0.001, 0.004, grainT))
+                            * noise(vec3(t * 760.0, uSeed * 7.0, 1.0));
+                        density *= 1.0 - 0.22 * (1.0 - smoothstep(0.004, 0.012, grainT))
+                            * noise(vec3(t * 230.0, uSeed * 3.0, 2.0));
+                        // Close to, the sheet resolves into what it is made of:
+                        // clumps strung out along the orbit, grit, glints of ice.
+                        float nearBy = uDetail * (1.0 - smoothstep(50.0, 240.0, vDepth));
+                        float glint = 0.0;
+                        if (nearBy > 0.0) {
+                            float clump = noise(vec3(r * 2.4, vLocal.z * 0.33, vLocal.x * 0.33 + uSeed * 5.0));
+                            float grit = noise(vec3(vLocal.xz * 4.6, uSeed * 2.0));
+                            density *= mix(1.0, (0.5 + 1.0 * clump) * (0.72 + 0.56 * grit), nearBy);
+                            glint = smoothstep(0.8, 0.9, noise(vec3(vLocal.xz * 41.0, uSeed + 4.0)))
+                                * (1.0 - smoothstep(40.0, 150.0, vDepth)) * uDetail;
                         }
                         float along = -dot(vLocal, uLightLocal);
                         float miss = length(vLocal + uLightLocal * along);
-                        float shadow = along < 0.0 ? smoothstep(uBodyRadius * 0.94, uBodyRadius * 1.06, miss) : 1.0;
+                        // The planet's shadow, its edge softening with distance.
+                        float soft = 0.03 + 0.05 * clamp(-along / (uBodyRadius * 3.0), 0.0, 1.0);
+                        float shadow = along < 0.0
+                            ? smoothstep(uBodyRadius * (1.0 - soft), uBodyRadius * (1.0 + soft), miss) : 1.0;
+                        // Ice in sunlight: the lit face reflects, more where the
+                        // ring is thick; seen from below, the thin rings glow
+                        // with light passed through and the thick one goes dark.
+                        float depthOf = density * 3.2;
+                        float tilt = 0.3 + 0.7 * abs(uLightLocal.y);
+                        float reflected = (1.0 - exp(-depthOf)) * tilt;
+                        float passed = depthOf * exp(-depthOf) * 1.9 * tilt;
+                        float litFace = smoothstep(-0.04, 0.04, ndl);
                         float forward = pow(max(dot(-v, SUN), 0.0), 6.0);
-                        col = tone * (0.2 + 0.8 * abs(uLightLocal.y) + forward * 0.7) * mix(0.05, 1.0, shadow);
-                        alpha = clamp(density * 0.92, 0.0, 0.9) * fade;
+                        col = tone * (mix(passed, reflected, litFace) * (0.82 + 0.4 * glint) + forward * 0.5 * passed)
+                            * mix(0.03, 1.0, shadow);
+                        // Seen edge-on a thin sheet still hides what is behind it.
+                        float across = max(0.22, abs(dot(n, v)));
+                        alpha = (1.0 - exp(-depthOf * 0.8 / across)) * edges * fade;
                     } else if (uKind > 3.5) {
                         // Air above the cloud tops: brightest along the limb, thinning
                         // outwards, lit on the day side and glowing when the sun is behind.
@@ -1587,20 +2020,49 @@
                             ? pow(facing / LIMB, 2.4)
                             : pow(1.0 - (facing - LIMB) / (1.0 - LIMB), 7.0);
                         float lit = smoothstep(-0.32, 0.45, ndl);
-                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.5, 0.3, dot(n, SUN));
+                        float against = pow(max(dot(-v, SUN), 0.0), 4.0) * smoothstep(-0.05, 0.75, dot(n, SUN));
                         col = mix(uColorPrimary, uColorInk, 0.38) * (0.5 + lit)
                             + mix(uColorAccent, uColorInk, 0.5) * against * 1.5;
-                        alpha = halo * (0.05 + 0.5 * lit + 0.55 * against) * fade * step(grain, solid - 0.04);
+                        alpha = halo * (0.012 + 0.42 * lit + 0.5 * against) * fade * step(grain, solid - 0.04);
                     } else {
-                        // Light sail: a thin membrane on ribs, iridescent at grazing angles.
-                        float rib = max(smoothstep(0.86, 1.0, abs(fract(vUv.x * 11.0) * 2.0 - 1.0)),
-                            smoothstep(0.82, 1.0, abs(vUv.y * 2.0 - 1.0)));
-                        float graze = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0);
-                        vec3 film = mix(uColorPrimary, uColorAccent, 0.5 + 0.5 * sin(graze * 7.0 + vUv.x * 5.0 + uSeed * 6.0));
-                        col = film * (0.1 + 0.55 * pow(abs(ndl), 1.5) + graze * 0.5)
-                            + uColorInk * rib * (0.3 + day * 0.5)
-                            + uColorPrimary * smoothstep(0.8, 1.0, vUv.x) * 0.7 * uGlow;
-                        alpha = clamp(0.3 + rib * 0.55 + graze * 0.3, 0.0, 0.92) * fade;
+                        // Sail film: aluminised on the sunward face, bare gold
+                        // polymer behind; fold creases, slack wrinkles, strips
+                        // of thin solar cells, taped edges. It mirrors the sky.
+                        vec2 q = vUv * 2.0 - 1.0;
+                        vec2 aq = abs(q);
+                        float reach = max(aq.x, aq.y);
+                        float gap = abs(aq.x - aq.y);
+                        if (gap < 0.012 && reach > 0.09) discard;
+                        vec3 flat_ = normalize(vNormal);
+                        bool sunward = dot(flat_, v) > 0.0;
+                        float folds = max(1.0 - smoothstep(0.0, 0.05, abs(fract(q.x * 9.0) - 0.5) * 2.0),
+                            1.0 - smoothstep(0.0, 0.05, abs(fract(q.y * 9.0) - 0.5) * 2.0));
+                        float slack = noise(vec3(q * vec2(5.0, 23.0) * (aq.x > aq.y ? 1.0 : 0.0)
+                            + q.yx * vec2(5.0, 23.0) * (aq.x > aq.y ? 0.0 : 1.0), uSeed * 9.0)) - 0.5;
+                        // Tension lines fan out from the hub and the boom tips; a
+                        // fine crinkle is left from the film having been packed.
+                        float fan = noise(vec3(atan(q.y, q.x) * 26.0, reach * 2.0, uSeed * 5.0)) - 0.5;
+                        vec2 crinkle = vec2(noise(vec3(q * 46.0, uSeed)), noise(vec3(q * 46.0 + 19.0, uSeed))) - 0.5;
+                        vec3 nn = normalize(n + (aq.x > aq.y ? vec3(0.0, slack, 0.0) : vec3(slack, 0.0, 0.0)) * 0.5
+                            + vec3(-q.y, q.x, 0.0) * fan * 0.55 + vec3(crinkle, 0.0) * 0.22 * uDetail);
+                        float lam = clamp(abs(dot(nn, uLight)), 0.0, 1.0);
+                        float facing = clamp(abs(dot(nn, v)), 0.0, 1.0);
+                        vec3 bounce = reflect(-v, nn);
+                        vec3 sky = mix(mix(uColorPrimary, uColorInk, 0.3) * 0.13, mix(uColorEmber, uColorAccent, 0.4) * 0.36,
+                            smoothstep(-0.25, 0.55, dot(bounce, SUN)));
+                        float sun = pow(max(dot(normalize(uLight + v), nn), 0.0), 14.0);
+                        vec3 silver = uColorInk * (0.05 + 0.16 * lam) + sky * 1.9 + uColorInk * sun * 1.6 * lam;
+                        vec3 gold = mix(mix(uColorPrimary, uColorInk, 0.72), uColorAccent, 0.42) * (0.07 + 0.42 * lam)
+                            + mix(uColorAccent, uColorInk, 0.5) * sun * 0.9 * lam + sky * 0.5;
+                        col = sunward ? silver : gold;
+                        col *= 1.0 - 0.28 * folds;
+                        // Thin-film cells in a band on each quadrant, taped hems.
+                        float cells = smoothstep(0.5, 0.52, reach) * (1.0 - smoothstep(0.62, 0.64, reach))
+                            * smoothstep(0.06, 0.09, gap) * step(0.12, fract(max(aq.x, aq.y) < 0.0 ? 0.0 : min(aq.x, aq.y) * 14.0));
+                        col = mix(col, uColorInk * 0.035 * (0.3 + lam) + sky * 0.8, cells * (sunward ? 1.0 : 0.25));
+                        float hem = smoothstep(0.965, 0.985, reach) + (1.0 - smoothstep(0.012, 0.03, gap));
+                        col = mix(col, uColorInk * (0.1 + 0.5 * lam), clamp(hem, 0.0, 1.0) * 0.8);
+                        alpha = (0.9 + 0.1 * (1.0 - facing)) * fade;
                     }
                     // On a pale backdrop the night side is a deep tone, not a hole.
                     col += uFloor;
@@ -1615,25 +2077,14 @@
             `
         }), surface);
 
-        const buildStationBody = ({ p, q, radius }, seed) => {
-            class KnotPath extends T.Curve {
-                getPoint(u, target = new T.Vector3()) {
-                    const t = u * TAU * p, phase = (q / p) * t;
-                    const core = radius * (0.72 + 0.28 * Math.cos(phase));
-                    return target.set(core * Math.cos(t), core * Math.sin(t),
-                        radius * (0.36 + 0.12 * Math.cos(phase)) * Math.sin(phase));
-                }
-            }
-            return [[fuse([
-                [new T.TubeGeometry(new KnotPath(), 640, 0.95, 7, true), 0],
-                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(0.38), 1],
-                [new T.TorusGeometry(radius * 1.02, 0.17, 6, 160).rotateX(-0.38), 1],
-                [new T.IcosahedronGeometry(radius * 0.12, 3), 2]
-            ]), makeBodyMaterial(0, seed)]];
-        };
+        const buildStationBody = (spec, seed) => [[stationGeometry(spec), makeBodyMaterial(0, seed)]];
         const buildPlanetBody = ({ radius }, seed) =>
             [
-                [fuse([[new T.SphereGeometry(radius * 0.985, 72, 44), 0]]),
+                [fuse([
+                    [new T.SphereGeometry(radius * 0.985, 72, 44), 0],
+                    [new T.SphereGeometry(radius * 0.11, 24, 16).translate(radius * 1.72, radius * 0.1, radius * 0.3), 1],
+                    [new T.SphereGeometry(radius * 0.045, 20, 12).translate(-radius * 1.1, -radius * 0.18, radius * 2.0), 1]
+                ]),
                     makeBodyMaterial(1, seed, seed < 0.5 ? 'gas-giant-b.webp' : 'gas-giant-a.webp')],
                 [fuse([[new T.SphereGeometry(radius * 0.985 * AIR_REACH, 56, 32), 0]]), makeBodyMaterial(4, seed)]
             ];
@@ -1642,53 +2093,48 @@
             const disc = makeBodyMaterial(2, seed, 'ring-system.png');
             disc.uniforms.uRing.value.set(inner, outer);
             disc.uniforms.uBodyRadius.value = bodyRadius;
+            const globe = wearSurface(makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp'),
+                'ring-system.png', 'uRingMap', 'uRingMapped');
+            globe.uniforms.uRinged.value = 1;
+            globe.uniforms.uRing.value.set(inner, outer);
             return [
-                [fuse([[new T.SphereGeometry(bodyRadius, 56, 36), 0]]), makeBodyMaterial(1, seed + 0.37, 'ringed-giant.webp')],
+                [fuse([
+                    [new T.SphereGeometry(bodyRadius, 56, 36), 0],
+                    [new T.SphereGeometry(bodyRadius * 0.13, 24, 16).translate(outer * 1.2, outer * 0.02, 0).rotateY(2.1), 1]
+                ]), globe],
                 [fuse([[new T.SphereGeometry(bodyRadius * AIR_REACH, 48, 28), 0]]), makeBodyMaterial(4, seed + 0.37)],
-                [fuse([[new T.RingGeometry(inner, outer, 160, 6).rotateX(-Math.PI / 2), 0]]), disc]
+                [fuse([[new T.RingGeometry(inner, outer, 192, 2).rotateX(-Math.PI / 2), 0]]), disc]
             ];
         };
-        const buildShipBody = ({ scale }, seed) => {
-            // The same oblique cruising attitude the point template uses.
-            const attitude = new T.Matrix4().set(0.85, 0, 0.48, 0, 0, 1, 0, 0, -0.48, 0, 0.85, 0, 0, 0, 0, 1);
-            const profile = [];
-            for (let i = 0; i <= 16; i += 1) {
-                const z = (i / 16 - 0.5) * 34 * scale;
-                profile.push(new T.Vector2(Math.max(0.12, (1 - Math.abs(z) / (17.6 * scale)) * 2.1 * scale), z));
-            }
-            const hull = fuse([
-                [new T.LatheGeometry(profile, 14).rotateX(Math.PI / 2), 3],
-                [new T.TorusGeometry(4.6 * scale, 0.42 * scale, 8, 44), 3],
-                [new T.CylinderGeometry(1.5 * scale, 0.55 * scale, 3 * scale, 12)
-                    .rotateX(Math.PI / 2).translate(0, 0, 16.4 * scale), 2]
-            ]).applyMatrix4(attitude);
-            const position = [], uv = [], index = [];
-            const SPAN = 22, CHORD = 6;
-            for (let wing = 0; wing < 3; wing += 1) {
-                const angle = (wing / 3) * TAU + Math.PI * 0.5;
-                const base = position.length / 3;
-                for (let i = 0; i <= SPAN; i += 1) {
-                    for (let j = 0; j <= CHORD; j += 1) {
-                        const s = i / SPAN, chord = (j / CHORD * 2 - 1) * (1 - s * 0.72);
-                        const reach = (2.2 + s * 28) * scale, camber = Math.sin(s * Math.PI) * 3.2 * scale;
-                        const x = Math.cos(angle) * reach - Math.sin(angle) * camber;
-                        const y = Math.sin(angle) * reach + Math.cos(angle) * camber;
-                        const z = (-s * s * 16 + chord * 7.5) * scale;
-                        position.push(x * 0.85 + z * 0.48, y * 0.92, -x * 0.48 + z * 0.85);
-                        uv.push(s, j / CHORD);
-                        if (i < SPAN && j < CHORD) {
-                            const a = base + i * (CHORD + 1) + j, b = a + CHORD + 1;
-                            index.push(a, b, a + 1, a + 1, b, b + 1);
-                        }
-                    }
+        const buildShipBody = (spec, seed) => {
+            if (spec.plan) return buildStationBody(spec, seed);
+            const plan = sailPlan(spec.scale);
+            const at = new Float32Array(3);
+            const posed = (geometry) => {
+                const p = geometry.attributes.position, n = geometry.attributes.normal;
+                for (let i = 0; i < p.count; i += 1) {
+                    plan.pose(p.getX(i), p.getY(i), p.getZ(i), at); p.setXYZ(i, at[0], at[1], at[2]);
+                    if (n) { plan.pose(n.getX(i), n.getY(i), n.getZ(i), at); n.setXYZ(i, at[0], at[1], at[2]); }
                 }
+                return geometry;
+            };
+            const film = new T.PlaneGeometry(plan.half * 2, plan.half * 2, 32, 32);
+            const fp = film.attributes.position;
+            for (let i = 0; i < fp.count; i += 1) fp.setZ(i, plan.billow(fp.getX(i), fp.getY(i)));
+            film.computeVertexNormals();
+            const frame = [];
+            for (let i = 0; i < 4; i += 1) {
+                frame.push([new T.CylinderGeometry(plan.boom, plan.boom * 0.5, plan.half * Math.SQRT2, 6, 1, true)
+                    .translate(0, plan.half * Math.SQRT2 / 2, 0).rotateZ(Math.PI / 4 + i * Math.PI / 2), 7]);
             }
-            const sails = new T.BufferGeometry();
-            sails.setAttribute('position', new T.Float32BufferAttribute(position, 3));
-            sails.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
-            sails.setIndex(index);
-            sails.computeVertexNormals();
-            return [[hull, makeBodyMaterial(0, seed)], [fuse([[sails, 0]]), makeBodyMaterial(3, seed)]];
+            frame.push([new T.CylinderGeometry(plan.bus, plan.bus, plan.busLength, 16, 1)
+                .rotateX(Math.PI / 2).translate(0, 0, plan.busLength * 0.2), 3]);
+            frame.push([new T.BoxGeometry(plan.bus * 2.4, plan.bus * 0.5, plan.bus * 0.04)
+                .translate(0, 0, plan.busLength * 0.72), 4]);
+            return [
+                [posed(fuse(frame)), makeBodyMaterial(0, seed)],
+                [posed(fuse([[film, 0]])), makeBodyMaterial(3, seed)]
+            ];
         };
         const bodyBuilders = [buildStationBody, buildPlanetBody, buildRingedBody, buildShipBody];
         const bodyNodes = slotTemplateMap.map((item, idx) => {
@@ -1707,6 +2153,119 @@
         });
         const worldLight = new T.Vector3(...KEY_LIGHT);
         const bodyTurn = new T.Quaternion();
+
+
+        /* ------------------------------------------------------------------------
+         * Layer 4c: a field of rock. In the quiet passages (the opening drift,
+         * interludes, the close) the route runs through scattered boulders that
+         * tumble past on every side. They live in a box that travels with the
+         * camera, so there are always more ahead, and keep clear of the route.
+         * ------------------------------------------------------------------------ */
+        const ROCK_COUNT = 110;
+        const rockField = (() => {
+            const rand = seededRandom('rock-field-v1');
+            const proto = new T.IcosahedronGeometry(1, 1);
+            const protoPos = proto.attributes.position, per = protoPos.count;
+            const position = new Float32Array(ROCK_COUNT * per * 3);
+            const home = new Float32Array(ROCK_COUNT * per * 4);
+            const spin = new Float32Array(ROCK_COUNT * per * 4);
+            const lump = (x, y, z, seed) => 1 + 0.26 * Math.sin(x * 2.3 + seed * 9) * Math.cos(y * 2.9 - seed * 5)
+                + 0.2 * Math.sin(z * 3.7 + seed * 13) + 0.12 * Math.cos((x + y + z) * 5.1 + seed * 3);
+            for (let r = 0; r < ROCK_COUNT; r += 1) {
+                const seed = rand(), size = 0.5 + Math.pow(rand(), 3.2) * 5.2;
+                const squash = [0.7 + rand() * 0.6, 0.55 + rand() * 0.5, 0.7 + rand() * 0.6];
+                const centre = [(rand() - 0.5) * 300, (rand() - 0.5) * 190, -rand() * 900, seed];
+                const axis = unit([rand() - 0.5, rand() - 0.5, rand() - 0.5]);
+                const rate = (0.08 + rand() * 0.3) * (rand() < 0.5 ? -1 : 1);
+                for (let i = 0; i < per; i += 1) {
+                    const x = protoPos.getX(i), y = protoPos.getY(i), z = protoPos.getZ(i);
+                    const k = lump(x, y, z, seed) * size, o = (r * per + i);
+                    position.set([x * k * squash[0], y * k * squash[1], z * k * squash[2]], o * 3);
+                    home.set(centre, o * 4);
+                    spin.set([axis[0], axis[1], axis[2], rate], o * 4);
+                }
+            }
+            proto.dispose();
+            const geo = new T.BufferGeometry();
+            geo.setAttribute('position', new T.BufferAttribute(position, 3));
+            geo.setAttribute('aHome', new T.BufferAttribute(home, 4));
+            geo.setAttribute('aSpin', new T.BufferAttribute(spin, 4));
+            const mat = new T.ShaderMaterial({
+                uniforms: {
+                    uCamPos: { value: new T.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 },
+                    uLight: { value: new T.Vector3(...KEY_LIGHT) },
+                    uColorPrimary: { value: new T.Color('#76bfae') }, uColorInk: { value: new T.Color('#f2f0e9') },
+                    uColorAccent: { value: new T.Color('#f2a900') }, uFloor: { value: new T.Color('#000000') },
+                    uViewport: { value: new T.Vector2(1280, 720) }
+                },
+                vertexShader: `
+                    attribute vec4 aHome, aSpin;
+                    uniform vec3 uCamPos;
+                    uniform float uTime;
+                    varying vec3 vWorld, vLocal;
+                    varying float vSeed, vDepth;
+                    void main() {
+                        // Tumble about the rock's own axis.
+                        float turn = uTime * aSpin.w + aHome.w * 6.28;
+                        vec3 k = aSpin.xyz;
+                        vec3 local = position * cos(turn) + cross(k, position) * sin(turn) + k * dot(k, position) * (1.0 - cos(turn));
+                        vec3 box = vec3(300.0, 190.0, 900.0);
+                        vec3 rel = mod(aHome.xyz - uCamPos + box * 0.5, box) - box * 0.5;
+                        rel.z = mod(aHome.z - uCamPos.z, 900.0) - 860.0;
+                        // Nothing sits on the route itself.
+                        float clear = length(rel.xy);
+                        rel.xy *= max(clear, 17.0 + aHome.w * 9.0) / max(clear, 0.001);
+                        vec3 world = uCamPos + rel + local;
+                        vWorld = world; vLocal = position; vSeed = aHome.w;
+                        vec4 mv = viewMatrix * vec4(world, 1.0);
+                        vDepth = -mv.z;
+                        gl_Position = projectionMatrix * mv;
+                    }
+                `,
+                fragmentShader: `
+                    uniform float uAmount;
+                    uniform vec3 uLight, uColorPrimary, uColorInk, uColorAccent, uFloor;
+                    uniform vec2 uViewport;
+                    varying vec3 vWorld, vLocal;
+                    varying float vSeed, vDepth;
+                    float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+                    float noise(vec3 p) {
+                        vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+                        return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
+                            mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+                            mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
+                            mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+                    }
+                    void main() {
+                        // Rocks come and go one by one, and thin out with distance.
+                        float present = smoothstep(vSeed * 0.7, vSeed * 0.7 + 0.3, uAmount)
+                            * (1.0 - smoothstep(560.0, 840.0, vDepth)) * smoothstep(4.0, 16.0, vDepth);
+                        float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+                        if (dither >= present) discard;
+                        // Broken faces, as shattered rock has.
+                        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                        vec3 v = normalize(cameraPosition - vWorld);
+                        if (dot(n, v) < 0.0) n = -n;
+                        float lit = clamp(dot(n, uLight) * 1.15 + 0.03, 0.0, 1.0);
+                        float grain = 0.6 + 0.4 * noise(vLocal * 2.6 + vSeed * 31.0);
+                        float pit = smoothstep(0.62, 0.7, noise(vLocal * 1.3 + vSeed * 7.0));
+                        vec3 stone = mix(uColorPrimary, uColorInk, 0.55) * (0.2 + 0.14 * vSeed) * grain * (1.0 - 0.45 * pit);
+                        vec3 col = stone * (mix(uColorInk, uColorAccent, 0.2) * lit * 1.5
+                            + uColorPrimary * (0.05 + 0.07 * clamp(0.5 - 0.5 * dot(n, uLight), 0.0, 1.0))) + uFloor;
+                        vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+                        col *= mix(0.35, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
+                        gl_FragColor = vec4(col, 1.0);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }
+                `
+            });
+            const mesh = new T.Mesh(geo, mat);
+            mesh.frustumCulled = false;
+            mesh.visible = false;
+            root.add(mesh);
+            return { geo, mat, mesh, per };
+        })();
 
         /* ------------------------------------------------------------------------
          * 层级 5：深空引力波纹环 (Gravitational Wave Ripples)
@@ -2300,6 +2859,10 @@
             const paper = luma(colors.background) > luma(colors.ink);
             const bodyInk = paper ? colors.background.clone().lerp(new T.Color('#ffffff'), 0.6) : colors.ink;
             const bodyFloor = paper ? colors.ink.clone().lerp(colors.secondary, 0.4).multiplyScalar(0.5) : new T.Color('#000000');
+            rockField.mat.uniforms.uColorPrimary.value.copy(colors.secondary);
+            rockField.mat.uniforms.uColorAccent.value.copy(colors.accent);
+            rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
+            rockField.mat.uniforms.uFloor.value.copy(bodyFloor);
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
                 mat.uniforms.uColorPrimary.value.copy(colors.secondary);
                 mat.uniforms.uColorAccent.value.copy(colors.accent);
@@ -2517,12 +3080,50 @@
                 lyricParticleMat.uniforms.uOpacity.value = 0;
             }
 
+            // The camera turns to watch whatever it is passing: a little while
+            // a line is being read, freely in the gaps between lines.
+            let passBank = 0, passRush = 0;
+            if (motionAmount > 0.001 && !settings.reducedMotion) {
+                const shots = timeline.lineShots;
+                const nextIdx = upperBound(shots, time, 'startTime');
+                const sinceLine = nextIdx > 0 ? time - shots[nextIdx - 1].endTime : time;
+                const untilLine = nextIdx < shots.length ? shots[nextIdx].startTime - time : 6;
+                const free = activeLine ? 0 : Math.min(smooth(sinceLine / 1.4), smooth(untilLine / 1.8));
+                const reach = (0.16 + 0.6 * free) * Math.min(1, motionAmount);
+                let weight = 0, sum = 0, gx = 0, gy = 0, gz = 0;
+                bodyNodes.forEach((body) => {
+                    if (!body.group.visible) return;
+                    const ahead = camZ - body.group.position.z;
+                    const near = smooth((560 - ahead) / 220) * smooth((ahead + 150) / 130);
+                    if (near <= 0) return;
+                    // Close alongside, the camera banks towards the body and the lens widens.
+                    const beside = smooth(1 - Math.abs(ahead - 25) / 150);
+                    const offX = body.group.position.x - camX, offY = body.group.position.y - camY;
+                    const closeBy = beside * clamp(70 / Math.max(20, Math.hypot(offX, offY)));
+                    if (closeBy > passRush) {
+                        passRush = closeBy;
+                        passBank = -Math.sign(offX * camSpine.right.x + offY * camSpine.right.y) * closeBy;
+                    }
+                    weight = Math.max(weight, near);
+                    sum += near;
+                    gx += body.group.position.x * near; gy += body.group.position.y * near; gz += body.group.position.z * near;
+                });
+                if (sum > 0) {
+                    const pull = weight * reach;
+                    // Aim at a point a fixed way off, so a body alongside turns the head fully.
+                    const tx = gx / sum - camX, ty = gy / sum - camY, tz = gz / sum - camZ;
+                    const far = 140 / Math.max(1, Math.hypot(tx, ty, tz));
+                    lookX = mix(lookX, camX + tx * far, pull);
+                    lookY = mix(lookY, camY + ty * far, pull);
+                    lookZ = mix(lookZ, camZ + tz * far, pull);
+                }
+            }
             cameraInstance.lookAt(lookX, lookY, lookZ);
-            cameraInstance.rotation.z += rigRoll + camSpine.curvature * 0.032 * motionAmount
+            cameraInstance.rotation.z += rigRoll + passBank * 0.11 * Math.min(1, motionAmount) + camSpine.curvature * 0.032 * motionAmount
                 + Math.sin(time * 0.21) * 0.008 * breathAmount * motionAmount;
 
             const targetFov = clamp(
-                actState.fov + rigFov + bassSmooth * 2.4 * shakeAmount + (cruiseSpeed - 1.0) * 3.5 * Math.min(1, motionAmount),
+                actState.fov + rigFov + passRush * 5.0 * Math.min(1, motionAmount) + bassSmooth * 2.4 * shakeAmount + (cruiseSpeed - 1.0) * 3.5 * Math.min(1, motionAmount),
                 38,
                 68
             );
@@ -2537,6 +3138,11 @@
             skyDome.visible = showStarfield;
             skyMat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
             skyMat.uniforms.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
+            const rockAmount = (actState.rocks || 0) * clamp(objectDensity, 0, 1.2);
+            rockField.mesh.visible = rockAmount > 0.01;
+            rockField.mat.uniforms.uAmount.value = rockAmount;
+            rockField.mat.uniforms.uTime.value = time;
+            rockField.mat.uniforms.uCamPos.value.copy(cameraInstance.position);
             filamentMesh.visible = showStarfield;
             streakLines.visible = showStarfield && !settings.reducedMotion;
 
@@ -2595,6 +3201,10 @@
             const showShips = settings.showShips !== false;
             const showStations = settings.showStations !== false;
             const cycle = timeline.ENCOUNTER_CYCLE;
+            const pass = timeline.ringPass;
+            const encounterShift = pass
+                ? (((pass.distance * clamp(speedScale, 0.25, 2.5) - pass.baseS) % cycle) + cycle) % cycle
+                : 0;
             const audioPulse = clamp(bassSmooth * 1.1 + vocalSmooth * 0.35, 0, 1.2);
 
             timeline.encounterSlots.forEach((slot, idx) => {
@@ -2611,8 +3221,36 @@
                 }
 
                 // 计算该巨构在当前周期内的世界弧长坐标 sWorld（掠过身后 220m 后再折返至下一周期 2180m 远方）
-                const cycleIndex = Math.max(0, Math.floor((totalTravelDistance - slot.baseS + 220) / cycle));
-                const sWorld = slot.baseS + cycleIndex * cycle;
+                const placed = slot.baseS + encounterShift;
+                const cycleIndex = Math.floor((totalTravelDistance - placed + 220) / cycle);
+                let sWorld = placed + cycleIndex * cycle;
+                let place = slot;
+                let handover = 1;
+                for (const hero of timeline.heroPasses) {
+                    const routeScale = clamp(speedScale, 0.25, 2.5);
+                    const heroS = hero.distance * routeScale;
+                    if (hero.slotId !== idx) {
+                        if (sWorld > hero.clearFrom * routeScale && sWorld < hero.clearTo * routeScale) sWorld = -1e9;
+                        continue;
+                    }
+                    const heroRel = heroS - totalTravelDistance;
+                    if (heroRel > -180 && heroRel < 1820) {
+                        // One body cannot be in two places. Its turn in the
+                        // procession, if it comes first and clear of the pass,
+                        // is finished before it is gathered again for the pass.
+                        if (place === slot && sWorld < hero.clearFrom * routeScale && sWorld - totalTravelDistance > -180) continue;
+                        const before = placed + Math.floor((heroS - placed) / cycle) * cycle;
+                        if (before < hero.clearFrom * routeScale && before + 180 > heroS - 1820) {
+                            handover = Math.min(handover, smooth((totalTravelDistance - before - 180) / 160));
+                        }
+                        sWorld = heroS;
+                        place = hero;
+                    } else if (place === slot && sWorld > heroS && sWorld < heroS + 2000) {
+                        // ... and the one after waits until the pass is over.
+                        if (heroRel >= 1820) sWorld = -1e9;
+                        else handover = Math.min(handover, smooth((-180 - heroRel) / 160));
+                    }
+                }
                 const relS = sWorld - totalTravelDistance; // >0 在镜头前方，<0 已掠过镜头后方
 
                 if (relS < -180 || relS > 1820) {
@@ -2624,7 +3262,7 @@
                 // 远端 1820m -> 920m 从 0% 极微弱星雾渐显，近端 -30m -> -180m 在身后彻底消隐
                 const farPresence = 1.0 - smoother((relS - 920) / 880);
                 const nearPresence = smooth((relS + 180) / 150);
-                const presence = clamp(farPresence * nearPresence, 0, 1);
+                const presence = clamp(farPresence * nearPresence * handover, 0, 1);
                 if (presence <= 0.002) {
                     node.points.visible = false;
                     return;
@@ -2634,13 +3272,13 @@
                 const anchorSpine = timeline.spineAt(sWorld, motionAmount);
                 // 远方未完全凝聚时，巨构位置略微向航道中轴聚拢，随凝聚自然舒展到两侧巡航位
                 const birthSpread = 0.65 + 0.35 * (1.0 - smooth((relS - 460) / 1150));
-                const wx = anchorSpine.x + anchorSpine.right.x * (slot.side * slot.radial * birthSpread) + anchorSpine.up.x * (slot.elev * birthSpread);
-                const wy = anchorSpine.y + anchorSpine.right.y * (slot.side * slot.radial * birthSpread) + anchorSpine.up.y * (slot.elev * birthSpread);
+                const wx = anchorSpine.x + anchorSpine.right.x * (place.side * place.radial * birthSpread) + anchorSpine.up.x * (place.elev * birthSpread);
+                const wy = anchorSpine.y + anchorSpine.right.y * (place.side * place.radial * birthSpread) + anchorSpine.up.y * (place.elev * birthSpread);
                 const wz = anchorSpine.z;
                 node.points.position.set(wx, wy, wz);
 
                 const rotY = time * slot.rotSpeed + idx * 1.1;
-                node.points.rotation.set(slot.tilt[0], rotY + slot.tilt[1], slot.tilt[2]);
+                node.points.rotation.set(place.tilt[0], rotY + place.tilt[1], place.tilt[2]);
 
                 // 结项凝聚与近场擦肩解体包络：
                 // 远方 (relS: 1680 -> 440) 从深空纵向星尘细丝缓缓坍缩凝结为精密流形；
@@ -2651,8 +3289,9 @@
                 if (relS > 440) {
                     cohesion = 1.0 - smoother((relS - 440) / 1220);
                     dissolveDir = -1.0;
-                } else if (relS < 135) {
-                    const passPhase = clamp((135 - relS) / 260);
+                } else if (slot.type === 'rings' || place.hold ? relS < -15 : relS < 135) {
+                    // A ring system holds together until the camera is through its plane.
+                    const passPhase = slot.type === 'rings' || place.hold ? clamp((-15 - relS) / 150) : clamp((135 - relS) / 260);
                     cohesion = 1.0 - easeInCubic(passPhase) * (0.48 + dissolveAmount * 0.52);
                     dissolveDir = 1.0;
                 }
@@ -2667,8 +3306,15 @@
                 u.uAudioPulse.value = audioPulse;
                 u.uGlow.value = glowAmount;
 
+                // Neither is drawn while it would be fully transparent: the solid
+                // before it starts to form, the points once it has (stations
+                // keep theirs for the lamps).
+                const lampless = slotTemplateMap[idx].code !== 0 || slot.type !== 'station';
+                node.points.visible = !(lampless && cohesion > 0.87);
                 // The solid shares the points' place, attitude and envelope.
-                body.group.visible = true;
+                // Far off a body is only its dust; the solid forms on the approach.
+                const formed = dissolveDir < 0 ? Math.min(cohesion, mix(0.42, 1, smooth((1020 - relS) / 420))) : cohesion;
+                body.group.visible = formed > 0.42;
                 body.group.position.copy(node.points.position);
                 body.group.rotation.copy(node.points.rotation);
                 body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
@@ -2676,17 +3322,37 @@
                 for (const { mat } of body.parts) {
                     const b = mat.uniforms;
                     b.uTime.value = time;
-                    b.uCohesion.value = cohesion;
+                    b.uCohesion.value = formed;
                     b.uPresence.value = presence;
                     b.uAudioPulse.value = audioPulse;
                     b.uGlow.value = glowAmount;
                     b.uLightLocal.value.copy(worldLight).applyQuaternion(bodyTurn);
+                    if (slot.type === 'station') {
+                        // The planet that follows a station in the plan is its companion.
+                        const companion = bodyNodes[idx + 1].group;
+                        b.uBounceDir.value.copy(companion.position).sub(body.group.position);
+                        const apart = b.uBounceDir.value.length();
+                        b.uBounce.value = companion.visible && apart > 1 ? clamp(90 / apart) : 0;
+                        if (apart > 1) b.uBounceDir.value.divideScalar(apart);
+                    }
                 }
             });
         };
 
+        // What each quality tier spends inside the world: how many of the
+        // gathering points are drawn, and whether the bodies compute their
+        // finest surface detail.
+        const QUALITY_TIERS = { 'energy-saving': [0.5, 0, 0.4], standard: [0.8, 1, 0.75], ultimate: [1, 1, 1] };
+        const setQuality = (tier) => {
+            const [points, detail, rocks] = QUALITY_TIERS[tier] || QUALITY_TIERS.standard;
+            rockField.geo.setDrawRange(0, Math.floor(ROCK_COUNT * rocks) * rockField.per);
+            entityNodes.forEach((node) => node.geo.setDrawRange(0, Math.floor(POINTS_PER_ENTITY * points)));
+            bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => { mat.uniforms.uDetail.value = detail; }));
+        };
+
         return {
             get distance() { return totalTravelDistance; },
+            setQuality,
             get currentSpeed() { return cruiseSpeed; },
             reset,
             setPalette,
@@ -2704,6 +3370,7 @@
                 bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
                     mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 }));
+                rockField.mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
             },
             destroy() {
                 clearGlyphStage();
@@ -2716,6 +3383,7 @@
                     node.mat?.dispose?.();
                 });
                 bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
+                rockField.geo.dispose(); rockField.mat.dispose();
                 surfacesReleased = true;
                 surfaceMaps.forEach((entry) => entry.texture?.dispose());
                 ripples.forEach((r) => r.mat?.dispose?.());
