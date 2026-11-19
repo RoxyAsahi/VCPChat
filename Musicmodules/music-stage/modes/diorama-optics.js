@@ -69,7 +69,7 @@
         // Without multisampling the edges are smoothed here instead, on the
         // pass that reads every pixel anyway: a few taps along the local edge.
         const material = pass(`uniform sampler2D image,glowMap;
-            uniform float time,grain,vignette,bloom,smoothing;uniform vec2 texel;varying vec2 uvScreen;
+            uniform float time,grain,vignette,bloom,smoothing,grade;uniform vec2 texel;varying vec2 uvScreen;
             float luma(vec3 c){c=c/(1.0+c);return dot(c,vec3(0.299,0.587,0.114));}
             vec3 smoothed(vec2 uv){
                 vec3 m=texture2D(image,uv).rgb;
@@ -95,6 +95,14 @@
                 color+=texture2D(glowMap,uvScreen).rgb*bloom;
                 vec2 p=uvScreen*2.0-1.0;
                 color*=1.0-vignette*smoothstep(0.2,1.7,dot(p,p))*0.6;
+                // Grade, as film stock does: shadows a little cool, lights a little
+                // warm, a touch more colour, and a black that is lifted and tinted
+                // rather than empty.
+                float l=dot(color,vec3(0.2126,0.7152,0.0722));
+                float lit=smoothstep(0.015,0.7,l);
+                vec3 graded=color*mix(vec3(0.93,0.99,1.07),vec3(1.06,1.0,0.92),lit);
+                graded=max(mix(vec3(l),graded,1.14),0.0)+vec3(0.0012,0.002,0.0035)*(1.0-lit);
+                color=mix(color,graded,grade);
                 gl_FragColor=vec4(color,1.0);
                 #include <tonemapping_fragment>
                 #include <colorspace_fragment>
@@ -104,7 +112,7 @@
             }`, {
             image: { value: target.texture }, glowMap: { value: chain[0].texture },
             time: { value: 0 }, grain: { value: 0.08 }, vignette: { value: 0.22 }, bloom: { value: 0.6 },
-            smoothing: { value: 0 }, texel: { value: new T.Vector2() }
+            smoothing: { value: 0 }, texel: { value: new T.Vector2() }, grade: { value: 1 }
         });
         const quad = new T.Mesh(geometry, material);
         scene.add(quad);
@@ -147,6 +155,8 @@
                 material.uniforms.vignette.value = tuning.vignette ?? 0.22;
                 material.uniforms.bloom.value = (tuning.glow ?? 1) * 0.6;
                 prefilter.uniforms.threshold.value = tuning.threshold ?? 0.82;
+                // The day lens raises the threshold; by day the grade is lighter too.
+                material.uniforms.grade.value = (tuning.threshold ?? 0.82) > 1 ? 0.45 : 1;
                 const previous = renderer.getRenderTarget();
                 const autoClear = renderer.autoClear;
                 try {
