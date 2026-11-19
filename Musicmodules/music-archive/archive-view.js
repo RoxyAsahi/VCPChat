@@ -169,7 +169,7 @@
             const index = selectedIndex();
             const t = tracks()[index];
             refs.cat.textContent = col.name;
-            refs.fno.textContent = t ? 'TRK-' + Model.fileCode(index) : 'TRK-000';
+            refs.fno.textContent = t ? fileNumber(t, index) : 'TRK-000';
             refs.ftitle.textContent = t ? (Model.stripExtension(t.title) || '未知标题') : (col.kind === 'search' ? '没有匹配的曲目' : '这个歌单还是空的');
             const meta = t ? [t.artist, t.album].filter(Boolean).join(' · ') : '';
             refs.fmeta.textContent = (meta || (t ? 'UNKNOWN ARTIST' : '')).toUpperCase();
@@ -185,6 +185,14 @@
             refs.access.classList.toggle('is-playing', Boolean(t) && index === app.currentTrackIndex && app.isPlaying);
             refs.access.disabled = !t;
             scheduleCover(t, force);
+        };
+
+        // 档案号和列表、舞台用同一套（按路径算的稳定编号）；没有那套时退回曲库序号
+        const fileNumber = (t, index) => {
+            const specs = global.MusicTrackSpecs;
+            const n = specs && typeof specs.fileNumber === 'function' ? specs.fileNumber(t) : '';
+            if (n) return /^TRK/i.test(n) ? n : 'TRK-' + n;
+            return 'TRK-' + Model.fileCode(index);
         };
 
         // 封面：只给选中的那张加载，停稳 120ms 后再取，同时预取前后两首
