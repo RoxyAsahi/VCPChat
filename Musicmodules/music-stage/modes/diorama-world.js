@@ -425,8 +425,58 @@
         // Openings along a side, measured from the middle of the car towards its inner end.
         const DOORS = [-4.3, 3.55], WINDOWS = [-2.95, -1.7, -0.45, 0.8, 2.05, 4.95], WINDOW_PITCH = 1.25;
         const DOOR_PANES = [2.60, 0.62, 0.86], SIDE_PANES = [2.63, 1.02, 0.86], CAB_PANE = [2.66, 0.5, 0.74];
-        const CABIN = { ceiling: 3.34, tube: 3.285, rail: 0.66, first: -3.75, pitch: 2.17, length: 1.88, lamps: 5 };
+        const CABIN = { ceiling: 3.34, tube: 3.285, rail: 0.86, first: -3.75, pitch: 2.17, length: 1.88, lamps: 5 };
         const cabinDaylight = { value: 0 };
+        // How the saloon feels: low sun through the windows, the car emptying of
+        // people, and the straps swinging with the ride. The director can set
+        // pose.cabinSunset and pose.cabinEmpty (0 to 1); the stage tuning can too.
+        const cabinMood = { sunset: { value: 0 }, empty: { value: 0 }, clock: { value: 0 }, sway: { value: 1 } };
+        /*
+         * A small detail map made here, not loaded: R is woven pile for the
+         * seats, G brushed streaks for stainless, B soft grime and wear, A a
+         * fine grain. It tiles, it is the same on every run, and it is shared
+         * by whatever wants surface detail (one sampler, no extra draws).
+         */
+        const detailAtlas = (() => {
+            const SIZE = 256, data = new Uint8Array(SIZE * SIZE * 4);
+            let seed = 0x2f6e2b1;
+            const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+            const lattice = cells => { const g = new Float32Array(cells * cells); for (let i = 0; i < g.length; i++) g[i] = random(); return g; };
+            const value = (g, cells, x, y) => {
+                const fx = x * cells, fy = y * cells, ix = Math.floor(fx), iy = Math.floor(fy);
+                const tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+                const at = (i, j) => g[((j % cells) + cells) % cells * cells + ((i % cells) + cells) % cells];
+                const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * sx;
+                const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * sx;
+                return top + (bottom - top) * sy;
+            };
+            const octaves = [4, 8, 16, 32].map(cells => [cells, lattice(cells)]);
+            const fine = lattice(128), pile = lattice(64), streakRows = lattice(SIZE);
+            for (let y = 0; y < SIZE; y++) {
+                for (let x = 0; x < SIZE; x++) {
+                    const u = x / SIZE, v = y / SIZE, i = (y * SIZE + x) * 4;
+                    // Pile: a basket weave every 4 texels, each tuft a little different.
+                    const weave = ((x >> 2) + (y >> 2)) % 2 ? Math.sin((x % 4 + 0.5) / 4 * Math.PI) : Math.sin((y % 4 + 0.5) / 4 * Math.PI);
+                    const tuft = value(pile, 64, u, v);
+                    data[i] = Math.round(255 * clamp(0.35 + 0.4 * weave * (0.6 + 0.4 * tuft) + 0.25 * (random() - 0.5)));
+                    // Brushing runs along u; rows differ, and drift slowly.
+                    const row = streakRows[y] * 0.6 + value(octaves[3][1], 32, u * 0.25, v) * 0.4;
+                    data[i + 1] = Math.round(255 * clamp(0.5 + (row - 0.5) * 0.9 + (random() - 0.5) * 0.12));
+                    let grime = 0, weight = 0.5;
+                    octaves.forEach(([cells, g]) => { grime += value(g, cells, u, v) * weight; weight *= 0.5; });
+                    data[i + 2] = Math.round(255 * clamp(grime / 0.9375));
+                    data[i + 3] = Math.round(255 * clamp(value(fine, 128, u, v) * 0.7 + random() * 0.3));
+                }
+            }
+            const texture = new T.DataTexture(data, SIZE, SIZE, T.RGBAFormat);
+            texture.wrapS = texture.wrapT = T.RepeatWrapping;
+            texture.magFilter = T.LinearFilter;
+            texture.minFilter = T.LinearMipmapLinearFilter;
+            texture.generateMipmaps = true;
+            texture.anisotropy = 4;
+            texture.needsUpdate = true;
+            return texture;
+        })();
         const cabinLightFunctions = `
             const float CEILING=${CABIN.ceiling},TUBE_Y=${CABIN.tube},RAIL=${CABIN.rail};
             const float FIRST_TUBE=${CABIN.first},TUBE_STEP=${CABIN.pitch},TUBE_HALF=${CABIN.length * 0.5};
@@ -943,7 +993,7 @@
         const glassMaterial = material(new T.ShaderMaterial({
             uniforms: { warm: { value: new T.Color('#ffd28c') }, seat: { value: new T.Color('#1d4a40') },
                 night: { value: new T.Color('#05080f') }, shadowInk: { value: new T.Color('#24212a') },
-                day: cabinDaylight, power: { value: 1.3 } },
+                day: cabinDaylight, power: { value: 1.3 }, empty: cabinMood.empty },
             vertexShader: `attribute vec4 pane;varying vec2 vUv;varying vec4 vPane;varying vec3 vPos,vEye;varying float car;
                 void main(){vUv=uv;vPane=pane;vPos=position;
                     #ifdef USE_INSTANCING
@@ -954,7 +1004,7 @@
                     vEye=(inverse(m)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*viewMatrix*m*vec4(position,1.0);
                 }`,
-            fragmentShader: `uniform vec3 warm,seat,night,shadowInk;uniform float power,day;
+            fragmentShader: `uniform vec3 warm,seat,night,shadowInk;uniform float power,day,empty;
                 varying vec2 vUv;varying vec4 vPane;varying vec3 vPos,vEye;varying float car;
                 ${cabinLightFunctions}
                 const float WIDE=1.24,FLOOR=${CAR.floor.toFixed(2)},CEIL=3.34,END=${(CAR.length / 2 - 0.12).toFixed(2)};
@@ -971,7 +1021,7 @@
                     float who=place*1.7+floor(car+0.5)*37.0+salt;
                     float taken=step(1.0-share,h(who));
                     vec2 q=vec2((fract(p.z/pitch)-0.5)*pitch+(h(who+0.3)-0.5)*0.1,p.y-neck-(h(who+0.7)-0.5)*0.12);
-                    return taken*(1.0-smoothstep(-0.012,0.016,figure(q,h(who+4.7)*2.0-1.0)));
+                    return taken*(1.0-empty)*(1.0-smoothstep(-0.012,0.016,figure(q,h(who+4.7)*2.0-1.0)));
                 }
                 void main(){
                     float side=sign(vPos.x);
@@ -1204,7 +1254,7 @@
          * needed, in the same tones the lit windows show from outside.
          * Paints: panel, dado, moquette, floor, metal, tube, ceiling, gangway,
          * printed card (9), luggage (10/11), dials (12/13), route diagram (14),
-         * silhouette (15), heater (16), vent (17), trim (18), piping (19), stainless (20).
+         * silhouette (15), heater (16), vent (17), trim (18), piping (19), stainless (20), cab paint (21).
          */
         const SITTERS = [
             [-1, -2.9, 'doze', 1.05], [-1, -0.7, 'bag', 0.94], [1, -1.9, 'read', 1.0],
@@ -1324,7 +1374,7 @@
                 }
                 if (pose === 'bag') parts.push(oval(0.105, 0.129, 0.16, 0.24, 0.22, 0));
                 if (pose === 'read') parts.push(new T.BoxGeometry(0.16, 0.016, 0.23).rotateZ(0.42).translate(0.3, 0.33, 0));
-                placeFigure(parts, side * (WALL - 0.3), F + 0.52, z, side > 0 ? Math.PI : 0);
+                placeFigure(parts, side * (WALL - 0.36), F + 0.54, z, side > 0 ? Math.PI : 0);
             };
             const stander = () => {
                 const parts = [];
@@ -1396,14 +1446,18 @@
                     const seats = Math.round(run / 0.94), bay = run / seats;
                     for (let i = 0; i < seats; i++) {
                         const z = a + bay * (i + 0.5);
-                        moulded(0.54, 0.113, bay - 0.007, 0.037, side * (WALL - 0.29), F + 0.45, z, 2);
-                        add(roundedPanel(0.14, 0.40, bay - 0.005, 0.035).rotateZ(-side * 0.116)
-                            .translate(side * (WALL - 0.092), F + 0.696, z), 2);
+                        // A thick cushion with a rolled front edge, a fuller back with a roll along its top.
+                        moulded(0.57, 0.165, bay - 0.006, 0.072, side * (WALL - 0.3), F + 0.445, z, 2);
+                        add(roundedPanel(0.19, 0.34, bay - 0.004, 0.075).rotateZ(-side * 0.12)
+                            .translate(side * (WALL - 0.13), F + 0.68, z), 2);
+                        add(roundedPanel(0.12, 0.085, bay - 0.004, 0.042)
+                            .translate(side * (WALL - 0.075), F + 0.8, z), 2);
                     }
-                    moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.557), F + 0.422, middle, 19);
-                    moulded(0.39, 0.37, run, 0.029, side * (WALL - 0.228), F + 0.20, middle, 18);
-                    moulded(0.042, 0.056, run, 0.016, side * (WALL - 0.431), F + 0.386, middle, 4);
-                    moulded(0.018, 0.256, run - 0.09, 0.008, side * (WALL - 0.429), F + 0.205, middle, 16);
+                    moulded(0.032, 0.018, run - 0.042, 0.007, side * (WALL - 0.575), F + 0.378, middle, 19);
+                    moulded(0.40, 0.355, run, 0.022, side * (WALL - 0.24), F + 0.19, middle, 18);
+                    moulded(0.05, 0.03, run, 0.012, side * (WALL - 0.445), F + 0.352, middle, 4);
+                    moulded(0.016, 0.29, run - 0.06, 0.006, side * (WALL - 0.442), F + 0.183, middle, 16);
+                    boxAt(0.02, 0.022, run, side * (WALL - 0.452), F + 0.011, middle, 13);
                     // Luggage rack: tubes on brackets, not a shelf.
                     for (let out = 0.05; out < 0.34; out += 0.037) {
                         add(new T.CylinderGeometry(0.006, 0.006, run, 6).rotateX(Math.PI / 2)
@@ -1416,23 +1470,26 @@
                     for (const end of [a, b]) {
                         const aisle = side * (WALL - 0.58);
                         const rail = new T.CatmullRomCurve3([
-                            [aisle, F + 0.03], [aisle, F + 0.74], [aisle + side * 0.11, F + 0.93],
-                            [side * (WALL - 0.05), F + 1.01],
+                            [aisle, F + 0.03], [aisle, F + 0.86], [aisle + side * 0.05, F + 1.04],
+                            [aisle + side * 0.2, F + 1.12], [side * (WALL - 0.05), F + 1.14],
                         ].map(([rx, y]) => new T.Vector3(rx, y, end)), false, 'centripetal');
-                        add(new T.TubeGeometry(rail, 16, 0.018, 8, false), 4);
+                        add(new T.TubeGeometry(rail, 20, 0.019, 8, false), 20);
+                        // A cross bar from the post to the wall at arm height, over the screen.
+                        add(new T.CylinderGeometry(0.015, 0.015, 0.5, 8).rotateZ(Math.PI / 2)
+                            .translate(side * (WALL - 0.31), F + 0.83, end), 20);
                         // Stainless screen at the bench end, up inside the curve of the rail, on a dark kick strip.
-                        moulded(0.5, 0.66, 0.03, 0.024, side * (WALL - 0.29), F + 0.42, end, 20);
-                        moulded(0.49, 0.07, 0.036, 0.01, side * (WALL - 0.29), F + 0.06, end, 13);
-                        moulded(0.47, 0.016, 0.04, 0.006, side * (WALL - 0.3), F + 0.74, end, 4);
-                        boxAt(0.10, 0.03, 0.087, aisle, F + 0.017, end, 4);
-                        boxAt(0.035, 0.093, 0.076, side * (WALL - 0.043), F + 1.01, end, 4);
+                        moulded(0.52, 0.76, 0.03, 0.026, side * (WALL - 0.3), F + 0.43, end, 20);
+                        moulded(0.51, 0.055, 0.036, 0.01, side * (WALL - 0.3), F + 0.045, end, 13);
+                        add(new T.CylinderGeometry(0.034, 0.042, 0.03, 12).translate(aisle, F + 0.015, end), 4);
+                        add(new T.CylinderGeometry(0.03, 0.03, 0.1, 10).rotateZ(Math.PI / 2)
+                            .translate(side * (WALL - 0.03), F + 1.14, end), 4);
                     }
                 }
                 add(new T.CylinderGeometry(0.015, 0.015, CAR.length - 2.6, 10).rotateX(Math.PI / 2)
                     .translate(side * 0.62, 3.12, 0.8), 4);
                 for (let z = -3.4; z < END - 0.5; z += 0.42) {
-                    boxAt(0.012, 0.20, 0.022, side * 0.62, 3.01, z, 18);
-                    add(grip.clone().translate(side * 0.62, 2.86, z), 18);
+                    boxAt(0.012, 0.20, 0.022, side * 0.62, 3.01, z, 22);
+                    add(grip.clone().translate(side * 0.62, 2.86, z), 22);
                 }
             }
             grip.dispose();
@@ -1465,17 +1522,47 @@
                 add(sashRim(span, 0.819, 0.026, 0.091, 0.024).translate(x, 2.628, BULKHEAD + 0.048), 13);
                 add(sashRim(span - 0.02, 0.798, 0.014, 0.081, 0.012).translate(x, 2.628, BULKHEAD + 0.064), 4);
             }
-            // The driver at the desk on the left, cap on.
-            boxAt(0.84, 0.1, 0.4, -0.82, 2.1, FRONT + 0.26, 4);
-            boxAt(0.5, 0.16, 0.05, -0.8, 2.2, FRONT + 0.1, 13);
-            for (const dial of [-0.14, 0, 0.14])
-                add(new T.CylinderGeometry(0.055, 0.055, 0.02, 14).rotateX(Math.PI / 2).translate(-0.8 + dial, 2.21, FRONT + 0.135), 12);
-            // Controller and brake handles either side of the desk.
-            for (const [x, tilt] of [[-1.08, 0.35], [-0.54, -0.3]]) {
-                add(new T.CylinderGeometry(0.06, 0.07, 0.07, 12).translate(x, 2.18, FRONT + 0.3), 13);
-                add(new T.CapsuleGeometry(0.016, 0.16, 2, 6).rotateX(Math.PI / 2).rotateY(tilt).translate(x, 2.23, FRONT + 0.36), 4);
+            // The driver's desk on the left: a console under the windscreen, an
+            // instrument hood leaning back towards the glass with two gauges and a
+            // row of lamps, the master controller on the left and the brake valve
+            // on the right, a seat on a post, and a visor over the glass.
+            const DESK = -0.8, CAB = 21;
+            moulded(0.84, 2.0 - F, 0.3, 0.02, DESK, (2.0 + F) / 2, FRONT + 0.16, CAB);
+            moulded(0.9, 0.04, 0.44, 0.012, DESK, 2.02, FRONT + 0.22, CAB);
+            moulded(0.86, 0.03, 0.03, 0.01, DESK, 2.02, FRONT + 0.44, 4);
+            const hood = shape => shape.rotateX(-0.62).translate(DESK, 2.17, FRONT + 0.1);
+            add(hood(roundedPanel(0.64, 0.25, 0.05, 0.016)), CAB);
+            for (const x of [-0.15, 0.13]) {
+                add(hood(new T.CylinderGeometry(0.062, 0.062, 0.02, 20).rotateX(Math.PI / 2).translate(x, 0.025, 0.03)), 12);
+                add(hood(new T.TorusGeometry(0.064, 0.009, 6, 20).translate(x, 0.025, 0.041)), 4);
+                add(hood(new T.BoxGeometry(0.006, 0.052, 0.004).translate(0, 0.022, 0).rotateZ(x > 0 ? -0.9 : 0.5)
+                    .translate(x, 0.025, 0.043)), 13);
             }
-            boxAt(0.4, 0.5, 0.4, -0.8, F + 0.3, FRONT + 0.8, 4);
+            [-0.21, -0.13, 0.05, 0.13, 0.21].forEach((x, i) => add(hood(new T.CylinderGeometry(0.011, 0.011, 0.012, 8)
+                .rotateX(Math.PI / 2).translate(x, -0.085, 0.03)), i === 1 || i === 3 ? 5 : 13));
+            // Master controller: a box on the desk, a notched top plate, a handle with a ball knob.
+            moulded(0.2, 0.17, 0.24, 0.024, -1.08, 2.12, FRONT + 0.27, 13);
+            add(new T.CylinderGeometry(0.095, 0.095, 0.018, 18).translate(-1.08, 2.215, FRONT + 0.27), 4);
+            add(new T.CylinderGeometry(0.014, 0.014, 0.07, 8).translate(-1.08, 2.255, FRONT + 0.27), 4);
+            add(new T.CapsuleGeometry(0.013, 0.15, 2, 6).rotateX(Math.PI / 2).rotateY(0.45)
+                .translate(-1.045, 2.29, FRONT + 0.34), 4);
+            add(new T.SphereGeometry(0.027, 12, 8).translate(-1.01, 2.29, FRONT + 0.41), 13);
+            // Brake valve: a drum with a long handle swung towards the driver.
+            add(new T.CylinderGeometry(0.068, 0.078, 0.1, 16).translate(-0.52, 2.09, FRONT + 0.3), 13);
+            add(new T.CylinderGeometry(0.05, 0.05, 0.02, 14).translate(-0.52, 2.15, FRONT + 0.3), 4);
+            add(new T.CapsuleGeometry(0.012, 0.19, 2, 6).rotateX(Math.PI / 2).rotateY(-0.55)
+                .translate(-0.565, 2.17, FRONT + 0.38), 4);
+            add(new T.SphereGeometry(0.024, 12, 8).translate(-0.61, 2.17, FRONT + 0.46), 13);
+            // The driver's seat on its post, and the visor.
+            add(new T.CylinderGeometry(0.028, 0.028, 0.44, 10).translate(DESK, F + 0.22, FRONT + 0.84), 4);
+            add(new T.CylinderGeometry(0.17, 0.19, 0.025, 16).translate(DESK, F + 0.012, FRONT + 0.84), 4);
+            moulded(0.42, 0.085, 0.4, 0.035, DESK, F + 0.48, FRONT + 0.82, 2);
+            moulded(0.4, 0.4, 0.065, 0.03, DESK, F + 0.76, FRONT + 1.03, 2);
+            add(roundedPanel(0.66, 0.012, 0.21, 0.005).rotateX(0.38).translate(DESK, 3.0, FRONT + 0.15), 13);
+            // To the right of the cab door: a locker against the front, and a lamp in the cab roof.
+            moulded(0.72, 0.78, 0.34, 0.02, 0.8, F + 0.39, FRONT + 0.19, CAB);
+            moulded(0.74, 0.03, 0.36, 0.01, 0.8, F + 0.795, FRONT + 0.19, 4);
+            moulded(0.3, 0.025, 0.22, 0.01, 0, TOP - 0.012, FRONT + 0.55, 5);
             {
                 const driver = [];
                 coat(driver, 0, 0.56, -0.03);
@@ -1500,14 +1587,30 @@
         })();
         const saloonMaterial = material(new T.ShaderMaterial({
             uniforms: { warm: glassMaterial.uniforms.warm, seat: glassMaterial.uniforms.seat,
+                sunset: cabinMood.sunset, empty: cabinMood.empty, clock: cabinMood.clock, sway: cabinMood.sway,
+                detail: { value: detailAtlas },
                 sky: carHorizon, shadowInk: glassMaterial.uniforms.shadowInk, day: cabinDaylight, power: glassMaterial.uniforms.power,
                 boards: planks.map, boardsReady: planks.ready },
-            vertexShader: `attribute float paint;varying float vPaint;varying vec3 vNormal,vPos,vView;
-                void main(){vPaint=paint;vNormal=normal;vPos=position;
-                    vView=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz-position;
-                    gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady;
-                uniform sampler2D boards;
+            vertexShader: `attribute float paint;uniform float clock,sway;varying float vPaint;varying vec3 vNormal,vPos,vView;
+                void main(){vPaint=paint;vec3 p=position,nn=normal;
+                    if(paint>21.5){
+                        // Each strap swings from its hanger: mostly along the car, a little across.
+                        float zp=-3.4+floor((p.z+3.4)/0.42+0.5)*0.42;
+                        vec3 pivot=vec3(sign(p.x)*0.62,3.11,zp);
+                        float a=sway*(0.11*sin(clock*1.35+zp*0.55)+0.035*sin(clock*2.9+zp*1.9));
+                        float b=sway*0.05*sin(clock*1.1+zp*0.8+sign(p.x));
+                        vec3 q=p-pivot;
+                        q=vec3(q.x,q.y*cos(a)-q.z*sin(a),q.y*sin(a)+q.z*cos(a));
+                        q=vec3(q.x*cos(b)-q.y*sin(b),q.x*sin(b)+q.y*cos(b),q.z);
+                        p=pivot+q;
+                        nn=vec3(nn.x,nn.y*cos(a)-nn.z*sin(a),nn.y*sin(a)+nn.z*cos(a));
+                        nn=vec3(nn.x*cos(b)-nn.y*sin(b),nn.x*sin(b)+nn.y*cos(b),nn.z);
+                    }
+                    vNormal=nn;vPos=p;
+                    vView=(inverse(modelMatrix)*vec4(cameraPosition,1.0)).xyz-p;
+                    gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+            fragmentShader: `uniform vec3 warm,seat,sky,shadowInk;uniform float power,day,boardsReady,sunset,empty;
+                uniform sampler2D boards,detail;
                 varying float vPaint;varying vec3 vNormal,vPos,vView;
                 ${cabinLightFunctions}
                 const float FLOOR=${CAR.floor.toFixed(2)},PITCH=${WINDOW_PITCH.toFixed(2)};
@@ -1525,6 +1628,29 @@
                     float t=(TUBE_Y-p.y)/ray.y;
                     return tubes(p.xz+ray.xz*t,width)*smoothstep(0.0,0.15,t)*(1.0-smoothstep(5.0,10.0,t));
                 }
+                // Low sun from the left of the car, through the side windows: whether a
+                // point can see it, traced back to the glass, with the sash rail across it.
+                const vec3 SUN_TO=normalize(vec3(-1.0,0.6,0.95));
+                const float GLASS_X=-${(CAR.half - 0.06).toFixed(3)};
+                const float PANES[${WINDOWS.length}]=float[](${WINDOWS.map(z => z.toFixed(2)).join(',')});
+                const float DOORWAYS[${DOORS.length}]=float[](${DOORS.map(z => z.toFixed(2)).join(',')});
+                float opening(vec2 q,vec2 size,float soft){
+                    vec2 d=abs(q)-size;
+                    return 1.0-smoothstep(-soft,soft,max(d.x,d.y));
+                }
+                float sunPatch(vec3 p,vec3 n){
+                    float facing=dot(n,SUN_TO);
+                    if(sunset<0.001||facing<=0.0||p.x<GLASS_X+0.03)return 0.0;
+                    // Under and against the near bench the sun cannot reach.
+                    if(p.x<-0.66&&p.y<FLOOR+0.56)return 0.0;
+                    float t=(GLASS_X-p.x)/SUN_TO.x;
+                    vec3 h=p+SUN_TO*t;
+                    float soft=0.006+t*0.012,lit=0.0;
+                    for(int i=0;i<${WINDOWS.length};i++)lit=max(lit,opening(h.zy-vec2(PANES[i],2.63),vec2(0.47,0.4),soft));
+                    for(int i=0;i<${DOORS.length};i++)lit=max(lit,opening(h.zy-vec2(DOORWAYS[i],2.6),vec2(0.29,0.41),soft));
+                    lit*=smoothstep(0.012,0.02+soft,abs(h.y-2.76));
+                    return lit*smoothstep(0.0,0.25,facing);
+                }
                 void main(){
                     vec3 cream=mix(vec3(0.62,0.55,0.42),vec3(0.74,0.70,0.61),day);
                     vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
@@ -1538,20 +1664,27 @@
                         float seam=exp(-abs(vPos.y-2.20)*42.0)*0.12;
                         float mottling=sin(vPos.z*21.0+vPos.y*7.1)*sin(vPos.y*12.4-vPos.z*8.7);
                         float seal=exp(-abs(vPos.y-3.066)*59.0)+exp(-abs(vPos.y-2.21)*46.0);
-                        c=cream*((enamel?0.75:0.64)-seam)*(1.0+0.023*mottling-0.07*seal);
+                        float dirt=texture2D(detail,vec2(vPos.z*0.5,vPos.y*0.5)+vPos.x*0.3).b;
+                        c=cream*((enamel?0.75:0.64)-seam)*(1.0+0.023*mottling-0.07*seal)
+                            *(1.0-0.06*dirt*(1.0-smoothstep(FLOOR,FLOOR+0.9,vPos.y))-0.025*(dirt-0.5));
                         shine=reflectTubes(vPos,reflect(-v,n),0.24)*(enamel?0.115:0.042);
                     }
                     else if(vPaint<1.5)c=cream*0.43;
                     else if(vPaint<2.5){
                         // Looped wool catches grazing light along the rolled edge.
-                        vec3 moquette=mix(seat,vec3(0.092,0.17,0.026),0.37*(1.0-day));
+                        vec3 moquette=mix(seat,vec3(0.11,0.27,0.028),0.8*(1.0-day));
+                        moquette=mix(moquette,mix(seat,vec3(0.36,0.52,0.30),0.55),day);
                         vec2 fibre=vec2(vPos.z,vPos.x+vPos.y)*vec2(284.0,321.0);
                         float fibreFade=1.0-smoothstep(0.7,3.4,max(fwidth(fibre.x),fwidth(fibre.y)));
-                        float nap=sin(fibre.x+sin(fibre.y*0.52))*sin(fibre.y)*fibreFade;
+                        vec4 cloth=texture2D(detail,vec2(vPos.z,vPos.y+vPos.x)*vec2(4.6,4.6));
+                        float nap=(cloth.r-0.5)*2.2*mix(1.0,0.4,fibreFade)+sin(fibre.x+sin(fibre.y*0.52))*sin(fibre.y)*fibreFade*0.5
+                            -(texture2D(detail,vPos.zy*0.35).b-0.5)*0.9;
                         float wear=sin(vPos.z*15.1+vPos.x*7.0)*sin(vPos.z*27.7-vPos.y*9.0);
                         float edge=pow(clamp(1.0-abs(dot(n,v)),0.0,1.0),2.3);
-                        c=(moquette+warm*0.016)*(1.0+0.16*nap+0.045*wear+0.39*edge);
-                        c+=light*edge*smoothstep(0.11,0.97,n.y)*0.013;
+                        c=(moquette+warm*0.016)*(1.0+0.12*nap+0.045*wear+0.30*edge);
+                        // Velour shows a soft sheen where it rolls over towards the light.
+                        float roll=smoothstep(0.25,0.9,n.y)*(1.0-smoothstep(0.92,1.0,n.y));
+                        c+=moquette*roll*0.32+light*edge*smoothstep(0.11,0.97,n.y)*0.02;
                     }else if(vPaint<3.5){
                         // Boards laid along the car, butt joints staggered, varnish worn dull.
                         float board=vPos.x/0.11,id=floor(board),grain=fwidth(board);
@@ -1569,10 +1702,12 @@
                             vPos.z*0.63+sampleId*4.1);
                         float scanned=texture2D(boards,woodUv).r;
                         float patina=mix(1.0,mix(0.695,1.29,scanned),boardsReady);
-                        c=vec3(0.27,0.19,0.11)*mix(1.0,tone+0.095*wood-0.09*grainDetail,fade)
+                        float scuff=texture2D(detail,vPos.xz*vec2(0.9,0.22)).b;
+                        patina*=mix(0.86,1.12,scuff)*(1.0-0.16*smoothstep(0.75,1.2,abs(vPos.x))*(1.0-scuff));
+                        c=mix(vec3(0.36,0.25,0.14),vec3(0.42,0.33,0.22),day)*mix(1.0,tone+0.095*wood-0.09*grainDetail,fade)
                             *(1.0-0.40*max(seam,butt)*fade)*(0.89+0.19*wear)*patina;
                         vec3 r=reflect(-v,n);
-                        shine=reflectTubes(vPos,r,0.22)*(0.018+0.14*pow(max(1.0-r.y,0.0),2.4))
+                        shine=reflectTubes(vPos,r,0.22)*(0.03+0.2*pow(max(1.0-r.y,0.0),2.4))
                             *(1.0-0.36*seam*fade)*mix(1.0,0.6,wear);
                     }else if(vPaint<4.5){
                         vec3 reflected=reflect(-v,n);
@@ -1611,6 +1746,25 @@
                         art=mix(art,seat*0.45+cream*(0.10+0.06*sin(print.y*85.0)),tide);
                         c=mix(cream*0.86,art,artwork*block*inside);
                         c=mix(c,cream*0.22,type*inside*0.75*0.4/(0.4+soft*8.0));
+                        if(hung){
+                            // The cards hung over the aisle are loud: two posters side by side,
+                            // flat colour, a big round shape and bold diagonal bands.
+                            float leaf=step(0.0,q.x);
+                            vec2 pp=vec2(q.x*2.0-(leaf*2.0-1.0),q.y);
+                            float pick=fract(id*5.3+leaf*0.37);
+                            vec3 red=vec3(0.78,0.13,0.09),green=seat*1.9+vec3(0.02,0.05,0.0),gold=warm*1.05,sea=sky*1.15;
+                            vec3 ground=pick<0.25?red:pick<0.5?gold:pick<0.75?green:sea;
+                            vec3 motif=pick<0.25?gold:pick<0.5?red:pick<0.75?gold:red;
+                            float s2=fwidth(pp.y)*1.5;
+                            float disc=1.0-smoothstep(0.42,0.42+s2,length(pp-vec2(0.18-0.4*fract(id*3.1),0.15)));
+                            float bands=step(0.5,fract((pp.x+pp.y*0.7)*1.6+id*2.0))*step(pp.y,-0.25);
+                            vec3 pop=mix(ground,motif,disc);
+                            pop=mix(pop,cream*0.9,bands*0.85);
+                            float margin=smoothstep(0.86,0.84,max(abs(pp.x),abs(pp.y)));
+                            float title=(1.0-smoothstep(0.03,0.03+s2,abs(pp.y-0.68)))*step(abs(pp.x+0.15),0.55);
+                            pop=mix(pop,vec3(0.02),title*0.8);
+                            c=mix(cream*0.9,mix(pop,cream*0.85,0.42*day),margin);
+                        }
                     }else if(vPaint>13.5&&vPaint<14.5){
                         // The line over the door: every station a dot, this one filled in.
                         vec2 q=vec2(fract((vPos.z+4.3)/7.85+0.5)-0.5,vPos.y-3.2)*vec2(7.85,1.0);
@@ -1630,37 +1784,58 @@
                         float rim=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),2.2)*smoothstep(-0.15,0.8,n.y);
                         c=shadowInk+cream*rim*0.021;
                     }else if(vPaint<16.5){
-                        // Two recessed perforated strips in the heater cover under the bench.
-                        float strip=abs(abs(vPos.y-(FLOOR+0.205))-0.058);
-                        float inStrip=1.0-smoothstep(0.033,0.038,strip);
-                        vec2 drill=vec2(vPos.z*40.0,vPos.y*59.0);
-                        drill.x+=mod(floor(drill.y),2.0)*0.5;
-                        float hole=1.0-smoothstep(0.19,0.33,length(fract(drill)-0.5));
-                        hole=mix(hole,0.28,smoothstep(0.25,1.0,max(fwidth(drill.x),fwidth(drill.y))));
-                        c=mix(cream*0.26,(cream*0.095+seat*0.04)*(1.0-0.64*hole),inStrip);
+                        // The heater cover under the bench: cream sheet with two bands
+                        // of long slots, each band two rows staggered like brickwork.
+                        float y=vPos.y-(FLOOR+0.183);
+                        float band=abs(abs(y)-0.062);
+                        float inBand=1.0-smoothstep(0.034,0.037,band);
+                        float u=abs(y)-0.062,row=step(0.0,u);
+                        vec2 cell=vec2(vPos.z/0.064+row*0.5+step(0.0,y)*0.25,0.0);
+                        vec2 slot=vec2((fract(cell.x)-0.5)*0.064,u-(row*2.0-1.0)*0.017);
+                        vec2 d=abs(slot)-vec2(0.024,0.006);
+                        float sd=length(max(d,0.0))+min(max(d.x,d.y),0.0)-0.0045;
+                        float soft=max(fwidth(vPos.z),fwidth(vPos.y))*1.2;
+                        float hole=(1.0-smoothstep(-soft,soft,sd))*inBand;
+                        hole=mix(hole,0.34*inBand,smoothstep(0.25,1.0,fwidth(cell.x)*2.0));
+                        float frame=1.0-smoothstep(0.0,0.004+soft,abs(band-0.036));
+                        c=cream*mix(0.7,0.6,inBand)*(1.0-0.12*frame);
+                        c=mix(c,vec3(0.012,0.012,0.014),hole);
+                        shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.05*(1.0-hole);
                     }else if(vPaint<17.5){
                         float slot=abs(fract(vPos.x*33.0)-0.5);
                         float slat=smoothstep(0.23,0.35+fwidth(vPos.x)*16.0,slot+n.x*0.016);
                         float lip=1.0-smoothstep(0.012,0.064,abs(slot-0.34));
                         c=cream*mix(0.059,0.52,slat)+light*lip*0.035;
+                    }else if(vPaint>21.5){
+                        // Hand straps: white moulded grips on pale bands.
+                        c=cream*0.86+vec3(0.03);
+                        shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.12;
+                    }else if(vPaint>20.5){
+                        // The cab is painted a quiet grey-green, smooth, a little gloss.
+                        c=mix(mix(vec3(0.13,0.16,0.14),cream*0.4,0.25),cream*0.62,day);
+                        shine=reflectTubes(vPos,reflect(-v,n),0.2)*0.08;
                     }else if(vPaint>19.5){
                         // Brushed stainless: it takes the cream of the car and the wood of the floor, grained across.
-                        float grain=0.93+0.07*sin(vPos.y*1430.0+sin(vPos.x*37.0)*2.0);
-                        float low=smoothstep(FLOOR+0.05,FLOOR+0.62,vPos.y);
-                        c=mix(vec3(0.19,0.13,0.08),mix(cream*0.5,vec3(0.47,0.5,0.52),0.55),low)*grain;
-                        shine=reflectTubes(vPos,reflect(-v,n),0.16)*0.32;
+                        // Brushed stainless: low down it holds the floor's honey, higher the cream and the lamps.
+                        float grain=0.9+0.2*texture2D(detail,vec2(vPos.x*0.7+vPos.z*0.7,vPos.y*9.0)).g;
+                        vec3 r=reflect(-v,n);
+                        float low=smoothstep(-0.35,0.25,r.y)*smoothstep(FLOOR+0.03,FLOOR+0.4,vPos.y);
+                        c=mix(vec3(0.30,0.21,0.12),mix(cream*0.62,vec3(0.56,0.58,0.6),0.5),low)*grain;
+                        shine=reflectTubes(vPos,r,0.18)*0.55+pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0)*0.12;
                     }else{
                         c=mix(seat,vec3(0.061,0.084,0.035),0.58)*0.66;
                         shine=reflectTubes(vPos,reflect(-v,n),0.28)*0.06;
                     }
                     // Two tube rows and a cooler ambient contribution entering through the windows.
-                    float direct=(tubeLux(vPos,n,-1.0)+tubeLux(vPos,n,1.0))*0.77;
+                    float direct=(tubeLux(vPos,n,-1.0)+tubeLux(vPos,n,1.0))*0.77*(1.0-0.72*sunset);
                     float wall=1.0-smoothstep(0.93,1.27,abs(vPos.x))*smoothstep(2.8,3.18,vPos.y)*0.24;
                     vec3 fill=mix(vec3(0.105,0.082,0.066),vec3(0.42,0.48,0.52),day);
                     fill*=0.70+0.30*smoothstep(FLOOR,2.7,vPos.y);
                     float windowFill=smoothstep(0.35,1.24,abs(vPos.x))
                         *(1.0-smoothstep(0.22,1.22,abs(vPos.y-2.55)));
                     fill+=sky*windowFill*mix(0.23,0.30,day);
+                    // At sunset the car is lit from outside: an amber fill, the lamps nearly out.
+                    fill=mix(fill,mix(vec3(0.20,0.105,0.06),vec3(0.46,0.42,0.36),day)*(0.75+0.25*windowFill),sunset*0.85);
                     float lit=wall;
                     if(vPaint<2.5||enamel){
                         float overhead=exp(-abs(vPos.y-3.09)*23.0)*smoothstep(0.90,1.12,abs(vPos.x));
@@ -1674,20 +1849,31 @@
                     if(cushion||floorboards){
                         for(int i=0;i<${SITTERS.length};i++){
                             vec2 who=SAT[i];
-                            float along=vPos.z-who.y,across=abs(vPos.x)-${(CAR.half - 0.04 - 0.3).toFixed(3)};
+                            float along=vPos.z-who.y,across=abs(vPos.x)-${(CAR.half - 0.04 - 0.36).toFixed(3)};
                             if(who.x*vPos.x<0.0)continue;
                             sat=max(sat,exp(-along*along/0.05-across*across/0.08));
                             stood=max(stood,exp(-along*along/0.05-(across+0.46)*(across+0.46)/0.03));
                         }
                     }
                     if(cushion){
-                        float crease=exp(-abs(vPos.y-(FLOOR+0.493))*25.0)*smoothstep(0.83,1.14,abs(vPos.x));
+                        float crease=exp(-abs(vPos.y-(FLOOR+0.53))*25.0)*smoothstep(0.92,1.12,abs(vPos.x));
                         lit*=(1.0-0.42*sat)*(1.0-0.37*crease);
                     }
+                    sat*=1.0-empty;stood*=1.0-empty;
                     if(floorboards){lit*=1.0-0.4*stood;shine*=1.0-0.7*stood;}
-                    vec3 colour=c*lit*(fill+light*(0.15+direct))+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12);
-                    if(vPaint>4.5&&vPaint<6.5)colour=c;
-                    if(figure)colour=c*0.83;
+                    vec3 lamp=light*(0.15*(1.0-0.6*sunset)+direct);
+                    vec3 colour=c*lit*(fill+lamp)+shine*mix(light,vec3(0.66,0.79,0.84),metal?0.42:0.12)*(1.0-0.5*sunset);
+                    float sun=sunPatch(vPos,n)*sunset;
+                    vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
+                    colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
+                    if(vPaint>4.5&&vPaint<6.5)colour=c*(1.0-0.6*sunset);
+                    if(figure){
+                        // People thin out as the car empties: a dither, so it stays one opaque pass.
+                        const float B[16]=float[](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
+                        ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.0));
+                        if((B[cell.x+cell.y*4]+0.5)/16.0<empty)discard;
+                        colour=mix(c*0.83,c*0.83+sunlight*0.05*sunset,0.5);
+                    }
                     gl_FragColor=vec4(colour*power*0.82,1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
@@ -2434,6 +2620,10 @@
             // From the cab the train is all behind the lens: nothing of it to draw.
             placeTrain(track, front, tuning.showTrain !== false && (pose.chase ?? 0) > 0.002);
             placeSaloon(track, front, tuning.showTrain !== false && (pose.saloon ?? 0) > 0.002);
+            cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
+            cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
+            cabinMood.clock.value = time;
+            cabinMood.sway.value = time > 0 ? 1 : 0;
             cabinGlow.intensity = saving || tuning.showTrain === false ? 0 : 4.5 * (palBase?.light ? 0.4 : 1) * clamp(pose.chase ?? 0);
             // The permanent way slides forward in long strides; scenery is laid
             // out again only when a new pole or station comes into range.
