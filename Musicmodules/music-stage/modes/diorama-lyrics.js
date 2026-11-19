@@ -201,16 +201,33 @@
             const group = new T.Group(), materials = [], textures = [];
             const midpoint = (phrase.start + phrase.end) * 0.5;
             const intended = C.pose(timeline, track, midpoint, options);
-            const opening = C.pose(timeline, track, phrase.start, options);
-            const closing = C.pose(timeline, track, phrase.end, options);
+            let opening = C.pose(timeline, track, phrase.start, options);
+            let closing = C.pose(timeline, track, phrase.end, options);
             const act = timeline.sample(phrase.start);
             const constellation = options.lyricCarrier === 'constellation'
                 || options.lyricCarrier !== 'sign' && ['Chorus', 'Open'].includes(act.act);
+            let reference = intended;
+            // A line sung while the camera swings round cannot stay in a picture
+            // that is turning past it. Write it where the camera spends most of
+            // the line looking, so it is read whole for as long as possible.
+            const heading = view => { const g = view.sky || view.direction; return Math.atan2(g.x, -g.z); };
+            const turnBetween = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+            if (constellation && turnBetween(heading(opening), heading(closing)) > 0.5) {
+                const views = Array.from({ length: 13 }, (_, i) =>
+                    C.pose(timeline, track, phrase.start + (phrase.end - phrase.start) * i / 12, options));
+                const reach = Math.atan(Math.tan((views[6].fov || 48) * Math.PI / 360)
+                    * Math.max(0.35, options.aspect || 1.6)) * 0.55;
+                let best = views[6], held = -1;
+                for (const view of views) {
+                    const count = views.filter(other => turnBetween(heading(other), heading(view)) < reach).length;
+                    if (count >= held) { held = count; best = view; }
+                }
+                opening = closing = reference = best;
+            }
             const actEnd = timeline.acts[act.actIndex]?.end ?? phrase.end;
             const style = !constellation ? 0 : actEnd - phrase.end < 4 ? 3 : act.act === 'Chorus' ? 2 : 1;
             const encounter = !constellation
                 ? track.encounters[track.pageEncounter.get(phrase.id)] : null;
-            const reference = intended;
             const travel = timeline.distanceAt(phrase.end, options.cameraSpeed)
                 - timeline.distanceAt(phrase.start, options.cameraSpeed);
             const distance = 24 + travel * 1.3 + (constellation ? 12 : 0);

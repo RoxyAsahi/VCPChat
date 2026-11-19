@@ -330,7 +330,8 @@ test('each chorus is seen from somewhere else, and the train never runs through 
     assert.ok(held[2].trainFront > held[2].distance + 30);
     // Beside the train the line on the sky is written above the gaze, clear of the windows.
     assert.ok(held[1].sky.y > held[1].direction.y + 0.1);
-    assert.equal(held[0].sky.y, held[0].direction.y);
+    // Even behind the train it sits a little above the gaze, over the far shore.
+    assert.ok(held[0].sky.y > held[0].direction.y + 0.05 && held[0].sky.y < held[1].sky.y);
     let previous = null;
     for (let t = 0; t <= 175; t += 1 / 60) {
         const pose = C.pose(timeline, track, t, { aspect: 1.78 });
