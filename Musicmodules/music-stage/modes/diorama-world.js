@@ -2411,16 +2411,20 @@
                 shape.dispose();
             };
             const boxAt = (sx, sy, sz, x, y, z, paint) => add(new T.BoxGeometry(sx, sy, sz).translate(x, y, z), paint);
-            const roundedPanel = (width, height, length, radius) => {
-                const panel = new T.BoxGeometry(width, height, length, 6, 6, 6);
+            // Fewer steps round the edges where they would not show: four for the
+            // cab's fittings, a plain box where the radius is a few millimetres.
+            let edgeSteps = 6;
+            const roundedPanel = (width, height, length, radius, steps = edgeSteps) => {
+                if (steps < 4 || radius < 0.014 && steps < 6) return new T.BoxGeometry(width, height, length);
+                const panel = new T.BoxGeometry(width, height, length, steps, steps, steps);
                 const points = panel.attributes.position, surface = panel.attributes.normal;
                 const half = [width / 2, height / 2, length / 2];
-                const offsets = [0, 0.38, 1, 0, 1, 0.38, 0];
+                const offsets = steps === 6 ? [0, 0.38, 1, 0, 1, 0.38, 0] : [0, 1, 0, 1, 0];
                 const normal = new T.Vector3();
                 for (let i = 0; i < points.count; i++) {
                     const mapAxis = (value, limit) => {
-                        const step = Math.round((value / limit + 1) * 3);
-                        return step === 3 ? 0 : Math.sign(step - 3) * (limit - radius * offsets[step]);
+                        const middle = steps / 2, step = Math.round((value / limit + 1) * middle);
+                        return step === middle ? 0 : Math.sign(step - middle) * (limit - radius * offsets[step]);
                     };
                     const x = mapAxis(points.getX(i), half[0]), y = mapAxis(points.getY(i), half[1]);
                     const z = mapAxis(points.getZ(i), half[2]);
@@ -2435,14 +2439,14 @@
             };
             const moulded = (sx, sy, sz, radius, x, y, z, paint) =>
                 add(roundedPanel(sx, sy, sz, radius).translate(x, y, z), paint);
-            const sashRim = (width, height, rail, r, depth) => {
+            const sashRim = (width, height, rail, r, depth, curve = 4) => {
                 const outline = new T.Shape(), opening = new T.Path();
                 roundedOutline(outline, width, height, r);
                 roundedOutline(opening, width - 2 * rail, height - 2 * rail, r - rail * 0.7);
                 outline.holes.push(opening);
                 return new T.ExtrudeGeometry(outline, {
                     depth, bevelEnabled: true, bevelThickness: 0.003,
-                    bevelSize: 0.003, bevelSegments: 1, curveSegments: 4
+                    bevelSize: 0.003, bevelSegments: 1, curveSegments: curve
                 }).translate(0, 0, -depth / 2);
             };
             const F = CAR.floor, WALL = CAR.half - 0.04, END = CAR.length / 2, TOP = CABIN.ceiling, SILL = 2.2, HEAD = 3.06;
@@ -2667,6 +2671,7 @@
             boxAt(0.22, 0.17, 0.32, -(WALL - 0.17), 3.2, 0.4, 11);
             boxAt(0.22, 0.14, 0.3, WALL - 0.17, 3.18, -2.6, 10);
             coarse = true;
+            edgeSteps = 4;
             // Cab bulkhead and the front of the cab: a glazed door or pane in the middle, one either side.
             for (const [z, post, paint] of [[BULKHEAD, 0.12, 0], [FRONT, 0.09, 21]]) {
                 boxAt(2.6, SILL - F, 0.06, 0, (SILL + F) / 2, z, 1);
@@ -2680,8 +2685,8 @@
             moulded(0.033, 0.153, 0.032, 0.014, 0.36, F + 0.72, BULKHEAD + 0.065, 4);
             for (const x of [-0.81, 0, 0.81]) {
                 const span = x === 0 ? 0.828 : 0.594;
-                add(sashRim(span, 0.819, 0.026, 0.091, 0.024).translate(x, 2.628, BULKHEAD + 0.048), 13);
-                add(sashRim(span - 0.02, 0.798, 0.014, 0.081, 0.012).translate(x, 2.628, BULKHEAD + 0.064), 4);
+                add(sashRim(span, 0.819, 0.026, 0.091, 0.024, 2).translate(x, 2.628, BULKHEAD + 0.048), 13);
+                add(sashRim(span - 0.02, 0.798, 0.014, 0.081, 0.012, 2).translate(x, 2.628, BULKHEAD + 0.064), 4);
             }
             // The driver's desk on the left: a console under the windscreen, an
             // instrument hood leaning back towards the glass with two gauges and a
