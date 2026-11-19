@@ -3234,3 +3234,16 @@ body.music-stage-active #custom-title-bar,
 .music-stage-backdrop-layer.is-empty {
     display: none;
 }
+
+/* Nothing on a paused stage moves, so nothing should ask for frames: the flow
+   ring holds its place, and the settings dot only pulses while it is shown. */
+.music-stage:not(.is-playing) .music-stage-edge-flow {
+    animation-play-state: paused;
+}
+.music-stage-settings-toggle-pulse {
+    animation-play-state: paused;
+}
+.music-stage-settings-toggle:hover .music-stage-settings-toggle-pulse,
+.music-stage-settings-toggle:focus-visible .music-stage-settings-toggle-pulse {
+    animation-play-state: running;
+}

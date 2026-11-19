@@ -835,6 +835,7 @@
                 edgeCanvasState.height = height;
                 edgeCanvasState.dpr = dpr;
                 edgeCanvasState.drawnAt = 0;
+                edgeCanvasState.pausedAt = 0;
                 edgeCanvasState.blank = false;
             }
             return true;
@@ -937,9 +938,15 @@
                 edgeCanvasState.blank = true;
                 return;
             }
-            // A paused stage holds a faint, nearly still line: a few times a second is plenty.
+            // A paused stage holds a faint, still line: let it settle for a
+            // moment after the pause, then leave the canvases alone.
             const now = performance.now();
-            if (!frame.isPlaying && now - edgeCanvasState.drawnAt < 250) return;
+            if (frame.isPlaying) edgeCanvasState.pausedAt = 0;
+            else {
+                edgeCanvasState.pausedAt ||= now;
+                if (now - edgeCanvasState.pausedAt > 1500 && !edgeCanvasState.blank) return;
+                if (now - edgeCanvasState.drawnAt < 250) return;
+            }
             edgeCanvasState.drawnAt = now;
             edgeCanvasState.blank = false;
             clearEdgeStrips();
