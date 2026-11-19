@@ -89,7 +89,7 @@
         // the paving under each, the wall beside it, the underside of a roof.
         const SPILLS = 12;
         const spills = { value: Array.from({ length: SPILLS }, () => new T.Vector4()) };
-        const spillTint = { value: new T.Color() };
+        const spillTint = { value: new T.Color() }, WHITE = new T.Color(1, 1, 1);
         let spillList = [];
         // Boards are laid along the longer side of whatever they clad, an
         // edge of the piece falling on a gap between two boards.
@@ -531,12 +531,80 @@
             shape.setAttribute('inset', new T.Float32BufferAttribute(inset, 3));
             return geometry(shape);
         })();
+        /*
+         * Weather on built things, so no two posts and no two metres of wall
+         * are the same: broad patchy grime, rain streaks down the uprights,
+         * dirt where a piece meets the ground, dust settling on its top. It
+         * only scales lightness and roughness, never adds a hue; on the light
+         * theme it is kept faint so paper stays clean.
+         */
+        const weatherAmount = { value: 1 };
+        const WEATHER = `
+            float weatherHash(vec3 p) {
+                p = fract(p * 0.3183099 + 0.1) * 17.0;
+                return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+            }
+            float weatherNoise(vec3 x) {
+                vec3 i = floor(x), f = fract(x);
+                f = f * f * (3.0 - 2.0 * f);
+                return mix(mix(mix(weatherHash(i), weatherHash(i + vec3(1, 0, 0)), f.x),
+                        mix(weatherHash(i + vec3(0, 1, 0)), weatherHash(i + vec3(1, 1, 0)), f.x), f.y),
+                    mix(mix(weatherHash(i + vec3(0, 0, 1)), weatherHash(i + vec3(1, 0, 1)), f.x),
+                        mix(weatherHash(i + vec3(0, 1, 1)), weatherHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+            }
+            // x: what the lightness is multiplied by; y: what the roughness gains.
+            vec2 weather(vec3 world, vec3 up, float height, float seed, float amount) {
+                float broad = weatherNoise(world * 0.31) * 0.6 + weatherNoise(world * 1.27 + 7.0) * 0.4;
+                float fine = weatherNoise(world * 6.3);
+                float upright = 1.0 - abs(up.y);
+                float run = weatherNoise(vec3((world.x - world.z) * 4.7, world.y * 0.3, (world.x + world.z) * 4.7));
+                float streak = smoothstep(0.55, 0.92, run) * upright;
+                float grime = (1.0 - smoothstep(0.0, 0.55, height)) * upright;
+                float dust = smoothstep(0.7, 0.95, up.y) * smoothstep(0.45, 0.8, broad);
+                float lightness = 1.0 + (broad - 0.5) * 0.42 + (fine - 0.5) * 0.14 + (seed - 0.5) * 0.18
+                    - streak * 0.26 - grime * 0.34 - dust * 0.1;
+                return vec2(mix(1.0, lightness, amount),
+                    amount * (broad * 0.3 + streak * 0.18 + grime * 0.1 + fine * 0.12 - 0.16));
+            }`;
+        const weathered = (target, key) => {
+            target.onBeforeCompile = shader => {
+                shader.uniforms.weatherAmount = weatherAmount;
+                shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
+                    varying vec3 vWeatherWorld, vWeatherUp;
+                    varying float vWeatherHeight, vWeatherSeed;`).replace('#include <begin_vertex>', `#include <begin_vertex>
+                    #ifdef USE_INSTANCING
+                        mat4 weatherMatrix = modelMatrix * instanceMatrix;
+                        vWeatherSeed = fract(sin(mod(float(gl_InstanceID), 289.0) * 12.9898) * 43758.5453);
+                    #else
+                        mat4 weatherMatrix = modelMatrix;
+                        vWeatherSeed = 0.5;
+                    #endif
+                    vWeatherWorld = (weatherMatrix * vec4(position, 1.0)).xyz;
+                    vWeatherUp = normalize(mat3(weatherMatrix) * normal);
+                    // Only an upright piece has a foot; a lying bar is dirtied as a whole.
+                    vec3 weatherAxis = mat3(weatherMatrix) * vec3(0.0, 1.0, 0.0);
+                    vWeatherHeight = normalize(weatherAxis).y > 0.7
+                        ? vWeatherWorld.y - (weatherMatrix * vec4(0.0, -0.5, 0.0, 1.0)).y : 9.0;`);
+                shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+                    uniform float weatherAmount;
+                    varying vec3 vWeatherWorld, vWeatherUp;
+                    varying float vWeatherHeight, vWeatherSeed;
+                    vec2 weatherNow = vec2(1.0, 0.0);
+                    ${WEATHER}`).replace('#include <color_fragment>', `#include <color_fragment>
+                    weatherNow = weather(vWeatherWorld, normalize(vWeatherUp), vWeatherHeight, vWeatherSeed, weatherAmount);
+                    diffuseColor.rgb *= weatherNow.x;`).replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+                    roughnessFactor = clamp(roughnessFactor + weatherNow.y, 0.05, 1.0);`);
+            };
+            target.customProgramCacheKey = () => key;
+        };
+        weathered(steel, 'weathered-steel');
+        weathered(concrete, 'weathered-concrete');
         const DRESSED_CAPACITY = 2600;
         const dressedMaterial = material(new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.7, metalness: 0.2 }));
-        const dressSky = { value: new T.Color() };
+        const dressSky = { value: new T.Color() }, dressFill = { value: 0 };
         dressedMaterial.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, { dressSheet: { value: sheetTexture }, dressTones: { value: dressTones },
-                dressSky, wetness, tideLine, spills, spillTint, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
+                dressSky, wetness, tideLine, spills, spillTint, weatherAmount, dressFill, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
             shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
                 attribute vec3 inset;
                 attribute vec4 dressRect, dressLook, dressCut;
@@ -545,7 +613,8 @@
                 varying vec4 vDressRect;
                 varying vec3 vDressTone;
                 varying float vDressTile, vDressRough, vDressMetal, vDressGlow, vDressGlass;
-                varying vec3 vDressWorld, vDressUp;`)
+                varying vec3 vDressWorld, vDressUp;
+                varying float vDressHeight, vDressSeed, vDressEdge;`)
                 .replace('#include <begin_vertex>', `#include <begin_vertex>
                 vec3 dressSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz),
                     length(instanceMatrix[2].xyz));
@@ -568,12 +637,22 @@
                 vDressMetal = dressLook.w;
                 vDressGlow = dressCut.w;
                 vDressWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-                vDressUp = normalize(mat3(modelMatrix * instanceMatrix) * normal);`);
+                vDressUp = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+                vDressSeed = fract(sin(mod(float(gl_InstanceID), 289.0) * 12.9898) * 43758.5453);
+                vec3 dressAxis = normalize(mat3(modelMatrix * instanceMatrix) * vec3(0.0, 1.0, 0.0));
+                vDressHeight = dressAxis.y > 0.7
+                    ? vDressWorld.y - (modelMatrix * instanceMatrix * vec4(0.0, -0.5, 0.0, 1.0)).y : 9.0;
+                // The narrow cut along an edge, where paint wears through and catches the light.
+                vDressEdge = max(face.x, max(face.y, face.z)) < 0.95 && max(dressCutBy.x, max(dressCutBy.y, dressCutBy.z)) < 0.05
+                    ? 1.0 : 0.0;`);
             shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
                 uniform sampler2D dressSheet;
                 uniform vec3 dressSky;
                 uniform vec4 dressPuddles;
-                uniform float wetness, tideLine;
+                uniform float wetness, tideLine, weatherAmount, dressFill;
+                varying float vDressHeight, vDressSeed, vDressEdge;
+                vec2 dressWeather = vec2(1.0, 0.0);
+                ${WEATHER}
                 uniform vec4 spills[${SPILLS}];
                 uniform vec3 spillTint;
                 varying vec3 vDressWorld, vDressUp;
@@ -590,6 +669,12 @@
                     dressTexel = textureGrad(dressSheet, vDressRect.xy + cell * vDressRect.zw,
                         dFdx(vDressUv) * grad, dFdy(vDressUv) * grad).rgb;
                     diffuseColor.rgb = vDressTone * dressTexel.r * 1.3 * (1.0 - vDressGlow * dressTexel.b);
+                    float bare = 1.0 - step(0.01, vDressGlow) - vDressGlass;
+                    if (bare > 0.5) {
+                        dressWeather = weather(vDressWorld, normalize(vDressUp), vDressHeight, vDressSeed, weatherAmount);
+                        float worn = vDressEdge * smoothstep(0.35, 0.75, weatherNoise(vDressWorld * 9.0 + vDressSeed * 31.0));
+                        diffuseColor.rgb *= dressWeather.x * (1.0 + 0.35 * worn * weatherAmount);
+                    }
                     float soaked = 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y);
                     diffuseColor.rgb *= 1.0 - 0.45 * soaked * (1.0 - vDressGlow);
                     if (wetness > 0.0) {
@@ -601,7 +686,8 @@
                     }
                 }`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));
+                roughnessFactor = clamp(vDressRough + dressWeather.y + (0.5 - dressTexel.g) * 0.2, 0.05, 1.0);
+                roughnessFactor = mix(roughnessFactor, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));
                 roughnessFactor = mix(roughnessFactor, 0.2, 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y));`)
                 .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                 metalnessFactor = vDressMetal;`)
@@ -622,9 +708,11 @@
                         vec3 toLamp = spills[i].xyz - vDressWorld;
                         float d2 = dot(toLamp, toLamp);
                         float facing = max(0.0, dot(normalize(vDressUp), toLamp * inversesqrt(max(d2, 0.0001))));
-                        spill += vec3(spills[i].w * facing / (1.0 + d2 * 0.3));
+                        spill += vec3(spills[i].w * facing / (1.0 + d2 * 0.8));
                     }
                     totalEmissiveRadiance += diffuseColor.rgb * spillTint * spill;
+                    // Light off the sky and the water: a wall turned from the moon is dim, not black.
+                    totalEmissiveRadiance += diffuseColor.rgb * dressSky * dressFill * (0.75 + 0.25 * vDressUp.y);
                 }
                 if (vDressGlass > 0.5) {
                     // Glass gives back the sky, more of it the flatter it is seen.
@@ -689,6 +777,8 @@
             stripes: look({ sheet: 'stripes', tile: 0.5, tone: TONE.warm, rough: 0.6, metal: 0.1, bevel: 0.006 }),
             glass: look({ sheet: 'glass', tile: 1.2, tone: TONE.glass, rough: 0.12, metal: 0.6, bevel: 0.002 }),
             boards: look({ sheet: 'boards', tile: 0.9, tone: TONE.timber, rough: 0.85, metal: 0, bevel: 0.006 }),
+            // Painted soffit boards: lit only by the lamps under them, so each tube leaves its own pool.
+            soffit: look({ sheet: 'boards', tile: 0.9, tone: TONE.pale, rough: 0.9, metal: 0, bevel: 0.004 }),
             timber: look({ sheet: 'weathered', tile: 1.2, tone: TONE.timber, rough: 0.85, metal: 0, bevel: 0.01 }),
             ink: look({ sheet: 'weathered', tile: 1.6, tone: TONE.ink, rough: 0.6, metal: 0.2 }),
             pale: look({ sheet: 'weathered', tile: 1.6, tone: TONE.pale, rough: 0.6, metal: 0.1 }),
@@ -3916,12 +4006,16 @@
                     : kind === 3 ? warmPaint : kind === 4 ? palePaint : kind === 5 ? roomGlow : ceilingGlow);
             }
             glow.instanceColor.needsUpdate = true;
-            spillTint.value.copy(lampMaterial.color).multiplyScalar(palBase?.light ? 0.05 : 0.9);
+            spillTint.value.copy(lampMaterial.color).lerp(WHITE, 0.35).multiplyScalar(palBase?.light ? 0.05 : 0.7);
+            weatherAmount.value = palBase?.light ? 0.35 : 1;
+            dressFill.value = palBase?.light ? 0 : 0.6;
             // The fittings take the same tones as the plain pools, and glass the sky.
             const night = !palBase?.light;
             [steel.color, concrete.color, wood.color, palePaint, warmPaint, null, lampMaterial.color, roomGlow,
                 ceilingGlow, coldLampMaterial.color].forEach((colour, i) => { if (colour) dressTones[i].copy(colour); });
             dressTones[TONE.pale].copy(palePaint).lerp(concrete.color, 0.2).multiplyScalar(night ? 1.6 : 1);
+            // Boarding is never quite black: weathered timber keeps some grey even at night.
+            if (night) dressTones[TONE.timber].multiplyScalar(1.4);
             dressTones[TONE.glass].copy(skyMat.uniforms.horizon.value).multiplyScalar(night ? 0.25 : 0.95);
             // A poster case is lit white from behind; only the night warms it a little.
             if (night) dressTones[TONE.poster].copy(palePaint).multiplyScalar(1.5).lerp(roomGlow, 0.35);
@@ -4784,8 +4878,8 @@
                     // lamps, and the purlins cross them as dark lines.
                     span(LOOK.corrugated, address, lateral(4.1), 5.62, lateral(7), 5.16, 0.05, 26);
                     span(LOOK.corrugated, address, lateral(7), 5.16, lateral(9.5), 5.5, 0.05, 26);
-                    span(litSurface, address, lateral(4.18), 5.542, lateral(6.86), 5.117, 0.02, 25.9);
-                    span(litSurface, address, lateral(7.14), 5.114, lateral(9.42), 5.424, 0.02, 25.9);
+                    span(LOOK.soffit, address, lateral(4.18), 5.542, lateral(6.86), 5.117, 0.02, 25.9);
+                    span(LOOK.soffit, address, lateral(7.14), 5.114, lateral(9.42), 5.424, 0.02, 25.9);
                     for (const [offset, y] of [[4.9, 5.37], [6.0, 5.2], [7.9, 5.16], [8.8, 5.28]])
                         part(LOOK.paint, address, lateral(offset), y, 0.07, 0.1, 26);
                     part(LOOK.paint, address, lateral(7), 5.02, 0.32, 0.24, 26);
@@ -4801,7 +4895,7 @@
                         part(LOOK.paint, z, lateral(7), 4.18, 0.3, 0.2, 0.3);
                         if ((id + bay) % 7 !== 3) {
                             part(glowParts, z + 2.75, lateral(5.5), 5.3, 0.1, 0.04, 2.3);
-                            spillAt(z + 2.75, lateral(5.5), 5.1, 1.6);
+                            spillAt(z + 2.75, lateral(5.5), 5.1, 2.6);
                             // The batten the tube is fixed to, and its two drops.
                             if (!saving) part(LOOK.paint, z + 2.75, lateral(5.5), 5.345, 0.16, 0.05, 2.5);
                         }
