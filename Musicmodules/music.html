@@ -6,6 +6,7 @@
     <title>音乐播放器</title>
     <link rel="stylesheet" href="music.css">
     <link rel="stylesheet" href="music-theme/music-tokens.css">
+    <link rel="stylesheet" href="music-archive/archive.css">
     <link rel="stylesheet" href="music-stage/music-stage.css">
     <link rel="stylesheet" href="music-stage/modes/stage-lyric-performance.css">
     <!-- 仅加载主题覆盖，并置于模块样式之后以确保主题定义生效 -->
@@ -53,6 +54,10 @@
     </div>
     <!-- 用于显示模糊专辑封面的背景 -->
     <div id="player-background"></div>
+    <!-- music-archive: 曲目档案阵列主视图（内容由 music-archive/archive-view.js 生成） -->
+    <div id="music-archive-view" class="music-archive-view" hidden></div>
+    <button id="music-archive-return" class="archive-return" type="button" title="回到档案阵列">ARCHIVE ↙</button>
+    <!-- /music-archive -->
 
     <div class="music-player-container">
         <!-- Pixi.js v8 硬件加速背景声纹与气泡粒子容器 -->
@@ -909,6 +914,11 @@
     <script src="music-sidebar.js"></script>
     <script src="music-ui.js"></script>
     <script src="music-theme/music-skin.js"></script>
+    <!-- music-archive -->
+    <script src="music-archive/archive-model.js"></script>
+    <script src="music-archive/archive-scene.js"></script>
+    <script src="music-archive/archive-view.js"></script>
+    <!-- /music-archive -->
     <script src="music.js"></script>
 
     <!-- music-dock -->

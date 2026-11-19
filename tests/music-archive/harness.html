@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>archive harness</title>
+<link rel="stylesheet" href="/Musicmodules/music-theme/music-tokens.css">
+<link rel="stylesheet" href="/Musicmodules/music-archive/archive.css">
+<style>html,body{margin:0;height:100%;overflow:hidden}</style>
+</head>
+<body>
+<div id="music-archive-view" hidden></div>
+<button id="music-archive-return" class="archive-return" type="button">ARCHIVE ↙</button>
+<div class="music-player-container"></div>
+<script src="/vendor/three.min.js"></script>
+<script src="/Musicmodules/music-stage/music-stage-config.js"></script>
+<script src="/Musicmodules/music-archive/archive-model.js"></script>
+<script src="/Musicmodules/music-archive/archive-scene.js"></script>
+<script src="/Musicmodules/music-archive/archive-view.js"></script>
+<script>
+/* 假播放器：只有档案页用到的字段和函数。?n=曲目数 ?light ?dock=像素 ?empty */
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (q.has('light')) document.body.classList.add('light-theme');
+  if (q.has('dock')) document.body.style.setProperty('--music-dock-safe-bottom', q.get('dock') + 'px');
+  try { localStorage.clear(); } catch (e) {}
+  const n = q.has('empty') ? 0 : Number(q.get('n') || 60);
+  const W1 = ['清晨的','黄昏','空车厢','潮汐','雨后的','末班','远处的','水面','玻璃','安静的','夏日','微光的'];
+  const W2 = ['站台','信号','回声','海风','长椅','倒影','灯塔','车窗','来信','航线','月台','旧磁带'];
+  const ART = ['Aki','Mio Kanata','Shirone','Hoshino','Ren','Lumi','Tsubame'];
+  const ALB = ['Low Tide','夜行列车','Paper Lanterns','窗边','Static Bloom'];
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const playlist = Array.from({ length: n }, (_, i) => ({
+    path: 'D:\\Music\\' + i + '.flac',
+    title: W1[Math.floor(rnd() * W1.length)] + W2[Math.floor(rnd() * W2.length)] + '.flac',
+    artist: ART[Math.floor(rnd() * ART.length)],
+    album: ALB[Math.floor(rnd() * ALB.length)]
+  }));
+  const pick = (k, off) => Array.from({ length: Math.min(n, k) }, (_, i) => playlist[(i * 7 + off) % n]?.path).filter(Boolean);
+  const app = window.app = {
+    playlist,
+    customPlaylists: n ? [
+      { id: 'a', name: '海边线路', tracks: pick(12, 1) },
+      { id: 'b', name: '夜间散步', tracks: pick(12, 3) },
+      { id: 'c', name: '雨天档案', tracks: pick(9, 5) },
+      { id: 'd', name: '专注白噪', tracks: pick(14, 2) }
+    ] : [],
+    currentTrackIndex: 0, isPlaying: q.has('playing'), calls: [],
+    loadTrack(i) { this.calls.push(['loadTrack', i]); this.currentTrackIndex = i; this.isPlaying = true; },
+    playTrack() { this.calls.push(['playTrack']); this.isPlaying = true; },
+    pauseTrack() { this.calls.push(['pauseTrack']); this.isPlaying = false; },
+    renderPlaylist() {}, showContextMenu(x, y) { this.calls.push(['ctx', x, y]); },
+    destroyAmbientPixi() {}, createAmbientPixi() {},
+    stageHost: { active: false, enter() { app.calls.push(['stageEnter']); this.active = true; app.isStageActive = true; document.body.classList.add('music-stage-active'); },
+                 exit() { this.active = false; app.isStageActive = false; document.body.classList.remove('music-stage-active'); } }
+  };
+  window.MusicArchive.init(app);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
