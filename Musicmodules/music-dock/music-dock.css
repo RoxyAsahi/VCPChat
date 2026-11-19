@@ -1,54 +1,7 @@
 /*
  * 音乐窗口底栏：正在播放药丸、进度胶囊、快捷行、面板把手、统一面板、舞台弹层、音效设置抽屉。
- * 颜色只读 music-theme/music-tokens.css；下面 “待并入令牌” 一段是底栏专用的细分色，
- * 已交给令牌文件维护者，并入后从这里删掉。
+ * 颜色只读 music-theme/music-tokens.css 的 --md-* / --mt-*，这里不定义颜色变量。
  */
-
-/* ───────── 待并入令牌（深色默认 / 浅色跟 body.light-theme） ───────── */
-body {
-  --md-time: rgb(113, 113, 122);
-  --md-track: rgba(255, 255, 255, .1);
-  --md-hover: rgba(255, 255, 255, .15);
-  --md-slot-hover: rgba(255, 255, 255, .1);
-  --md-slot-on-bg: rgba(255, 255, 255, .2);
-  --md-slot-on-fg: inherit;
-  --md-capsule-border: rgba(255, 255, 255, .05);
-  --md-capsule-bg-hover: rgba(0, 0, 0, .3);
-  --md-capsule-shadow: 0 25px 50px -12px rgba(0, 0, 0, .25);
-  --md-capsule-shadow-open: 0 25px 50px -12px rgba(0, 0, 0, .25);
-  --md-quick-bg: rgba(0, 0, 0, .4);
-  --md-pill-fg: #fff;
-  --md-pill-border: rgba(255, 255, 255, .1);
-  --md-pill-bg-hover: rgba(0, 0, 0, .55);
-  --md-pill-kicker: rgba(255, 255, 255, .45);
-  --md-pill-sub: rgba(255, 255, 255, .5);
-  --md-pill-cover: #27272a;
-  --md-handle-fg: #fff;
-  --md-handle-open-bg: #fff;
-  --md-handle-open-fg: #000;
-}
-body.light-theme {
-  --md-time: rgb(68, 64, 60);
-  --md-track: rgba(0, 0, 0, .05);
-  --md-hover: rgba(0, 0, 0, .1);
-  --md-slot-hover: rgba(0, 0, 0, .05);
-  --md-slot-on-bg: rgba(0, 0, 0, .1);
-  --md-slot-on-fg: #000;
-  --md-capsule-border: rgba(255, 255, 255, .2);
-  --md-capsule-bg-hover: rgba(255, 255, 255, .5);
-  --md-capsule-shadow: 0 10px 15px -3px rgba(0, 0, 0, .1), 0 4px 6px -4px rgba(0, 0, 0, .1);
-  --md-capsule-shadow-open: 0 20px 25px -5px rgba(0, 0, 0, .1), 0 8px 10px -6px rgba(0, 0, 0, .1);
-  --md-quick-bg: rgba(255, 255, 255, .6);
-  --md-pill-fg: #18181b;
-  --md-pill-border: rgba(0, 0, 0, .1);
-  --md-pill-bg-hover: rgba(255, 255, 255, .55);
-  --md-pill-kicker: rgba(0, 0, 0, .45);
-  --md-pill-sub: rgba(0, 0, 0, .55);
-  --md-pill-cover: #e4e4e7;
-  --md-handle-fg: #18181b;
-  --md-handle-open-bg: #fff;
-  --md-handle-open-fg: #000;
-}
 
 /* ───────── 旧的播放卡片控件：DOM 留给播放器逻辑用，只是不再显示 ───────── */
 body.music-dock-on .music-player .progress-section,
