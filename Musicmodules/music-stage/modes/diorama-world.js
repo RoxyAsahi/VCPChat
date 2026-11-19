@@ -83,6 +83,8 @@
         // How wet the line is after rain, 0 to 1: surfaces darken, flat ones
         // turn glossy and hold standing water that gives back the lamps.
         const wetness = { value: 0 };
+        // Where the sea stands: what is in it is darker and glossy up to a tide line just above.
+        const tideLine = { value: 0 };
         // Boards are laid along the longer side of whatever they clad, an
         // edge of the piece falling on a gap between two boards.
         const grained = bed => {
@@ -528,7 +530,7 @@
         const dressSky = { value: new T.Color() };
         dressedMaterial.onBeforeCompile = shader => {
             Object.assign(shader.uniforms, { dressSheet: { value: sheetTexture }, dressTones: { value: dressTones },
-                dressSky, wetness, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
+                dressSky, wetness, tideLine, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
             shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
                 attribute vec3 inset;
                 attribute vec4 dressRect, dressLook, dressCut;
@@ -565,7 +567,7 @@
                 uniform sampler2D dressSheet;
                 uniform vec3 dressSky;
                 uniform vec4 dressPuddles;
-                uniform float wetness;
+                uniform float wetness, tideLine;
                 varying vec3 vDressWorld, vDressUp;
                 float dressPuddle = 0.0;
                 varying vec2 vDressUv;
@@ -580,6 +582,8 @@
                     dressTexel = textureGrad(dressSheet, vDressRect.xy + cell * vDressRect.zw,
                         dFdx(vDressUv) * grad, dFdy(vDressUv) * grad).rgb;
                     diffuseColor.rgb = vDressTone * dressTexel.r * 1.3 * (1.0 - vDressGlow * dressTexel.b);
+                    float soaked = 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y);
+                    diffuseColor.rgb *= 1.0 - 0.45 * soaked * (1.0 - vDressGlow);
                     if (wetness > 0.0) {
                         // Water stands in the low, stained patches of anything flat and open to the sky.
                         float level = smoothstep(0.8, 0.95, vDressUp.y);
@@ -589,7 +593,8 @@
                     }
                 }`)
                 .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));`)
+                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));
+                roughnessFactor = mix(roughnessFactor, 0.2, 1.0 - smoothstep(tideLine + 0.04, tideLine + 0.16, vDressWorld.y));`)
                 .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
                 metalnessFactor = vDressMetal;`)
                 .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -681,6 +686,7 @@
                 look({ sheet, tone: TONE.poster, rough: 0.3, metal: 0, glow: 1, bevel: 0.002 })),
             lamp: look({ tone: TONE.lamp, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
             coldLamp: look({ tone: TONE.cold, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
+            lantern: look({ tone: TONE.lamp, rough: 0.6, metal: 0, glow: 0.45, bevel: 0.06 }),
             window: look({ tone: TONE.room, rough: 0.4, metal: 0, glow: 1, bevel: 0.002 }),
             figure: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.04 }),
             head: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.07 })
@@ -3683,6 +3689,7 @@
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
             wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            tideLine.value = waterLevel;
             splash.layers.set(saving ? 1 : 0);
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
@@ -4456,6 +4463,18 @@
                     // In the dream the boats are gone. Now and then a house stands on
                     // a rock far out, one window lit.
                     if (cell % 3 === 0) house(address, side * (reach + 10), side, random);
+                    // Paper lanterns set adrift, a few together, lit from within.
+                    else if (cell % 3 === 1) for (let k = 0; k < 4 + Math.floor(random() * 4); k++) {
+                        const at = address + (random() - 0.5) * 30, out = side * (6 + random() * 22);
+                        if (inTheWay(at, out, 1, 0.6)) continue;
+                        rawPart(LOOK.paint, at, out, waterLevel + 0.03, 0.34, 0.06, 0.34);
+                        rawPart(LOOK.lantern, at, out, waterLevel + 0.22, 0.28, 0.32, 0.28);
+                        if (haloCount < haloPositions.length / 3) {
+                            const f = track.at(at);
+                            haloPositions.set([f.position.x + f.right.x * out, waterLevel + 0.24, f.position.z + f.right.z * out], haloCount * 3);
+                            haloCount++;
+                        }
+                    }
                     continue;
                 }
                 const lateral = side * reach, length = 10 + random() * 3, bulbs = 7 + Math.floor(random() * 3);
