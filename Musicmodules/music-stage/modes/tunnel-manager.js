@@ -3787,10 +3787,8 @@
             // journey has to be compiled for the whole song, not just its lyrics.
             const nextDuration = Math.round(finiteNumber(frame.duration, 0));
             const songChanged = source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration;
-
             // Paused with nothing changed: the last picture is still right, so
             // the GPU can rest. Playing: no more often than the tier's rate.
-            // A new song is always taken in at once.
             const still = !frame.isPlaying && lastTime !== null
                 && finiteNumber(frame.playbackTime, 0) === lastTime;
             if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), mode.config.quality))) return;
