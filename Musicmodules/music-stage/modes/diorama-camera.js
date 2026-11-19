@@ -78,8 +78,18 @@
             const from = last ? mix(last.from, last.to, smooth((cue.time - last.time) / 3.5)) : initialYaw;
             turns.push({ time: cue.time, from, to: rigYaw(cue.rig) });
         }
+        // On the way up to the roof and down again the camera passes the train
+        // on the side of the screen being read then: the pantograph is then off
+        // to the other side of the picture and never comes between them.
+        const screenSide = t => {
+            const reading = plan.encounters.filter(item => item.start - 5 <= t && item.end + 2 >= t);
+            const nearest = reading.sort((a, b) => Math.abs(a.start - t) - Math.abs(b.start - t))[0];
+            return nearest ? nearest.side : 1;
+        };
+        const rideSides = rideSpans(timeline).map(span => ({
+            entry: screenSide(span.start + ROOF.blend / 2), exit: screenSide(span.end - ROOF.blend / 2) }));
         return { at, encounters: plan.encounters, pageEncounter: plan.pageEncounter, turns, initialYaw,
-            scenes: planScenes(timeline, options) };
+            scenes: planScenes(timeline, options), rideSides };
     };
     const CHASE_LATERAL = 7.5;
     const CHASE_LEAD = 66;
@@ -164,7 +174,7 @@
         const low = t => {
             const index = timeline.sample(t).actIndex, act = timeline.acts[index];
             const move = crane(act, timeline.acts[Math.max(0, index - 1)], t, timeline);
-            return act.kind !== 'Terminus' && move.out === 0 && move.lead === 0;
+            return act.kind !== 'Terminus' && move.out === 0 && move.lead === 0 && rideAt(timeline, t) === 0;
         };
         const scenes = [];
         let cursor = 0;
@@ -187,6 +197,44 @@
             cursor = Math.max(cursor, busy.end);
         }
         return scenes;
+    };
+    /*
+     * Some verses are ridden on the roof instead of from the cab: from over
+     * the joint of the leading set, down the length of the first car's roof
+     * and its pantograph to where the line runs out. From that far back the
+     * pantograph is narrow and low in the middle of the picture, and the
+     * screens stand out to either side of it. Getting there is a crane move with an order to it, like the
+     * high acts': out past the side of the cab, let the train draw ahead,
+     * up past the cant rail, and in over the roof; coming back the same way.
+     * Lead is how far the nose runs ahead of the camera, out how far the
+     * camera stands off to the side on its way up.
+     */
+    const ROOF = Object.freeze({ name: 'ROOF', lead: 13, height: 4.95, out: 2.15, pitch: -0.07, fov: 4, sky: 0.12, blend: 6 });
+    const rides = new WeakMap();
+    const rideSpans = timeline => {
+        let spans = rides.get(timeline);
+        if (!spans) {
+            spans = [];
+            let verse = 0;
+            for (const act of timeline.acts) {
+                if (act.kind !== 'Verse') continue;
+                const length = act.end - act.start, visit = verse++;
+                // Every other verse goes up for the whole verse; the others ride
+                // their second half up there when they are long enough to.
+                if (visit % 2) { if (length >= 2.5 * ROOF.blend) spans.push({ start: act.start, end: act.end }); }
+                else if (length >= 30) spans.push({ start: act.start + length * 0.45, end: act.end });
+            }
+            rides.set(timeline, spans);
+        }
+        return spans;
+    };
+    // How far along the way up to the roof the camera is at this time, and
+    // which span of the song's that is and whether it is on its way out.
+    const rideAt = (timeline, t, detail) => {
+        const spans = rideSpans(timeline), index = upperBound(spans, t, 'start') - 1, span = spans[index];
+        if (!span || t > span.end) return 0;
+        if (detail) { detail.index = index; detail.leaving = t > (span.start + span.end) / 2; }
+        return Math.min(clamp((t - span.start) / ROOF.blend), clamp((span.end - t) / ROOF.blend));
     };
     // The saloon camera rides at seated eye level, measured back from the nose.
     const SALOON = Object.freeze({ back: 9.1, travel: 2.4, lateral: 0.11, height: 2.34, sill: 2.35 });
@@ -263,6 +311,16 @@
         // Out to the waterside, the train past, the train caught up, back in: in that order.
         const aside = beside ? ease(beside.progress / 0.25) * (1 - ease((beside.progress - 0.8) / 0.2)) : 0;
         const passed = beside ? ease((beside.progress - 0.1) / 0.4) * (1 - ease((beside.progress - 0.55) / 0.3)) : 0;
+        const rideSpan = {};
+        const riding = motion ? rideAt(timeline, t, rideSpan) : 0;
+        const rideSide = riding > 0 ? track.rideSides?.[rideSpan.index]?.[rideSpan.leaving ? 'exit' : 'entry'] ?? 1 : 1;
+        const ride = {
+            out: ease(riding / 0.3) * (1 - ease((riding - 0.7) / 0.3)),
+            lead: ease((riding - 0.2) / 0.35),
+            up: ease((riding - 0.45) / 0.3),
+            over: ease((riding - 0.7) / 0.3)
+        };
+        if (riding > 0) move.height = mix(move.height, ROOF.height, ride.up);
         if (inside) move.height = mix(move.height, Math.max(move.height, SALOON.sill), inside.raised);
         if (beside) move.height = mix(move.height, TRACKSIDE.height, aside);
         const position = {
@@ -277,8 +335,10 @@
         // Low acts are seen from the cab. When the camera rises it also leaves the
         // train: it swings out to one side and lets the train run ahead, so the
         // high acts look down on lit carriages crossing the water.
-        const chase = motion ? Math.max(move.out, aside) : 0;
-        const swing = motion ? move.rig.lateral * move.out + TRACKSIDE.lateral * aside : 0;
+        const chase = motion ? Math.max(move.out, aside, ease(riding / 0.15)) : 0;
+        // On the roof the camera sits on the centre line, not over the driver's seat.
+        const swing = motion ? move.rig.lateral * move.out + TRACKSIDE.lateral * aside
+            + (rideSide * ROOF.out + 0.25) * ride.out + 0.25 * ride.over : 0;
         position.x += frame.right.x * swing;
         position.z += frame.right.z * swing;
         // A rig that looks back at the train turns as the train falls behind it,
@@ -304,7 +364,7 @@
         const upcoming = encounters[encounterIndex + 1];
         const blendAngle = (a, b, weight) => a
             + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * weight;
-        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength + move.rig.fov * move.out : 48;
+        let fov = motion ? state.fov - arch * (1.2 + openness * 1.8) * strength + move.rig.fov * move.out + ROOF.fov * ride.over : 48;
         const halfFrame = Math.atan(Math.tan(fov * Math.PI / 360) * Math.max(0.35, options.aspect || 1.6)) * 0.84;
         // A screen is read from its own side of the frame, with the line ahead
         // still in view: the camera turns only as far as it takes to hold the
@@ -319,7 +379,9 @@
             if (!item.width) return { yaw: full, pitch };
             const off = Math.atan2(Math.sin(full - frame.yaw), Math.cos(full - frame.yaw));
             const needed = Math.abs(off) + Math.atan(item.width * 0.5 / reach) - halfFrame;
-            const turn = Math.min(Math.abs(off), Math.max(needed, Math.abs(off) * 0.6));
+            // From the roof the gaze stays down the line, so a screen stands
+            // out to its own side of the pantograph instead of behind it.
+            const turn = Math.min(Math.abs(off), Math.max(needed, Math.abs(off) * 0.6 * (1 - Math.max(ride.lead, ride.out))));
             return { yaw: frame.yaw + Math.sign(off) * turn, pitch };
         };
         let encounterId = null;
@@ -375,6 +437,9 @@
             fov = mix(fov, Math.max(fov, Math.min(80, fit)), weight);
             eventFocus = { id: event.id, weight };
         }
+        // On the roof the gaze is tipped down after a screen has taken it, so
+        // the nose and the lamp stay in the bottom of the picture.
+        pitch += ROOF.pitch * ride.over;
         // Apply after roadside gaze release so the last sign cannot cancel the skyward finale.
         // The moon uses this same fixed celestial offset in the world renderer.
         yaw = blendAngle(yaw, Math.atan2(-210, 420), finale);
@@ -408,7 +473,7 @@
         const out = motion ? move.out : 0;
         // Even from the cab a line on the sky is written above the horizon, clear of
         // the poles and the far shore that gather where the line ahead runs out.
-        const skyYaw = yaw + move.rig.skyYaw * out, skyPitch = pitch + mix(0.08, move.rig.skyPitch, out);
+        const skyYaw = yaw + move.rig.skyYaw * out, skyPitch = pitch + mix(0.08, move.rig.skyPitch, out) + ROOF.sky * ride.over;
         const sky = { x: Math.sin(skyYaw) * Math.cos(skyPitch), y: Math.sin(skyPitch),
             z: -Math.cos(skyYaw) * Math.cos(skyPitch) };
         return {
@@ -419,9 +484,10 @@
             scene: staged && staged.weight > 0 ? { id: staged.scene.id, kind: staged.scene.kind, weight: staged.weight } : null,
             shot: openness > 0.6 ? 'rising-traverse' : 'window-tracking',
             rig: !motion ? 'CAB' : staged && staged.weight > 0.5 ? staged.scene.kind : rig,
-            encounterId, reading, distance, state, chase, chaseRig: chase > 0.5 ? move.rig.name : null,
+            encounterId, reading, distance, state, chase, chaseRig: move.out > 0.5 ? move.rig.name : null,
+            ride: riding > 0 ? ROOF.name : null,
             // Where the front of the train is along the line.
-            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead),
+            trainFront: distance + (motion ? Math.max(mix(-0.4, move.rig.lead, move.lead), riding > 0 ? mix(-0.4, ROOF.lead, ride.lead) : -Infinity,
                 mix(Math.min(-0.4, move.rig.lead * move.lead), CHASE_LEAD, passed)) : -0.4),
             look: { x: position.x + direction.x * 30, y: position.y + direction.y * 30,
                 z: position.z + direction.z * 30 }

@@ -337,9 +337,11 @@ test('each chorus is seen from somewhere else, and the train never runs through 
         const pose = C.pose(timeline, track, t, { aspect: 1.78 });
         const lead = pose.trainFront - pose.distance;
         // The train reaches from its nose 53 m back. Where that covers the
-        // camera, the camera is out to one side of it or up over its roof.
+        // camera, the camera is out to one side of it or up over its roof,
+        // and riding on the roof only clear of the pantograph 2.9 m back.
+        const onRoof = pose.ride && pose.position.y > 4.4 && (lead > 4 || lead < 1.8);
         if (pose.chase > 0.01 && lead > 0.5 && lead < 53)
-            assert.ok(Math.abs(beside(pose)) > 2 || pose.position.y > 5.2,
+            assert.ok(Math.abs(beside(pose)) > 2 || pose.position.y > 5.2 || onRoof,
                 `the train would run through the camera at ${t.toFixed(2)}`);
         if (previous) {
             const step = Math.hypot(pose.position.x - previous.position.x, pose.position.y - previous.position.y,
