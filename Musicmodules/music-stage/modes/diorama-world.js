@@ -1993,12 +1993,14 @@
         const endMaterial = material(new T.ShaderMaterial({
             transparent: true, depthWrite: false,
             uniforms: { warm: { value: new T.Color('#ffd28c') }, head: { value: new T.Color('#fff3d6') }, cold: carHorizon,
-                red: { value: new T.Color('#ff3b2f') }, day: cabinDaylight, destination: { value: destinationGraphic } },
+                red: { value: new T.Color('#ff3b2f') }, day: cabinDaylight, destination: { value: destinationGraphic },
+                rain: cabinMood.rain, clock: cabinMood.clock },
             vertexShader: `attribute float kind;varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 void main(){vUv=uv;vKind=kind;vTail=float(gl_InstanceID);
                     vPos=position;vEye=(inverse(modelMatrix*instanceMatrix)*vec4(cameraPosition,1.0)).xyz;
                     gl_Position=projectionMatrix*modelViewMatrix*instanceMatrix*vec4(position,1.0);}`,
-            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day;uniform sampler2D destination;
+            fragmentShader: `uniform vec3 warm,head,red,cold;uniform float day,rain,clock;uniform sampler2D destination;
+                ${RAIN_GLASS}
                 varying vec2 vUv;varying float vKind,vTail;varying vec3 vPos,vEye;
                 // The cab behind the windscreen, traced through its few solid shapes: the
                 // driver's desk with its cowl and gauges, controller and brake handle, the
@@ -2092,6 +2094,9 @@
                         vec3 ray=normalize(vPos-vEye);
                         float grazing=pow(1.0-clamp(ray.z,0.0,1.0),2.0);
                         float dash=1.0-smoothstep(-0.59,-0.44,p.y+0.07*p.x);
+                        // Rain on the outside bends the view through each bead and runnel.
+                        vec3 wet=rainOnGlass(vPos.xy,clock,rain);
+                        ray=normalize(ray+vec3(wet.xy*9.0,0.0));
                         c=cab(cabin,ray,tail);
                         c=mix(c,vec3(0.012,0.018,0.017),dash*0.92);
                         // Glass: a thick, faintly green pane. What is behind it loses some light;
@@ -2111,6 +2116,9 @@
                         // The edge of the glass seen through its thickness, a thin bright line inside the rubber.
                         float rim=length(max(abs(p)-vec2(0.88),0.0))-0.12;
                         c+=cold*0.22*(1.0-smoothstep(-0.07,-0.045,rim))*smoothstep(-0.11,-0.075,rim)*(0.4+fresnel*2.0);
+                        // Each drop is a lens: darker in its body, a bright rim of sky at its edge.
+                        float dropRim=clamp(length(wet.xy)*90.0,0.0,1.0);
+                        c=mix(c,c*0.75+mirror*0.25+cold*0.35*dropRim,wet.z*0.7);
                         // Rain on the glass is laid on by the cab's own pass (rainOnGlass).
                         if(vKind<0.5){
                             // The wiper parked low across the pane.
