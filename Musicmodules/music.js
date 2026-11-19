@@ -395,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await initializeTheme();
 
         app.updateSidebarToggleState(localStorage.getItem('musicSidebarCollapsed') === 'true');
+        if (typeof initMusicDock === 'function') initMusicDock(app);
 
         app.phantomAudio.src = app.createSilentAudio();
         app.wnpAdapter = new WebNowPlayingAdapter(app);
