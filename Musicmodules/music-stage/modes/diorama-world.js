@@ -933,6 +933,10 @@
             crown: 3.85, bogie: 3.9, joint: 0.5, coupling: 0.9 });
         const CARS = 4, TIP = -CAR.length / 2;
         const SET_PITCH = CAR.length * 2 + CAR.joint + CAR.coupling;
+        // 1 while the camera is close to the nose from outside: the saloon's real
+        // cab is drawn then and the windscreen is clear glass in front of it;
+        // further off the windscreen paints its own cab and the saloon is not drawn.
+        const cabReal = { value: 0 };
         // The rounded end in plan: distance behind the face, half width, share of the roof's rise.
         const NOSE = [[0, 0.46, 0.59], [0.058, 0.76, 0.73], [0.139, 1.02, 0.87],
             [0.253, 1.205, 0.96], [0.39, 1.274, 1], [0.59, CAR.half, 1]];
@@ -3269,12 +3273,14 @@
                 fogTint: { value: new T.Color('#415266') }, fogDensity: { value: 0.008 },
                 lampTint: { value: new T.Color('#ffd28c') },
                 lampPos: { value: Array.from({ length: 4 }, () => new T.Vector3()) },
-                lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 } },
+                lampPower: { value: new Float32Array(4) }, rain: rainAmount, calm: { value: 0 },
+                // Where the train wades: its nose, three points down its length and its tail.
+                wake: { value: 0 }, wakePath: { value: Array.from({ length: 5 }, () => new T.Vector2()) } },
             vertexShader: `uniform mat4 textureMatrix;varying vec4 reflected;varying vec3 world;
                 void main(){vec4 p=modelMatrix*vec4(position,1.0);world=p.xyz;reflected=textureMatrix*p;
                     gl_Position=projectionMatrix*viewMatrix*p;}`,
-            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm;
-                uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;
+            fragmentShader: `uniform sampler2D reflection;uniform float time,strength,energy,glitter,fogDensity,rain,calm,wake;
+                uniform vec3 tint,moonDir,moonTint,fogTint,lampTint;uniform vec2 wakePath[5];
                 uniform vec3 lampPos[4];uniform float lampPower[4];
                 varying vec4 reflected;varying vec3 world;
                 float h21(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
@@ -3296,6 +3302,43 @@
                     }
                     return g;
                 }
+                // The water the train pushes aside. Measured from the nearest stretch
+                // of the train: how far back from the nose (s) and how far out from
+                // the side of the car (h). Returns the slope; foam in w.
+                vec3 stirred(vec2 p){
+                    float best=1e9,s=0.0,d=0.0,run=0.0;vec2 tangent=vec2(0.0,1.0),side=vec2(1.0,0.0);
+                    for(int i=0;i<4;i++){
+                        vec2 a=wakePath[i],b=wakePath[i+1],ab=b-a;float len=max(length(ab),0.001);
+                        vec2 t=ab/len;float u=dot(p-a,t);
+                        // Ahead of the nose and beyond the tail the line runs on straight.
+                        float lo=i==0?-1e4:0.0,hi=i==3?1e4:len;
+                        float k=clamp(u,lo,hi);vec2 q=a+t*k;float e=length(p-q);
+                        if(e<best){best=e;s=run+k;tangent=t;vec2 n=vec2(-t.y,t.x);d=dot(p-q,n);side=n*sign(d);}
+                        run+=len;
+                    }
+                    float h=abs(d)-1.32,length_=run;
+                    if(h<-0.2&&s>-0.3&&s<length_)return vec3(0.0);
+                    vec2 g=vec2(0.0);float foam=0.0;
+                    // Wash running out from the hull all along its length.
+                    float beside=smoothstep(-1.0,0.5,s)*(1.0-smoothstep(length_,length_+6.0,s));
+                    float hh=max(h,0.0);
+                    float wash=sin(hh*6.5-time*8.0+s*0.7)*exp(-hh*0.55);
+                    g+=side*wash*0.3*beside;
+                    foam+=exp(-hh*1.4)*beside*(0.55+0.45*sin(s*1.3-time*5.0+hh*3.0));
+                    // Two arms opening behind the nose at about twenty degrees.
+                    float behind=max(s,0.0),arm=hh-0.36*behind;
+                    float arms=sin(arm*4.5-time*5.0)*exp(-arm*arm*0.35)*exp(-behind/48.0)*smoothstep(-2.0,0.0,s);
+                    g+=(side*0.8-tangent*0.35)*arms*0.28;
+                    // Churned water closing in behind the last car.
+                    float after=max(s-length_,0.0);
+                    float trail=(1.0-smoothstep(1.2+after*0.12,2.6+after*0.18,abs(d)))*exp(-after/22.0)*step(length_,s);
+                    g+=(vec2(n21(p*3.1+time*1.7),n21(p.yx*2.7-time*1.4))-0.5)*0.4*trail;
+                    foam+=trail*0.6;
+                    // The nose shoulders the water up in front of it.
+                    float bow=exp(-pow(max(-s,0.0)*0.7,2.0))*(1.0-smoothstep(0.8,2.6,abs(d)))*step(s,0.0);
+                    g-=tangent*bow*0.25;foam+=bow*0.5;
+                    return vec3(g,foam);
+                }
                 void main(){
                     vec3 toCam=cameraPosition-world;float dist=length(toCam);vec3 v=toCam/max(dist,0.001);
                     // Analytic ripple normal: two swells and fine chop, damped with distance.
@@ -3314,8 +3357,12 @@
                         g+=r*0.09*rain*nearRings;
                         g+=(vec2(n21(world.xz*7.0+time*3.0),n21(world.zx*6.0-time*2.7))-0.5)*0.05*rain*(1.0-nearRings*0.5);
                     }
+                    // Where the train wades it stirs the mirror up, still or not.
+                    float churn=0.0;vec2 stir=vec2(0.0);
+                    if(wake>0.0){vec3 w=stirred(world.xz);stir=w.xy*wake;g+=stir;churn=clamp(w.z,0.0,1.0)*wake;}
                     vec3 n=normalize(vec3(-g.x,1.0,-g.y));
-                    vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03);
+                    // The stirred water throws what it mirrors about far more than the swell does.
+                    vec2 uv=reflected.xy/max(reflected.w,0.001)+n.xz*(0.018+energy*0.008+rain*0.03)+stir*0.07*damp;
                     float valid=step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0)*step(0.0,reflected.w);
                     vec3 r=texture2D(reflection,clamp(uv,0.001,0.999)).rgb;
                     // Schlick Fresnel for water (F0 ~ 0.02), lifted so the mirror reads at night.
@@ -3345,6 +3392,9 @@
                         float shimmer=0.55+0.45*sin(along*5.0-time*2.2+n.x*20.0);
                         c+=lampTint*band*shimmer*lampPower[i]*0.55*strength;
                     }
+                    // Broken water along the hull catches what light there is.
+                    float lace=smoothstep(0.35,0.75,n21(world.xz*vec2(5.0,6.3)+vec2(time*1.3,-time*0.9)));
+                    c=mix(c,max(fogTint,r)*1.15+moonTint*0.04,churn*lace*0.5*strength);
                     // Match scene FogExp2 so the far plane melts into the horizon.
                     float fog=1.0-exp(-fogDensity*fogDensity*dist*dist);
                     c=mix(c,fogTint,clamp(fog,0.0,1.0));
@@ -4185,7 +4235,12 @@
             headlight.position.set(ahead.position.x, 0.7, ahead.position.z);
             // From the cab the train is all behind the lens: nothing of it to draw.
             placeTrain(track, front, tuning.showTrain !== false && (pose.chase ?? 0) > 0.002);
-            placeSaloon(track, front, tuning.showTrain !== false && (pose.saloon ?? 0) > 0.002);
+            // Within this reach of the nose the real cab shows through the windscreen.
+            const CAB_REAL_REACH = 16;
+            const nose = track.at(front - 1.2).position, eyeAt = pose.position;
+            const outside = (pose.chase ?? 0) > 0.002 && (pose.saloon ?? 0) <= 0.002;
+            cabReal.value = outside && eyeAt && Math.hypot(eyeAt.x - nose.x, (eyeAt.y ?? 0) - 2.2, eyeAt.z - nose.z) < CAB_REAL_REACH ? 1 : 0;
+            placeSaloon(track, front, tuning.showTrain !== false && ((pose.saloon ?? 0) > 0.002 || cabReal.value > 0));
             cabinMood.sunset.value = clamp(pose.cabinSunset ?? tuning.cabinSunset ?? 0);
             cabinMood.empty.value = clamp(pose.cabinEmpty ?? tuning.cabinEmpty ?? 0);
             cabinMood.clock.value = time;
@@ -4213,6 +4268,7 @@
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
             wade(track, pose, time, waterLevel, saving, tuning.showTrain !== false);
+            // The water the train stirs follows its length down the line.
             tideLine.value = waterLevel;
             splash.layers.set(saving ? 1 : 0);
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
@@ -4281,6 +4337,17 @@
             drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
             waterLevel = drownLevel;
             water.position.y = waterLevel;
+            // Even at a crawl the wheels stir it; at speed the arms open out behind.
+            const stirring = tuning.showTrain !== false
+                ? smooth((waterLevel - 0.3) / 0.12) * (0.4 + 0.6 * smooth(Math.abs(splashSpeed) / 7)) : 0;
+            waterMat.uniforms.wake.value = stirring;
+            if (stirring > 0) {
+                const head = pose.trainFront ?? pose.distance, reach = SET_PITCH * CARS / 2;
+                waterMat.uniforms.wakePath.value.forEach((point, i) => {
+                    const at = track.at(head - reach * i / 4).position;
+                    point.set(at.x, at.z);
+                });
+            }
             // Where the camera is as it goes by an address: how far out to one
             // side of the line, and how high. In the cab it is on the line.
             if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
@@ -5136,7 +5203,7 @@
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
                 rain: rainLevel, rainStreaks: rainDrops.visible ? rainGeometry.drawRange.count / 6 : 0, waterLevel,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
-                cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible,
+                cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible, cabReal: cabReal.value,
                 auroraVisible: Boolean(skyMat.uniforms.auroraActive.value > 0.5),
                 starOpacity: starMat.opacity, moonRadius: 20,
                 instanceRebuilds, reflectionSize: [target.width, target.height],
