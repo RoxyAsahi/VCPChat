@@ -80,13 +80,16 @@
             return held;
         };
         const planks = scan('planks.webp'), gravel = scan('ballast.webp');
+        // How wet the line is after rain, 0 to 1: surfaces darken, flat ones
+        // turn glossy and hold standing water that gives back the lamps.
+        const wetness = { value: 0 };
         // Boards are laid along the longer side of whatever they clad, an
         // edge of the piece falling on a gap between two boards.
         const grained = bed => {
             const wood = material(new T.MeshStandardMaterial({ color: '#292d32', roughness: 0.95 }));
             if (bed) wood.defines = { TRACK_BED: '' };
             wood.onBeforeCompile = shader => {
-                Object.assign(shader.uniforms, { planks: planks.map, planked: planks.ready,
+                Object.assign(shader.uniforms, { wetness, planks: planks.map, planked: planks.ready,
                     gravel: gravel.map, gravelled: gravel.ready, stone: { value: concrete.color } });
                 shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
                     attribute float bed;
@@ -108,7 +111,7 @@
                     vBed = bed;`);
                 shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
                     uniform sampler2D planks, gravel;
-                    uniform float planked, gravelled;
+                    uniform float planked, gravelled, wetness;
                     uniform vec3 stone;
                     varying vec3 vGrainAt, vGrainSize, vGrainFace, vGrainWorld;
                     varying float vBed, vGrainSeed;
@@ -137,7 +140,10 @@
                         diffuseColor.rgb *= mix(1.0, min(0.2 + 2.3 * wood, 2.1), planked);
                         grainRelief = wood * planked;
                         grainDepth = 0.008;
-                    }`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+                    }
+                    diffuseColor.rgb *= 1.0 - 0.42 * wetness;`).replace('#include <roughnessmap_fragment>',
+                    `#include <roughnessmap_fragment>
+                    roughnessFactor = mix(roughnessFactor, 0.32, wetness);`).replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
                     {
                         // Relief from the scan's own light and dark, by screen-space derivatives.
                         vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
@@ -183,6 +189,500 @@
             mesh.count = 0;
             root.add(mesh);
             return mesh;
+        };
+        /*
+         * Lineside fittings are low in faces and rich in surface, as good game
+         * props are: a post is a bevelled bar, but its paint is streaked, a
+         * panel is perforated, a poster glows in its case. The surfaces are
+         * painted once, here, into one sheet: red is how light the surface is,
+         * green its relief, blue whether it shines from within. Colour comes
+         * from the palette, never from the sheet.
+         */
+        const SHEET = 1024;
+        const sheetRegions = {};
+        const paintSheet = () => {
+            const doc = global.document;
+            const canvas = doc?.createElement?.('canvas');
+            const layers = canvas && ['albedo', 'relief', 'glow'].map(() => {
+                const c = doc.createElement('canvas');
+                c.width = c.height = SHEET;
+                return c.getContext?.('2d');
+            });
+            if (!layers || layers.some(c => !c)) return null;
+            const [A, H, E] = layers;
+            A.fillStyle = 'rgb(196,196,196)'; A.fillRect(0, 0, SHEET, SHEET);
+            H.fillStyle = 'rgb(128,128,128)'; H.fillRect(0, 0, SHEET, SHEET);
+            E.fillStyle = '#000'; E.fillRect(0, 0, SHEET, SHEET);
+            const random = seededRandom('lineside-sheet');
+            const grey = v => { const g = Math.max(0, Math.min(255, Math.round(v))); return `rgb(${g},${g},${g})`; };
+            const region = (name, x, y, w, h, paint) => {
+                sheetRegions[name] = [(x + 1) / SHEET, 1 - (y + h - 1) / SHEET, (w - 2) / SHEET, (h - 2) / SHEET];
+                for (const c of layers) { c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); c.translate(x, y); }
+                paint(w, h);
+                for (const c of layers) c.restore();
+            };
+            // Draw something on every copy of a tile that touches it, so it repeats without a seam.
+            const wrapped = (w, h, x, y, draw) => {
+                for (const dx of [-w, 0, w]) for (const dy of [-h, 0, h]) draw(x + dx, y + dy);
+            };
+            const blot = (c, x, y, r, value, alpha) => {
+                const g = c.createRadialGradient(x, y, 0, x, y, r);
+                g.addColorStop(0, `rgba(${value},${value},${value},${alpha})`);
+                g.addColorStop(1, `rgba(${value},${value},${value},0)`);
+                c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2);
+            };
+            // Plain: the tone as it is, lit through where it shines.
+            region('plain', 0, 0, 16, 16, (w, h) => { E.fillStyle = '#fff'; E.fillRect(0, 0, w, h); });
+            // Painted metal out in the weather: streaks run down from every ledge, blotches of wear.
+            region('weathered', 16, 0, 240, 240, (w, h) => {
+                for (let i = 0; i < 70; i++) {
+                    const x = random() * w, y = random() * h, r = 12 + random() * 46;
+                    wrapped(w, h, x, y, (px, py) => blot(A, px, py, r, random() > 0.5 ? 150 : 222, 0.22));
+                }
+                for (let i = 0; i < 140; i++) {
+                    const x = random() * w, top = random() * h, length = 20 + random() * 120;
+                    const g = A.createLinearGradient(0, top, 0, top + length);
+                    const v = 120 + random() * 50;
+                    g.addColorStop(0, `rgba(${v},${v},${v},0.32)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`);
+                    A.fillStyle = g;
+                    wrapped(w, h, x, top, (px, py) => A.fillRect(px, py, 1 + random() * 2, length));
+                }
+                for (let i = 0; i < 900; i++) {
+                    const x = random() * w, y = random() * h;
+                    H.fillStyle = grey(110 + random() * 40); H.fillRect(x, y, 1, 1);
+                }
+            });
+            // Concrete: cast in panels, stained, pitted.
+            region('concrete', 256, 0, 240, 240, (w, h) => {
+                for (let i = 0; i < 90; i++) {
+                    const x = random() * w, y = random() * h, r = 10 + random() * 60;
+                    wrapped(w, h, x, y, (px, py) => blot(A, px, py, r, random() > 0.6 ? 150 : 214, 0.25));
+                }
+                for (let i = 0; i < 1600; i++) {
+                    const x = random() * w, y = random() * h, d = random();
+                    A.fillStyle = grey(d > 0.8 ? 120 : 210); A.fillRect(x, y, 1, 1);
+                    H.fillStyle = grey(d > 0.8 ? 70 : 140); H.fillRect(x, y, 1 + (d > 0.95), 1 + (d > 0.95));
+                }
+            });
+            // Paving slabs on a platform: square, a dark joint between them.
+            region('paving', 496, 0, 240, 240, (w, h) => {
+                for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+                    A.fillStyle = grey(186 + random() * 22); A.fillRect(i * 60 + 2, j * 60 + 2, 56, 56);
+                    blot(A, i * 60 + 30 + (random() - 0.5) * 30, j * 60 + 30, 24, 160, 0.3 * random());
+                }
+                A.fillStyle = grey(96); H.fillStyle = grey(60);
+                for (let k = 0; k <= 4; k++) {
+                    for (const c of [A, H]) { c.fillRect(k * 60 - 1, 0, 3, h); c.fillRect(0, k * 60 - 1, w, 3); }
+                }
+            });
+            // Perforated sheet: a staggered field of round holes, dark through.
+            region('perforated', 736, 0, 64, 64, (w, h) => {
+                for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+                    const x = i * 16 + 8 + (j % 2) * 8, y = j * 16 + 8;
+                    wrapped(w, h, x, y, (px, py) => {
+                        for (const [c, v] of [[A, 26], [H, 20]]) {
+                            c.fillStyle = grey(v); c.beginPath(); c.arc(px, py, 4.6, 0, Math.PI * 2); c.fill();
+                        }
+                    });
+                }
+            });
+            // Corrugated sheeting: ribs along the fall of the roof.
+            region('corrugated', 800, 0, 64, 64, (w, h) => {
+                for (let x = 0; x < w; x++) {
+                    const wave = Math.sin(x / w * Math.PI * 8);
+                    H.fillStyle = grey(128 + wave * 110); H.fillRect(x, 0, 1, h);
+                    A.fillStyle = grey(190 + wave * 30); A.fillRect(x, 0, 1, h);
+                }
+            });
+            // Tactile paving: rows of raised domes.
+            region('tactile', 864, 0, 64, 64, (w, h) => {
+                for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+                    const x = i * 16 + 8, y = j * 16 + 8;
+                    const g = H.createRadialGradient(x, y, 0, x, y, 6);
+                    g.addColorStop(0, grey(250)); g.addColorStop(1, grey(128));
+                    H.fillStyle = g; H.beginPath(); H.arc(x, y, 6, 0, Math.PI * 2); H.fill();
+                    A.fillStyle = grey(214); A.beginPath(); A.arc(x, y, 5, 0, Math.PI * 2); A.fill();
+                }
+            });
+            // Louvres: slats tipped down, a shadow under each.
+            region('louvre', 928, 0, 64, 64, (w, h) => {
+                for (let y = 0; y < h; y++) {
+                    const u = (y % 8) / 8;
+                    H.fillStyle = grey(60 + u * 190); H.fillRect(0, y, w, 1);
+                    A.fillStyle = grey(u < 0.2 ? 70 : 190 + u * 30); A.fillRect(0, y, w, 1);
+                }
+            });
+            // Warning stripes at forty-five degrees.
+            region('stripes', 0, 256, 64, 64, (w, h) => {
+                A.fillStyle = grey(40);
+                for (let k = -2; k < 4; k++) {
+                    A.beginPath(); A.moveTo(k * 32, 0); A.lineTo(k * 32 + 16, 0);
+                    A.lineTo(k * 32 + 16 + 64, 64); A.lineTo(k * 32 + 64, 64); A.fill();
+                }
+            });
+            // Glass: clear but never quite clean, grime gathered at the foot.
+            region('glass', 64, 256, 128, 128, (w, h) => {
+                A.fillStyle = grey(150); A.fillRect(0, 0, w, h);
+                for (let i = 0; i < 26; i++) {
+                    const x = random() * w, y = random() * h;
+                    wrapped(w, h, x, y, (px, py) => blot(A, px, py, 8 + random() * 22, 190, 0.18));
+                }
+            });
+            // Posters in lit cases: a sky, a sun or moon, the sea's lines, and a block of print.
+            const poster = (name, x, y, mood) => region(name, x, y, 128, 192, (w, h) => {
+                const sky = A.createLinearGradient(0, 0, 0, h);
+                sky.addColorStop(0, grey(mood ? 90 : 230)); sky.addColorStop(0.62, grey(mood ? 200 : 170));
+                sky.addColorStop(1, grey(mood ? 120 : 110));
+                A.fillStyle = sky; A.fillRect(0, 0, w, h);
+                A.fillStyle = grey(mood ? 250 : 255);
+                A.beginPath(); A.arc(w * (0.3 + 0.4 * random()), h * 0.36, 16 + random() * 10, 0, Math.PI * 2); A.fill();
+                A.strokeStyle = grey(mood ? 70 : 90); A.lineWidth = 2;
+                for (let k = 0; k < 6; k++) {
+                    A.beginPath();
+                    for (let x0 = 0; x0 <= w; x0 += 4) A.lineTo(x0, h * 0.64 + k * 7 + Math.sin(x0 / 9 + k) * 2);
+                    A.stroke();
+                }
+                A.fillStyle = grey(30);
+                A.fillRect(10, h - 44, w * 0.62, 9);
+                for (let k = 0; k < 3; k++) A.fillRect(10, h - 28 + k * 6, w * (0.3 + random() * 0.5), 2);
+                E.fillStyle = grey(230); E.fillRect(0, 0, w, h);
+            });
+            poster('poster-a', 192, 256, 0);
+            poster('poster-b', 320, 256, 1);
+            poster('poster-c', 448, 256, 0);
+            // A timetable: a heading and columns of small print, lit from behind.
+            region('timetable', 576, 256, 96, 144, (w, h) => {
+                A.fillStyle = grey(232); A.fillRect(0, 0, w, h);
+                A.fillStyle = grey(50); A.fillRect(6, 6, w - 12, 12);
+                for (let row = 0; row < 18; row++) {
+                    A.fillStyle = grey(row % 2 ? 214 : 232); A.fillRect(6, 24 + row * 6.5, w - 12, 6.5);
+                    A.fillStyle = grey(70); A.fillRect(8, 26 + row * 6.5, 7, 2.5);
+                    for (let k = 0; k < 5; k++) if (random() > 0.25) A.fillRect(22 + k * 13, 26 + row * 6.5, 8, 2.5);
+                }
+                E.fillStyle = grey(150); E.fillRect(0, 0, w, h);
+            });
+            // A route map: the line as one rule, its stops as rings, small print under each.
+            region('route', 672, 256, 192, 96, (w, h) => {
+                A.fillStyle = grey(230); A.fillRect(0, 0, w, h);
+                A.fillStyle = grey(60); A.fillRect(10, 40, w - 20, 5);
+                for (let k = 0; k < 8; k++) {
+                    const x = 14 + k * (w - 28) / 7;
+                    A.fillStyle = grey(240); A.beginPath(); A.arc(x, 42.5, 5, 0, Math.PI * 2); A.fill();
+                    A.strokeStyle = grey(50); A.lineWidth = 2; A.stroke();
+                    A.fillStyle = grey(80); A.fillRect(x - 6, 54, 12, 3); A.fillRect(x - 4, 60, 8, 2);
+                }
+                A.fillStyle = grey(50); A.fillRect(10, 10, 60, 10);
+                E.fillStyle = grey(140); E.fillRect(0, 0, w, h);
+            });
+            // A station name board with no name that can be read: a large word of
+            // brush-like strokes, a small line under it, the neighbours each side.
+            region('nameboard', 0, 400, 512, 128, (w, h) => {
+                A.fillStyle = grey(236); A.fillRect(0, 0, w, h);
+                A.fillStyle = grey(36);
+                for (let k = 0; k < 3; k++) {
+                    const x = 170 + k * 62;
+                    const strokes = 3 + Math.floor(random() * 3);
+                    for (let s = 0; s < strokes; s++) {
+                        const horizontal = random() > 0.45;
+                        const sx = x + random() * 30, sy = 18 + random() * 40;
+                        if (horizontal) A.fillRect(x + random() * 8, sy, 30 + random() * 14, 6);
+                        else A.fillRect(sx, 16 + random() * 10, 6, 30 + random() * 20);
+                    }
+                    A.fillRect(x + 2, 66, 44, 6);
+                }
+                A.fillStyle = grey(90);
+                A.fillRect(196, 84, 120, 6);
+                for (const [x, dir] of [[18, -1], [w - 18, 1]]) {
+                    A.beginPath(); A.moveTo(x, 104); A.lineTo(x - dir * 12, 96); A.lineTo(x - dir * 12, 112); A.fill();
+                    A.fillRect(dir < 0 ? 36 : w - 36 - 70, 98, 70, 5); A.fillRect(dir < 0 ? 36 : w - 36 - 50, 108, 50, 3);
+                }
+                E.fillStyle = grey(200); E.fillRect(0, 0, w, h);
+            });
+            // A clock face: a ring of marks and two hands, at ten to two.
+            region('clock', 512, 400, 128, 128, (w, h) => {
+                A.fillStyle = grey(240); A.beginPath(); A.arc(64, 64, 60, 0, Math.PI * 2); A.fill();
+                A.strokeStyle = grey(40); A.lineWidth = 5; A.stroke();
+                for (let k = 0; k < 12; k++) {
+                    const a = k / 12 * Math.PI * 2;
+                    A.lineWidth = k % 3 ? 2 : 5;
+                    A.beginPath(); A.moveTo(64 + Math.cos(a) * 46, 64 + Math.sin(a) * 46);
+                    A.lineTo(64 + Math.cos(a) * 54, 64 + Math.sin(a) * 54); A.stroke();
+                }
+                A.lineWidth = 5; A.beginPath(); A.moveTo(64, 64); A.lineTo(64 - 26, 64 - 18); A.stroke();
+                A.lineWidth = 3; A.beginPath(); A.moveTo(64, 64); A.lineTo(64 + 34, 64 - 30); A.stroke();
+                E.fillStyle = grey(190); E.beginPath(); E.arc(64, 64, 58, 0, Math.PI * 2); E.fill();
+            });
+            // The front of a drinks machine: rows of lit samples with a button under each,
+            // the lit panel below, the slot and the flap.
+            region('vending', 640, 400, 96, 192, (w, h) => {
+                A.fillStyle = grey(70); A.fillRect(0, 0, w, h);
+                for (let row = 0; row < 3; row++) for (let k = 0; k < 5; k++) {
+                    const x = 6 + k * 17.5, y = 8 + row * 30;
+                    A.fillStyle = grey(150 + random() * 100); A.fillRect(x, y, 13, 20);
+                    E.fillStyle = grey(255); E.fillRect(x, y, 13, 20); E.fillRect(x + 4, y + 23, 5, 3);
+                    A.fillStyle = grey(230); A.fillRect(x + 4, y + 23, 5, 3);
+                }
+                A.fillStyle = grey(200); A.fillRect(6, 102, 60, 46); E.fillStyle = grey(160); E.fillRect(6, 102, 60, 46);
+                A.fillStyle = grey(30); A.fillRect(72, 108, 16, 30); A.fillRect(10, 160, w - 20, 22);
+                H.fillStyle = grey(60); H.fillRect(10, 160, w - 20, 22);
+            });
+            // A pole's number plate.
+            region('plate', 736, 400, 48, 96, (w, h) => {
+                A.fillStyle = grey(232); A.fillRect(0, 0, w, h);
+                A.strokeStyle = grey(50); A.lineWidth = 3; A.strokeRect(3, 3, w - 6, h - 6);
+                A.fillStyle = grey(40);
+                for (let k = 0; k < 3; k++) { A.fillRect(14, 14 + k * 26, 20, 4); A.fillRect(14, 30 + k * 26, 20, 4); A.fillRect(30, 14 + k * 26, 4, 18); }
+            });
+            // Vertical slots, as in a litter bin or a cabinet door.
+            region('slots', 784, 400, 64, 64, (w, h) => {
+                for (let x = 0; x < w; x++) {
+                    const u = (x % 16) / 16;
+                    A.fillStyle = grey(u > 0.75 ? 40 : 196); A.fillRect(x, 0, 1, h);
+                    H.fillStyle = grey(u > 0.75 ? 40 : 150); H.fillRect(x, 0, 1, h);
+                }
+            });
+            // Weatherboarding: lapped boards, each casting a line of shadow on the next.
+            region('boards', 848, 400, 64, 64, (w, h) => {
+                for (let y = 0; y < h; y++) {
+                    const u = (y % 16) / 16;
+                    A.fillStyle = grey(u > 0.88 ? 90 : 170 + u * 40); A.fillRect(0, y, w, 1);
+                    H.fillStyle = grey(70 + u * 150); H.fillRect(0, y, w, 1);
+                }
+            });
+            const a = A.getImageData(0, 0, SHEET, SHEET).data, hh = H.getImageData(0, 0, SHEET, SHEET).data;
+            const e = E.getImageData(0, 0, SHEET, SHEET).data;
+            const data = new Uint8Array(SHEET * SHEET * 4);
+            // Rows go bottom-up, as texture coordinates do.
+            for (let y = 0; y < SHEET; y++) for (let x = 0; x < SHEET; x++) {
+                const from = (y * SHEET + x) * 4, to = ((SHEET - 1 - y) * SHEET + x) * 4;
+                data[to] = a[from]; data[to + 1] = hh[from]; data[to + 2] = e[from]; data[to + 3] = 255;
+            }
+            return data;
+        };
+        const sheetTexture = (() => {
+            const data = paintSheet();
+            const texture = data
+                ? new T.DataTexture(data, SHEET, SHEET, T.RGBAFormat)
+                : new T.DataTexture(new Uint8Array([196, 128, 255, 255]), 1, 1, T.RGBAFormat);
+            if (data) {
+                texture.generateMipmaps = true;
+                texture.minFilter = T.LinearMipmapLinearFilter;
+                texture.magFilter = T.LinearFilter;
+                texture.anisotropy = 4;
+            }
+            texture.needsUpdate = true;
+            return texture;
+        })();
+        const regionOf = name => sheetRegions[name] || [0, 0, 1, 1];
+        // Tones a fitting takes: indices into the list the shader reads.
+        const TONE = Object.freeze({ steel: 0, concrete: 1, timber: 2, pale: 3, warm: 4, glass: 5, lamp: 6,
+            room: 7, ceiling: 8, cold: 9, ink: 10, sky: 11, poster: 12 });
+        const dressTones = Array.from({ length: 13 }, () => new T.Color());
+        // A box whose edges are cut back by a set width in metres, whatever its
+        // size: each corner remembers which way its bevel moves it.
+        const bevelledBox = (() => {
+            const position = [], normal = [], inset = [];
+            const corner = (axis, c) => {
+                const into = c.map((v, k) => (k === axis ? 0 : -v));
+                return { p: c.map(v => v * 0.5), i: into };
+            };
+            const tri = (verts, n) => {
+                // Wind each triangle to face its normal, judged at a nominal bevel.
+                const at = v => v.p.map((x, k) => x + v.i[k] * 0.1);
+                const [p0, p1, p2] = verts.map(at);
+                const u = p1.map((x, k) => x - p0[k]), w = p2.map((x, k) => x - p0[k]);
+                const c = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+                if (c[0] * n[0] + c[1] * n[1] + c[2] * n[2] < 0) verts = [verts[0], verts[2], verts[1]];
+                for (const v of verts) { position.push(...v.p); inset.push(...v.i); normal.push(...n); }
+            };
+            const signs = [-1, 1];
+            for (let axis = 0; axis < 3; axis++) for (const s of signs) {
+                const [b, d] = [0, 1, 2].filter(k => k !== axis);
+                const quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => {
+                    const c = [0, 0, 0]; c[axis] = s; c[b] = x; c[d] = y; return corner(axis, c);
+                });
+                const n = [0, 0, 0]; n[axis] = s;
+                tri([quad[0], quad[1], quad[2]], n); tri([quad[0], quad[2], quad[3]], n);
+            }
+            for (let axis = 0; axis < 3; axis++) {
+                const [b, d] = [0, 1, 2].filter(k => k !== axis);
+                for (const sb of signs) for (const sd of signs) {
+                    const ends = signs.map(sa => { const c = [0, 0, 0]; c[axis] = sa; c[b] = sb; c[d] = sd; return c; });
+                    const [fb0, fb1] = ends.map(c => corner(b, c)), [fd0, fd1] = ends.map(c => corner(d, c));
+                    const n = [0, 0, 0]; n[b] = sb * Math.SQRT1_2; n[d] = sd * Math.SQRT1_2;
+                    tri([fb0, fb1, fd1], n); tri([fb0, fd1, fd0], n);
+                }
+            }
+            for (const x of signs) for (const y of signs) for (const z of signs) {
+                const c = [x, y, z], k = 1 / Math.sqrt(3);
+                tri([corner(0, c), corner(1, c), corner(2, c)], [x * k, y * k, z * k]);
+            }
+            const shape = new T.BufferGeometry();
+            shape.setAttribute('position', new T.Float32BufferAttribute(position, 3));
+            shape.setAttribute('normal', new T.Float32BufferAttribute(normal, 3));
+            shape.setAttribute('inset', new T.Float32BufferAttribute(inset, 3));
+            return geometry(shape);
+        })();
+        const DRESSED_CAPACITY = 2600;
+        const dressedMaterial = material(new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.7, metalness: 0.2 }));
+        const dressSky = { value: new T.Color() };
+        dressedMaterial.onBeforeCompile = shader => {
+            Object.assign(shader.uniforms, { dressSheet: { value: sheetTexture }, dressTones: { value: dressTones },
+                dressSky, wetness, dressPuddles: { value: new T.Vector4(...regionOf('concrete')) } });
+            shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
+                attribute vec3 inset;
+                attribute vec4 dressRect, dressLook, dressCut;
+                uniform vec3 dressTones[13];
+                varying vec2 vDressUv;
+                varying vec4 vDressRect;
+                varying vec3 vDressTone;
+                varying float vDressTile, vDressRough, vDressMetal, vDressGlow, vDressGlass;
+                varying vec3 vDressWorld, vDressUp;`)
+                .replace('#include <begin_vertex>', `#include <begin_vertex>
+                vec3 dressSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz),
+                    length(instanceMatrix[2].xyz));
+                vec3 dressCutBy = min(dressCut.xyz, dressSize * 0.49);
+                transformed = position + inset * dressCutBy / max(dressSize, vec3(0.0001));
+                vec3 face = abs(normal);
+                vec3 across = face.y > face.x && face.y > face.z ? vec3(1.0, 0.0, 0.0)
+                    : face.x > face.z ? vec3(0.0, 0.0, -sign(normal.x)) : vec3(sign(normal.z), 0.0, 0.0);
+                vec3 upward = face.y > face.x && face.y > face.z ? vec3(0.0, 0.0, -sign(normal.y)) : vec3(0.0, 1.0, 0.0);
+                vec3 metres = transformed * dressSize;
+                vDressTile = dressLook.x;
+                vDressUv = dressLook.x > 0.0
+                    ? vec2(dot(metres, across), dot(metres, upward)) / dressLook.x
+                    : vec2(dot(transformed, across), dot(transformed, upward)) + 0.5;
+                vDressRect = dressRect;
+                int toneIndex = int(dressLook.y + 0.5);
+                vDressTone = dressTones[toneIndex];
+                vDressGlass = toneIndex == 5 ? 1.0 : 0.0;
+                vDressRough = dressLook.z;
+                vDressMetal = dressLook.w;
+                vDressGlow = dressCut.w;
+                vDressWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+                vDressUp = normalize(mat3(modelMatrix * instanceMatrix) * normal);`);
+            shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
+                uniform sampler2D dressSheet;
+                uniform vec3 dressSky;
+                uniform vec4 dressPuddles;
+                uniform float wetness;
+                varying vec3 vDressWorld, vDressUp;
+                float dressPuddle = 0.0;
+                varying vec2 vDressUv;
+                varying vec4 vDressRect;
+                varying vec3 vDressTone;
+                varying float vDressTile, vDressRough, vDressMetal, vDressGlow, vDressGlass;
+                vec3 dressTexel = vec3(0.77, 0.5, 1.0);`)
+                .replace('#include <color_fragment>', `#include <color_fragment>
+                {
+                    vec2 cell = vDressTile > 0.0 ? fract(vDressUv) : clamp(vDressUv, 0.0, 1.0);
+                    vec2 grad = vDressRect.zw;
+                    dressTexel = textureGrad(dressSheet, vDressRect.xy + cell * vDressRect.zw,
+                        dFdx(vDressUv) * grad, dFdy(vDressUv) * grad).rgb;
+                    diffuseColor.rgb = vDressTone * dressTexel.r * 1.3 * (1.0 - vDressGlow * dressTexel.b);
+                    if (wetness > 0.0) {
+                        // Water stands in the low, stained patches of anything flat and open to the sky.
+                        float level = smoothstep(0.8, 0.95, vDressUp.y);
+                        float stain = texture(dressSheet, dressPuddles.xy + fract(vDressWorld.xz * 0.11) * dressPuddles.zw).r;
+                        dressPuddle = level * smoothstep(0.74, 0.6, stain) * smoothstep(0.3, 0.8, wetness);
+                        diffuseColor.rgb *= 1.0 - wetness * (0.3 + 0.2 * level) - dressPuddle * 0.3;
+                    }
+                }`)
+                .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+                roughnessFactor = mix(vDressRough, mix(0.28, 0.04, dressPuddle), wetness * (1.0 - vDressGlow));`)
+                .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+                metalnessFactor = vDressMetal;`)
+                .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+                {
+                    vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+                    vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
+                    float det = dot(dpdx, r1);
+                    float relief = dressTexel.g * (1.0 - dressPuddle);
+                    normal = normalize(abs(det) * normal - sign(det) * 0.006
+                        * (dFdx(relief) * r1 + dFdy(relief) * r2));
+                }`)
+                .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+                totalEmissiveRadiance += vDressTone * dressTexel.r * 1.3 * dressTexel.b * vDressGlow;
+                if (vDressGlass > 0.5) {
+                    // Glass gives back the sky, more of it the flatter it is seen.
+                    float facing = max(0.0, abs(dot(normalize(vViewPosition), normal)));
+                    totalEmissiveRadiance += dressSky * (0.06 + 0.42 * pow(max(0.0, 1.0 - facing), 3.0));
+                }`);
+        };
+        dressedMaterial.customProgramCacheKey = () => 'dressed-lineside';
+        const dressed = new T.InstancedMesh(bevelledBox, dressedMaterial, DRESSED_CAPACITY);
+        dressed.instanceMatrix.setUsage(T.DynamicDrawUsage);
+        dressed.frustumCulled = false;
+        dressed.count = 0;
+        dressed.name = 'dressed';
+        root.add(dressed);
+        const dressAttribute = name => {
+            const attribute = new T.InstancedBufferAttribute(new Float32Array(DRESSED_CAPACITY * 4), 4);
+            attribute.setUsage(T.DynamicDrawUsage);
+            bevelledBox.setAttribute(name, attribute);
+            return attribute;
+        };
+        const dressRect = dressAttribute('dressRect'), dressLook = dressAttribute('dressLook'), dressCut = dressAttribute('dressCut');
+        const matrixScale = new T.Vector3();
+        /*
+         * A look: which part of the sheet, repeated every so many metres or
+         * stretched once over each face (tile 0), the tone, how rough and how
+         * metallic, how wide the bevel ('round' cuts a bar to an octagon), and
+         * whether it shines.
+         */
+        const look = ({ sheet = 'plain', tile = 0, tone = TONE.steel, rough = 0.6, metal = 0.3, bevel = 0.012, glow = 0 }) => {
+            const rect = regionOf(sheet);
+            return {
+                instanceMatrix: dressed.instanceMatrix,
+                get count() { return dressed.count; },
+                set count(value) { dressed.count = value; },
+                setMatrixAt(index, matrix) {
+                    dressed.setMatrixAt(index, matrix);
+                    dressRect.setXYZW(index, rect[0], rect[1], rect[2], rect[3]);
+                    dressLook.setXYZW(index, tile, tone, rough, metal);
+                    if (bevel === 'round') {
+                        matrixScale.setFromMatrixScale(matrix);
+                        const sizes = [matrixScale.x, matrixScale.y, matrixScale.z];
+                        const long = sizes.indexOf(Math.max(...sizes));
+                        const cut = Math.min(...sizes.filter((_, k) => k !== long)) * 0.293;
+                        dressCut.setXYZW(index, long === 0 ? 0.004 : cut, long === 1 ? 0.004 : cut, long === 2 ? 0.004 : cut, glow);
+                    } else dressCut.setXYZW(index, bevel, bevel, bevel, glow);
+                }
+            };
+        };
+        // The fittings' finishes.
+        const LOOK = {
+            paint: look({ sheet: 'weathered', tile: 1.6, rough: 0.55, metal: 0.35 }),
+            tube: look({ sheet: 'weathered', tile: 1.6, rough: 0.45, metal: 0.45, bevel: 'round' }),
+            bright: look({ sheet: 'weathered', tile: 2.4, rough: 0.3, metal: 0.8, bevel: 'round' }),
+            perforated: look({ sheet: 'perforated', tile: 0.12, rough: 0.5, metal: 0.5, bevel: 0.006 }),
+            corrugated: look({ sheet: 'corrugated', tile: 0.6, rough: 0.5, metal: 0.45, bevel: 0.004 }),
+            louvre: look({ sheet: 'louvre', tile: 0.32, rough: 0.6, metal: 0.3 }),
+            slots: look({ sheet: 'slots', tile: 0.24, rough: 0.6, metal: 0.3 }),
+            concrete: look({ sheet: 'concrete', tile: 2.2, tone: TONE.concrete, rough: 0.9, metal: 0, bevel: 0.02 }),
+            paving: look({ sheet: 'paving', tile: 2.4, tone: TONE.concrete, rough: 0.85, metal: 0, bevel: 0.01 }),
+            coping: look({ sheet: 'concrete', tile: 1.4, tone: TONE.pale, rough: 0.8, metal: 0, bevel: 0.03 }),
+            tactile: look({ sheet: 'tactile', tile: 0.3, tone: TONE.warm, rough: 0.7, metal: 0, bevel: 0.004 }),
+            stripes: look({ sheet: 'stripes', tile: 0.5, tone: TONE.warm, rough: 0.6, metal: 0.1, bevel: 0.006 }),
+            glass: look({ sheet: 'glass', tile: 1.2, tone: TONE.glass, rough: 0.12, metal: 0.6, bevel: 0.002 }),
+            boards: look({ sheet: 'boards', tile: 0.9, tone: TONE.timber, rough: 0.85, metal: 0, bevel: 0.006 }),
+            timber: look({ sheet: 'weathered', tile: 1.2, tone: TONE.timber, rough: 0.85, metal: 0, bevel: 0.01 }),
+            ink: look({ sheet: 'weathered', tile: 1.6, tone: TONE.ink, rough: 0.6, metal: 0.2 }),
+            pale: look({ sheet: 'weathered', tile: 1.6, tone: TONE.pale, rough: 0.6, metal: 0.1 }),
+            warm: look({ sheet: 'weathered', tile: 1.6, tone: TONE.warm, rough: 0.6, metal: 0.1 }),
+            nameboard: look({ sheet: 'nameboard', tone: TONE.pale, rough: 0.5, metal: 0, glow: 0.6, bevel: 0.004 }),
+            timetable: look({ sheet: 'timetable', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
+            route: look({ sheet: 'route', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.5, bevel: 0.002 }),
+            clock: look({ sheet: 'clock', tone: TONE.pale, rough: 0.4, metal: 0, glow: 0.6, bevel: 0.002 }),
+            plate: look({ sheet: 'plate', tone: TONE.pale, rough: 0.5, metal: 0.1, bevel: 0.002 }),
+            vending: look({ sheet: 'vending', tone: TONE.room, rough: 0.35, metal: 0.2, glow: 1, bevel: 0.003 }),
+            posters: ['poster-a', 'poster-b', 'poster-c'].map(sheet =>
+                look({ sheet, tone: TONE.poster, rough: 0.3, metal: 0, glow: 1, bevel: 0.002 })),
+            lamp: look({ tone: TONE.lamp, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
+            coldLamp: look({ tone: TONE.cold, rough: 0.4, metal: 0, glow: 1, bevel: 0.01 }),
+            window: look({ tone: TONE.room, rough: 0.4, metal: 0, glow: 1, bevel: 0.002 }),
+            figure: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.04 }),
+            head: look({ sheet: 'concrete', tile: 3, tone: TONE.ink, rough: 0.95, metal: 0, bevel: 0.07 })
         };
         // Flat-bottom rail: head, web and foot. Sleepers carry their tie plates.
         // A rail is rust everywhere but the band its wheels run on: only that
@@ -262,7 +762,7 @@
         const litSurface = tinted(6), ceilingGlow = new T.Color();
         // A buoy's light, a short wink every few seconds, and the red paint under it.
         const beacons = tinted(7), signalBody = tinted(8);
-        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow];
+        const sceneryPools = [masts, steelParts, concreteParts, timberParts, glow, dressed];
         Object.entries({ rails, sleepers, masts, steelParts, concreteParts, timberParts, glow })
             .forEach(([name, mesh]) => { mesh.name = name; });
         // The bed hides the track from below, so the water never shows it.
@@ -299,7 +799,7 @@
                 global.document.head?.appendChild(tag);
             }
         }
-        let stationTypes = [];
+        let stationTypes = [], stationPlan = [];
         const wirePositions = new Float32Array(40 * 20 * 6);
         const wireGeometry = geometry(new T.BufferGeometry());
         wireGeometry.setAttribute('position', new T.BufferAttribute(wirePositions, 3).setUsage(T.DynamicDrawUsage));
@@ -2176,6 +2676,33 @@
             sheenMat.uniforms.opacity.value = e * (palBase?.light ? 0.03 : 0.07);
         };
         let dead = false, reflectionEnabled = true, liveStations = 0, quality = 'standard';
+        // How far the water has risen over the track in the dream, in metres.
+        let drownLevel = 0;
+        // Gulls are drawn as strokes after the overhead line, in the same buffer.
+        let wireCount = 0, gullsOn = false;
+        const GULLS = 5;
+        const flyGulls = (track, s, time) => {
+            let v = wireCount;
+            if (gullsOn) for (let i = 0; i < GULLS && v + 24 <= wirePositions.length; i++) {
+                // Each keeps pace with the train a while, wheeling slowly off to one side.
+                const along = s + 22 + i * 13 + Math.sin(time * 0.11 + i * 2.1) * 6;
+                const f = track.at(along);
+                const lateral = (i % 2 ? 1 : -1) * (7 + i * 2.6) + Math.sin(time * 0.23 + i) * 3;
+                const y = 7.5 + i * 1.1 + Math.sin(time * 0.37 + i * 1.7) * 0.7;
+                const flap = Math.sin(time * (5.5 + i * 0.4) + i * 1.3);
+                const cx = f.position.x + f.right.x * lateral, cz = f.position.z + f.right.z * lateral;
+                const wing = [[-0.62, 0.12 + flap * 0.22], [-0.28, 0.04 - flap * 0.05], [0, -0.04], [0.28, 0.04 - flap * 0.05],
+                    [0.62, 0.12 + flap * 0.22]];
+                for (let k = 0; k < 4; k++) for (const [w, h] of [wing[k], wing[k + 1]]) {
+                    // The wings spread across the line of flight.
+                    wirePositions[v++] = cx + f.right.x * w;
+                    wirePositions[v++] = y + h;
+                    wirePositions[v++] = cz + f.right.z * w;
+                }
+            }
+            wireGeometry.setDrawRange(0, v / 3);
+            wireGeometry.attributes.position.needsUpdate = true;
+        };
         let trackKey = '', sceneryKey = '', instanceTrack = null, lightAnchors = [], instanceRebuilds = 0;
         let stationInstances = 0;
         let auroraTrack = null;
@@ -2207,6 +2734,18 @@
                     : kind === 3 ? warmPaint : kind === 4 ? palePaint : kind === 5 ? roomGlow : ceilingGlow);
             }
             glow.instanceColor.needsUpdate = true;
+            // The fittings take the same tones as the plain pools, and glass the sky.
+            const night = !palBase?.light;
+            [steel.color, concrete.color, wood.color, palePaint, warmPaint, null, lampMaterial.color, roomGlow,
+                ceilingGlow, coldLampMaterial.color].forEach((colour, i) => { if (colour) dressTones[i].copy(colour); });
+            dressTones[TONE.pale].copy(palePaint).lerp(concrete.color, 0.2).multiplyScalar(night ? 1.6 : 1);
+            dressTones[TONE.glass].copy(skyMat.uniforms.horizon.value).multiplyScalar(night ? 0.25 : 0.95);
+            // A poster case is lit white from behind; only the night warms it a little.
+            if (night) dressTones[TONE.poster].copy(palePaint).multiplyScalar(1.5).lerp(roomGlow, 0.35);
+            else dressTones[TONE.poster].copy(palePaint).multiplyScalar(1.04);
+            dressTones[TONE.ink].copy(steel.color).multiplyScalar(night ? 0.35 : 0.6);
+            dressTones[TONE.sky].copy(skyMat.uniforms.horizon.value);
+            dressSky.value.copy(skyMat.uniforms.horizon.value).multiplyScalar(night ? 0.6 : 0.3);
         };
         const updateLights = (track, s, saving, audio) => {
             lightAnchors.sort((a, b) => Math.abs(a.address - s) - Math.abs(b.address - s));
@@ -2384,6 +2923,7 @@
             quality = config.quality || 'standard';
             const saving = quality === 'energy-saving';
             const s = pose.distance;
+            if (Number.isFinite(tuning.wetness)) wetness.value = clamp(tuning.wetness);
             sky.position.set(pose.position.x, 0, pose.position.z);
             stars.position.copy(sky.position);
             ridge.position.copy(sky.position);
@@ -2457,6 +2997,7 @@
             }
             if (rocksArrived) { rocksArrived = false; sceneryKey = ''; }
             if (instanceTrack === track && nextSceneryKey === sceneryKey) {
+                flyGulls(track, s, time);
                 tintGlow(time);
                 updateLights(track, s, saving, audio);
                 return;
@@ -2496,6 +3037,18 @@
                 return (lo + hi) * 0.5;
             };
             const stateAt = address => timeline.sample(timeAt(address));
+            /*
+             * As the song goes on the line turns to a dream: the water rises over
+             * the track, the busy shore falls away, and what is left is a lamp, a
+             * lit window far off, someone waiting. The director says how far into
+             * the dream an address is; failing that, the last part of the song is.
+             */
+            const dreamAt = address => {
+                const dream = stateAt(address).dream;
+                if (Number.isFinite(dream)) return clamp(dream);
+                return smooth((timeAt(address) / Math.max(1, timeline.duration || 1) - 0.55) / 0.15);
+            };
+            drownLevel = 0.45 * smooth((dreamAt(s) - 0.3) / 0.5);
             // Where the camera is as it goes by an address: how far out to one
             // side of the line, and how high. In the cab it is on the line.
             if (passingTrack !== track) { passing = new Map(); passingTrack = track; }
@@ -2555,7 +3108,10 @@
                 const taken = towards => flownOver(towards) || screened(towards);
                 if (taken(side)) side = -side;
                 if (taken(side)) continue;
-                stations.push({ id, address, open: stateAt(address).density < 0.4, side });
+                // Deep in the dream only every other station is left, and that one bare.
+                const dream = dreamAt(address);
+                if (dream > 0.5 && id % 2) continue;
+                stations.push({ id, address, open: stateAt(address).density < 0.4, side, dream });
             }
             const atStation = (address, side, margin) => stations.some(station =>
                 station.side === side && Math.abs(station.address - address) < 14 + margin);
@@ -2619,7 +3175,8 @@
                 // Over open water the camera flies at 5 to 7 m and the line is
                 // written on the sky: bare posts stay below that eye line.
                 const lampY = pole.wired ? LAMP_Y : 4.2;
-                if (id % 7 !== 3) {
+                const dreaming = dreamAt(address) > 0.5;
+                if (dreaming ? id % 4 === 0 : id % 7 !== 3) {
                     // Luminaire: bracket, hooded housing and the lit diffuser below it.
                     span(steelParts, address, L(POLE_OFFSET), lampY + 0.02, L(LAMP_OFFSET - 0.2), lampY + 0.2, 0.05);
                     if (!saving) {
@@ -2637,7 +3194,7 @@
                     lightAnchors.push({ address, side, y: lampY, distance: Math.abs(address - s) });
                 }
                 // A block signal on every eleventh pole, its lamp in the cold palette colour.
-                if (id % 11 === 5 && !saving && !atStation(address, side, 2) && !inSight(track, address, 2.3, side)) {
+                if (id % 11 === 5 && !saving && !dreaming && !atStation(address, side, 2) && !inSight(track, address, 2.3, side)) {
                     part(masts, address + 1.2, L(2.3), 1.9, 0.7, 3.8, 0.7);
                     part(steelParts, address + 1.2, L(2.3), 3.55, 0.36, 1.0, 0.16);
                     part(steelParts, address + 1.08, L(2.3), 3.86, 0.3, 0.04, 0.22);
@@ -2666,8 +3223,8 @@
                     stagger + (nextStagger - stagger) * half / 2, CONTACT_Y, address + (half + 1) * spacing / 2,
                     stagger + (nextStagger - stagger) * (half + 1) / 2, CONTACT_Y);
             });
-            wireGeometry.setDrawRange(0, wireVertex / 3);
-            wireGeometry.attributes.position.needsUpdate = true;
+            wireCount = wireVertex;
+            gullsOn = enabled && !saving;
             wires.visible = enabled;
             haloGeometry.setDrawRange(0, haloCount);
             haloGeometry.attributes.position.needsUpdate = true;
@@ -2677,11 +3234,12 @@
             // --- Stations ---
             liveStations = 0;
             stationTypes = [];
-            const motifNames = ['sheltered-platform', 'waiting-shelters', 'water-stairs', 'station-house'];
+            stationPlan = [];
+            const motifNames = ['sheltered-platform', 'waiting-shelters', 'water-stairs', 'station-house', 'lone-platform'];
             const beforeStations = sceneryPools.reduce((sum, mesh) => sum + mesh.count, 0);
-            for (const { id, address, open, side } of stations) {
+            for (const { id, address, open, side, dream } of stations) {
                 // The steps belong to open water; lit stations rotate through the other three.
-                const type = open ? 2 : [0, 1, 3][id % 3];
+                const type = dream > 0.5 ? 4 : open ? 2 : [0, 1, 3][id % 3];
                 const lateral = value => side * value;
                 // Whatever would stand between the train and a line being sung is
                 // left out, bay by bay: the station keeps an opening there.
@@ -2703,47 +3261,186 @@
                 // All objects remain below/away from the lyric viewing zone:
                 // lyric signs stand at +/-18m; shelters stay within +/-10m and
                 // take the side with no screen nearby.
+                // Fittings that stand above the sight line go up whole or not at all.
+                const whole = (at, offset, top, reach = 0) =>
+                    [-reach, 0, reach].every(d => clear(at + d, offset, top));
+                // A bevelled member between two points of the cross-section, kept whole.
+                const strut = (finish, at, l0, y0, l1, y1, thick, depth = thick) =>
+                    rawSpan(finish, at, lateral(l0), y0, lateral(l1), y1, thick, depth);
+                const fit = (finish, at, offset, y, sx, sy, sz, roll = 0, pitch = 0) =>
+                    rawPart(finish, at, lateral(offset), y, sx, sy, sz, roll, pitch);
+                // Someone waiting: a figure in a long coat, seen only as a shape.
+                const figure = (z, offset, seed) => {
+                    const r = seededRandom(`waiting:${id}:${seed}`);
+                    const tall = 0.92 + r() * 0.14, base = 1.12;
+                    const y = v => base + v * tall;
+                    for (const leg of [-0.075, 0.075]) part(LOOK.figure, z + leg, lateral(offset), y(0.36), 0.11, 0.72 * tall, 0.11);
+                    // A coat that narrows from the hem to the shoulders, arms close at the sides.
+                    [[0.66, 0.42, 0.26, 0.44], [1.0, 0.36, 0.24, 0.41], [1.3, 0.2, 0.22, 0.38]]
+                        .forEach(([at, height, depth, width]) => part(LOOK.figure, z, lateral(offset), y(at),
+                            depth, height * tall, width));
+                    for (const arm of [-0.2, 0.2]) part(LOOK.figure, z + arm, lateral(offset), y(1.07), 0.09, 0.5 * tall, 0.09, 0, arm * 0.2);
+                    part(LOOK.figure, z, lateral(offset), y(1.45), 0.08, 0.08, 0.08);
+                    part(LOOK.head, z, lateral(offset), y(1.58), 0.17, 0.21, 0.16);
+                    // Some carry a closed umbrella, its tip on the deck.
+                    if (r() > 0.5) part(LOOK.tube, z + 0.33, lateral(offset - 0.05), y(0.42), 0.03, 0.86, 0.03, 0, 0.12);
+                };
+                // A platform bench: slatted seat and back on two cast ends, an arm at each.
+                const bench = (z, back, length = 1.8) => {
+                    for (let slat = 0; slat < 4; slat++)
+                        part(LOOK.timber, z, lateral(back - 0.42 + slat * 0.11), 1.57, 0.085, 0.035, length);
+                    for (let slat = 0; slat < 2; slat++)
+                        part(LOOK.timber, z, lateral(back - 0.02 - slat * 0.012), 1.78 + slat * 0.15, 0.03, 0.1, length, side * -0.12);
+                    for (const end of [-1, 1]) {
+                        const at = z + end * (length / 2 - 0.12);
+                        part(LOOK.paint, at, lateral(back - 0.38), 1.33, 0.06, 0.46, 0.06);
+                        part(LOOK.paint, at, lateral(back - 0.06), 1.4, 0.06, 0.6, 0.06);
+                        part(LOOK.paint, at, lateral(back - 0.22), 1.53, 0.42, 0.04, 0.05);
+                        part(LOOK.tube, at + end * 0.04, lateral(back - 0.24), 1.8, 0.36, 0.035, 0.035);
+                        part(LOOK.paint, at + end * 0.04, lateral(back - 0.4), 1.68, 0.035, 0.24, 0.035);
+                    }
+                };
+                // A litter bin: slotted drum, a lid with a hood over the mouth.
+                const bin = (z, offset) => {
+                    part(LOOK.slots, z, lateral(offset), 1.48, 0.42, 0.72, 0.42);
+                    part(LOOK.paint, z, lateral(offset), 1.88, 0.46, 0.08, 0.46);
+                    part(LOOK.ink, z, lateral(offset - 0.2), 1.72, 0.03, 0.12, 0.26);
+                };
+                // The station name board: a lit panel on two posts, the line's band
+                // under the name, a hood with its lamp over the top.
+                const nameboard = (z, offset) => {
+                    if (!whole(z, offset, 3.3, 1.1)) return;
+                    const face = offset - 0.06;
+                    for (const post of [-1.12, 1.12]) {
+                        fit(LOOK.tube, z + post, offset, 2.2, 0.08, 2.2, 0.08);
+                        fit(LOOK.paint, z + post, offset, 1.16, 0.16, 0.06, 0.16);
+                    }
+                    fit(LOOK.paint, z, offset, 2.62, 0.1, 0.96, 2.36);
+                    fit(LOOK.nameboard, z, face, 2.64, 0.02, 0.8, 2.2);
+                    fit(LOOK.warm, z, face - 0.005, 2.3, 0.02, 0.09, 2.2);
+                    fit(LOOK.paint, z, offset - 0.12, 3.14, 0.32, 0.06, 2.4);
+                    fit(LOOK.lamp, z, offset - 0.2, 3.1, 0.06, 0.02, 2.1);
+                };
+                // A drinks machine, its front the brightest thing on the platform.
+                const machine = (z, offset) => {
+                    if (!whole(z, offset, 2.93)) return;
+                    fit(LOOK.paint, z, offset, 2.015, 0.7, 1.83, 1.02);
+                    fit(LOOK.vending, z, offset - 0.36, 2.0, 0.02, 1.7, 0.9);
+                    fit(LOOK.paint, z, offset - 0.1, 2.97, 0.86, 0.06, 1.08);
+                    fit(LOOK.ink, z, offset, 1.14, 0.74, 0.08, 1.06);
+                };
+                // A glass-and-steel waiting shelter: four posts in their sleeves, a
+                // flat roof with a deep fascia and a light under it, perforated
+                // panels low, glass high, a lit poster case closing one end.
+                const glassShelter = (z, index) => {
+                    const front = 6.75, back = 8.6, mid = (front + back) / 2, half = 2.1;
+                    const roofY = 3.66, wallTop = 3.3;
+                    bench(z, back - 0.05, 3.2);
+                    if (![-half, 0, half].every(at => clear(z + at, 7.6, roofY + 0.1))) return;
+                    for (const end of [-half, half]) for (const lat of [front, back]) {
+                        fit(LOOK.tube, z + end, lat, 2.37, 0.1, 2.54, 0.1);
+                        fit(LOOK.paint, z + end, lat, 1.3, 0.17, 0.38, 0.17);
+                    }
+                    // Roof: the sheet, its fascia band all round, the light in a slot underneath.
+                    fit(LOOK.paint, z, mid + 0.15, roofY + 0.06, back - front + 0.75, 0.06, half * 2 + 0.5, side * 0.05);
+                    fit(LOOK.paint, z, front - 0.22, roofY, 0.05, 0.26, half * 2 + 0.5);
+                    fit(LOOK.warm, z, front - 0.25, roofY, 0.012, 0.13, half * 2 + 0.3);
+                    fit(LOOK.paint, z, back + 0.38, roofY + 0.02, 0.05, 0.2, half * 2 + 0.5);
+                    for (const end of [-1, 1]) fit(LOOK.paint, z + end * (half + 0.25), mid + 0.15, roofY, back - front + 0.75, 0.22, 0.05);
+                    fit(LOOK.ink, z, mid, roofY - 0.05, 0.22, 0.03, half * 2 - 0.3);
+                    if ((id + index) % 5 !== 3) fit(LOOK.lamp, z, mid, roofY - 0.07, 0.1, 0.012, half * 2 - 0.5);
+                    // Back wall: three bays, perforated below the rail and glazed above.
+                    for (let bay = -1; bay <= 1; bay++) {
+                        const at = z + bay * half * 2 / 3;
+                        fit(LOOK.perforated, at, back, 1.56, 0.02, 0.62, half * 2 / 3 - 0.08);
+                        fit(LOOK.glass, at, back, 2.6, 0.015, 1.3, half * 2 / 3 - 0.08);
+                        if (bay < 1) fit(LOOK.paint, at + half / 3, back, 2.3, 0.06, 2.0, 0.05);
+                    }
+                    for (const y of [1.25, 1.88, wallTop]) fit(LOOK.paint, z, back, y, 0.07, 0.06, half * 2);
+                    fit(LOOK.warm, z, back - 0.04, wallTop - 0.17, 0.01, 0.2, half * 2 - 0.1);
+                    // The poster case at the far end, lit both sides; a glass screen at the near one.
+                    const caseAt = z + half * (index ? -1 : 1), poster = LOOK.posters[(id + index) % 3];
+                    fit(LOOK.paint, caseAt, mid + 0.1, 2.25, back - front - 0.1, 1.95, 0.13);
+                    for (const face of [-1, 1]) fit(poster, caseAt + face * 0.066, mid + 0.1, 2.27, back - front - 0.32, 1.72, 0.008);
+                    const screenAt = z - half * (index ? -1 : 1);
+                    fit(LOOK.glass, screenAt, back - 0.45, 2.3, 0.8, 1.95, 0.015);
+                    fit(LOOK.paint, screenAt, back - 0.45, 3.28, 0.86, 0.05, 0.05);
+                    // Timetable on the front post.
+                    fit(LOOK.paint, z - half * 0.5, front + 0.02, 2.45, 0.05, 0.86, 0.62);
+                    fit(LOOK.timetable, z - half * 0.5, front - 0.01, 2.45, 0.01, 0.78, 0.54);
+                };
+                // A timber shelter as on the small platforms: a weatherboarded back
+                // between cheek walls, a tin lean-to roof on two posts, one tube lamp.
+                const timberShelter = (z, index) => {
+                    bench(z, 8.4, 2.6);
+                    if (![-2.1, 0, 2.1].every(at => clear(z + at, 7.6, 3.8))) return;
+                    fit(LOOK.boards, z, 8.62, 2.3, 0.08, 2.4, 4.2);
+                    for (const cheek of [-2.1, 2.1]) {
+                        fit(LOOK.boards, z + cheek, 7.95, 2.3, 1.3, 2.4, 0.08);
+                        fit(LOOK.timber, z + cheek, 6.75, 2.42, 0.11, 2.6, 0.11);
+                        fit(LOOK.concrete, z + cheek, 6.75, 1.16, 0.22, 0.12, 0.22);
+                        fit(LOOK.timber, z + cheek, 7.2, 3.3, 0.9, 0.08, 0.08, side * 0.6);
+                    }
+                    strut(LOOK.corrugated, z, 6.3, 3.82, 8.95, 3.5, 0.03, 4.8);
+                    strut(LOOK.timber, z, 6.4, 3.74, 8.9, 3.44, 0.14, 0.09);
+                    fit(LOOK.timber, z, 6.42, 3.72, 0.06, 0.18, 4.8);
+                    fit(LOOK.timber, z, 8.62, 3.5, 0.14, 0.12, 4.3);
+                    fit(LOOK.paint, z, 7.5, 3.6, 0.14, 0.05, 1.5);
+                    if ((id + index) % 5 !== 3) {
+                        fit(LOOK.lamp, z, 7.5, 3.565, 0.07, 0.03, 1.3);
+                        rawPart(windowLight, z, lateral(8.575), 2.85, 0.012, 1.2, 4.0);
+                    }
+                    fit(LOOK.paint, z - 1.0, 8.555, 2.6, 0.03, 0.74, 1.0);
+                    fit(LOOK.posters[(id + index) % 3], z - 1.0, 8.535, 2.6, 0.01, 0.66, 0.44);
+                    fit(LOOK.timetable, z + 1.0, 8.55, 2.6, 0.01, 0.6, 0.42);
+                };
+                if (type === 4) {
+                    // A bare platform standing just clear of the water: a slab on two
+                    // piers, a lamp on a post, a bench, and one or two people waiting.
+                    part(LOOK.concrete, address, lateral(5.6), 0.86, 3.2, 0.3, 12);
+                    part(LOOK.coping, address, lateral(4.1), 1.03, 0.36, 0.06, 12.1);
+                    for (const pier of [-4.5, 4.5]) part(LOOK.concrete, address + pier, lateral(5.6), 0.3, 2.6, 0.9, 0.5);
+                    const lamp = address - 3.5;
+                    if (whole(lamp, 6.6, 3.9)) {
+                        fit(LOOK.tube, lamp, 6.6, 2.5, 0.09, 2.8, 0.09);
+                        fit(LOOK.paint, lamp, 6.6, 1.12, 0.18, 0.1, 0.18);
+                        strut(LOOK.tube, lamp, 6.6, 3.8, 5.9, 3.95, 0.04);
+                        fit(LOOK.paint, lamp, 5.85, 3.95, 0.36, 0.14, 0.36);
+                        fit(LOOK.lamp, lamp, 5.85, 3.86, 0.26, 0.04, 0.26);
+                    }
+                    bench(address + 1.5, 6.9, 1.6);
+                    figure(address - 1.2, 5.1, 0);
+                    if (id % 3 === 0) figure(address + 4.2, 5.9, 1);
+                    stationTypes.push(motifNames[type]);
+                    stationPlan.push({ address, side, type: motifNames[type] });
+                    liveStations++;
+                    continue;
+                }
                 // The platform is a deck on cross walls standing in the water, its
                 // edge carried out past them on a beam: coping stones, the white line,
                 // and the band of tactile paving a pace back from the edge.
-                part(concreteParts, address, lateral(6.5), 0.97, 5, 0.26, 28);
-                part(concreteParts, address, lateral(4.3), 0.9, 0.32, 0.36, 28);
+                part(LOOK.paving, address, lateral(6.6), 0.97, 4.8, 0.26, 28);
+                part(LOOK.concrete, address, lateral(4.3), 0.9, 0.32, 0.36, 28);
                 for (let pier = 0; pier < (saving ? 4 : 8); pier++) {
-                    part(concreteParts, address - 13.3 + pier * (saving ? 8.87 : 3.8), lateral(6.75), 0.42, 4.3, 0.86, 0.55);
+                    part(LOOK.concrete, address - 13.3 + pier * (saving ? 8.87 : 3.8), lateral(6.75), 0.42, 4.3, 0.86, 0.55);
                 }
-                part(concreteParts, address, lateral(4.2), 1.13, 0.7, 0.08, 28.2);
+                part(LOOK.coping, address, lateral(4.2), 1.13, 0.7, 0.08, 28.2);
                 part(glowParts, address, lateral(3.84), 1.12, 0.045, 0.035, 28);
                 part(paleMarks, address, lateral(4.5), 1.174, 0.07, 0.012, 27.6);
-                part(warmMarks, address, lateral(4.95), 1.108, 0.3, 0.016, 27.6);
-                part(concreteParts, address, lateral(8.8), 1.25, 0.18, 0.3, 28);
+                part(LOOK.tactile, address, lateral(4.95), 1.112, 0.3, 0.02, 27.6);
+                part(LOOK.concrete, address, lateral(8.8), 1.25, 0.18, 0.3, 28);
                 // Steps run down into the shallows at both ends.
                 for (let step = 0; step < 4; step++) {
                     const height = 1.1 - (step + 1) * 0.22;
-                    for (const end of [-1, 1]) part(concreteParts, address + end * (14.45 + step * 0.9),
+                    for (const end of [-1, 1]) part(LOOK.concrete, address + end * (14.45 + step * 0.9),
                         lateral(6.5), height / 2, 5, height, 0.9);
                 }
                 if (!saving && !open) {
-                    // A station name board with nothing written on it.
-                    for (const post of [-1.35, 1.35])
-                        part(steelParts, address + 9.5 + post, lateral(8.45), 2.2, 0.08, 2.2, 0.08);
-                    part(timberParts, address + 9.5, lateral(8.45), 2.75, 0.07, 0.85, 3.1);
-                    part(concreteParts, address + 9.5, lateral(8.4), 2.48, 0.05, 0.12, 3.1);
-                    part(glowParts, address + 9.5, lateral(8.4), 3.21, 0.05, 0.04, 3.1);
-                }
-                if (!saving && !open) {
-                    // A drinks machine, its window the brightest thing on the platform,
-                    // and the card reader on its post by the steps.
-                    // It stands taller than the sight line allows, so it is all there or not at all.
-                    const machine = address - 9.5;
-                    if (clear(machine, 8.22, 2.93)) {
-                        rawPart(steelParts, machine, lateral(8.22), 2.015, 0.7, 1.83, 1.02);
-                        rawPart(coldGlowParts, machine, lateral(7.86), 2.33, 0.02, 0.8, 0.88);
-                        rawPart(paleMarks, machine, lateral(7.862), 1.58, 0.02, 0.42, 0.88);
-                        rawPart(glowParts, machine + 0.3, lateral(7.855), 1.82, 0.02, 0.05, 0.16);
-                        rawPart(steelParts, machine, lateral(7.84), 1.3, 0.05, 0.14, 0.7);
-                    }
-                    part(steelParts, address + 12.4, lateral(5.5), 1.62, 0.1, 1.04, 0.1);
-                    part(steelParts, address + 12.4, lateral(5.5), 2.2, 0.2, 0.14, 0.26, side * 0.5);
+                    machine(address - 9.5, 8.22);
+                    bin(address - 8.4, 8.4);
+                    // The card reader on its post by the steps.
+                    part(LOOK.paint, address + 12.4, lateral(5.5), 1.62, 0.1, 1.04, 0.1);
+                    part(LOOK.paint, address + 12.4, lateral(5.5), 2.2, 0.2, 0.14, 0.26, side * 0.5);
                     part(coldGlowParts, address + 12.4, lateral(5.46), 2.275, 0.1, 0.012, 0.12, side * 0.5);
                 }
                 if (type === 0) {
@@ -2751,100 +3448,83 @@
                     // planes fold down to a valley gutter over the column line.
                     // Under the sheeting the boards of the ceiling catch the tube
                     // lamps, and the purlins cross them as dark lines.
-                    span(steelParts, address, lateral(4.1), 5.62, lateral(7), 5.16, 0.1, 26);
-                    span(steelParts, address, lateral(7), 5.16, lateral(9.5), 5.5, 0.1, 26);
+                    span(LOOK.corrugated, address, lateral(4.1), 5.62, lateral(7), 5.16, 0.05, 26);
+                    span(LOOK.corrugated, address, lateral(7), 5.16, lateral(9.5), 5.5, 0.05, 26);
                     span(litSurface, address, lateral(4.18), 5.542, lateral(6.86), 5.117, 0.02, 25.9);
                     span(litSurface, address, lateral(7.14), 5.114, lateral(9.42), 5.424, 0.02, 25.9);
                     for (const [offset, y] of [[4.9, 5.37], [6.0, 5.2], [7.9, 5.16], [8.8, 5.28]])
-                        part(steelParts, address, lateral(offset), y, 0.07, 0.1, 26);
-                    part(steelParts, address, lateral(7), 5.02, 0.32, 0.24, 26);
-                    part(steelParts, address, lateral(4.12), 5.56, 0.07, 0.24, 26.1);
-                    part(steelParts, address, lateral(9.48), 5.44, 0.07, 0.22, 26.1);
+                        part(LOOK.paint, address, lateral(offset), y, 0.07, 0.1, 26);
+                    part(LOOK.paint, address, lateral(7), 5.02, 0.32, 0.24, 26);
+                    part(LOOK.paint, address, lateral(4.12), 5.56, 0.07, 0.24, 26.1);
+                    part(LOOK.paint, address, lateral(9.48), 5.44, 0.07, 0.22, 26.1);
                     for (let bay = 0; bay < 5; bay++) {
                         const z = address - 11 + bay * 5.5;
-                        part(steelParts, z, lateral(7), 3.0, 0.22, 3.8, 0.22);
-                        part(concreteParts, z, lateral(7), 1.2, 0.42, 0.2, 0.42);
-                        span(steelParts, z, lateral(7), 4.15, lateral(4.9), 5.38, 0.1);
-                        span(steelParts, z, lateral(7), 4.15, lateral(9.0), 5.33, 0.1);
+                        part(LOOK.tube, z, lateral(7), 3.0, 0.24, 3.8, 0.24);
+                        part(LOOK.concrete, z, lateral(7), 1.2, 0.46, 0.2, 0.46);
+                        part(LOOK.paint, z, lateral(7), 1.33, 0.34, 0.06, 0.34);
+                        span(LOOK.tube, z, lateral(7), 4.15, lateral(4.9), 5.38, 0.11);
+                        span(LOOK.tube, z, lateral(7), 4.15, lateral(9.0), 5.33, 0.11);
+                        part(LOOK.paint, z, lateral(7), 4.18, 0.3, 0.2, 0.3);
                         if ((id + bay) % 7 !== 3) {
                             part(glowParts, z + 2.75, lateral(5.5), 5.3, 0.1, 0.04, 2.3);
                             // The batten the tube is fixed to, and its two drops.
-                            if (!saving) part(steelParts, z + 2.75, lateral(5.5), 5.345, 0.16, 0.05, 2.5);
+                            if (!saving) part(LOOK.paint, z + 2.75, lateral(5.5), 5.345, 0.16, 0.05, 2.5);
                         }
                         // The valley gutter drains down the end columns.
                         if (!saving && (bay === 0 || bay === 4)) {
-                            part(steelParts, z + (bay ? 0.17 : -0.17), lateral(7), 3.05, 0.08, 3.7, 0.08);
-                            part(steelParts, z + (bay ? 0.17 : -0.17), lateral(7), 1.34, 0.12, 0.08, 0.14);
+                            part(LOOK.tube, z + (bay ? 0.19 : -0.19), lateral(7), 3.05, 0.08, 3.7, 0.08);
+                            part(LOOK.paint, z + (bay ? 0.19 : -0.19), lateral(7), 1.34, 0.12, 0.08, 0.14);
                         }
-                        // Timetable and fare table on the middle columns.
+                        // Timetable, fare table and route map on the middle columns.
                         if (!saving && (bay === 1 || bay === 3)) {
-                            part(steelParts, z, lateral(6.86), 2.45, 0.03, 1.0, 0.74);
-                            part(paleMarks, z, lateral(6.84), 2.45, 0.012, 0.9, 0.64);
+                            part(LOOK.paint, z, lateral(6.84), 2.45, 0.04, 1.0, 0.74);
+                            part(bay === 1 ? LOOK.timetable : LOOK.route, z, lateral(6.815), 2.45, 0.01, 0.9, 0.66);
                         }
                     }
                     if (!saving) {
-                        // Hanging platform sign and a back rail.
+                        // Hanging platform sign: a lit box on two drops.
                         for (const hanger of [-0.8, 0.8])
-                            part(steelParts, address - 2.75, lateral(5.6 + hanger), 4.9, 0.03, 0.75, 0.03);
-                        part(timberParts, address - 2.75, lateral(5.6), 4.3, 2.1, 0.5, 0.09);
-                        part(glowParts, address - 2.75, lateral(5.6), 4.02, 2.1, 0.03, 0.1);
-                        for (const y of [1.65, 2.15]) part(steelParts, address, lateral(9.15), y, 0.05, 0.05, 26);
+                            part(LOOK.tube, address - 2.75, lateral(5.6 + hanger), 4.9, 0.03, 0.75, 0.03);
+                        part(LOOK.paint, address - 2.75, lateral(5.6), 4.3, 2.1, 0.5, 0.12);
+                        for (const face of [-0.065, 0.065])
+                            part(LOOK.nameboard, address - 2.75 + face, lateral(5.6), 4.3, 2.0, 0.42, 0.005);
+                        // The back rail.
+                        for (const y of [1.65, 2.15]) part(LOOK.tube, address, lateral(9.15), y, 0.05, 0.05, 26);
                         for (let post = 0; post <= 8; post++)
-                            part(steelParts, address - 13 + post * 3.25, lateral(9.15), 1.65, 0.06, 1.1, 0.06);
-                        // The station nameboard stands at the back of the platform
-                        // facing the track: a pale panel on two posts with the
-                        // line's band across it. It goes up whole or not at all.
-                        const board = address + 8.25;
-                        if (clear(board, 8.85, 3.2)) {
-                            for (const post of [-0.95, 0.95])
-                                rawPart(steelParts, board + post, lateral(8.85), 2.1, 0.07, 2.0, 0.07);
-                            rawPart(steelParts, board, lateral(8.85), 3.08, 0.12, 0.05, 2.1);
-                            rawPart(paleMarks, board, lateral(8.83), 2.55, 0.05, 0.9, 1.84);
-                            rawPart(warmMarks, board, lateral(8.8), 2.3, 0.012, 0.1, 1.84);
-                        }
+                            part(LOOK.tube, address - 13 + post * 3.25, lateral(9.15), 1.65, 0.06, 1.1, 0.06);
+                        nameboard(address + 8.25, 8.85);
                         // A clock hangs from the canopy beside the platform sign.
                         const clock = address + 2.75;
                         if (clear(clock, 5.6, 5)) {
-                            rawPart(steelParts, clock, lateral(5.6), 4.86, 0.03, 0.62, 0.03);
-                            rawPart(steelParts, clock, lateral(5.6), 4.3, 0.18, 0.54, 0.54);
-                            for (const face of [-0.095, 0.095])
-                                rawPart(windowLight, clock, lateral(5.6 + face), 4.3, 0.012, 0.44, 0.44);
+                            fit(LOOK.tube, clock, 5.6, 4.86, 0.03, 0.62, 0.03);
+                            fit(LOOK.paint, clock, 5.6, 4.3, 0.16, 0.56, 0.56);
+                            for (const face of [-0.085, 0.085]) fit(LOOK.clock, clock, 5.6 + face, 4.3, 0.005, 0.48, 0.48);
                         }
                     }
                 } else if (type === 1) {
-                    // Timber waiting shelters, as on the small platforms along the
-                    // bay: a back of upright boards between cheek walls, a lean-to
-                    // roof on two posts, one tube lamp under it, a bench and the
-                    // timetable inside. Between them the platform is open to the water.
+                    // Two waiting shelters with the platform open to the water
+                    // between them: one of glass and steel, one of timber.
                     // A shelter that would stand in a sight line leaves only its bench.
-                    [-4.6, 2.6].forEach((centre, index) => {
-                        const z = address + centre;
-                        part(timberParts, z, lateral(8.2), 1.56, 0.42, 0.06, 3.2);
-                        part(timberParts, z, lateral(8.46), 1.9, 0.05, 0.36, 3.2, side * -0.1);
-                        for (const leg of [-1.3, 0, 1.3]) part(steelParts, z + leg, lateral(8.22), 1.33, 0.38, 0.4, 0.05);
-                        if (![-2.1, 0, 2.1].every(at => clear(z + at, 7.6, 3.8))) return;
-                        rawPart(timberParts, z, lateral(8.62), 2.3, 0.08, 2.4, 4.2);
-                        for (const cheek of [-2.1, 2.1]) {
-                            rawPart(timberParts, z + cheek, lateral(7.95), 2.3, 1.3, 2.4, 0.08);
-                            rawPart(steelParts, z + cheek, lateral(6.75), 2.42, 0.09, 2.6, 0.09);
-                            rawPart(concreteParts, z + cheek, lateral(6.75), 1.16, 0.2, 0.12, 0.2);
+                    glassShelter(address - 4.6, 0);
+                    timberShelter(address + 3.6, 1);
+                    if (!saving) {
+                        nameboard(address + 9.2, 8.6);
+                        // A sign on a pole at the platform's open end.
+                        const pole = address - 9.6;
+                        if (whole(pole, 6.4, 3.4)) {
+                            fit(LOOK.tube, pole, 6.4, 2.6, 0.07, 3.0, 0.07);
+                            fit(LOOK.paint, pole, 6.4, 1.18, 0.14, 0.08, 0.14);
+                            fit(LOOK.paint, pole, 6.4, 3.2, 0.05, 0.62, 0.56);
+                            for (const face of [-0.03, 0.03]) fit(LOOK.timetable, pole, 6.4 + face, 3.2, 0.005, 0.54, 0.48);
+                            fit(LOOK.warm, pole, 6.4, 3.56, 0.06, 0.1, 0.56);
                         }
-                        rawSpan(concreteParts, z, lateral(6.4), 3.8, lateral(8.9), 3.5, 0.06, 4.7);
-                        // The lamp's light on the boards behind the bench.
-                        if ((id + index) % 5 !== 3) rawPart(windowLight, z, lateral(8.575), 2.85, 0.012, 1.2, 4.0);
-                        rawPart(steelParts, z, lateral(6.42), 3.72, 0.05, 0.16, 4.7);
-                        rawPart(steelParts, z, lateral(8.62), 3.5, 0.12, 0.1, 4.2);
-                        rawPart(steelParts, z, lateral(7.5), 3.6, 0.14, 0.05, 1.5);
-                        if ((id + index) % 5 !== 3) rawPart(glowParts, z, lateral(7.5), 3.55, 0.07, 0.04, 1.3);
-                        rawPart(steelParts, z - 1.0, lateral(8.555), 2.6, 0.03, 0.7, 1.0);
-                        rawPart(paleMarks, z - 1.0, lateral(8.535), 2.6, 0.02, 0.6, 0.9);
-                    });
+                    }
                 } else if (type === 2) {
                     // Broad steps descend toward the water, not into the sky.
                     // In open acts they replace dense station silhouettes.
                     for (let step = 0; step < 7; step++) {
                         const height = 1.05 - step * 0.14;
-                        part(concreteParts, address, lateral(9.2 + step * 0.65),
+                        part(LOOK.concrete, address, lateral(9.2 + step * 0.65),
                             height * 0.5, 0.7, height, 13 - step * 0.65);
                     }
                     for (const z of [-10, 10]) {
@@ -2853,16 +3533,15 @@
                         part(glowParts, address + z, lateral(10), 4.2, 0.34, 0.38, 0.34);
                     }
                     if (!saving) {
-                        // A torii standing alone in the shallows beyond the steps, after
-                        // the bronze one on the approach to Enoshima: round columns
-                        // leaning in on stone footings, a tie beam run through them and
-                        // wedged, a strut carrying the tablet, and a lintel that lifts
-                        // towards its ends.
+                        // A gate standing alone in the shallows beyond the steps: round
+                        // columns leaning in on stone footings, a tie beam run through
+                        // them and wedged, a strut carrying the tablet, and a lintel
+                        // that lifts towards its ends.
                         const gate = lateral(15.5);
                         for (const z of [-2.9, 2.9]) {
                             part(masts, address + z * 0.975, gate, 3.0, 3.1, 5.9, 3.1, 0, z > 0 ? 0.045 : -0.045);
-                            part(concreteParts, address + z, gate, 0.16, 1.05, 0.5, 1.05);
-                            part(concreteParts, address + z, gate, 0.5, 0.82, 0.18, 0.82);
+                            part(LOOK.concrete, address + z, gate, 0.16, 1.05, 0.5, 1.05);
+                            part(LOOK.concrete, address + z, gate, 0.5, 0.82, 0.18, 0.82);
                             part(steelParts, address + z * 0.96, gate, 4.92, 0.6, 0.05, 0.16);
                         }
                         part(steelParts, address, gate, 4.7, 0.22, 0.38, 7.5);
@@ -2886,63 +3565,70 @@
                             size * (0.85 + pile() * 0.35), pile() * 6.28);
                     }
                 } else {
-                    // A timber station house along the back of the platform, after
-                    // the old ones on the line: boarded walls on a concrete base, a
-                    // row of sash windows lit from inside, the ticket window and the
-                    // way through beside it, and a tin gable roof whose eaves come out
-                    // over the platform. Where it would stand in a sight line only
+                    // A timber station house along the back of the platform:
+                    // weatherboarded walls on a concrete base, a row of sash windows
+                    // lit from inside, the ticket window and the way through beside
+                    // it, posters by the door, and a tin gable roof whose eaves come
+                    // out over the platform. Where it would stand in a sight line only
                     // the boarded fence at its foot is built.
                     const HOUSE = 13, wall = lateral(8.36), face = lateral(8.3);
-                    part(concreteParts, address, lateral(9.6), 0.55, 2.4, 1.1, HOUSE);
-                    part(timberParts, address, wall, 1.72, 0.1, 1.2, HOUSE);
-                    part(steelParts, address, wall, 2.34, 0.16, 0.05, HOUSE + 0.1);
+                    part(LOOK.concrete, address, lateral(9.6), 0.55, 2.4, 1.1, HOUSE);
+                    part(LOOK.boards, address, wall, 1.72, 0.1, 1.2, HOUSE);
+                    part(LOOK.paint, address, wall, 2.34, 0.16, 0.05, HOUSE + 0.1);
                     if ([-6, -3, 0, 3, 6].every(at => clear(address + at, 9.3, 4.6))) {
-                        rawPart(timberParts, address, wall, 2.95, 0.1, 1.2, HOUSE);
+                        rawPart(LOOK.boards, address, wall, 2.95, 0.1, 1.2, HOUSE);
                         for (const end of [-1, 1]) {
-                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 2.35, 2.1, 2.5, 0.1);
-                            rawPart(steelParts, address + end * HOUSE / 2, lateral(8.36), 2.35, 0.14, 2.5, 0.14);
+                            rawPart(LOOK.boards, address + end * HOUSE / 2, lateral(9.4), 2.35, 2.1, 2.5, 0.1);
+                            rawPart(LOOK.timber, address + end * HOUSE / 2, lateral(8.36), 2.35, 0.14, 2.5, 0.14);
                             // The gable closes up to the ridge in two steps of boarding.
-                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 3.83, 1.9, 0.46, 0.1);
-                            rawPart(timberParts, address + end * HOUSE / 2, lateral(9.4), 4.22, 0.8, 0.32, 0.1);
+                            rawPart(LOOK.boards, address + end * HOUSE / 2, lateral(9.4), 3.83, 1.9, 0.46, 0.1);
+                            rawPart(LOOK.boards, address + end * HOUSE / 2, lateral(9.4), 4.22, 0.8, 0.32, 0.1);
                         }
                         // Sash windows: a lit pane, its cross of glazing bars, sill and head.
                         [-5.2, -3.2, -1.2, 5.2].forEach((at, index) => {
                             const z = address + at;
                             rawPart((id + index) % 4 === 1 ? warmMarks : windowLight, z, face, 2.6, 0.02, 0.95, 1.3);
-                            rawPart(steelParts, z, lateral(8.285), 2.6, 0.03, 0.95, 0.045);
-                            rawPart(steelParts, z, lateral(8.285), 2.6, 0.03, 0.045, 1.3);
-                            rawPart(steelParts, z, lateral(8.26), 2.1, 0.12, 0.05, 1.44);
-                            rawPart(steelParts, z, lateral(8.28), 3.1, 0.05, 0.07, 1.44);
+                            fit(LOOK.timber, z, 8.285, 2.6, 0.03, 0.95, 0.045);
+                            fit(LOOK.timber, z, 8.285, 2.6, 0.03, 0.045, 1.3);
+                            fit(LOOK.timber, z, 8.25, 2.1, 0.14, 0.05, 1.44);
+                            fit(LOOK.timber, z, 8.28, 3.1, 0.05, 0.07, 1.44);
                         });
-                        // The ticket window with its counter, and the open way through.
+                        // The ticket window with its counter and grille, and the open way through.
                         rawPart(glowParts, address + 1.0, face, 2.42, 0.02, 0.5, 0.82);
-                        rawPart(timberParts, address + 1.0, lateral(8.18), 2.1, 0.34, 0.05, 1.06);
-                        rawPart(steelParts, address + 1.0, lateral(8.2), 2.78, 0.26, 0.04, 1.06, side * 0.25);
+                        for (let bar = -2; bar <= 2; bar++) fit(LOOK.paint, address + 1.0 + bar * 0.16, 8.28, 2.42, 0.015, 0.5, 0.015);
+                        fit(LOOK.timber, address + 1.0, 8.18, 2.1, 0.34, 0.05, 1.06);
+                        fit(LOOK.paint, address + 1.0, 8.2, 2.78, 0.26, 0.04, 1.06, side * 0.25);
                         rawPart(windowLight, address + 3.2, face, 2.2, 0.02, 2.0, 1.12);
-                        for (const jamb of [-0.6, 0.6]) rawPart(steelParts, address + 3.2 + jamb, lateral(8.28), 2.2, 0.06, 2.06, 0.08);
-                        rawPart(steelParts, address + 3.2, lateral(8.28), 3.24, 0.06, 0.08, 1.28);
-                        rawPart(paleMarks, address + 2.1, lateral(8.29), 3.02, 0.02, 0.34, 0.34);
-                        // Roof: two slopes, the ridge cap, the gutter, and bulbs under the eaves.
-                        rawSpan(concreteParts, address, lateral(7.35), 3.42, lateral(9.4), 4.5, 0.07, HOUSE + 1.2);
-                        rawSpan(concreteParts, address, lateral(9.4), 4.5, lateral(11.2), 3.55, 0.07, HOUSE + 1.2);
-                        rawPart(steelParts, address, lateral(9.4), 4.56, 0.22, 0.1, HOUSE + 1.3);
-                        rawPart(steelParts, address, lateral(7.37), 3.36, 0.07, 0.12, HOUSE + 1.2);
+                        for (const jamb of [-0.6, 0.6]) fit(LOOK.timber, address + 3.2 + jamb, 8.28, 2.2, 0.07, 2.06, 0.09);
+                        fit(LOOK.timber, address + 3.2, 8.28, 3.24, 0.07, 0.08, 1.28);
+                        fit(LOOK.clock, address + 2.1, 8.29, 3.02, 0.01, 0.34, 0.34);
+                        // Posters and the timetable on the wall by the way through.
+                        for (const [at, finish] of [[4.3, LOOK.posters[id % 3]], [-3.2 + 1.0, LOOK.timetable]]) {
+                            if (at < 0) continue;
+                            fit(LOOK.paint, address + at, 8.29, 2.5, 0.03, 0.82, 0.6);
+                            fit(finish, address + at, 8.27, 2.5, 0.01, 0.74, 0.52);
+                        }
+                        // Roof: two tin slopes, the ridge cap, the gutter and its
+                        // downpipes, and bulbs under the eaves.
+                        rawSpan(LOOK.corrugated, address, lateral(7.35), 3.42, lateral(9.4), 4.5, 0.05, HOUSE + 1.2);
+                        rawSpan(LOOK.corrugated, address, lateral(9.4), 4.5, lateral(11.2), 3.55, 0.05, HOUSE + 1.2);
+                        fit(LOOK.paint, address, 9.4, 4.56, 0.22, 0.1, HOUSE + 1.3);
+                        fit(LOOK.tube, address, 7.37, 3.36, 0.1, 0.1, HOUSE + 1.2);
+                        for (const end of [-1, 1]) fit(LOOK.tube, address + end * (HOUSE / 2 + 0.3), 7.4, 2.3, 0.07, 2.2, 0.07);
                         for (const at of [-4.2, 0, 4.2]) {
-                            rawPart(steelParts, address + at, lateral(7.8), 3.5, 0.3, 0.04, 0.3);
-                            rawPart(glowParts, address + at, lateral(7.8), 3.42, 0.12, 0.1, 0.12);
+                            fit(LOOK.paint, address + at, 7.8, 3.5, 0.3, 0.04, 0.3);
+                            fit(LOOK.lamp, address + at, 7.8, 3.44, 0.12, 0.06, 0.12);
                         }
                     }
+                    if (!saving) machine(address + 7.6, 8.0);
                 }
-                for (let seat = 0; seat < (saving ? 1 : 3); seat++) {
-                    if ((id + seat) % 4 === 2 || type === 1) continue;
+                if (type !== 1) for (let seat = 0; seat < (saving ? 1 : 3); seat++) {
+                    if ((id + seat) % 4 === 2) continue;
                     const z = address - 7 + seat * 7 + (type === 0 ? 2.75 : type === 3 ? 0.6 - seat * 1.6 : 0);
-                    const back = type === 0 ? 8.2 : type === 3 ? 8.2 : 7.25;
-                    part(timberParts, z, lateral(back - 0.25), 1.58, 0.5, 0.07, 1.8);
-                    part(timberParts, z, lateral(back), 1.95, 0.07, 0.5, 1.8, side * -0.12);
-                    for (const leg of [-0.75, 0.75])
-                        part(steelParts, z + leg, lateral(back - 0.22), 1.33, 0.46, 0.46, 0.05);
+                    bench(z, type === 2 ? 7.25 : 8.2);
                 }
                 stationTypes.push(motifNames[type]);
+                stationPlan.push({ address, side, type: motifNames[type] });
                 liveStations++;
             }
             stationInstances = sceneryPools.reduce((sum, mesh) => sum + mesh.count, 0) - beforeStations;
@@ -2958,7 +3644,7 @@
                 if (cell < 0) continue;
                 // Midway between two poles, so neither stands in the road.
                 const address = cell * crossingPitch + spacing * 5.5;
-                if ([-1, 1].some(side => atStation(address, side, 10))) continue;
+                if ([-1, 1].some(side => atStation(address, side, 10)) || dreamAt(address) > 0.3) continue;
                 crossings.push(address);
                 part(timberParts, address, 0, 0.3, 1.26, 0.2, ROAD * 2);
                 for (const side of [-1, 1]) {
@@ -3011,6 +3697,7 @@
                 const random = seededRandom(`mooring:${cell}`);
                 if (random() > 0.62) continue;
                 const address = cell * 34 + random() * 18;
+                if (dreamAt(address) > 0.5 && cell % 3) continue;
                 // Only where no screen stands within reading distance on that side.
                 const side = poleSide(track, address);
                 const count = 3 + Math.floor(random() * 5), outward = random() > 0.45;
@@ -3033,6 +3720,24 @@
                     }
                 }
             }
+            // A small house on its rock: boarded walls, a tin roof, a lit window and the lamp by its door.
+            const house = (address, lateral, side, random) => {
+                const L = value => lateral + side * value;
+                rock(address, lateral, 3.2, random() * 6.28, 0.3);
+                rawPart(LOOK.boards, address, lateral, 2.0, 3.4, 2.4, 4.6);
+                rawSpan(LOOK.corrugated, address, L(-2.1), 2.95, lateral, 4.3, 0.05, 5.2);
+                rawSpan(LOOK.corrugated, address, lateral, 4.3, L(2.1), 2.95, 0.05, 5.2);
+                rawPart(LOOK.timber, address, lateral, 4.32, 0.18, 0.12, 5.3);
+                rawPart(windowLight, address - 0.8, L(-1.71), 2.2, 0.02, 0.8, 1.1);
+                rawPart(LOOK.timber, address - 0.8, L(-1.72), 2.2, 0.03, 0.85, 0.05);
+                rawPart(LOOK.timber, address + 1.2, L(-1.72), 1.75, 0.04, 1.7, 0.85);
+                rawPart(glowParts, address + 1.9, L(-1.8), 2.75, 0.14, 0.18, 0.14);
+                if (haloCount < haloPositions.length / 3) {
+                    const f = track.at(address + 1.9);
+                    haloPositions.set([f.position.x + f.right.x * L(-1.8), 2.75, f.position.z + f.right.z * L(-1.8)], haloCount * 3);
+                    haloCount++;
+                }
+            };
             // --- Out on the water: squid boats under their lamps, and channel buoys ---
             // A boat works the dark well off the line, a row of bare bulbs strung
             // over its deck from bow to stern; the water doubles every one of them.
@@ -3042,6 +3747,12 @@
                 if (random() > 0.55) continue;
                 const address = cell * 95 + random() * 40;
                 const side = random() > 0.5 ? 1 : -1, reach = 32 + random() * 40;
+                if (dreamAt(address) > 0.4) {
+                    // In the dream the boats are gone. Now and then a house stands on
+                    // a rock far out, one window lit.
+                    if (cell % 3 === 0) house(address, side * (reach + 10), side, random);
+                    continue;
+                }
                 const lateral = side * reach, length = 10 + random() * 3, bulbs = 7 + Math.floor(random() * 3);
                 // Farther out than any screen stands, so a boat can only ever be behind one.
                 const bow = random() > 0.5 ? 1 : -1;
@@ -3071,6 +3782,7 @@
                 const random = seededRandom(`buoy:${cell}`);
                 if (random() > 0.7) continue;
                 const address = cell * 130 + random() * 50, side = poleSide(track, address, random() > 0.5 ? 1 : -1);
+                if (dreamAt(address) > 0.4) continue;
                 const reach = 15 + random() * 10, lateral = side * reach;
                 if (atStation(address, side, 20) || inSight(track, address, reach, side, 3)
                     || inTheWay(address, lateral, 3, 1.2)) continue;
@@ -3082,9 +3794,11 @@
                 part(beacons, address, lateral, 2.2, 0.2, 0.28, 0.2);
             }
             haloGeometry.setDrawRange(0, haloCount);
+            flyGulls(track, s, time);
             tintGlow(time);
             updateLights(track, s, saving, audio);
             sceneryPools.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
+            dressRect.needsUpdate = dressLook.needsUpdate = dressCut.needsUpdate = true;
         };
         const renderReflection = (renderer, camera) => {
             if (dead || !reflectionEnabled) return;
@@ -3143,7 +3857,8 @@
                 starMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
                 haloMat.uniforms.pixelRatio.value = Math.max(0.5, ratio || 1);
             },
-            snapshot: () => ({ liveStations, stationTypes, waterVisible: water.visible, reflectionEnabled,
+            setWetness(amount) { wetness.value = clamp(amount ?? 0); },
+            snapshot: () => ({ liveStations, stationTypes, stationPlan, drownLevel, wetness: wetness.value, waterVisible: water.visible, reflectionEnabled,
                 warmth: liveWarmth, accent: liveAccent, fogDensity: scene.fog?.density ?? 0,
                 lampHalos: halos.visible ? haloGeometry.drawRange.count : 0,
                 cabinWeight: cabin.visible ? cabinWeight : 0, saloonVisible: saloon.visible,
