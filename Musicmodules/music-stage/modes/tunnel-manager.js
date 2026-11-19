@@ -73,9 +73,26 @@
         { id: 'HIGH_ORBIT', offset: [-2.2, 3.8], aimBias: [1.2, -2.0], roll: 0.032, fovAdd: 1.0 }
     ]);
 
+    const NEUTRAL_CAMERA = Object.freeze({ x: 0, y: 0, aimX: 0, aimY: 0, roll: 0, fov: 0, lyricX: 0, lyricY: 0, yaw: 0, pitch: 0 });
+    const CAMERA_CHANNELS = Object.keys(NEUTRAL_CAMERA);
+    const sampleCamera = (shot, time) => {
+        if (!shot) return NEUTRAL_CAMERA;
+        const blend = smoother((time - shot.startTime) / shot.cameraSpan);
+        const pose = {};
+        for (const key of CAMERA_CHANNELS) pose[key] = mix(shot.cameraFrom[key], shot.cameraTo[key], blend);
+        return pose;
+    };
+
     const vocalEndOf = (line) => Math.max(
         finiteNumber(line?.startTime, 0),
         finiteNumber(line?.vocalEndTime, finiteNumber(line?.endTime, finiteNumber(line?.startTime, 0) + 3.2))
+    );
+    const LYRIC_HANDOFF_SECONDS = 0.38;
+    const LYRIC_FADE_SECONDS = 0.16;
+    const lyricsCanHandoff = (from, to, dwell) => Boolean(
+        from?.fullText?.trim() && to?.fullText?.trim()
+        && to.startTime > from.startTime
+        && to.startTime - vocalEndOf(from) <= Math.min(0.85, dwell + 0.3)
     );
 
     const normalizeKeyText = (line) => String(line?.fullText || '')
@@ -178,16 +195,24 @@
         }
         if (!acts.length) pushAct('Verse', 0, duration);
 
+        const actChannels = Object.keys(ACT_PRESETS.Verse);
+        acts.forEach((act, index) => {
+            act.blendSpan = clamp((act.end - act.start) * 0.42, 0.4, 2.6);
+            const prev = acts[index - 1];
+            act.blendFrom = { ...act.params };
+            if (prev) {
+                const progress = smooth((act.start - prev.start) / prev.blendSpan);
+                for (const key of actChannels) act.blendFrom[key] = mix(prev.blendFrom[key], prev.params[key], progress);
+            }
+        });
         const sampleState = (time) => {
             const t = clamp(time, 0, duration);
             const idx = Math.max(0, upperBound(acts, t, 'start') - 1);
             const act = acts[idx];
-            const prev = acts[Math.max(0, idx - 1)];
-            const span = Math.max(0.4, Math.min(2.6, (act.end - act.start) * 0.42));
-            const blend = idx === 0 ? 1 : smooth((t - act.start) / span);
+            const blend = idx === 0 ? 1 : smooth((t - act.start) / act.blendSpan);
             const out = { act: act.kind, actIndex: idx, blend };
-            for (const k of Object.keys(act.params)) {
-                out[k] = mix(prev.params[k], act.params[k], blend);
+            for (const k of actChannels) {
+                out[k] = mix(act.blendFrom[k], act.params[k], blend);
             }
             return out;
         };
@@ -239,6 +264,7 @@
 
         // 为每一句歌词编排分镜机位 (Shot Rig) 与三维空间结项锚点
         let prevRigIdx = 0;
+        let previousShot = null;
         const lineShots = lines.map((line, idx) => {
             const actKind = kinds[idx] || 'Verse';
             let rigIdx = (idx + Math.floor(rand() * 3)) % SHOT_RIGS.length;
@@ -249,21 +275,26 @@
             const sign = idx % 2 === 0 ? 1 : -1;
             const knotP = 2 + (idx % 3);
             const knotQ = 3 + ((idx * 2) % 4);
-            return {
+            const lateralX = sign * (2.2 + (idx % 3) * 1.15) + (rand() - 0.5) * 1.2;
+            const verticalY = ((idx % 3) - 1) * 1.05 + (rand() - 0.5) * 0.8;
+            const shot = {
                 index: idx,
                 startTime: line.startTime,
                 endTime: line.endTime,
                 vocalEnd: vocalEndOf(line),
                 actKind,
-                rig,
-                lateralX: sign * (2.2 + (idx % 3) * 1.15) + (rand() - 0.5) * 1.2,
-                verticalY: ((idx % 3) - 1) * 1.05 + (rand() - 0.5) * 0.8,
-                rollBias: sign * (0.022 + (idx % 2) * 0.014) + rig.roll * 0.45,
-                pitchBias: ((idx % 2 === 0 ? 1 : -1) * 0.018),
-                yawBias: -sign * 0.038,
+                cameraFrom: sampleCamera(previousShot, line.startTime),
+                cameraTo: {
+                    x: rig.offset[0], y: rig.offset[1], aimX: rig.aimBias[0], aimY: rig.aimBias[1],
+                    roll: sign * (0.022 + (idx % 2) * 0.014) + rig.roll * 0.45,
+                    fov: rig.fovAdd, lyricX: lateralX, lyricY: verticalY, pitch: sign * 0.018, yaw: -sign * 0.038
+                },
+                cameraSpan: clamp((line.endTime - line.startTime) * 0.45, 0.65, 2.2),
                 knotP,
                 knotQ
             };
+            previousShot = shot;
+            return shot;
         });
 
         // 編排深空巨构与结项流形遭遇序列 (Celestial & Knotted Manifold Encounters)
@@ -313,6 +344,28 @@
                 tilt: [0.5, 0.2, -0.25], hold: true, clearFrom: distanceAt(duration - 16), clearTo: Infinity });
         }
 
+        const usableDuration = durationHint > 0 ? Math.min(duration, durationHint) : duration;
+        const existingPeaks = choruses.slice(0, 3).map(passTime);
+        const findEncounter = (fraction, maxSpan, low, high) => {
+            const preferred = usableDuration * fraction;
+            const span = Math.min(maxSpan, usableDuration * 0.22);
+            const earlier = Math.max(span * 0.5, usableDuration * low);
+            const later = Math.min(usableDuration - span * 0.5, usableDuration * high);
+            let winner = clamp(preferred, earlier, later);
+            let best = Infinity;
+            for (let i = 0; i <= 28; i += 1) {
+                const t = mix(earlier, later, i / 28);
+                const act = sampleState(t).act;
+                const quiet = act === 'Drift' || act === 'Interlude';
+                const conflict = existingPeaks.reduce((near, peak) => Math.max(near, 1 - Math.abs(peak - t) / (span * 0.5 + 4)), 0);
+                const score = Math.abs(t - preferred) - (quiet ? span * 0.28 : 0) + conflict * span * 1.5;
+                if (score < best) { winner = t; best = score; }
+            }
+            return { start: winner - span * 0.5, peak: winner, end: winner + span * 0.5 };
+        };
+        const asteroidBelt = findEncounter(0.23, 18, 0.14, 0.38);
+        const blackHole = findEncounter(0.67, 22, 0.50, 0.83);
+
         return {
             seedHash,
             duration,
@@ -322,12 +375,17 @@
             encounterSlots,
             ringPass,
             heroPasses,
+            asteroidBelt,
+            blackHole,
             ENCOUNTER_CYCLE,
             sampleState,
             distanceAt,
             spineAt
         };
     };
+
+    const encounterAmount = ({ start, peak, end }, time) => smooth((time - start) / ((peak - start) * 0.76))
+        * smooth((end - time) / ((end - peak) * 0.76));
 
     /* ============================================================================
      * 2. 粒子结项流形与深空巨构点云生成器 (Procedural Knotted Manifolds)
@@ -776,6 +834,10 @@
                 uColorSun: { value: new T.Color('#fff1d6') },
                 uInk: { value: new T.Color('#f2f0e9') },
                 uTime: { value: 0 }, uNebula: { value: 1 }, uPaper: { value: 0 },
+                uHole: { value: new T.Vector2(0, 0.08) },
+                uHoleDir: { value: new T.Vector3(0, 0, -1) },
+                uHoleRight: { value: new T.Vector3(1, 0, 0) },
+                uHoleUp: { value: new T.Vector3(0, 1, 0) },
                 uViewport: { value: new T.Vector2(1280, 720) }
             },
             vertexShader: `
@@ -791,11 +853,47 @@
                 uniform sampler2D uMasks;
                 uniform vec3 uBase, uColorA, uColorB, uColorStar, uColorSun, uInk;
                 uniform float uTime, uNebula, uPaper;
-                uniform vec2 uViewport;
+                uniform vec2 uViewport, uHole;
+                uniform vec3 uHoleDir, uHoleRight, uHoleUp;
                 varying vec3 vDir;
                 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+                vec3 accretion(vec2 x, vec3 background, float read) {
+                    vec2 p = mat2(0.95, 0.312, -0.312, 0.95) * x;
+                    float r = length(p);
+                    float edge = max(fwidth(r), 0.004);
+                    float horizon = 1.0 - smoothstep(0.96 - edge, 0.96 + edge, r);
+                    float azimuth = atan(p.y, p.x);
+                    float warmSide = 0.31 + 0.69 * smoothstep(-1.0, 1.0, -p.x);
+                    float plane = length(vec2(p.x, (p.y + 0.08) * 4.15));
+                    float gas = smoothstep(0.95, 1.20, plane) * (1.0 - smoothstep(2.05, 3.05, plane));
+                    gas *= 1.0 - horizon * smoothstep(-0.28, -0.07, p.y);
+                    float spin = azimuth + uTime * 0.38;
+                    float turbulence = 0.58 + 0.19 * sin(plane * 12.1 + cos(spin * 3.0) * 1.4)
+                        + 0.13 * sin(plane * 25.0 - spin * 3.0) + 0.10 * sin(spin * 7.0 + plane * 6.0);
+                    float arcR = length(vec2(p.x, (p.y - 0.04) * 0.88));
+                    float farArc = exp(-abs(arcR - 1.16) * 14.0) * smoothstep(-0.33, 0.5, p.y);
+                    farArc *= 0.68 + 0.32 * cos(azimuth * 4.0 - uTime * 0.48);
+                    float photon = exp(-abs(r - 0.996) / (0.019 + edge)) * (0.29 + warmSide * 0.48);
+                    float glow = exp(-abs(plane - 1.46) * 1.65) * (1.0 - horizon) * 0.12;
+                    float jet = exp(-abs(p.x) * (7.0 - min(abs(p.y), 4.0)))
+                        * smoothstep(1.2, 2.0, abs(p.y)) * (1.0 - smoothstep(2.25, 4.7, abs(p.y)));
+                    vec3 disk = mix(uColorB, uColorSun, 0.55);
+                    vec3 emission = disk * (gas * turbulence * warmSide * 2.35 + farArc * warmSide * 1.15 + glow)
+                        + uColorSun * photon * 0.95 + uColorA * jet * 0.095;
+                    return mix(background, vec3(0.0009, 0.0011, 0.0017), horizon) + emission * (0.54 + 0.46 * read);
+                }
                 void main() {
                     vec3 d = normalize(vDir);
+                    vec2 lens = vec2(0.0);
+                    float lensRange = 5.1;
+                    if (uHole.x > 0.001 && dot(d, uHoleDir) > 0.0) {
+                        lens = vec2(dot(d, uHoleRight), dot(d, uHoleUp)) / uHole.y;
+                        lensRange = length(lens);
+                        if (lensRange < 5.1) {
+                            float bend = 0.36 / (0.48 + lensRange * lensRange) * (1.0 - smoothstep(2.7, 5.1, lensRange));
+                            d = normalize(d - (uHoleRight * lens.x + uHoleUp * lens.y) * (bend * uHole.x * uHole.y));
+                        }
+                    }
                     float lat = asin(clamp(d.y, -1.0, 1.0));
                     vec2 uv = vec2(atan(d.x, -d.z) / 6.2831853 + 0.5, lat / 3.14159265 + 0.5);
                     vec4 m = texture2D(uMasks, uv);
@@ -854,7 +952,12 @@
                     paper = mix(paper, uInk, m.a * 0.1 + star * 0.45);
                     paper = mix(paper, vec3(1.0), clamp(disc + corona * 0.9, 0.0, 1.0) * 0.85);
 
-                    gl_FragColor = vec4(mix(night, paper, uPaper), 1.0);
+                    vec3 background = mix(night, paper, uPaper);
+                    if (lensRange < 5.1) {
+                        float mask = uHole.x * (1.0 - smoothstep(4.3, 5.1, lensRange));
+                        background = mix(background, accretion(lens, background, read), mask);
+                    }
+                    gl_FragColor = vec4(background, 1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }
@@ -1449,6 +1552,7 @@
                 uTime: { value: 0 },
                 uPixelRatio: { value: 1 },
                 uCohesion: { value: 1 },
+                uSolid: { value: 0 },
                 uPresence: { value: 1 },
                 uDissolveDir: { value: 0 }, // -1: 远方星雾孕育, +1: 近处掠过解体
                 uScale: { value: 1 },
@@ -1464,7 +1568,7 @@
             vertexShader: `
                 attribute vec3 aNormal;
                 attribute vec4 aMeta; // x: phase, y: shade, z: size, w: seed
-                uniform float uTime, uPixelRatio, uCohesion, uPresence, uDissolveDir, uScale, uDensity, uAudioPulse, uGlow, uType;
+                uniform float uTime, uPixelRatio, uCohesion, uSolid, uPresence, uDissolveDir, uScale, uDensity, uAudioPulse, uGlow, uType;
                 uniform vec3 uColorPrimary, uColorAccent, uColorInk, uColorEmber;
                 varying vec3 vColor;
                 varying float vAlpha;
@@ -1589,7 +1693,7 @@
                     float keep = uType < 0.5 ? (shade > 2.5 ? 0.5 : 0.0)
                         : uType < 2.5 ? 0.0
                         : 0.0;
-                    vAlpha *= mix(1.0, keep, smoothstep(0.5, 0.86, uCohesion));
+                    vAlpha *= mix(1.0, keep, smoothstep(0.48, 0.94, uSolid));
                 }
             `,
             fragmentShader: `
@@ -1640,30 +1744,39 @@
         // arrives, and wherever it cannot be read, the procedural surface stands in.
         const surfaceMaps = new Map();
         let surfacesReleased = false;
+        let sceneDrawn = false;
         const wearSurface = (material, file, slot = 'uSurface', flag = 'uMapped') => {
             if (!file || !T.TextureLoader) return material;
             let entry = surfaceMaps.get(file);
             if (!entry) {
-                entry = { texture: null, wearers: [] };
+                entry = { texture: null, blend: 0, wearers: [] };
                 surfaceMaps.set(file, entry);
                 new T.TextureLoader().load(ASSETS + file, (texture) => {
                     if (surfacesReleased) { texture.dispose(); return; }
                     texture.wrapS = T.RepeatWrapping;
                     texture.anisotropy = 4;
                     entry.texture = texture;
+                    entry.blend = sceneDrawn ? 0 : 1;
                     entry.wearers.forEach(([wearer, into, mark]) => {
                         wearer.uniforms[into].value = texture;
-                        wearer.uniforms[mark].value = 1;
+                        wearer.uniforms[mark].value = entry.blend;
                     });
                 }, undefined, () => {});
             }
+            entry.wearers.push([material, slot, flag]);
             if (entry.texture) {
                 material.uniforms[slot].value = entry.texture;
-                material.uniforms[flag].value = 1;
-            } else {
-                entry.wearers.push([material, slot, flag]);
+                material.uniforms[flag].value = smooth(entry.blend);
             }
             return material;
+        };
+        const advanceSurfaces = (dt) => {
+            surfaceMaps.forEach(entry => {
+                if (!entry.texture || entry.blend >= 1) return;
+                entry.blend = clamp(entry.blend + dt / 0.7);
+                const mixAmount = smooth(entry.blend);
+                entry.wearers.forEach(([wearer, , flag]) => { wearer.uniforms[flag].value = mixAmount; });
+            });
         };
         // Surface kinds: 0 hull, 1 gas planet, 2 ring disc, 3 sail membrane, 4 air above the clouds.
         const AIR_REACH = 1.045;
@@ -1890,16 +2003,18 @@
                         vec3 dark = mix(uColorPrimary, uColorInk, 0.12) * 0.26;
                         vec3 pale = mix(uColorPrimary, uColorInk, 0.62) * 0.74;
                         float deck = bands * (0.72 + fine * 0.28);
-                        if (uMapped > 0.5) {
+                        if (uMapped > 0.0) {
                             // A real cloud deck turns slowly under the same light;
                             // only its light and dark are kept.
-                            vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, vUv.y + (warp - 0.5) * 0.004);
+                            float polar = smoothstep(0.83, 0.985, abs(p.y));
+                            float latitude = clamp(vUv.y + (warp - 0.5) * 0.004 * (1.0 - polar), 0.0, 1.0);
+                            vec2 at = vec2(vUv.x + uTime * 0.0014 + uSeed, latitude);
                             float shade = texture2D(uSurface, at).r;
                             if (uDetail > 0.5) {
                                 // Belts and zones run at different speeds. The map is
                                 // carried along each jet in two overlapping passes, so
                                 // the shear never winds it up.
-                                float jet = sin(vUv.y * 31.0 + uSeed * 6.0) * 0.016;
+                                float jet = sin(vUv.y * 31.0 + uSeed * 6.0) * 0.016 * (1.0 - polar);
                                 float pass = fract(uTime * 0.02);
                                 float a = texture2D(uSurface, at + vec2(jet * (pass - 0.5), 0.0)).r;
                                 float b = texture2D(uSurface, at + vec2(jet * (fract(pass + 0.5) - 0.5), 0.0)).r;
@@ -1908,15 +2023,24 @@
                                 shade += (noise(p * vec3(34.0, 90.0, 34.0) + warp * 6.0) - 0.5) * 0.07
                                     * (1.0 - smoothstep(0.0005, 0.004, fwidth(vUv.y)));
                             }
-                            deck = smoothstep(0.04, 0.96, shade);
-                            storm = 0.0;
-                            bands = deck;
+                            // Longitude collapses at the poles. Average across it to keep the cloud cap from pinching.
+                            if (polar > 0.0) {
+                                float cap = (texture2D(uSurface, vec2(0.125, latitude)).r
+                                    + texture2D(uSurface, vec2(0.375, latitude)).r
+                                    + texture2D(uSurface, vec2(0.625, latitude)).r
+                                    + texture2D(uSurface, vec2(0.875, latitude)).r) * 0.25;
+                                shade = mix(shade, cap, polar);
+                            }
+                            float mappedDeck = smoothstep(0.04, 0.96, shade);
+                            deck = mix(deck, mappedDeck, uMapped);
+                            bands = mix(bands, mappedDeck, uMapped);
+                            storm *= 1.0 - uMapped;
                         }
                         vec3 surface = mix(dark, pale, deck);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.25) * 0.8, storm * 0.5);
                         surface = mix(surface, uColorEmber * 0.55, smoothstep(0.8, 0.98, bands) * (1.0 - storm) * 0.22);
                         // Belts lean warm and the brightest zones catch the accent.
-                        surface = mix(surface, uColorEmber * 0.36, smoothstep(0.5, 0.12, deck) * 0.42 * uMapped);
+                        surface = mix(surface, uColorEmber * 0.36, (1.0 - smoothstep(0.12, 0.5, deck)) * 0.42 * uMapped);
                         surface = mix(surface, mix(uColorAccent, uColorInk, 0.55) * 0.8, smoothstep(0.7, 1.0, deck) * 0.22 * uMapped);
                         vec3 air = mix(uColorPrimary, uColorInk, 0.3);
                         // The disc dims towards its edge, where the light has
@@ -1924,7 +2048,7 @@
                         float facing = clamp(dot(n, v), 0.0, 1.0);
                         surface *= mix(0.5, 1.0, pow(facing, 0.55));
                         surface = mix(surface, surface * mix(vec3(1.0), uColorEmber * 1.6, 0.55),
-                            smoothstep(0.5, 0.0, ndl) * smoothstep(-0.2, 0.1, ndl));
+                            (1.0 - smoothstep(0.0, 0.5, ndl)) * smoothstep(-0.2, 0.1, ndl));
                         // The rings lay their shadow across the cloud tops.
                         float veil = 1.0;
                         if (uRinged > 0.5 && abs(uLightLocal.y) > 0.01) {
@@ -1932,8 +2056,8 @@
                             vec3 hit = vLocal + uLightLocal * reach;
                             float rt = (length(hit.xz) - uRing.x) / (uRing.y - uRing.x);
                             if (reach > 0.0 && rt > 0.0 && rt < 1.0) {
-                                float ice = uRingMapped > 0.5 ? texture2D(uRingMap, vec2(rt, 0.5)).r
-                                    : 0.75 - 0.7 * smoothstep(0.27, 0.285, rt) * (1.0 - smoothstep(0.34, 0.355, rt));
+                                float ice = 0.75 - 0.7 * smoothstep(0.27, 0.285, rt) * (1.0 - smoothstep(0.34, 0.355, rt));
+                                if (uRingMapped > 0.0) ice = mix(ice, texture2D(uRingMap, vec2(rt, 0.5)).r, uRingMapped);
                                 veil = 1.0 - 0.82 * ice * smoothstep(0.0, 0.03, rt) * (1.0 - smoothstep(0.95, 1.0, rt));
                             }
                         }
@@ -1941,9 +2065,9 @@
                         // Seen against the sun the air along the limb lights up.
                         float against = pow(max(dot(-v, SUN), 0.0), 4.0);
                         col += air * rim * against * smoothstep(-0.1, 0.7, dot(n, SUN)) * 2.2;
-                        float oval = smoothstep(0.76, 0.81, abs(p.y)) * (1.0 - smoothstep(0.87, 0.93, abs(p.y)));
-                        float curtain = 0.45 + 0.55 * noise(vec3(atan(p.z, p.x) * 9.0, uTime * 0.4, uSeed));
-                        col += mix(uColorPrimary, uColorAccent, 0.3) * oval * curtain * (1.0 - day) * 0.9 * uGlow;
+                        float polarLight = smoothstep(0.77, 0.94, abs(p.y));
+                        float curtain = mix(0.55, 1.0, noise(vec3(p.xz * 5.0, uTime * 0.14 + uSeed)));
+                        col += mix(uColorPrimary, uColorAccent, 0.3) * polarLight * curtain * (1.0 - day) * 0.20 * uGlow;
                         }
                     } else if (uKind < 2.5) {
                         // Ring system: ringlets, a wide division, spiral density
@@ -1960,20 +2084,20 @@
                         float density = ringlets * division * wave * dust;
                         vec3 tone = mix(uColorAccent * 1.05, mix(uColorPrimary, uColorInk, 0.35), smoothstep(0.0, 0.3, t));
                         tone = mix(tone, uColorInk * 0.5, smoothstep(0.7, 1.0, t));
-                        if (uMapped > 0.5) {
+                        if (uMapped > 0.0) {
                             // A measured profile: how much ice there is along the
                             // radius, and how bright it is.
                             vec4 profile = texture2D(uSurface, vec2(t, 0.5));
                             float sand = 0.84 + 0.16 * noise(vec3(t * 420.0, uSeed * 5.0, 0.0));
-                            density = profile.r * sand * (0.94 + 0.06 * wave);
+                            density = mix(density, profile.r * sand * (0.94 + 0.06 * wave), uMapped);
                             // Dusty and warm near the planet, pale ice in the broad
                             // middle ring, greyer and cooler outside the division.
                             vec3 dusty = mix(uColorAccent, uColorEmber, 0.35) * 0.55;
                             vec3 ice = mix(uColorInk, uColorAccent, 0.14);
                             vec3 outerIce = mix(uColorInk, uColorPrimary, 0.3) * 0.8;
-                            tone = mix(dusty, ice, smoothstep(0.12, 0.3, t));
-                            tone = mix(tone, outerIce, smoothstep(0.66, 0.76, t));
-                            tone *= 0.45 + 0.75 * profile.g;
+                            vec3 mappedTone = mix(dusty, ice, smoothstep(0.12, 0.3, t));
+                            mappedTone = mix(mappedTone, outerIce, smoothstep(0.66, 0.76, t));
+                            tone = mix(tone, mappedTone * (0.45 + 0.75 * profile.g), uMapped);
                         }
                         // Fine ringlets, kept only while a pixel can still resolve them.
                         float grainT = uDetail > 0.5 ? fwidth(t) : 1.0;
@@ -2192,7 +2316,7 @@
             geo.setAttribute('aSpin', new T.BufferAttribute(spin, 4));
             const mat = new T.ShaderMaterial({
                 uniforms: {
-                    uCamPos: { value: new T.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 },
+                    uCamPos: { value: new T.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 }, uBelt: { value: 0 },
                     uLight: { value: new T.Vector3(...KEY_LIGHT) },
                     uColorPrimary: { value: new T.Color('#76bfae') }, uColorInk: { value: new T.Color('#f2f0e9') },
                     uColorAccent: { value: new T.Color('#f2a900') }, uFloor: { value: new T.Color('#000000') },
@@ -2201,9 +2325,9 @@
                 vertexShader: `
                     attribute vec4 aHome, aSpin;
                     uniform vec3 uCamPos;
-                    uniform float uTime;
+                    uniform float uTime, uBelt;
                     varying vec3 vWorld, vLocal;
-                    varying float vSeed, vDepth;
+                    varying float vSeed, vDepth, vCycleDepth;
                     void main() {
                         // Tumble about the rock's own axis.
                         float turn = uTime * aSpin.w + aHome.w * 6.28;
@@ -2212,10 +2336,16 @@
                         vec3 box = vec3(300.0, 190.0, 900.0);
                         vec3 rel = mod(aHome.xyz - uCamPos + box * 0.5, box) - box * 0.5;
                         rel.z = mod(aHome.z - uCamPos.z, 900.0) - 860.0;
+                        vCycleDepth = -rel.z;
+                        rel.z *= 1.0 - uBelt * 0.46;
+                        rel.x *= 1.0 - uBelt * 0.12;
+                        // Compress the scattered field into a tilted sheet during the belt passage.
+                        rel.y = mix(rel.y, rel.y * 0.25 + rel.x * 0.42 - 13.0 + sin(rel.z * 0.012) * 5.0, uBelt);
                         // Nothing sits on the route itself.
                         float clear = length(rel.xy);
-                        rel.xy *= max(clear, 17.0 + aHome.w * 9.0) / max(clear, 0.001);
-                        vec3 world = uCamPos + rel + local;
+                        rel.xy *= max(clear, 17.0 + aHome.w * 9.0 + uBelt * 5.0) / max(clear, 0.001);
+                        float bulk = 1.0 + uBelt * (0.45 + 0.55 * aHome.w);
+                        vec3 world = uCamPos + rel + local * bulk;
                         vWorld = world; vLocal = position; vSeed = aHome.w;
                         vec4 mv = viewMatrix * vec4(world, 1.0);
                         vDepth = -mv.z;
@@ -2223,11 +2353,11 @@
                     }
                 `,
                 fragmentShader: `
-                    uniform float uAmount;
+                    uniform float uAmount, uBelt;
                     uniform vec3 uLight, uColorPrimary, uColorInk, uColorAccent, uFloor;
                     uniform vec2 uViewport;
                     varying vec3 vWorld, vLocal;
-                    varying float vSeed, vDepth;
+                    varying float vSeed, vDepth, vCycleDepth;
                     float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
                     float noise(vec3 p) {
                         vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -2239,7 +2369,7 @@
                     void main() {
                         // Rocks come and go one by one, and thin out with distance.
                         float present = smoothstep(vSeed * 0.7, vSeed * 0.7 + 0.3, uAmount)
-                            * (1.0 - smoothstep(560.0, 840.0, vDepth)) * smoothstep(4.0, 16.0, vDepth);
+                            * (1.0 - smoothstep(560.0, 840.0, max(vDepth, vCycleDepth))) * smoothstep(4.0, 16.0, vDepth);
                         float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
                         if (dither >= present) discard;
                         // Broken faces, as shattered rock has.
@@ -2252,6 +2382,7 @@
                         vec3 stone = mix(uColorPrimary, uColorInk, 0.55) * (0.2 + 0.14 * vSeed) * grain * (1.0 - 0.45 * pit);
                         vec3 col = stone * (mix(uColorInk, uColorAccent, 0.2) * lit * 1.5
                             + uColorPrimary * (0.05 + 0.07 * clamp(0.5 - 0.5 * dot(n, uLight), 0.0, 1.0))) + uFloor;
+                        col += uColorPrimary * uBelt * pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0) * (0.035 + grain * 0.055);
                         vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
                         col *= mix(0.35, 1.0, smoothstep(0.15, 0.8, length(ndc * vec2(0.8, 1.5))));
                         gl_FragColor = vec4(col, 1.0);
@@ -2265,6 +2396,58 @@
             mesh.visible = false;
             root.add(mesh);
             return { geo, mat, mesh, per };
+        })();
+
+        const BELT_GRAIN_COUNT = 920;
+        const beltDust = (() => {
+            const rand = seededRandom('asteroid-belt-dust');
+            const sites = new Float32Array(BELT_GRAIN_COUNT * 3);
+            for (let i = 0; i < BELT_GRAIN_COUNT; i += 1) {
+                const lane = rand() < 0.63 ? 0 : rand() < 0.5 ? -13 : 15;
+                sites.set([(rand() - 0.5) * 340, lane + (rand() + rand() - 1) * 21, rand() * 630], i * 3);
+            }
+            const geo = new T.BufferGeometry();
+            geo.setAttribute('position', new T.BufferAttribute(sites, 3));
+            const mat = new T.ShaderMaterial({
+                transparent: true, depthWrite: false,
+                uniforms: {
+                    uCamPos: { value: new T.Vector3() }, uBelt: { value: 0 }, uRatio: { value: 1 },
+                    uDust: { value: new T.Color('#76bfae') }, uGlint: { value: new T.Color('#f2a900') }
+                },
+                vertexShader: `
+                    uniform vec3 uCamPos;
+                    uniform float uBelt, uRatio;
+                    varying float vSeed, vFade;
+                    void main() {
+                        float x = mod(position.x - uCamPos.x + 170.0, 340.0) - 170.0;
+                        float z = -mod(position.z + uCamPos.z + 630.0, 630.0);
+                        float y = x * 0.42 - 13.0 + position.y + sin(z * 0.012) * 5.0;
+                        vec4 mv = viewMatrix * vec4(uCamPos + vec3(x, y, z), 1.0);
+                        float depth = max(1.0, -mv.z);
+                        vSeed = fract(position.z * 1.719);
+                        vFade = uBelt * smoothstep(12.0, 34.0, -z) * (1.0 - smoothstep(415.0, 625.0, -z));
+                        vFade *= smoothstep(19.0, 46.0, length(vec2(x, y))) * (1.0 - smoothstep(125.0, 169.0, abs(x)));
+                        gl_PointSize = clamp((0.9 + vSeed * 1.65) * 156.0 / depth, 0.75, 3.1) * uRatio;
+                        gl_Position = projectionMatrix * mv;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 uDust, uGlint;
+                    varying float vSeed, vFade;
+                    void main() {
+                        vec2 p = gl_PointCoord - 0.5;
+                        float grain = 1.0 - smoothstep(0.06, 0.24, dot(p, p));
+                        gl_FragColor = vec4(mix(uDust, uGlint, vSeed * vSeed), grain * vFade * (0.24 + vSeed * 0.41));
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
+                    }
+                `
+            });
+            const mesh = new T.Points(geo, mat);
+            mesh.frustumCulled = false;
+            mesh.visible = false;
+            root.add(mesh);
+            return { geo, mat, mesh };
         })();
 
         /* ------------------------------------------------------------------------
@@ -2386,9 +2569,9 @@
 
                     float depth = max(1.0, -mv.z);
                     vSpark = vocalWave;
-                    // Settled points sit on the strokes: keep them finer than the strokes
-                    // so the glyph edge stays crisp, and let them swell only in flight.
-                    gl_PointSize = clamp((1.7 - localCohesion * 0.6 + vocalWave * 0.9) * uPixelRatio * 320.0 / depth, 1.0, 26.0);
+                    // Limit the apparent size of sparks as they fly past the lens.
+                    float pointSize = (mix(1.55, 0.55, localCohesion) + vocalWave * 0.22) * 190.0 / depth;
+                    gl_PointSize = clamp(pointSize, 0.8, 12.0) * uPixelRatio;
 
                     float nearFade = smoothstep(4.0, 16.0, depth);
                     vAlpha = nearFade * (0.28 + localCohesion * 0.72) * (1.0 - smoothstep(0.65, 1.0, uDisperse));
@@ -2466,12 +2649,11 @@
                 time: { value: 0 },
                 alpha: { value: 1 },
                 motion: { value: 1 },
-                glow: { value: 1 },
                 waitMain: { value: new T.Color() },
                 sungMain: { value: new T.Color() },
-                waitSub: { value: new T.Color() },
-                sungSub: { value: new T.Color() },
-                ink: { value: new T.Color() }
+                sub: { value: new T.Color() },
+                ink: { value: new T.Color() },
+                outline: { value: new T.Color() }
             },
             vertexShader: `
                 attribute vec2 aCenter, aLocal, aTiming;
@@ -2488,43 +2670,75 @@
                     float pulse = sin(p * 3.14159265) * motion;
                     vActive = pulse;
                     vec3 pos = position;
-                    pos.xy *= 1.0 + pulse * 0.06;
-                    pos.y += pulse * 0.24;
-                    pos.z += pulse * 0.35;
+                    pos.xy *= 1.0 + pulse * 0.025;
+                    pos.y += pulse * 0.12;
+                    pos.z += pulse * 0.18;
                     pos.xy += aCenter;
                     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
                 }
             `,
             fragmentShader: `
                 uniform sampler2D map;
-                uniform float time, alpha, glow;
-                uniform vec3 waitMain, sungMain, waitSub, sungSub, ink;
+                uniform float time, alpha;
+                uniform vec3 waitMain, sungMain, sub, ink, outline;
                 varying vec2 vUv, vLocal, vTiming;
                 varying float vActive, vKind;
                 void main() {
                     float cov = texture2D(map, vUv).a;
-                    if (cov < 0.01) discard;
+                    // Sample the same mask one pixel out for a narrow contrast edge.
+                    vec2 dx = dFdx(vUv) * 0.9;
+                    vec2 dy = dFdy(vUv) * 0.9;
+                    float surround = max(
+                        max(texture2D(map, vUv - dx).a, texture2D(map, vUv + dx).a),
+                        max(texture2D(map, vUv - dy).a, texture2D(map, vUv + dy).a));
+                    float coverage = max(cov, surround * 0.72);
+                    if (coverage < 0.01) discard;
                     float p = clamp((time - vTiming.x) / max(0.001, vTiming.y - vTiming.x), 0.0, 1.0);
                     float wipe = 1.0 - smoothstep(p - 0.04, p + 0.04, vLocal.x);
                     if (p <= 0.0) wipe = 0.0;
                     if (p >= 1.0) wipe = 1.0;
-                    // 擦亮前沿高光游标 (Leading Edge Spark)
-                    float edgeGlow = exp(-pow((vLocal.x - p) * 14.0, 2.0)) * step(0.01, p) * step(p, 0.99);
-                    float core = smoothstep(0.16, 0.74, cov);
-                    float a = clamp(core + cov * (1.0 - core) * glow * 0.68, 0.0, 1.0) * alpha;
-                    vec3 wait = mix(waitMain, waitSub, vKind);
-                    vec3 sung = mix(sungMain, sungSub, vKind);
-                    vec3 baseCol = mix(wait, mix(sung, ink, 0.12), wipe);
-                    vec3 finalCol = baseCol + ink * edgeGlow * 0.65 + sung * vActive * 0.25;
-                    gl_FragColor = vec4(finalCol, a);
+                    float fromEdge = (vLocal.x - p) * 14.0;
+                    float edge = exp(-fromEdge * fromEdge) * step(0.01, p) * step(p, 0.99);
+                    vec3 mainColor = mix(waitMain, sungMain, wipe) + ink * edge * 0.13 + sungMain * vActive * 0.06;
+                    vec3 fill = mix(mainColor, sub, vKind);
+                    gl_FragColor = vec4(mix(outline, fill, cov / coverage), coverage * alpha);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }
             `
         });
-        const glyphCanvas = document.createElement('canvas');
+        const fadingGlyphMaterial = glyphMaterial.clone();
+        const glyphColorUniforms = ['waitMain', 'sungMain', 'sub', 'ink', 'outline'];
+        let glyphCanvas = document.createElement('canvas');
         let glyphMesh = null;
         let glyphTexture = null;
+        let glyphLine = null;
+        let glyphTop = 0;
+        let glyphBottom = 0;
+        let fadingGlyph = null;
+
+        const clearFadingGlyph = () => {
+            if (!fadingGlyph) return;
+            lyricAnchorGroup.remove(fadingGlyph.mesh);
+            fadingGlyph.mesh.geometry.dispose();
+            fadingGlyph.texture.dispose();
+            fadingGlyphMaterial.uniforms.map.value = null;
+            fadingGlyph = null;
+        };
+
+        const keepFadingGlyph = () => {
+            const uniforms = fadingGlyphMaterial.uniforms;
+            glyphColorUniforms.forEach(key => uniforms[key].value.copy(glyphMaterial.uniforms[key].value));
+            uniforms.map.value = glyphTexture;
+            uniforms.motion.value = 0;
+            glyphMesh.material = fadingGlyphMaterial;
+            lyricAnchorGroup.add(glyphMesh);
+            fadingGlyph = { mesh: glyphMesh, texture: glyphTexture, bottom: glyphBottom,
+                alpha: glyphMaterial.uniforms.alpha.value };
+            glyphMesh = null;
+            glyphTexture = null;
+            glyphCanvas = document.createElement('canvas');
+        };
 
         const clearGlyphStage = () => {
             if (glyphMesh) {
@@ -2569,8 +2783,8 @@
             glyphCacheKey = cacheKey;
 
             const fontFamily = '"Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif';
-            const mainFont = `800 80px ${fontFamily}`;
-            const subFont = `500 32px ${fontFamily}`;
+            const mainFont = `600 80px ${fontFamily}`;
+            const subFont = `500 35px ${fontFamily}`;
             measureCtx.font = mainFont;
 
             let glyphs = buildGlyphTimeline(line);
@@ -2592,14 +2806,21 @@
 
             // 自动折行排版
             const rows = [[]];
+            const latinWordGlyph = /^[\p{Script=Latin}\p{M}\p{N}'’]+$/u;
             let rowW = 0;
             glyphs.forEach((g) => {
-                const adv = Math.max(16, measureCtx.measureText(g.text || ' ').width);
-                if (rowW + adv > 1360 && rows[rows.length - 1].length) {
-                    rows.push([]);
-                    rowW = 0;
+                const adv = Math.max(16, measureCtx.measureText(g.text || ' ').width) + 6;
+                let row = rows[rows.length - 1];
+                if (rowW + adv > 1360 && row.length) {
+                    let breakAt = row.length;
+                    if (latinWordGlyph.test(g.text)) {
+                        while (breakAt > 0 && latinWordGlyph.test(row[breakAt - 1].text)) breakAt -= 1;
+                    }
+                    row = breakAt > 0 ? row.splice(breakAt) : [];
+                    rows.push(row);
+                    rowW = row.reduce((width, item) => width + item.advance, 0);
                 }
-                rows[rows.length - 1].push({ ...g, advance: adv });
+                row.push({ ...g, advance: adv });
                 rowW += adv;
             });
 
@@ -2613,7 +2834,7 @@
             const addCell = (label, px, py, advance, start, end, isSub = false, normOrder = 0.5, fit = 1) => {
                 if (!String(label || '').trim()) return;
                 cells.push({
-                    label, start, end, isSub, order: normOrder, fit,
+                    label, advance, start, end, isSub, order: normOrder, fit,
                     w: Math.max(32, Math.ceil(advance + 44)),
                     h: isSub ? 92 : 148,
                     cx: px + advance * unit * fit * 0.5,
@@ -2666,6 +2887,13 @@
             }
 
             if (cells.length) {
+                glyphTop = -Infinity;
+                glyphBottom = Infinity;
+                cells.forEach(cell => {
+                    const halfHeight = (cell.isSub ? 35 : 80) * unit * 0.5;
+                    glyphTop = Math.max(glyphTop, cell.cy + halfHeight);
+                    glyphBottom = Math.min(glyphBottom, cell.cy - halfHeight);
+                });
                 // Shelf-pack the cells into one atlas and draw it once.
                 const shelfLimit = Math.floor(4096 / res);
                 let penX = 0, penY = 0, shelfH = 0, atlasW = 1;
@@ -2689,17 +2917,16 @@
                     ctx.setTransform(res, 0, 0, res, 0, 0);
                     ctx.clearRect(0, 0, atlasW, atlasH);
                     ctx.textBaseline = 'middle';
+                    ctx.textAlign = 'center';
                     ctx.fillStyle = '#ffffff';
-                    ctx.shadowColor = '#ffffff';
                     cells.forEach((cell) => {
                         ctx.save();
                         ctx.beginPath();
                         ctx.rect(cell.ax, cell.ay, cell.w, cell.h);
                         ctx.clip?.();
                         ctx.font = cell.isSub ? subFont : mainFont;
-                        // Shadow blur is measured in device pixels, not in the transform.
-                        ctx.shadowBlur = (cell.isSub ? 3 : 8) * res;
-                        ctx.fillText(cell.label, cell.ax + 22, cell.ay + cell.h * 0.5);
+                        // This mask also seeds the particles, so keep it to the inked strokes.
+                        ctx.fillText(cell.label, cell.ax + cell.w * 0.5, cell.ay + cell.h * 0.5);
                         ctx.restore();
                     });
 
@@ -2711,7 +2938,7 @@
                             positions.push((u * 2 - 1) * halfW, (v * 2 - 1) * halfH, 0);
                             centers.push(cell.cx, cell.cy);
                             uvs.push((cell.ax + u * cell.w) / atlasW, 1 - (cell.ay + (1 - v) * cell.h) / atlasH);
-                            locals.push(u, v);
+                            locals.push(0.5 + (u - 0.5) * cell.w / cell.advance, v);
                             timings.push(cell.start, cell.end);
                             kinds.push(cell.isSub ? 1 : 0);
                         }
@@ -2733,11 +2960,11 @@
                     glyphTexture.magFilter = T.LinearFilter;
                     const uniforms = glyphMaterial.uniforms;
                     uniforms.map.value = glyphTexture;
-                    uniforms.waitMain.value.copy(colors.ink).multiplyScalar(0.52);
-                    uniforms.sungMain.value.copy(colors.accent);
-                    uniforms.waitSub.value.copy(colors.secondary).multiplyScalar(0.78);
-                    uniforms.sungSub.value.copy(colors.secondary);
+                    uniforms.waitMain.value.copy(colors.ink).lerp(colors.background, stagePalette.light ? 0.06 : 0.15);
+                    uniforms.sungMain.value.copy(colors.accent).lerp(colors.ink, 0.28);
+                    uniforms.sub.value.copy(colors.secondary).lerp(colors.ink, 0.48);
                     uniforms.ink.value.copy(colors.ink);
+                    uniforms.outline.value.copy(colors.background);
 
                     glyphMesh = new T.Mesh(geometry, glyphMaterial);
                     glyphMesh.frustumCulled = false;
@@ -2863,6 +3090,8 @@
             rockField.mat.uniforms.uColorAccent.value.copy(colors.accent);
             rockField.mat.uniforms.uColorInk.value.copy(bodyInk);
             rockField.mat.uniforms.uFloor.value.copy(bodyFloor);
+            beltDust.mat.uniforms.uDust.value.copy(colors.secondary).lerp(bodyInk, 0.35);
+            beltDust.mat.uniforms.uGlint.value.copy(colors.accent).lerp(bodyInk, 0.24);
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => {
                 mat.uniforms.uColorPrimary.value.copy(colors.secondary);
                 mat.uniforms.uColorAccent.value.copy(colors.accent);
@@ -2875,10 +3104,13 @@
             frameArcMats.forEach((m, idx) => m.color.copy(idx === 0 ? colors.secondary : colors.accent));
             ripples.forEach((r, idx) => r.mat.color.copy(idx % 2 === 0 ? colors.secondary : colors.accent));
             glyphCacheKey = ''; // 触发当前句按新主题重绘
+            clearFadingGlyph();
         };
 
         const reset = (lines = [], identity = 'tunnel-track', duration = 0) => {
+            clearFadingGlyph();
             clearGlyphStage();
+            glyphLine = null;
             currentLineKey = '';
             activePointCount = 0;
             lyricGeo.setDrawRange(0, 0);
@@ -2896,6 +3128,7 @@
          * ------------------------------------------------------------------------ */
         const update = (time, frame, settings, audioState, cameraInstance) => {
             const dt = audioState.dt;
+            advanceSurfaces(dt);
             const live = audioState.playing;
             const settingVal = (key, fb) => {
                 const v = Number(settings?.[key]);
@@ -2906,6 +3139,7 @@
             const motionAmount = settings.reducedMotion
                 ? 0
                 : clamp(settingVal('motionAmount', 1), 0, 2) * clamp(settingVal('animationIntensity', 1), 0, 2);
+            const hasMotion = motionAmount > 0.001;
             const breathAmount = clamp(settingVal('cameraBreath', 0.5), 0, 2);
             const shakeAmount = settings.reducedMotion ? 0 : clamp(settingVal('cameraShake', 1), 0, 2);
             const objectDensity = clamp(settingVal('objectDensity', 1), 0.25, 2);
@@ -2913,6 +3147,7 @@
             const dissolveAmount = clamp(settingVal('dissolveAmount', 0.72), 0, 1);
             const holdRatio = clamp(settingVal('textHoldRatio', 0.32), 0, 0.8);
             const pauseDur = clamp(settingVal('pauseDuration', 0.4), 0, 3);
+            const dwell = holdRatio * 0.55 + pauseDur;
 
             if (audioState.seek) {
                 bassSmooth = 0;
@@ -2933,62 +3168,71 @@
 
             const lineStart = activeLine ? finiteNumber(activeLine.startTime, time) : time;
             const lineEnd = activeLine ? Math.max(lineStart + 0.6, finiteNumber(activeLine.endTime, lineStart + 3.8)) : time + 3.0;
-            const lineProgress = activeLine ? clamp((time - lineStart) / Math.max(0.4, lineEnd - lineStart)) : 0;
-
-            // 句内镜头节奏：入场微推进 -> 阅读平稳托举 -> 句尾失重滑翔
-            const readingHold = activeLine
-                ? smooth(lineProgress / 0.22) * (1 - smooth((lineProgress - 0.78) / 0.22))
+            const shots = timeline.lineShots;
+            const nextShotIndex = upperBound(shots, time, 'startTime');
+            const cameraShot = shots[nextShotIndex - 1];
+            const pose = sampleCamera(cameraShot, time);
+            const focusFor = (cue) => cue
+                ? smooth((time - cue.startTime + 0.65) / 0.65)
+                    * (1 - smooth((time - Math.max(cue.startTime + 0.25, cue.vocalEnd) - dwell) / 0.75))
                 : 0;
-            const speedMod = activeLine ? (1.0 - readingHold * 0.26) : 0.92;
+            const lyricFocus = Math.max(focusFor(cameraShot), focusFor(shots[nextShotIndex]));
+            const speedMod = 0.92 - lyricFocus * 0.14;
             cruiseSpeed = (actState.speed / 22.0) * speedScale * speedMod * (settings.reducedMotion ? 0 : 1);
             totalTravelDistance = timeline.distanceAt(time, speedScale);
 
             const camSpine = timeline.spineAt(totalTravelDistance, motionAmount);
 
-            // 2. 分镜机位平滑插值 (Shot Rig Interpolation)
-            let rigOffX = 0;
-            let rigOffY = 0;
-            let rigAimX = 0;
-            let rigAimY = 0;
-            let rigRoll = 0;
-            let rigFov = 0;
-
-            if (shot && motionAmount > 0.001) {
-                const prevShot = timeline.lineShots[Math.max(0, lineIdx - 1)] || shot;
-                const cutBlend = smoother((time - lineStart) / Math.min(2.2, Math.max(0.65, (lineEnd - lineStart) * 0.45)));
-                rigOffX = mix(prevShot.rig.offset[0], shot.rig.offset[0], cutBlend) * motionAmount;
-                rigOffY = mix(prevShot.rig.offset[1], shot.rig.offset[1], cutBlend) * motionAmount;
-                rigAimX = mix(prevShot.rig.aimBias[0], shot.rig.aimBias[0], cutBlend) * motionAmount;
-                rigAimY = mix(prevShot.rig.aimBias[1], shot.rig.aimBias[1], cutBlend) * motionAmount;
-                rigRoll = mix(prevShot.rollBias, shot.rollBias, cutBlend) * motionAmount;
-                rigFov = shot.rig.fovAdd * cutBlend * Math.min(1, motionAmount);
-            }
-
             // 漂移呼吸与低频微震（阅读区间自动衰减抖动，保护字幕清晰度）
-            const readDamp = 1.0 - readingHold * 0.55;
+            const readDamp = 1.0 - lyricFocus * 0.55;
             const driftX = (Math.sin(time * 0.29) * 1.15 + Math.cos(time * 0.13) * 0.65) * breathAmount * motionAmount;
             const driftY = (Math.cos(time * 0.23) * 0.82 + Math.sin(time * 0.17) * 0.45) * breathAmount * motionAmount;
             const shakeX = Math.sin(time * 16.3) * bassSmooth * 0.18 * shakeAmount * readDamp;
             const shakeY = Math.cos(time * 18.7) * bassSmooth * 0.14 * shakeAmount * readDamp;
 
-            const camX = camSpine.x + camSpine.right.x * (rigOffX + driftX) + camSpine.up.x * (rigOffY + driftY) + shakeX;
-            const camY = camSpine.y + camSpine.right.y * (rigOffX + driftX) + camSpine.up.y * (rigOffY + driftY) + shakeY;
+            const side = pose.x * motionAmount + driftX;
+            const lift = pose.y * motionAmount + driftY;
+            const camX = camSpine.x + camSpine.right.x * side + camSpine.up.x * lift + shakeX;
+            const camY = camSpine.y + camSpine.right.y * side + camSpine.up.y * lift + shakeY;
             const camZ = camSpine.z;
             cameraInstance.position.set(camX, camY, camZ);
 
-            // 前视目标：沿深空航道前方 140 米处，叠加分镜偏航与歌词舞台牵引
             const lookAheadSpine = timeline.spineAt(totalTravelDistance + 140, motionAmount);
-            let lookX = lookAheadSpine.x + rigAimX * 4.5;
-            let lookY = lookAheadSpine.y + rigAimY * 4.5;
-            let lookZ = lookAheadSpine.z;
+            const stageDist = 33.5;
+            const stageSpine = timeline.spineAt(totalTravelDistance + stageDist, motionAmount);
+            const stageX = mix(camX, stageSpine.x, 0.65) + (pose.lyricX * 0.38 + Math.sin(time * 0.34) * 0.38) * motionAmount;
+            const stageY = mix(camY, stageSpine.y, 0.65)
+                + (pose.lyricY * 0.38 + Math.cos(time * 0.27) * 0.28 + vocalSmooth * 0.22) * motionAmount;
+            const stageZ = camZ - stageDist;
+            const lookToLyric = lyricFocus * 0.58;
+            let lookX = mix(lookAheadSpine.x + pose.aimX * 4.5 * motionAmount, stageX, lookToLyric);
+            let lookY = mix(lookAheadSpine.y + pose.aimY * 4.5 * motionAmount, stageY, lookToLyric);
+            const lookZ = mix(lookAheadSpine.z, stageZ, lookToLyric);
 
             // 3. 更新空间锚定歌词与结项粒子流形
+            const previousLine = frame?.lines?.[lineIdx - 1];
+            const upcomingLine = frame?.lines?.[lineIdx + 1];
+            const joinsPrevious = lyricsCanHandoff(previousLine, activeLine, dwell);
+            const joinsUpcoming = lyricsCanHandoff(activeLine, upcomingLine, dwell);
+            const handoffTime = time - lineStart;
+            const timeForLine = (upcomingLine?.startTime ?? lineEnd) - lineStart;
+            const handoffDuration = clamp(timeForLine * 0.75, 0.05, LYRIC_HANDOFF_SECONDS);
+            const handoffProgress = smooth(handoffTime / handoffDuration);
+            const handingOff = joinsPrevious && handoffTime >= 0 && handoffTime < handoffDuration;
+
             const nextKey = activeLine ? `${activeLine.index}:${activeLine.startTime}:${activeLine.fullText}` : '';
             if (nextKey !== currentLineKey) {
+                clearFadingGlyph();
+                if (handingOff && !audioState.seek && hasMotion
+                    && glyphLine === previousLine && glyphMesh && glyphStage.visible) {
+                    keepFadingGlyph();
+                }
+                glyphLine = activeLine;
                 currentLineKey = nextKey;
                 buildLyricStage(activeLine, settings);
-            } else if (activeLine && !glyphCacheKey) {
-                buildLyricStage(activeLine, settings);
+            } else {
+                if (audioState.seek || !handingOff || !hasMotion) clearFadingGlyph();
+                if (activeLine && !glyphCacheKey) buildLyricStage(activeLine, settings);
             }
 
             if (activeLine && activePointCount > 0) {
@@ -2997,7 +3241,7 @@
                 // The dwell is the number of seconds the finished line stays whole
                 // before it dissolves; it used to be scaled down and capped to
                 // a fraction of a second, which made the control inert.
-                const exitStart = vocalEnd + holdRatio * 0.55 + pauseDur;
+                const exitStart = joinsUpcoming ? Math.max(vocalEnd + dwell, upcomingLine.startTime) : vocalEnd + dwell;
                 const exitDuration = 0.55 + dissolveAmount * 0.65;
 
                 const entryPhase = clamp((time - start) / 0.34);
@@ -3005,22 +3249,16 @@
                 const alive = time >= start - 0.05 && time < exitStart + exitDuration;
 
                 const cohesion = settings.reducedMotion ? 1 : smoother(entryPhase);
-                const solidIn = settings.reducedMotion ? 1 : smooth((entryPhase - 0.48) / 0.52);
-                const solidOut = 1 - smooth(exitPhase / 0.32);
+                let solidIn = settings.reducedMotion ? 1 : smooth((entryPhase - 0.48) / 0.52);
+                if (joinsPrevious) {
+                    solidIn = hasMotion ? handoffProgress
+                        : smooth(handoffTime / Math.min(LYRIC_FADE_SECONDS, handoffDuration));
+                }
+                const fadeForNext = !hasMotion && joinsUpcoming
+                    ? smooth((time - upcomingLine.startTime + LYRIC_FADE_SECONDS) / LYRIC_FADE_SECONDS) : 0;
+                const solidOut = (1 - smooth(exitPhase / 0.32)) * (1 - fadeForNext);
                 const disperse = smooth((exitPhase - 0.12) / 0.88) * (0.35 + dissolveAmount * 0.65);
                 const glyphAlpha = alive ? solidIn * solidOut : 0;
-
-                // 歌词三维锚点：位于镜头前方的弯曲航道断面，带独立空间视差与优雅侧倾
-                const stageDist = 33.5;
-                const stageSpine = timeline.spineAt(totalTravelDistance + stageDist, motionAmount);
-                const floatX = Math.sin(time * 0.34) * 0.38 * motionAmount;
-                const floatY = (Math.cos(time * 0.27) * 0.28 + vocalSmooth * 0.22) * motionAmount;
-                const shotX = (shot ? shot.lateralX * 0.38 : 0) * motionAmount;
-                const shotY = (shot ? shot.verticalY * 0.38 : 0) * motionAmount;
-
-                const stageX = mix(camX, stageSpine.x, 0.65) + shotX + floatX;
-                const stageY = mix(camY, stageSpine.y, 0.65) + shotY + floatY;
-                const stageZ = camZ - stageDist;
 
                 lyricAnchorGroup.position.set(stageX, stageY, stageZ);
                 const aspectScale = Math.min(1, Math.max(0.42, viewportAspect * 0.68));
@@ -3030,27 +3268,32 @@
                 const dx = camX - stageX;
                 const dy = camY - stageY;
                 const dz = camZ - stageZ;
-                const faceYaw = Math.atan2(dx, dz) + (shot ? shot.yawBias : 0) * motionAmount;
-                const facePitch = -Math.atan2(dy, Math.hypot(dx, dz)) * 0.65 + (shot ? shot.pitchBias : 0) * motionAmount;
-                const faceRoll = ((shot ? shot.rollBias : 0) + Math.sin(time * 0.31) * 0.012) * motionAmount;
+                const faceYaw = Math.atan2(dx, dz) + pose.yaw * motionAmount;
+                const facePitch = -Math.atan2(dy, Math.hypot(dx, dz)) * 0.65 + pose.pitch * motionAmount;
+                const faceRoll = (pose.roll + Math.sin(time * 0.31) * 0.012) * motionAmount;
                 lyricAnchorGroup.rotation.set(facePitch, faceYaw, faceRoll);
-
-                // 镜头视线向当前歌词锚点温和聚焦（保证任意机位下字幕均在黄金构图区内）
-                lookX = mix(lookX, stageX, 0.58);
-                lookY = mix(lookY, stageY, 0.58);
-                lookZ = mix(lookZ, stageZ, 0.58);
 
                 glyphStage.visible = alive && glyphAlpha > 0.004;
                 glyphMaterial.uniforms.time.value = time;
                 glyphMaterial.uniforms.alpha.value = glyphAlpha;
                 glyphMaterial.uniforms.motion.value = motionAmount;
-                glyphMaterial.uniforms.glow.value = glowAmount;
-
+                if (glyphMesh) glyphMesh.position.y = 0;
+                if (fadingGlyph && glyphMesh) {
+                    // Keep the ink of the two full blocks apart, including translations.
+                    const separation = glyphTop - fadingGlyph.bottom + 0.6;
+                    glyphMesh.position.y = -separation * (1 - handoffProgress);
+                    fadingGlyph.mesh.position.y = separation * handoffProgress;
+                    fadingGlyphMaterial.uniforms.time.value = time;
+                    fadingGlyphMaterial.uniforms.alpha.value = fadingGlyph.alpha * (1 - handoffProgress);
+                }
                 const releaseIn = smooth(exitPhase / 0.22);
                 const releaseOut = 1 - smooth((exitPhase - 0.58) / 0.42);
+                // Hand over from particles to type at entry and leave room for the line to fade before release.
+                const gatherOpacity = joinsPrevious ? 0 : (1 - solidIn) * 0.92;
+                const releaseOpacity = (1 - solidOut) * releaseIn * releaseOut * (0.24 + dissolveAmount * 0.24);
                 const particleOpacity = (!alive || settings.reducedMotion)
                     ? 0
-                    : clamp((1 - solidIn * 0.8) * 0.92 + solidIn * releaseIn * releaseOut * (0.45 + dissolveAmount * 0.55), 0, 1);
+                    : clamp(gatherOpacity + releaseOpacity, 0, 1);
 
                 lyricPoints.visible = particleOpacity > 0.005;
                 lyricParticleMat.uniforms.uTime.value = time;
@@ -3074,75 +3317,45 @@
                     arcLine.visible = glyphStage.visible;
                 });
             } else {
+                clearFadingGlyph();
                 glyphStage.visible = false;
                 lyricPoints.visible = false;
                 frameArcLines.forEach((arcLine) => { arcLine.visible = false; });
                 lyricParticleMat.uniforms.uOpacity.value = 0;
             }
 
-            // The camera turns to watch whatever it is passing: a little while
-            // a line is being read, freely in the gaps between lines.
-            let passBank = 0, passRush = 0;
-            if (motionAmount > 0.001 && !settings.reducedMotion) {
-                const shots = timeline.lineShots;
-                const nextIdx = upperBound(shots, time, 'startTime');
-                const sinceLine = nextIdx > 0 ? time - shots[nextIdx - 1].endTime : time;
-                const untilLine = nextIdx < shots.length ? shots[nextIdx].startTime - time : 6;
-                const free = activeLine ? 0 : Math.min(smooth(sinceLine / 1.4), smooth(untilLine / 1.8));
-                const reach = (0.16 + 0.6 * free) * Math.min(1, motionAmount);
-                let weight = 0, sum = 0, gx = 0, gy = 0, gz = 0;
-                bodyNodes.forEach((body) => {
-                    if (!body.group.visible) return;
-                    const ahead = camZ - body.group.position.z;
-                    const near = smooth((560 - ahead) / 220) * smooth((ahead + 150) / 130);
-                    if (near <= 0) return;
-                    // Close alongside, the camera banks towards the body and the lens widens.
-                    const beside = smooth(1 - Math.abs(ahead - 25) / 150);
-                    const offX = body.group.position.x - camX, offY = body.group.position.y - camY;
-                    const closeBy = beside * clamp(70 / Math.max(20, Math.hypot(offX, offY)));
-                    if (closeBy > passRush) {
-                        passRush = closeBy;
-                        passBank = -Math.sign(offX * camSpine.right.x + offY * camSpine.right.y) * closeBy;
-                    }
-                    weight = Math.max(weight, near);
-                    sum += near;
-                    gx += body.group.position.x * near; gy += body.group.position.y * near; gz += body.group.position.z * near;
-                });
-                if (sum > 0) {
-                    const pull = weight * reach;
-                    // Aim at a point a fixed way off, so a body alongside turns the head fully.
-                    const tx = gx / sum - camX, ty = gy / sum - camY, tz = gz / sum - camZ;
-                    const far = 140 / Math.max(1, Math.hypot(tx, ty, tz));
-                    lookX = mix(lookX, camX + tx * far, pull);
-                    lookY = mix(lookY, camY + ty * far, pull);
-                    lookZ = mix(lookZ, camZ + tz * far, pull);
-                }
-            }
-            cameraInstance.lookAt(lookX, lookY, lookZ);
-            cameraInstance.rotation.z += rigRoll + passBank * 0.11 * Math.min(1, motionAmount) + camSpine.curvature * 0.032 * motionAmount
-                + Math.sin(time * 0.21) * 0.008 * breathAmount * motionAmount;
-
-            const targetFov = clamp(
-                actState.fov + rigFov + passRush * 5.0 * Math.min(1, motionAmount) + bassSmooth * 2.4 * shakeAmount + (cruiseSpeed - 1.0) * 3.5 * Math.min(1, motionAmount),
-                38,
-                68
-            );
-            if (Math.abs(cameraInstance.fov - targetFov) > 0.02) {
-                cameraInstance.fov = targetFov;
-                cameraInstance.updateProjectionMatrix();
-            }
-
             // 4. 更新深空星尘、体积星云与结项引力丝束
             const showStarfield = settings.starfield !== false;
             fieldPoints.visible = showStarfield;
             skyDome.visible = showStarfield;
-            skyMat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
-            skyMat.uniforms.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
-            const rockAmount = (actState.rocks || 0) * clamp(objectDensity, 0, 1.2);
+            const sky = skyMat.uniforms;
+            sky.uTime.value = settings.reducedMotion ? 0 : time;
+            sky.uNebula.value = actState.nebulaAlpha * clamp(glowAmount, 0.3, 1.6);
+            const holeStrength = showStarfield ? encounterAmount(timeline.blackHole, time) : 0;
+            sky.uHole.value.x = holeStrength;
+            if (holeStrength > 0.001) {
+                // A distant encounter stays fixed in the sky as the route drifts past it.
+                const distance = timeline.distanceAt(timeline.blackHole.peak, speedScale) + 1030;
+                const anchor = timeline.spineAt(distance, motionAmount);
+                const offset = 342 * clamp(viewportAspect / 1.55, 0.46, 1.15);
+                const direction = sky.uHoleDir.value.set(anchor.x + offset - camX, anchor.y + 195 - camY, anchor.z - camZ);
+                const range = direction.length();
+                direction.multiplyScalar(1 / range);
+                const right = sky.uHoleRight.value.set(-direction.z, 0, direction.x).normalize();
+                sky.uHoleUp.value.crossVectors(right, direction);
+                const size = mix(93, 105, smooth((viewportAspect - 0.85) / 0.7));
+                sky.uHole.value.y = clamp(size / range, 0.048, 0.108) * clamp(0.62 + viewportAspect * 0.32, 0.72, 1);
+            }
+            const beltAmount = encounterAmount(timeline.asteroidBelt, time);
+            const rockAmount = Math.max(actState.rocks, beltAmount * 1.05) * clamp(objectDensity, 0, 1.2);
             rockField.mesh.visible = rockAmount > 0.01;
             rockField.mat.uniforms.uAmount.value = rockAmount;
-            rockField.mat.uniforms.uTime.value = time;
+            rockField.mat.uniforms.uBelt.value = beltAmount;
+            rockField.mat.uniforms.uTime.value = settings.reducedMotion ? 0 : time;
             rockField.mat.uniforms.uCamPos.value.copy(cameraInstance.position);
+            beltDust.mesh.visible = beltAmount > 0.01;
+            beltDust.mat.uniforms.uBelt.value = beltAmount * clamp(objectDensity, 0, 1.2);
+            beltDust.mat.uniforms.uCamPos.value.copy(cameraInstance.position);
             filamentMesh.visible = showStarfield;
             streakLines.visible = showStarfield && !settings.reducedMotion;
 
@@ -3201,11 +3414,14 @@
             const showShips = settings.showShips !== false;
             const showStations = settings.showStations !== false;
             const cycle = timeline.ENCOUNTER_CYCLE;
+            const emergence = 1820, departure = 180;
             const pass = timeline.ringPass;
             const encounterShift = pass
                 ? (((pass.distance * clamp(speedScale, 0.25, 2.5) - pass.baseS) % cycle) + cycle) % cycle
                 : 0;
             const audioPulse = clamp(bassSmooth * 1.1 + vocalSmooth * 0.35, 0, 1.2);
+            let passRush = 0, bankSum = 0, bankWeight = 0;
+            let aimWeight = 0, aimX = 0, aimY = 0;
 
             timeline.encounterSlots.forEach((slot, idx) => {
                 const node = entityNodes[idx];
@@ -3220,9 +3436,9 @@
                     return;
                 }
 
-                // 计算该巨构在当前周期内的世界弧长坐标 sWorld（掠过身后 220m 后再折返至下一周期 2180m 远方）
+                // Keep the current occurrence until it fades astern, then look ahead to the next cycle.
                 const placed = slot.baseS + encounterShift;
-                const cycleIndex = Math.floor((totalTravelDistance - placed + 220) / cycle);
+                const cycleIndex = Math.ceil((totalTravelDistance - departure - placed) / cycle);
                 let sWorld = placed + cycleIndex * cycle;
                 let place = slot;
                 let handover = 1;
@@ -3234,34 +3450,34 @@
                         continue;
                     }
                     const heroRel = heroS - totalTravelDistance;
-                    if (heroRel > -180 && heroRel < 1820) {
+                    if (heroRel > -departure && heroRel < emergence) {
                         // One body cannot be in two places. Its turn in the
                         // procession, if it comes first and clear of the pass,
                         // is finished before it is gathered again for the pass.
-                        if (place === slot && sWorld < hero.clearFrom * routeScale && sWorld - totalTravelDistance > -180) continue;
+                        if (place === slot && sWorld < hero.clearFrom * routeScale && sWorld - totalTravelDistance > -departure) continue;
                         const before = placed + Math.floor((heroS - placed) / cycle) * cycle;
-                        if (before < hero.clearFrom * routeScale && before + 180 > heroS - 1820) {
-                            handover = Math.min(handover, smooth((totalTravelDistance - before - 180) / 160));
+                        if (before < hero.clearFrom * routeScale && before + departure > heroS - emergence) {
+                            handover = Math.min(handover, smooth((totalTravelDistance - before - departure) / 160));
                         }
                         sWorld = heroS;
                         place = hero;
                     } else if (place === slot && sWorld > heroS && sWorld < heroS + 2000) {
                         // ... and the one after waits until the pass is over.
-                        if (heroRel >= 1820) sWorld = -1e9;
-                        else handover = Math.min(handover, smooth((-180 - heroRel) / 160));
+                        if (heroRel >= emergence) sWorld = -1e9;
+                        else handover = Math.min(handover, smooth((-departure - heroRel) / 160));
                     }
                 }
                 const relS = sWorld - totalTravelDistance; // >0 在镜头前方，<0 已掠过镜头后方
 
-                if (relS < -180 || relS > 1820) {
+                if (relS < -departure || relS > emergence) {
                     node.points.visible = false;
                     return;
                 }
 
                 // 远近双端丝滑存在包络 (uPresence)：
                 // 远端 1820m -> 920m 从 0% 极微弱星雾渐显，近端 -30m -> -180m 在身后彻底消隐
-                const farPresence = 1.0 - smoother((relS - 920) / 880);
-                const nearPresence = smooth((relS + 180) / 150);
+                const farPresence = smoother((emergence - relS) / (emergence - 920));
+                const nearPresence = smooth((relS + departure) / 150);
                 const presence = clamp(farPresence * nearPresence * handover, 0, 1);
                 if (presence <= 0.002) {
                     node.points.visible = false;
@@ -3296,9 +3512,12 @@
                     dissolveDir = 1.0;
                 }
 
+                // Form the solid and clear its dust together, including on the approach from the horizon.
+                const formed = dissolveDir < 0 ? Math.min(cohesion, mix(0.42, 1, smooth((1020 - relS) / 420))) : cohesion;
                 const u = node.mat.uniforms;
                 u.uTime.value = time;
                 u.uCohesion.value = cohesion;
+                u.uSolid.value = formed;
                 u.uPresence.value = presence;
                 u.uDissolveDir.value = dissolveDir;
                 u.uScale.value = slot.scale;
@@ -3310,14 +3529,31 @@
                 // before it starts to form, the points once it has (stations
                 // keep theirs for the lamps).
                 const lampless = slotTemplateMap[idx].code !== 0 || slot.type !== 'station';
-                node.points.visible = !(lampless && cohesion > 0.87);
+                node.points.visible = !(lampless && formed >= 0.94);
                 // The solid shares the points' place, attitude and envelope.
                 // Far off a body is only its dust; the solid forms on the approach.
-                const formed = dissolveDir < 0 ? Math.min(cohesion, mix(0.42, 1, smooth((1020 - relS) / 420))) : cohesion;
                 body.group.visible = formed > 0.42;
                 body.group.position.copy(node.points.position);
                 body.group.rotation.copy(node.points.rotation);
                 body.group.scale.setScalar(slot.scale * (dissolveDir < 0 ? mix(0.58, 1, smooth(cohesion)) : 1));
+
+                if (hasMotion) {
+                    // Save the change in heading for a close pass; distant bodies drift into view on their own.
+                    const attention = smooth(presence / 0.35) * smooth((formed - 0.42) / 0.22);
+                    const near = smooth((215 - relS) / 135) * smooth((relS + 150) / 130) * attention;
+                    const alongside = smooth(1 - Math.abs(relS - 25) / 150);
+                    const offX = wx - camX, offY = wy - camY;
+                    const closeBy = alongside * clamp(70 / Math.max(20, Math.hypot(offX, offY))) * attention;
+                    const crossTrack = offX * camSpine.right.x + offY * camSpine.right.y;
+                    bankSum -= closeBy * crossTrack / Math.hypot(crossTrack, 16);
+                    bankWeight += closeBy;
+                    passRush = Math.max(passRush, closeBy);
+                    const bearing = near / Math.hypot(offX, offY, Math.max(35, relS));
+                    aimWeight += near;
+                    aimX += offX * bearing;
+                    aimY += offY * bearing;
+                }
+
                 bodyTurn.copy(body.group.quaternion).invert();
                 for (const { mat } of body.parts) {
                     const b = mat.uniforms;
@@ -3337,6 +3573,29 @@
                     }
                 }
             });
+
+            const motionStrength = Math.min(1, motionAmount);
+            // Blend separate bearings, so two passing bodies cannot cancel into an unstable target.
+            const aimReach = (0.16 + 0.38 * (1 - lyricFocus)) * motionStrength;
+            const aimDistance = 92 * aimReach / Math.max(1, aimWeight);
+            lookX += aimX * aimDistance;
+            lookY += aimY * aimDistance;
+            const passBank = bankSum / Math.max(1, bankWeight);
+            cameraInstance.lookAt(lookX, lookY, lookZ);
+            cameraInstance.rotation.z += pose.roll * motionAmount + passBank * 0.11 * motionStrength
+                + camSpine.curvature * 0.032 * motionAmount + Math.sin(time * 0.21) * 0.008 * breathAmount * motionAmount;
+
+            const targetFov = clamp(
+                actState.fov + (pose.fov + passRush * 5.0 + (cruiseSpeed - 1.0) * 3.5) * motionStrength
+                    + bassSmooth * 2.4 * shakeAmount,
+                38,
+                68
+            );
+            if (audioState.seek || Math.abs(cameraInstance.fov - targetFov) > 0.02) {
+                cameraInstance.fov = targetFov;
+                cameraInstance.updateProjectionMatrix();
+            }
+            sceneDrawn = true;
         };
 
         // What each quality tier spends inside the world: how many of the
@@ -3346,6 +3605,7 @@
         const setQuality = (tier) => {
             const [points, detail, rocks] = QUALITY_TIERS[tier] || QUALITY_TIERS.standard;
             rockField.geo.setDrawRange(0, Math.floor(ROCK_COUNT * rocks) * rockField.per);
+            beltDust.geo.setDrawRange(0, Math.floor(BELT_GRAIN_COUNT * rocks));
             entityNodes.forEach((node) => node.geo.setDrawRange(0, Math.floor(POINTS_PER_ENTITY * points)));
             bodyNodes.forEach((body) => body.parts.forEach(({ mat }) => { mat.uniforms.uDetail.value = detail; }));
         };
@@ -3359,9 +3619,11 @@
             prepare,
             update,
             resize(w, h, ratio) {
+                const oldGlyphResolution = glyphResolution();
                 viewportAspect = Math.max(0.2, Number(w) / Math.max(1, Number(h)));
                 pixelRatio = ratio;
                 viewportPixels = Math.max(1, Number(h) * ratio);
+                if (glyphResolution() !== oldGlyphResolution) glyphCacheKey = '';
                 fieldMat.uniforms.uPixelRatio.value = ratio;
                 skyMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 filamentMat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
@@ -3371,12 +3633,15 @@
                     mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
                 }));
                 rockField.mat.uniforms.uViewport.value.set(Math.max(1, w * ratio), Math.max(1, h * ratio));
+                beltDust.mat.uniforms.uRatio.value = ratio;
             },
             destroy() {
+                clearFadingGlyph();
                 clearGlyphStage();
                 scene.remove(root);
                 [fieldGeo, skyGeo, filamentGeo, streakGeo, lyricGeo, rippleGeo, ...frameArcGeos].forEach((g) => g?.dispose?.());
-                [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, ...frameArcMats].forEach((m) => m?.dispose?.());
+                [fieldMat, skyMat, skyBakeMat, filamentMat, streakMat, lyricParticleMat, glyphMaterial, fadingGlyphMaterial,
+                    ...frameArcMats].forEach((m) => m?.dispose?.());
                 skyMasks.dispose();
                 entityNodes.forEach((node) => {
                     node.geo?.dispose?.();
@@ -3384,6 +3649,7 @@
                 });
                 bodyNodes.forEach((body) => body.parts.forEach(({ geo, mat }) => { geo.dispose(); mat.dispose(); }));
                 rockField.geo.dispose(); rockField.mat.dispose();
+                beltDust.geo.dispose(); beltDust.mat.dispose();
                 surfacesReleased = true;
                 surfaceMaps.forEach((entry) => entry.texture?.dispose());
                 ripples.forEach((r) => r.mat?.dispose?.());
@@ -3516,19 +3782,22 @@
                 if (!fallbackMode) void initialize();
                 return;
             }
-            // Paused with nothing changed: the last picture is still right, so
-            // the GPU can rest. Playing: no more often than the tier's rate.
-            const still = !frame.isPlaying && lastTime !== null
-                && finiteNumber(frame.playbackTime, 0) === lastTime;
-            if (!force && !dirty && (still || !cap.take(performance.now(), mode.config.quality))) return;
-            dirty = false;
-            applyQuality();
-
             const nextIdentity = frame.track?.path || frame.track?.title || 'tunnel-track';
             // The track length often arrives a moment after the track itself; the
             // journey has to be compiled for the whole song, not just its lyrics.
             const nextDuration = Math.round(finiteNumber(frame.duration, 0));
-            if (source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration) {
+            const songChanged = source !== frame.lines || identity !== nextIdentity || nextDuration !== compiledDuration;
+
+            // Paused with nothing changed: the last picture is still right, so
+            // the GPU can rest. Playing: no more often than the tier's rate.
+            // A new song is always taken in at once.
+            const still = !frame.isPlaying && lastTime !== null
+                && finiteNumber(frame.playbackTime, 0) === lastTime;
+            if (!force && !dirty && !songChanged && (still || !cap.take(performance.now(), mode.config.quality))) return;
+            dirty = false;
+            applyQuality();
+
+            if (songChanged) {
                 source = frame.lines;
                 identity = nextIdentity;
                 compiledDuration = nextDuration;
