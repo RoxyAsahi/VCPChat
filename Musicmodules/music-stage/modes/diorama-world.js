@@ -3290,13 +3290,17 @@
                     if(dusk>0.0){
                         // Afterglow: warm and low over the sun's bearing, a band of
                         // rose above it, and the rest of the sky still blue, not black.
-                        float toward=0.5+0.5*dot(normalize(vec3(d.x,0.0,d.z)+vec3(0.0001)),sunDir);
+                        // Clamped: a GPU's pow() of a hair below zero is NaN, and one NaN in
+                        // the sky spreads through the environment map onto everything lit.
+                        float toward=clamp(0.5+0.5*dot(normalize(vec3(d.x,0.0,d.z)+vec3(0.0001)),sunDir),0.0,1.0);
                         float low=exp(-max(d.y,0.0)*6.0);
                         c=mix(c,duskHigh,dusk*0.55*(1.0-low));
                         c=mix(c,sunset,low*(0.2+0.8*pow(toward,3.0))*dusk*0.85);
-                        c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-pow((d.y-0.13)*8.0,2.0))*pow(toward,1.5)*dusk*0.3);
+                        float rose=(d.y-0.13)*8.0;
+                        c=mix(c,sunset*vec3(1.0,0.8,0.9),exp(-rose*rose)*pow(toward,1.5)*dusk*0.3);
                     }
-                    float band=exp(-pow(dot(d,normalize(vec3(0.35,0.8,0.48)))-0.18,2.0)*90.0);
+                    float across=dot(d,normalize(vec3(0.35,0.8,0.48)))-0.18;
+                    float band=exp(-across*across*90.0);
                     float cloud=noise(d*12.0)*0.6+noise(d*33.0)*0.3+noise(d*91.0)*0.1;
                     c+=cold*band*pow(cloud,3.0)*(0.12+open*0.22);
                     // Moonlight scattering: a tight corona plus a wide, faint veil.
@@ -3338,6 +3342,10 @@
                         c += emission * sector * auroraActive
                             * (0.75 + auroraRhythm * 0.2 + accent * 0.55);
                     }
+                    // Nothing that is not a number may leave the sky: through the lens and
+                    // the environment map it would black out or flare everything near it.
+                    if(any(isnan(c))||any(isinf(c)))c=vec3(0.0);
+                    c=max(c,vec3(0.0));
                     gl_FragColor=vec4(c,1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
