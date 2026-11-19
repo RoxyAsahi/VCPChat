@@ -79,6 +79,7 @@
             const now = Date.now();
             if (now - lastContextLoss > 60000) contextRetries = 0;
             lastContextLoss = now;
+            console.warn(`[MusicStage:Diorama] WebGL context lost (retry ${contextRetries} of 3)`);
             fallbackMode = true;
             disposeGraphics();
             if (latest) renderFallback(latest);

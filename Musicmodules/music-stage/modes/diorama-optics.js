@@ -35,7 +35,9 @@
         // First step down: keep only what is brighter than the threshold, with a soft knee.
         const prefilter = pass(`uniform sampler2D image;uniform vec2 texel;uniform float threshold;
             varying vec2 uvScreen;
-            vec3 tap(vec2 o){vec3 c=min(texture2D(image,uvScreen+o*texel).rgb,vec3(24.0));
+            vec3 tap(vec2 o){vec3 c=texture2D(image,uvScreen+o*texel).rgb;
+                // A NaN or negative pixel from any material must not bloom into a blot.
+                c=mix(vec3(0.0),min(c,vec3(24.0)),vec3(greaterThanEqual(c,vec3(0.0))));
                 float l=max(c.r,max(c.g,c.b));
                 float soft=clamp(l-threshold+0.35,0.0,0.7);soft=soft*soft/1.4;
                 return c*max(soft,l-threshold)/max(l,0.0001);}
@@ -92,6 +94,7 @@
             }
             void main(){
                 vec3 color=smoothed(uvScreen);
+                color=mix(vec3(0.0),color,vec3(greaterThanEqual(color,vec3(0.0))));
                 color+=texture2D(glowMap,uvScreen).rgb*bloom;
                 vec2 p=uvScreen*2.0-1.0;
                 color*=1.0-(vignette+cabin*0.3)*smoothstep(0.2,1.7,dot(p,p))*0.6;
