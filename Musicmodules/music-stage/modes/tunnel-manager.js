@@ -1018,7 +1018,8 @@
                         float mask = uHole.x * (1.0 - smoothstep(4.3, 5.1, lensRange));
                         background = mix(background, accretion(lens, background, read), mask);
                     }
-                    gl_FragColor = vec4(background, 1.0);
+                    if (any(isnan(background)) || any(isinf(background))) background = vec3(0.0);
+                    gl_FragColor = vec4(min(max(background, vec3(0.0)), vec3(64.0)), 1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }
@@ -2128,7 +2129,7 @@
                     if (uKind < 1.5 && dither > fade) discard;
 
                     vec3 n = normalize(vNormal);
-                    if ((uKind > 2.5 && uKind < 3.5) || (uKind < 1.5 && uWorld > 6.5)) n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                    if ((uKind > 2.5 && uKind < 3.5) || (uKind < 1.5 && uWorld > 6.5)) { vec3 fn = cross(dFdx(vWorld), dFdy(vWorld)); if (dot(fn, fn) > 1e-12) n = normalize(fn); }
                     vec3 v = normalize(cameraPosition - vWorld);
                     if (dot(n, v) < 0.0) n = -n;
                     float ndl = dot(n, uLight);
@@ -2364,7 +2365,7 @@
                             // A cold desert: rust dust, dark basalt, frost at one
                             // pole, and a canyon system along the equator.
                             float dark = smoothstep(0.5, 0.66, fbm(p * 2.4 + s + 11.0));
-                            float lon = atan(p.z, p.x);
+                            float lon = atan(p.z, p.x + 1e-5);
                             float trench = (1.0 - smoothstep(0.0, 0.025 + 0.02 * noise(p * 12.0), abs(p.y + 0.08 + 0.05 * sin(lon * 3.0 + s))))
                                 * smoothstep(-0.6, -0.2, sin(lon + s)) ;
                             float cap = smoothstep(0.84, 0.88, p.y + (noise(p * 10.0 + s) - 0.5) * 0.06);
@@ -2394,7 +2395,8 @@
                         // canyons fill with shadow near the terminator.
                         vec3 nl = p;
                         if (uWorld > 6.5) {
-                            nl = normalize(cross(dFdx(vLocal), dFdy(vLocal)));
+                            vec3 facet = cross(dFdx(vLocal), dFdy(vLocal));
+                            if (dot(facet, facet) > 1e-12) nl = normalize(facet);
                             if (dot(nl, vLocal) < 0.0) nl = -nl;
                         }
                         // Derivatives are taken outside any branch that varies across pixels.
@@ -2620,8 +2622,8 @@
                             // Plumes: fine streaks rising from the vents, thinning with
                             // height, lit by the sun and brightest seen against it.
                             vec3 q = normalize(vLocal);
-                            float streaks = noise(vec3(atan(q.z, q.x) * 26.0, vRise * 3.0, uSeed * 5.0)) * 0.6
-                                + noise(vec3(atan(q.z, q.x) * 70.0, vRise * 8.0 - uTime * 0.3, uSeed)) * 0.4;
+                            float streaks = noise(vec3(atan(q.z, q.x + 1e-5) * 26.0, vRise * 3.0, uSeed * 5.0)) * 0.6
+                                + noise(vec3(atan(q.z, q.x + 1e-5) * 70.0, vRise * 8.0 - uTime * 0.3, uSeed)) * 0.4;
                             float body = smoothstep(0.01, 0.06, vRise) * (0.4 + 0.6 * smoothstep(0.35, 0.8, streaks));
                             float sunPart = smoothstep(-0.3, 0.4, ndl) + against * 2.5;
                             col = mix(uColorInk, uColorPrimary, uWorld < 2.5 ? 0.25 : 0.05)
@@ -2689,7 +2691,12 @@
                         col *= mix(0.3, 1.0, forward);
                     }
                     col += mix(uColorAccent, uColorInk, 0.4) * front * 1.6 * uGlow;
-                    gl_FragColor = vec4(col, alpha);
+                    // A real GPU can make NaN where a software one does not; one bad
+                    // pixel would spread through the bloom, so it is cleared here.
+                    if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+                    col = min(max(col, vec3(0.0)), vec3(64.0));
+                    if (isnan(alpha)) alpha = 0.0;
+                    gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
                 }
@@ -2874,7 +2881,7 @@
                         float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
                         if (dither >= present) discard;
                         // Broken faces, as shattered rock has.
-                        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+                        vec3 n = cross(dFdx(vWorld), dFdy(vWorld)); n = dot(n, n) > 1e-12 ? normalize(n) : vec3(0.0, 0.0, 1.0);
                         vec3 v = normalize(cameraPosition - vWorld);
                         if (dot(n, v) < 0.0) n = -n;
                         float lit = clamp(dot(n, uLight) * 1.15 + 0.03, 0.0, 1.0);
