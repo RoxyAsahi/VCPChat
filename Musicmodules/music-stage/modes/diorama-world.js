@@ -3508,7 +3508,7 @@
                     float hh=max(h,0.0);
                     float wash=sin(hh*6.5-time*8.0+s*0.7)*exp(-hh*0.55);
                     g+=side*wash*0.3*beside;
-                    foam+=exp(-hh*1.4)*beside*(0.55+0.45*sin(s*1.3-time*5.0+hh*3.0));
+                    foam+=exp(-hh*2.6)*beside*(0.55+0.45*sin(s*1.3-time*5.0+hh*3.0));
                     // Two arms opening behind the nose at about twenty degrees.
                     float behind=max(s,0.0),arm=hh-0.36*behind;
                     float arms=sin(arm*4.5-time*5.0)*exp(-arm*arm*0.35)*exp(-behind/48.0)*smoothstep(-2.0,0.0,s);
@@ -3578,7 +3578,7 @@
                     }
                     // Broken water along the hull catches what light there is.
                     float lace=smoothstep(0.35,0.75,n21(world.xz*vec2(5.0,6.3)+vec2(time*1.3,-time*0.9)));
-                    c=mix(c,max(fogTint,r)*1.15+moonTint*0.04,churn*lace*0.5*strength);
+                    c=mix(c,c*1.35+fogTint*0.12+moonTint*0.03,churn*lace*0.4*strength);
                     // Match scene FogExp2 so the far plane melts into the horizon.
                     float fog=1.0-exp(-fogDensity*fogDensity*dist*dist);
                     c=mix(c,fogTint,clamp(fog,0.0,1.0));
