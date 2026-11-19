@@ -414,10 +414,16 @@
     // One set of dimensions for each encounter: the point template and the
     // solid body are built from the same numbers, so they coincide.
     const ENTITY_SPECS = Object.freeze({
-        stationA: { radius: 25, plan: 'truss' }, stationB: { radius: 26, plan: 'cross' },
+        // Each craft slot is a different spacecraft each time round: the
+        // first is the slot's own, the rest follow in turn.
+        stationA: { radius: 25, plan: 'truss', variants: [{ radius: 25, plan: 'mir' }] },
+        stationB: { radius: 26, plan: 'cross', variants: [{ radius: 26, plan: 'skylab' }] },
         ringsA: { inner: 22, outer: 48 }, ringsB: { inner: 24, outer: 52 },
         planetA: { radius: 26 }, planetB: { radius: 24 },
-        shipA: { scale: 1.0 }, shipB: { scale: 0.92, radius: 25, plan: 'probe' },
+        shipA: { scale: 1.0, variants: [{ radius: 25, plan: 'apollo' }] },
+        // The probe slot's first pass comes in the opening, still near home:
+        // `turns` picks the craft for each time round, from the one before the first.
+        shipB: { scale: 0.92, radius: 25, plan: 'probe', variants: [{ radius: 25, plan: 'sputnik' }, { radius: 25, plan: 'hubble' }], turns: [1, 0, 2] },
         scope: { radius: 25, plan: 'telescope' }
     });
     // A solar sail, after the square sails that have flown: a thin film in
@@ -1344,7 +1350,159 @@
                 panel(3.2, 1.1, 'x', 'z', [2.7, 0, z + facing * 0.6], 4);
                 panel(3.2, 1.1, 'x', 'z', [-2.7, 0, z + facing * 0.6], 4);
             };
-            if (spec.plan === 'truss') {
+            // A rod between two points, and a can (open-ended tapering drum) along an axis.
+            const rod = (a, b, r, code = 7, sides = 5) => {
+                const span = new T.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+                const g = sized(new T.CylinderGeometry(r * k, r * k, span.length() * k, sides, 1), 4, span.length());
+                g.applyQuaternion(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), span.clone().normalize()));
+                parts.push([g.translate((a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k, (a[2] + b[2]) / 2 * k), code]);
+            };
+            const can = (top, bottom, length, axis, at, code, sides = 20) => {
+                parts.push([turn(sized(new T.CylinderGeometry(top * k, bottom * k, length * k, sides, 1), TAU * Math.max(top, bottom), length), axis)
+                    .translate(at[0] * k, at[1] * k, at[2] * k), code]);
+            };
+            // A panel turned freely: length along `dir` (in the xz-plane or any), face normal `facing`.
+            const sheet = (length, width, centre, dir, facing, code) => {
+                const g = new T.BoxGeometry(width * k, 0.06 * k, length * k);
+                const z = new T.Vector3(...dir).normalize(), y = new T.Vector3(...facing).normalize();
+                const x = new T.Vector3().crossVectors(y, z).normalize();
+                g.applyMatrix4(new T.Matrix4().makeBasis(x, new T.Vector3().crossVectors(z, x), z));
+                parts.push([g.translate(centre[0] * k, centre[1] * k, centre[2] * k), code]);
+            };
+            // The command and service modules of a lunar ship, nose towards +z
+            // (or -z), sitting on the given point: the conical capsule, the
+            // service module with its thruster quads, the big engine bell and
+            // the four-dish antenna swung out on its boom.
+            const lunarShip = (z, facing) => {
+                const f = facing, at = (dz) => [0, 0, z + dz * f];
+                can(f > 0 ? 0.32 : 1.95, f > 0 ? 1.95 : 0.32, 3.2, 'z', at(5.3), 8, 28);
+                can(1.95, 1.95, 7.4, 'z', at(0), 8, 28);
+                can(1.98, 1.98, 0.5, 'z', at(3.45), 9, 28);
+                can(f > 0 ? 0.55 : 1.3, f > 0 ? 1.3 : 0.55, 2.8, 'z', at(-5.1), 7, 20);
+                can(0.7, 0.7, 0.6, 'z', at(-3.9), 9, 14);
+                for (let i = 0; i < 4; i += 1) {
+                    const a = i * TAU / 4 + 0.4, x = Math.cos(a) * 2.15, y = Math.sin(a) * 2.15;
+                    crate([0.55, 0.55, 0.9], [x, y, z + 2.2 * f]);
+                    for (const d of [-1, 1]) rod([x, y, z + 2.2 * f], [x * 1.25, y * 1.25, z + (2.2 + d * 0.7) * f], 0.08, 7, 6);
+                }
+                rod([1.4, -1.4, z - 3.6 * f], [3.6, -3.6, z - 5.4 * f], 0.1);
+                for (const [dx, dy] of [[0.5, 0.5], [-0.5, 0.5], [0.5, -0.5], [-0.5, -0.5]]) {
+                    parts.push([new T.ConeGeometry(0.42 * k, 0.22 * k, 14, 1, true).rotateX(-f * Math.PI / 2)
+                        .translate((3.6 + dx) * k, (-3.6 + dy) * k, (z - 5.6 * f) * k), 8]);
+                }
+            };
+            if (spec.plan === 'hubble') {
+                // A space telescope of the first kind: a long tube in silver blankets, the
+                // wider aft shroud, the aperture door swung open, two long
+                // solar wings out on masts, two dish antennas on booms, handrails.
+                can(2.15, 2.15, 7.6, 'z', [0, 0, -4.4], 8, 28);
+                can(1.6, 1.6, 9.0, 'z', [0, 0, 4.3], 8, 28);
+                can(1.62, 1.62, 0.25, 'z', [0, 0, 8.7], 9, 28);
+                can(2.18, 2.18, 0.35, 'z', [0, 0, -8.1], 8, 28);
+                can(2.0, 2.0, 0.3, 'z', [0, 0, -0.65], 7, 28);
+                // The door, hinged at the top of the aperture and standing open.
+                parts.push([new T.CylinderGeometry(1.62 * k, 1.62 * k, 0.12 * k, 24, 1).rotateX(-0.35)
+                    .translate(0, 3.3 * k, 9.5 * k), 8]);
+                rod([0, 1.62, 8.8], [0, 2.4, 9.3], 0.12, 7, 6);
+                for (const side of [-1, 1]) {
+                    rod([side * 2.1, 0, -2.2], [side * 4.0, 0, -2.2], 0.14, 7, 6);
+                    sheet(11.8, 2.5, [side * 4.0, 0, -2.2], [0, 0, 1], [side * 0.2, 1, 0], 4);
+                    rod([side * 4.0, 0, -8.2], [side * 4.0, 0, 3.8], 0.06, 7, 6);
+                    rod([0, side * 2.15, -3.5], [0, side * 4.3, -3.5], 0.08, 7, 6);
+                    parts.push([new T.ConeGeometry(0.85 * k, 0.4 * k, 18, 1, true).rotateX(side > 0 ? Math.PI : 0)
+                        .translate(0, side * 4.6 * k, -3.5 * k), 8]);
+                }
+                for (let i = 0; i < 8; i += 1) {
+                    const a = i * TAU / 8 + 0.2;
+                    rod([Math.cos(a) * 1.75, Math.sin(a) * 1.75, 0.2], [Math.cos(a) * 1.75, Math.sin(a) * 1.75, 8.2], 0.05, 7, 4);
+                }
+                for (const [x, y] of [[1.6, 1.4], [-1.9, 1.0]]) crate([0.8, 0.5, 1.6], [x, y, -6.2]);
+            } else if (spec.plan === 'apollo') {
+                // A lunar ship as it was flown out: the command and service
+                // modules with the lander docked at the nose, its legs out.
+                lunarShip(-3.0, 1);
+                can(0.55, 0.55, 1.2, 'z', [0, 0, 4.4], 7, 14);
+                // Ascent stage: a faceted cabin, a docking tunnel, a dish and windows.
+                can(1.9, 2.1, 2.6, 'z', [0, 0, 6.3], 3, 7);
+                crate([2.6, 1.8, 1.6], [0, -1.6, 6.6]);
+                crate([1.2, 1.2, 2.2], [2.1, 0.6, 6.2]);
+                dish(0.6, [-1.6, 2.4, 6.2], 0.6);
+                // Descent stage: an octagon in gold foil, four legs and footpads.
+                can(2.4, 2.4, 1.8, 'z', [0, 0, 8.6], 9, 8);
+                can(0.9, 1.2, 0.8, 'z', [0, 0, 9.9], 7, 14);
+                for (let i = 0; i < 4; i += 1) {
+                    const a = i * TAU / 4 + TAU / 8, cx = Math.cos(a), cy = Math.sin(a);
+                    rod([cx * 2.2, cy * 2.2, 8.0], [cx * 4.6, cy * 4.6, 10.8], 0.13);
+                    rod([cx * 2.3, cy * 2.3, 9.4], [cx * 4.0, cy * 4.0, 10.2], 0.08);
+                    parts.push([new T.CylinderGeometry(0.55 * k, 0.45 * k, 0.2 * k, 14, 1).rotateX(Math.PI / 2)
+                        .translate(cx * 4.7 * k, cy * 4.7 * k, 11.0 * k), 8]);
+                }
+            } else if (spec.plan === 'mir') {
+                // The modular station: a core with a docking node at its head,
+                // five laboratories reaching out from the node and aft, each
+                // with its own wings, the long girder on the aft module, ships docked.
+                module(2.05, 13, 'z', [0, 0, 0]);
+                node(1.75, [0, 0, 7.6]);
+                module(2.1, 5.6, 'z', [0, 0, -9.3]);
+                for (const [axis, sign] of [['x', 1], ['x', -1], ['y', 1], ['y', -1]]) {
+                    const along = (d) => axis === 'x' ? [sign * d, 0, 7.6] : [0, sign * d, 7.6];
+                    module(2.05, 11.2, axis, along(7.4));
+                    module(1.4, 1.4, axis, along(13.6));
+                    const tip = along(9.5), up = axis === 'x' ? [0, 1, 0] : [1, 0, 0];
+                    for (const s2 of [-1, 1]) {
+                        const c = [tip[0] + up[0] * s2 * 6.4, tip[1] + up[1] * s2 * 6.4, tip[2]];
+                        sheet(9.4, 2.5, c, up, [0, 0, 1], 4);
+                        rod([tip[0] + up[0] * s2 * 2.0, tip[1] + up[1] * s2 * 2.0, tip[2]], [c[0] - up[0] * s2 * 4.6, c[1] - up[1] * s2 * 4.6, c[2]], 0.1);
+                    }
+                }
+                for (const side of [-1, 1]) {
+                    sheet(10.5, 3.0, [side * 8.0, 0, -1.5], [1, 0, 0], [0, 0.3, 1], 4);
+                    rod([side * 2.05, 0, -1.5], [side * 2.8, 0, -1.5], 0.12);
+                }
+                beam(0.32, 14, 'y', [0, 9.1, -9.3], 4);
+                crate([1.4, 1.4, 1.4], [0, 16.5, -9.3]);
+                visitor(10.6, 1);
+                visitor(-14.4, -1);
+                dish(1.0, [2.4, 2.2, 3.0], 0.3);
+                for (const at of [[0, 0, 15.6], [0, 0, -18.5], [0, 16.8, -9.3]]) {
+                    parts.push([new T.IcosahedronGeometry(0.24 * k, 1).translate(at[0] * k, at[1] * k, at[2] * k), 2]);
+                }
+            } else if (spec.plan === 'skylab') {
+                // The first workshop in orbit: a broad white cylinder with a gold
+                // sunshade spread over it and a single wing (the other was lost),
+                // the solar observatory in its windmill of four wings, and a
+                // lunar-type ship docked at the front.
+                can(3.3, 3.3, 14.6, 'z', [0, 0, -4.0], 8, 32);
+                can(3.32, 3.32, 0.4, 'z', [0, 0, 3.2], 7, 32);
+                can(3.32, 3.32, 0.4, 'z', [0, 0, -11.3], 7, 32);
+                can(1.6, 3.3, 1.6, 'z', [0, 0, -12.1], 8, 32);
+                sheet(9.0, 7.2, [0, 3.45, -4.0], [0, 0, 1], [0, 1, 0.05], 11);
+                rod([3.3, 0, -3.5], [5.2, 0, -3.5], 0.15);
+                sheet(9.5, 3.6, [10.0, 0, -3.5], [1, 0, 0], [0, 1, 0.2], 4);
+                rod([5.2, 0, -3.5], [14.8, 0, -3.5], 0.08);
+                can(1.65, 1.65, 4.6, 'z', [0, 0, 5.6], 3, 18);
+                can(1.5, 1.5, 4.2, 'z', [0, 0, 10.0], 9, 18);
+                lunarShip(17.2, -1);
+                // Observatory on its strut, with four wings in an X.
+                rod([0, 1.5, 9.6], [0, 4.6, 9.6], 0.25, 5, 4);
+                can(1.8, 1.8, 3.4, 'z', [0, 5.6, 9.6], 9, 8);
+                for (let i = 0; i < 4; i += 1) {
+                    const a = i * TAU / 4 + TAU / 8, d = [Math.cos(a), Math.sin(a), 0];
+                    sheet(9.0, 2.6, [d[0] * 6.6, 5.6 + d[1] * 6.6, 9.6], d, [0, 0, 1], 4);
+                    rod([d[0] * 1.8, 5.6 + d[1] * 1.8, 9.6], [d[0] * 2.2, 5.6 + d[1] * 2.2, 9.6], 0.12);
+                }
+            } else if (spec.plan === 'sputnik') {
+                // The first: a polished sphere with four whip antennas swept
+                // back in two pairs, shown far larger than life.
+                parts.push([new T.SphereGeometry(2.9 * k, 40, 26), 8]);
+                can(0.55, 0.55, 0.4, 'z', [0, 0, 2.9], 7, 12);
+                parts.push([new T.TorusGeometry(2.9 * k, 0.06 * k, 6, 48), 7]);
+                for (const [x, y, len] of [[1, 1, 24], [-1, 1, 24], [1, -1, 28], [-1, -1, 28]]) {
+                    const base = [x * 1.6, y * 1.6, 2.0];
+                    rod(base, [x * 1.6 + x * len * 0.36, y * 1.6 + y * len * 0.22, 2.0 - len * 0.9], 0.07, 7, 5);
+                    parts.push([new T.SphereGeometry(0.28 * k, 10, 8).translate(base[0] * k, base[1] * k, base[2] * k), 7]);
+                }
+            } else if (spec.plan === 'truss') {
                 // A long truss across, eight solar wings, radiators, and a
                 // spine of modules fore and aft with laboratories off a node.
                 beam(0.85, 46, 'x', [0, 1.6, 0]);
@@ -2578,13 +2736,18 @@
         const bodyNodes = slotTemplateMap.map((item, idx) => {
             const group = new T.Group();
             group.visible = false;
-            const parts = bodyBuilders[item.code](item.spec, (idx * 0.618 + 0.11) % 1).map(([geo, mat]) => {
+            const seed = (idx * 0.618 + 0.11) % 1;
+            const built = bodyBuilders[item.code](item.spec, seed).map(([geo, mat]) => [geo, mat, 0]);
+            (item.spec.variants || []).forEach((variant, v) => {
+                built.push([stationGeometry(variant), makeBodyMaterial(0, (seed + 0.29 * (v + 1)) % 1), v + 1]);
+            });
+            const parts = built.map(([geo, mat, variant]) => {
                 const mesh = new T.Mesh(geo, mat);
                 mesh.frustumCulled = false;
                 // Translucent rings and sails draw after the opaque bodies they wrap.
                 mesh.renderOrder = mat.transparent ? 6 : 0;
                 group.add(mesh);
-                return { geo, mat, mesh };
+                return { geo, mat, mesh, variant };
             });
             root.add(group);
             return { group, parts };
@@ -3910,13 +4073,22 @@
                 const air = world === WORLD.desert ? 0.35 : world === WORLD.home ? 0.3
                     : world === WORLD.ice || world === WORLD.volcanic ? 1
                     : world === 0 || world === WORLD.home || world === WORLD.iceGiant ? 1 : 0;
-                for (const { mat, mesh } of body.parts) {
+                // Craft take their turns the same way the worlds do.
+                const variants = slotTemplateMap[idx].spec.variants;
+                const turns = slotTemplateMap[idx].spec.turns;
+                const craft = place !== slot || !variants ? 0
+                    : turns ? turns[clamp(cycleIndex + 1, 0, turns.length - 1)]
+                        : Math.max(0, cycleIndex) % (variants.length + 1);
+                for (const { mat, mesh, variant } of body.parts) {
                     const b = mat.uniforms;
+                    mesh.visible = variant === craft;
+                    if (!mesh.visible) continue;
                     b.uWorld.value = world;
                     b.uThin.value = world === WORLD.iceGiant ? 1 : 0;
                     const kind = b.uKind.value;
                     if (kind === 4) mesh.visible = air > 0;
                     else if (kind === 2) mesh.visible = world === 0 || world === WORLD.iceGiant;
+                    if (!mesh.visible) continue;
                     b.uTime.value = time;
                     b.uCohesion.value = formed;
                     b.uPresence.value = kind === 4 ? presence * air : presence;
