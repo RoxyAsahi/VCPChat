@@ -7,10 +7,17 @@
      * The glow is what makes a lamp a light instead of a yellow box.
      */
     const LEVELS = 4;
+    // Whether the lens draws for these settings; when it does not, the scene
+    // goes straight to the canvas, which then needs its own antialiasing.
+    const active = (config, lens) => {
+        const tuning = lens || config.modes?.diorama || {};
+        return tuning.postProcess !== false && global.MusicStageModeUtils?.tier(config.quality).lens !== false;
+    };
     const create = (T) => {
         const target = new T.WebGLRenderTarget(1, 1, {
             type: T.HalfFloatType, depthBuffer: true,
             // The scene is drawn into this target, so the canvas's own antialiasing never applies.
+            // The tier sets the sample count on the first frame.
             samples: 4
         });
         const chain = Array.from({ length: LEVELS }, () => new T.WebGLRenderTarget(1, 1, {
@@ -59,13 +66,43 @@
                 gl_FragColor=vec4(c/12.0*weight,1.0);
             }`, { image: { value: null }, texel: { value: new T.Vector2() }, weight: { value: 1 } },
         { blending: T.AdditiveBlending, transparent: true });
+        // Without multisampling the edges are smoothed here instead, on the
+        // pass that reads every pixel anyway: a few taps along the local edge.
         const material = pass(`uniform sampler2D image,glowMap;
-            uniform float time,grain,vignette,bloom;varying vec2 uvScreen;
+            uniform float time,grain,vignette,bloom,smoothing,grade;uniform vec2 texel;varying vec2 uvScreen;
+            float luma(vec3 c){c=c/(1.0+c);return dot(c,vec3(0.299,0.587,0.114));}
+            vec3 smoothed(vec2 uv){
+                vec3 m=texture2D(image,uv).rgb;
+                if(smoothing<0.5)return m;
+                float lNW=luma(texture2D(image,uv+texel*vec2(-1.0,-1.0)).rgb);
+                float lNE=luma(texture2D(image,uv+texel*vec2(1.0,-1.0)).rgb);
+                float lSW=luma(texture2D(image,uv+texel*vec2(-1.0,1.0)).rgb);
+                float lSE=luma(texture2D(image,uv+texel*vec2(1.0,1.0)).rgb);
+                float lM=luma(m);
+                float lMin=min(lM,min(min(lNW,lNE),min(lSW,lSE)));
+                float lMax=max(lM,max(max(lNW,lNE),max(lSW,lSE)));
+                if(lMax-lMin<max(0.03,lMax*0.12))return m;
+                vec2 dir=vec2(-((lNW+lNE)-(lSW+lSE)),(lNW+lSW)-(lNE+lSE));
+                float reduce=max((lNW+lNE+lSW+lSE)*0.03125,1.0/128.0);
+                dir=clamp(dir/(min(abs(dir.x),abs(dir.y))+reduce),-8.0,8.0)*texel;
+                vec3 a=0.5*(texture2D(image,uv-dir/6.0).rgb+texture2D(image,uv+dir/6.0).rgb);
+                vec3 b=0.5*a+0.25*(texture2D(image,uv-dir*0.5).rgb+texture2D(image,uv+dir*0.5).rgb);
+                float lB=luma(b);
+                return lB<lMin||lB>lMax?a:b;
+            }
             void main(){
-                vec3 color=texture2D(image,uvScreen).rgb;
+                vec3 color=smoothed(uvScreen);
                 color+=texture2D(glowMap,uvScreen).rgb*bloom;
                 vec2 p=uvScreen*2.0-1.0;
                 color*=1.0-vignette*smoothstep(0.2,1.7,dot(p,p))*0.6;
+                // Grade, as film stock does: shadows a little cool, lights a little
+                // warm, a touch more colour, and a black that is lifted and tinted
+                // rather than empty.
+                float l=dot(color,vec3(0.2126,0.7152,0.0722));
+                float lit=smoothstep(0.015,0.7,l);
+                vec3 graded=color*mix(vec3(0.93,0.99,1.07),vec3(1.06,1.0,0.92),lit);
+                graded=max(mix(vec3(l),graded,1.14),0.0)+vec3(0.0012,0.002,0.0035)*(1.0-lit);
+                color=mix(color,graded,grade);
                 gl_FragColor=vec4(color,1.0);
                 #include <tonemapping_fragment>
                 #include <colorspace_fragment>
@@ -74,7 +111,8 @@
                 gl_FragColor.rgb=clamp(gl_FragColor.rgb+n*grain*0.08,0.0,1.0);
             }`, {
             image: { value: target.texture }, glowMap: { value: chain[0].texture },
-            time: { value: 0 }, grain: { value: 0.08 }, vignette: { value: 0.22 }, bloom: { value: 0.6 }
+            time: { value: 0 }, grain: { value: 0.08 }, vignette: { value: 0.22 }, bloom: { value: 0.6 },
+            smoothing: { value: 0 }, texel: { value: new T.Vector2() }, grade: { value: 1 }
         });
         const quad = new T.Mesh(geometry, material);
         scene.add(quad);
@@ -87,15 +125,25 @@
         };
         let dead = false;
         return {
+            active,
             // The diorama's own settings unless another mode passes its own.
             render(renderer, world, worldCamera, time, config, lens) {
                 if (dead) return;
-                const tuning = lens || config.modes?.diorama || {};
-                if (tuning.postProcess === false || config.quality === 'energy-saving') {
+                if (!active(config, lens)) {
                     renderer.render(world, worldCamera);
                     return;
                 }
+                const tuning = lens || config.modes?.diorama || {};
+                // Multisampling a half-float target is the largest single cost of
+                // the lens on an integrated GPU; only the top tier pays for it.
+                const samples = global.MusicStageModeUtils?.tier(config.quality).samples ?? 4;
+                if (target.samples !== samples) {
+                    target.samples = samples;
+                    target.dispose();
+                }
+                material.uniforms.smoothing.value = samples ? 0 : 1;
                 const size = renderer.getDrawingBufferSize(new T.Vector2());
+                material.uniforms.texel.value.set(1 / size.x, 1 / size.y);
                 if (target.width !== size.x || target.height !== size.y) {
                     target.setSize(size.x, size.y);
                     chain.forEach((level, index) => level.setSize(
@@ -107,6 +155,8 @@
                 material.uniforms.vignette.value = tuning.vignette ?? 0.22;
                 material.uniforms.bloom.value = (tuning.glow ?? 1) * 0.6;
                 prefilter.uniforms.threshold.value = tuning.threshold ?? 0.82;
+                // The day lens raises the threshold; by day the grade is lighter too.
+                material.uniforms.grade.value = (tuning.threshold ?? 0.82) > 1 ? 0.45 : 1;
                 const previous = renderer.getRenderTarget();
                 const autoClear = renderer.autoClear;
                 try {
@@ -141,5 +191,5 @@
             }
         };
     };
-    global.MusicStageDioramaOptics = Object.freeze({ create });
+    global.MusicStageDioramaOptics = Object.freeze({ create, active });
 })(window);

@@ -3110,10 +3110,13 @@
             uniforms: { time: { value: 0 }, amount: rainAmount, centre: { value: new T.Vector3() },
                 colour: { value: new T.Color('#c9d6e0') }, opacity: { value: 0.3 },
                 wind: { value: new T.Vector2(0.9, 0.35) },
-                shelterA: { value: new T.Vector3() }, shelterB: { value: new T.Vector3() }, shelter: { value: 0 } },
+                shelterA: { value: new T.Vector3() }, shelterB: { value: new T.Vector3() }, shelter: { value: 0 },
+                lampAt: { value: Array.from({ length: 4 }, () => new T.Vector3(0, -100, 0)) },
+                lampTint: { value: new T.Color('#ffd28c') }, lampGain: { value: 1 } },
             vertexShader: `attribute vec2 corner;
-                uniform float time,amount,shelter;uniform vec3 centre,shelterA,shelterB;uniform vec2 wind;
-                varying float vAlpha;varying float vAcross;
+                uniform float time,amount,shelter,lampGain;uniform vec3 centre,shelterA,shelterB;uniform vec2 wind;
+                uniform vec3 lampAt[4];
+                varying float vAlpha;varying float vAcross;varying float vGlow;
                 const float BOX=${RAIN_BOX.toFixed(1)},HEIGHT=${RAIN_HEIGHT.toFixed(1)};
                 void main(){
                     float fall=7.5+position.z*2.5;
@@ -3140,14 +3143,19 @@
                     vAlpha=(1.0-inside)*smoothstep(0.6,3.5,dist)*(1.0-smoothstep(BOX*0.18,BOX*0.5,dist))
                         *step(0.0,p.y)*(0.35+0.65*fract(position.x*91.3));
                     vAcross=corner.x;
+                    // Drops falling through a lamp's light catch it.
+                    vGlow=0.0;
+                    for(int i=0;i<4;i++){vec3 l=p-lampAt[i];vGlow+=1.0/(1.0+dot(l,l)*0.35);}
+                    vGlow*=lampGain;
                     gl_Position=projectionMatrix*viewMatrix*vec4(head,1.0);
                     if(vAlpha<=0.0)gl_Position=vec4(2.0,2.0,2.0,1.0);
                 }`,
-            fragmentShader: `uniform vec3 colour;uniform float opacity;varying float vAlpha;varying float vAcross;
+            fragmentShader: `uniform vec3 colour,lampTint;uniform float opacity;
+                varying float vAlpha;varying float vAcross;varying float vGlow;
                 void main(){
-                    float a=vAlpha*opacity*(1.0-vAcross*vAcross);
+                    float a=vAlpha*opacity*(1.0-vAcross*vAcross)*(1.0+vGlow*2.5);
                     if(a<0.004)discard;
-                    gl_FragColor=vec4(colour,a);
+                    gl_FragColor=vec4(colour+lampTint*vGlow*1.5,min(a,0.9));
                     #include <colorspace_fragment>
                 }`
         }));
@@ -3160,6 +3168,37 @@
         root.add(rainDrops);
         // Every tier rains; the saving tier with far fewer streaks.
         const RAIN_COUNTS = { 'energy-saving': 4000, standard: 9000, ultimate: RAIN_MAX };
+        // The light under each of the nearest lamps, seen as a cone in the
+        // haze: faint on a clear night, plain in the rain. One draw for all.
+        const BEAMS = 6;
+        const beamMat = material(new T.ShaderMaterial({
+            transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+            uniforms: { haze: { value: 0 } },
+            vertexShader: `varying vec3 vColour;varying float vDown;varying vec3 vNormal;varying vec3 vView;
+                void main(){
+                    vColour=instanceColor;vDown=uv.y;
+                    vec4 world=modelMatrix*instanceMatrix*vec4(position,1.0);
+                    vNormal=normalize(mat3(modelMatrix*instanceMatrix)*normal);
+                    vView=normalize(cameraPosition-world.xyz);
+                    gl_Position=projectionMatrix*viewMatrix*world;
+                }`,
+            fragmentShader: `uniform float haze;varying vec3 vColour;varying float vDown;varying vec3 vNormal;varying vec3 vView;
+                void main(){
+                    // Brightest down the middle of the cone as seen, fading to the ground.
+                    float edge=abs(dot(normalize(vNormal),vView));
+                    float a=pow(edge,1.5)*pow(vDown,1.6)*haze;
+                    gl_FragColor=vec4(vColour*a,1.0);
+                }`
+        }));
+        const beams = new T.InstancedMesh(geometry(new T.ConeGeometry(2.1, 5.4, 20, 1, true).translate(0, -2.7, 0)),
+            beamMat, BEAMS);
+        beams.instanceMatrix.setUsage(T.DynamicDrawUsage);
+        for (let i = 0; i < BEAMS; i++) beams.setColorAt(i, new T.Color(0, 0, 0));
+        beams.frustumCulled = false;
+        beams.count = 0;
+        beams.layers.set(1);
+        root.add(beams);
+        const beamMatrix = new T.Matrix4(), beamColour = new T.Color();
         const RAIN_LEVELS = { off: 0, light: 0.45, heavy: 1 };
         let rainLevel = 0, rainClock = 0;
         // The sea's height. Scenery may raise it a little where the line runs
@@ -3316,6 +3355,32 @@
                     f.position.z + f.right.z * LAMP_OFFSET * side);
                 lights[i].intensity = anchor && !saving ? 24 * (1 + clamp(audio.impact) * 0.12) : 0;
             }
+            // Cones of light in the haze under the nearest lamps, and the rain
+            // lit where it falls through them. Not by day: the page has no haze to light.
+            const night = palBase && !palBase.light && !saving;
+            beams.count = 0;
+            for (let i = 0; i < BEAMS && night; i++) {
+                const anchor = lightAnchors[i];
+                if (!anchor || Math.abs(anchor.address - s) > 90) break;
+                const f = track.at(anchor.address);
+                beamMatrix.makeTranslation(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, (anchor.y ?? LAMP_Y) - 0.15,
+                    f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
+                beams.setMatrixAt(beams.count, beamMatrix);
+                beams.setColorAt(beams.count, beamColour.copy(lampMaterial.color).multiplyScalar(0.06));
+                beams.count++;
+            }
+            beams.instanceMatrix.needsUpdate = true;
+            if (beams.instanceColor) beams.instanceColor.needsUpdate = true;
+            beamMat.uniforms.haze.value = 0.25 + rainLevel * 0.55;
+            for (let i = 0; i < 4; i++) {
+                const anchor = night ? lightAnchors[i] : null;
+                const at = rainMat.uniforms.lampAt.value[i];
+                if (!anchor) { at.set(0, -100, 0); continue; }
+                const f = track.at(anchor.address);
+                at.set(f.position.x + f.right.x * LAMP_OFFSET * anchor.side, (anchor.y ?? LAMP_Y) - 1.5,
+                    f.position.z + f.right.z * LAMP_OFFSET * anchor.side);
+            }
+            rainMat.uniforms.lampTint.value.copy(lampMaterial.color).multiplyScalar(0.25);
             // Water streaks only for lamps still ahead of the camera.
             const ahead = lightAnchors.filter(a => a.address > s + 2);
             for (let i = 0; i < 4; i++) {
@@ -3440,7 +3505,7 @@
             haloMat.uniforms.color.value.copy(lamp);
             // The page is bright enough already: by day the gloss is kept low,
             // or every lit surface would be lifted by the white around it.
-            envSkyMat.uniforms.envGain.value = light ? 0.35 : 1.6;
+            envSkyMat.uniforms.envGain.value = light ? 0.35 : 0.6;
             envDirty = true;
             // Dusk and dream colours. By day the afterglow is only a warm wash on the page.
             const sunsetHue = new T.Color('#c47a55').lerp(emission, 0.2);
