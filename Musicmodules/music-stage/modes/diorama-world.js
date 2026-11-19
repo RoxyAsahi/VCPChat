@@ -3556,7 +3556,7 @@
                             0.335, 1, 1, 2.04);
                     }
                 }
-                sleepers.count = saving ? 200 : 400;
+                sleepers.count = saving ? 140 : 400;
                 for (let i = 0; i < sleepers.count; i++) place(sleepers, i, track, stride - (lookingBack ? 114 : 24) + i * 0.75, 0, 0.18, 1, 1, 1);
                 rails.instanceMatrix.needsUpdate = sleepers.instanceMatrix.needsUpdate = true;
             }
@@ -3570,6 +3570,9 @@
             instanceTrack = track; sceneryKey = nextSceneryKey; instanceRebuilds++;
             const enabled = tuning.narrativeStations !== false && (tuning.stationIntensity ?? 1) > 0;
             sceneryPools.forEach(mesh => { mesh.count = 0; });
+            // On the saving tier the fittings and the rocks are left out of the reflection.
+            dressed.layers.set(saving ? 1 : 0);
+            if (rocks) rocks.layers.set(saving ? 1 : 0);
             const part = (mesh, address, lateral, y, sx, sy, sz, roll = 0, pitch = 0) => {
                 if (mesh.count >= mesh.instanceMatrix.count) return;
                 place(mesh, mesh.count++, track, address, lateral, y, sx, sy, sz, roll, pitch);
@@ -3580,7 +3583,9 @@
             const rawPart = part, rawSpan = span;
             // A pile of shore rocks, turned and sized so no two read as the same one.
             const rock = (address, lateral, size, turn, sunk = 0.12) => {
-                if (!rocks || rocks.count >= rocks.instanceMatrix.count) return;
+                if (!rocks || rocks.count >= (saving ? 6 : rocks.instanceMatrix.count)) return;
+                // On the saving tier only the larger rocks are kept.
+                if (saving && size < 0.9) return;
                 if (inTheWay(address, lateral, size * 1.7, size * 3, size * 3 + 1)) return;
                 const f = track.at(address);
                 dummy.position.set(f.position.x + f.right.x * lateral, -sunk * size, f.position.z + f.right.z * lateral);
