@@ -2650,7 +2650,7 @@
             boxAt(0.22, 0.17, 0.32, -(WALL - 0.17), 3.2, 0.4, 11);
             boxAt(0.22, 0.14, 0.3, WALL - 0.17, 3.18, -2.6, 10);
             // Cab bulkhead and the front of the cab: a glazed door or pane in the middle, one either side.
-            for (const [z, post, paint] of [[BULKHEAD, 0.12, 0], [FRONT, 0.09, 4]]) {
+            for (const [z, post, paint] of [[BULKHEAD, 0.12, 0], [FRONT, 0.09, 21]]) {
                 boxAt(2.6, SILL - F, 0.06, 0, (SILL + F) / 2, z, 1);
                 boxAt(2.6, TOP - 3.05, 0.06, 0, (TOP + 3.05) / 2, z, 0);
                 for (const x of [-1.2, -0.46, 0.46, 1.2]) boxAt(Math.abs(x) > 1 ? 0.2 : post, 3.05 - SILL, 0.06, x, (3.05 + SILL) / 2, z, paint);
@@ -2673,7 +2673,9 @@
             moulded(0.84, 2.0 - F, 0.3, 0.02, DESK, (2.0 + F) / 2, FRONT + 0.16, CAB);
             moulded(0.9, 0.04, 0.44, 0.012, DESK, 2.02, FRONT + 0.22, CAB);
             moulded(0.86, 0.03, 0.03, 0.01, DESK, 2.02, FRONT + 0.44, 4);
-            const hood = shape => shape.rotateX(-0.62).translate(DESK, 2.17, FRONT + 0.1);
+            const hood = shape => shape.rotateX(-0.62).translate(DESK, 2.27, FRONT + 0.12);
+            // The hood stands on a skirt, high enough to show over the sill of the glass.
+            moulded(0.62, 0.17, 0.06, 0.012, DESK, 2.1, FRONT + 0.1, CAB);
             add(hood(roundedPanel(0.64, 0.25, 0.05, 0.016)), CAB);
             for (const x of [-0.15, 0.13]) {
                 add(hood(new T.CylinderGeometry(0.062, 0.062, 0.02, 20).rotateX(Math.PI / 2).translate(x, 0.025, 0.03)), 12);
@@ -2701,10 +2703,20 @@
             add(new T.CylinderGeometry(0.17, 0.19, 0.025, 16).translate(DESK, F + 0.012, FRONT + 0.84), 4);
             moulded(0.42, 0.085, 0.4, 0.035, DESK, F + 0.48, FRONT + 0.82, 2);
             moulded(0.4, 0.4, 0.065, 0.03, DESK, F + 0.76, FRONT + 1.03, 2);
-            add(roundedPanel(0.66, 0.012, 0.21, 0.005).rotateX(0.38).translate(DESK, 3.0, FRONT + 0.15), 13);
+            // A roller blind over the driver's glass, drawn a third of the way down.
+            add(new T.CylinderGeometry(0.024, 0.024, 0.68, 10).rotateZ(Math.PI / 2).translate(DESK, 3.01, FRONT + 0.08), 13);
+            boxAt(0.64, 0.25, 0.006, DESK, 2.875, FRONT + 0.085, 10);
+            boxAt(0.66, 0.016, 0.014, DESK, 2.75, FRONT + 0.085, 4);
+            boxAt(0.012, 0.06, 0.006, DESK, 2.712, FRONT + 0.085, 13);
+            // The day's running card clipped on the hood, standing up beside the gauges.
+            add(new T.BoxGeometry(0.16, 0.22, 0.008).rotateX(-0.3).translate(-0.55, 2.43, FRONT + 0.2), 12);
+            add(new T.BoxGeometry(0.06, 0.025, 0.014).rotateX(-0.3).translate(-0.55, 2.535, FRONT + 0.232), 4);
+            // The driver's bag on the locker opposite.
+            moulded(0.34, 0.2, 0.18, 0.04, 0.72, F + 0.92, FRONT + 0.26, 11);
+            add(new T.TorusGeometry(0.06, 0.01, 6, 14, Math.PI).translate(0.72, F + 1.02, FRONT + 0.26), 13);
             // To the right of the cab door: a locker against the front, and a lamp in the cab roof.
             moulded(0.72, 0.78, 0.34, 0.02, 0.8, F + 0.39, FRONT + 0.19, CAB);
-            moulded(0.74, 0.03, 0.36, 0.01, 0.8, F + 0.795, FRONT + 0.19, 4);
+            moulded(0.74, 0.03, 0.36, 0.01, 0.8, F + 0.795, FRONT + 0.19, 13);
             moulded(0.3, 0.025, 0.22, 0.01, 0, TOP - 0.012, FRONT + 0.55, 5);
             {
                 const driver = [];
@@ -2844,7 +2856,7 @@
                 void main(){
                     if(cabReal>0.5&&insideShell(vPos)<0.5)discard;
                     vec3 cream=mix(vec3(0.70,0.66,0.52),vec3(0.74,0.70,0.58),day);
-                    vec3 light=lampColour(warm,day),n=normalize(vNormal),v=normalize(vView);
+                    vec3 light=lampColour(warm,day*0.45),n=normalize(vNormal),v=normalize(vView);
                     vec3 c,env=vec3(0.0);float shine=0.0,chrome=0.0;
                     // What the metal sees: the lamps, fading at sunset to the amber of the windows.
                     vec3 seen=light*(1.0-0.62*sunset)+mix(vec3(0.5,0.26,0.1),vec3(0.3,0.28,0.24),day)*sunset;
@@ -2909,11 +2921,13 @@
                         float grazing=pow(1.0-clamp(abs(dot(n,v)),0.0,1.0),3.0);
                         c=vec3(0.06,0.062,0.065);
                         env=mix(cabinScene(vPos+n*0.02,reflected,cream,seen,0.0),cream*seen*0.5,0.35)*(0.72+0.28*grazing);
+                        // In the cab there are no benches to reflect: grey-green panels and the glass.
+                        if(vPos.z<${(TIP + 1.45).toFixed(2)})env=mix(cream*seen*0.32,cream*seen*0.75,smoothstep(-0.3,0.6,reflected.y))*(0.72+0.28*grazing);
                         chrome=0.9;
                         shine=reflectTubes(vPos,reflected,0.06)*1.1;
                     }
                     else if(vPaint<5.5)c=light*2.8;
-                    else if(vPaint<6.5)c=cream*(mix(0.3,0.46,day)+mix(1.15,0.9,day)*tubes(vPos.xz,0.3))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
+                    else if(vPaint<6.5)c=cream*(mix(0.62,0.6,day)+0.45*tubes(vPos.xz,0.55)+mix(0.7,0.5,day)*tubes(vPos.xz,0.22))*(1.0-0.3*smoothstep(1.0,1.26,abs(vPos.x)));
                     else if(vPaint<7.5){
                         // The open gangway: through the bellows into the next car, in perspective.
                         vec3 d=-v,o=vPos+d*(0.7/max(d.z,0.05))-vec3(0.0,0.0,${CAR.length.toFixed(2)}+0.7);
@@ -3042,7 +3056,7 @@
                     fill*=0.70+0.30*smoothstep(FLOOR,2.7,vPos.y);
                     float windowFill=smoothstep(0.35,1.24,abs(vPos.x))
                         *(1.0-smoothstep(0.22,1.22,abs(vPos.y-2.55)));
-                    fill+=sky*windowFill*mix(0.23,0.30,day);
+                    fill+=mix(sky,sky*vec3(1.0,0.93,0.8),day)*windowFill*mix(0.23,0.13,day);
                     // At sunset the car is lit from outside: an amber fill, the lamps nearly out.
                     fill=mix(fill,mix(vec3(0.20,0.105,0.06),vec3(0.46,0.42,0.36),day)*(0.75+0.25*windowFill),sunset*0.85);
                     float lit=wall;
@@ -3088,11 +3102,13 @@
                     vec3 sunlight=mix(vec3(2.6,1.25,0.48),vec3(1.25,1.12,0.9),day);
                     colour+=c*sun*sunlight*(1.0-0.5*float(metal))+sun*sunlight*shine*0.6;
                     if(vPaint>4.5&&vPaint<6.5)colour=c*(1.0-0.6*sunset);
+                    // The cab sits a shade darker than the saloon behind it.
+                    if(vPos.z<${(TIP + 1.38).toFixed(2)}&&!(vPaint>4.5&&vPaint<5.5))colour*=0.8;
                     if(figure){
-                        // People thin out as the car empties: a dither, so it stays one opaque pass.
+                        // People thin out as the car empties (the driver stays): a dither, so it stays one opaque pass.
                         const float B[16]=float[](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
                         ivec2 cell=ivec2(mod(gl_FragCoord.xy,4.0));
-                        if((B[cell.x+cell.y*4]+0.5)/16.0<empty)discard;
+                        if((B[cell.x+cell.y*4]+0.5)/16.0<empty&&vPos.z>${(TIP + 1.35).toFixed(2)})discard;
                         colour=mix(c*0.83,cream*light*0.1*(0.6+0.4*smoothstep(-0.3,0.8,n.y)),0.4*(1.0-day))+sunlight*0.03*sunset;
                     }
                     gl_FragColor=vec4(colour*power*0.82,1.0);
