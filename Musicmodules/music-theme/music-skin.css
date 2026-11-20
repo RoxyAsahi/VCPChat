@@ -1301,3 +1301,158 @@ body.music-archive-on:not(.music-stage-active) #custom-title-bar {
 .sidebar-playlist li.active .cl-duration {
     color: var(--ar-ink-2);
 }
+
+/* ---------- 键盘焦点：全窗口一种写法 ----------
+   主题里有一条全局的粗焦点框（高亮色 2px），优先级很高，这里用同样的排除条件再加一层类名盖过它。
+   文字按钮是一圈点线，输入框和下拉是底线变墨色，开关是方框外再套一圈。 */
+.music-player-container :focus-visible:not(#messageInput):not(.chat-message-input):not(.vcp-ui-scope *),
+:is(.music-modal-overlay, .dialog-overlay) :focus-visible:not(#messageInput):not(.chat-message-input):not(.vcp-ui-scope *) {
+    outline: 1px dashed var(--ar-accent);
+    outline-offset: 3px;
+}
+
+.music-player-container :is(select, input[type="text"], input[type="number"], input[type="search"], .acoustic-drawer-toggle):focus-visible:not(#messageInput):not(.chat-message-input):not(.vcp-ui-scope *),
+:is(.music-modal-overlay, .dialog-overlay) :is(select, input):focus-visible:not(#messageInput):not(.chat-message-input):not(.vcp-ui-scope *) {
+    outline: 0;
+    border-bottom-color: var(--ar-ink);
+}
+
+.music-player-container .sidebar-playlist li:focus-visible:not(#messageInput):not(.chat-message-input):not(.vcp-ui-scope *) {
+    outline-offset: -2px;
+}
+
+/* ---------- 空状态：搜不到、歌单是空的时候说一句，不留白 ---------- */
+#playlist:empty::after {
+    content: "NO RESULT ／ 没有匹配的曲目";
+    display: block;
+    padding: 18px 16px;
+    font-size: 12px;
+    letter-spacing: 1.3px;
+    color: var(--ar-muted);
+}
+
+/* ---------- 滑条：一条细线上一个实心方块，和小方块记号一个意思 ---------- */
+.acoustic-drawer-body input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 14px;
+    background: linear-gradient(var(--ar-line), var(--ar-line)) 0 50% / 100% 1px no-repeat;
+    border-radius: 0;
+    cursor: pointer;
+}
+
+.acoustic-drawer-body input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 8px;
+    height: 8px;
+    border: 0;
+    border-radius: 0;
+    background: var(--ar-ink);
+    box-shadow: none;
+    transform: none;
+}
+
+.acoustic-drawer-body input[type="range"]::-webkit-slider-thumb:hover {
+    background: var(--ar-accent);
+    transform: none;
+    box-shadow: none;
+}
+
+.acoustic-drawer-body input[type="range"]:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+/* ---------- 脉冲响应的加载状态：一个小方块加一行字，不铺色块 ---------- */
+.acoustic-drawer-body .ir-status,
+.acoustic-drawer-body .ir-status.loaded,
+.acoustic-drawer-body .ir-status.error {
+    padding: 6px 0;
+    background: transparent;
+    border-radius: 0;
+    font-size: 11px;
+    letter-spacing: .6px;
+    color: var(--ar-muted);
+}
+
+.acoustic-drawer-body .ir-status-indicator {
+    width: 5px;
+    height: 5px;
+    border-radius: 0;
+    background: var(--ar-line);
+    box-shadow: none;
+}
+
+.acoustic-drawer-body .ir-status.loaded { color: var(--ar-ink); }
+.acoustic-drawer-body .ir-status.loaded .ir-status-indicator { background: var(--ar-accent); box-shadow: none; }
+.acoustic-drawer-body .ir-status.error { color: #e57373; }
+.acoustic-drawer-body .ir-status.error .ir-status-indicator { background: #e57373; }
+body.light-theme .acoustic-drawer-body .ir-status.error { color: #a3352b; }
+body.light-theme .acoustic-drawer-body .ir-status.error .ir-status-indicator { background: #a3352b; }
+
+/* ---------- 弹窗里的按钮和输入框 ----------
+   主按钮原来是高亮色底配白字，深色主题下高亮色就是浅墨色，白字看不见：改成墨色底配纸色字。 */
+.dialog-btn {
+    border: 1px solid var(--ar-line);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ar-ink);
+    font-size: 13px;
+    letter-spacing: .4px;
+}
+
+.dialog-btn.confirm {
+    border-color: var(--ar-ink);
+    background: var(--ar-ink);
+    color: var(--ar-paper);
+}
+
+.dialog-btn.cancel,
+body.light-theme .dialog-btn.cancel {
+    border-color: var(--ar-danger, #dc3c3c);
+    background: transparent;
+    color: var(--ar-danger, #dc3c3c);
+}
+
+.dialog-btn:hover {
+    filter: none;
+    border-color: var(--ar-ink);
+}
+
+.dialog-btn.confirm:hover {
+    background: var(--ar-accent);
+    border-color: var(--ar-accent);
+}
+
+.dialog-btn:disabled,
+.dialog-btn.confirm:disabled {
+    border-color: var(--ar-line);
+    background: transparent;
+    color: var(--ar-muted);
+    filter: none;
+    opacity: .7;
+}
+
+:is(.dialog, .music-modal) input:is([type="text"], [type="url"], [type="password"], :not([type])) {
+    border: 0;
+    border-bottom: 1px solid var(--ar-rule);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--ar-ink);
+}
+
+:is(.dialog, .music-modal) input::placeholder {
+    color: var(--ar-muted);
+}
+
+.music-modal-close-btn {
+    border-radius: 2px;
+    color: var(--ar-muted);
+}
+
+.music-modal-close-btn:hover {
+    background: transparent;
+    color: var(--ar-ink);
+}
