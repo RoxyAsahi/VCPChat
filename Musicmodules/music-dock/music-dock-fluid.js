@@ -337,7 +337,8 @@
 
         const step = (now) => {
             frame = 0;
-            const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+            // 帧间隔上限放到 0.25 秒：页面掉到很低帧率时（3D 页面占满主线程）几帧内也能收尾，不会拖成一长串零星重画。
+            const dt = Math.min(0.25, (now - last) / 1000 || 0.016);
             last = now;
             const instant = reduced();
             const k = instant ? 1 : 1 - Math.pow(0.0015, dt);
@@ -398,8 +399,13 @@
                 writeProgress();
                 if (s.ringMode !== 'playhead' || !s.ring.docked) return;
                 retargetRing();
-                // 正常播放一次只挪一两个像素：直接落位画一次，不为它起一轮动画帧。拖动、切歌的大跳才走动画。
-                if (!frame && px < 4 && !moving2()) { s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; draw(); return; }
+                // 正常播放一次只挪几个像素（页面很卡时一次几十个像素）：播放头直接落位，不为它起一轮动画帧，也不让正在收尾的动画去追它
+                // （页面帧率很低时，追着进度跑会让循环一直停不下来）。拖动、切歌的大跳才走动画。
+                if (px < 48) {
+                    s.ring.x = s.ring.tx;
+                    if (!frame && !moving2()) { s.ring.y = s.ring.ty; draw(); }
+                    return;
+                }
                 kick();
             },
             // 窗口不可见：停掉一切；回来时一次画到位。失焦：不跑动画帧。
