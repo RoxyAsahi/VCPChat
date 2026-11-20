@@ -160,16 +160,14 @@ test('歌手分类按名字分组；切换分类会记住', () => {
     f.close();
 });
 
-test('没有时长时不显示时长列；播放过的歌记下时长后显示', async () => {
+test('没有时长就不显示时长；播放过的歌记下时长后显示', async () => {
     const f = fixture();
     f.view.setListOpen(true);
-    assert.ok(f.view.list.el.classList.contains('no-time'));
+    const times = () => [...f.view.list.el.querySelectorAll('.archive-list-row .rt i')].map((n) => n.textContent).filter((t) => /:/.test(t));
+    assert.deepEqual(times(), []);
     f.app.lastKnownDuration = 245.4;
     await new Promise((r) => setTimeout(r, 1100));
-    assert.ok(!f.view.list.el.classList.contains('no-time'));
-    const first = f.view.list.el.querySelector('.archive-list-row .tm');
-    assert.ok([...f.view.list.el.querySelectorAll('.archive-list-row .tm')].some((n) => n.textContent === '04:05'));
-    assert.ok(first);
+    assert.deepEqual(times(), ['04:05']);
     assert.deepEqual(JSON.parse(f.w.localStorage.getItem('musicArchiveDurations')), { '/m/0': 245 });
     f.close();
 });

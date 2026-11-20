@@ -25,6 +25,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     if (name.includes('light')) qs.set('light', '');
     if (name.includes('dock')) qs.set('dock', '118');
     if (name.includes('empty')) qs.set('empty', '');
+    if (name.includes('playing')) qs.set('playing', '');
     if (args.n) qs.set('n', args.n);
     await page.goto(base + '?' + qs.toString());
     await page.waitForFunction(() => window.__ready);
