@@ -1566,8 +1566,12 @@
             big.forEach(s => {
                 const c = screenMat.uniforms.sung.value;
                 const i = screenMat.uniforms.level.value;
-                out.push({ position: add(s.centre, s.normal, 1.5), color: [Math.min(1, c.r * 0.6 + 0.2), Math.min(1, c.g * 0.6 + 0.2), Math.min(1, c.b * 0.6 + 0.3)],
-                    intensity: i * Math.min(4, Math.sqrt(s.width * s.height) * 0.3), radius: Math.max(s.width, s.height) * 1.4, flicker: 1, flickerValue: 1 });
+                // Well out in front and a little low, so it lights the street and the
+                // block opposite rather than throwing a hot spot back onto the glass.
+                out.push({ position: add(add(s.centre, s.normal, 5.5), UP, -Math.min(3, s.height * 0.3)), color: [Math.min(1, c.r * 0.6 + 0.2), Math.min(1, c.g * 0.6 + 0.2), Math.min(1, c.b * 0.6 + 0.3)],
+                    intensity: i * Math.min(2.8, Math.sqrt(s.width * s.height) * 0.21), radius: Math.max(s.width, s.height) * 1.4, flicker: 1, flickerValue: 1,
+                    // A wash from the board, not a lamp: nothing to draw a haze halo around.
+                    halo: false });
             });
             const ranked = lightSources.map(l => ({ l, v: l.base * (levels[l.spec.index] || 0) })).sort((a, b) => b.v - a.v);
             for (const { l } of ranked) {
