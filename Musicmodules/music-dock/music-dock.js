@@ -346,10 +346,10 @@
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
-        // 小环的角色还在挑：存在 localStorage musicDockRingMode 里（fixed / playhead / hover / drop）。
+        // 小环默认是播放头；另外三种（fixed / hover / drop）留作备选，存在 localStorage musicDockRingMode 里。
         const RING_MODES = ['fixed', 'playhead', 'hover', 'drop'];
         const readRingMode = () => {
-            try { const v = global.localStorage?.getItem('musicDockRingMode'); return RING_MODES.includes(v) ? v : 'fixed'; } catch (e) { return 'fixed'; }
+            try { const v = global.localStorage?.getItem('musicDockRingMode'); return RING_MODES.includes(v) ? v : 'playhead'; } catch (e) { return 'playhead'; }
         };
         let ringMode = readRingMode();
         const syncRing = () => {
@@ -1300,7 +1300,48 @@
             syncShift();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
-        listen(el.handle, 'click', togglePanel);
+        // 播放头模式下白环就是播放头：按住横向拖动超过 4px 就是拖进度，松手跳过去；不拖就是普通点击（开关面板）。
+        {
+            let pending = null;
+            let swallow = false;
+            const trk = el.tracks[0];
+            listen(el.handle, 'pointerdown', (event) => {
+                if (event.button !== 0 || ringMode !== 'playhead' || state.panelOpen || !trk) return;
+                pending = { x: event.clientX, pointerId: event.pointerId };
+                el.handle.setPointerCapture?.(event.pointerId);
+            });
+            listen(el.handle, 'pointermove', (event) => {
+                if (!pending) return;
+                if (!state.dragging && Math.abs(event.clientX - pending.x) > 4) {
+                    const time = seekFromPointer(trk, event.clientX);
+                    if (time === null) { pending = null; return; }
+                    state.dragging = { time, trk, pointerId: pending.pointerId };
+                    syncExpanded();
+                }
+                if (!state.dragging || state.dragging.trk !== trk) return;
+                const time = seekFromPointer(trk, event.clientX);
+                if (time === null) return;
+                state.dragging.time = time;
+                renderProgress();
+            });
+            const finish = (event, commit) => {
+                el.handle.releasePointerCapture?.(event.pointerId);
+                const was = pending;
+                pending = null;
+                if (!was || !state.dragging || state.dragging.trk !== trk) return;
+                const { time } = state.dragging;
+                state.dragging = null;
+                swallow = true;
+                if (commit) app.seekTo?.(time);
+                kickProgress();
+            };
+            listen(el.handle, 'pointerup', (event) => finish(event, true));
+            listen(el.handle, 'pointercancel', (event) => finish(event, false));
+            listen(el.handle, 'click', (event) => {
+                if (swallow) { swallow = false; event.stopImmediatePropagation(); return; }
+                togglePanel();
+            });
+        }
 
         // ───────── 舞台调制子页 ─────────
         // 控制页「舞台」那一行点进来：当前舞台（三列缩略格）+ 原来舞台控制舱里的演出阵列、模式调制、全局输出和「恢复出厂编排」。
@@ -1674,7 +1715,7 @@
             get glowColors() { return currentGlow(); },
             get ringMode() { return ringMode; },
             setRingMode(mode) {
-                ringMode = RING_MODES.includes(mode) ? mode : 'fixed';
+                ringMode = RING_MODES.includes(mode) ? mode : 'playhead';
                 try { global.localStorage?.setItem('musicDockRingMode', ringMode); } catch (e) { /* 只是记住选择 */ }
                 syncRing();
             },
