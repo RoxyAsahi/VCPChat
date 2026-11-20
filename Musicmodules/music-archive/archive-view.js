@@ -103,6 +103,23 @@
         const playlistsSig = () => (app.customPlaylists || []).map((p) => (p && p.id) + ':' + (p && p.tracks ? p.tracks.length : 0) + ':' + (p && p.name)).join('|');
 
         let listTimer = 0;
+        /*
+         * 「曲库为空」要等一等再说：窗口刚打开时曲库还在读（通常几百毫秒），这时不显示空状态和添加入口，免得每次启动闪一下；
+         * 过了这段时间还是没有歌才显示。大曲库分片重建期间（已经知道有歌，只是还没排好）也不显示，左下角写 LOADING。
+         */
+        const BOOT_HOLD = 1500;
+        const bootUntil = performance.now() + BOOT_HOLD;
+        let bootTimer = 0;
+        const applyEmpty = (preparing = false) => {
+            const empty = !preparing && tracks().length === 0;
+            const holding = preparing || (empty && performance.now() < bootUntil && !root.classList.contains('is-scanning'));
+            root.classList.toggle('is-empty', empty && !holding);
+            root.classList.toggle('is-loading', holding);
+            if (holding && refs.status && !root.classList.contains('is-scanning')) refs.status.textContent = preparing ? 'LOADING ' + pad(tracks().length, 4) + ' FILES' : 'LOADING';
+            else if (!holding && refs.status && /^LOADING/.test(refs.status.textContent)) refs.status.textContent = 'SESSION AUTHORIZED';
+            clearTimeout(bootTimer);
+            if (holding && !preparing) bootTimer = setTimeout(() => { if (!state.destroyed) applyEmpty(); }, Math.max(0, bootUntil - performance.now()) + 20);
+        };
         const rebuild = ({ keep = true, track = -1, reindex = true, prepared = null, laterList = false } = {}) => {
             // 曲库从空变成有歌（启动时异步读进来）：直接落到正在播放的那首
             if (state.dataRefs.length <= 0) keep = false;
@@ -136,7 +153,7 @@
             if (col0 && col0.items.length) focusByColumn.set(col0.id, Model.wrap(row, col0.items.length));
             state.scene?.jump(lane, row);
             state.scene?.refreshLabels?.();
-            root.classList.toggle('is-empty', tracks().length === 0);
+            applyEmpty();
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
             if (firstData && !pendingPlace && !placed) { placeSettled = true; followUntil.t = performance.now() + 4000; }
@@ -277,6 +294,7 @@
         const setScan = (next) => {
             Object.assign(scan, next);
             renderScan();
+            if (root.classList.contains('is-loading') && tracks().length === 0) applyEmpty();
         };
         const scanDone = (data) => {
             const got = Array.isArray(data) ? data.length : (data && Array.isArray(data.tracks) ? data.tracks.length : 0);
@@ -688,6 +706,7 @@
             if (!IndexLib || !IndexLib.warm || list.length <= WARM_ABOVE) { warming = null; rebuild(); return; }
             if (warming && warming.list === app.playlist && warming.n === list.length) return;
             const job = warming = { list: app.playlist, n: list.length, at: 0, pinyin: pinyinOf() };
+            if (state.dataRefs.length <= 0) applyEmpty(true); // 从空到有：先把空状态收起来
             const later = () => setTimeout(slice, 0);
             const slice = () => {
                 if (state.destroyed || warming !== job) return;
@@ -1276,6 +1295,8 @@
             state.destroyed = true;
             clearInterval(clockTimer);
             clearTimeout(scan.timer);
+            clearTimeout(bootTimer);
+            clearTimeout(listTimer);
             scanOff.forEach((off) => { if (typeof off === 'function') off(); });
             clearTimeout(state.coverTimer);
             stopInertia();

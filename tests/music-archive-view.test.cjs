@@ -216,12 +216,29 @@ test('经典视图隐藏档案页并记住；返回按钮回来', () => {
     f.close();
 });
 
-test('空曲库显示空状态，回车什么也不做', () => {
+test('空曲库显示空状态，回车什么也不做；刚打开的一小段先不说空（曲库可能还在读），曲库到了就直接是阵列', async () => {
     const f = fixture({ n: 0, playlists: [] });
-    assert.ok(f.w.document.getElementById('music-archive-view').classList.contains('is-empty'));
+    const root = f.w.document.getElementById('music-archive-view');
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    assert.equal(root.classList.contains('is-empty'), false, '刚打开不闪空状态');
+    assert.ok(root.classList.contains('is-loading'));
+    assert.equal(f.text('status'), 'LOADING');
     f.key('Enter');
     assert.deepEqual(f.calls, []);
+    await wait(1650);
+    assert.ok(root.classList.contains('is-empty'), '等过了还是没有歌才显示');
+    assert.equal(root.classList.contains('is-loading'), false);
+    assert.equal(f.text('status'), 'SESSION AUTHORIZED');
     f.close();
+
+    const g = fixture({ n: 0, playlists: [] });
+    const groot = g.w.document.getElementById('music-archive-view');
+    g.app.playlist = Array.from({ length: 12 }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i }));
+    g.view.refresh();
+    assert.equal(groot.classList.contains('is-loading'), false);
+    assert.equal(groot.classList.contains('is-empty'), false);
+    assert.equal(g.text('status'), 'SESSION AUTHORIZED');
+    g.close();
 });
 
 test('过场期间继续画、开场动画期间不画；选中卡抬高的接口在', async () => {

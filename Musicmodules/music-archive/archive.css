@@ -169,6 +169,11 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 body.music-reduce-motion #music-archive-view.is-scanning .archive-status-light { animation: none; }
 body.music-reduce-motion .archive-scan-bar i { transition: none; }
 .archive-status [data-ref="status"] { font-variant-numeric: tabular-nums; }
+#music-archive-view.is-loading .archive-callout,
+#music-archive-view.is-loading .archive-counter,
+#music-archive-view.is-loading .archive-rows,
+#music-archive-view.is-loading .archive-lanes,
+#music-archive-view.is-loading .archive-hint,
 #music-archive-view.is-empty .archive-callout,
 #music-archive-view.is-empty .archive-counter,
 #music-archive-view.is-empty .archive-rows,
