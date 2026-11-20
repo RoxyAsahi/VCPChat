@@ -322,6 +322,9 @@
             node.classList.toggle('playing', current && Boolean(app.isPlaying));
             if (row.type === 'head') node.classList.toggle('stuck', k === state.stuck);
             if (row.type === 'track') {
+                const failed = app.failedTracks instanceof Map ? app.failedTracks.get(tracks()[row.i]) : null;
+                node.classList.toggle('bad', Boolean(failed));
+                if (failed) node.title = `上次没能播放：${failed}`; else node.removeAttribute('title');
                 const picked = multi.size > 0 && multi.has(keyOf(row));
                 node.classList.toggle('picked', picked);
                 node.setAttribute('aria-selected', String(on || picked));
@@ -1223,6 +1226,9 @@
                 render();
             } else if (k >= 0) scrollToRow(k, { center: true });
         };
+
+        // 放不出来的歌标灰（播放器在加载失败 / 恢复时发这个事件）
+        document.addEventListener('music-track-health', () => { for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k); });
 
         const setPlaying = (i) => {
             if (i === state.playing) { schedule(); return; }

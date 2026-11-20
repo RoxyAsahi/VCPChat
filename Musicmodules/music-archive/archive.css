@@ -395,6 +395,9 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-row:hover .eq, .archive-list-row:hover::before { visibility: hidden; }
 .archive-list.grabbing .archive-list-row .go, .archive-list.has-multi .archive-list-row .go { display: none; }
 @media (hover: none) { .archive-list-row .go { display: none; } }
+/* 本次没能播放的歌：标灰，悬停提示原因 */
+.archive-list-row.bad .tx b, .archive-list-row.bad .tx em, .archive-list-row.bad .rt { opacity: .42; }
+.archive-list-row.bad .tx b::after { content: "无法播放"; margin-left: 8px; padding: 0 5px; font-size: 10px; font-weight: 500; letter-spacing: .4px; vertical-align: 2px; border: 1px solid currentColor; opacity: .9; }
 .archive-list-row .eq { position: absolute; left: 0; top: 13px; display: none; align-items: flex-end; gap: 1.5px; height: 12px; }
 .archive-list-row .eq i { width: 2px; height: 100%; background: var(--ar-accent); transform-origin: bottom; transform: scaleY(.45); }
 .archive-list-row.current .eq { display: flex; }
