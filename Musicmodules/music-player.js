@@ -496,6 +496,20 @@ function setupPlayer(app) {
         return { manual, context };
     };
 
+    // 「上一首」会放哪一首，但不动播放历史（底栏悬停标题区时预览用）。
+    app.peekPrevious = () => {
+        const activeList = app.currentFilteredTracks || app.playlist;
+        if (!activeList.length) return null;
+        const currentTrack = app.playlist[app.currentTrackIndex];
+        for (let k = playHistory.length - 1; k >= 0; k--) {
+            const track = playHistory[k];
+            if (track === currentTrack) continue;
+            if (app.playlist.includes(track)) return track;
+        }
+        const position = activeList.indexOf(currentTrack);
+        return activeList[(Math.max(position, 0) - 1 + activeList.length) % activeList.length] || null;
+    };
+
     app.prevTrack = () => {
         const activeList = app.currentFilteredTracks || app.playlist;
         if (activeList.length === 0) return;

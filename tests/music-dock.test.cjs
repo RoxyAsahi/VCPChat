@@ -406,3 +406,20 @@ test('clicking the capsule body enters the stage, and inside the stage opens the
         dock.destroy();
     }
 });
+
+test('hovering the title edges previews the real previous and next track', () => {
+    const { window, doc, app, dock } = setup();
+    try {
+        const c = { path: 'C:/c.flac', title: 'Gamma.flac', artist: 'C' };
+        app.getUpNext = () => ({ manual: [c], context: [app.playlist[1]] });
+        app.peekPrevious = () => app.playlist[1];
+        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerenter'));
+        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Gamma', 'queued track comes first');
+        assert.ok(doc.querySelector('.md-tnav').classList.contains('md-previewing'));
+        doc.querySelector('.md-zone.md-r').dispatchEvent(new window.Event('pointerleave'));
+        doc.querySelector('.md-zone.md-l').dispatchEvent(new window.Event('pointerenter'));
+        assert.equal(doc.querySelector('[data-md="preview"]').textContent, 'Beta');
+    } finally {
+        dock.destroy();
+    }
+});

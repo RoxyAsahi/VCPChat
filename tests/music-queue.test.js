@@ -174,3 +174,17 @@ test('up next shows the manual layer then the real context order (shuffle includ
     r.app.currentTrackIndex = 3;
     assert.deepEqual(titles(r.app.getUpNext().context), ['t4', 't0', 't1', 't2']);
 });
+
+test('peekPrevious names what prev will play without touching history', () => {
+    const { app, playlist } = setup();
+    app.currentTrackIndex = 2;
+    assert.equal(app.peekPrevious(), playlist[1], 'no history: previous in the list');
+    app.rememberPlayed(playlist[4]);
+    app.rememberPlayed(playlist[2]);
+    assert.equal(app.peekPrevious(), playlist[4], 'history wins, skipping the current track');
+    assert.equal(app.peekPrevious(), playlist[4], 'peeking twice gives the same answer');
+    const loads = [];
+    app.loadTrack = (i) => loads.push(i);
+    app.prevTrack();
+    assert.deepEqual(loads, [4]);
+});

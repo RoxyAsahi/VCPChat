@@ -434,10 +434,17 @@
             else app.playTrack?.();
         });
 
+        // 悬停标题区左右两边时预览上一首 / 下一首：下一首取播放器的真实队列（手动层优先，随机时也是洗好的那首），
+        // 上一首按播放历史。播放器没提供这两个接口时退回按列表前后数。
         const neighbour = (dir) => {
+            if (dir > 0 && typeof app.getUpNext === 'function') {
+                const up = app.getUpNext(1);
+                return up.manual[0] || up.context[0] || null;
+            }
+            if (dir < 0 && typeof app.peekPrevious === 'function') return app.peekPrevious();
             const list = activeList();
             if (!list.length) return null;
-            if (playMode() === 'shuffle' && dir > 0) return null; // 随机播放时下一首事先不知道
+            if (playMode() === 'shuffle' && dir > 0) return null;
             const pos = list.indexOf(currentTrack());
             return list[((Math.max(pos, 0) + dir) % list.length + list.length) % list.length] || null;
         };
