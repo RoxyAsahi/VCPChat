@@ -171,6 +171,46 @@
                     if (h < 0.90) return vec3(1.00, 0.85, 0.60);
                     return vec3(0.42, 0.55, 1.00);
                 }
+                // 店铺里：同样的盒子求交，但背墙和侧墙是一层层货架，天花上一根日光灯管。
+                vec3 shopRoom(vec2 cell, vec3 v, vec3 tone, float h){
+                    vec3 o = vec3(cell, 0.0);
+                    vec3 d = vec3(v.x, v.y, max(v.z, 1e-3));
+                    vec3 t3 = (step(0.0, d) - o) / d;
+                    float t = min(min(t3.x, t3.y), t3.z);
+                    vec3 hit = o + d * t;
+                    float tube = exp(-pow((hit.x - 0.5) * 2.2, 2.0)) * exp(-pow((hit.z - 0.45) * 3.0, 2.0));
+                    vec3 c;
+                    if (t3.y <= t3.x && t3.y <= t3.z) {
+                        if (d.y > 0.0) {
+                            // 天花：灯管本身最亮，周围一圈泛光。
+                            float bar = step(abs(hit.x - 0.5), 0.3) * step(abs(hit.z - 0.45), 0.025);
+                            c = tone * (0.12 + 0.5 * tube) + tone * bar * 3.0;
+                        } else {
+                            // 地面：水磨石，近门口湿一点。
+                            vec2 g = hit.xz * vec2(5.0, 4.0);
+                            float tile = step(0.06, fract(g.x)) * step(0.06, fract(g.y));
+                            c = tone * (0.08 + 0.12 * tile) * (0.6 + 0.6 * kwHash(floor(g) + h * 7.0));
+                        }
+                    } else {
+                        // 背墙（沿 x、y）或侧墙（沿 z、y）：货架横板，板上一格格货品。
+                        vec2 q = t3.z <= t3.x ? hit.xy : vec2(hit.z * 1.6, hit.y);
+                        float shelfY = fract(q.y * 5.0);
+                        float board = step(shelfY, 0.08);
+                        vec2 itemId = floor(vec2(q.x * 14.0, q.y * 5.0));
+                        float rnd = kwHash(itemId + h * 31.0);
+                        float item = step(0.28, rnd) * step(0.1, shelfY) * step(shelfY, 0.35 + 0.55 * kwHash(itemId + 3.0));
+                        vec3 goods = mix(vec3(0.9, 0.25, 0.2), vec3(0.2, 0.55, 0.9), fract(rnd * 7.0));
+                        goods = mix(goods, vec3(0.95, 0.85, 0.3), step(0.7, fract(rnd * 13.0)));
+                        vec3 wallC = vec3(0.32, 0.31, 0.28);
+                        vec3 alb = mix(wallC, goods, item * 0.8);
+                        alb = mix(alb, vec3(0.5, 0.48, 0.44), board);
+                        // 货架只到一人多高，上面是光墙。
+                        alb = mix(alb, wallC, step(0.82, q.y));
+                        c = alb * tone * (0.35 + 0.9 * (0.4 + 0.6 * smoothstep(0.0, 1.0, q.y)));
+                        if (t3.z > t3.x) c *= 0.75;
+                    }
+                    return c * mix(1.0, 0.7, clamp(hit.z, 0.0, 1.0));
+                }
                 // 窗洞里的房间：沿视线在一个 1×1×深 的盒子里求交，背墙、侧墙、天花、地板分别着色。
                 vec3 room(vec2 cell, vec3 v, vec3 tone, float h, float depth){
                     vec3 o = vec3(cell, 0.0);
@@ -202,6 +242,8 @@
                     vec3 n = normalize(vNormal);
                     vec3 V = normalize(vWorld - cameraPosition);
                     float wet = uWet;
+                    // 窄巷和天井只漏进一点街上的暖光。
+                    if (kind > 0.5 && kind < 2.5) kwGlowScale = 0.35;
 
                     // ---------- 屋顶 ----------
                     if (kind > 3.5 && kind < 4.5 && n.y < -0.5) {
@@ -343,6 +385,26 @@
                         win *= 0.55 + 0.45 * ao;
                         win = mix(win, kwLight(vWorld, n, vec3(0.45, 0.46, 0.44), 0.5), frame);
                         col = mix(col, win, inWin);
+                    }
+                    // 地面层店面：开着的店露出里面的日光灯和货架，关着的由巷道模块的卷闸挡住。
+                    if (fl < 0.5 && kind < 1.5) {
+                        vec2 sMin = vec2(0.05, 0.0), sMax = vec2(0.95, 0.86);
+                        vec2 sfw = fwidth(cell) * 1.5;
+                        vec2 sIn = smoothstep(sMin - sfw, sMin + sfw, cell) * (1.0 - smoothstep(sMax - sfw, sMax + sfw, cell));
+                        float shop = sIn.x * sIn.y;
+                        if (shop > 0.001) {
+                            vec2 sc = (cell - sMin) / (sMax - sMin);
+                            float open_ = step(0.45, kwHash(vec2(h * 7.0, seed * 3.0)));
+                            vec3 tone = fract(h * 3.3) < 0.55 ? vec3(0.85, 0.95, 1.0) : vec3(1.0, 0.7, 0.4);
+                            vec3 t = normalize(vec3(n.z, 0.0, -n.x));
+                            vec3 lv = vec3(dot(V, t) / (bay * 0.9), V.y / (uFloor * 0.86), -dot(V, n) / 4.0);
+                            vec3 inside = shopRoom(sc, lv, tone, h) * open_ * uWindowGain * 0.7;
+                            vec3 dark = vec3(0.015, 0.016, 0.02);
+                            vec3 front = mix(dark, inside, open_);
+                            float fr = max(1.0 - smoothstep(0.0, 0.03, sc.x), smoothstep(0.97, 1.0, sc.x));
+                            front = mix(front, kwLight(vWorld, n, vec3(0.3), 0.5), max(fr, 1.0 - smoothstep(0.92, 0.96, 1.0 - sc.y)) * 0.8);
+                            col = mix(col, front, shop);
+                        }
                     }
                     // 窗台：窗下一道浅色的台，台下有水痕。
                     float sill = hasWindow * step(wMin.x - 0.03, cell.x) * step(cell.x, wMax.x + 0.03)
@@ -550,7 +612,7 @@
                 const p = out(s, depth / 2);
                 p[1] = FLOOR - 0.35 + rand() * 0.2;
                 const tint = rand();
-                const c = tint < 0.3 ? [0.42, 0.14, 0.12] : tint < 0.55 ? [0.16, 0.3, 0.26] : tint < 0.7 ? [0.4, 0.34, 0.18] : [0.32, 0.32, 0.33];
+                const c = tint < 0.2 ? [0.3, 0.13, 0.11] : tint < 0.45 ? [0.14, 0.24, 0.22] : tint < 0.6 ? [0.3, 0.27, 0.16] : [0.24, 0.24, 0.25];
                 awnings.push({ p, s: [s.width * 1.02, 0.08, depth], yaw, c });
             }
         });

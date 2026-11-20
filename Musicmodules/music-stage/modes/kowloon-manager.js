@@ -340,7 +340,7 @@
                 // 巷道先建：它定雾、天空和湿度。
                 if (global.MusicStageKowloonAlley?.create) alley = global.MusicStageKowloonAlley.create(T, ctx);
                 city = global.MusicStageKowloonCity.create(T, ctx);
-                ctx.city = city;
+                ctx.city = city; ctx.alley = alley;
                 if (global.MusicStageKowloonSigns?.create) signs = global.MusicStageKowloonSigns.create(T, ctx);
                 if (!alley) {
                     // 巷道模块还没并进来：先铺一块湿地面，好看楼体落地。

@@ -48,6 +48,22 @@ const SHOTS = (args.shots || 'iso,street,screen,roof').split(/;|,(?=[a-z])/);
         await page.waitForTimeout(600);
         const file = path.join(OUT, `${shot.replace('@', '-')}.png`);
         await page.screenshot({ path: file });
+        if (args.probe) {
+            // --probe=x,y;x,y（0–1 屏幕坐标）：打出命中的网格名，排查哪个模块画的东西。
+            const pts = args.probe.split(';').map(v => v.split(',').map(Number));
+            console.log((await page.evaluate((pts) => {
+                const { scene, camera, T } = MusicStageKowloonManager.debugInstance().debugScene();
+                const rc = new T.Raycaster();
+                return pts.map(([x, y]) => {
+                    rc.setFromCamera(new T.Vector2(x * 2 - 1, 1 - y * 2), camera);
+                    const hit = rc.intersectObjects(scene.children, true)[0];
+                    if (!hit) return `${x},${y}: -`;
+                    let o = hit.object, chain = [];
+                    while (o) { chain.push(o.name || o.type); o = o.parent; }
+                    return `${x},${y}: d=${hit.distance.toFixed(1)} ${chain.join('<')} inst=${hit.instanceId ?? ''} n=${hit.face ? hit.face.normal.toArray().map(v => v.toFixed(2)) : ''} p=${hit.point.toArray().map(v => v.toFixed(2))} ${hit.face && !hit.instanceId && hit.object.geometry.attributes.aFace ? ['aFace', 'aInfo'].map(k => { const a = hit.object.geometry.attributes[k]; return [hit.face.a, hit.face.b, hit.face.c].map(i => a ? Array.from({ length: a.itemSize }, (_, j) => a.array[i * a.itemSize + j].toFixed(2)).join('/') : '').join(' '); }).join(' | ') : ''}`;
+                });
+            }, pts)).join("\n"));
+        }
         const snap = await page.evaluate(() => __h.snap().mode);
         console.log(shot, JSON.stringify({ draws: snap.drawCalls, tris: snap.triangles, programs: snap.programs, lights: snap.lights, fallback: snap.fallbackMode }));
     }

@@ -80,11 +80,13 @@
         uniform float uWet;
         uniform vec3 uGlow;
         uniform float uGlowStrength;
+        // 材质可以在 main 里改：窄巷、天井里看不到街上的光，地面暖光要压下去。
+        float kwGlowScale = 1.0;
         vec3 kwLight(vec3 p, vec3 n, vec3 albedo, float rough){
             float up = n.y * 0.5 + 0.5;
             vec3 col = albedo * mix(uGround, uSky, up) * 1.1;
             // 街上霓虹和店铺灯从下往上打的一层暖光，楼越高越弱。
-            col += albedo * uGlow * uGlowStrength * exp(-max(p.y, 0.0) / 14.0) * (0.6 + 0.4 * (1.0 - abs(n.y)));
+            col += albedo * uGlow * uGlowStrength * kwGlowScale * exp(-max(p.y, 0.0) / 14.0) * (0.6 + 0.4 * (1.0 - abs(n.y)));
             for (int i = 0; i < KW_MAX_LIGHTS; i++) {
                 if (i >= uLightCount) break;
                 vec3 d = uLightPos[i] - p;
