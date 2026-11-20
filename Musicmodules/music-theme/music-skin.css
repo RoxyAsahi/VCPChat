@@ -404,24 +404,40 @@ body.music-playing .sidebar-playlist li.active::before {
     padding: 28px 32px 24px;
 }
 
+/* 栏头和目录、歌词栏同一种写法：一行带字距的小字，底下一条细线 */
 .track-file-head {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    margin-bottom: 18px;
-    font-family: var(--mt-font-label);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: .14em;
+    margin-bottom: 22px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--ar-rule);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     text-transform: uppercase;
     color: var(--ar-muted);
     white-space: nowrap;
     overflow: hidden;
 }
 
+.track-file-slash {
+    font-size: 0;
+}
+
+.track-file-slash::before {
+    content: "／";
+    font-size: 12px;
+    letter-spacing: 0;
+    opacity: .7;
+}
+
 .track-file-album {
+    min-width: 0;
     text-transform: none;
-    letter-spacing: .04em;
+    letter-spacing: .4px;
+    font-weight: 600;
+    color: var(--ar-ink);
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -458,13 +474,12 @@ body.music-playing .sidebar-playlist li.active::before {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: var(--mt-font-label);
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: .02em;
-    color: var(--ar-ink);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
+    color: var(--ar-muted);
     line-height: 1.2;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
 .track-details .track-title {
@@ -478,20 +493,21 @@ body.music-playing .sidebar-playlist li.active::before {
     text-overflow: ellipsis;
 }
 
+/* 标题下面的记号和目录选中行一样：实心小方块，后面一条细线 */
 .track-rule {
     position: relative;
-    height: 1px;
+    height: 6px;
     margin: 12px 0 10px;
-    background: var(--ar-line);
+    background: linear-gradient(var(--ar-rule), var(--ar-rule)) 6px 2.5px / calc(100% - 6px) 1px no-repeat;
 }
 
 .track-rule i {
     position: absolute;
     left: 0;
-    top: -2px;
-    width: 5px;
-    height: 5px;
-    background: var(--ar-ink);
+    top: 0;
+    width: 6px;
+    height: 6px;
+    background: var(--ar-square);
 }
 
 .track-details .track-artist {
@@ -522,32 +538,28 @@ body.music-playing .sidebar-playlist li.active::before {
     background: var(--ar-field);
 }
 
+/* 规格：四组字直接排在纸面上，不画格子 */
 .track-specs {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    column-gap: 20px;
     margin: 0 0 20px;
-    border-top: 1px solid var(--ar-hairline);
-    border-bottom: 1px solid var(--ar-hairline);
 }
 
 .track-specs > div {
-    padding: 10px 12px 9px 0;
+    padding: 4px 0;
     min-width: 0;
 }
 
-.track-specs > div + div {
-    padding-left: 12px;
-    border-left: 1px solid var(--ar-hairline);
-}
-
 .track-specs dt {
-    font-family: var(--mt-font-label);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: .14em;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     color: var(--ar-muted);
-    margin: 0 0 4px;
+    margin: 0 0 5px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .track-specs dd {
@@ -657,7 +669,7 @@ body.music-dock-on .music-player .controls {
 .settings-container.acoustic-drawer {
     flex: 0 1 auto;
     margin-top: auto;
-    border-top: 1px solid var(--ar-hairline);
+    border-top: 0;
     padding: 0;
     overflow: hidden;
     display: flex;
@@ -669,54 +681,50 @@ body.music-dock-on .music-player .controls {
     flex: 1 1 auto;
 }
 
+/* 一行栏头：小字、名字、当前状态，底下一条细线；不铺底色 */
 .acoustic-drawer-toggle {
     display: grid;
     grid-template-columns: auto auto 1fr auto;
     align-items: baseline;
-    column-gap: 12px;
-    width: 100%;
-    padding: 16px 32px;
+    column-gap: 10px;
+    width: auto;
+    margin: 0 32px;
+    padding: 14px 0 9px;
     border: 0;
-    border-bottom: 1px solid transparent;
+    border-bottom: 1px solid var(--ar-rule);
+    border-radius: 0;
     background: transparent;
-    color: var(--ar-ink);
+    color: var(--ar-muted);
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: background-color var(--mt-dur-1) var(--mt-ease-std);
-}
-
-.acoustic-drawer-toggle:hover {
-    background: var(--ar-field);
 }
 
 .acoustic-drawer-toggle:focus-visible {
-    outline: 2px solid var(--ar-ink);
-    outline-offset: -2px;
-}
-
-.acoustic-drawer.is-open .acoustic-drawer-toggle {
-    border-bottom-color: var(--ar-hairline);
+    outline: 0;
+    border-bottom-color: var(--ar-ink);
 }
 
 .acoustic-drawer-kicker {
-    font-family: var(--mt-font-label);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: .14em;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     color: var(--ar-muted);
 }
 
 .acoustic-drawer-title {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
+    letter-spacing: .4px;
+    color: var(--ar-ink);
 }
 
 .acoustic-drawer-summary {
     justify-self: end;
-    font-family: var(--mt-font-mono);
-    font-size: 11px;
+    font-size: 12px;
+    letter-spacing: .4px;
     color: var(--ar-muted);
+    transition: color var(--mt-dur-1) var(--mt-ease-std);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -726,7 +734,14 @@ body.music-dock-on .music-player .controls {
 .acoustic-drawer-chevron {
     align-self: center;
     color: var(--ar-muted);
-    transition: transform var(--mt-dur-2) var(--mt-ease);
+    transition: transform var(--mt-dur-2) var(--mt-ease), color var(--mt-dur-1) var(--mt-ease-std);
+}
+
+.acoustic-drawer-toggle:hover .acoustic-drawer-summary,
+.acoustic-drawer-toggle:hover .acoustic-drawer-chevron,
+.acoustic-drawer-toggle:focus-visible .acoustic-drawer-summary,
+.acoustic-drawer-toggle:focus-visible .acoustic-drawer-chevron {
+    color: var(--ar-ink);
 }
 
 .acoustic-drawer.is-open .acoustic-drawer-chevron {
@@ -774,10 +789,9 @@ body.music-dock-on .music-player .controls {
 .acoustic-drawer-body .setting-row.full-width > label {
     display: block;
     margin-bottom: 6px;
-    font-family: var(--mt-font-label);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: .14em;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     color: var(--ar-muted);
 }
 
@@ -786,17 +800,20 @@ body.music-dock-on .music-player .controls {
 .acoustic-drawer-body .compact-select,
 .acoustic-drawer-body input[type="number"],
 .acoustic-drawer-body input[type="text"] {
-    background: var(--ar-field);
+    background-color: transparent;
     color: var(--ar-ink);
-    border: 1px solid transparent;
-    border-radius: 2px;
+    border: 0;
+    border-bottom: 1px solid var(--ar-rule);
+    border-radius: 0;
     box-shadow: none;
     font-size: 12px;
 }
 
 .acoustic-drawer-body select:hover,
-.acoustic-drawer-body select:focus {
-    border-color: var(--ar-line);
+.acoustic-drawer-body select:focus,
+.acoustic-drawer-body input[type="number"]:focus,
+.acoustic-drawer-body input[type="text"]:focus {
+    border-bottom-color: var(--ar-ink);
     outline: none;
 }
 
@@ -869,7 +886,7 @@ body.music-dock-sheet-open .main-content #visualizer {
     display: block;
 }
 
-/* ---------- 歌词栏 ---------- */
+/* ---------- 歌词栏：和目录同一套排版，靠左排，不居中 ---------- */
 .lyrics-container {
     min-height: 0;
     border-radius: 0;
@@ -884,49 +901,109 @@ body.music-dock-sheet-open .main-content #visualizer {
     display: flex;
     align-items: baseline;
     gap: 10px;
-    padding: 16px 24px 24px;
-    background: linear-gradient(var(--ar-paper) 55%, rgba(var(--ar-paper-rgb), 0));
+    padding: 18px 24px 9px;
+    background: var(--ar-paper);
+    font-size: 12px;
+    letter-spacing: 1.3px;
+    color: var(--ar-muted);
+    white-space: nowrap;
     pointer-events: none;
 }
 
+/* 栏头底下的细线，以及线下面一小段渐隐，歌词从这里滑进栏头后面 */
+.lyrics-head::before {
+    content: "";
+    position: absolute;
+    left: 24px;
+    right: 24px;
+    bottom: 0;
+    height: 1px;
+    background: var(--ar-rule);
+}
+
+.lyrics-head::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 32px;
+    background: linear-gradient(var(--ar-paper), rgba(var(--ar-paper-rgb), 0));
+}
+
 .lyrics-head-kicker {
-    font-family: var(--mt-font-label);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: .14em;
-    color: var(--ar-muted);
+    opacity: .7;
 }
 
 .lyrics-head-title {
-    font-size: 12px;
-    color: var(--ar-ink-2);
+    font-weight: 600;
+    letter-spacing: .4px;
+    color: var(--ar-ink);
 }
 
 #lyrics-list {
-    padding-top: 56px;
+    padding-top: 60px;
+    text-align: left;
 }
 
 #lyrics-list li {
-    font-size: 15px;
-    line-height: 1.55;
+    position: relative;
+    align-items: flex-start;
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 600;
     color: var(--ar-muted);
-    opacity: .72;
-    padding: 6px 24px;
+    opacity: .62;
+    padding: 14px 24px 8px 44px;
     border-radius: 0;
     transform: none;
+    transition: color .3s, opacity .3s;
 }
 
-#lyrics-list li:hover {
-    background: var(--ar-field);
+#lyrics-list li:hover,
+body.light-theme #lyrics-list li:hover {
+    background: transparent;
+    opacity: .9;
 }
 
+/* 正在唱：目录选中行同款记号（小方块 + 延伸到行尾的细线），字变成墨色加粗，字号不变 */
 #lyrics-list li.active {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 18px;
+    font-weight: 750;
     color: var(--ar-ink) !important;
     opacity: 1;
     transform: none;
     text-shadow: none;
+}
+
+#lyrics-list li.active::before {
+    content: "";
+    position: absolute;
+    left: 24px;
+    top: 5px;
+    width: 6px;
+    height: 6px;
+    background: var(--ar-square);
+}
+
+#lyrics-list li.active::after {
+    content: "";
+    position: absolute;
+    left: 30px;
+    right: 24px;
+    top: 7.5px;
+    height: 1px;
+    background: var(--ar-rule);
+    transform-origin: left;
+    animation: music-lyric-rule .5s var(--mt-ease, ease) both;
+}
+
+@keyframes music-lyric-rule {
+    from { transform: scaleX(0); }
+}
+
+body.music-reduce-motion #lyrics-list li.active::after {
+    animation: none;
 }
 
 #lyrics-list li.active .lyric-original:not(.is-wbyw),
@@ -934,18 +1011,26 @@ body.music-dock-sheet-open .main-content #visualizer {
     color: var(--ar-ink);
 }
 
-#lyrics-list li .lyric-translation {
-    font-size: 13px;
+#lyrics-list li .lyric-translation,
+#lyrics-list li .lyric-romanization {
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 400;
+    letter-spacing: .6px;
     color: var(--ar-muted);
 }
 
 #lyrics-list li.active .lyric-translation {
-    color: var(--ar-ink-2);
-    font-size: 14px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--ar-ink);
+    opacity: .8;
 }
 
 #lyrics-list .no-lyrics {
-    font-size: 13px;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1.3px;
     color: var(--ar-muted);
     opacity: 1;
 }
@@ -1066,7 +1151,7 @@ body.music-reduce-motion .acoustic-drawer-chevron {
     }
 
     .acoustic-drawer-toggle {
-        padding: 14px 16px;
+        margin: 0 16px;
     }
 
     .acoustic-drawer-body {
@@ -1075,15 +1160,6 @@ body.music-reduce-motion .acoustic-drawer-chevron {
 
     .track-specs {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .track-specs > div:nth-child(3) {
-        padding-left: 0;
-        border-left: 0;
-    }
-
-    .track-specs > div:nth-child(n + 3) {
-        border-top: 1px solid var(--ar-hairline);
     }
 
     /* 单列时整页一起滚，只在最底部给底栏留一次位置 */
