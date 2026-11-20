@@ -131,6 +131,7 @@ function setupPlayer(app) {
         app.playPauseBtn.classList.toggle('is-playing', playing);
         app.setPhantomAudio(playing);
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+        app.syncMediaPosition?.(true);
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
     };
 
@@ -214,6 +215,7 @@ function setupPlayer(app) {
             album: track.album || ''
         });
         app.updateMediaSessionMetadata();
+        app.syncMediaPosition?.(true);
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
 
         // 旧歌的轮询到此为止；加载期间由下面的等待循环负责读状态。
@@ -361,6 +363,7 @@ function setupPlayer(app) {
         const epoch = ++app.controlEpoch;
         app.lastKnownCurrentTime = seconds;
         app.lastStateUpdateTime = Date.now();
+        app.syncMediaPosition?.(true);
         const result = await app.enqueueControl(() => app.api.seekMusic(seconds));
         if (epoch === app.controlEpoch && app.isPlaying) app.startStatePolling();
         return result;
@@ -487,6 +490,50 @@ function setupPlayer(app) {
         scheduleSessionSave();
         return true;
     };
+
+    // ───────── 系统媒体控制：进度条和拖动 ─────────
+    // 系统的媒体浮层按 setPositionState 给的位置和速率自己往前推，所以只在会跳变的时候报：
+    // 切歌、播放/暂停、拖动、时长变了，或者引擎报的进度和推算的差了 1 秒以上。
+    const mediaSession = () => (typeof navigator !== 'undefined' && navigator && navigator.mediaSession) || null;
+    let mediaPosition = null; // 上次报给系统的 { position, duration, playing, at }
+    const nowMs = () => Date.now();
+    app.syncMediaPosition = (force = false) => {
+        const session = mediaSession();
+        if (!session || typeof session.setPositionState !== 'function') return false;
+        const duration = Number(app.lastKnownDuration) || 0;
+        const playing = app.isPlaying === true;
+        if (!(duration > 0)) {
+            if (mediaPosition) { try { session.setPositionState(); } catch (error) { /* 旧内核不认空参数 */ } mediaPosition = null; }
+            return false;
+        }
+        const elapsed = playing && app.lastStateUpdateTime ? (nowMs() - app.lastStateUpdateTime) / 1000 : 0;
+        const position = Math.min(duration, Math.max(0, (Number(app.lastKnownCurrentTime) || 0) + elapsed));
+        if (!force && mediaPosition && mediaPosition.duration === duration && mediaPosition.playing === playing) {
+            const expected = mediaPosition.position + (playing ? (nowMs() - mediaPosition.at) / 1000 : 0);
+            if (Math.abs(expected - position) < 1) return false;
+        }
+        try {
+            session.setPositionState({ duration, playbackRate: 1, position });
+            mediaPosition = { position, duration, playing, at: nowMs() };
+            return true;
+        } catch (error) {
+            mediaPosition = null;
+            return false;
+        }
+    };
+    {
+        const session = mediaSession();
+        if (session && typeof session.setActionHandler === 'function') {
+            try {
+                session.setActionHandler('seekto', (details) => {
+                    const time = Number(details && details.seekTime);
+                    if (!Number.isFinite(time)) return;
+                    const duration = Number(app.lastKnownDuration) || 0;
+                    app.seekTo(Math.max(0, duration > 0 ? Math.min(time, Math.max(0, duration - 0.5)) : time));
+                });
+            } catch (error) { /* 不支持 seekto 的内核就只有上一首/下一首 */ }
+        }
+    }
 
     // ───────── 歌词偏移和翻译开关 ─────────
     // 偏移按歌记住（路径 → 秒，正数是歌词推后），换歌时先取出来，解析歌词时就带上。
@@ -888,6 +935,7 @@ function setupPlayer(app) {
                 album: track.album || ''
             });
             app.updateMediaSessionMetadata();
+            app.syncMediaPosition?.(true);
 
             // 如果是随机播放，从队列中移除当前已开始播放的这首歌，防止之后再次随机到它
             if (app.playModes[app.currentPlayMode] === 'shuffle') {
@@ -942,6 +990,7 @@ function setupPlayer(app) {
                         album: track.album || ''
                     });
                     app.updateMediaSessionMetadata();
+                    app.syncMediaPosition?.(true);
 
                     // 同样处理模糊匹配的情况
                     if (app.playModes[app.currentPlayMode] === 'shuffle') {

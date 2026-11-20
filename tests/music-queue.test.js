@@ -7,14 +7,14 @@ const path = require('node:path');
 const titles = (list) => Array.from(list, (t) => t.title);
 
 // 播放器的「下一首」和自动预载：先把现有行为锁住，再测手动队列。
-function setup({ mode = 'repeat', count = 5 } = {}) {
+function setup({ mode = 'repeat', count = 5, nav = {} } = {}) {
     const events = [];
     const context = vm.createContext({
         console: { log() {}, warn() {}, error() {} },
         setTimeout, clearTimeout, setInterval, clearInterval,
         CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
         document: { body: { classList: { add() {}, remove() {}, toggle() {}, contains: () => false } }, dispatchEvent: (e) => events.push(e.type) },
-        navigator: {},
+        navigator: nav,
         localStorage: (() => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })()
     });
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../Musicmodules/music-player.js'), 'utf8'), context);
@@ -316,3 +316,40 @@ test('lyrics offset is applied before the next track parses its lyrics; translat
     assert.equal(renders, 1);
 });
 
+test('media session: seekto seeks the engine, position is reported on jumps and drift only', async () => {
+    const handlers = {};
+    const positions = [];
+    const nav = { mediaSession: { setActionHandler: (name, fn) => { handlers[name] = fn; }, setPositionState: (p) => positions.push(p ? { ...p } : null) } };
+    const { app } = setup({ nav });
+    const seeks = [];
+    app.api.seekMusic = async (t) => { seeks.push(t); return { status: 'success' }; };
+    app.startStatePolling = () => {};
+    app.lastKnownDuration = 200;
+    app.isPlaying = true;
+    app.lastKnownCurrentTime = 10;
+    app.lastStateUpdateTime = Date.now();
+
+    assert.equal(typeof handlers.seekto, 'function');
+    handlers.seekto({ seekTime: 63.2 });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(seeks, [63.2]);
+    assert.equal(positions.at(-1).position, 63.2);
+    assert.equal(positions.at(-1).duration, 200);
+    assert.equal(positions.at(-1).playbackRate, 1);
+    handlers.seekto({ seekTime: 999 });
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(seeks.at(-1), 199.5, 'clamped short of the end');
+
+    // 引擎按时报进度，和推算的一致：不重复报
+    const count = positions.length;
+    app.lastKnownCurrentTime = 199.5; app.lastStateUpdateTime = Date.now();
+    assert.equal(app.syncMediaPosition(), false);
+    assert.equal(positions.length, count);
+    // 差了 1 秒以上（比如引擎自己跳了）才报
+    app.lastKnownCurrentTime = 120; app.lastStateUpdateTime = Date.now();
+    assert.equal(app.syncMediaPosition(), true);
+    // 时长未知时清掉系统进度条
+    app.lastKnownDuration = 0;
+    app.syncMediaPosition(true);
+    assert.equal(positions.at(-1), null);
+});
