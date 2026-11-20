@@ -111,19 +111,44 @@
             quick: { v: 0, t: 0, x: 0, y: 0, w: 0, h: 0 },
             split: { p: 1 },
             ring: { x: 0, y: 0, tx: 0, ty: 0, docked: true, placed: false },
+            // 小环在播放条上的角色（预览中，选定后再定默认）：
+            // fixed 停在条顶固定位置；playhead 当播放头，跟着进度走，暂停时沉进条里；
+            // hover 平时藏起来，指针在条上时才浮出；drop 平时藏起来，切歌时从上方落进条里再化开。
+            ringMode: 'fixed',
+            show: { v: 1, t: 1 },
+            drop: { p: 1 },
             enabled: true
         };
         let frame = 0;
         let last = 0;
 
+        const GLOW_MS = 600;
+        const glow = { cur: [null, null, null], frame: 0 };
+        const parseHex = (hex) => {
+            const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+            if (!m) return null;
+            const n = parseInt(m[1], 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        };
+        const toHex = (rgb) => `#${rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('')}`;
         const setAttr = (node, name, value) => {
             const text = typeof value === 'number' ? value.toFixed(2) : String(value);
             if (node.getAttribute(name) !== text) node.setAttribute(name, text);
         };
 
         // 播放条在窗口里的位置变了（窗口缩放、紧凑档）就重新量。
+        // 右侧抽屉打开时播放条整体往左让位（CSS 的 translate 属性，流体层同步平移）。
+        // 这里量位置时扣掉当前的平移量，层自己的 left 记的是没平移时的位置。
+        const dockEl = bar.closest('.md-dock');
+        const shiftX = () => {
+            const t = dockEl ? win.getComputedStyle(dockEl).translate : '';
+            const n = parseFloat(t);
+            return Number.isFinite(n) ? n : 0;
+        };
         const layout = () => {
-            const rect = bar.getBoundingClientRect();
+            const sx = shiftX();
+            const raw = bar.getBoundingClientRect();
+            const rect = { left: raw.left - sx, right: raw.right - sx, top: raw.top, bottom: raw.bottom, width: raw.width, height: raw.height };
             const vh = win.innerHeight || doc.documentElement.clientHeight || 0;
             if (!(rect.width > 0 && rect.height > 0)) return false;
             geo.layerW = Math.round(rect.width + PAD_X * 2);
@@ -139,8 +164,8 @@
             const volBtn = bar.querySelector('[data-md="vol"]');
             const pr = playBtn?.getBoundingClientRect();
             const vr = volBtn?.getBoundingClientRect();
-            geo.playX = pr && pr.width ? pr.left + pr.width / 2 - geo.left : geo.x + geo.h / 2;
-            geo.volX = vr && vr.width ? vr.left + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
+            geo.playX = pr && pr.width ? pr.left - sx + pr.width / 2 - geo.left : geo.x + geo.h / 2;
+            geo.volX = vr && vr.width ? vr.left - sx + vr.width / 2 - geo.left : geo.x + geo.w - geo.h / 2;
             geo.ringX = geo.x + geo.w * 0.63;
             svg.setAttribute('width', geo.layerW);
             svg.setAttribute('height', LAYER_H);
@@ -182,7 +207,24 @@
             const layerTop = vh - geo.bottom - LAYER_H;
             return { x: cx - geo.left, y: cy - layerTop };
         };
-        const dockPoint = () => ({ x: geo.ringX, y: geo.y - 2 });
+        const progressX = () => geo.x + geo.w * (0.06 + Math.min(1, Math.max(0, s.progress)) * 0.88);
+        const dockPoint = () => {
+            if (s.ringMode === 'playhead') return { x: progressX(), y: geo.y - 2 + (1 - s.solidity.t) * 16 };
+            if (s.ringMode === 'drop') {
+                const p = s.drop.p;
+                const fall = p < 0.5 ? 1 - Math.pow(p / 0.5, 2) : 0;
+                return { x: geo.ringX, y: geo.y - 2 - fall * 110 + (p > 0.5 ? (p - 0.5) * 28 : 0) };
+            }
+            return { x: geo.ringX, y: geo.y - 2 };
+        };
+        // 小环该不该露出来：面板开着时它是关闭按钮，一直露着。
+        const showTarget = () => {
+            if (!s.ring.docked) return 1;
+            if (s.ringMode === 'playhead') return s.solidity.t > 0.5 ? 1 : 0;
+            if (s.ringMode === 'hover') return s.ringHover ? 1 : 0;
+            if (s.ringMode === 'drop') return s.drop.p < 1 ? (s.drop.p < 0.62 ? 1 : 0) : 0;
+            return 1;
+        };
         const retargetRing = () => {
             const p = s.ring.docked ? dockPoint() : cornerLocal();
             s.ring.tx = p.x; s.ring.ty = p.y;
@@ -205,9 +247,12 @@
                 || Math.abs(s.vol.v - s.vol.t) > eps
                 || Math.abs(s.quick.v - s.quick.t) > eps
                 || s.split.p < 1
+                || s.drop.p < 1
+                || Math.abs(s.show.v - s.show.t) > 0.01
                 || Math.hypot(s.ring.x - s.ring.tx, s.ring.y - s.ring.ty) > 0.5;
         };
 
+        let lastGrow = '';
         const draw = (force = false) => {
             const sol = s.solidity.v;
             setAttr(solidR, 'opacity', 0.15 + 0.85 * sol);
@@ -217,6 +262,10 @@
             setAttr(volB, 'x', geo.volX - 24); setAttr(volB, 'width', 48); setAttr(volB, 'rx', 24);
             setAttr(volB, 'y', vy); setAttr(volB, 'height', Math.max(0, geo.h - 12 + s.vol.v * VOL_RISE));
             setAttr(volSolid, 'opacity', s.vol.v);
+            // 水滴里的白色音量条跟着水滴长：水滴升到七成以后才开始出现，收起时它先消失。
+            const grow = Math.max(0, Math.min(1, (s.vol.v - 0.7) / 0.28));
+            const growText = (grow * grow * (3 - 2 * grow)).toFixed(3);
+            if (growText !== lastGrow) { lastGrow = growText; host.style.setProperty('--md-vgrow', growText); }
             if (s.split.p < 1) {
                 const e = s.split.p;
                 setAttr(splitC, 'cx', geo.x + geo.w - geo.h / 2 + e * 170); setAttr(splitC, 'cy', geo.y + geo.h / 2); setAttr(splitC, 'r', (geo.h / 2 - 4) * (1 - e));
@@ -237,17 +286,23 @@
             }
             const rx = s.ring.x;
             const ry = s.ring.y;
-            const near = Math.hypot(rx - geo.ringX, ry - (geo.y - 2)) < 120;
-            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R : 0);
-            setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 : 0);
+            const near = Math.hypot(rx - s.ring.tx, ry - s.ring.ty) < 120 && s.ring.docked;
+            const sh = s.show.v;
+            // 凹口跟着小环：环藏起来时凹口愈合；环落在条上方很远时也不开口。
+            const touch = Math.max(0, Math.min(1, 1 - (geo.y - 2 - ry - 20) / 40));
+            setAttr(holeC, 'cx', rx); setAttr(holeC, 'cy', ry); setAttr(holeC, 'r', near ? HOLE_R * sh * touch : 0);
+            setAttr(ringSolid, 'cx', rx); setAttr(ringSolid, 'cy', ry); setAttr(ringSolid, 'r', near ? 95 * sh : 0);
             if (ring) {
                 const vh = win.innerHeight || 0;
                 const layerTop = vh - geo.bottom - LAYER_H;
                 const left = geo.left + rx - RING_R;
                 const top = layerTop + ry - RING_R;
-                if (force || ring.__mdfLeft !== left || ring.__mdfTop !== top) {
-                    ring.__mdfLeft = left; ring.__mdfTop = top;
-                    ring.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0)`;
+                const shText = sh.toFixed(3);
+                if (force || ring.__mdfLeft !== left || ring.__mdfTop !== top || ring.__mdfShow !== shText) {
+                    ring.__mdfLeft = left; ring.__mdfTop = top; ring.__mdfShow = shText;
+                    ring.style.transform = `translate3d(${left.toFixed(1)}px, ${top.toFixed(1)}px, 0) scale(${(0.4 + 0.6 * sh).toFixed(3)})`;
+                    ring.style.opacity = shText;
+                    ring.style.pointerEvents = sh > 0.5 ? '' : 'none';
                     onRingMove?.({ left, top, docked: s.ring.docked, near });
                 }
             }
@@ -265,11 +320,14 @@
             s.vol.v += (s.vol.t - s.vol.v) * (instant ? 1 : 1 - Math.pow(0.004, dt));
             s.quick.v += (s.quick.t - s.quick.v) * (instant ? 1 : 1 - Math.pow(0.002, dt));
             if (s.split.p < 1) s.split.p = instant ? 1 : Math.min(1, s.split.p + dt / 0.9);
+            if (s.drop.p < 1) { s.drop.p = instant ? 1 : Math.min(1, s.drop.p + dt / 1.1); retargetRing(); }
+            s.show.t = showTarget();
+            s.show.v += (s.show.t - s.show.v) * (instant ? 1 : 1 - Math.pow(0.004, dt));
             s.ring.x += (s.ring.tx - s.ring.x) * k * 0.8;
             s.ring.y += (s.ring.ty - s.ring.y) * k * 0.8;
             if (instant || !moving()) {
                 s.solidity.v = s.solidity.t; s.bump.x = s.bump.tx; s.bump.r = s.bump.tr; s.vol.v = s.vol.t; s.quick.v = s.quick.t;
-                s.ring.x = s.ring.tx; s.ring.y = s.ring.ty;
+                s.ring.x = s.ring.tx; s.ring.y = s.ring.ty; s.show.v = s.show.t;
             }
             draw();
             if (s.enabled && moving()) frame = win.requestAnimationFrame(step);
@@ -289,12 +347,13 @@
                 if (Math.abs(next - s.progress) < 0.0005) return;
                 s.progress = next;
                 writeProgress();
+                if (s.ringMode === 'playhead' && s.ring.docked) { retargetRing(); kick(); }
             },
             // 实心程度：1 = 播放中或正被关注，0 = 暂停化雾
-            setSolid(target) { s.solidity.t = target ? 1 : 0; kick(); },
+            setSolid(target) { s.solidity.t = target ? 1 : 0; if (s.ringMode === 'playhead') retargetRing(); kick(); },
             pointer(clientX) {
                 if (clientX == null) { s.bump.tr = 0; kick(); return; }
-                s.bump.tx = clientX - geo.left;
+                s.bump.tx = clientX - shiftX() - geo.left;
                 if (s.bump.r < 1) s.bump.x = s.bump.tx;
                 s.bump.tr = 20;
                 kick();
@@ -305,7 +364,7 @@
                 if (open && rect && rect.width > 0) {
                     const vh = win.innerHeight || 0;
                     const layerTop = vh - geo.bottom - LAYER_H;
-                    s.quick.x = rect.left - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
+                    s.quick.x = rect.left - shiftX() - geo.left; s.quick.y = rect.top - layerTop; s.quick.w = rect.width; s.quick.h = rect.height;
                 }
                 s.quick.t = open ? 1 : 0;
                 kick();
@@ -317,11 +376,21 @@
                 retargetRing();
                 kick();
             },
+            // 换主题、换舞台时颜色在 0.6 秒里慢慢过去；降低动态时直接换。
             setGlow(colors) {
-                const [a, b, c] = colors || [];
-                if (a) setAttr(in0, 'stop-color', a);
-                if (b) setAttr(in1, 'stop-color', b);
-                if (c) setAttr(in2, 'stop-color', c);
+                const target = [0, 1, 2].map((i) => parseHex(colors?.[i]) || glow.cur[i]);
+                if (glow.frame) { win.cancelAnimationFrame(glow.frame); glow.frame = 0; }
+                const paint = (rgbs) => { glow.cur = rgbs; [in0, in1, in2].forEach((stop, i) => setAttr(stop, 'stop-color', toHex(rgbs[i]))); };
+                if (reduced() || !glow.cur.every(Boolean)) { paint(target); return; }
+                const from = glow.cur.slice();
+                const start = win.performance?.now?.() ?? Date.now();
+                const step = (now) => {
+                    const t = Math.min(1, (now - start) / GLOW_MS);
+                    const k = t * t * (3 - 2 * t);
+                    paint(from.map((c, i) => c.map((v, j) => v + (target[i][j] - v) * k)));
+                    glow.frame = t < 1 ? win.requestAnimationFrame(step) : 0;
+                };
+                glow.frame = win.requestAnimationFrame(step);
             },
             setEnabled(on) {
                 s.enabled = Boolean(on);
@@ -333,12 +402,22 @@
             get enabled() { return s.enabled; },
             get volumeOpen() { return s.vol.t === 1; },
             get ringDocked() { return s.ring.docked; },
+            setRingMode(mode) {
+                s.ringMode = ['playhead', 'hover', 'drop'].includes(mode) ? mode : 'fixed';
+                s.drop.p = 1;
+                retargetRing(); kick();
+            },
+            get ringMode() { return s.ringMode; },
+            setRingHover(on) { if (s.ringHover === Boolean(on)) return; s.ringHover = Boolean(on); kick(); },
+            dropRing() { if (s.ringMode !== 'drop' || !s.ring.docked) return; s.drop.p = 0; retargetRing(); s.ring.y = s.ring.ty; kick(); },
             debug: () => ({ progress: s.progress, solidity: s.solidity.v, vol: s.vol.v, ring: { ...s.ring }, geo: { ...geo }, animating: Boolean(frame) }),
             destroy() {
                 if (frame) win.cancelAnimationFrame(frame);
+                if (glow.frame) win.cancelAnimationFrame(glow.frame);
                 frame = 0;
                 svg.remove();
                 mist.remove();
+                host.style.removeProperty('--md-vgrow');
             }
         };
         return api;

@@ -405,8 +405,8 @@ test('window keymap: space without repeat, seek, track and volume keys, help, in
     }
 });
 
-test('clicking the capsule body enters the stage, and inside the stage opens the command palette', () => {
-    const { doc, app, dock, calls } = setup();
+test('clicking the capsule body enters the stage; inside the stage it does nothing, search only opens with Ctrl+K', () => {
+    const { window, doc, app, dock, calls } = setup();
     try {
         const cap = doc.querySelector('.md-cap');
         cap.click();
@@ -414,9 +414,12 @@ test('clicking the capsule body enters the stage, and inside the stage opens the
         app.isStageActive = true;
         doc.body.classList.add('music-stage-active');
         cap.click();
-        assert.ok(doc.querySelector('.md-cmd').classList.contains('md-open') || !doc.querySelector('.md-cmd').hidden);
-        assert.ok(doc.body.classList.contains('music-dock-cmd-open'));
+        assert.ok(!doc.body.classList.contains('music-dock-cmd-open'), 'no accidental search popup');
         assert.ok(!calls.includes('enter'));
+        assert.equal(doc.querySelector('[data-q="panel"]'), null, 'quick row has no search button');
+        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+        assert.ok(doc.body.classList.contains('music-dock-cmd-open'));
+        assert.equal(doc.querySelectorAll('.md-cmd-row').length, 0, 'empty search lists no player commands');
     } finally {
         dock.destroy();
     }
@@ -565,4 +568,42 @@ test('stage settings live in the dock panel: the drawer content is moved in, ope
     }
     assert.ok(stage.querySelector('.music-stage-settings-card > .music-stage-settings-body') === body, 'moved back home');
     assert.ok(!doc.body.classList.contains('music-dock-stage-settings'));
+});
+
+test('fluid colours follow the theme accent, keep scene colours on themed stages and fall back for grey accents', async () => {
+    const { window, doc, app, dock } = setup();
+    try {
+        const hue = (hex) => {
+            const n = parseInt(hex.slice(1), 16);
+            const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            if (max === min) return null;
+            const d = max - min;
+            const h = max === r ? (g - b) / d : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            return ((h * 60) + 360) % 360;
+        };
+        doc.documentElement.style.setProperty('--highlight-text', '#2f6fd0');
+        const blue = dock.glowColors;
+        assert.ok(Math.abs(hue(blue[0]) - 216) < 6, `blue theme gives a blue glow (${blue[0]})`);
+        doc.body.classList.add('light-theme');
+        const blueLight = dock.glowColors;
+        assert.equal(blueLight[2], '#ffffff', 'light glow fades to white');
+        assert.ok(Math.abs(hue(blueLight[0]) - 216) < 6);
+
+        doc.documentElement.style.setProperty('--highlight-text', '#808080');
+        assert.ok(Math.abs(hue(dock.glowColors[0]) - 22) < 6, 'grey accent falls back to the warm default');
+
+        // 有自己色调的舞台用自己的颜色
+        doc.body.classList.add('music-stage-active');
+        app.isStageActive = true;
+        app.stageHost = { ...(app.stageHost || {}), modeId: 'tunnel' };
+        assert.equal(dock.glowColors[0], '#4fa597');
+        doc.body.classList.remove('light-theme');
+        app.stageHost.modeId = 'kowloon';
+        assert.equal(dock.glowColors[0], '#d24a8d');
+
+        // 节能档的实色进度底也跟着强调色
+        await new Promise((r) => setTimeout(r, 0));
+        assert.ok(doc.getElementById('music-dock-root').style.getPropertyValue('--md-fl-low-fill'), 'low tier fill is tinted');
+    } finally { dock.destroy(); }
 });

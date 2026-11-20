@@ -217,9 +217,84 @@
         // 暂停时整条化成雾，鼠标移上来（关注）又凝固。设置小环停在顶边时播放条凹进去让它，
         // 打开面板时小环飞到右下角，凹口愈合。音量从播放条里像水滴一样分裂上去。
         // 舞台的「性能档位」选节能时不跑流体层，播放条退成不透明的实色。
+        // 播放条玻璃里透出的颜色跟着主题走：平时取 VCPChat 当前主题的强调色（--highlight-text），
+        // 舞台换了自定义主题就取舞台的；有自己固定色调的舞台（镜台黄昏、隧图深空、町景霓虹）用各自的颜色。
+        // 强调色太灰（单色主题）时退回默认的暖橙。深浅两套各自调亮度，保证上面的字看得清。
         const SCENE_GLOW = {
-            light: { base: ['#f29a63', '#f7d9c6', '#ffffff'], diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'], tunnel: ['#4fa597', '#cfe9e2', '#ffffff'] },
-            dark: { base: ['#d9773f', '#6b4c3b', '#46403b'], diorama: ['#e06a30', '#6e4733', '#45403b'], tunnel: ['#46a593', '#3c5853', '#3d4441'] }
+            light: {
+                diorama: ['#ef7b3f', '#f6cdb0', '#ffffff'],
+                tunnel: ['#4fa597', '#cfe9e2', '#ffffff'],
+                kowloon: ['#e0629f', '#bfe2ea', '#ffffff']
+            },
+            dark: {
+                diorama: ['#e06a30', '#6e4733', '#45403b'],
+                tunnel: ['#46a593', '#3c5853', '#3d4441'],
+                kowloon: ['#d24a8d', '#2f5a6a', '#3b3e46']
+            }
+        };
+        const FALLBACK_ACCENT = [217, 119, 63];
+        const colorProbe = document.createElement('i');
+        colorProbe.hidden = true;
+        const readRgb = (value) => {
+            const text = String(value || '').trim();
+            if (!text) return null;
+            colorProbe.style.color = '';
+            colorProbe.style.color = text;
+            if (!colorProbe.style.color) return null;
+            if (!colorProbe.isConnected) host.appendChild(colorProbe);
+            const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/.exec(getComputedStyle(colorProbe).color || '');
+            return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+        };
+        const rgbToHsl = ([r, g, b]) => {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const l = (max + min) / 2;
+            if (max === min) return [0, 0, l];
+            const d = max - min;
+            const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+            return [h / 6, s, l];
+        };
+        const hslToRgb = ([h, s, l]) => {
+            if (!s) return [l * 255, l * 255, l * 255];
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            const f = (t) => {
+                t = (t + 1) % 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+            return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+        };
+        const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+        const mix = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+        const hex = (rgb) => `#${rgb.map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('')}`;
+        const glowFromAccent = (accent, light) => {
+            let [h, s, l] = rgbToHsl(accent || FALLBACK_ACCENT);
+            if (s < 0.12) [h, s, l] = rgbToHsl(FALLBACK_ACCENT);
+            if (light) {
+                const a = hslToRgb([h, clamp(s, 0.5, 0.85), clamp(l, 0.6, 0.68)]);
+                return [hex(a), hex(mix(a, [255, 255, 255], 0.7)), '#ffffff'];
+            }
+            const a = hslToRgb([h, clamp(s, 0.45, 0.8), clamp(l, 0.5, 0.58)]);
+            return [hex(a), hex(mix(a, [70, 64, 59], 0.68)), hex(mix(a, [64, 63, 62], 0.92))];
+        };
+        const themeAccent = () => {
+            const stageRoot = document.getElementById('music-stage');
+            if (stageActive() && stageRoot?.classList.contains('stage-theme-custom')) {
+                const custom = readRgb(getComputedStyle(stageRoot).getPropertyValue('--highlight-text'));
+                if (custom) return custom;
+            }
+            return readRgb(getComputedStyle(document.documentElement).getPropertyValue('--highlight-text'));
+        };
+        const currentGlow = () => {
+            const light = document.body.classList.contains('light-theme');
+            const mode = stageActive() ? app.stageHost?.modeId : null;
+            const custom = stageActive() && document.getElementById('music-stage')?.classList.contains('stage-theme-custom');
+            return (!custom && SCENE_GLOW[light ? 'light' : 'dark'][mode]) || glowFromAccent(themeAccent(), light);
         };
         const lowQuality = () => global.MusicStageConfig?.get?.()?.quality === 'energy-saving';
         let fluid = null;
@@ -244,14 +319,21 @@
                 fluid.setRingDocked(!state.panelOpen);
                 syncGlow();
                 syncSolid();
+                syncRing();
                 renderProgress();
             }
         };
+        // 节能档没有流体层：把同一套颜色混进实心播放条的进度底色和快捷胶囊的描边里。
+        let lastGlowKey = '';
         const syncGlow = () => {
-            if (!fluid) return;
-            const palette = SCENE_GLOW[document.body.classList.contains('light-theme') ? 'light' : 'dark'];
-            const mode = stageActive() ? app.stageHost?.modeId : null;
-            fluid.setGlow(palette[mode] || palette.base);
+            const colors = currentGlow();
+            const key = colors.join();
+            const light = document.body.classList.contains('light-theme');
+            const a = readRgb(colors[0]) || FALLBACK_ACCENT;
+            host.style.setProperty('--md-fl-low-fill', hex(mix(a, light ? [247, 242, 238] : [43, 41, 39], light ? 0.62 : 0.55)));
+            host.style.setProperty('--md-fl-tint', colors[0]);
+            if (fluid && (key !== lastGlowKey || !fluid.glowSet)) { fluid.setGlow(colors); fluid.glowSet = true; }
+            lastGlowKey = key;
         };
         // 实心 = 正在播放，或者正被关注（悬停、拖动）。
         const syncSolid = () => {
@@ -264,8 +346,20 @@
         const shouldExpand = () => state.hover
             || state.dragging !== null
             || (!app.isPlaying && !app.isTrackLoading && duration() > 0 && currentTime() > 0);
+        // 小环的角色还在挑：存在 localStorage musicDockRingMode 里（fixed / playhead / hover / drop）。
+        const RING_MODES = ['fixed', 'playhead', 'hover', 'drop'];
+        const readRingMode = () => {
+            try { const v = global.localStorage?.getItem('musicDockRingMode'); return RING_MODES.includes(v) ? v : 'fixed'; } catch (e) { return 'fixed'; }
+        };
+        let ringMode = readRingMode();
+        const syncRing = () => {
+            if (!fluid) return;
+            if (fluid.ringMode !== ringMode) fluid.setRingMode(ringMode);
+            fluid.setRingHover(state.hover || state.dragging !== null);
+        };
         const syncExpanded = () => {
             syncSolid();
+            syncRing();
             const next = shouldExpand();
             if (next === state.expanded) return;
             state.expanded = next;
@@ -412,10 +506,8 @@
         });
         listen(el.cap, 'click', (event) => {
             if (event.target.closest('button')) return;
-            // 舞台里点胶囊就在要去的地方，这一下改成打开命令面板。
+            // 不在舞台时点胶囊进舞台；已经在舞台里就不做事（以前会弹出搜索面板，太容易误触）。
             if (!stageActive()) app.stageHost?.enter?.();
-            else if (palette) palette.open();
-            else openPanel();
         });
 
         const quickItems = () => {
@@ -431,14 +523,12 @@
             const items = quickItems();
             el.quickGroup.innerHTML = items.map((item) => (
                 `<button class="md-qb${item.on ? ' md-on' : ''}" type="button" data-q="${item.id}" title="${item.label}" aria-label="${item.label}"${item.on ? ' aria-pressed="true"' : ''}>${icon(item.icon, 16)}</button>`
-            )).join('') + '<span class="md-qsep" aria-hidden="true"></span>'
-                + `<button class="md-qb" type="button" data-q="panel" title="命令面板（Ctrl+K）" aria-label="命令面板">${icon('command', 16)}</button>`;
+            )).join('');
         };
         listen(el.quickGroup, 'click', (event) => {
             const button = event.target.closest('[data-q]');
             if (!button) return;
             event.stopPropagation();
-            if (button.dataset.q === 'panel') { if (palette) palette.toggle(); else togglePanel(); return; }
             quickItems().find((item) => item.id === button.dataset.q)?.run();
         });
 
@@ -652,7 +742,7 @@
             el.stageSlot.classList.toggle('md-on', inStage);
             el.stageSlot.setAttribute('aria-pressed', String(inStage));
             el.stageSlot.title = inStage ? '离开歌词舞台' : '歌词舞台';
-            el.cap.title = inStage ? '点一下打开命令面板（Ctrl+K），左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
+            el.cap.title = inStage ? '左右拖动调进度' : '点一下进入歌词舞台，左右拖动调进度';
             syncGlow();
             renderQuick();
             if (state.panelOpen && state.tab === '控制') renderBody();
@@ -675,7 +765,7 @@
             el.pCover.style.backgroundImage = coverCss;
             if (key !== state.trackKey) {
                 // 换歌：上一首像一滴水从右边分裂出去蒸发掉（第一次渲染不算）。
-                if (state.trackKey) fluid?.split();
+                if (state.trackKey) { fluid?.split(); fluid?.dropRing(); }
                 state.trackKey = key;
                 renderNext();
                 // 换了歌，上一首的加载失败提示就不用再留着了。
@@ -1171,6 +1261,17 @@
             setVolume(readVolume() + delta);
         });
 
+        // 右侧抽屉打开时播放条往左让位，右边缘停在抽屉内容左边 24px；放得下就不动。窄窗口抽屉铺满，不让位。
+        const DRAWER_W = 400;
+        const syncShift = () => {
+            const vw = global.innerWidth || 0;
+            const barW = el.cap.offsetWidth || 0;
+            const room = vw - DRAWER_W - 24;
+            const right = vw / 2 + barW / 2;
+            const shift = state.panelOpen && vw >= COMPACT_BELOW && barW ? Math.min(0, room - right) : 0;
+            host.style.setProperty('--md-shift', `${Math.round(shift)}px`);
+            host.classList.toggle('md-shifted', shift < 0);
+        };
         function openPanel(tab) {
             if (tab) { state.tab = tab; closePop(); }
             if (!state.panelOpen) {
@@ -1181,6 +1282,7 @@
                 el.handle.setAttribute('aria-expanded', 'true');
                 el.handle.setAttribute('aria-label', '关闭面板');
                 fluid?.setRingDocked(false);
+                syncShift();
             }
             renderTabs();
             renderBody();
@@ -1195,6 +1297,7 @@
             el.handle.setAttribute('aria-expanded', 'false');
             el.handle.setAttribute('aria-label', '打开面板');
             fluid?.setRingDocked(true);
+            syncShift();
         }
         function togglePanel() { if (state.panelOpen) closePanel(); else openPanel(); }
         listen(el.handle, 'click', togglePanel);
@@ -1321,6 +1424,15 @@
         let lastPlaying = null;
         let lastStage = null;
         let lastTheme = null;
+        // 主题文件换了（样式表重新加载、换了 href）或舞台换了自定义主题：颜色跟着换。
+        let glowTimer = 0;
+        const queueGlow = () => { clearTimeout(glowTimer); glowTimer = setTimeout(syncGlow, 60); timers.add(glowTimer); };
+        observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] }, queueGlow);
+        listen(document, 'load', (event) => { if (event.target?.tagName === 'LINK') queueGlow(); }, true);
+        const stageRootEl = document.getElementById('music-stage');
+        if (stageRootEl) observe(stageRootEl, { attributes: true, attributeFilter: ['class'] }, queueGlow);
+        // 舞台顶部的模式切换（不经过底栏）也要换色：跟着选中按钮的 aria-pressed 走。
+        observe(stageRootEl?.querySelector('.music-stage-mode-switcher'), { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] }, queueGlow);
         observe(document.body, { attributes: true, attributeFilter: ['class'] }, () => {
             const playing = app.isPlaying === true;
             if (playing !== lastPlaying) { lastPlaying = playing; renderPlay(); kickProgress(); }
@@ -1356,6 +1468,7 @@
         });
         listen(document, 'visibilitychange', () => { if (!document.hidden) kickProgress(); });
         listen(global, 'resize', () => {
+            syncShift();
             animateCapsule();
             if (state.volOpen) placeRail();
             if (state.panelOpen) placeMarks(el.pnl);
@@ -1372,12 +1485,12 @@
             ['Shift + ← / →', '上一首 / 下一首'],
             ['Ctrl + ↑ / ↓', '音量 +5% / −5%'],
             ['M', '静音 / 恢复（档案页里是打字检索）'],
-            ['Ctrl + K', '命令面板：搜歌、歌单和操作'],
+            ['Ctrl + K', '搜索：歌、歌单，也能输入操作'],
             ['Ctrl + L', '档案页里定位当前播放'],
             ['/', '档案页里打开检索'],
             ['字母 / 数字', '档案页里直接打字就是检索目录'],
-            ['?', '打开这张快捷键表（档案页里用命令面板打开）'],
-            ['Esc', '关闭面板、命令面板或这张表']
+            ['?', '打开这张快捷键表（档案页里用 Ctrl + K 搜「快捷键」）'],
+            ['Esc', '关闭面板、搜索或这张表']
         ];
         const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')));
         const modalOpen = () => [app.playlistDialog, app.playlistEditModal, app.lyricsFetchModal].some((m) => m?.classList?.contains('visible'))
@@ -1539,7 +1652,7 @@
         state.expanded = shouldExpand();
         el.cap.classList.toggle('md-ex', state.expanded);
         syncFluid();
-        if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => syncFluid()));
+        if (global.MusicStageConfig?.subscribe) cleanups.push(global.MusicStageConfig.subscribe(() => { syncFluid(); syncGlow(); }));
         // 字体和布局稳定后再量一次（流体层要对齐按钮的真实位置）。
         requestAnimationFrame(() => { if (!state.destroyed) animateCapsule(); });
         kickProgress();
@@ -1558,6 +1671,13 @@
             get stageSettingsOpen() { return state.subOpen; },
             get soundSettingsOpen() { return state.sheetOpen; },
             get tab() { return state.tab; },
+            get glowColors() { return currentGlow(); },
+            get ringMode() { return ringMode; },
+            setRingMode(mode) {
+                ringMode = RING_MODES.includes(mode) ? mode : 'fixed';
+                try { global.localStorage?.setItem('musicDockRingMode', ringMode); } catch (e) { /* 只是记住选择 */ }
+                syncRing();
+            },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
