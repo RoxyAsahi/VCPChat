@@ -61,24 +61,57 @@
         };
 
         // 每行拆成标题 / 歌手 / 时长三格。原渲染只在列表内容变化时重建 <li>，已拆过的行跳过。
-        const decorate = () => {
-            for (const li of list.children) {
-                if (li.dataset.cols === '1') continue;
-                const track = app.playlist[Number(li.dataset.index)];
-                const title = document.createElement('span');
-                title.className = 'cl-title';
-                title.textContent = li.textContent;
-                const artist = document.createElement('span');
-                artist.className = 'cl-artist';
-                artist.textContent = track?.artist || '';
-                const duration = document.createElement('span');
-                duration.className = 'cl-duration';
-                duration.textContent = formatDuration(track?.duration);
-                li.replaceChildren(title, artist, duration);
-                li.title = [titleOf(track), track?.artist].filter(Boolean).join(' — ');
-                li.dataset.cols = '1';
-            }
+        const decorateRow = (li) => {
+            if (li.dataset.cols === '1') return;
+            const track = app.playlist[Number(li.dataset.index)];
+            const title = document.createElement('span');
+            title.className = 'cl-title';
+            title.textContent = li.textContent;
+            const artist = document.createElement('span');
+            artist.className = 'cl-artist';
+            artist.textContent = track?.artist || '';
+            const duration = document.createElement('span');
+            duration.className = 'cl-duration';
+            duration.textContent = formatDuration(track?.duration);
+            li.replaceChildren(title, artist, duration);
+            li.title = [titleOf(track), track?.artist].filter(Boolean).join(' — ');
+            li.dataset.cols = '1';
         };
+
+        // 曲库大的时候全部拆一遍要几百毫秒，所以：
+        // 列表没显示（在档案页，或者切到专辑 / 歌手分页）时不拆，等它显示出来；
+        // 显示时只拆视口上下各 BUFFER 行，滚到哪拆到哪。
+        const BUFFER = 30;
+        const shown = () => !document.body.classList.contains('music-archive-on') && list.style.display !== 'none';
+        const decorate = () => {
+            const rows = list.children;
+            const count = rows.length;
+            if (!count || !shown()) return;
+            const pitch = count > 1 ? rows[1].offsetTop - rows[0].offsetTop : rows[0].offsetHeight;
+            const view = list.clientHeight;
+            let from = 0;
+            let to = count;
+            // 量不到行高（还没排版）就整列处理，保证内容是对的
+            if (pitch > 0 && view > 0) {
+                from = Math.max(0, Math.floor(list.scrollTop / pitch) - BUFFER);
+                to = Math.min(count, Math.ceil((list.scrollTop + view) / pitch) + BUFFER);
+            }
+            for (let i = from; i < to; i += 1) decorateRow(rows[i]);
+        };
+
+        let queued = 0;
+        const decorateSoon = () => {
+            if (queued) return;
+            queued = requestAnimationFrame(() => { queued = 0; decorate(); });
+        };
+        list.addEventListener('scroll', decorateSoon, { passive: true });
+        global.addEventListener('resize', decorateSoon);
+        if (typeof MutationObserver === 'function') {
+            // 切回经典视图、切回曲目分页时补上
+            const watch = new MutationObserver(decorateSoon);
+            watch.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            watch.observe(list, { attributes: true, attributeFilter: ['style'] });
+        }
 
         const base = app.renderPlaylist;
         let lastFiltered = null;
