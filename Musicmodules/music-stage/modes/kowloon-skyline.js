@@ -80,6 +80,23 @@
             push(spire, tw, 3);
             tw.top = y + (tw.h - y + 40);
         });
+        // 中间层：城寨和巨构之间一圈一两百米高的巨型楼块，压得很暗，只有稀疏的窗，
+        // 把近处的城寨和远处的塔楼隔出层次。
+        for (let i = 0; i < 16; i += 1) {
+            if (i % 3 === 2) continue;
+            const h1 = (Math.sin(i * 12.9898) * 43758.5453) % 1, h2 = (Math.sin(i * 78.233) * 12543.123) % 1;
+            const a = Math.PI * (1.02 + (i + Math.abs(h1) * 0.6) / 16 * 0.96);
+            const r = 210 + Math.abs(h2) * 130;
+            const x = Math.cos(a) * r * 1.5, z = Math.sin(a) * r - 40;
+            const w = 34 + Math.abs(h1) * 30, d = 26 + Math.abs(h2) * 20, h = 70 + Math.abs(h1 * h2) * 4 * 55;
+            const block = new T.BoxGeometry(w, h, d);
+            block.translate(x, h / 2, z);
+            push(block, { x, z, seed: Math.abs(h1) }, 4);
+            // 顶上再退一级。
+            const cap = new T.BoxGeometry(w * 0.6, h * 0.18, d * 0.7);
+            cap.translate(x + w * 0.1, h + h * 0.09, z);
+            push(cap, { x, z, seed: Math.abs(h2) }, 4);
+        }
         // 合并（全是非索引几何，直接拼）。
         const merged = (() => {
             const names = ['position', 'normal', 'aTower'];
@@ -124,20 +141,22 @@
                     float under = clamp(-n.y, 0.0, 1.0);
                     col += uHaze * 0.12 * under * exp(-vWorld.y / 220.0);
                     // 侧面：竖向窗带和每层的横线，零星的亮窗，金色为主，少数冷青。
-                    if (part < 0.5) {
+                    float blocky = step(3.5, part);
+                    if (blocky > 0.5) around = abs(n.x) > 0.5 ? vWorld.z : vWorld.x;
+                    if (part < 0.5 || blocky > 0.5) {
                         float bay = floor(around / 4.0);
                         float fl = floor(vWorld.y / 4.2);
                         vec2 cell = vec2(fract(around / 4.0), fract(vWorld.y / 4.2));
                         float strip = step(0.25, cell.x) * step(cell.x, 0.75) * step(0.2, cell.y) * step(cell.y, 0.8);
                         float band = step(0.82, h21(vec2(floor(bay / 3.0), seed * 91.0)));
-                        float lit = step(0.9 - band * 0.45, h21(vec2(bay, fl + seed * 37.0)));
+                        float lit = step(0.9 - band * 0.45 * (1.0 - blocky) + blocky * 0.075, h21(vec2(bay, fl + seed * 37.0)));
                         float cool = step(0.86, h21(vec2(bay * 1.7, fl * 0.3 + seed)));
                         vec3 win = mix(vec3(1.0, 0.62, 0.25), vec3(0.3, 0.9, 1.0), cool);
-                        glow += win * strip * lit * 1.4;
+                        glow += win * strip * lit * mix(1.0, 0.55, blocky) * step(abs(n.y), 0.5);
                         // 竖向灯带：每隔几个开间一根从下往上的细光条，慢慢流动。
                         float rib = 1.0 - smoothstep(0.0, 0.06, abs(fract(around / 24.0 + seed) - 0.5) * 2.0 - 0.94);
                         float flow = 0.55 + 0.45 * sin(vWorld.y * 0.05 - uTime * 0.8 + seed * 20.0);
-                        glow += vec3(1.0, 0.55, 0.2) * rib * flow * 0.6;
+                        glow += vec3(1.0, 0.55, 0.2) * rib * flow * 0.4 * (1.0 - blocky);
                     } else if (part < 1.5) {
                         // 檐口一圈灯，像一串小灯笼。
                         float bead = step(0.6, fract(around / 3.0));
@@ -332,6 +351,109 @@
         beams.layers.set(3);
         group.add(beams);
 
+        // ---------- 高架轨道和列车 ----------
+        // 南街南沿架着一条单线高架，贴着对面那排矮楼。列车每隔几十秒带着一串窗灯从镜头前驶过，
+        // 给街景和正立面机位一层会动的前景；在街上往上看，桥面正好压在画面上沿。
+        const S = global.MusicStageKowloonShared;
+        const RAIL = { z: 70.8, y: 9.4, width: 3.2, x0: -330, x1: 330, span: 18 };
+        const railParts = [];
+        const rbox = (w, h, d, x, y, z) => { const g = new T.BoxGeometry(w, h, d); g.translate(x, y, z); railParts.push(g); };
+        rbox(RAIL.x1 - RAIL.x0, 0.55, RAIL.width, 0, RAIL.y - 0.28, RAIL.z);
+        // 两侧的护栏和线槽。
+        rbox(RAIL.x1 - RAIL.x0, 0.9, 0.12, 0, RAIL.y + 0.45, RAIL.z - RAIL.width / 2);
+        rbox(RAIL.x1 - RAIL.x0, 0.9, 0.12, 0, RAIL.y + 0.45, RAIL.z + RAIL.width / 2);
+        rbox(RAIL.x1 - RAIL.x0, 0.18, 0.5, 0, RAIL.y - 0.7, RAIL.z + RAIL.width / 2 + 0.25);
+        for (let x = RAIL.x0; x <= RAIL.x1; x += RAIL.span) {
+            // 桥墩在南侧，不占街面；上面一根挑梁托着桥面，再往上是接触网的门架。
+            rbox(0.8, RAIL.y - 0.55, 0.8, x, (RAIL.y - 0.55) / 2, RAIL.z + 1.1);
+            rbox(1.0, 0.7, RAIL.width + 0.8, x, RAIL.y - 0.9, RAIL.z);
+            rbox(0.16, 5.2, 0.16, x, RAIL.y + 2.6, RAIL.z + RAIL.width / 2 + 0.1);
+            rbox(0.12, 0.12, RAIL.width, x, RAIL.y + 5.0, RAIL.z);
+        }
+        rbox(RAIL.x1 - RAIL.x0, 0.04, 0.04, 0, RAIL.y + 4.7, RAIL.z);
+        const railGeo = keep(mergeAll(T, railParts));
+        railParts.forEach(g => g.dispose());
+        const litVertex = (instanced) => /* glsl */`
+            varying vec3 vWorld; varying vec3 vNormal; varying vec3 vLocal;
+            #include <fog_pars_vertex>
+            void main(){
+                mat4 m = modelMatrix${instanced ? ' * instanceMatrix' : ''};
+                vec4 w = m * vec4(position, 1.0);
+                vWorld = w.xyz; vNormal = normalize(mat3(m) * normal); vLocal = position;
+                vec4 mvPosition = viewMatrix * w;
+                gl_Position = projectionMatrix * mvPosition;
+                #include <fog_vertex>
+            }`;
+        const railMat = keep(new T.ShaderMaterial({
+            fog: true,
+            uniforms: Object.assign(T.UniformsUtils.clone(T.UniformsLib.fog), shared),
+            vertexShader: litVertex(false),
+            fragmentShader: /* glsl */`
+                ${S.GLSL_COMMON}
+                ${S.GLSL_LIGHTS}
+                varying vec3 vWorld; varying vec3 vNormal; varying vec3 vLocal;
+                #include <fog_pars_fragment>
+                void main(){
+                    vec3 n = normalize(vNormal);
+                    // 旧钢梁：深灰绿的漆，接缝和锈水。
+                    float g = kwFbm(vWorld.xy * vec2(0.8, 2.5) + vWorld.z);
+                    vec3 alb = mix(vec3(0.11, 0.13, 0.13), vec3(0.2, 0.12, 0.07), smoothstep(0.55, 0.8, g));
+                    alb *= 0.75 + 0.25 * step(0.04, fract(vWorld.x / 2.0));
+                    alb *= 1.0 - uWet * 0.3;
+                    vec3 col = kwLight(vWorld, n, alb, 0.7);
+                    gl_FragColor = vec4(col, 1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                    #include <fog_fragment>
+                }`
+        }));
+        const rail = new T.Mesh(railGeo, railMat);
+        rail.name = 'kowloon-rail';
+        rail.frustumCulled = false;
+        group.add(rail);
+
+        const CARS = 5, CAR_LEN = 15, CAR_GAP = 0.8;
+        const carGeo = keep(new T.BoxGeometry(CAR_LEN, 2.9, 2.5));
+        const carMat = keep(new T.ShaderMaterial({
+            fog: true,
+            uniforms: Object.assign(T.UniformsUtils.clone(T.UniformsLib.fog), shared),
+            vertexShader: litVertex(true),
+            fragmentShader: /* glsl */`
+                ${S.GLSL_COMMON}
+                ${S.GLSL_LIGHTS}
+                varying vec3 vWorld; varying vec3 vNormal; varying vec3 vLocal;
+                #include <fog_pars_fragment>
+                void main(){
+                    vec3 n = normalize(vNormal);
+                    vec2 uv = vec2(vLocal.x / ${CAR_LEN.toFixed(1)} + 0.5, vLocal.y / 2.9 + 0.5);
+                    // 车身：暗银灰，腰线一道橙色。
+                    vec3 alb = mix(vec3(0.2, 0.21, 0.22), vec3(0.75, 0.3, 0.08), step(0.3, uv.y) * step(uv.y, 0.36));
+                    vec3 col = kwLight(vWorld, n, alb, 0.5);
+                    float side = step(0.5, abs(n.z));
+                    // 侧窗：一排亮着冷白灯的窗，窗间有立柱，车门处窗更高。
+                    float cellX = fract(uv.x * 9.0);
+                    float win = step(0.5, uv.y) * step(uv.y, 0.82) * step(0.08, cellX) * step(cellX, 0.92) * step(0.03, uv.x) * step(uv.x, 0.97);
+                    // 车里的人影：窗下半截有些暗块。
+                    float head = step(0.6, kwHash(vec2(floor(uv.x * 27.0), 3.0))) * step(uv.y, 0.66);
+                    vec3 inside = vec3(0.85, 0.95, 1.0) * (1.6 - head * 1.1);
+                    col = mix(col, inside, win * side);
+                    // 车头车尾：端面的灯。
+                    float endFace = step(0.5, abs(n.x));
+                    float lamp = endFace * (1.0 - smoothstep(0.1, 0.22, length(vec2(abs(vLocal.z) - 0.8, vLocal.y + 0.7))));
+                    col += vec3(1.0, 0.9, 0.7) * lamp * 4.0;
+                    gl_FragColor = vec4(col, 1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                    #include <fog_fragment>
+                }`
+        }));
+        const cars = new T.InstancedMesh(carGeo, carMat, CARS);
+        cars.name = 'kowloon-train';
+        cars.frustumCulled = false;
+        group.add(cars);
+        const TRAIN = { period: 38, speed: 24 };
+        const trainLights = [];
+
         const tmp = { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1), m: new T.Matrix4(),
             fwd: new T.Vector3(), up: new T.Vector3(0, 1, 0), dir: new T.Vector3(), e: new T.Euler() };
         const beamLights = [];
@@ -378,6 +500,19 @@
                     }
                 }
             });
+            // 列车：每个周期开过一趟，单双数趟方向相反。
+            trainLights.length = 0;
+            const pass = Math.floor(t / TRAIN.period), tt = t - pass * TRAIN.period;
+            const dir = pass % 2 ? -1 : 1;
+            const head = (dir > 0 ? RAIL.x0 : RAIL.x1) + dir * tt * TRAIN.speed;
+            for (let i = 0; i < CARS; i += 1) {
+                const x = head - dir * (i * (CAR_LEN + CAR_GAP) + CAR_LEN / 2);
+                tmp.m.makeTranslation(x, RAIL.y + 1.75, RAIL.z);
+                cars.setMatrixAt(i, tmp.m);
+                // 车窗的光洒在对面楼和街上。
+                if (i % 2 === 0 && Math.abs(x) < 130) trainLights.push({ position: [x, RAIL.y + 1.6, RAIL.z - 2.2], color: [0.8, 0.92, 1.0], intensity: 1.1, radius: 16, halo: false });
+            }
+            cars.instanceMatrix.needsUpdate = true;
             bodies.instanceMatrix.needsUpdate = true;
             beams.instanceMatrix.needsUpdate = true;
             navGeo.attributes.position.needsUpdate = true;
@@ -386,8 +521,9 @@
         return {
             group,
             update,
-            lights: () => beamLights,
-            stats: () => ({ megaTowers: TOWERS.length, stacks: STACKS.length, craft: CRAFT }),
+            lights: () => beamLights.concat(trainLights),
+            rail: RAIL,
+            stats: () => ({ megaTowers: TOWERS.length, stacks: STACKS.length, craft: CRAFT, trainCars: CARS }),
             towers: TOWERS,
             dispose() {
                 scene.remove(group);

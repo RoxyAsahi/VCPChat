@@ -314,6 +314,11 @@
         screen: { position: [10, 22, 80], target: [10, 22.4, 60], fov: 43 }
     });
 
+    // 主入口：主巷 B 的南口，牌楼和集市雨棚（巷道模块画）。招牌避开 keepOut 这个盒子。
+    const GATE = Object.freeze({ x: -14, z: 61.2, width: 7.2, height: 8.2,
+        plaque: { center: [-14, 6.9, 61.5], width: 4.5, height: 1.2 },
+        keepOut: { x0: -28, x1: -1, z0: 50, z1: 64, y1: 9 } });
+
     const build = (seed = 'kowloon') => {
         const r = rng(`layout:${seed}`);
         const lots = buildLots(r);
@@ -322,7 +327,7 @@
         const bridges = buildBridges(lots, r);
         const slotCount = facades.reduce((n, f) => n + f.slots.length, 0);
         return {
-            FLOOR, BAY, HX, HZ, STREET, ALLEYS, SCREENS, CAMERA,
+            FLOOR, BAY, HX, HZ, STREET, ALLEYS, SCREENS, CAMERA, GATE,
             lots, facades, outer, bridges, slotCount,
             slots(filter) {
                 const list = [];

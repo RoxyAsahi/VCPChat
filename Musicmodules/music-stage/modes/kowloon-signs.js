@@ -921,6 +921,12 @@
     // The layout offers thousands of places a sign could hang. Take the ones the
     // cameras see: the street faces first (low floors densest, a few up high),
     // the main alleys next, little elsewhere; keep them from crowding.
+    // The gate into the main alley and the market under it: no signs there.
+    const gateOf = layout => layout.GATE || { x: -14, z: 61.2, width: 7.2, height: 8.2, keepOut: { x0: -28, x1: -1, z0: 50, z1: 64, y1: 9 } };
+    const inGate = (layout, p, above = 0) => {
+        const k = gateOf(layout).keepOut;
+        return !!k && p[0] > k.x0 && p[0] < k.x1 && p[2] > k.z0 && p[2] < k.z1 && p[1] < k.y1 + above;
+    };
     const chooseSlots = (layout, max, random, hot = []) => {
         const all = [];
         (layout.facades || []).forEach(facade => (facade.slots || []).forEach(slot => {
@@ -933,6 +939,7 @@
             const alleyW = alleyId ? (layout.ALLEYS || []).find(a => a.id === alleyId)?.w || 2 : 0;
             // Alleys are roofed over above the third floor: their signs hang low.
             if (alleyId && floor > 2) return;
+            if (inGate(layout, vec(slot.pos), 1.5)) return;
             const nrm = vec(slot.normal || facade.normal);
             // The cameras mostly look at the south and east faces.
             const facing = nrm[2] > 0.5 ? 1.7 : nrm[0] > 0.5 ? 1.35 : 0.45;
@@ -991,6 +998,7 @@
             const floor = Number(slot.floor) || 0;
             const p = vec(slot.pos);
             if (screens.some(sc => Math.hypot(p[0] - sc.center[0], p[1] - sc.center[1], p[2] - sc.center[2]) < 24)) return;
+            if (inGate(layout, p, 16)) return;
             if (slot.kind === 'roof' && slot.use === 'sign') roof.push({ slot, n, p, score: random() * (n[2] > 0.5 ? 1.3 : 1) });
             else if (floor >= 4 && floor <= 12 && (slot.use === 'sign' || slot.use === 'free')) face.push({ slot, n, p, score: random() * (n[2] > 0.5 ? 1.25 : 1) });
         }));
@@ -1046,7 +1054,16 @@
             const w = 3.2 + random() * 2.2, h = w * (0.5 + random() * 0.15);
             adScreens.push({ id: `ad${adScreens.length}`, center: add(vec(slot.pos), vec(slot.normal), 0.5), normal: slot.normal, size: [w, h] });
         }
-        const specs = chosen.slice(0, MAX_SIGNS).map((slot, i) => {
+        // The gate's name board: four characters of neon in the frame the alley builds.
+        const gate = gateOf(layout);
+        const plaqueSlot = { pos: [gate.x, 6.9, gate.z + 0.2], normal: [0, 0, 1], tangent: [1, 0, 0], kind: 'flat', use: 'sign', floor: 2, width: 4.5, _gate: true };
+        const specs = [plaqueSlot].concat(chosen.slice(0, MAX_SIGNS - 1)).map((slot, i) => {
+            if (slot._gate) {
+                const base = designSign({ ...slot, kind: 'flat' }, i, random, { vertical: [], horizontal: [], roof: [] });
+                return { ...base, kind: 'flat', text: '城寨夜市', caption: 'NIGHT MARKET', vertical: false, style: 'neon', font: 'brush',
+                    color: '#ff3fae', border: '#2ef2ff', width: 4.3, height: 1.1, depth: 0.16, dead: [], broken: 0, bulbs: false, tilt: 0, rise: 0,
+                    gain: 1.45 / (0.55 + lum(hexRgb('#ff3fae')) * 0.9), slot };
+            }
             const spec = designSign(slot, i, random, pools);
             // Signs on the street faces are seen from far off: some run many floors.
             const floor = Number(slot.floor) || 0;
@@ -1333,7 +1350,7 @@
         // air, turned toward where people walk. One over the street, one in each
         // main alley.
         const holoSpots = [
-            { pos: [-26, 0, 64.5], normal: norm([0.25, 0, 1]), width: 9, height: 2.6, lift: 6.5 },
+            { pos: [-26, 0, 65.4], normal: norm([0.25, 0, 1]), width: 9, height: 2.6, lift: 6.5 },
             { pos: [-34, 0, 0], normal: [1, 0, 0], width: 2.0, height: 0.75, lift: 2.5 },
             { pos: [-14, 0, 22], normal: [0, 0, 1], width: 1.8, height: 0.7, lift: 2.4 }
         ];
@@ -1355,10 +1372,20 @@
         // thrown up by a projector on an arm off the wall or a mast on the roof.
         const holoAds = chooseHoloAds(layout, tier.name === 'energy-saving' ? 8 : tier.name === 'ultimate' ? 20 : 16, random);
         const ab = createBuilder();
+        // Some banners carry the sung line whenever the main screen is out of shot.
+        const roofPath = layout.CAMERA?.roof;
+        const toPath = a => {
+            if (!roofPath?.from || !roofPath?.to) return 0;
+            const A = vec(roofPath.from), B = vec(roofPath.to), d = [B[0] - A[0], B[2] - A[2]];
+            const t = Math.max(0, Math.min(1, ((a.centre[0] - A[0]) * d[0] + (a.centre[2] - A[2]) * d[1]) / (d[0] * d[0] + d[1] * d[1] || 1)));
+            return Math.hypot(A[0] + d[0] * t - a.centre[0], A[2] + d[1] * t - a.centre[2]);
+        };
+        // Every roof banner (the roof pass sees several at once), two off the walls.
+        const lyricBanners = new Set([...holoAds.filter(a => a.roof).sort((a, b) => toPath(a) - toPath(b)), ...holoAds.filter(a => !a.roof).slice(0, 2)]);
         holoAds.forEach((a, i) => {
             const n = a.normal, r = a.right;
             const P = (sx, sy) => add(add(a.centre, r, sx * a.width / 2), UP, sy * a.height / 2);
-            const inf = [i % 4, a.seed, a.width, a.height];
+            const inf = [(lyricBanners.has(a) ? 20 : 0) + i % 4, a.seed, a.width, a.height];
             ab.quad(P(-1, -1), P(1, -1), P(1, 1), P(-1, 1), n, [0, 0, 1, 1], inf);
             // The light fans up from the lens to the sheet's foot.
             const lens = add(a.centre, UP, -a.height / 2 - (a.roof ? 4 : 2.6));
@@ -1534,6 +1561,8 @@
         const holoAdMat = new T.ShaderMaterial({
             name: 'kowloon:signs:holo-ads', fog: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
             uniforms: { ...fogUniforms(), map: { value: haTex }, time: { value: 0 }, level: { value: 1 },
+                lyricMap: { value: lyricTex }, tallRegion: { value: new T.Vector4(...regionUv(REGIONS.tall)) },
+                lyricMode: { value: 0 }, vprogress: { value: 0 }, age: { value: 9 },
                 cyan: { value: new T.Color(0.2, 0.95, 1.15) }, magenta: { value: new T.Color(1.15, 0.22, 0.85) } },
             vertexShader: `attribute vec4 info;varying vec2 vUv;varying vec4 vInfo;
                 ${FOG_V}
@@ -1541,7 +1570,7 @@
                     vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
                     #include <fog_vertex>
                 }`,
-            fragmentShader: `uniform sampler2D map;uniform float time,level;uniform vec3 cyan,magenta;
+            fragmentShader: `uniform sampler2D map,lyricMap;uniform vec4 tallRegion;uniform float time,level,lyricMode,vprogress,age;uniform vec3 cyan,magenta;
                 varying vec2 vUv;varying vec4 vInfo;
                 #include <fog_pars_fragment>
                 float h(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
@@ -1553,7 +1582,8 @@
                     // Now and then the feed drops a frame: the sheet blinks out or slips.
                     float drop=step(h(vec2(win,seed*13.0)),0.02);
                     vec3 col;
-                    if(role>0.5){
+                    float lyr=step(1.5,role)*lyricMode;
+                    if(role>0.5&&role<1.5){
                         float a=1.0-abs(vUv.x*2.0-1.0);a=a*a*a;
                         a*=smoothstep(0.0,0.2,vUv.y)*(0.3+0.7*vUv.y);
                         col=main*a*0.07*(0.85+0.15*sin(time*17.0+seed*40.0))*(1.0-drop*0.8);
@@ -1561,8 +1591,11 @@
                         float period=7.0+5.0*fract(seed*3.7);
                         float tt=time/period+seed*5.0;float slide=mod(floor(tt),2.0);float into=fract(tt)*period;
                         float sw=1.0-smoothstep(0.0,0.4,into);
-                        float glitch=max(sw,drop);
+                        // In lyric mode a new line arrives with one tear.
+                        float glitch=max(mix(sw,1.0-smoothstep(0.0,0.45,age),lyr),drop);
                         vec2 uv=vUv;
+                        // Read the right way round from either side.
+                        if(!gl_FrontFacing)uv.x=1.0-uv.x;
                         float row=floor(uv.y*56.0);
                         uv.x+=sin(time*2.1+uv.y*13.0+seed*9.0)*0.004
                             +(h(vec2(row,win+seed))-0.5)*0.16*glitch*step(0.55,h(vec2(row*3.1,win)));
@@ -1574,6 +1607,18 @@
                         float tl=texture2D(map,auv-vec2(ca,0.0)).r,tr=texture2D(map,auv+vec2(ca,0.0)).r;
                         col=main*t.r*1.1+other*t.g*0.75+main*t.b*0.07;
                         col+=magenta*max(tl-t.r,0.0)*0.6+cyan*max(tr-t.r,0.0)*0.6;
+                        if(lyr>0.001){
+                            // The tall screen's column of the line, cropped to the sheet.
+                            vec2 q=tallRegion.xy+vec2(0.5+(uv.x-0.5)*0.5,uv.y)*tallRegion.zw;
+                            vec4 l=texture2D(lyricMap,q);
+                            float le=texture2D(lyricMap,q-vec2(ca*0.6,0.0)).r,re=texture2D(lyricMap,q+vec2(ca*0.6,0.0)).r;
+                            float sung=step(l.g,vprogress-0.0001)*step(0.001,vprogress);
+                            vec3 ink=mix(main*0.75,mix(main,vec3(1.0),0.55)*1.25,sung);
+                            vec3 lc=ink*l.r+magenta*max(le-l.r,0.0)*0.5+cyan*max(re-l.r,0.0)*0.5;
+                            float fr=max(smoothstep(0.035,0.02,min(uv.x,1.0-uv.x)),smoothstep(0.012,0.006,min(uv.y,1.0-uv.y)));
+                            lc+=other*fr*0.5+main*0.035;
+                            col=mix(col,lc,lyr);
+                        }
                         // Scanlines, faded out where they would be finer than a pixel.
                         float lines=size.y*4.0;
                         float sl=0.62+0.38*sin((vUv.y*lines-time*1.3)*6.2832);
@@ -1607,7 +1652,7 @@
             mesh.name = 'Signs/holo-ads'; mesh.renderOrder = 3; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
             group.add(mesh); meshes.push(mesh);
         }
-        let holoKey = null, holoAt = 0;
+        let holoKey = null, holoAt = 0, holoChorus = 0, lastShot = null;
         const paintHolo = text => {
             const g = holoCtx;
             g.setTransform(1, 0, 0, 1, 0, 0);
@@ -1785,7 +1830,19 @@
             if (nextText !== holoKey) { holoKey = nextText; paintHolo(nextText); holoTex.needsUpdate = true; holoAt = wall; }
             holoMat.uniforms.time.value = local % 1000;
             holoAdMat.uniforms.time.value = still ? 3.3 : local % 1000;
-            holoAdMat.uniforms.level.value = night * (palette.light ? 0.5 : 1);
+            // Out of sight of the main screen, the lyric banners take the line up.
+            const shotId = String(state.shot || '');
+            const mainInShot = !shotId || /^(street|screen|iso|diorama)/.test(shotId);
+            const ha = holoAdMat.uniforms;
+            const wantLyric = !mainInShot && lyric?.line ? 1 : 0;
+            // A cut switches at once; otherwise it fades.
+            const cut = shotId !== lastShot; lastShot = shotId;
+            ha.lyricMode.value += (wantLyric - ha.lyricMode.value) * (still || cut ? 1 : Math.min(1, realDt * 4));
+            ha.vprogress.value = p;
+            ha.age.value = u.age.value;
+            const chorus = state.phase ? state.phase === 'chorus' : !!lyric?.isChorus;
+            holoChorus += ((chorus ? 1 : 0) - holoChorus) * Math.min(1, realDt * 2);
+            ha.level.value = night * (palette.light ? 0.5 : 1) * (1 + 0.25 * holoChorus);
             holoMat.uniforms.age.value = still || state.isPlaying === false ? 9 : wall - holoAt;
             holoMat.uniforms.level.value = night * (nextText ? 1 : 0.25);
             if (glyphs < 0) u.progress.value = 0;
