@@ -147,16 +147,24 @@
         const tilt = random() < 0.08 ? (random() - 0.5) * 0.09 : 0;
         if (kind === 'roof') {
             const [cn, en] = take(random, pools.roof, ROOF_BRANDS);
-            const span = Math.max(6, Math.min(14, (Number(slot.width) || 8) * 1.4));
-            const neon = random() < 0.6;
+            // A few are the skyline's big frames: wide neon on deep steel, some tubes long dead.
+            const mega = slot._street && random() < 0.45 || !slot._street && random() < 0.12;
+            const span = mega ? 17 + random() * 7 : Math.max(6, Math.min(14, (Number(slot.width) || 8) * 1.4));
+            const neon = mega || random() < 0.6;
             const color = pick(random, NEON), box = pick(random, BOXES);
+            const chars = graphemes(cn).length;
+            const dead = [];
+            if (neon && random() < (mega ? 0.7 : 0.25)) dead.push(Math.floor(random() * chars));
+            if (mega && random() < 0.35) dead.push(Math.floor(random() * chars));
             return {
+                mega,
                 index, kind, text: cn, caption: en, vertical: false,
                 style: neon ? 'neon' : 'box', font: random() < 0.5 ? 'heavy' : 'brush',
                 color, border: pick(random, NEON), box,
-                width: span, height: span * (0.26 + random() * 0.12), depth: 0.5,
-                lift: 1.2 + random() * 1.4, bulbs: !neon && random() < 0.5, dead: [], tubes: true, tilt: 0,
-                gain: neon ? 1.6 / (0.55 + lum(hexRgb(color)) * 0.9) : 0.95 / (0.6 + lum(hexRgb(box[0])) * 0.6), broken: random() < 0.12 ? 0.5 : 0, beat: Math.floor(random() * 3)
+                width: span, height: span * (mega ? 0.3 + random() * 0.08 : 0.26 + random() * 0.12), depth: mega ? 0.8 : 0.5,
+                lift: mega ? 2.6 + random() * 2.2 : 1.2 + random() * 1.4, bulbs: !neon && random() < 0.5, dead, tubes: true, tilt: 0,
+                gain: neon ? 1.6 / (0.55 + lum(hexRgb(color)) * 0.9) : 0.95 / (0.6 + lum(hexRgb(box[0])) * 0.6),
+                broken: mega ? (random() < 0.5 ? 0.45 : 0) : random() < 0.12 ? 0.5 : 0, beat: Math.floor(random() * 3)
             };
         }
         const blade = kind === 'blade';
@@ -881,7 +889,10 @@
         };
         const quota = (hot.length ? [0.27, 0.13, 0.12, 0.05, 0.12, 0.31] : [0.36, 0.17, 0.24, 0.09, 0.14, 0]).map(q => Math.round(q * max));
         const picked = [];
-        const minGap = s => s.kind === 'roof' ? 11 : s._street ? 3.0 : 2.6;
+        // Round the main screen the street signs keep further apart, so each reads.
+        const screens = layout.SCREENS || [];
+        const nearScreen = s => screens.some(sc => sc.primary && Math.hypot(vec(s.pos)[0] - sc.center[0], (vec(s.pos)[1] - sc.center[1]) * 0.7) < 26 && Math.abs(vec(s.pos)[2] - sc.center[2]) < 3);
+        const minGap = s => s.kind === 'roof' ? 11 : s._street ? (nearScreen(s) ? 5.2 : 3.0) : 2.6;
         const taken = [0, 0, 0, 0, 0, 0];
         const tryTake = (slot, b) => {
             const p = vec(slot.pos);
@@ -947,7 +958,7 @@
             // placed) of any two whose boxes meet.
             const box = boxOf(spec);
             spec._box = box;
-            return !all.slice(0, i).some(o => o._kept !== false && o._box && overlaps(o._box, box)) || (spec._kept = false);
+            return !all.slice(0, i).some(o => o._kept !== false && o._box && overlaps(o._box, box, spec.slot._street && o.slot._street ? 0.7 : 0.12)) || (spec._kept = false);
         }).map((spec, i) => ({ ...spec, index: i }));
 
         // --- atlas
@@ -1061,7 +1072,7 @@
                 const fp = (sx, sy, sz) => add(add(add(c, r, sx * spec.width / 2), u, sy * spec.height / 2), f, sz);
                 glow.quad(fp(-1, -1, spec.depth / 2 + 0.03), fp(1, -1, spec.depth / 2 + 0.03), fp(1, 1, spec.depth / 2 + 0.03), fp(-1, 1, spec.depth / 2 + 0.03), f, faceUv, info);
                 // Steel frame: posts, chords, cross braces, a catwalk and floodlights.
-                const posts = Math.max(3, Math.round(spec.width / 2.6));
+                const posts = Math.max(3, Math.round(spec.width / (spec.mega ? 2.0 : 2.6)));
                 const bottomY = p[1], frontZ = -spec.depth / 2 - 0.25, backZ = -spec.depth / 2 - 2.2;
                 for (let k = 0; k < posts; k += 1) {
                     const sx = -1 + 2 * k / (posts - 1);
@@ -1078,6 +1089,22 @@
                 }
                 [bottomY + 0.2, c[1] - spec.height / 2 - 0.05, c[1] + spec.height / 2].forEach(y =>
                     hw.bar(add(add(add(c, r, -spec.width / 2), f, frontZ), UP, y - c[1]), add(add(add(c, r, spec.width / 2), f, frontZ), UP, y - c[1]), 0.12, darkUv, info));
+                if (spec.mega) {
+                    // Deep frames: horizontal stringers across the back, a second
+                    // bracing plane and a service ladder up one leg.
+                    for (let k = 1; k < 4; k += 1) {
+                        const y = c[1] - spec.height / 2 + spec.height * k / 4;
+                        hw.bar(add(add(add(c, r, -spec.width / 2), f, -spec.depth / 2 - 0.12), UP, y - c[1]), add(add(add(c, r, spec.width / 2), f, -spec.depth / 2 - 0.12), UP, y - c[1]), 0.09, darkUv, info);
+                    }
+                    for (let k = 0; k < posts - 1; k += 1) {
+                        const s0 = -1 + 2 * k / (posts - 1), s1 = -1 + 2 * (k + 1) / (posts - 1);
+                        const at = (sx, y) => add(add(add(c, r, sx * spec.width / 2 * 0.96), f, -spec.depth / 2 - 0.12), UP, y - c[1]);
+                        hw.bar(at(s0, c[1] - spec.height / 2), at(s1, c[1] + spec.height / 2), 0.05, darkUv, info);
+                    }
+                    const leg = add(add(c, r, -spec.width / 2 * 0.96), f, frontZ - 0.25);
+                    for (const side of [-0.22, 0.22]) hw.bar([leg[0] + r[0] * side, bottomY, leg[2] + r[2] * side], [leg[0] + r[0] * side, c[1] + spec.height / 2, leg[2] + r[2] * side], 0.04, metalUv, info);
+                    for (let y = bottomY + 0.3; y < c[1] + spec.height / 2; y += 0.35) hw.bar([leg[0] - r[0] * 0.22, y, leg[2] - r[2] * 0.22], [leg[0] + r[0] * 0.22, y, leg[2] + r[2] * 0.22], 0.03, metalUv, info);
+                }
                 // Catwalk under the face and lamps reaching out over it.
                 hw.box(add(add(c, f, 0.55), UP, -spec.height / 2 - 0.08), r, UP, f, spec.width / 2, 0.04, 0.45, darkUv, darkUv, info);
                 const lamps = Math.max(2, Math.round(spec.width / 4));
@@ -1358,6 +1385,24 @@
             return k * (1 + beatBoost + chorusGlow * 0.12) * night;
         };
 
+        // When the last chorus began (from the whole song when the manager gives
+        // it, so a seek lands right; else from the live edge).
+        let strikeLines = null, strikeTimes = [], wasChorus = false, liveStrike = -1e9;
+        const strikeSince = (state, pt) => {
+            if (Array.isArray(state.lines) && state.lines.length) {
+                if (state.lines !== strikeLines) {
+                    strikeLines = state.lines;
+                    strikeTimes = state.lines.filter((l, i) => l?.isChorus && !state.lines[i - 1]?.isChorus).map(l => l.startTime).filter(Number.isFinite);
+                }
+                for (let i = strikeTimes.length - 1; i >= 0; i -= 1) if (strikeTimes[i] <= pt) return { since: pt - strikeTimes[i], start: strikeTimes[i] };
+                return { since: -1, start: 0 };
+            }
+            const chorus = Boolean(state.lyric?.isChorus);
+            if (chorus && !wasChorus) liveStrike = Number.isFinite(state.lyric?.start) ? state.lyric.start : pt;
+            wasChorus = chorus;
+            return { since: pt - liveStrike, start: liveStrike };
+        };
+
         const update = (state = {}) => {
             const t = Number(state.time) || 0;
             // The street wakes on the wall clock: a paused song or a seek back
@@ -1381,6 +1426,16 @@
             
             // Signs.
             for (let i = 0; i < specs.length; i += 1) levels[i] = signLevel(specs[i], i, local, audio, still ? 60 : awake);
+            // Lightning at the top of a chorus: the surge knocks a sign or two out
+            // for a blink, then they come back over-bright and stutter.
+            const strike = strikeSince(state, pt);
+            if (strike.since >= 0 && strike.since < 1.2 && !still && state.options?.lightning !== false && specs.length) {
+                const h = hashString(`strike:${strike.start.toFixed(2)}`);
+                const hits = [h % specs.length, (h >>> 9) % specs.length];
+                const x = strike.since;
+                const k = x < 0.03 ? 1 : x < 0.14 ? 0.04 : x < 0.22 ? 1.9 : x < 0.32 ? 0.15 : x < 0.42 ? 1.3 : x < 0.5 ? 0.3 : 1;
+                hits.forEach((i, n) => { if (n === 0 || x > 0.1) levels[i] *= n === 0 ? k : (x < 0.3 ? 0.05 : 1); });
+            }
             for (let i = 0; i < 64; i += 1) levelArray[i].set(levels[i * 4], levels[i * 4 + 1], levels[i * 4 + 2], levels[i * 4 + 3]);
             for (let k = 0; k < 16; k += 1) {
                 // One tube in a few drops out for a moment now and then.
