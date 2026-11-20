@@ -1219,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.api.onMusicScanComplete((data) => {
             clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
             // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
-            const addedDuringScan = scanAddedPaths; scanAddedPaths = null;
+            const addedDuringScan = scanAddedPaths;
             const playingPath = app.playlist[app.currentTrackIndex]?.path;
             app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
@@ -1235,9 +1235,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const updatedPlaylist = [];
             const handledPaths = new Set();
+            // 这次扫描途中先接上去的曲目：先从原位置拿掉，下面按磁盘顺序放回（用同一个对象）。
+            // 同时在扫的另一个文件夹接上去的不归这次管，留在原处。
+            const appended = new Map();
 
             for (const track of app.playlist) {
-                if (addedDuringScan?.has(track.path)) continue;
+                if (addedDuringScan?.has(track.path) && scannedPaths.has(track.path)) {
+                    appended.set(track.path, track);
+                    addedDuringScan.delete(track.path);
+                    continue;
+                }
                 if (scannedPaths.has(track.path)) {
                     // 已有的曲目原地更新信息，保住对象本身：歌单视图、队列、播放历史都拿着它。
                     Object.assign(track, scannedMap.get(track.path));
@@ -1256,10 +1263,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add brand-new tracks that weren't in the existing playlist
             for (const track of newPlaylist) {
                 if (!handledPaths.has(track.path)) {
-                    updatedPlaylist.push(track);
+                    const early = appended.get(track.path);
+                    updatedPlaylist.push(early ? Object.assign(early, track) : track);
                 }
             }
 
+            if (scanAddedPaths && !scanAddedPaths.size) scanAddedPaths = null;
             app.playlist = updatedPlaylist;
             if (playingPath) {
                 const at = updatedPlaylist.findIndex(t => t.path === playingPath);
