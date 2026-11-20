@@ -950,3 +950,92 @@ test('扫描途中一批批进来：阵列和目录跟着长，选中的还是�
     assert.equal(selPath(), chosen);
     f.close();
 });
+
+test('歌单管理：目录的歌单分类里新建、重命名、删除（要确认，可撤销）；存盘走播放器的 saveCustomPlaylists，阵列跟着变', () => {
+    let saved = 0;
+    const toasts = [];
+    const f = fixture({ setup: (w, app) => { app.saveCustomPlaylists = () => { saved++; }; w.MusicToast = { show: (t) => toasts.push(t) }; } });
+    const el = f.view.list.el;
+    const names = () => f.app.customPlaylists.map((p) => p.name);
+    const cols = () => f.view.debug().columns.map((c) => c.id);
+    const type = (input, value, key = 'Enter') => { input.value = value; input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); };
+    f.view.setListOpen(true);
+    assert.equal(el.querySelector('[data-l="newPl"]').hidden, true, '只在歌单分类里出现');
+    el.querySelector('[data-kind="playlist"]').click();
+    assert.equal(el.querySelector('[data-l="newPl"]').hidden, false);
+    // 新建
+    el.querySelector('[data-pl="new"]').click();
+    type(el.querySelector('.archive-list-name'), '  雨天  ');
+    assert.deepEqual(names(), ['夜间散步', '雨天']);
+    assert.equal(saved, 1);
+    assert.ok(cols().some((id) => id === 'playlist:' + f.app.customPlaylists[1].id), '阵列里多了一列');
+    assert.ok(el.querySelector('[data-pl="new"]'), '输入框收回去了');
+    // 空名字、Esc 都不建
+    el.querySelector('[data-pl="new"]').click();
+    type(el.querySelector('.archive-list-name'), '   ');
+    el.querySelector('[data-pl="new"]').click();
+    type(el.querySelector('.archive-list-name'), '不要了', 'Escape');
+    assert.equal(names().length, 2);
+    // 重命名
+    const head = (name) => [...el.querySelectorAll('.archive-list-group')].find((n) => n.textContent.includes(name));
+    head('夜间散步').querySelector('[data-pl="rename"]').click();
+    type(el.querySelector('.archive-list-group .archive-list-name'), '夜里走走');
+    assert.deepEqual(names(), ['夜里走走', '雨天']);
+    assert.ok(head('夜里走走'));
+    // 删除：先问，取消不删，确认才删，能撤销
+    head('雨天').querySelector('[data-pl="delete"]').click();
+    assert.match(head('雨天').textContent, /删除「雨天」？/);
+    head('雨天').querySelector('[data-pl="delete-no"]').click();
+    assert.equal(names().length, 2);
+    head('雨天').querySelector('[data-pl="delete"]').click();
+    head('雨天').querySelector('[data-pl="delete-yes"]').click();
+    assert.deepEqual(names(), ['夜里走走']);
+    assert.equal(head('雨天'), undefined);
+    toasts[toasts.length - 1].action.run();
+    assert.deepEqual(names(), ['夜里走走', '雨天']);
+    assert.equal(saved, 4);
+    f.close();
+});
+
+test('把歌拖到歌单上：拖起一行时目录下方出现歌单架，松在歌单上加入（已有的不重复），松在「新建歌单」上新建', () => {
+    const toasts = [];
+    const f = fixture({ setup: (w, app) => { app.saveCustomPlaylists = () => {}; w.MusicToast = { show: (t) => toasts.push(t) }; } });
+    const el = f.view.list.el;
+    const ev = (type, target) => { const e = new f.w.Event(type, { bubbles: true, cancelable: true }); target.dispatchEvent(e); return e; };
+    f.view.setListOpen(true);
+    const rowOf = (title) => [...el.querySelectorAll('.archive-list-row')].find((n) => n.querySelector('b').textContent === title);
+    assert.equal(rowOf('Song 3').draggable, true);
+    const shelf = el.querySelector('[data-l="shelf"]');
+    ev('dragstart', rowOf('Song 3'));
+    assert.equal(shelf.hidden, false);
+    const chip = shelf.querySelector('[data-drop="p"]');
+    assert.equal(chip.textContent, '夜间散步');
+    assert.equal(ev('dragover', chip).defaultPrevented, true, '可以松手');
+    assert.ok(chip.classList.contains('drop-over'));
+    ev('drop', chip);
+    assert.equal(shelf.hidden, true);
+    assert.deepEqual(f.app.customPlaylists[0].tracks, ['/m/5', '/m/7', '/m/9', '/m/3']);
+    assert.match(toasts[toasts.length - 1].message, /已加入歌单「夜间散步」：1 首/);
+    // 再拖一次同一首：不重复
+    ev('dragstart', rowOf('Song 3'));
+    ev('drop', shelf.querySelector('[data-drop="p"]'));
+    assert.equal(f.app.customPlaylists[0].tracks.length, 4);
+    // 撤销第一次
+    toasts.find((t) => /1 首/.test(t.message)).action.run();
+    assert.deepEqual(f.app.customPlaylists[0].tracks, ['/m/5', '/m/7', '/m/9']);
+    // 松在「新建歌单」上
+    ev('dragstart', rowOf('Song 4'));
+    ev('drop', shelf.querySelector('[data-drop-new]'));
+    assert.equal(f.app.customPlaylists.length, 2);
+    assert.equal(f.app.customPlaylists[1].tracks.join(), '/m/4');
+    // 没松在歌单上：什么都不变
+    ev('dragstart', rowOf('Song 4'));
+    ev('dragend', rowOf('Song 4'));
+    assert.equal(shelf.hidden, true);
+    // 歌单分类里，歌单标题本身也能接
+    el.querySelector('[data-kind="playlist"]').click();
+    const head = [...el.querySelectorAll('.archive-list-group')].find((n) => n.textContent.includes('夜间散步'));
+    ev('dragstart', el.querySelector('.archive-list-row'));
+    assert.equal(ev('dragover', head).defaultPrevented, true);
+    f.close();
+});

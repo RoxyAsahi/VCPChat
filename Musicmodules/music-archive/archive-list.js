@@ -39,11 +39,13 @@
                 </span>
             </span>
         </div>
+        <div class="archive-list-newpl" data-l="newPl" hidden><button type="button" data-pl="new">＋ 新建歌单 <i>NEW PLAYLIST</i></button></div>
         <div class="archive-list-viewport" data-l="viewport" tabindex="0" role="listbox" aria-label="曲目目录">
             <div class="archive-list-sticky" data-l="sticky" aria-hidden="true"></div>
             <div class="archive-list-spacer" data-l="spacer"></div>
             <div class="archive-list-empty" data-l="empty" role="status"></div>
         </div>
+        <div class="archive-list-shelf" data-l="shelf" hidden></div>
         <div class="archive-list-foot" aria-live="polite">
             <b data-l="pos">---</b><i>/</i><span data-l="tot">000</span>
         </div>`;
@@ -209,6 +211,8 @@
                     : ['这里还没有曲目', ''];
                 r.empty.innerHTML = `<b>NO DATA</b><span>${esc(line)}</span>${hint ? `<i>${esc(hint)}</i>` : ''}`;
             }
+            manage.confirm = null;
+            r.newPl.hidden = state.kind !== 'playlist' || Boolean(state.query.trim());
             el.querySelectorAll('[data-kind]').forEach((b) => {
                 const on = b.dataset.kind === state.kind;
                 b.classList.toggle('on', on);
@@ -239,7 +243,12 @@
         const rowHtml = (row, k) => {
             if (row.type === 'head') {
                 if (isLetter(row)) return letterHtml(row);
-                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`;
+                const pl = playlistOfHead(row);
+                if (pl && manage.confirm === String(pl.id)) {
+                    return `<span>删除「${esc(pl.name)}」？</span><button type="button" data-pl="delete-yes">删除</button><button type="button" data-pl="delete-no">取消</button>`;
+                }
+                return `<span>${esc(row.label)}</span><i>${pad(row.n)}</i>`
+                    + (pl ? '<span class="acts"><button type="button" data-pl="rename" title="重命名歌单" aria-label="重命名歌单">✎</button><button type="button" data-pl="delete" title="删除歌单" aria-label="删除歌单">✕</button></span>' : '');
             }
             const t = tracks()[row.i] || {};
             const meta = [t.artist, t.album].filter(Boolean).join(' · ') || 'UNKNOWN ARTIST';
@@ -284,7 +293,8 @@
                     node = document.createElement('div');
                     node.className = row.type === 'track' ? 'archive-list-row' : isLetter(row) ? 'archive-list-letter' : 'archive-list-group';
                     node.dataset.k = k;
-                    if (row.type === 'track') node.setAttribute('role', 'option');
+                    if (row.type === 'track') { node.setAttribute('role', 'option'); node.draggable = true; }
+                    else if (playlistOfHead(row)) node.classList.add('is-playlist');
                     node.style.transform = `translateY(${state.offsets[k]}px)`;
                     node.innerHTML = rowHtml(row, k);
                     r.spacer.appendChild(node);
@@ -541,6 +551,182 @@
             node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 40, clientY: rect.top + rect.height / 2 }));
             menuKeyboard(app, { restore: back && back !== document.body ? back : r.viewport });
         };
+        /*
+         * ---------- 歌单管理（目录的「歌单」分类里）----------
+         * 新建：分类下面的「＋ 新建歌单」就地变成输入框；重命名、删除：歌单标题右边的两个小按钮（删除要再点一次确认）；
+         * 把歌拖到歌单上：拖起目录里的行时，目录下方出现各个歌单（和「新建歌单」），松手即加入。
+         * 数据还是播放器的 app.customPlaylists，存盘用它的 saveCustomPlaylists；改完通知档案页重排。
+         */
+        const manage = { confirm: null, drag: null };
+        const playlists = () => (Array.isArray(app.customPlaylists) ? app.customPlaylists : []);
+        const playlistOfHead = (row) => {
+            if (!row || row.type !== 'head' || state.kind !== 'playlist') return null;
+            const m = /^playlist:(.+)$/.exec(String(row.key || ''));
+            return (m && playlists().find((p, order) => String(p && (p.id ?? order)) === m[1])) || null;
+        };
+        const toast = (message, action) => { try { global.MusicToast?.show?.({ message, action }); } catch (e) { /* 没有提示层就不提示 */ } };
+        const commitPlaylists = () => {
+            app.saveCustomPlaylists?.();
+            if (app.currentSidebarView === 'playlists') app.renderSidebarContent?.('playlists');
+            if (opts.onPlaylistsChanged) opts.onPlaylistsChanged(); else rebuild();
+        };
+        const createPlaylist = (name, paths = []) => {
+            const clean = String(name || '').trim();
+            if (!clean) return null;
+            const pl = { id: Date.now().toString() + (playlists().some((p) => String(p.id) === Date.now().toString()) ? '1' : ''), name: clean, tracks: [...new Set(paths)] };
+            if (!Array.isArray(app.customPlaylists)) app.customPlaylists = [];
+            app.customPlaylists.push(pl);
+            commitPlaylists();
+            return pl;
+        };
+        /* 把曲库下标对应的歌加进歌单（已经在里面的跳过）；返回新加了几首 */
+        const addToPlaylist = (pl, indices) => {
+            if (!pl) return 0;
+            const add = [];
+            for (const i of indices) {
+                const t = tracks()[i];
+                if (t && t.path && !pl.tracks.includes(t.path) && !add.includes(t.path)) add.push(t.path);
+            }
+            if (add.length) {
+                pl.tracks.push(...add);
+                commitPlaylists();
+                toast(`已加入歌单「${pl.name}」：${add.length} 首`, { label: '撤销', run: () => { pl.tracks = pl.tracks.filter((p) => !add.includes(p)); commitPlaylists(); } });
+            } else if (indices.length) {
+                toast(`已经在歌单「${pl.name}」里了`);
+            }
+            return add.length;
+        };
+        const renamePlaylist = (pl, name) => {
+            const clean = String(name || '').trim();
+            if (!pl || !clean || clean === pl.name) return false;
+            pl.name = clean;
+            commitPlaylists();
+            return true;
+        };
+        const deletePlaylist = (pl) => {
+            if (!pl) return;
+            const at = playlists().indexOf(pl);
+            app.customPlaylists = playlists().filter((p) => p !== pl);
+            commitPlaylists();
+            toast(`已删除歌单「${pl.name}」`, { label: '撤销', run: () => {
+                if (playlists().includes(pl)) return;
+                const next = playlists().slice();
+                next.splice(Math.min(at, next.length), 0, pl);
+                app.customPlaylists = next;
+                commitPlaylists();
+            } });
+        };
+        /* 就地输入名字：回车确定，Esc 或移开取消 */
+        const askName = (host, { value = '', label, done }) => {
+            const before = host.innerHTML;
+            host.innerHTML = `<input type="text" class="archive-list-name" maxlength="60" aria-label="${esc(label)}" placeholder="${esc(label)}">`;
+            const input = host.firstChild;
+            input.value = value;
+            let closed = false;
+            const close = (commit) => {
+                if (closed) return;
+                closed = true;
+                const name = input.value;
+                host.innerHTML = before;
+                if (commit) done(name);
+                else r.viewport.focus?.();
+            };
+            input.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); close(true); }
+                else if (e.key === 'Escape') { e.preventDefault(); close(false); }
+            });
+            input.addEventListener('blur', () => close(false));
+            for (const type of ['click', 'dblclick', 'contextmenu']) input.addEventListener(type, (e) => e.stopPropagation());
+            input.focus();
+            input.select();
+        };
+        const repaintHead = (node) => { const k = Number(node.dataset.k); node.innerHTML = rowHtml(state.rows[k], k); };
+        r.newPl.addEventListener('click', (e) => {
+            if (!e.target.closest('[data-pl="new"]')) return;
+            askName(r.newPl, { label: '新歌单的名字', done: (name) => {
+                const pl = createPlaylist(name);
+                if (pl) { const k = state.rows.findIndex((row) => playlistOfHead(row) === pl); if (k >= 0) r.viewport.scrollTop = Math.max(0, state.offsets[k] - 20); render(); }
+            } });
+        });
+        r.viewport.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-pl]');
+            const node = b && b.closest('.archive-list-group');
+            const pl = node && playlistOfHead(state.rows[Number(node.dataset.k)]);
+            if (!pl) return;
+            e.stopPropagation();
+            const act = b.dataset.pl;
+            if (act === 'rename') {
+                askName(node, { value: pl.name, label: '歌单的名字', done: (name) => { if (!renamePlaylist(pl, name)) repaintHead(node); } });
+            } else if (act === 'delete') {
+                manage.confirm = String(pl.id);
+                repaintHead(node);
+                node.querySelector('[data-pl="delete-no"]')?.focus();
+            } else if (act === 'delete-no') {
+                manage.confirm = null;
+                repaintHead(node);
+            } else if (act === 'delete-yes') {
+                manage.confirm = null;
+                deletePlaylist(pl);
+            }
+        });
+
+        // 拖到歌单上
+        const dragIndices = (row) => (typeof pickedIndices === 'function' ? pickedIndices(row) : [row.i]);
+        const openShelf = () => {
+            r.shelf.innerHTML = '<b>拖到歌单上 <i>DROP ON A PLAYLIST</i></b>'
+                + playlists().map((p, order) => `<button type="button" data-drop="${esc(p.id ?? order)}">${esc(p.name || '未命名歌单')}</button>`).join('')
+                + '<button type="button" data-drop-new>＋ 新建歌单</button>';
+            r.shelf.hidden = false;
+            el.classList.add('dragging');
+        };
+        const closeShelf = () => {
+            manage.drag = null;
+            r.shelf.hidden = true;
+            el.classList.remove('dragging');
+            el.querySelectorAll('.drop-over').forEach((n) => n.classList.remove('drop-over'));
+        };
+        const dropTarget = (target) => {
+            const chip = target.closest?.('[data-drop], [data-drop-new]');
+            if (chip) return { node: chip, pl: chip.hasAttribute('data-drop-new') ? 'new' : playlists().find((p, order) => String(p.id ?? order) === chip.dataset.drop) };
+            const head = target.closest?.('.archive-list-group.is-playlist');
+            const pl = head && playlistOfHead(state.rows[Number(head.dataset.k)]);
+            return pl ? { node: head, pl } : null;
+        };
+        el.addEventListener('dragstart', (e) => {
+            const node = e.target.closest?.('.archive-list-row');
+            const row = node && state.rows[Number(node.dataset.k)];
+            if (!row || row.type !== 'track') return;
+            manage.drag = dragIndices(row);
+            try {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('text/plain', manage.drag.map((i) => (tracks()[i] || {}).title || '').join('\n'));
+            } catch (err) { /* 没有 dataTransfer（测试环境）也能拖 */ }
+            openShelf();
+        });
+        el.addEventListener('dragover', (e) => {
+            if (!manage.drag) return;
+            const hit = dropTarget(e.target);
+            el.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
+            if (!hit) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'copy'; } catch (err) { /* 同上 */ }
+            hit.node.classList.add('drop-over');
+        });
+        el.addEventListener('drop', (e) => {
+            if (!manage.drag) return;
+            const hit = dropTarget(e.target);
+            const indices = manage.drag;
+            closeShelf();
+            if (!hit) return;
+            e.preventDefault();
+            if (hit.pl === 'new') {
+                const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
+                if (pl) toast(`已新建歌单「${pl.name}」：${pl.tracks.length} 首`);
+            } else addToPlaylist(hit.pl, indices);
+        });
+        el.addEventListener('dragend', closeShelf);
+
         el.querySelector('[data-l="kinds"]').addEventListener('click', (e) => {
             const b = e.target.closest('[data-kind]');
             if (b) setKind(b.dataset.kind);

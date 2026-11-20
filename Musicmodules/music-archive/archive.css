@@ -301,6 +301,28 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-group span { overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); font-weight: 600; }
 .archive-list-group i { font-style: normal; font-size: 11px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; }
 
+/* 歌单管理：标题右边的重命名、删除（移上去或聚焦时才显出来），就地输入名字，拖歌时目录下方的歌单架 */
+.archive-list-group .acts { margin-left: auto; padding-right: 2px; display: flex; gap: 14px; opacity: 0; transition: opacity .15s; overflow: visible; }
+.archive-list-group:hover .acts, .archive-list-group:focus-within .acts { opacity: 1; }
+.archive-list-group button { font-size: 12px; color: var(--ar-muted); letter-spacing: .6px; }
+.archive-list-group button:hover, .archive-list-group button:focus-visible { color: var(--ar-ink); }
+.archive-list-group button[data-pl="delete-yes"] { color: var(--ar-accent); font-weight: 600; }
+.archive-list-group.drop-over span:first-child { color: var(--ar-accent); }
+.archive-list-group.drop-over::after { content: ""; position: absolute; left: 0; right: 0; bottom: 2px; height: 1px; background: var(--ar-accent); }
+.archive-list-name { width: 100%; min-width: 0; height: 24px; padding: 0 0 2px; font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .3px; color: var(--ar-ink); background: none; border: 0; border-bottom: 1px solid var(--ar-ink); outline: none; }
+.archive-list-name::placeholder { color: var(--ar-muted); font-weight: 400; }
+.archive-list-newpl { margin: 0 0 4px var(--gutter); height: 26px; display: flex; align-items: center; font-size: 12px; letter-spacing: .6px; }
+.archive-list-newpl[hidden] { display: none; }
+.archive-list-newpl button { color: var(--ar-muted); }
+.archive-list-newpl button:hover, .archive-list-newpl button:focus-visible { color: var(--ar-ink); }
+.archive-list-newpl button i { margin-left: 8px; font-style: normal; font-size: 10px; letter-spacing: 1.1px; }
+.archive-list-shelf { margin-left: var(--gutter); padding: 10px 0 4px; border-top: 1px solid var(--ar-rule); display: flex; flex-wrap: wrap; gap: 6px 8px; max-height: 132px; overflow: hidden; }
+.archive-list-shelf[hidden] { display: none; }
+.archive-list-shelf b { flex: 0 0 100%; font-size: 12px; font-weight: 600; color: var(--ar-ink); letter-spacing: .4px; }
+.archive-list-shelf b i { margin-left: 8px; font-style: normal; font-weight: 400; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
+.archive-list-shelf button { max-width: 180px; padding: 5px 10px; border: 1px solid var(--ar-rule); font-size: 12px; color: var(--ar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-list-shelf button.drop-over { border-color: var(--ar-accent); color: var(--ar-accent); }
+
 .archive-list-row { position: absolute; left: var(--gutter); right: 0; top: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding-left: 20px; cursor: pointer; color: var(--ar-summary, var(--ar-muted)); }
 .archive-list-row .tx { min-width: 0; display: grid; gap: 4px; }
 .archive-list-row .tx b { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: font-weight .2s; }

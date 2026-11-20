@@ -1359,6 +1359,7 @@
                 getRecent: recentIndices, durationOf,
                 columnOfGroup,
                 fileNumber: (t, i) => fileNumber(t, i),
+                onPlaylistsChanged: () => { warming = null; rebuild({ steady: true }); },
                 onPick: (i, ctx) => goToTrack(i, ctx),
                 onPlay: (i, ctx, o) => playIndex(i, ctx, o)
             });
