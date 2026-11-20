@@ -173,6 +173,29 @@
          * steady：曲库只是变多了（扫描途中一批批进来）。这时不把目录拉回选中行，
          * 而是让眼前最上面那首歌留在原来的位置，上面多出来的歌不把正在看的内容顶走。
          */
+        // 选中的筛选下面那一道液态的线：换筛选时像一滴流过去（共用套件里的 slide），只量文字本身，不含前面的分隔号
+        const placeKindMark = () => {
+            const box = el.querySelector('[data-l="kinds"]');
+            const on = box?.querySelector('[data-kind].on');
+            if (!box || !on || !on.firstChild || !global.MusicFluid?.slide) return;
+            let mark = box.querySelector('.archive-kind-mark');
+            if (!mark) {
+                mark = document.createElement('i');
+                mark.className = 'archive-kind-mark';
+                mark.setAttribute('aria-hidden', 'true');
+                box.appendChild(mark);
+            }
+            const range = document.createRange();
+            range.selectNodeContents(on);
+            const t = range.getBoundingClientRect();
+            const b = box.getBoundingClientRect();
+            if (!t.width || !b.width) return;
+            // 档案页整体可能被缩放过：量出来的是屏幕上的尺寸，换回这一层自己的像素
+            const k = box.offsetWidth / b.width || 1;
+            global.MusicFluid.slide(mark, { left: (t.left - b.left) * k, width: t.width * k }, { key: 'archive-kinds' });
+        };
+        // 目录收起时量不到宽度；展开、窗口变宽窄、字体换好时再落一次位
+        if (typeof global.ResizeObserver === 'function' && r.kinds) new global.ResizeObserver(() => placeKindMark()).observe(r.kinds);
         const rebuild = ({ steady = false } = {}) => {
             const index = opts.getIndex();
             if (!index) return;
@@ -219,6 +242,7 @@
                 b.classList.toggle('on', on);
                 b.setAttribute('aria-selected', String(on));
             });
+            placeKindMark();
             paintSort();
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
@@ -322,6 +346,9 @@
             node.classList.toggle('playing', current && Boolean(app.isPlaying));
             if (row.type === 'head') node.classList.toggle('stuck', k === state.stuck);
             if (row.type === 'track') {
+                const failed = app.failedTracks instanceof Map ? app.failedTracks.get(tracks()[row.i]) : null;
+                node.classList.toggle('bad', Boolean(failed));
+                if (failed) node.title = `上次没能播放：${failed}`; else node.removeAttribute('title');
                 const picked = multi.size > 0 && multi.has(keyOf(row));
                 node.classList.toggle('picked', picked);
                 node.setAttribute('aria-selected', String(on || picked));
@@ -718,6 +745,7 @@
         const toast = (message, action) => { try { global.MusicToast?.show?.({ message, action }); } catch (e) { /* 没有提示层就不提示 */ } };
         const commitPlaylists = () => {
             app.saveCustomPlaylists?.();
+            app.refreshPreload?.();
             if (app.currentSidebarView === 'playlists') app.renderSidebarContent?.('playlists');
             if (opts.onPlaylistsChanged) opts.onPlaylistsChanged(); else rebuild();
         };
@@ -884,6 +912,7 @@
             const after = () => {
                 if (app.playlistViewSource && Array.isArray(app.currentFilteredTracks)) app.renderPlaylist?.(app.currentFilteredTracks); else app.renderPlaylist?.();
                 app.api?.saveMusicPlaylist?.(app.playlist);
+                app.refreshPreload?.();
                 if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
             };
             after();
@@ -985,19 +1014,51 @@
         // 拖到歌单上
         const dragIndices = (row) => pickedIndices(row);
         const openShelf = () => {
-            r.shelf.innerHTML = '<b>拖到歌单上</b>'
+            const canQueue = typeof app.queuePlayNext === 'function' && typeof app.queueAdd === 'function';
+            r.shelf.innerHTML = (canQueue ? '<b>放进队列</b><button type="button" data-drop-q="next">下一首播放</button><button type="button" data-drop-q="last">加入队列</button>' : '')
+                + '<b>拖到歌单上</b>'
                 + playlists().map((p, order) => `<button type="button" data-drop="${esc(p.id ?? order)}">${esc(p.name || '未命名歌单')}</button>`).join('')
                 + '<button type="button" data-drop-new>＋ 新建歌单</button>';
             r.shelf.hidden = false;
             el.classList.add('dragging');
+            openCapDrop();
         };
         const closeShelf = () => {
             manage.drag = null;
             r.shelf.hidden = true;
             el.classList.remove('dragging');
             el.querySelectorAll('.drop-over').forEach((n) => n.classList.remove('drop-over'));
+            closeCapDrop();
+        };
+        /*
+         * 拖着歌经过底栏胶囊：胶囊上盖一层两格的落点，左半「下一首播放」、右半「加入队列」（和 Apple Music
+         * 把歌拖到顶部播放条入队一样）。落点是盖在胶囊上的独立一层，不改胶囊本身；没有底栏时什么都不做。
+         */
+        let capDrop = null;
+        const capsule = () => document.querySelector('.md-dock .md-cap');
+        const openCapDrop = () => {
+            const cap = capsule();
+            if (!cap || typeof app.queueAdd !== 'function' || typeof app.queuePlayNext !== 'function') return;
+            const rect = cap.getBoundingClientRect();
+            if (!(rect.width > 0)) return;
+            capDrop = document.createElement('div');
+            capDrop.className = 'archive-cap-drop';
+            capDrop.setAttribute('aria-hidden', 'true');
+            capDrop.innerHTML = '<span data-cap-q="next">下一首播放</span><span data-cap-q="last">加入队列</span>';
+            Object.assign(capDrop.style, { left: rect.left + 'px', top: rect.top + 'px', width: rect.width + 'px', height: rect.height + 'px' });
+            document.body.appendChild(capDrop);
+        };
+        const closeCapDrop = () => { capDrop?.remove(); capDrop = null; };
+        const capHit = (x, y) => {
+            if (!capDrop || !Number.isFinite(x)) return null;
+            const rect = capDrop.getBoundingClientRect();
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) return null;
+            const q = x < rect.left + rect.width / 2 ? 'next' : 'last';
+            return { node: capDrop.querySelector(`[data-cap-q="${q}"]`), q };
         };
         const dropTarget = (target) => {
+            const qchip = target.closest?.('[data-drop-q]');
+            if (qchip) return { node: qchip, q: qchip.dataset.dropQ === 'next' ? 'next' : 'last' };
             const chip = target.closest?.('[data-drop], [data-drop-new]');
             if (chip) return { node: chip, pl: chip.hasAttribute('data-drop-new') ? 'new' : playlists().find((p, order) => String(p.id ?? order) === chip.dataset.drop) };
             const head = target.closest?.('.archive-list-group.is-playlist');
@@ -1015,11 +1076,14 @@
         const stopGlide = () => { if (glide) cancelAnimationFrame(glide); glide = 0; };
         const pxScale = () => { const h = r.viewport.offsetHeight; return h ? (r.viewport.getBoundingClientRect().height / h) || 1 : 1; };
         const hitOf = (e) => {
+            const cap = capHit(e.clientX, e.clientY);
+            if (cap) return cap;
             const under = typeof document.elementFromPoint === 'function' && Number.isFinite(e.clientX) ? document.elementFromPoint(e.clientX, e.clientY) : null;
             return dropTarget(under || e.target);
         };
         const paintOver = (hit) => {
             el.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
+            capDrop?.querySelectorAll('.drop-over').forEach((n) => { if (!hit || n !== hit.node) n.classList.remove('drop-over'); });
             if (hit) hit.node.classList.add('drop-over');
         };
         const moveGhost = (e) => { if (ghost) ghost.style.transform = `translate(${(e.clientX || 0) + 14}px, ${(e.clientY || 0) + 12}px)`; };
@@ -1039,6 +1103,7 @@
             ghost = null;
             closeShelf();
             if (!hit || !indices) return;
+            if (hit.q) { queueBatch(indices, hit.q === 'next'); return; }
             if (hit.pl === 'new') {
                 const pl = createPlaylist('新歌单 ' + (playlists().length + 1), indices.map((i) => (tracks()[i] || {}).path).filter(Boolean));
                 if (pl) toast(`已新建歌单「${pl.name}」：${pl.tracks.length} 首`);
@@ -1189,6 +1254,9 @@
                 render();
             } else if (k >= 0) scrollToRow(k, { center: true });
         };
+
+        // 放不出来的歌标灰（播放器在加载失败 / 恢复时发这个事件）
+        document.addEventListener('music-track-health', () => { for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k); });
 
         const setPlaying = (i) => {
             if (i === state.playing) { schedule(); return; }
