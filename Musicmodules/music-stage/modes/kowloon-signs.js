@@ -574,21 +574,43 @@
         }`;
     // Screens: role 0 main lyric, 1 tall lyric, 2 ticker, 3 advert.
     const SCREEN_VS = `
-        attribute vec4 info;attribute vec4 region;varying vec2 vUv,vLocal;varying vec4 vInfo,vRegion;
+        attribute vec4 info;attribute vec4 region;varying vec2 vUv,vLocal;varying vec4 vInfo,vRegion;varying vec3 vW,vN;
         ${FOG_V}
         void main(){vLocal=uv;vInfo=info;vRegion=region;vUv=region.xy+uv*region.zw;
-            vec4 mvPosition=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mvPosition;
+            vN=normalize(mat3(modelMatrix)*normal);vec4 w=modelMatrix*vec4(position,1.0);vW=w.xyz;
+            vec4 mvPosition=viewMatrix*w;gl_Position=projectionMatrix*mvPosition;
             #include <fog_vertex>
         }`;
     const SCREEN_FS = `
         uniform sampler2D lyricMap,adMap;uniform vec3 sung,rest,trans,amber,deep;
-        uniform float time,level,progress,vprogress,age,idle,ticker,tickerSpan,beat,energy,grid,subpixel;
-        varying vec2 vUv,vLocal;varying vec4 vInfo,vRegion;
+        uniform float time,level,progress,vprogress,age,idle,ticker,tickerSpan,beat,energy,grid,subpixel,wet,rain;
+        uniform vec3 sky;
+        varying vec2 vUv,vLocal;varying vec4 vInfo,vRegion;varying vec3 vW,vN;
         #include <fog_pars_fragment>
         float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
         void main(){
             float role=vInfo.x;vec2 cells=vInfo.yz;float seed=vInfo.w;
-            vec2 cell=vLocal*cells;vec2 id=floor(cell);vec2 f=fract(cell)-0.5;
+            vec2 cell0=vLocal*cells;
+            float aa0=fwidth(cell0.x);
+            float near0=1.0-smoothstep(0.3,0.7,aa0);
+            // Rain on the cover glass: beads, and a few drops running down that
+            // wipe a trail. Each bends the lamps behind it like a small lens.
+            float wetG=clamp(wet,0.0,1.0)*(1.0-smoothstep(0.35,0.9,aa0));
+            vec2 dc=cell0/4.0;vec2 di=floor(dc);vec2 df=fract(dc)-0.5;
+            float runs=step(h(vec2(di.x,seed+2.0)),0.28);
+            float head=fract(h(vec2(di.x,seed+1.0))-time*(0.02+0.05*h(vec2(di.x,seed+4.0))))*cells.y/4.0;
+            float rx=(h(vec2(di.x,seed+6.0))-0.5)*0.35;
+            float above=dc.y-head;
+            float trail=runs*step(0.0,above)*step(above,4.0+6.0*h(vec2(di.x,seed+8.0)));
+            vec2 off=vec2(h(di+3.1+seed),h(di+5.7+seed))-0.5;
+            float rad=mix(0.16,0.34,h(di+9.3+seed))*step(h(di+seed*7.0),0.2+0.2*rain)*(1.0-trail);
+            vec2 dv=df-off*0.45;float bead=smoothstep(rad,rad*0.75,length(dv*vec2(1.0,0.85)))*step(0.01,rad);
+            vec2 rv=vec2(df.x-rx,above*0.5);float runner=runs*smoothstep(0.3,0.24,length(rv*vec2(1.0,0.75)));
+            float streak=trail*smoothstep(0.07,0.02,abs(df.x-rx))*0.5;
+            vec2 dn=runner>bead?rv/0.3:dv/max(rad,0.01);
+            float lens=max(bead,runner)*wetG;
+            vec2 cell=cell0-dn*lens*1.6+vec2(streak*wetG*0.6,0.0);
+            vec2 id=floor(cell);vec2 f=fract(cell)-0.5;
             // The picture is sampled once per LED: the board is a grid of lamps.
             vec2 luv=(id+0.5)/cells;
             // Line change: torn rows, colour split, a wipe from the left.
@@ -644,9 +666,42 @@
             sub=mix(vec3(1.0),sub*3.0,subpixel*(1.0-smoothstep(0.08,0.3,aa)));
             col*=lamp*sub;
             col+=vec3(0.006,0.007,0.01)*(1.0-lamp*0.5);
+            // The board is built from 16x16 modules, each a touch off in
+            // brightness and tint, with thin seams; a few lamps are dead or stuck.
+            vec2 mid=floor(id/16.0);
+            col*=mix(vec3(1.0),(0.93+0.1*h(mid+seed))*(1.0+(vec3(h(mid+1.3),h(mid+2.7),h(mid+4.1))-0.5)*0.07),step(role,1.5));
+            vec2 mf=fract(cell/16.0);vec2 me=min(mf,1.0-mf)*16.0;
+            col*=1.0-0.75*smoothstep(0.14,0.04,min(me.x,me.y))*near0;
+            float dp=h(id*1.37+seed);
+            col*=mix(1.0,step(0.0025,dp),near0);
+            col=mix(col,max(col,vec3(0.5,0.05,0.02)*step(dp,0.0035)*step(0.0025,dp)),near0);
+            // Interlaced rows and the darker band a camera catches on an LED board.
+            col*=1.0-0.06*mod(id.y+floor(time*30.0),2.0)*near0*step(role,1.5);
+            col*=1.0-0.18*smoothstep(0.1,0.0,abs(fract(vLocal.y*0.7-time*0.23)-0.5)-0.38);
             // A refresh band rolls down the big boards.
             col*=1.0+0.08*smoothstep(0.02,0.0,abs(fract(vLocal.y+time*0.31)-0.5)-0.47)*step(role,1.5);
-            gl_FragColor=vec4(col*level,1.0);
+            col*=level;
+            // Drops: dark rims, a bright fleck of the sky on top, a lit run trail.
+            float rimD=smoothstep(0.55,1.0,length(dn))*lens;
+            col*=1.0-0.55*rimD;
+            vec2 sp=dn-vec2(-0.3,0.45);
+            col+=(sky*0.8+vec3(0.12)+col*0.6)*smoothstep(0.26,0.06,length(sp))*lens*0.45;
+            col+=sky*streak*wetG*0.25;
+            // Cover glass: Fresnel reflection of the night sky, wetter = glossier.
+            vec3 n=normalize(vN);vec3 v=normalize(cameraPosition-vW);
+            float fr=0.03+0.97*pow(1.0-max(dot(n,v),0.0),5.0);
+            float sheen=0.6+0.4*smoothstep(0.2,0.9,vLocal.y+vLocal.x*0.3);
+            col+=sky*fr*(0.35+0.5*wet)*sheen;
+            // Steel lip around the glass: catches spill from the lamps and the rain.
+            vec2 eg=min(cell0,cells-cell0);float e=min(eg.x,eg.y);
+            float lip=smoothstep(0.85,0.7,e)*near0;
+            float top=smoothstep(0.85,0.7,cells.y-cell0.y);
+            float glint=step(0.965,h(floor(cell0*vec2(1.0,1.0))+floor(time*7.0+h(floor(cell0))*7.0)))*wet;
+            float bead2=smoothstep(0.35,0.1,length(vec2(fract(cell0.x*0.5)-0.5,(cell0.y-0.35)*1.4)))*step(cell0.y,0.85);
+            vec3 metal=vec3(0.015)+sky*(0.2+0.6*top)*(0.3+0.7*wet)+sung*level*0.05*(1.0-top)
+                +(sky+vec3(0.6))*glint*0.8+(sky*0.8+sung*0.15)*bead2*wet*0.8;
+            col=mix(col,metal,lip);
+            gl_FragColor=vec4(col,1.0);
             #ifdef USE_FOG
             #ifdef FOG_EXP2
             float fogFactor=1.0-exp(-fogDensity*fogDensity*vFogDepth*vFogDepth);
@@ -1252,7 +1307,10 @@
                 deep: { value: new T.Color(0.05, 0.08, 0.2) },
                 time: { value: 0 }, level: { value: 1 }, progress: { value: 0 }, vprogress: { value: 0 }, age: { value: 9 },
                 idle: { value: 1 }, ticker: { value: 0 }, tickerSpan: { value: 1 }, beat: { value: 0 }, energy: { value: 0 },
-                grid: { value: 1 }, subpixel: { value: tier.name === 'ultimate' ? 1 : 0 } },
+                grid: { value: 1 }, subpixel: { value: tier.name === 'ultimate' ? 1 : 0 },
+                // Same objects as the shared lights, so the alley's rain drives the glass.
+                wet: ctx.lightUniforms?.uWet || { value: 0.7 }, rain: ctx.lightUniforms?.uRain || { value: 0.4 },
+                sky: ctx.lightUniforms?.uSky || { value: new T.Color(0x3a4c66) } },
             vertexShader: SCREEN_VS, fragmentShader: SCREEN_FS, extensions: { derivatives: true }
         });
         disposables.push(screenMat);
@@ -1388,6 +1446,7 @@
         // When the last chorus began (from the whole song when the manager gives
         // it, so a seek lands right; else from the live edge).
         let strikeLines = null, strikeTimes = [], wasChorus = false, liveStrike = -1e9;
+        let flashOn = false, flashCount = 0;
         const strikeSince = (state, pt) => {
             if (Array.isArray(state.lines) && state.lines.length) {
                 if (state.lines !== strikeLines) {
@@ -1428,7 +1487,19 @@
             for (let i = 0; i < specs.length; i += 1) levels[i] = signLevel(specs[i], i, local, audio, still ? 60 : awake);
             // Lightning at the top of a chorus: the surge knocks a sign or two out
             // for a blink, then they come back over-bright and stutter.
-            const strike = strikeSince(state, pt);
+            // Prefer the alley's own flash so both hit on the same frame; fall back
+            // to working out the chorus starts ourselves.
+            const flash = typeof ctx.alley?.flash === 'function' ? Number(ctx.alley.flash()) : NaN;
+            if (Number.isFinite(flash)) {
+                if (flash > 0.08 && !flashOn) flashCount += 1;
+                flashOn = flash > 0.08;
+                if (flashOn && !still && state.options?.lightning !== false && specs.length) {
+                    const h = hashString(`strike:${flashCount}`);
+                    levels[h % specs.length] *= 0.1 + Math.min(1, flash) * 1.8;
+                    if (flash > 0.3) levels[(h >>> 9) % specs.length] *= 0.05;
+                }
+            }
+            const strike = Number.isFinite(flash) ? { since: -1 } : strikeSince(state, pt);
             if (strike.since >= 0 && strike.since < 1.2 && !still && state.options?.lightning !== false && specs.length) {
                 const h = hashString(`strike:${strike.start.toFixed(2)}`);
                 const hits = [h % specs.length, (h >>> 9) % specs.length];
