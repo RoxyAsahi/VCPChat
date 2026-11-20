@@ -301,6 +301,15 @@
             active: false,
             modeId: localStorage.getItem('musicStageMode') || 'luminous',
             modeInstance: null,
+            // Soft-focus switch: the old mode keeps performing until the new
+            // one has drawn, then one blurs away as the other settles in.
+            leaving: null,
+            arriving: null,
+            // Song handover: what the current mode is performing; see songHandover.
+            handover: null,
+            committedSong: null,
+            committedIdentity: null,
+            committedInstance: null,
             generation: 0,
             trackPath: null,
             trackSignature: '',
@@ -340,15 +349,26 @@
             toggleButton.title = state.active ? '退出歌词舞台 (Esc)' : '进入歌词舞台';
         };
 
+        // A mode on its way out of a soft-focus switch; see setMode.
+        const dropLeaving = () => {
+            const leaving = state.leaving;
+            if (!leaving) return;
+            state.leaving = null;
+            leaving.instance.destroy();
+            state.stats.modeDestroys += 1;
+        };
+
         const destroyMode = () => {
+            dropLeaving();
+            state.arriving = null;
             if (!state.modeInstance) return;
             state.modeInstance.destroy();
             state.modeInstance = null;
             state.stats.modeDestroys += 1;
         };
 
-        const createMode = (modeId) => {
-            destroyMode();
+        const createMode = (modeId, { keepCurrent = false } = {}) => {
+            if (!keepCurrent) destroyMode();
             elements.modeRoot.classList.remove('is-switching');
             state.generation += 1;
             state.modeId = Modes.get(modeId).id;
@@ -1031,6 +1051,78 @@
             updateTransportControls();
         };
 
+        // Which song (and which lyrics) the current mode is performing. The
+        // player empties the lyrics when a song changes and fills them in a
+        // moment later, from cache or a search. A 3D mode that followed along
+        // directly would build its whole journey for a song without words,
+        // then again once the words arrive: two jumps. So the 3D modes stay
+        // on the song they have until the new one is ready, fade out softly,
+        // rebuild unseen and come back out of the same blur.
+        const SONG_LEAVE_MS = 360;
+        // Long enough for an in-world handover to have turned away from the old song.
+        const SONG_TILT_MS = 900;
+        const LYRICS_WAIT_MS = 2000;
+        const SCENE_MODES = new Set(['diorama', 'tunnel', 'kowloon']);
+        const linesIds = new WeakMap();
+        let nextLinesId = 1;
+        const songKey = (frame) => {
+            const track = frame.track;
+            const identity = track?.path || `${track?.title || ''}\u0001${track?.artist || ''}`;
+            const lines = frame.lines;
+            if (!lines?.length) return { identity, key: `${identity}\u0001-` };
+            if (!linesIds.has(lines)) linesIds.set(lines, nextLinesId++);
+            return { identity, key: `${identity}\u0001${linesIds.get(lines)}` };
+        };
+        // Returns whether the mode should get this frame.
+        const songHandover = (frame) => {
+            const instance = state.modeInstance;
+            const { identity, key } = songKey(frame);
+            const handover = state.handover;
+            if (!instance || !SCENE_MODES.has(state.modeId) || reducedMotion() || state.arriving
+                || state.committedSong === null || state.committedInstance !== instance) {
+                if (handover) instance?.root.classList.remove('is-song-leaving');
+                state.handover = null;
+                state.committedSong = key;
+                state.committedIdentity = identity;
+                state.committedInstance = instance;
+                return true;
+            }
+            if (key === state.committedSong) {
+                if (handover) {
+                    // Went back to what is on screen (a quick skip back): show it again.
+                    instance.root.classList.remove('is-song-leaving');
+                    state.handover = null;
+                }
+                return true;
+            }
+            const now = performance.now();
+            const newSong = identity !== state.committedIdentity;
+            if (!handover || handover.newSong !== newSong) {
+                // A mode that can show the way to the next song in its own world
+                // does (镜台 tilts up to the sky and dissolves); the rest fade.
+                const inWorld = handover?.inWorld ?? Boolean(instance.beginSongHandover?.());
+                state.handover = { since: handover?.since ?? now, newSong, inWorld };
+                if (!inWorld) instance.root.classList.add('is-song-leaving');
+                state.stats.songHandovers = (state.stats.songHandovers || 0) + 1;
+            }
+            const waited = now - state.handover.since;
+            // A new song waits for its words, or until it is clearly playing without them.
+            const ready = !newSong || frame.lines?.length > 0 || waited >= LYRICS_WAIT_MS;
+            const leaveMs = state.handover.inWorld ? SONG_TILT_MS : SONG_LEAVE_MS;
+            if (waited < leaveMs || !ready) {
+                if (state.handover.inWorld) instance.holdFrame?.(frame);
+                return false;
+            }
+            state.handover = null;
+            state.committedSong = key;
+            state.committedIdentity = identity;
+            // Rebuild on this frame while hidden, then let the picture come back.
+            requestAnimationFrame(() => {
+                if (state.modeInstance === instance && !state.handover) instance.root.classList.remove('is-song-leaving');
+            });
+            return true;
+        };
+
         const updateFrame = (timestamp) => {
             if (!state.active || state.destroyed || document.hidden) return;
             applySeekHold();
@@ -1058,7 +1150,11 @@
                 root.style.setProperty('--stage-audio-vocal', audioVocal);
             }
             drawEdgeSpectrum(frame);
-            state.modeInstance?.updateFrame?.(frame);
+            if (songHandover(frame)) state.modeInstance?.updateFrame?.(frame);
+            if (state.leaving || state.arriving) {
+                state.leaving?.instance.updateFrame?.(frame);
+                advanceSoftSwitch(performance.now());
+            }
         };
 
         // The player polls the engine every 250 ms. During a drag, and until the
@@ -1176,6 +1272,77 @@
 
         const toggle = () => state.active ? exit() : enter();
 
+        const reducedMotion = () => Boolean(global.MusicMotion?.reduced?.()
+            ?? global.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+
+        // Whether a mode has drawn its first real frame. The 3D modes report
+        // `initialized` once their shaders are warm and a frame has run (or
+        // `fallbackMode` once they settled for text); the others are ready
+        // the moment they exist.
+        const modeReady = (instance) => {
+            if (!instance || instance.destroyed) return true;
+            const snapshot = instance.getDebugSnapshot?.();
+            if (!snapshot || !('initialized' in snapshot)) return true;
+            return Boolean(snapshot.initialized || snapshot.fallbackMode);
+        };
+
+        // How long a switch waits for the new mode before showing it anyway.
+        // A cold 3D start on a slow GPU can take longer; it then shows its
+        // own text fallback until the scene is up, as it did before.
+        const SWITCH_WAIT_MS = 2600;
+        const SWITCH_LEAVE_MS = 360;
+        const SWITCH_SETTLE_MS = 600;
+
+        // Switch modes without a blank in between: the new mode is built
+        // unseen behind the old one, both keep receiving frames, and once the
+        // new one has drawn the old drifts forward and blurs away while the
+        // new one comes out of the same blur.
+        const softSwitch = (modeId) => {
+            dropLeaving();
+            if (state.arriving) {
+                // Switched again before the last one was shown: that one never appeared.
+                state.arriving = null;
+                state.modeInstance?.destroy();
+                state.stats.modeDestroys += 1;
+                state.modeInstance = null;
+            }
+            const outgoing = state.modeInstance;
+            state.modeInstance = null;
+            if (outgoing) {
+                state.leaving = { instance: outgoing, removeAt: Infinity };
+                outgoing.root.classList.add('is-soft-leaving-wait');
+            }
+            createMode(modeId, { keepCurrent: true });
+            const incoming = state.modeInstance;
+            if (!incoming) return;
+            incoming.root.classList.add('is-soft-arriving');
+            state.arriving = { instance: incoming, since: performance.now() };
+            advanceSoftSwitch(performance.now());
+        };
+
+        const advanceSoftSwitch = (now) => {
+            const arriving = state.arriving;
+            if (arriving) {
+                if (arriving.instance !== state.modeInstance) { state.arriving = null; return; }
+                if (!modeReady(arriving.instance) && now - arriving.since < SWITCH_WAIT_MS) return;
+                state.arriving = null;
+                const root = arriving.instance.root;
+                // Start from the blurred state on a committed frame, then let it settle.
+                root.classList.add('is-soft-settling');
+                root.classList.remove('is-soft-arriving');
+                requestAnimationFrame(() => root.classList.remove('is-soft-settling'));
+                scope.timeout(() => root.classList.remove('is-soft-settling', 'is-soft-arriving'), SWITCH_SETTLE_MS + 200);
+                if (state.leaving) {
+                    state.leaving.instance.root.classList.remove('is-soft-leaving-wait');
+                    state.leaving.instance.root.classList.add('is-soft-leaving');
+                    state.leaving.removeAt = now + SWITCH_LEAVE_MS + 40;
+                }
+                return;
+            }
+            if (state.leaving && now >= state.leaving.removeAt) dropLeaving();
+        };
+
+
         const setMode = (modeId) => {
             const resolved = Modes.get(modeId).id;
             if (resolved === state.modeId && state.modeInstance) return;
@@ -1184,6 +1351,10 @@
             renderSettingsControls();
             if (!state.active) {
                 localStorage.setItem('musicStageMode', resolved);
+                return;
+            }
+            if (!reducedMotion() && state.modeInstance) {
+                softSwitch(resolved);
                 return;
             }
             elements.modeRoot.classList.add('is-switching');
@@ -1354,16 +1525,22 @@
         scope.listen(global, 'resize', () => {
             edgeCanvasState.width = 0;
             edgeCanvasState.height = 0;
-            state.modeInstance?.resize?.({
+            const viewport = {
                 width: global.innerWidth,
                 height: global.innerHeight,
                 dpr: Math.min(2, global.devicePixelRatio || 1)
-            });
+            };
+            state.modeInstance?.resize?.(viewport);
+            state.leaving?.instance.resize?.(viewport);
         });
         scope.listen(document, 'visibilitychange', () => {
-            if (!state.modeInstance) return;
-            if (document.hidden) state.modeInstance.suspend?.();
-            else state.modeInstance.resume?.();
+            // A hidden window would leave the old mode half faded out; finish the switch.
+            if (document.hidden) { state.arriving = null; dropLeaving(); }
+            if (state.modeInstance) {
+                state.modeInstance.root.classList.remove('is-soft-arriving', 'is-soft-settling');
+                if (document.hidden) state.modeInstance.suspend?.();
+                else state.modeInstance.resume?.();
+            }
         });
         scope.listen(global, 'beforeunload', () => app.stageHost?.destroy?.(), { once: true });
 
@@ -1387,8 +1564,11 @@
                     modeId: state.modeId,
                     generation: state.generation,
                     hasModeInstance: Boolean(state.modeInstance),
+                    switching: state.arriving ? 'waiting' : state.leaving ? 'crossfading' : null,
+                    leavingModeId: state.leaving?.instance.id || null,
+                    songHandover: state.handover ? (state.handover.newSong ? 'new-song' : 'new-lyrics') : null,
                     modeRootChildren: elements.modeRoot.childElementCount,
-                    canvasCount: elements.modeRoot.querySelectorAll('canvas').length,
+                    canvasCount: elements.modeRoot.querySelectorAll('canvas:not(.stage-handover-veil)').length,
                     ...state.stats,
                     mode: state.modeInstance?.getDebugSnapshot?.() || null
                 };

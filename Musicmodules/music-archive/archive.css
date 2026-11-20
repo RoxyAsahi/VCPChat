@@ -63,11 +63,16 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-hud button, .archive-hud input { pointer-events: auto; }
 
 /* 左上字标 */
-.archive-brand { position: absolute; left: 59px; top: 114px; line-height: 1; width: 270px; white-space: nowrap; }
-.archive-brand h1 { font-size: 44px; letter-spacing: 2.324px; line-height: 48px; font-weight: 750; margin: 0; }
-.archive-brand > div { font-size: 19px; line-height: 23px; letter-spacing: .587px; font-weight: 600; }
-.archive-brand p { font-size: 35px; line-height: 40px; display: flex; justify-content: space-between; margin: 0; }
-.archive-brand p b { font-weight: 750; letter-spacing: 3px; }
+/* 左上：当前这一组的名字（大标题）、首数，和「播放这一组」 */
+.archive-brand { position: absolute; left: 59px; top: 108px; line-height: 1; width: 420px; white-space: nowrap; }
+.archive-brand h1 { font-size: 46px; letter-spacing: 1.5px; line-height: 54px; font-weight: 750; margin: 0; overflow: hidden; text-overflow: ellipsis; }
+.archive-brand > div { margin-top: 8px; font-size: 14px; line-height: 18px; letter-spacing: .5px; color: var(--ar-muted); font-variant-numeric: tabular-nums; }
+.archive-brand-play { margin-top: 18px; font-size: 17px; font-weight: 600; letter-spacing: .5px; display: inline-flex; align-items: center; gap: 10px; }
+.archive-brand-play > span { transition: transform .3s; }
+.archive-brand-play:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-brand-play:hover > span { transform: translateX(6px); }
+.archive-brand-play:disabled { opacity: .35; cursor: default; }
+#music-archive-view.is-detail .archive-brand-play { visibility: hidden; }
 
 /* 右上：检索、加入歌单、回到正在播放 */
 .archive-nav { position: absolute; right: 59px; top: 124px; display: flex; align-items: center; gap: 34px; }
@@ -81,31 +86,36 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 
 
 /* 中间：档案标注 */
-.archive-callout { position: absolute; left: 970px; top: 471px; width: 950px; }
-.archive-eyebrow { font-size: 12px; letter-spacing: 1.3px; margin-bottom: 22px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 760px; }
-.archive-eyebrow > span { margin-left: 16px; }
-.archive-file-title { font-size: 28px; font-weight: 750; display: flex; gap: 10px; align-items: center; position: relative; letter-spacing: .2px; }
+.archive-callout { position: absolute; left: 970px; top: min(471px, calc(100% - 430px - var(--archive-dock-lift, 0px))); width: 950px; transition: top .48s cubic-bezier(.32, .72, 0, 1); }
+.archive-eyebrow { font-size: 13px; letter-spacing: .6px; margin-bottom: 16px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 760px; display: flex; gap: 18px; font-variant-numeric: tabular-nums; }
+.archive-eyebrow > span:first-child { color: var(--ar-ink); }
+.archive-file-title { font-size: 34px; font-weight: 750; display: flex; gap: 12px; align-items: center; position: relative; letter-spacing: .3px; max-width: 760px; }
+.archive-file-title > span:first-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-file-open { opacity: 0; transition: opacity .3s, transform .3s; }
 .archive-file-title:hover .archive-file-open { opacity: 1; transform: translate(3px, -3px); }
-.archive-rule { height: 1px; background: var(--ar-rule); margin-left: 57px; margin-top: 55px; position: relative; transform-origin: right; animation: archive-rule 1.3s var(--mt-ease) both; }
+.archive-rule { height: 1px; background: var(--ar-rule); margin-left: 57px; margin-top: 36px; position: relative; transform-origin: right; animation: archive-rule 1.3s var(--mt-ease) both; }
 .archive-rule i { position: absolute; left: -61px; top: -3px; width: 6px; height: 6px; background: var(--ar-square); }
 @keyframes archive-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .archive-summary { margin-left: 58px; margin-top: 22px; width: 652px; display: flex; align-items: center; justify-content: space-between; gap: 24px; font-size: 16px; }
 .archive-summary > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-summary > span:first-child { min-width: 0; }
-.archive-summary > span:last-child { font-size: 11px; letter-spacing: 1px; color: var(--ar-summary, var(--ar-muted)); flex-shrink: 0; max-width: 300px; }
-.archive-access { display: flex; align-items: center; gap: 70px; margin-left: 58px; margin-top: 58px; font-size: 14px; letter-spacing: 1px; }
+.archive-summary > span:last-child { font-size: 13px; letter-spacing: .6px; color: var(--ar-summary, var(--ar-muted)); flex-shrink: 0; max-width: 300px; font-variant-numeric: tabular-nums; }
+.archive-callout-acts { display: flex; align-items: center; gap: 64px; margin-left: 58px; margin-top: 40px; }
+.archive-access { display: flex; align-items: center; gap: 22px; font-size: 18px; font-weight: 600; letter-spacing: .5px; }
+.archive-more { font-size: 14px; letter-spacing: .5px; color: var(--ar-muted); display: flex; gap: 8px; align-items: center; }
+.archive-more:hover { color: var(--ar-accent-text, var(--ar-accent)); }
 .archive-access > span { font-size: 24px; transition: transform .3s; }
 .archive-access:hover > span { transform: translateX(9px); }
 /* 再点中间那张卡：展开，ACCESS FILE 亮起来等着回车 */
 #music-archive-view.is-expanded .archive-access { color: var(--ar-accent-text, var(--ar-accent)); }
 #music-archive-view.is-expanded .archive-access > span { transform: translateX(9px); }
-.archive-access.is-playing::before { content: ""; width: 6px; height: 6px; background: var(--ar-accent); margin-right: -58px; }
+.archive-access.is-playing::before { content: ""; width: 6px; height: 6px; background: var(--ar-accent); margin-right: -10px; }
 /* 选中曲目的封面：按需加载，没有封面就不显示 */
 /* 专辑封面：右边和歌手那行的右端对齐，放大到 232 见方，带一点投影压在卡片上 */
-.archive-cover { position: absolute; left: 478px; top: 186px; width: 232px; height: 232px; background: center / cover no-repeat; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .45s var(--mt-ease, ease); box-shadow: 0 0 0 1px rgba(var(--ar-paper-rgb), .6), 0 18px 40px rgba(0, 0, 0, .28); }
+/* 放在曲名右上方、压在横线上，不再往下伸到底部那一行（带底栏时会盖住页脚） */
+.archive-cover { position: absolute; left: 478px; top: -130px; width: 232px; height: 232px; background: center / cover no-repeat; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .45s var(--mt-ease, ease); box-shadow: 0 0 0 1px rgba(var(--ar-paper-rgb), .6), 0 18px 40px rgba(0, 0, 0, .28); }
 .archive-cover.on { transform: none; }
-.archive-cover.on { opacity: 1; }
+.archive-cover.on { opacity: 1; pointer-events: auto; cursor: pointer; }
 
 /* 底部一排（底栏控件出现时整体上移让开） */
 .archive-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 400px; transform: translateY(calc(-1 * var(--archive-dock-lift, 0px))); transition: transform .48s cubic-bezier(.32, .72, 0, 1); }
@@ -134,9 +144,6 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-lanes strong { font-size: 15px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-hint { position: absolute; bottom: 60px; left: 505px; color: var(--ar-hint, var(--ar-muted)); font-size: 10px; letter-spacing: .9px; white-space: nowrap; }
 .archive-hint > span { margin: 0 12px; }
-.archive-powered { position: absolute; right: 59px; bottom: 108px; font-size: 19px; display: flex; align-items: center; gap: 5px; line-height: 24px; }
-.archive-powered b { font-weight: 750; }
-.archive-powered i { height: 6px; width: 25px; background: var(--ar-ink); display: inline-block; margin-left: 11px; }
 .archive-footer { position: absolute; bottom: 35px; left: 59px; right: 59px; font-size: 10px; letter-spacing: .9px; display: flex; gap: 44px; color: var(--ar-foot, var(--ar-muted)); }
 .archive-footer > span { display: flex; align-items: center; gap: 10px; }
 .archive-footer > span:nth-child(2) { margin-left: auto; }
@@ -361,7 +368,7 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-row { position: absolute; left: var(--gutter); right: 0; top: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; padding-left: 20px; cursor: pointer; color: var(--ar-summary, var(--ar-muted)); }
 .archive-list-row .tx { min-width: 0; display: grid; gap: 4px; }
 .archive-list-row .tx b { font-size: 18px; line-height: 24px; font-weight: 600; color: var(--ar-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: font-weight .2s; }
-.archive-list-row .tx em { font-style: normal; font-size: 11px; letter-spacing: 1px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; transition: color .2s; }
+.archive-list-row .tx em { font-style: normal; font-size: 11px; letter-spacing: 1px; color: var(--ar-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .2s; }
 .archive-list-row .rt { display: grid; justify-items: end; gap: 6px; font-size: 11px; letter-spacing: 1px; color: var(--ar-count, var(--ar-muted)); font-variant-numeric: tabular-nums; opacity: .8; }
 .archive-list-row .rt i { font-style: normal; }
 .archive-list-row:hover .tx em, .archive-list-row:hover .rt { color: var(--ar-ink); }
@@ -469,7 +476,7 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 
 /* 有歌词时说明块收窄到左半，封面缩到 160 放在 ACCESS FILE 右边，右半给歌词 */
 .archive-hud.has-lyrics .archive-callout { width: 470px; }
-.archive-hud.has-lyrics .archive-cover { left: 300px; top: 210px; width: 160px; height: 160px; }
+.archive-hud.has-lyrics .archive-cover { left: 300px; top: -60px; width: 160px; height: 160px; }
 .archive-hud.has-lyrics .archive-powered { visibility: hidden; }
 .archive-hud.has-lyrics .archive-summary { width: 412px; flex-direction: column; align-items: flex-start; gap: 6px; }
 .archive-hud.has-lyrics .archive-summary > span:first-child { max-width: 100%; }
@@ -491,3 +498,74 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-list.has-drop .archive-list-letter[data-md-dist="4"] > span { opacity: .35; filter: blur(.35px); }
 /* 节能档不做模糊 */
 .archive-hud.low-power .archive-ticks.has-drop > span::before, .archive-hud.low-power .archive-list.has-drop .archive-list-letter > span { filter: none; }
+
+/* ---------- 取出（曲目详情） ---------- */
+.archive-detail { position: absolute; inset: 0; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .5s var(--mt-ease, ease) .25s, visibility 0s linear .75s; }
+#music-archive-view.is-detail .archive-detail { opacity: 1; visibility: visible; transition: opacity .55s var(--mt-ease, ease) .35s, visibility 0s; }
+.archive-detail button { pointer-events: auto; }
+.archive-detail-back { position: absolute; left: 59px; top: 226px; font-size: 18px; font-weight: 600; letter-spacing: .4px; display: flex; align-items: center; gap: 14px; }
+.archive-detail-back:hover { color: var(--ar-accent-text, var(--ar-accent)); }
+.archive-detail-card {
+    position: absolute; right: 59px; top: 250px; width: 700px;
+    max-height: calc(100% - 250px - 72px - var(--archive-dock-lift, 0px));
+    overflow: auto; overscroll-behavior: contain; scrollbar-width: thin;
+    pointer-events: auto;
+    padding: 26px 30px 26px;
+    background: rgba(var(--ar-paper-rgb), .9);
+    border-top: 3px solid var(--ar-ink);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .14);
+    backdrop-filter: blur(14px) saturate(1.1);
+    transform: translateY(18px);
+    transition: transform .6s var(--mt-ease, cubic-bezier(.32, .72, 0, 1)) .3s;
+}
+#music-archive-view.is-detail .archive-detail-card { transform: none; }
+.archive-detail-head { display: flex; align-items: center; gap: 14px; font-size: 12px; letter-spacing: .6px; color: var(--ar-muted); padding-bottom: 14px; border-bottom: 1px solid var(--ar-rule); white-space: nowrap; }
+.archive-detail-head b { background: var(--ar-ink); color: var(--ar-paper); font-weight: 600; padding: 3px 7px; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.archive-detail-head > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.archive-detail-spec { margin-left: auto; border: 1px solid var(--ar-accent); color: var(--ar-accent-text, var(--ar-accent)); padding: 2px 7px; font-size: 11px; letter-spacing: 1px; }
+.archive-detail-album { margin-top: 22px; font-size: 16px; color: var(--ar-ink-2, var(--ar-muted)); min-height: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-detail-card h2 { margin: 10px 0 0; font-size: 40px; line-height: 1.15; font-weight: 750; letter-spacing: .3px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.archive-detail-artist { margin-top: 10px; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-detail-actions { margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 24px; border-bottom: 1px solid var(--ar-rule); }
+.archive-detail-actions > button { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 15px; border: 1px solid var(--ar-line, var(--ar-rule)); transition: background .2s, color .2s, border-color .2s; white-space: nowrap; }
+.archive-detail-actions > button > i { font-style: normal; width: 16px; text-align: center; font-size: 13px; }
+.archive-detail-actions > button:hover { background: var(--ar-hover); }
+.archive-detail-actions > button.is-primary { background: var(--ar-ink); color: var(--ar-paper); border-color: var(--ar-ink); font-weight: 600; }
+.archive-detail-actions > button.is-primary:hover { background: var(--ar-accent); border-color: var(--ar-accent); color: var(--ar-on-ink, var(--ar-paper)); }
+.archive-detail-actions > button:disabled { opacity: .35; cursor: default; }
+.archive-detail-meta { margin: 22px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; }
+.archive-detail-meta > div { min-width: 0; }
+.archive-detail-meta > div[hidden] { display: none; }
+.archive-detail-meta > div.wide { grid-column: 1 / -1; }
+.archive-detail-meta dt { font-size: 12px; letter-spacing: .6px; color: var(--ar-muted); }
+.archive-detail-meta dd { margin: 6px 0 0; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.archive-detail-meta .wide dd { font-size: 13px; color: var(--ar-ink-2, var(--ar-muted)); direction: rtl; text-align: left; }
+.archive-detail-more { margin-top: 24px; }
+.archive-detail-more[hidden] { display: none; }
+.archive-detail-more-head { font-size: 15px; font-weight: 600; padding-bottom: 10px; border-bottom: 2px solid var(--ar-accent); width: max-content; }
+.archive-detail-more ol { list-style: none; margin: 8px 0 0; padding: 0; columns: 2; column-gap: 28px; }
+.archive-detail-more li { break-inside: avoid; }
+.archive-detail-more button { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 15px; border-bottom: 1px solid var(--ar-hairline, var(--ar-rule)); }
+.archive-detail-more button > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-detail-more button > small { font-size: 12px; color: var(--ar-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.archive-detail-more button:hover > span, .archive-detail-more button.is-current > span { color: var(--ar-accent-text, var(--ar-accent)); }
+/* 取出时浏览用的说明块、目录、底部一排、歌词都让开 */
+#music-archive-view .archive-callout, #music-archive-view .archive-bottom, #music-archive-view .archive-list, #music-archive-view .archive-lyrics { transition: opacity .35s var(--mt-ease, ease); }
+#music-archive-view.is-detail .archive-callout,
+#music-archive-view.is-detail .archive-bottom,
+#music-archive-view.is-detail .archive-list,
+#music-archive-view.is-detail .archive-lyrics { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .25s, visibility 0s linear .25s; }
+#music-archive-view.is-detail .archive-list * { pointer-events: none; }
+/* 窄窗口：资料卡占右侧大半，取出的卡在左边露一部分 */
+.archive-hud.narrow .archive-detail-card { width: auto; left: 46%; right: 40px; }
+.archive-hud.narrow .archive-detail-actions { grid-template-columns: repeat(2, 1fr); }
+.archive-hud.narrow .archive-detail-more ol { columns: 1; }
+body.music-reduce-motion .archive-detail, body.music-reduce-motion .archive-detail-card { transition: none; transform: none; }
+/* 平时没有状态要说，左下角的状态行就不显示（读取、扫描时才出现） */
+.archive-status:has([data-ref="status"]:empty) { visibility: hidden; }
+/* 悬停预览：指针旁边的曲名和歌手 */
+.archive-tip { position: absolute; left: 0; top: 0; z-index: calc(var(--mt-z-archive-hud, 5) + 1); pointer-events: none; padding: 7px 11px; background: rgba(var(--ar-paper-rgb), .92); border-left: 2px solid var(--ar-accent); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); display: grid; gap: 3px; max-width: 320px; opacity: 0; transition: opacity .15s; font-size: 14px; white-space: nowrap; }
+.archive-tip.on { opacity: 1; transition-delay: .25s; }
+.archive-tip b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.archive-tip span { font-size: 12px; color: var(--ar-muted); overflow: hidden; text-overflow: ellipsis; }
+.archive-tip span:empty { display: none; }

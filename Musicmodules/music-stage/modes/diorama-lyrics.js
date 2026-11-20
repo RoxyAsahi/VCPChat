@@ -617,6 +617,9 @@
             return { sign, map, materials: [line, subtitle] };
         })();
         return {
+            // Hidden while the stage hands over to the next song (the old song's
+            // words would otherwise go on over the new song's music).
+            setVisible(visible) { root.visible = visible !== false; },
             reset(nextTimeline, nextTrack, nextOptions, nextPalette) {
                 timeline = nextTimeline; track = nextTrack; options = nextOptions; palette = nextPalette || {};
                 clear();

@@ -353,6 +353,58 @@ body.music-stage-active #player-background {
     overflow: hidden;
 }
 
+/*
+ * Soft-focus switch between modes (host: softSwitch). The new mode is built
+ * unseen while the old one keeps performing; once the new one has drawn, the
+ * old drifts forward and blurs away and the new one comes out of the same
+ * blur. Both stay at or above full size, so no edge ever shows.
+ */
+.music-stage-mode-root > .music-stage-mode.is-soft-arriving {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-settling {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-arriving:not(.is-soft-settling) {
+    transition: none;
+}
+
+.music-stage-mode-root > .music-stage-mode:not(.is-soft-arriving):not(.is-soft-settling) {
+    transition: opacity 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+        filter 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s,
+        transform 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.08s;
+}
+
+/* A 3D mode handing over to the next song (host: songHandover). */
+.music-stage-mode-root > .music-stage-mode.is-song-leaving {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+    transition: opacity 0.36s cubic-bezier(0.4, 0, 1, 1),
+        filter 0.36s cubic-bezier(0.4, 0, 1, 1),
+        transform 0.36s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-leaving-wait {
+    pointer-events: none;
+}
+
+.music-stage-mode-root > .music-stage-mode.is-soft-leaving {
+    z-index: 1;
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.02);
+    pointer-events: none;
+    transition: opacity 0.36s cubic-bezier(0.4, 0, 1, 1),
+        filter 0.36s cubic-bezier(0.4, 0, 1, 1),
+        transform 0.36s cubic-bezier(0.4, 0, 1, 1);
+}
+
 .music-stage-top-chrome {
     position: absolute;
     top: 56px;
@@ -3251,4 +3303,21 @@ body.music-stage-active #custom-title-bar,
 .music-stage-settings-toggle:hover .music-stage-settings-toggle-pulse,
 .music-stage-settings-toggle:focus-visible .music-stage-settings-toggle-pulse {
     animation-play-state: running;
+}
+
+/* The last picture of the old song, dissolving over the new one (createHandoverVeil). */
+.stage-handover-veil {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Over the scene's canvas, under its text fallback and letterbox. */
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    display: none;
+}
+
+.stage-handover-veil.is-showing {
+    display: block;
 }
