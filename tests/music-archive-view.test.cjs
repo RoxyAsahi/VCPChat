@@ -559,3 +559,22 @@ test('降低动态读设置里的统一开关；开关不在时按系统设置�
     assert.ok(g.w.document.body.classList.contains('music-reduce-motion'));
     g.close();
 });
+
+test('有统一点播入口时走 playFromContext（按阵列顺序）；换排序时正在放的整库队列跟着换顺序', () => {
+    const got = [];
+    let owned = false;
+    const f = fixture({
+        n: 60,
+        setup: (w, app) => {
+            app.playFromContext = (list, index, opts) => { got.push(['ctx', list.length, index, opts.origin]); owned = true; app.currentTrackIndex = index; };
+            app.contextFrom = (o) => owned && o === 'archive';
+            app.reorderContext = (list, o) => { got.push(['reorder', list.length, o, list[0].path]); return true; };
+        }
+    });
+    f.key('ArrowDown');
+    f.key('Enter');
+    assert.deepEqual(got[0], ['ctx', 60, f.view.debug().selected, 'archive']);
+    f.view.setSort('added');
+    assert.deepEqual(got[1], ['reorder', 60, 'archive', '/m/59']); // 新的在前
+    f.close();
+});

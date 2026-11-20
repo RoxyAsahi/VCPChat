@@ -410,6 +410,37 @@
             if (!document.body.classList.contains('music-stage-entering')) state.scene?.raise();
         };
 
+        /* 整个曲库按当前排序的顺序（就是阵列里从左到右、从上到下看到的顺序） */
+        const libraryOrder = () => {
+            const letters = state.columns.filter((c) => c.kind === 'letter');
+            if (letters.length) return letters.flatMap((c) => c.items);
+            const all = state.columns.find((c) => c.kind === 'all');
+            return all ? all.items : tracks().map((_, i) => i);
+        };
+        /*
+         * 设队列并播放：播放器有统一点播入口（playFromContext）就走它，
+         * 之后换排序时能用 reorderContext 跟着换顺序；没有时退回直接设 currentFilteredTracks。
+         */
+        const startQueue = (items, index, source, name) => {
+            const list = items.map((i) => tracks()[i]).filter(Boolean);
+            state.playedLane = state.lane;
+            setQueueName(name);
+            if (typeof app.playFromContext === 'function') {
+                app.playFromContext(list, index, { source, origin: 'archive' });
+                return;
+            }
+            const whole = list.length === tracks().length && list.every((t, i) => t === tracks()[i]);
+            app.currentFilteredTracks = whole ? null : list;
+            app.filteredPlaylistSource = source;
+            try { app.renderPlaylist?.(app.currentFilteredTracks); } catch (e) { /* 旧列表只是同步显示，失败不影响播放 */ }
+            app.loadTrack(index, true);
+        };
+        /* 换了排序：正在放的还是从档案页点的整个曲库，就换成新顺序，不打断播放 */
+        const followSort = () => {
+            if (typeof app.reorderContext !== 'function' || !app.contextFrom?.('archive')) return;
+            app.reorderContext(libraryOrder().map((i) => tracks()[i]).filter(Boolean), 'archive');
+        };
+
         const playSelected = ({ stage = true, group = null } = {}) => {
             const col = column();
             const index = selectedIndex();
@@ -417,25 +448,14 @@
             const already = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
             if (!already && group && group.items.includes(index)) {
                 // 从目录的某一组点播（歌手、专辑、最近、检索结果）：队列就是看到的这一组
-                const list = group.items.map((i) => tracks()[i]).filter(Boolean);
-                app.currentFilteredTracks = list;
-                app.filteredPlaylistSource = { type: 'archive-group', name: group.name };
-                try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示 */ }
-                state.playedLane = state.lane;
-                setQueueName(group.name);
-                app.loadTrack(index, true);
+                startQueue(group.items, index, { type: 'archive-group', name: group.name }, group.name);
             } else if (!already) {
-                // 播放队列跟着所在的列走：全部曲目列用整个曲库，其他列用这一列的曲目
-                // 按首字母拆开的列：队列是整个曲库（按首字母顺序接着放），不只这一个字母
-                const queue = col.kind === 'letter' ? state.columns.filter((c) => c.kind === 'letter').flatMap((c) => c.items) : col.items;
-                const list = col.kind === 'all' ? null : queue.map((i) => tracks()[i]).filter(Boolean);
-                app.currentFilteredTracks = list;
-                app.filteredPlaylistSource = col.kind === 'playlist' ? { type: 'playlist', name: col.name, id: col.playlistId }
+                // 播放队列跟着所在的列走，按阵列里看到的顺序：
+                // 按首字母（或排序方式）拆开的列，队列是整个曲库按当前排序接着放；其他列是这一列的曲目
+                const source = col.kind === 'playlist' ? { type: 'playlist', name: col.name, id: col.playlistId }
                     : col.kind === 'album' ? { type: 'album', name: col.name } : null;
-                try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示，失败不影响播放 */ }
-                state.playedLane = state.lane;
-                setQueueName(col.kind === 'letter' || col.kind === 'all' ? '全部曲目' : col.name);
-                app.loadTrack(index, true);
+                const whole = col.kind === 'letter' || col.kind === 'all';
+                startQueue(whole ? libraryOrder() : col.items, index, source, whole ? '全部曲目' : col.name);
             }
             if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
         };
@@ -514,6 +534,7 @@
             // 按新顺序重排：选中的那首留在选中，换到它在新排法里的那一列
             const keepIndex = selectedIndex();
             rebuild({ keep: false, track: keepIndex });
+            followSort();
         };
         // 拼音表按需加载（项目已有的依赖），加载好之后重建索引，汉字才能按拼音检索和分组
         const loadPinyin = () => {
