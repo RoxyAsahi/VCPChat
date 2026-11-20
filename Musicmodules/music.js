@@ -384,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners();
         setupElectronHandlers();
         window.setupMusicLikes?.(app); // 「喜欢」：右键菜单那一项要包在上面的菜单入口外面
+        window.setupMusicGoto?.(app); // 右键「转到歌手 / 转到专辑」
         app.setupWebDavHandlers();
         app.setupMediaSessionHandlers();
 

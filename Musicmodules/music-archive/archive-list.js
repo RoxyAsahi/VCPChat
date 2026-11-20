@@ -1230,6 +1230,28 @@
             } else if (k >= 0) scrollToRow(k, { center: true });
         };
 
+        /*
+         * 「转到歌手 / 转到专辑」：换到那个分类、清掉检索词，把这首所在的组顶到最上面并选中它
+         * （和主流播放器右键「转到歌手」一样，落点是整组，不是只有这一首）
+         */
+        const goToGroup = (i, kind) => {
+            if (!KINDS.some(([k]) => k === kind)) return false;
+            if (state.query) { clearTimeout(typeTimer); r.input.value = ''; state.query = ''; }
+            if (kind !== state.kind) setKind(kind); else rebuild();
+            const k = findRow(i, null);
+            if (k < 0) return false;
+            let h = -1;
+            for (const hk of state.heads) { if (hk <= k) h = hk; else break; }
+            const vp = r.viewport;
+            const top = h >= 0 ? state.offsets[h] : state.offsets[k] - LABEL_H;
+            // 组太长、这首在一屏以外时，以这首为准居中
+            if (state.offsets[k] + ROW_H - top <= (vp.clientHeight || 600)) vp.scrollTop = Math.max(0, top);
+            else scrollToRow(k, { center: true });
+            pickRow(k);
+            r.viewport.focus({ preventScroll: true });
+            return true;
+        };
+
         // 放不出来的歌标灰（播放器在加载失败 / 恢复时发这个事件）
         document.addEventListener('music-track-health', () => { for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k); });
         // 喜欢 / 取消喜欢：行尾的小心形要重画（行内容是按需生成的，扔掉已画的行让它重建）
@@ -1247,6 +1269,7 @@
             reveal,
             setPlaying,
             setKind,
+            goToGroup,
             render: schedule,
             focusSearch: () => { r.input.focus(); r.input.select(); },
             clearMulti, closeBatchMenu,
