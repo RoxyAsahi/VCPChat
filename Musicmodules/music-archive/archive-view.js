@@ -97,6 +97,7 @@
             if (state.dataRefs.length <= 0) keep = false;
             const keepId = keep && column() ? column().id : null;
             const keepIndex = keep ? selectedIndex() : track;
+            const firstData = state.dataRefs.length <= 0 && tracks().length > 0;
             rebuildIndex();
             const columns = buildColumns();
             state.columns = columns;
@@ -104,8 +105,11 @@
             state.dataRefs = { playlist: app.playlist, length: tracks().length, playlists: app.customPlaylists, plSig: playlistsSig() };
 
             let lane = 0, row = 0;
-            const byId = keepId ? columns.findIndex((c) => c.id === keepId) : -1;
-            if (byId !== -1) {
+            const placed = tracks().length ? restorePlace(columns) : null;
+            const byId = !placed && keepId ? columns.findIndex((c) => c.id === keepId) : -1;
+            if (placed) {
+                lane = placed.lane; row = placed.row;
+            } else if (byId !== -1) {
                 lane = byId;
                 const r = keepIndex >= 0 ? columns[byId].items.indexOf(keepIndex) : -1;
                 row = r !== -1 ? r : Math.min(state.row, Math.max(0, columns[byId].items.length - 1));
@@ -115,16 +119,82 @@
             }
             state.lane = lane;
             state.row = row;
+            const col0 = columns[lane];
+            if (col0 && col0.items.length) focusByColumn.set(col0.id, Model.wrap(row, col0.items.length));
             state.scene?.jump(lane, row);
             state.scene?.refreshLabels?.();
             root.classList.toggle('is-empty', tracks().length === 0);
             refs.files.textContent = pad(tracks().length, 4);
             refs.savedN.textContent = pad((app.customPlaylists || []).length);
+            if (firstData && !pendingPlace && !placed) { placeSettled = true; followUntil.t = performance.now() + 4000; }
             renderHud(true);
             updatePlaying(true);
             list?.rebuild();
             syncList();
+            schedulePlace();
         };
+
+        /*
+         * 上次的位置：视图（档案页、经典视图、播放页）、选中的列和那张卡，重启后回到原位，不自动播放。
+         * 曲库、歌单、拼音表都是启动后陆续到的：曲库到了之后最多等 5 秒，等到那一列出现再落位；
+         * 用户先动了就不再恢复。播放器自己恢复上次那首（不播放），这里只读它的 currentTrackIndex。
+         */
+        const PLACE_KEY = 'musicArchivePlace';
+        const PLACE_WAIT = 5000;
+        let pendingPlace = null;
+        try {
+            const p = JSON.parse(localStorage.getItem(PLACE_KEY) || 'null');
+            if (p && typeof p === 'object') pendingPlace = p;
+        } catch (e) { pendingPlace = null; }
+        let placeDeadline = 0;
+        let placeSettled = false;     // 已经落过位（或放弃了），之后才记新的位置
+        const followUntil = { t: 0 }; // 没有记录时：启动后几秒内选中跟着播放器恢复的那首走
+        const settlePlace = ({ stage = false } = {}) => {
+            const p = pendingPlace;
+            pendingPlace = null;
+            placeSettled = true;
+            if (stage && p && p.stage) {
+                // 上次停在播放页：曲库到了、当前那首在，就回到播放页（不播放）
+                setTimeout(() => {
+                    if (state.destroyed || !tracks()[app.currentTrackIndex]) return;
+                    if (app.stageHost && !app.stageHost.active) { try { app.stageHost.enter(); } catch (e) { /* 舞台没准备好就留在这里 */ } }
+                }, 0);
+            }
+        };
+        const restorePlace = (columns) => {
+            if (!pendingPlace) return null;
+            const now = performance.now();
+            if (!placeDeadline) placeDeadline = now + PLACE_WAIT;
+            const p = pendingPlace;
+            const lane = typeof p.col === 'string' ? columns.findIndex((c) => c.id === p.col) : -1;
+            const want = typeof p.path === 'string' ? Model.normalizePath(p.path) : '';
+            const indexOfPath = want ? tracks().findIndex((t) => Model.normalizePath(t && t.path) === want) : -1;
+            let at = null;
+            if (lane !== -1) {
+                const items = columns[lane].items;
+                const r = indexOfPath >= 0 ? items.indexOf(indexOfPath) : -1;
+                at = { lane, row: r !== -1 ? r : Math.max(0, Math.min(items.length - 1, Number(p.row) || 0)) };
+            } else if (indexOfPath >= 0) {
+                at = Model.locate(columns, indexOfPath, 0);
+            }
+            if ((at && lane !== -1) || now > placeDeadline) settlePlace({ stage: true });
+            return at;
+        };
+        const savePlace = () => {
+            if (!placeSettled || !state.columns.length || !tracks().length) return;
+            const col = column();
+            const t = selectedTrack();
+            const place = {
+                mode: state.mode,
+                stage: document.body.classList.contains('music-stage-active'),
+                col: col ? col.id : null,
+                row: col && col.items.length ? Model.wrap(state.row, col.items.length) : 0,
+                path: t ? t.path : null
+            };
+            try { localStorage.setItem(PLACE_KEY, JSON.stringify(place)); } catch (e) { /* 只是记住 */ }
+        };
+        let placeTimer = 0;
+        const schedulePlace = () => { clearTimeout(placeTimer); placeTimer = setTimeout(savePlace, 400); };
 
         /*
          * 阵列的列：曲库够大时「全部曲目」按首字母拆成 A、B…あ行…0–9、其他几列（歌少的相邻字母合并），
@@ -285,6 +355,8 @@
         // ---------- 选中与播放 ----------
         const select = (lane, row, { pulse = true } = {}) => {
             if (!state.columns.length) return;
+            if (pendingPlace && tracks().length) settlePlace();
+            followUntil.t = 0;
             if (lane === state.lane && row === state.row) return;
             state.lane = lane;
             state.row = row;
@@ -294,6 +366,7 @@
             state.scene?.select(lane, row, { pulse });
             renderHud();
             syncList();
+            schedulePlace();
             kick();
         };
 
@@ -374,6 +447,16 @@
             const key = app.currentTrackIndex + ':' + Boolean(app.isPlaying) + ':' + state.sig;
             if (!force && key === state.playingKey) return;
             state.playingKey = key;
+            // 启动时播放器晚一点才恢复上次那首：用户还没动过，就直接落到那张卡（不飞过去）
+            if (!pendingPlace && followUntil.t && performance.now() < followUntil.t && selectedIndex() !== app.currentTrackIndex) {
+                const at0 = Model.locate(state.columns, app.currentTrackIndex, 0);
+                if (at0) {
+                    state.lane = at0.lane; state.row = at0.row;
+                    state.scene?.jump(at0.lane, at0.row);
+                    renderHud(true);
+                    syncList();
+                }
+            }
             const at = Model.locate(state.columns, app.currentTrackIndex, Model.wrap(state.playedLane, state.columns.length || 1));
             let cell = null;
             if (at) {
@@ -573,7 +656,7 @@
             document.body.classList.toggle('music-archive-on', on);
             document.body.classList.toggle('music-archive-off', !on);
             app.isArchiveActive = on;
-            if (persist) { try { localStorage.setItem(VIEW_KEY, state.mode); } catch (e) { /* 只是记住上次的视图 */ } }
+            if (persist) { try { localStorage.setItem(VIEW_KEY, state.mode); } catch (e) { /* 只是记住上次的视图 */ } schedulePlace(); }
             if (on) {
                 app.destroyAmbientPixi?.();
                 ensureScene();
@@ -907,6 +990,7 @@
             lastBodyClass = cls;
             if (themeChanged) applyTheme({ wave: true });
             if (enteringChanged) syncEntering();
+            if (stageChanged) savePlace();
             if (stageChanged && !cls.includes('music-stage-active') && isShown()) {
                 // 从播放页回来：旧界面的背景声纹不要重新起来
                 app.destroyAmbientPixi?.();
@@ -930,6 +1014,8 @@
 
         const destroy = () => {
             if (state.destroyed) return;
+            clearTimeout(placeTimer);
+            savePlace();
             state.destroyed = true;
             clearInterval(clockTimer);
             clearTimeout(state.coverTimer);

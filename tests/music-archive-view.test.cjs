@@ -444,3 +444,46 @@ test('在档案页直接打字：打开目录、聚焦检索框并带入这个�
     assert.ok(f.calls.some((c) => c[0] === 'play'));
     f.close();
 });
+
+test('重启回到上次的列和那张卡，不自动播放；上次在播放页就回到播放页', async () => {
+    const place = { mode: 'archive', stage: true, col: 'playlist:p', row: 2, path: '/m/9' };
+    const f = fixture({ setup: (w) => w.localStorage.setItem('musicArchivePlace', JSON.stringify(place)) });
+    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.view.debug().selected, 9);
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(f.calls, [['stage']]); // 只进播放页，没有 load / play
+    f.close();
+});
+
+test('曲库晚到：等曲库到了再落位；换了选中会记下来，下次打开回到这里', async () => {
+    const tracks = Array.from({ length: 30 }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: 'A', album: 'B' }));
+    let store = null;
+    const f = fixture({
+        tracks: [],
+        setup: (w) => w.localStorage.setItem('musicArchivePlace', JSON.stringify({ mode: 'archive', stage: false, col: 'all', row: 0, path: '/m/12' }))
+    });
+    f.app.playlist = tracks;
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 12);
+    f.key('ArrowDown');
+    assert.equal(f.view.debug().selected, 13);
+    await new Promise((r) => setTimeout(r, 450));
+    store = JSON.parse(f.w.localStorage.getItem('musicArchivePlace'));
+    assert.equal(store.path, '/m/13');
+    assert.equal(store.col, 'all');
+    assert.equal(store.stage, false);
+    assert.ok(!f.calls.length);
+    f.close();
+});
+
+test('没有记录时：播放器晚一点恢复上次那首，选中直接落到那张卡', () => {
+    const tracks = Array.from({ length: 30 }, (_, i) => ({ path: '/m/' + i, title: 'Song ' + i, artist: 'A', album: 'B' }));
+    const f = fixture({ tracks: [] });
+    f.app.playlist = tracks;
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 0);
+    f.app.currentTrackIndex = 21; // 播放器 loadTrack(上次那首, 不播放)
+    f.view.refresh();
+    assert.equal(f.view.debug().selected, 21);
+    f.close();
+});
