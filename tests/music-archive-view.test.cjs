@@ -214,3 +214,22 @@ test('空曲库显示空状态，回车什么也不做', () => {
     assert.deepEqual(f.calls, []);
     f.close();
 });
+
+test('过场期间继续画、开场动画期间不画；选中卡抬高的接口在', async () => {
+    const f = fixture();
+    const body = f.w.document.body.classList;
+    const allowed = () => f.view.debug().allowed;
+    assert.equal(typeof f.view.raise, 'function');
+    assert.equal(typeof f.view.setThemeWave, 'function');
+    assert.equal(allowed(), true);
+    body.add('music-intro-playing');
+    assert.equal(allowed(), false);
+    body.remove('music-intro-playing');
+    body.add('music-stage-active', 'music-stage-entering');
+    await new Promise((r) => setTimeout(r, 0)); // 等 body 观察者
+    assert.equal(allowed(), true);
+    body.remove('music-stage-entering');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(allowed(), false);
+    f.close();
+});

@@ -410,7 +410,17 @@
 
         // ---------- 视图切换（档案页 / 经典视图） ----------
         const isShown = () => state.mode === 'archive';
-        const shouldRender = () => isShown() && !state.destroyed && !document.hidden && !document.body.classList.contains('music-stage-active') && state.scene;
+        // 进播放页的过场里（music-stage-entering，最多 1.1 秒）舞台还没盖上来，继续画让选中卡的上浮看得见；
+        // 开场动画（music-intro-playing）是一层不透明全屏层，期间不画
+        let enteringSince = 0;
+        const renderAllowed = () => {
+            if (!isShown() || state.destroyed || document.hidden) return false;
+            const body = document.body.classList;
+            if (body.contains('music-intro-playing')) return false;
+            if (!body.contains('music-stage-active')) return true;
+            return body.contains('music-stage-entering') && performance.now() - enteringSince < 1100;
+        };
+        const shouldRender = () => Boolean(state.scene) && renderAllowed();
 
         const setMode = (mode, { persist = true } = {}) => {
             state.mode = mode === 'classic' ? 'classic' : 'archive';
@@ -464,7 +474,11 @@
         };
         /* 进播放页的过场期间（body.music-stage-entering）选中卡多抬一点；外部也可以直接调 raise(高度) */
         const raise = (amount) => { state.scene?.raise(amount); kick(); };
-        const syncEntering = () => raise(document.body.classList.contains('music-stage-entering') ? 0.9 : undefined);
+        const syncEntering = () => {
+            const on = document.body.classList.contains('music-stage-entering');
+            if (on) enteringSince = performance.now();
+            raise(on ? 0.9 : undefined);
+        };
 
         let sceneQuality = null;
         const ensureScene = () => {
@@ -724,7 +738,7 @@
             get mode() { return state.mode; },
             debug: () => ({
                 mode: state.mode, lane: state.lane, row: state.row, columns: state.columns.map((c) => ({ id: c.id, n: c.items.length })),
-                selected: selectedIndex(), rendering: Boolean(state.raf), scene: state.scene?.debug() || null
+                selected: selectedIndex(), rendering: Boolean(state.raf), allowed: renderAllowed(), scene: state.scene?.debug() || null
             })
         };
         app.archiveView = api;

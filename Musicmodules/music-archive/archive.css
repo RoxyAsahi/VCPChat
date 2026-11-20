@@ -34,6 +34,8 @@ body.music-archive-on .music-player-container,
 body.music-archive-on #player-background { visibility: hidden; }
 /* 进入播放页（歌词舞台）时档案页淡出，渲染也停掉 */
 body.music-stage-active #music-archive-view { opacity: 0; pointer-events: none; }
+/* 过场期间（music-stage-entering）舞台还在淡入，档案页留在下面，选中卡的上浮看得见 */
+body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 
 .archive-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: var(--mt-z-archive, 1); outline: none; }
 .archive-atmos {
