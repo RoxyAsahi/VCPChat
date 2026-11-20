@@ -361,13 +361,35 @@
         };
 
         // ---------- 选中与播放 ----------
+        /*
+         * 选中移动的速度：给外面的动效用（比如刻度上的小滴，快速滚动时拉长）。
+         * onMotion(fn) 每次换选中回调 fn({ axis: 'row' | 'lane', velocity, fraction })，
+         * velocity 按最近 160ms 的移动估算（行或列/秒，有符号），fraction 是在这一列里的位置（0..1）。
+         */
+        const motionListeners = new Set();
+        let motionSamples = [];
+        const emitMotion = (dLane, dRow) => {
+            if (!motionListeners.size) return;
+            const t = performance.now();
+            motionSamples.push([t, dLane, dRow]);
+            motionSamples = motionSamples.filter((x) => t - x[0] <= 160);
+            const span = Math.max(0.06, (t - motionSamples[0][0]) / 1000);
+            const sum = motionSamples.reduce((a, x) => [a[0] + x[1], a[1] + x[2]], [0, 0]);
+            const axis = dLane ? 'lane' : 'row';
+            const col = column();
+            const count = col ? col.items.length : 0;
+            const info = { axis, velocity: (axis === 'lane' ? sum[0] : sum[1]) / span, fraction: count > 1 ? Model.wrap(state.row, count) / (count - 1) : 0 };
+            for (const fn of motionListeners) { try { fn(info); } catch (e) { /* 外面的动效出错不影响选中 */ } }
+        };
         const select = (lane, row, { pulse = true } = {}) => {
             if (!state.columns.length) return;
             if (pendingPlace && tracks().length) settlePlace();
             followUntil.t = 0;
             if (lane === state.lane && row === state.row) return;
+            const dLane = lane - state.lane, dRow = row - state.row;
             state.lane = lane;
             state.row = row;
+            emitMotion(dLane, dRow);
             collapse();
             const col = column();
             if (col && col.items.length) focusByColumn.set(col.id, Model.wrap(row, col.items.length));
@@ -1146,6 +1168,7 @@
             setListOpen,
             setSort,
             get sort() { return sortMode; },
+            onMotion: (fn) => { motionListeners.add(fn); return () => motionListeners.delete(fn); },
             raise,
             setThemeWave: () => applyTheme({ wave: true }),
             get list() { return list; },
