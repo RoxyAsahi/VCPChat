@@ -380,6 +380,34 @@ document.addEventListener('DOMContentLoaded', () => {
             app.ws = null;
             app.connectWebSocket();
         }
+        recoverAfterEngineRestart(endpoint.state);
+    };
+    // 引擎用着用着崩了又被重启：新引擎里什么都没加载。把那首歌重新加载回去、跳回原来的位置，
+    // 原来在放就接着放。只认「就绪过 → 断了 → 又就绪」，窗口刚打开时的启动过程不算。
+    let engineSeenReady = false;
+    let engineLost = false;
+    const recoverAfterEngineRestart = (state) => {
+        if (state === 'ready') {
+            const lost = engineLost;
+            engineSeenReady = true;
+            engineLost = false;
+            if (!lost) return;
+            const track = app.playlist[app.currentTrackIndex];
+            app.engineTrackPath = null;
+            if (!track) return;
+            const wasPlaying = app.isPlaying === true || app.playIntent === true;
+            const resumeAt = Math.max(0, Number(app.lastKnownCurrentTime) || 0);
+            const index = app.currentTrackIndex;
+            app.skipHistoryOnce = true;
+            // 先加载、跳到原位置再播，不从头响一下。
+            Promise.resolve(app.loadTrack(index, false)).then(async () => {
+                if (app.currentTrackIndex !== index || app.engineTrackPath !== track.path) return; // 期间换了歌
+                if (resumeAt > 1) await app.seekTo(resumeAt);
+                if (wasPlaying && app.currentTrackIndex === index) app.playTrack();
+            }).catch(error => console.warn('[Music] Reload after engine restart failed:', error));
+        } else if (engineSeenReady && (state === 'failed' || state === 'starting' || state === 'stopped')) {
+            engineLost = true;
+        }
     };
     const refreshAudioEngineEndpoint = async () => {
         if (!app.api?.getAudioEngineEndpoint) return;
