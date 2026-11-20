@@ -267,6 +267,7 @@
                 paintRow(node, row, k);
             }
             // 吸附字母停在顶上，下一组的字母顶上来时把它推上去
+            let stickyY = null;
             if (state.stuck === -1) {
                 r.sticky.style.visibility = 'hidden';
             } else {
@@ -277,7 +278,9 @@
                 const y = Math.max(top, state.offsets[headK]);
                 const push = nextHead !== undefined ? Math.min(0, state.offsets[nextHead] - y - LETTER_PUSH) : 0;
                 r.sticky.style.transform = `translateY(${y + push}px)`;
+                stickyY = y + push;
             }
+            syncDrop(headK, top, stickyY);
             const sel = state.selectedRow;
             let nth = 0;
             if (sel >= 0) for (let k = 0; k <= sel; k++) if (state.rows[k].type === 'track') nth++;
@@ -285,6 +288,37 @@
             r.tot.textContent = pad(state.count, 3);
         };
         const schedule = () => { if (!state.raf) state.raf = requestAnimationFrame(render); };
+
+        /*
+         * 字母轴上的流体小滴（有底栏的流体标记模块时）：停在当前组的首字母旁边，
+         * 滚得快时拉出细颈；其他组的首字母离当前组越远越淡（data-md-dist）。
+         */
+        let drop = null;
+        let lastScroll = null;
+        const syncDrop = (headK, top, stickyY) => {
+            if (typeof global.createMusicFluidMarker !== 'function') return;
+            // 一下跳出一屏以外（换排序、键盘跳到很远的一首）：小滴不拖着长颈飞过去，直接落在新位置
+            const far = drop && lastScroll && Math.abs(top - lastScroll.top) > (r.viewport.clientHeight || 600);
+            if (far) { drop.destroy(); drop = null; lastScroll = null; }
+            if (!drop) {
+                drop = global.createMusicFluidMarker(r.viewport, { axis: 'y', thickness: 5, align: 'start', inset: 2 });
+                if (drop) el.classList.add('has-drop');
+            }
+            if (!drop) return;
+            const now = performance.now();
+            if (lastScroll && now > lastScroll.t) drop.setVelocity(Math.max(-80, Math.min(80, (top - lastScroll.top) / ROW_H / ((now - lastScroll.t) / 1000))));
+            lastScroll = { t: now, top };
+            const at = state.heads.indexOf(headK);
+            for (const [k, node] of state.rendered) {
+                if (!node.classList.contains('archive-list-letter')) continue;
+                const hi = state.heads.indexOf(k);
+                node.dataset.mdDist = String(at < 0 || hi < 0 ? 4 : Math.min(4, Math.abs(hi - at)));
+            }
+            // 用内容坐标（不用元素的屏幕矩形：HUD 整体缩放过，屏幕像素和内容像素对不上）
+            if (stickyY === null) { drop.moveTo(null); return; }
+            const wide = Boolean(r.sticky.querySelector('.wide'));
+            drop.moveTo(wide ? { start: stickyY + 30, end: stickyY + 48 } : { start: stickyY + 22, end: stickyY + 56 });
+        };
 
         const findRow = (i, ctx) => {
             if (i < 0) return -1;
@@ -561,6 +595,7 @@
             setKind,
             render: schedule,
             focusSearch: () => { r.input.focus(); r.input.select(); },
+            destroyDrop: () => { drop?.destroy(); drop = null; },
             /* 在档案页直接打字：聚焦检索框并带入这个字（替换掉原来的检索词） */
             typeInto: (text) => {
                 r.input.focus();

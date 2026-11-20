@@ -271,6 +271,14 @@
             const letter = g ? (IndexLib.groupName(g) || g) : '';
             return (letter ? letter + ' · ' : '') + pad(r + 1, 3);
         };
+        /* 位置条上的流体小滴：底栏的通用模块在时才用，没有就还是竖线游标 */
+        let tickMarker = null;
+        const tickDrop = () => {
+            if (tickMarker || typeof global.createMusicFluidMarker !== 'function') return tickMarker;
+            tickMarker = global.createMusicFluidMarker(refs.ticks, { axis: 'x', thickness: 7, align: 'center' });
+            if (tickMarker) refs.ticks.classList.add('has-drop');
+            return tickMarker;
+        };
         const renderTicks = (count, current) => {
             ticksReady();
             const n = Math.min(count, TICKS);
@@ -285,6 +293,14 @@
                 m.classList.toggle('on', i === nearest);
             });
             refs.ticks.style.setProperty('--pos', String(frac));
+            // 流体小滴（有底栏的流体标记模块时）：停在当前位置，离得越远的刻度越淡
+            const drop = tickDrop();
+            if (drop) {
+                const w = refs.ticks.clientWidth || 300;
+                const x = frac * (w - 14) + 7;
+                drop.moveTo({ start: x - 7, end: x + 7 });
+                marks.forEach((m, i) => { if (i < n) m.dataset.mdDist = String(Math.min(4, Math.abs(i - nearest))); });
+            }
             refs.ticks.setAttribute('aria-valuemin', '1');
             refs.ticks.setAttribute('aria-valuemax', String(Math.max(1, count)));
             refs.ticks.setAttribute('aria-valuenow', String(count ? current + 1 : 0));
@@ -381,6 +397,7 @@
             const info = { axis, velocity: (axis === 'lane' ? sum[0] : sum[1]) / span, fraction: count > 1 ? Model.wrap(state.row, count) / (count - 1) : 0 };
             for (const fn of motionListeners) { try { fn(info); } catch (e) { /* 外面的动效出错不影响选中 */ } }
         };
+        motionListeners.add((m) => { if (tickMarker) tickMarker.setVelocity(m.axis === 'row' ? m.velocity : 0); });
         const select = (lane, row, { pulse = true } = {}) => {
             if (!state.columns.length) return;
             if (pendingPlace && tracks().length) settlePlace();
@@ -793,6 +810,7 @@
                 return;
             }
             sceneQuality = quality();
+            refs.hud.classList.toggle('low-power', sceneQuality === 'energy-saving');
             root.insertBefore(state.scene.canvas, root.firstChild);
             bindCanvas(state.scene.canvas);
             updateLabelMask();
@@ -1110,6 +1128,8 @@
             clearTimeout(state.coverTimer);
             stopInertia();
             lyrics?.destroy();
+            tickMarker?.destroy();
+            list?.destroyDrop?.();
             if (state.raf) cancelAnimationFrame(state.raf);
             state.raf = 0;
             document.removeEventListener('keydown', onKeyDown);

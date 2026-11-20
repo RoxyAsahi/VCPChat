@@ -732,3 +732,29 @@ test('onMotion：换选中时回调方向、速度和在这一列里的位置，
     assert.equal(got.length, 3);
     f.close();
 });
+
+test('流体小滴：底栏的流体标记模块在时，位置条和字母轴都挂上小滴，刻度按远近写 data-md-dist', (t) => {
+    const file = process.env.MUSIC_FLUID_MARKER || 'Musicmodules/music-dock/music-fluid-marker.js';
+    if (!fs.existsSync(file)) { t.skip('底栏的流体标记模块还没合进这个分支'); return; }
+    const src = read(file);
+    const f = fixture({ n: 60, setup: (w) => { w.eval(src); } });
+    const ticks = f.w.document.querySelector('.archive-ticks');
+    assert.ok(ticks.classList.contains('has-drop'));
+    assert.ok(ticks.querySelector('svg.mfm'));
+    for (let k = 0; k < 20; k++) f.key('ArrowDown');
+    const marks = [...ticks.querySelectorAll('span')].filter((m) => !m.hidden);
+    const on = marks.findIndex((m) => m.classList.contains('on'));
+    assert.equal(marks[on].dataset.mdDist, '0');
+    assert.equal(marks[Math.max(0, on - 1)].dataset.mdDist, on ? '1' : '0');
+    f.view.setListOpen(true);
+    f.view.list.render();
+    f.close();
+});
+
+test('没有流体标记模块时照旧用竖线游标', () => {
+    const f = fixture();
+    const ticks = f.w.document.querySelector('.archive-ticks');
+    assert.ok(!ticks.classList.contains('has-drop'));
+    assert.ok(!ticks.querySelector('svg'));
+    f.close();
+});
