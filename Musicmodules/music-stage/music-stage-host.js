@@ -1571,6 +1571,30 @@
         });
         scope.listen(global, 'beforeunload', () => app.stageHost?.destroy?.(), { once: true });
 
+        // When 镜台 is the stage the listener will most likely open, build its
+        // fixed shapes once the window has settled and is idle, so the first
+        // visit does not stop the entry transition for them. A quarter of a
+        // second of work, once per window, and nothing on the GPU.
+        const PREPARE_AFTER_MS = 4000;
+        const preparePreferredStage = (attempt = 0) => {
+            if (state.active || state.destroyed || state.modeId !== 'diorama') return;
+            const World = global.MusicStageDioramaWorld;
+            if (!global.THREE || !World?.prepareShapes) return;
+            // Not while the opening plays or anything else is moving on screen.
+            if (document.hidden || document.body.classList.contains('music-intro-playing')) {
+                if (attempt < 5) scope.timeout(() => preparePreferredStage(attempt + 1), PREPARE_AFTER_MS);
+                return;
+            }
+            try { World.prepareShapes(global.THREE); } catch (error) {
+                console.warn('[MusicStage] preparing the diorama ahead failed:', error);
+            }
+        };
+        scope.timeout(() => {
+            if (typeof global.requestIdleCallback === 'function') {
+                global.requestIdleCallback(() => preparePreferredStage(), { timeout: 10000 });
+            } else preparePreferredStage();
+        }, PREPARE_AFTER_MS);
+
         setButtonState();
         root.hidden = true;
         root.setAttribute('aria-hidden', 'true');

@@ -5618,5 +5618,14 @@
             o.z=max(o.z,bead);
             return o;
         }`;
-    global.MusicStageDioramaWorld = Object.freeze({ create, poleSide, inSight, RAIN_GLASS });
+    // Build the shared shapes ahead of the first visit (host: when the window is
+    // idle and 镜台 is the saved mode), by building a world nobody sees and
+    // throwing all of it away but those. Nothing is uploaded to a GPU.
+    const prepareShapes = (T) => {
+        if (SHARED_SHAPES.has('saloon') && SHARED_SHAPES.get('saloon').T === T) return false;
+        const scene = new T.Scene();
+        create(T, scene).destroy();
+        return true;
+    };
+    global.MusicStageDioramaWorld = Object.freeze({ create, prepareShapes, poleSide, inSight, RAIN_GLASS });
 })(window);
