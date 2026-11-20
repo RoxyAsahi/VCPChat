@@ -734,6 +734,7 @@
         function onQueuePointerDown(event) {
             const rowEl = event.target.closest('.md-man');
             if (!rowEl || event.button !== 0 || event.target.closest('.md-qx')) return;
+            event.preventDefault(); // 拖动时别选中文字
             const scroller = event.currentTarget;
             const from = Number(rowEl.dataset.qi);
             const manualEls = [...scroller.querySelectorAll('.md-man')];

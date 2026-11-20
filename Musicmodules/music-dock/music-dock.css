@@ -661,7 +661,14 @@ body.light-theme .md-np-img.md-empty { background-image: url("../../assets/music
 .md-qtag { flex-shrink: 0; font-size: 11px; color: var(--md-t3); }
 .md-ql.md-qdragging { cursor: grabbing; }
 .md-ql.md-qdragging .md-qi { pointer-events: none; }
-#music-dock-root .md-qi.md-qdrag { z-index: 2; transition: background-color .12s; background: var(--md-fill2); box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+#music-dock-root .md-qi.md-qdrag {
+  z-index: 2;
+  transition: background-color .12s;
+  /* 拖着的那行要不透明，不然和让位的行叠在一起看不清 */
+  background: var(--md-menu);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+}
+.md-ql { -webkit-user-select: none; user-select: none; }
 @media (hover: none) { #music-dock-root .md-qx { opacity: 1; } }
 .md-empty { padding: 24px 8px; font-size: 13px; line-height: 20px; color: var(--md-t3); text-align: center; }
 
