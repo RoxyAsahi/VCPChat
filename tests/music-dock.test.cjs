@@ -114,7 +114,7 @@ test('dock drives the existing player methods and keeps the old slider as the vo
         assert.deepEqual(calls.pop(), ['seek', 9]);
 
         dock.openPanel('播放列表');
-        assert.equal(doc.querySelector('.md-qh span').textContent, '2');
+        assert.equal(doc.querySelector('.md-qh span').textContent, '1', 'upcoming count leaves out the playing track');
 
         dock.openSheet();
         assert.equal(doc.getElementById('dsp').parentElement.className, 'md-sheet-body');
@@ -177,4 +177,107 @@ test('command palette parses --filters and ranks title hits above artist hits', 
     assert.equal(scoreTrack(track, parseQuery('--歌手 别人'), strip), -1);
     assert.equal(scoreTrack(track, parseQuery('不存在'), strip), -1);
     dom.window.close();
+});
+
+test('queue page shows now playing, the manual layer and the real upcoming order, and edits the manual layer', async () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const [a, b] = app.playlist;
+        const c = { path: 'C:/c.flac', title: 'Gamma.flac', artist: 'C' };
+        app.playlist.push(c);
+        app.manualQueue = [c, b];
+        app.getUpNext = () => ({ manual: app.manualQueue.slice(), context: [b, c] });
+        app.queueRemove = (i) => { calls.push(['qremove', i]); app.manualQueue.splice(i, 1); doc.dispatchEvent(new window.Event('music-queue-change')); };
+        app.queueMove = (f, t) => { calls.push(['qmove', f, t]); };
+        app.queueClear = () => { calls.push('qclear'); };
+        app.queuePlayNext = (t) => { calls.push(['qnext', t.path]); return t; };
+        dock.openPanel('播放列表');
+        const titles = () => [...doc.querySelectorAll('.md-ql .md-qi b')].map((n) => n.textContent);
+        assert.deepEqual(titles(), ['Alpha', 'Gamma', 'Beta', 'Beta', 'Gamma']);
+        assert.deepEqual([...doc.querySelectorAll('.md-qhd span:first-child')].map((n) => n.textContent), ['接下来播放', '接着播放 · 全部曲目']);
+        assert.equal(doc.querySelector('.md-qh span').textContent, '4');
+
+        doc.querySelectorAll('.md-man [data-qact="remove"]')[1].click();
+        assert.deepEqual(calls.pop(), ['qremove', 1]);
+        assert.deepEqual(titles(), ['Alpha', 'Gamma', 'Beta', 'Gamma'], 'repaints on music-queue-change');
+
+        doc.querySelector('.md-qi:not(.md-man):not(.md-now) [data-qact="next"]').click();
+        assert.deepEqual(calls.pop(), ['qnext', 'C:/b.flac']);
+
+        doc.querySelector('.md-man [data-qact="play"]').click();
+        assert.deepEqual(calls.pop(), ['load', 2]);
+        assert.deepEqual(calls.pop(), ['qremove', 0]);
+
+        app.manualQueue = [b, c];
+        doc.dispatchEvent(new window.Event('music-queue-change'));
+        const row = doc.querySelector('.md-man');
+        const fire = (type, y, target = row) => target.dispatchEvent(new window.MouseEvent(type, { bubbles: true, clientY: y, button: 0 }));
+        fire('pointerdown', 100);
+        fire('pointermove', 102, doc);
+        assert.ok(!row.classList.contains('md-qdrag'), 'under 4px is still a click');
+        fire('pointermove', 150, doc);
+        assert.ok(row.classList.contains('md-qdrag'));
+        fire('pointerup', 150, doc);
+        assert.deepEqual(calls.pop(), ['qmove', 0, 1]);
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+        doc.querySelector('[data-qact="clear"]').click();
+        assert.equal(calls.pop(), 'qclear');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});
+
+test('palette groups songs, playlists and commands; shift/ctrl+enter queue; pinyin search uses the archive index', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        window.eval(read('Musicmodules/music-archive/archive-index.js'));
+        const PY = { 夜: 'ye', 航: 'hang' };
+        window.pinyinPro = { pinyin: (c) => PY[c] || '' };
+        app.playlist.push({ path: 'C:/y.flac', title: '夜航.flac', artist: '远舟', album: 'Demo' });
+        app.customPlaylists = [{ id: 'p1', name: 'Beta Mix', tracks: ['C:/b.flac', 'C:/y.flac'] }];
+        app.queuePlayNext = (t) => { calls.push(['qnext', t.path]); return t; };
+        app.queueAdd = (t) => { calls.push(['qadd', t.path]); return t; };
+        app.renderPlaylist = () => {};
+        const seen = [];
+        doc.addEventListener('keydown', (e) => seen.push(e.key));
+
+        dock.openPalette();
+        const palette = doc.querySelector('.md-cmd');
+        const input = palette.querySelector('.md-cmd-in');
+        const type = (text) => { input.value = text; input.dispatchEvent(new window.Event('input')); };
+        const key = (k, extra = {}) => input.dispatchEvent(new window.KeyboardEvent('keydown', { key: k, bubbles: true, ...extra }));
+
+        type('yh');
+        assert.equal(palette.querySelector('.md-cmd-row .md-cmd-title').textContent, '夜航', 'initials find the Chinese title');
+        type('beta');
+        assert.deepEqual([...palette.querySelectorAll('.md-cmd-sec')].map((n) => n.textContent), ['歌曲', '歌单']);
+        assert.equal(palette.querySelector('.md-cmd-foot').hidden, false);
+        key('Enter', { shiftKey: true });
+        assert.deepEqual(calls.pop(), ['qnext', 'C:/b.flac']);
+        assert.ok(palette.classList.contains('md-open') || !palette.hidden, 'stays open after queueing');
+        key('Enter', { ctrlKey: true });
+        assert.deepEqual(calls.pop(), ['qadd', 'C:/b.flac']);
+
+        // 歌单那一行：Ctrl+回车整单入队，回车把歌单设成当前列表并播放
+        const rows = [...palette.querySelectorAll('.md-cmd-row')];
+        const plRow = rows.find((r) => r.querySelector('.md-cmd-title').textContent === 'Beta Mix');
+        plRow.dispatchEvent(new window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
+        assert.deepEqual(calls.splice(-2), [['qadd', 'C:/b.flac'], ['qadd', 'C:/y.flac']]);
+        plRow.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+        assert.deepEqual(calls.pop(), ['load', 1]);
+        assert.equal(app.filteredPlaylistSource.id, 'p1');
+        assert.equal(app.currentFilteredTracks.length, 2);
+
+        dock.openPalette();
+        type('下一');
+        assert.equal(palette.querySelector('.md-cmd-sec').textContent, '命令');
+        assert.equal(palette.querySelector('.md-cmd-foot').hidden, true);
+        key('k');
+        assert.ok(!seen.includes('k'), 'single keys typed in the palette do not reach window shortcuts');
+    } finally {
+        dock.destroy();
+        window.close();
+    }
 });
