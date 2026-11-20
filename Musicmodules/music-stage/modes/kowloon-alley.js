@@ -153,10 +153,13 @@
             uLightPos: { value: Array.from({ length: MAX_LIGHTS }, () => new T.Vector3(0, -999, 0)) },
             uLightCol: { value: Array.from({ length: MAX_LIGHTS }, () => new T.Vector3()) },
             uLightRad: { value: new Float32Array(MAX_LIGHTS).fill(1) },
-            uLightCount: { value: 0 }
+            uLightCount: { value: 0 },
+            uLightHalo: { value: new Float32Array(MAX_LIGHTS).fill(1) }
         };
         const lightSet = { uLightPos: lightUniforms.uLightPos, uLightCol: lightUniforms.uLightCol,
-            uLightRad: lightUniforms.uLightRad, uLightCount: lightUniforms.uLightCount };
+            uLightRad: lightUniforms.uLightRad, uLightCount: lightUniforms.uLightCount,
+            // 0 for a light that should not glow in the haze (a screen's fill light).
+            uLightHalo: lightUniforms.uLightHalo || { value: new Float32Array(MAX_LIGHTS).fill(1) } };
         const SHELTER = `uniform vec4 shelterBox[${MAX_SHELTERS}];uniform float shelterY[${MAX_SHELTERS}];
             float kSheltered(vec3 p){float s=0.0;for(int i=0;i<${MAX_SHELTERS};i++){vec4 b=shelterBox[i];
                 s=max(s,step(b.x,p.x)*step(p.x,b.z)*step(b.y,p.z)*step(p.z,b.w)*step(p.y,shelterY[i]));}return s;}`;
@@ -1016,6 +1019,7 @@
             transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false,
             uniforms: { ...lightSet, haze: { value: 0.5 }, day: shared.day },
             vertexShader: `attribute float slot;uniform vec3 uLightPos[${MAX_LIGHTS}];uniform vec3 uLightCol[${MAX_LIGHTS}];uniform float uLightRad[${MAX_LIGHTS}];uniform int uLightCount;
+                uniform float uLightHalo[${MAX_LIGHTS}];
                 varying vec2 vUv;varying vec3 vCol;
                 void main(){
                     int i=int(slot);vec4 lp=vec4(uLightPos[i],uLightRad[i]);vec4 lc=vec4(uLightCol[i],1.0);
@@ -1026,6 +1030,7 @@
                     mv.xyz+=normalize(-mv.xyz)*min(size*0.6,length(mv.xyz)*0.5);
                     vUv=position.xy;vCol=lc.rgb*min(lc.w,4.0);
                     gl_Position=projectionMatrix*mv;
+                    if(uLightHalo[i]<0.5||i>=uLightCount)gl_Position=vec4(2.0,2.0,2.0,1.0);
                 }`,
             fragmentShader: `uniform float haze,day;varying vec2 vUv;varying vec3 vCol;
                 void main(){float r=dot(vUv,vUv);if(r>1.0)discard;
