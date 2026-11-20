@@ -156,6 +156,13 @@ body.light-theme #music-dock-root {
 }
 #music-dock-root .md-qb:hover { opacity: 1; background: rgba(var(--md-tp-rgb), .1); }
 #music-dock-root .md-qb.md-on { opacity: 1; background: rgba(var(--md-tp-rgb), .12); }
+/* 流体档：快捷操作胶囊的形状由流体层画（从播放条里分裂上去），这里只留按钮 */
+#music-dock-root.md-fl-on .md-quick-in { transform: none; transition: opacity .2s ease-out .08s, visibility 0s linear .28s; }
+#music-dock-root.md-fl-on .md-quick.md-show .md-quick-in { transition: opacity .2s ease-out .12s, visibility 0s; }
+#music-dock-root.md-fl-on .md-quick-g { background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--md-fl-ink); }
+#music-dock-root.md-fl-on .md-qb:hover { background: rgba(var(--md-fl-ink-rgb), .1); }
+#music-dock-root.md-fl-on .md-qb.md-on { background: rgba(var(--md-fl-ink-rgb), .12); }
+#music-dock-root.md-fl-low .md-quick-g { background: var(--md-fl-low-bg); box-shadow: 0 0 0 1px var(--md-fl-low-edge), 0 12px 30px -14px rgba(0, 0, 0, .35); backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--md-fl-ink); }
 .md-qsep { height: 16px; width: 1px; flex-shrink: 0; background: currentColor; opacity: .15; margin: 0 2px; }
 
 .md-cap {
@@ -283,21 +290,26 @@ body.light-theme #music-dock-root {
 
 /* 下一首、再下一首：越往后越糊，悬停凝固 */
 .md-nx { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 22px; overflow: hidden; padding: 6px 0; }
+/* 文字要一直看得清：不再整段模糊，靠透明度分远近；再下一首的尾巴渐隐进雾里。 */
 #music-dock-root .md-nxb {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 150px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 600 15px/22px var(--mt-font-ui);
-  filter: blur(1.6px);
-  opacity: .6;
-  transition: filter .7s, opacity .7s;
+  opacity: .82;
+  transition: opacity .3s;
 }
-#music-dock-root .md-nxb.md-nx2 { filter: blur(3.4px); opacity: .32; }
+#music-dock-root .md-nxb.md-nx2 {
+  opacity: .5;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, #000 55%, transparent);
+  mask-image: linear-gradient(90deg, #000 55%, transparent);
+}
 #music-dock-root .md-nxb:hover,
-#music-dock-root .md-nxb:focus-visible { filter: none; opacity: .9; }
+#music-dock-root .md-nxb:focus-visible { opacity: 1; }
 .md-nxb[hidden] { display: none; }
 
 .md-slots { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
@@ -319,7 +331,7 @@ body.light-theme #music-dock-root {
 
 /* 暂停：条身和下一首化成雾；曲名、时间和按钮保持清楚，只淡到 70%；鼠标移上来（关注）又凝固 */
 #music-dock-root.md-vapor .md-ttl { opacity: .7; }
-#music-dock-root.md-vapor .md-nxb:not(.md-nx2) { opacity: .4; }
+#music-dock-root.md-vapor .md-nxb:not(.md-nx2) { opacity: .7; }
 
 /* 音量水滴里的竖条 */
 .md-vrail {

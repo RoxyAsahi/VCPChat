@@ -369,7 +369,11 @@
         }
 
         // ───────── 胶囊悬停与快捷行 ─────────
-        const setQuick = (show) => el.quick.classList.toggle('md-show', show);
+        const setQuick = (show) => {
+            if (el.quick.classList.contains('md-show') === Boolean(show)) return;
+            el.quick.classList.toggle('md-show', show);
+            fluid?.setQuick(show, show ? el.quickGroup.getBoundingClientRect() : null);
+        };
         listen(el.cap, 'pointerenter', (event) => {
             if (event.pointerType === 'touch') return;
             cancel(collapseTimer); collapseTimer = null;
