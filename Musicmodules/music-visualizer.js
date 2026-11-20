@@ -142,6 +142,7 @@ function setupVisualizer(app) {
                         } : { playing: false });
                     }
                     if (app.isPlaying) {
+                        if (!app.animationFrameId) app.wakeVisualizer();
                         app._visualizerIdle = false;
                         app.targetVisualizerData = message.data;
                         if (app.currentVisualizerData.length === 0) {
@@ -222,6 +223,12 @@ function setupVisualizer(app) {
             cancelAnimationFrame(app.animationFrameId);
             app.animationFrameId = null;
         }
+        app._visualizerWakeObserver?.disconnect();
+        app._visualizerWakeObserver = null;
+        if (app._visualizerWakeOnVisible) {
+            document.removeEventListener('visibilitychange', app._visualizerWakeOnVisible);
+            window.removeEventListener('resize', app._visualizerWakeOnVisible);
+        }
         const socket = app.ws;
         app.ws = null;
         if (socket) {
@@ -296,6 +303,35 @@ function setupVisualizer(app) {
         app.visualizerCtx.fill();
     };
 
+    // 这条循环该不该跑：
+    // - 窗口不可见：不跑。
+    // - 歌词舞台开着：舞台每一帧都是从这里驱动的（stageHost.updateFrame），要跑。
+    // - 经典视图被档案页盖住：不跑。
+    // - 正在播放：跑。暂停后只跑到频谱和封面落回静止为止。
+    app.visualizerShouldRun = () => {
+        if (app.visualizerDestroyed || document.hidden) return false;
+        if (app.isStageActive && app.stageHost?.active) return true;
+        if (document.body.classList.contains('music-archive-on')) return false;
+        if (app.isPlaying) return true;
+        if (performance.now() < (app._visualizerKeepUntil || 0)) return true; // 刚被叫醒：让背景把新状态画出来
+        const settling = app.targetVisualizerData.length > 0 && !app._visualizerIdle;
+        return settling || (Number.isFinite(app.bassScale) && app.bassScale !== 1.0);
+    };
+    // keepMs：暂停着也先画这么久（刚打开、换主题、改窗口大小后，背景要重画几帧才对）。
+    app.wakeVisualizer = (keepMs = 0) => {
+        if (keepMs > 0) app._visualizerKeepUntil = Math.max(app._visualizerKeepUntil || 0, performance.now() + keepMs);
+        if (!app.animationFrameId && app.visualizerShouldRun()) app.startVisualizerAnimation();
+    };
+    app._visualizerKeepUntil = performance.now() + 2500;
+    // 播放/暂停、进出舞台、档案页和经典视图互换都会改 body 的 class；再加上窗口重新可见。
+    if (!app._visualizerWakeObserver && typeof MutationObserver === 'function') {
+        app._visualizerWakeObserver = new MutationObserver(() => app.wakeVisualizer(1200));
+        app._visualizerWakeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        app._visualizerWakeOnVisible = () => app.wakeVisualizer(400);
+        document.addEventListener('visibilitychange', app._visualizerWakeOnVisible);
+        window.addEventListener('resize', app._visualizerWakeOnVisible);
+    }
+
     app.startVisualizerAnimation = () => {
         if (app.visualizerDestroyed || app.animationFrameId) return;
         const draw = (timestamp) => {
@@ -303,6 +339,16 @@ function setupVisualizer(app) {
                 app.animationFrameId = null;
                 return;
             }
+            // Pixi 的全局 system ticker（纹理回收、指针事件）自己会一直按满帧空转：
+            // 停掉它的自驱动，改成跟着这里的真实帧走，页面静止时它也静止。
+            const pixiTicker = window.PIXI?.Ticker?.system;
+            if (pixiTicker?.started) { pixiTicker.autoStart = false; pixiTicker.stop(); }
+            // 没有东西要画就整个停下，不再空排帧；wakeVisualizer 在状态变化时再把循环叫起来。
+            if (!app.visualizerShouldRun()) {
+                app.animationFrameId = null;
+                return;
+            }
+            pixiTicker?.update(timestamp);
             const isStageActive = Boolean(app.isStageActive && app.stageHost?.active);
 
             if (app.isPlaying && !isStageActive) {
