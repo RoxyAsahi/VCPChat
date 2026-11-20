@@ -26,7 +26,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
     if (name.includes('dock')) qs.set('dock', '118');
     if (name.includes('empty')) qs.set('empty', '');
     if (name.includes('playing')) qs.set('playing', '');
-    if (name.includes('lyrics')) qs.set('lyrics', '');
+    if (name.includes('nolyr')) qs.set('nolyrics', ''); else if (name.includes('lyrics')) qs.set('lyrics', '');
     if (name.includes('plzero')) qs.set('emptypl', '');
     if (args.n) qs.set('n', args.n);
     await page.goto(base + '?' + qs.toString(), { timeout: 120000 });
@@ -59,7 +59,7 @@ const CASES = (args.cases || 'dark,light,dark-dock,light-narrow,light-narrow-lis
       // 目录切到歌单分类，阵列走到那个空歌单
       await page.evaluate(() => { document.querySelector('[data-kind="playlist"]').click(); const v = window.app.archiveView; const k = v.debug().columns.findIndex((c) => c.id === 'playlist:e'); for (let i = 0; i < k; i++) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); });
     }
-    else if (name.includes('scan')) { /* 停在原处 */ }
+    else if (name.includes('scan') || name.includes('nolyr')) { /* 停在原处 */ }
     else if (name.includes('search')) { await page.keyboard.press('/'); await page.keyboard.type('站台'); await page.waitForTimeout(300); }
     else if (name.includes('pinyin')) { await page.waitForFunction(() => window.pinyinPro); await page.keyboard.press('/'); await page.keyboard.type('hh'); await page.waitForTimeout(300); await page.keyboard.press('ArrowDown'); }
     else if (!name.includes('empty')) { await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowRight'); }

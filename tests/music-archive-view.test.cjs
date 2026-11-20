@@ -846,3 +846,23 @@ test('空的原因各有说法：检索没结果、空歌单、还没有播放�
     assert.match(f.text('fmeta'), /右键/);
     f.close();
 });
+
+test('右侧歌词：正在放的歌等一会儿还没有歌词，只留栏头和「获取歌词」；歌词到了换成歌词，不占大封面的版面', async () => {
+    const f = fixture({ setup: (w, app) => { w.innerWidth = 1600; w.innerHeight = 900; app.isPlaying = true; app.currentLyrics = []; app.openLyricsFetchModal = (i) => { app.fetchAsked = i; }; } });
+    const el = f.w.document.querySelector('.archive-lyrics');
+    const hud = f.w.document.querySelector('.archive-hud');
+    const wait = (ms) => new Promise((r) => f.w.setTimeout(r, ms));
+    f.view.refresh();
+    assert.equal(el.hidden, true, '刚开始先不说没有（可能还在取）');
+    await wait(2700);
+    assert.equal(el.hidden, false);
+    assert.ok(el.classList.contains('none'));
+    assert.equal(hud.classList.contains('has-lyrics'), false);
+    el.querySelector('[data-y="fetch"]').click();
+    assert.equal(f.app.fetchAsked, 0);
+    f.app.currentLyrics = [{ time: 1, text: '第一句' }, { time: 5, text: '第二句' }];
+    f.view.refresh();
+    assert.equal(el.classList.contains('none'), false);
+    assert.ok(hud.classList.contains('has-lyrics'));
+    f.close();
+});

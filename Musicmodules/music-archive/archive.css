@@ -385,6 +385,16 @@ body.light-theme .archive-lyrics { --glow: .85; }
 .archive-lyrics-track p.on em { color: var(--ar-ink); opacity: .8; }
 .archive-lyrics-track p.on::before { content: ""; position: absolute; left: 0; top: 7px; width: 6px; height: 6px; background: var(--ar-square); }
 .archive-lyrics-track p.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 9.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
+/* 没有歌词：只留栏头和一行说明，不占右侧版面 */
+.archive-lyrics-none { display: none; margin-right: 59px; padding: 18px 0 0 20px; }
+.archive-lyrics-none span { display: block; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--ar-summary, var(--ar-muted)); }
+.archive-lyrics-none button { margin-top: 12px; font-size: 13px; letter-spacing: .6px; color: var(--ar-ink); }
+.archive-lyrics-none button i { margin-left: 10px; font-style: normal; font-size: 10px; letter-spacing: 1.1px; color: var(--ar-muted); }
+.archive-lyrics-none button:hover, .archive-lyrics-none button:hover i { color: var(--ar-accent); }
+.archive-lyrics.none { bottom: auto; }
+.archive-lyrics.none .archive-lyrics-viewport { display: none; }
+.archive-lyrics.none .archive-lyrics-none { display: block; }
+.archive-lyrics.none::before { bottom: -50px; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 50px, #000 calc(100% - 50px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 50px, #000 calc(100% - 50px), transparent 100%); }
 body.music-reduce-motion .archive-lyrics-track { transition: none; }
 body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 
