@@ -11,6 +11,7 @@ const WINDOW_APP_IDS = require('../services/windowAppIds');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPaths');
 const audioEngineEndpoint = require('../services/audioEngineEndpoint');
 const musicGrooveBus = require('../services/musicGrooveBus');
+const { findTrack } = require('../musicTrackMatch');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
 let fetch;
@@ -367,11 +368,8 @@ async function handleMusicControl(args) {
         case 'play':
             if (target) {
                 // 从播放列表中找到目标曲目
-                const playlist = await fs.readJson(MUSIC_PLAYLIST_FILE).catch(() => []);
-                const track = playlist.find(t =>
-                    (t.title || '').toLowerCase().includes(target.toLowerCase()) ||
-                    (t.artist || '').toLowerCase().includes(target.toLowerCase())
-                );
+                const playlist = await readPlaylistFile();
+                const track = findTrack(playlist, target);
                 if (!track) {
                     return { status: 'error', message: `Track '${target}' not found.` };
                 }
@@ -422,6 +420,11 @@ async function handleMusicControl(args) {
             }
             return audioEngineApi('/pause', 'POST');
         case 'stop':
+            // 窗口开着时绕过它直接停引擎，界面会一直以为还在放；交给窗口暂停。
+            if (musicWindow && !musicWindow.isDestroyed()) {
+                musicWindow.webContents.send('music-control', 'pause');
+                return { status: 'success', message: 'Stopped.' };
+            }
             return audioEngineApi('/stop', 'POST');
         case 'next':
             if (musicWindow && !musicWindow.isDestroyed()) {
