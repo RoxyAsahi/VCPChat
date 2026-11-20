@@ -266,7 +266,10 @@
             ],
             kowloon: [
                 { key: 'cameraMode', label: '镜头（可拖拽看景，双击回正）', type: 'select', options: [['auto', '分镜运镜'], ['diorama', '斜俯视全景']] },
-                { key: 'rain', label: '雨', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
+                { key: 'rain', label: '雨（节能档减量）', type: 'select', options: [['off', '关'], ['light', '小雨'], ['heavy', '大雨']] },
+                { key: 'lightning', label: '副歌闪电', type: 'toggle' },
+                { key: 'reflections', label: '积水倒影（节能档关闭）', type: 'toggle' },
+                { key: 'fog', label: '雾气浓度', type: 'range', min: 0.5, max: 1.5, step: 0.05, unit: 'x' },
                 { key: 'showTranslation', label: '翻译／罗马音', type: 'toggle' },
                 { key: 'postProcess', label: '光学后期（节能档关闭）', type: 'toggle' },
                 { key: 'glow', label: '霓虹辉光', type: 'range', min: 0, max: 2, step: 0.05, unit: 'x' },
