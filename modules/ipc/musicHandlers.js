@@ -9,7 +9,7 @@ const webdavManager = require('../webdavManager'); // WebDAV support
 const windowService = require('../services/windowService');
 const WINDOW_APP_IDS = require('../services/windowAppIds');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPaths');
-const AUDIO_ENGINE_URL = 'http://127.0.0.1:63789';
+const audioEngineEndpoint = require('../services/audioEngineEndpoint');
 const musicGrooveBus = require('../services/musicGrooveBus');
 const { formatCurrentLyrics } = require('../lyrics/lyricsMarkdown');
 const { randomUUID } = require('crypto');
@@ -86,10 +86,12 @@ function createOrFocusMusicWindow() {
                 throw new Error("startAudioEngine function not provided.");
             }
         } catch (error) {
+            // 引擎起不来时照常打开窗口，由窗口顶部的提示说明原因（见 music-get-audio-engine-endpoint），
+            // 而不是让用户对着时长 0:00 猜。下次打开窗口会再尝试启动。
             console.error('[Music] Failed to ensure audio engine is ready:', error);
-            dialog.showErrorBox('音乐引擎错误', '无法启动或连接后端音频引擎，请检查日志或重启应用。');
-            rejectWindowCreation(error);
-            return;
+            if (audioEngineEndpoint.getStatus().state !== 'failed') {
+                audioEngineEndpoint.markFailed(error?.message || '音频引擎没有启动');
+            }
         }
 
         if (musicWindow && !musicWindow.isDestroyed()) {
@@ -261,7 +263,7 @@ async function audioEngineApi(endpoint, method = 'POST', body = null) {
     try {
         if (!fetch) throw new Error('node-fetch module is not available yet.');
 
-        const url = `${AUDIO_ENGINE_URL}${endpoint}`;
+        const url = `${audioEngineEndpoint.getBaseUrl()}${endpoint}`;
         const options = {
             method,
             headers: { 'Content-Type': 'application/json' },
@@ -508,6 +510,14 @@ function initialize(options) {
             if (!mainWindow || event.sender !== mainWindow.webContents) return;
             if (!['previous', 'next', 'play', 'pause'].includes(command)) return;
             if (musicWindow && !musicWindow.isDestroyed()) musicWindow.webContents.send('music-control', command);
+        });
+
+        ipcMain.handle('music-get-audio-engine-endpoint', () => audioEngineEndpoint.getEndpoint());
+
+        audioEngineEndpoint.onStatus((endpoint) => {
+            if (musicWindow && !musicWindow.isDestroyed()) {
+                musicWindow.webContents.send('audio-engine-status', endpoint);
+            }
         });
 
         ipcMain.handle('music-get-pending-track', () => {

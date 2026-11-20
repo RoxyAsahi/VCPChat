@@ -361,6 +361,36 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     };
 
+    // --- Audio engine endpoint & status ---
+    // 引擎端口由主进程启动时探测决定；引擎没起来时在窗口顶部说明原因，而不是只显示时长 0:00。
+    const audioEngineNotice = document.getElementById('audio-engine-notice');
+    const applyAudioEngineEndpoint = (endpoint) => {
+        if (!endpoint) return;
+        const previousUrl = app.audioEngineWsUrl;
+        if (endpoint.wsUrl) app.audioEngineWsUrl = endpoint.wsUrl;
+        const failed = endpoint.state === 'failed';
+        if (audioEngineNotice) {
+            audioEngineNotice.hidden = !failed;
+            const detail = audioEngineNotice.querySelector('.audio-engine-notice-detail');
+            if (detail) detail.textContent = failed ? (endpoint.message || '') : '';
+        }
+        // 引擎换了端口重新就绪后，立即连到新地址，不等 5 秒重连。
+        if (endpoint.state === 'ready' && previousUrl && previousUrl !== app.audioEngineWsUrl) {
+            try { app.ws?.close(); } catch (_) { /* ignore */ }
+            app.ws = null;
+            app.connectWebSocket();
+        }
+    };
+    const refreshAudioEngineEndpoint = async () => {
+        if (!app.api?.getAudioEngineEndpoint) return;
+        try {
+            applyAudioEngineEndpoint(await app.api.getAudioEngineEndpoint());
+        } catch (error) {
+            console.warn('[Music] Failed to read audio engine endpoint:', error);
+        }
+    };
+    app.api?.onAudioEngineStatus?.(applyAudioEngineEndpoint);
+
     // --- Initialization ---
     const init = async () => {
         // Setup modules
@@ -391,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.visualizerCanvas.width = app.visualizerCanvas.clientWidth;
         app.visualizerCanvas.height = app.visualizerCanvas.clientHeight;
         app.recreateParticles();
+        await refreshAudioEngineEndpoint();
         app.connectWebSocket();
         if (!app.animationFrameId) app.startVisualizerAnimation();
         app.updateModeButton();
