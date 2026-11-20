@@ -227,7 +227,7 @@
                 for (const key of [...multi]) if (!alive.has(key)) multi.delete(key);
                 multiAnchor = -1;
                 r.multiNote.hidden = multi.size < 2;
-                r.multiNote.textContent = multi.size < 2 ? '' : `已选 ${multi.size} 首 · 右键批量操作 · ESC 取消`;
+                r.multiNote.textContent = multi.size < 2 ? '' : `已选 ${multi.size} 首 · 右键或菜单键操作 · ESC 取消`;
                 el.classList.toggle('has-multi', multi.size > 1);
             }
             state.selectedRow = findRow(state.selected, state.preferCtx);
@@ -283,7 +283,7 @@
         const paintMulti = () => {
             const n = multi.size;
             r.multiNote.hidden = n < 2;
-            r.multiNote.textContent = n < 2 ? '' : `已选 ${n} 首 · 右键批量操作 · ESC 取消`;
+            r.multiNote.textContent = n < 2 ? '' : `已选 ${n} 首 · 右键或菜单键操作 · ESC 取消`;
             el.classList.toggle('has-multi', n > 1);
             for (const [k, node] of state.rendered) paintRow(node, state.rows[k], k);
         };
@@ -485,6 +485,20 @@
                 if (state.rows[j].type === 'track') { pickRow(j); return; }
             }
         };
+        /*
+         * 键盘移动之后：按着 Shift 就把起点到现在这一行都选上（起点是上一次不带 Shift 停下的那一行），
+         * 不按 Shift 就回到单选
+         */
+        const afterMove = (shift, before) => {
+            const k = state.selectedRow;
+            if (!shift || k < 0) { multiAnchor = k; clearMulti(); return; }
+            const ok = (j) => j >= 0 && j < state.rows.length && state.rows[j].type === 'track';
+            const from = ok(multiAnchor) ? multiAnchor : ok(before) ? before : k;
+            multiAnchor = from;
+            multi.clear();
+            if (from !== k) for (let j = Math.min(from, k); j <= Math.max(from, k); j++) if (state.rows[j].type === 'track') multi.add(keyOf(state.rows[j]));
+            paintMulti();
+        };
         const selectedRowData = () => state.rows[state.selectedRow] || null;
         /* 第 k 行所在的那一组：组名和组里的曲目（按显示顺序） */
         const groupOf = (k) => {
@@ -524,13 +538,15 @@
         const onKey = (e) => {
             const inInput = e.target === r.input;
             if (inInput) flushQuery();
+            const before = state.selectedRow;
+            const range = e.shiftKey && !inInput;
             switch (e.key) {
-                case 'ArrowDown': e.preventDefault(); stepRow(1); break;
-                case 'ArrowUp': e.preventDefault(); stepRow(-1); break;
-                case 'PageDown': e.preventDefault(); stepRow(1, 10); break;
-                case 'PageUp': e.preventDefault(); stepRow(-1, 10); break;
-                case 'Home': if (!inInput) { e.preventDefault(); edgeRow(false); } break;
-                case 'End': if (!inInput) { e.preventDefault(); edgeRow(true); } break;
+                case 'ArrowDown': e.preventDefault(); stepRow(1); afterMove(range, before); break;
+                case 'ArrowUp': e.preventDefault(); stepRow(-1); afterMove(range, before); break;
+                case 'PageDown': e.preventDefault(); stepRow(1, 10); afterMove(range, before); break;
+                case 'PageUp': e.preventDefault(); stepRow(-1, 10); afterMove(range, before); break;
+                case 'Home': if (!inInput) { e.preventDefault(); edgeRow(false); afterMove(range, before); } break;
+                case 'End': if (!inInput) { e.preventDefault(); edgeRow(true); afterMove(range, before); } break;
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
@@ -559,8 +575,10 @@
                     if (e.key === 'F10' && !e.shiftKey) return;
                     e.preventDefault();
                     if (multi.size > 1) {
-                        const box = r.viewport.getBoundingClientRect();
-                        openBatchMenu(box.left + 80, box.top + 80, { keyboard: true });
+                        // 菜单开在当前那一行旁边（那一行滚出去了就开在目录左上）
+                        const node = state.rendered.get(state.selectedRow);
+                        const box = (node && inView(state.selectedRow) ? node : r.viewport).getBoundingClientRect();
+                        openBatchMenu(box.left + 80, box.top + (node && inView(state.selectedRow) ? box.height : 80), { keyboard: true });
                     } else openMenuForRow(state.selectedRow);
                     break;
                 }
@@ -699,7 +717,8 @@
                 const name = input.value;
                 host.innerHTML = before;
                 if (commit) done(name);
-                else r.viewport.focus?.();
+                // 键盘操作完焦点回目录（改名后整张目录重排，原来的按钮已经不在了）
+                if (!el.contains(document.activeElement) || document.activeElement === document.body) r.viewport.focus?.();
             };
             input.addEventListener('keydown', (e) => {
                 e.stopPropagation();
@@ -735,9 +754,11 @@
             } else if (act === 'delete-no') {
                 manage.confirm = null;
                 repaintHead(node);
+                node.querySelector('[data-pl="delete"]')?.focus();
             } else if (act === 'delete-yes') {
                 manage.confirm = null;
                 deletePlaylist(pl);
+                r.viewport.focus?.();
             }
         });
 
@@ -787,7 +808,9 @@
             const victims = new Set(indices.map((i) => lib[i]).filter((t) => t && t !== current));
             if (!victims.size) { toast('正在播放的这首没有移除'); return; }
             const before = lib.slice();
-            const beforeFiltered = app.currentFilteredTracks;
+            const beforeFiltered = Array.isArray(app.currentFilteredTracks) ? app.currentFilteredTracks.slice() : null;
+            // 手动队列里有这些歌的话一并拿掉，记下原来排第几，撤销时放回去
+            const queued = (app.manualQueue || []).map((t, at) => ({ t, at })).filter((q) => victims.has(q.t));
             for (let i = lib.length - 1; i >= 0; i--) if (victims.has(lib[i])) lib.splice(i, 1);
             if (current) app.currentTrackIndex = Math.max(0, lib.indexOf(current));
             if (Array.isArray(app.currentFilteredTracks)) app.currentFilteredTracks = app.currentFilteredTracks.filter((t) => !victims.has(t));
@@ -798,13 +821,36 @@
                 if (opts.onLibraryChanged) opts.onLibraryChanged(); else rebuild();
             };
             after();
+            /*
+             * 撤销：只把移除的那些插回去，各自回到原来排在它前面、现在还在的最近一首后面，
+             * 期间曲库里新增的歌（比如扫描还在进行）原样留着。
+             */
+            const putBack = (target, original) => {
+                let prev = null;
+                original.forEach((t) => {
+                    // prev：原来排在它前面、现在还在的最近一首
+                    if (!victims.has(t)) { if (target.includes(t)) prev = t; return; }
+                    if (!target.includes(t) && !target.some((x) => x && x.path === t.path)) target.splice(prev ? target.indexOf(prev) + 1 : 0, 0, t);
+                    if (target.includes(t)) prev = t;
+                });
+            };
             const skipped = indices.length - victims.size;
             toast(`已从曲库列表移除 ${victims.size} 首` + (skipped ? '（正在播放的那首留着）' : ''), { label: '撤销', run: () => {
-                if (app.playlist !== lib) return;
-                const playing = lib[app.currentTrackIndex];
-                lib.splice(0, lib.length, ...before);
-                if (playing) app.currentTrackIndex = Math.max(0, lib.indexOf(playing));
-                app.currentFilteredTracks = beforeFiltered;
+                const now = app.playlist;
+                if (!Array.isArray(now)) return;
+                const playing = now[app.currentTrackIndex];
+                putBack(now, before);
+                if (playing) app.currentTrackIndex = Math.max(0, now.indexOf(playing));
+                if (beforeFiltered && Array.isArray(app.currentFilteredTracks)) {
+                    const list = app.currentFilteredTracks.slice();
+                    putBack(list, beforeFiltered);
+                    app.currentFilteredTracks = list;
+                }
+                for (const q of queued) {
+                    if (typeof app.queueAdd !== 'function' || (app.manualQueue || []).includes(q.t) || !app.queueAdd(q.t)) continue;
+                    const last = app.manualQueue.indexOf(q.t);
+                    if (last !== -1 && last !== q.at && typeof app.queueMove === 'function') app.queueMove(last, Math.min(q.at, app.manualQueue.length - 1));
+                }
                 after();
             } });
         };
