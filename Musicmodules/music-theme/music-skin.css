@@ -946,17 +946,17 @@ body.music-dock-sheet-open .main-content #visualizer {
     -webkit-backdrop-filter: none;
 }
 
-/* ---------- 减少动态 ---------- */
-@media (prefers-reduced-motion: reduce) {
-    .is-rolling,
-    .acoustic-drawer.is-open .acoustic-drawer-body {
-        animation: none;
-    }
+/* ---------- 减少动态 ----------
+ * 读设置里的「降低动态」（music-motion.js 挂的 body 类），默认跟随系统；
+ * 用户选了「关」时系统开着减少动态也照常播放动画。 */
+body.music-reduce-motion .is-rolling,
+body.music-reduce-motion .acoustic-drawer.is-open .acoustic-drawer-body {
+    animation: none;
+}
 
-    .sidebar-tab::after,
-    .acoustic-drawer-chevron {
-        transition: none;
-    }
+body.music-reduce-motion .sidebar-tab::after,
+body.music-reduce-motion .acoustic-drawer-chevron {
+    transition: none;
 }
 
 /* ---------- 窄窗口：右栏歌词并到中栏下方，侧栏收窄 ---------- */

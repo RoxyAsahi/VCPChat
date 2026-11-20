@@ -39,7 +39,10 @@
     };
     const DEG = Math.PI / 180;
 
-    const reducedMotion = () => global.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // 「降低动态」统一读 music-motion.js（设置里可选跟随系统 / 开 / 关）；没加载时退回系统设置。
+    const reducedMotion = () => (global.MusicMotion
+        ? global.MusicMotion.reduced()
+        : Boolean(global.matchMedia?.('(prefers-reduced-motion: reduce)').matches));
 
     // ---------- 节点 ----------
     const el = (tag, attrs = {}, parent) => {

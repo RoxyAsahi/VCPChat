@@ -554,14 +554,13 @@ body.music-dock-on .music-stage .music-stage-chrome {
     letter-spacing: .14em;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .music-stage-settings-card {
-        animation: none;
-    }
+/* 降低动态：读 music-motion.js 挂的 body 类 */
+body.music-reduce-motion .music-stage-settings-card {
+    animation: none;
+}
 
-    .music-stage-mode-switcher .music-stage-mode-button::after {
-        transition: none;
-    }
+body.music-reduce-motion .music-stage-mode-switcher .music-stage-mode-button::after {
+    transition: none;
 }
 
 /* ---------- 窄窗口 ---------- */
