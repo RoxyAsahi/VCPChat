@@ -378,6 +378,17 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list-row.on::after { content: ""; position: absolute; left: 6px; right: 0; top: 6.5px; height: 1px; background: var(--ar-rule); transform-origin: left; animation: archive-list-rule .5s var(--mt-ease, ease) both; }
 @keyframes archive-list-rule { from { transform: scaleX(0); } }
 /* 正在播放：方块的位置换成三根跟着跳动的竖条，暂停时静止 */
+/* 行首播放键：悬停（或键盘选中）时出现在左边留白里；正在放的那一行悬停时换成暂停 */
+.archive-list-row .go { position: absolute; left: -7px; top: 50%; width: 26px; height: 26px; margin-top: -13px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ar-ink); display: grid; place-items: center; cursor: pointer; opacity: 0; transform: scale(.8); transition: opacity .15s, transform .15s var(--mt-ease, ease), background-color .15s; }
+.archive-list-row .go svg { width: 12px; height: 12px; fill: currentColor; }
+.archive-list-row .go .go-pause { display: none; }
+.archive-list-row.current.playing .go .go-play { display: none; }
+.archive-list-row.current.playing .go .go-pause { display: inline; }
+.archive-list-row:hover .go { opacity: 1; transform: none; }
+.archive-list-row .go:hover { background: var(--ar-rule, rgba(127,127,127,.18)); }
+.archive-list-row:hover .eq, .archive-list-row:hover::before { visibility: hidden; }
+.archive-list.grabbing .archive-list-row .go, .archive-list.has-multi .archive-list-row .go { display: none; }
+@media (hover: none) { .archive-list-row .go { display: none; } }
 .archive-list-row .eq { position: absolute; left: 0; top: 13px; display: none; align-items: flex-end; gap: 1.5px; height: 12px; }
 .archive-list-row .eq i { width: 2px; height: 100%; background: var(--ar-accent); transform-origin: bottom; transform: scaleY(.45); }
 .archive-list-row.current .eq { display: flex; }

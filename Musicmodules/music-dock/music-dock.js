@@ -636,11 +636,14 @@
             const pos = list.indexOf(currentTrack());
             return list[((Math.max(pos, 0) + dir) % list.length + list.length) % list.length] || null;
         };
-        const showPreview = (track) => {
-            el.tnav.classList.toggle('md-previewing', Boolean(track));
-            if (track) el.preview.textContent = trackTitle(track);
+        const showPreview = (track, label) => {
+            el.tnav.classList.toggle('md-previewing', Boolean(track || label));
+            if (label) el.preview.textContent = label;
+            else if (track) el.preview.textContent = trackTitle(track);
         };
-        listen($('.md-zone.md-l'), 'pointerenter', () => showPreview(neighbour(-1)));
+        // 放了 3 秒以上时「上一首」先回到本曲开头（播放器的规则），预览也照实说。
+        const prevRestarts = () => app.prevRestarts?.() === true;
+        listen($('.md-zone.md-l'), 'pointerenter', () => (prevRestarts() ? showPreview(null, '回到开头') : showPreview(neighbour(-1))));
         listen($('.md-zone.md-r'), 'pointerenter', () => showPreview(neighbour(1)));
         listen($('.md-zone.md-l'), 'pointerleave', () => showPreview(null));
         listen($('.md-zone.md-r'), 'pointerleave', () => showPreview(null));
@@ -691,7 +694,7 @@
                 el.cur.style.opacity = '';
             });
         };
-        listen(el.prev, 'click', (event) => { event.stopPropagation(); showPreview(null); slideTitle(-1); app.prevTrack?.(); });
+        listen(el.prev, 'click', (event) => { event.stopPropagation(); showPreview(null); if (!prevRestarts()) slideTitle(-1); app.prevTrack?.(); });
         listen(el.next, 'click', (event) => { event.stopPropagation(); showPreview(null); slideTitle(1); app.nextTrack?.(); });
 
         const cycleMode = () => {
@@ -1820,7 +1823,7 @@
                 take();
                 if (event.repeat) return;
                 showPreview(null);
-                slideTitle(key === 'ArrowLeft' ? -1 : 1);
+                if (key !== 'ArrowLeft' || !prevRestarts()) slideTitle(key === 'ArrowLeft' ? -1 : 1);
                 if (key === 'ArrowLeft') app.prevTrack?.(); else app.nextTrack?.();
                 return;
             }
