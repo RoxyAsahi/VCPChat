@@ -44,7 +44,9 @@
     /*
      * opts: {
      *   host, app, Index, getIndex(), getRecent(), columnOfGroup(g),
-     *   onPick(i, ctx), onPlay(i, ctx, { stage }), fileNumber(track, i), isNarrow()
+     *   onPick(i, ctx), onPlay(i, ctx, { stage, group }), fileNumber(track, i), isNarrow()
+     *   group = { name, items } 是这一行所在的那组（歌手、专辑、最近、检索结果），点播时用它当队列；
+     *   全部曲目且没有检索词时不给（按首字母分的组只是索引，队列仍是整个曲库）
      * }
      */
     /* 首字母分组（全部曲目、无检索词）：字母放到左侧外边距里，大号细体 */
@@ -114,6 +116,8 @@
             for (const node of state.rendered.values()) node.remove();
             state.rendered.clear();
             state.selectedRow = findRow(state.selected, state.preferCtx);
+            // 重排后（比如拼音表加载好、分组变了）选中行可能跑到视野外，拉回来
+            if (state.selectedRow >= 0 && !inView(state.selectedRow)) scrollToRow(state.selectedRow, { center: true });
             render();
         };
 
@@ -228,13 +232,13 @@
         };
 
         /* 阵列那边换了选中：列表跟着高亮并滚到那一行 */
-        const reveal = (i, ctx) => {
+        const reveal = (i, ctx, { center = false } = {}) => {
             state.selected = i;
             state.preferCtx = ctx;
             const k = findRow(i, ctx);
             const moved = k !== state.selectedRow;
             state.selectedRow = k;
-            if (moved && k >= 0) scrollToRow(k, { center: !inView(k) });
+            if ((moved || center) && k >= 0) scrollToRow(k, { center: center || !inView(k) });
             render(); // 当场画，避免阵列和目录高亮差一帧
         };
         const inView = (k) => {
@@ -271,6 +275,20 @@
             }
         };
         const selectedRowData = () => state.rows[state.selectedRow] || null;
+        /* 第 k 行所在的那一组：组名和组里的曲目（按显示顺序） */
+        const groupOf = (k) => {
+            if (state.kind === 'all' && !state.query.trim()) return null;
+            let h = -1;
+            for (const hk of state.heads) { if (hk <= k) h = hk; else break; }
+            const head = state.rows[h];
+            const items = [];
+            for (let j = h + 1; j < state.rows.length && state.rows[j].type === 'track'; j++) items.push(state.rows[j].i);
+            if (!items.length) return null;
+            const kindName = (KINDS.find(([kk]) => kk === state.kind) || [])[1] || '';
+            const label = head ? head.label : kindName;
+            const name = state.kind === 'all' || state.kind === 'recent' || !kindName || label === kindName ? label : kindName + '：' + label;
+            return { name, items };
+        };
 
         // ---------- 输入 ----------
         let typeTimer = 0;
@@ -305,13 +323,13 @@
                 case 'Enter': {
                     e.preventDefault();
                     const row = selectedRowData();
-                    if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: e.shiftKey });
+                    if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: e.shiftKey, group: groupOf(state.selectedRow) });
                     break;
                 }
                 case 'ArrowRight': {
                     if (inInput && r.input.selectionStart < r.input.value.length) return;
                     const row = selectedRowData();
-                    if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true }); }
+                    if (row && row.type === 'track') { e.preventDefault(); opts.onPlay(row.i, row.ctx, { stage: true, group: groupOf(state.selectedRow) }); }
                     break;
                 }
                 case 'Escape':
@@ -339,7 +357,7 @@
         r.viewport.addEventListener('dblclick', (e) => {
             const node = e.target.closest('.archive-list-row');
             const row = node && state.rows[Number(node.dataset.k)];
-            if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false });
+            if (row && row.type === 'track') opts.onPlay(row.i, row.ctx, { stage: false, group: groupOf(Number(node.dataset.k)) });
         });
         r.viewport.addEventListener('contextmenu', (e) => {
             const node = e.target.closest('.archive-list-row');

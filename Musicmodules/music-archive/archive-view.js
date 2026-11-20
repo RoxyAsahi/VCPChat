@@ -28,7 +28,7 @@
                 <button type="button" data-act="list" data-ref="listBtn" title="档案目录（L）" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST <span class="archive-key">L</span></button>
                 <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
-                <button type="button" data-act="now" title="回到正在播放（Home）" aria-label="回到正在播放"><span class="archive-glyph-now">◷</span></button>
+                <button type="button" data-act="now" title="定位当前播放（Ctrl+L）" aria-label="定位当前播放"><span class="archive-glyph-now">◷</span></button>
             </nav>
             <div class="archive-callout">
                 <div class="archive-eyebrow">TRACK DATABASE <span>／</span> <span data-ref="cat"></span></div>
@@ -50,7 +50,7 @@
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
                 <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索 <span>／</span> L 目录</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
-                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
+                <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
         </div>`;
 
@@ -136,6 +136,8 @@
         const buildColumns = () => {
             const base = Model.buildColumns(tracks(), app.customPlaylists);
             letterOf = null;
+            // 「全部曲目」用全局顺序（和目录一致），不用扫描顺序
+            if (IndexLib && searchIndex) base[0].items = IndexLib.sortedIndices(searchIndex, base[0].items);
             const n = tracks().length;
             if (n < LETTER_SPLIT_MIN || !IndexLib || !searchIndex) return base;
             const letters = IndexLib.groupColumns(searchIndex, base[0].items, { minSize: LETTER_MIN_SIZE });
@@ -290,12 +292,21 @@
             kick();
         };
 
-        const playSelected = ({ stage = true } = {}) => {
+        const playSelected = ({ stage = true, group = null } = {}) => {
             const col = column();
             const index = selectedIndex();
             if (!col || index < 0) return;
             const already = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
-            if (!already) {
+            if (!already && group && group.items.includes(index)) {
+                // 从目录的某一组点播（歌手、专辑、最近、检索结果）：队列就是看到的这一组
+                const list = group.items.map((i) => tracks()[i]).filter(Boolean);
+                app.currentFilteredTracks = list;
+                app.filteredPlaylistSource = { type: 'archive-group', name: group.name };
+                try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示 */ }
+                state.playedLane = state.lane;
+                setQueueName(group.name);
+                app.loadTrack(index, true);
+            } else if (!already) {
                 // 播放队列跟着所在的列走：全部曲目列用整个曲库，其他列用这一列的曲目
                 // 按首字母拆开的列：队列是整个曲库（按首字母顺序接着放），不只这一个字母
                 const queue = col.kind === 'letter' ? state.columns.filter((c) => c.kind === 'letter').flatMap((c) => c.items) : col.items;
@@ -305,6 +316,7 @@
                     : col.kind === 'album' ? { type: 'album', name: col.name } : null;
                 try { app.renderPlaylist?.(list); } catch (e) { /* 旧列表只是同步显示，失败不影响播放 */ }
                 state.playedLane = state.lane;
+                setQueueName(col.kind === 'letter' || col.kind === 'all' ? '全部曲目' : col.name);
                 app.loadTrack(index, true);
             }
             if (stage && app.stageHost && !app.stageHost.active) app.stageHost.enter();
@@ -452,10 +464,21 @@
             list.reveal(selectedIndex(), col ? col.id : null);
         };
 
-        const playIndex = (i, ctx, { stage }) => {
+        const playIndex = (i, ctx, { stage, group = null }) => {
             goToTrack(i, ctx, { pulse: false });
             if (selectedIndex() !== i) return;
-            playSelected({ stage });
+            playSelected({ stage, group });
+        };
+        /* 底部显示正在放的这一组（队列）叫什么 */
+        const setQueueName = (name) => { if (refs.queue) refs.queue.textContent = name || '全部曲目'; };
+        /* 定位当前播放：相机飞到那张卡，目录滚到那一行并居中 */
+        const locatePlaying = () => {
+            goToPlaying();
+            if (list && listOpen()) {
+                if (list.kind !== 'all' && !list.query) list.setKind('all');
+                const col = column();
+                list.reveal(app.currentTrackIndex, col ? col.id : null, { center: true });
+            }
         };
 
         const openSearch = () => {
@@ -713,7 +736,7 @@
                     case 'right': select(state.lane + 1, state.row); break;
                     case 'search': openSearch(); break;
                     case 'list': setListOpen(!listOpen()); break;
-                    case 'now': goToPlaying(); break;
+                    case 'now': locatePlaying(); break;
                     case 'classic': setMode('classic'); break;
                     case 'add-local': document.getElementById('add-folder-btn')?.click(); break;
                     case 'add-cloud': document.getElementById('add-webdav-btn')?.click(); break;
@@ -738,6 +761,8 @@
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
         const onKeyDown = (e) => {
             if (!isShown() || app.isStageActive || document.body.classList.contains('music-stage-active') || e.defaultPrevented) return;
+            // Ctrl+L 定位当前播放（输入框里也能用）
+            if (!modalOpen() && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'l' || e.key === 'L')) { e.preventDefault(); locatePlaying(); return; }
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;

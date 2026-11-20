@@ -139,6 +139,8 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-status-light { width: 5px; height: 5px; background: var(--ar-light, var(--ar-ink)); display: inline-block; }
 .archive-footer button { font-size: 10px; letter-spacing: 1px; }
 .archive-footer button:hover { color: var(--ar-ink); }
+.archive-queue { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+.archive-queue b { font-weight: 600; color: var(--ar-ink); margin-left: 8px; letter-spacing: .6px; }
 
 /* 空曲库 */
 .archive-empty { position: absolute; left: 970px; top: 471px; width: 760px; display: none; }
@@ -155,7 +157,7 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 
 /* 窄窗口（宽度不到 1500 个设计像素）：只留标题、档案说明、计数和歌单切换 */
 .archive-hud.narrow .archive-nav, .archive-hud.narrow .archive-hint, .archive-hud.narrow .archive-powered,
-.archive-hud.narrow .archive-rows, .archive-hud.narrow .archive-footer > span:nth-child(2) { display: none; }
+.archive-hud.narrow .archive-rows, .archive-hud.narrow .archive-footer > span:nth-child(3), .archive-hud.narrow .archive-queue { display: none; }
 .archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { left: 59px; top: 300px; width: calc(100% - 59px); }
 .archive-hud.narrow .archive-summary { width: calc(100% - 118px); }
 .archive-hud.narrow .archive-cover { left: auto; right: 59px; }

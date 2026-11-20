@@ -281,7 +281,10 @@
         return { rows, count };
     };
 
-    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, groupColumns, listRows, GROUP_ORDER });
+    /* 全局顺序：先按首字母分组的固定顺序，组内按标题（数字按数值）。阵列、目录、队列都用它 */
+    const sortedIndices = (index, indices) => groupColumns(index, indices).flatMap((c) => c.items);
+
+    const api = Object.freeze({ norm, toHiragana, romanize, groupOf, groupName, createIndex, groupColumns, sortedIndices, listRows, GROUP_ORDER });
     if (typeof module === 'object' && module.exports) module.exports = api;
     global.MusicArchiveIndex = api;
 })(typeof window !== 'undefined' ? window : globalThis);
