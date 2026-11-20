@@ -182,12 +182,18 @@
         };
         const wood = grained(false), permanentWay = grained(true);
         // Shore rocks: a scanned pile, lit as stone in the palette's colour.
+        // It starts with a plain white texel in both slots, so the warm-up
+        // compiles the shader it will finally draw with: the scan arriving only
+        // swaps the picture, instead of linking a new program mid-song.
         const rockMaterial = material(new T.MeshStandardMaterial({ color: '#444852', roughness: 0.92 }));
+        const blankRock = new T.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+        blankRock.needsUpdate = true;
+        scans.push(blankRock);
+        rockMaterial.map = rockMaterial.bumpMap = blankRock;
+        rockMaterial.bumpScale = 0.4;
         scan('coast-rock.webp', texture => {
             texture.flipY = false;
             rockMaterial.map = rockMaterial.bumpMap = texture;
-            rockMaterial.bumpScale = 0.4;
-            rockMaterial.needsUpdate = true;
         });
         // Several boxes fused into one shape, so a profile still costs one instance.
         const fused = parts => {
@@ -901,6 +907,13 @@
         sleepers.layers.set(1);
         // The rock pile is a data script of its own, fetched once the stage is up.
         let rocks = null, rocksArrived = false;
+        // Until the pile arrives an empty stand-in carries its material, so the
+        // warm-up still compiles the rocks' shader.
+        const rockShape = geometry(new T.BufferGeometry());
+        rockShape.setAttribute('position', new T.BufferAttribute(new Float32Array(0), 3));
+        rockShape.setAttribute('normal', new T.BufferAttribute(new Float32Array(0), 3));
+        rockShape.setAttribute('uv', new T.BufferAttribute(new Float32Array(0), 2));
+        let rockStandIn = instances(rockMaterial, 1, rockShape);
         // The camera's path past each address, worked out once per journey.
         let passing = new Map(), passingTrack = null;
         const raiseRocks = () => {
@@ -916,6 +929,8 @@
             shape.setAttribute('normal', new T.BufferAttribute(new Int8Array(bytes(data.normal).buffer), 3, true));
             shape.setAttribute('uv', new T.BufferAttribute(new Uint16Array(bytes(data.uv).buffer), 2, true));
             shape.setIndex(new T.BufferAttribute(new Uint16Array(bytes(data.index).buffer), 1));
+            rockStandIn?.removeFromParent();
+            rockStandIn = null;
             rocks = instances(rockMaterial, 40, shape);
             rocks.name = 'rocks';
             sceneryPools.push(rocks);

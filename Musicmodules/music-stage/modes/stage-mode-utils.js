@@ -287,7 +287,7 @@
      * target (the lens, the water) compiles differently from one drawn to the
      * canvas, so it is compiled for each place the frame will draw it.
      */
-    const precompile = async (T, renderer, scene, camera, { canvas = true, offscreen = true } = {}) => {
+    const precompile = async (T, renderer, scene, camera, { canvas = true, offscreen = true, report = true } = {}) => {
         const previous = renderer.getRenderTarget();
         const probe = offscreen ? new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType }) : null;
         try {
@@ -303,7 +303,7 @@
             renderer.setRenderTarget(previous);
             probe?.dispose();
         }
-        reportPrograms(renderer);
+        if (report) reportPrograms(renderer);
     };
 
     // Shader errors are not checked per program (that waits on the GPU
@@ -328,6 +328,25 @@
         } catch (error) {
             console.warn('[MusicStage] shader check skipped:', error);
         }
+    };
+
+    /*
+     * Once a mode starts down the ladder, its next tier drop may turn the lens
+     * off, and every material drawn straight to the canvas is a program of its
+     * own. Compile those in the background while the scale rungs are taken,
+     * or the drop links them all in one frame, on a machine already behind.
+     * Returns true once it has started.
+     */
+    const warmLensless = (T, renderer, scene, camera, scaler, quality) => {
+        if (!renderer || scaler.steps < 1) return false;
+        const at = Math.max(0, TIER_ORDER.indexOf(quality));
+        const next = TIER_ORDER[Math.min(TIER_ORDER.length - 1, at + 1)];
+        if (!tier(quality).lens || tier(next).lens) return false;
+        // Without background compiling the driver links them right here, all
+        // at once, which is a longer stall than the drop itself would cause.
+        if (!renderer.extensions?.has?.('KHR_parallel_shader_compile')) return true;
+        precompile(T, renderer, scene, camera, { canvas: true, offscreen: false, report: false });
+        return true;
     };
 
     /*
@@ -377,6 +396,7 @@
         createHandoverVeil,
         createFrameCap, durationChanged,
         precompile,
+        warmLensless,
         tier,
         clamp,
         hashString,
