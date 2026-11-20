@@ -266,3 +266,53 @@ test('reorderContext: follows a new sort of the same group, only while that orig
     app.currentFilteredTracks = [playlist[4]];
     assert.equal(app.contextFrom('archive'), false);
 });
+
+test('lyrics offset: shifts the parsed timeline in place, is remembered per track, and is picked up on the next load', () => {
+    const { app, playlist, context } = setup();
+    let renders = 0;
+    app.renderLyrics = () => { renders += 1; };
+    const fetched = [];
+    // 换歌时播放器会调用 fetchAndDisplayLyrics；这里只看它被调用时的偏移
+    app.currentTrackIndex = 1;
+    app.lastKnownCurrentTime = 10;
+    app.lyricOffset = 0;
+    app.currentLyrics = [
+        { time: 5, startTime: 5, endTime: 9, words: [{ startTime: 5, endTime: 6 }] },
+        { time: 9.8, startTime: 9.8, endTime: 12 }
+    ];
+    app.currentLyricIndex = 1;
+    assert.equal(app.shiftLyrics(0.5), 0.5);
+    assert.equal(app.currentLyrics[0].time, 5.5);
+    assert.equal(app.currentLyrics[0].words[0].endTime, 6.5);
+    assert.equal(app.currentLyricIndex, 0, 'the current line moves with the timeline');
+    assert.ok(renders > 0);
+    app.shiftLyrics(-1.5);
+    assert.equal(app.lyricOffset, -1);
+    assert.equal(app.currentLyrics[1].time, 8.8);
+    assert.equal(JSON.parse(context.localStorage.getItem('musicLyricOffsets'))['C:/m/1.flac'], -1);
+    assert.equal(app.lyricOffsetFor(playlist[2].path), 0);
+    assert.equal(app.setLyricOffset(99), 30, 'clamped');
+    app.setLyricOffset(0);
+    assert.equal(context.localStorage.getItem('musicLyricOffsets'), '{}', 'zero is not stored');
+    assert.equal(app.currentLyrics[0].time, 5);
+});
+
+test('lyrics offset is applied before the next track parses its lyrics; translation toggle persists', () => {
+    const { app, context } = setup();
+    context.localStorage.setItem('musicLyricOffsets', JSON.stringify({ 'C:/m/3.flac': 1.5 }));
+    // 播放器会把已有的取歌词函数包一层：调用时先换成这首歌的偏移
+    const seen = [];
+    const fresh = { ...app, fetchAndDisplayLyrics() { seen.push(fresh.lyricOffset); } };
+    context.setupPlayer(fresh);
+    fresh.fetchAndDisplayLyrics('a', 't', { path: 'C:/m/3.flac' });
+    fresh.fetchAndDisplayLyrics('a', 't', { path: 'C:/m/0.flac' });
+    assert.deepEqual(seen, [1.5, 0]);
+
+    assert.equal(fresh.lyricsTranslation, true, 'translation is shown by default');
+    let renders = 0;
+    fresh.renderLyrics = () => { renders += 1; };
+    fresh.setLyricsTranslation(false);
+    assert.equal(context.localStorage.getItem('musicLyricsTranslation'), 'false');
+    assert.equal(renders, 1);
+});
+

@@ -652,6 +652,27 @@
             return rows;
         };
 
+        // 歌词页顶上一行：翻译开关、偏移 −0.5 / 当前值（点一下归零）/ +0.5。
+        const lyricOffsetText = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)} 秒`;
+        function lyricsBar(lines) {
+            const hasTranslation = lines.some((line) => line && line.translation);
+            const on = app.lyricsTranslation !== false;
+            const offset = Number(app.lyricOffset) || 0;
+            const offsetOk = typeof app.shiftLyrics === 'function';
+            return `<div class="md-qh md-lyrh"><b>歌词</b><span class="md-g"></span>`
+                + (typeof app.setLyricsTranslation === 'function'
+                    ? `<button class="md-chip${on ? ' md-lit' : ''}" type="button" data-act="lyr-tr" aria-pressed="${on}"${hasTranslation ? '' : ' disabled'} title="${hasTranslation ? (on ? '隐藏翻译' : '显示翻译') : '这首歌没有翻译'}">${icon('languages', 14)}<span>翻译</span></button>`
+                    : '')
+                + (offsetOk
+                    ? `<span class="md-off" role="group" aria-label="歌词偏移">`
+                        + `<button class="md-ib md-s" type="button" data-act="lyr-off" data-d="-0.5" aria-label="歌词提前 0.5 秒" title="歌词提前 0.5 秒">${icon('minus', 14)}</button>`
+                        + `<button class="md-offv${offset ? ' md-lit' : ''}" type="button" data-act="lyr-off0" title="${offset ? '点一下归零' : '歌词偏移'}" aria-label="歌词偏移 ${lyricOffsetText(offset)}${offset ? '，点一下归零' : ''}">${lyricOffsetText(offset)}</button>`
+                        + `<button class="md-ib md-s" type="button" data-act="lyr-off" data-d="0.5" aria-label="歌词推后 0.5 秒" title="歌词推后 0.5 秒">${icon('plus', 14)}</button>`
+                        + '</span>'
+                    : '')
+                + '</div>';
+        }
+
         function renderBody() {
             const oldScroller = state.tab === '播放列表' ? el.body.querySelector('.md-ql') : null;
             const keepScroll = oldScroller ? oldScroller.scrollTop : null;
@@ -705,8 +726,10 @@
                     : `<div class="md-bigcv md-empty-cv">${icon('disc-3', 48, { strokeWidth: 1.4 })}</div>`;
             } else if (tab === '歌词') {
                 const lines = Array.isArray(app.currentLyrics) ? app.currentLyrics : [];
+                html += lyricsBar(lines);
                 html += lines.length
-                    ? `<div class="md-lyrl">${lines.map((line, index) => `<p data-i="${index}" data-time="${Number(line.time) || 0}">${escapeHtml(line.text || line.original || '') || '&nbsp;'}</p>`).join('')}</div>`
+                    ? `<div class="md-lyrl">${lines.map((line, index) => `<p data-i="${index}" data-time="${Number(line.time) || 0}">${escapeHtml(line.text || line.original || '') || '&nbsp;'}`
+                        + `${line.translation ? `<small class="md-tr">${escapeHtml(line.translation)}</small>` : ''}</p>`).join('')}</div>`
                     : '<p class="md-empty">这首歌还没有歌词。</p>';
                 state.lyricsSource = app.currentLyrics;
                 state.lyricIndex = -2;
@@ -959,6 +982,9 @@
             else if (act === 'stage') { toggleStage(); }
             else if (act === 'fx') { openSheet(); }
             else if (act === 'intro') { closePanel(); global.MusicIntro?.replay?.(); }
+            else if (act === 'lyr-tr') { app.setLyricsTranslation?.(app.lyricsTranslation === false); renderBody(); }
+            else if (act === 'lyr-off') { app.shiftLyrics?.(Number(target.dataset.d) || 0); renderBody(); }
+            else if (act === 'lyr-off0') { app.setLyricOffset?.(0); renderBody(); }
             else if (act === 'shuffle') { app.setPlayMode?.(playMode() === 'shuffle' ? 'repeat' : 'shuffle'); }
             else if (act === 'mute') {
                 toggleMute();

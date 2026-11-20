@@ -209,6 +209,7 @@ function setupPlayer(app) {
         app.renderPlaylist(app.currentFilteredTracks);
         app.scrollCurrentTrackToSidebarTop?.();
         app.fetchAndDisplayLyrics(track.artist, track.title, {
+            path: track.path,
             duration: track.duration || 0,
             album: track.album || ''
         });
@@ -486,6 +487,91 @@ function setupPlayer(app) {
         scheduleSessionSave();
         return true;
     };
+
+    // ───────── 歌词偏移和翻译开关 ─────────
+    // 偏移按歌记住（路径 → 秒，正数是歌词推后），换歌时先取出来，解析歌词时就带上。
+    // 调整时直接平移已经解析好的时间轴，不重新读歌词。翻译开关是全局的，只管显示。
+    const LYRIC_OFFSETS_KEY = 'musicLyricOffsets';
+    const LYRIC_TRANSLATION_KEY = 'musicLyricsTranslation';
+    const LYRIC_OFFSET_LIMIT = 30;
+    const MAX_LYRIC_OFFSETS = 500;
+    const readStore = (key, fallback) => {
+        try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); } catch (error) { return fallback; }
+    };
+    const writeStore = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) { /* 存不了就只在本次生效 */ } };
+    app.lyricOffsetFor = (path) => {
+        const offsets = readStore(LYRIC_OFFSETS_KEY, {});
+        const value = Number(path && offsets && offsets[path]);
+        return Number.isFinite(value) ? value : 0;
+    };
+    const lyricTrackPath = () => app.playlist?.[app.currentTrackIndex]?.path || null;
+    const shiftLine = (line, d) => {
+        for (const k of ['time', 'startTime', 'endTime']) if (typeof line[k] === 'number') line[k] += d;
+        if (line.renderHints && typeof line.renderHints.renderEndTime === 'number') line.renderHints.renderEndTime += d;
+        for (const w of Array.isArray(line.words) ? line.words : []) {
+            if (typeof w.startTime === 'number') w.startTime += d;
+            if (typeof w.endTime === 'number') w.endTime += d;
+            for (const syl of Array.isArray(w.syllables) ? w.syllables : []) {
+                if (typeof syl.startTime === 'number') syl.startTime += d;
+                if (typeof syl.endTime === 'number') syl.endTime += d;
+            }
+        }
+    };
+    const lyricIndexAt = (time) => {
+        const lines = Array.isArray(app.currentLyrics) ? app.currentLyrics : [];
+        let index = -1;
+        for (let i = 0; i < lines.length && time >= lines[i].time; i++) index = i;
+        return index;
+    };
+    app.setLyricOffset = (value) => {
+        const next = Math.max(-LYRIC_OFFSET_LIMIT, Math.min(LYRIC_OFFSET_LIMIT, Math.round((Number(value) || 0) * 10) / 10));
+        const d = Math.round((next - (Number(app.lyricOffset) || 0)) * 1000) / 1000;
+        if (!d) return app.lyricOffset || 0;
+        app.lyricOffset = next;
+        for (const line of Array.isArray(app.currentLyrics) ? app.currentLyrics : []) shiftLine(line, d);
+        const path = lyricTrackPath();
+        if (path) {
+            const offsets = readStore(LYRIC_OFFSETS_KEY, {}) || {};
+            delete offsets[path];
+            if (next) offsets[path] = next;
+            const keys = Object.keys(offsets);
+            for (const k of keys.slice(0, Math.max(0, keys.length - MAX_LYRIC_OFFSETS))) delete offsets[k];
+            writeStore(LYRIC_OFFSETS_KEY, offsets);
+        }
+        // 当前行按新时间轴重新定位，再重画（逐字高亮的时间在 DOM 上也要跟着变）。
+        app.currentLyricIndex = lyricIndexAt(Number(app.lastKnownCurrentTime) || 0);
+        try { app.renderLyrics?.(); } catch (error) { /* 歌词区没准备好时只改数据 */ }
+        lyricsEvent('music-lyrics-offset', { offset: next });
+        return next;
+    };
+    app.shiftLyrics = (delta) => app.setLyricOffset((Number(app.lyricOffset) || 0) + (Number(delta) || 0));
+    app.lyricsTranslation = readStore(LYRIC_TRANSLATION_KEY, true) !== false;
+    const lyricsEvent = (type, detail) => {
+        if (typeof document === 'undefined' || typeof CustomEvent !== 'function') return;
+        document.dispatchEvent(new CustomEvent(type, { detail }));
+    };
+    const applyTranslationClass = () => {
+        if (typeof document !== 'undefined') document.body?.classList?.toggle?.('music-lyrics-hide-translation', !app.lyricsTranslation);
+    };
+    applyTranslationClass();
+    app.setLyricsTranslation = (on) => {
+        app.lyricsTranslation = Boolean(on);
+        writeStore(LYRIC_TRANSLATION_KEY, app.lyricsTranslation);
+        applyTranslationClass();
+        // 行高变了，歌词区缓存的位置作废
+        app._lyricLayout = null;
+        try { app.renderLyrics?.(); } catch (error) { /* 同上 */ }
+        lyricsEvent('music-lyrics-translation', { on: app.lyricsTranslation });
+        return app.lyricsTranslation;
+    };
+    // 换歌取歌词前先换成这首的偏移。
+    if (typeof app.fetchAndDisplayLyrics === 'function') {
+        const fetchLyricsBase = app.fetchAndDisplayLyrics;
+        app.fetchAndDisplayLyrics = (artist, title, options = {}) => {
+            app.lyricOffset = app.lyricOffsetFor(options.path || lyricTrackPath());
+            return fetchLyricsBase(artist, title, options);
+        };
+    }
 
     // ───────── 重启恢复：队列、上下文、进度 ─────────
     // 和「上次那首」「播放模式」一样存在 localStorage：
@@ -797,6 +883,7 @@ function setupPlayer(app) {
             app.renderPlaylist(app.currentFilteredTracks);
             app.scrollCurrentTrackToSidebarTop?.();
             app.fetchAndDisplayLyrics(track.artist, track.title, {
+                path: track.path,
                 duration: track.duration || 0,
                 album: track.album || ''
             });
@@ -850,6 +937,7 @@ function setupPlayer(app) {
                     app.renderPlaylist(app.currentFilteredTracks);
                     app.scrollCurrentTrackToSidebarTop?.();
                     app.fetchAndDisplayLyrics(track.artist, track.title, {
+                        path: track.path,
                         duration: track.duration || 0,
                         album: track.album || ''
                     });

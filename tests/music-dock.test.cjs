@@ -429,3 +429,37 @@ test('hovering the title edges previews the real previous and next track', () =>
         dock.destroy();
     }
 });
+
+test('lyrics tab: translation toggle and ±0.5 s offset buttons drive the player', () => {
+    const { doc, app, dock } = setup();
+    try {
+        app.currentLyrics = [{ time: 3, text: '第一句', translation: 'first' }, { time: 9, text: '第二句' }];
+        app.lyricsTranslation = true;
+        app.lyricOffset = 0;
+        const seen = [];
+        app.setLyricsTranslation = (on) => { seen.push(['tr', on]); app.lyricsTranslation = on; };
+        app.shiftLyrics = (d) => { seen.push(['shift', d]); app.lyricOffset += d; };
+        app.setLyricOffset = (v) => { seen.push(['set', v]); app.lyricOffset = v; };
+        dock.openPanel('歌词');
+        assert.equal(doc.querySelector('.md-lyrl .md-tr').textContent, 'first');
+        const tr = doc.querySelector('[data-act="lyr-tr"]');
+        assert.equal(tr.getAttribute('aria-pressed'), 'true');
+        tr.click();
+        assert.deepEqual(seen.pop(), ['tr', false]);
+        assert.equal(doc.querySelector('[data-act="lyr-tr"]').getAttribute('aria-pressed'), 'false');
+
+        doc.querySelector('[data-act="lyr-off"][data-d="0.5"]').click();
+        assert.deepEqual(seen.pop(), ['shift', 0.5]);
+        assert.equal(doc.querySelector('[data-act="lyr-off0"]').textContent, '+0.5 秒');
+        doc.querySelector('[data-act="lyr-off"][data-d="-0.5"]').click();
+        doc.querySelector('[data-act="lyr-off"][data-d="-0.5"]').click();
+        assert.equal(doc.querySelector('[data-act="lyr-off0"]').textContent, '−0.5 秒');
+        doc.querySelector('[data-act="lyr-off0"]').click();
+        assert.deepEqual(seen.pop(), ['set', 0]);
+        assert.equal(doc.querySelector('[data-act="lyr-off0"]').textContent, '0.0 秒');
+
+        app.currentLyrics = [{ time: 1, text: '没有翻译' }];
+        dock.openPanel('歌词');
+        assert.ok(doc.querySelector('[data-act="lyr-tr"]').disabled, 'no translation in this song: the toggle is greyed out');
+    } finally { dock.destroy(); }
+});
