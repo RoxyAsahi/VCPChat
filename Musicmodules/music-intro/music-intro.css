@@ -6,8 +6,9 @@ body {
     --mi-muted: var(--ar-muted, #a6b0b1);
     --mi-line: var(--ar-line, rgba(224, 227, 220, .24));
     --mi-ring: var(--ar-ink-2, #c3cbc9);
-    --mi-flash: #dfe2dc;
-    --mi-flash-peak: .86;
+    /* 深色的白场用偏灰的纸色，不那么刺眼；但必须不透明，进出舞台靠它盖住切换。 */
+    --mi-flash: #c9cdc6;
+    --mi-flash-peak: 1;
 }
 
 body.light-theme {
@@ -106,4 +107,37 @@ body.light-theme {
 
 @keyframes music-intro-cover-out {
     to { opacity: 0; visibility: hidden; }
+}
+
+/* ---------- 进出舞台时按住舞台 ----------
+ * 进：舞台照常加载但先不露出，档案页（或经典视图）保持原样，直到白场盖严。
+ * 退：舞台先不淡出，白场盖严后一下撤掉。 */
+body.mi-stage-hold-enter .music-stage {
+    opacity: 0 !important;
+    transition: none !important;
+}
+
+body.mi-stage-hold-enter:not(.music-archive-on) .music-player-container {
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+body.mi-stage-hold-exit .music-stage {
+    opacity: 1 !important;
+    transform: none !important;
+    visibility: visible !important;
+    transition: none !important;
+}
+
+body.mi-stage-snap .music-stage,
+body.mi-stage-snap .music-player-container,
+body.mi-stage-snap #music-archive-view {
+    transition: none !important;
+}
+
+/* 舞台自己会在退出 0.38 秒后把根节点设成 hidden；万一白场还没盖严（掉帧时），先别让它消失。 */
+body.mi-stage-hold-exit .music-stage[hidden] {
+    display: block !important;
 }

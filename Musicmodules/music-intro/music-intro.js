@@ -61,8 +61,7 @@
 
         // 第二段：我们自己的记号（细圆 + 五根音轨竖条）和身份核验
         n.mark = el('g', { opacity: 0, transform: 'translate(0 0)' }, svg);
-        n.markRing = el('circle', { cx: 330, cy: 300, r: 46, class: 'mi-stroke', 'stroke-width': 2.2, pathLength: 1, 'stroke-dasharray': '0 1', transform: 'rotate(-90 330 300)' }, n.mark);
-        n.markBars = [-2, -1, 0, 1, 2].map((i) => el('rect', { x: 330 + i * 11 - 2, y: 300, width: 4, height: 0, class: 'mi-block' }, n.mark));
+        n.markParts = buildMark(n.mark, 330, 300, 46, 2.2);
         n.markWord = el('text', { x: 262, y: 382, 'font-size': 17, 'font-weight': 700, 'letter-spacing': '3' }, n.mark);
         n.brand = [
             el('text', { x: 262, y: 404, 'font-size': 9, 'letter-spacing': '2.2', class: 'mi-muted', opacity: 0 }, n.mark),
@@ -84,6 +83,8 @@
         n.innerA = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.innerB = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.dots = [0, 1].map(() => el('circle', { r: 2.6, class: 'mi-block' }, n.scanRings));
+        // 环收拢到位后，在环里画出记号的七条测地线：扫描环就是记号的圆周。
+        n.scanGeo = Array.from({ length: 7 }, () => el('path', { class: 'mi-stroke', 'stroke-width': 1, opacity: '.4', pathLength: 1, 'stroke-dasharray': '0 1' }, n.scanRings));
         n.cap = el('circle', { r: 3, class: 'mi-block' }, n.scanRings);
         // 核心点放在字的上方，不压字。
         n.core = el('circle', { cx: CX, cy: CY - 30, r: 0, class: 'mi-block' }, n.scan);
@@ -100,12 +101,8 @@
         n.welcomeName.textContent = 'VCP MUSIC';
         n.welcomeRule = el('rect', { x: CX - 128, y: 330, width: 0, height: 2, class: 'mi-block' }, n.welcomeInner);
         n.welcomeSub = el('text', { x: CX, y: 352, 'text-anchor': 'middle', 'font-size': 10, 'letter-spacing': '2.6', class: 'mi-muted' }, n.welcomeInner);
-        n.welcomeMark = el('g', { transform: `translate(${CX} 392) scale(.38)` }, n.welcomeInner);
-        el('circle', { cx: 0, cy: 0, r: 46, class: 'mi-stroke', 'stroke-width': 5 }, n.welcomeMark);
-        [-2, -1, 0, 1, 2].forEach((i) => {
-            const h = [24, 44, 62, 40, 20][i + 2];
-            el('rect', { x: i * 11 - 2, y: -h / 2, width: 4, height: h, class: 'mi-block' }, n.welcomeMark);
-        });
+        n.welcomeMark = el('g', {}, n.welcomeInner);
+        buildMark(n.welcomeMark, CX, 394, 17.5, 1.6);
 
         // 进出舞台：档案号
         n.file = el('g', { opacity: 0 }, svg);
@@ -123,6 +120,29 @@
         if (!node.textContent) return 0;
         try { return node.getComputedTextLength(); } catch (e) { return node.textContent.length * 9; }
     };
+
+    // ---------- VCP Music 记号：庞加莱圆盘 ----------
+    // 双曲平面的圆盘模型：圆周是无穷远，测地线是与圆周正交的圆弧。七条测地线隔一个点相连成七瓣（七声音阶），
+    // 里面再套一层缩小的同样结构。
+    const geodesic = (cx, cy, R, a, b) => {
+        const h = (b - a) / 2, m = (a + b) / 2;
+        const d = R / Math.cos(h), r = R * Math.tan(h);
+        const p1 = `${(cx + R * Math.cos(a)).toFixed(2)},${(cy + R * Math.sin(a)).toFixed(2)}`;
+        const p2 = `${(cx + R * Math.cos(b)).toFixed(2)},${(cy + R * Math.sin(b)).toFixed(2)}`;
+        return `M${p1}A${r.toFixed(2)},${r.toFixed(2)} 0 0 0 ${p2}`;
+    };
+    const buildMark = (parent, cx, cy, R, width) => {
+        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
+        const ring = el('circle', { cx, cy, r: R, class: 'mi-stroke', 'stroke-width': width, pathLength: 1, transform: `rotate(-90 ${cx} ${cy})` }, parent);
+        const outer = [], inner = [];
+        for (let k = 0; k < 7; k++) {
+            outer.push(el('path', { d: geodesic(cx, cy, R, off + k * step, off + (k + 2) * step), class: 'mi-stroke', 'stroke-width': (width * 0.62).toFixed(2), pathLength: 1 }, parent));
+            inner.push(el('path', { d: geodesic(cx, cy, R * 0.52, off + (k + 1) * step, off + (k + 3) * step), class: 'mi-stroke', 'stroke-width': (width * 0.45).toFixed(2), opacity: '.55', pathLength: 1 }, parent));
+        }
+        const core = el('circle', { cx, cy, r: width * 1.5, class: 'mi-block' }, parent);
+        return { ring, outer, inner, core };
+    };
+    const drawStroke = (node, p) => node.setAttribute('stroke-dasharray', `${p.toFixed(4)} ${(1 - p + 0.0001).toFixed(4)}`);
 
     // ---------- 扫描环（开场与短版共用） ----------
     // local 是扫描段内的秒数；speed 把同一条轨迹压快（短版 1.5 倍）。
@@ -144,6 +164,12 @@
         n.dots.forEach((dot, i) => {
             dot.setAttribute('cx', (CX + Math.cos(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
             dot.setAttribute('cy', (CY + Math.sin(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
+        });
+        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
+        n.scanGeo.forEach((path, i) => {
+            const p = easeOut(progress(t, 1.05 + i * 0.05, 1.4 + i * 0.05));
+            path.setAttribute('d', p > 0 ? geodesic(CX, CY, r, off + i * step, off + (i + 2) * step) : '');
+            drawStroke(path, p);
         });
         const capA = outerStart + outerSweep;
         n.cap.setAttribute('cx', (CX + Math.cos(capA) * r).toFixed(2));
@@ -180,14 +206,12 @@
 
         // 记号描线、音轨竖条升起、文字
         n.mark.style.opacity = t >= 2.2 && t < FULL.scan ? '1' : '0';
-        const draw = easeOut(progress(t, 2.2, 2.9));
-        n.markRing.setAttribute('stroke-dasharray', `${draw.toFixed(4)} ${(1 - draw + 0.0001).toFixed(4)}`);
-        const heights = [24, 44, 62, 40, 20];
-        n.markBars.forEach((bar, i) => {
-            const h = heights[i] * easeOut(progress(t, 2.7 + i * 0.07, 3.1 + i * 0.07));
-            bar.setAttribute('height', h.toFixed(2));
-            bar.setAttribute('y', (300 - h / 2).toFixed(2));
-        });
+        // 先画圆周（无穷远），再一条一条画出七条测地线，最后内层和中心点
+        const mp = n.markParts;
+        drawStroke(mp.ring, easeOut(progress(t, 2.2, 2.75)));
+        mp.outer.forEach((path, i) => drawStroke(path, easeOut(progress(t, 2.6 + i * 0.07, 2.95 + i * 0.07))));
+        mp.inner.forEach((path, i) => drawStroke(path, easeOut(progress(t, 3.0 + i * 0.04, 3.3 + i * 0.04))));
+        mp.core.setAttribute('opacity', t >= 3.3 ? '1' : '0');
         n.markWord.textContent = typed('VCP · MUSIC', t, 3.0, 3.45);
         n.brand.forEach((line, i) => {
             const p = easeOut(progress(t, 3.3 + i * 0.08, 3.85 + i * 0.08));
@@ -262,41 +286,43 @@
     };
 
     // ---------- 进出舞台 ----------
-    const TRANSIT = { enter: 1.1, exit: 0.8 };
+    // 进：第一帧还是档案页（舞台被按住不显示），圆环收拢、打出档案号，白场在 0.58 秒到不透明，
+    //     这一刻才放开舞台，白场退去时下面已经是舞台。
+    // 退：舞台先被按住不消失，白场 0.2 秒到不透明时放开，白场退去露出档案页，圆环张开。
+    const TRANSIT = { enter: 1.1, exit: 0.8, enterRelease: 0.58, exitRelease: 0.2 };
     const renderTransit = (n, t, ctx) => {
         const entering = ctx.direction === 'enter';
-        const local = entering ? t : t;
-        if (entering) {
-            n.veil.setAttribute('opacity', String(0.84 * smooth(progress(local, 0, 0.12)) * (1 - smooth(progress(local, 0.7, 1.05)))));
-            const r = keys([[0, 640], [0.2, 300], [0.45, 168], [0.7, 160]], local);
-            const sweep = keys([[0, 30], [0.25, 220], [0.5, 360]], local) * DEG;
-            const start = keys([[0, 200], [0.5, -90]], local) * DEG;
-            n.outer.setAttribute('d', arc(r, start, sweep));
-            n.white.setAttribute('d', arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG));
-            n.innerA.setAttribute('d', ''); n.innerB.setAttribute('d', '');
-            n.cap.setAttribute('cx', (CX + Math.cos(start + sweep) * r).toFixed(2));
-            n.cap.setAttribute('cy', (CY + Math.sin(start + sweep) * r).toFixed(2));
-            n.scan.style.opacity = String(smooth(progress(local, 0, 0.1)) * (1 - smooth(progress(local, 0.62, 0.8))));
-            n.fileLabel.textContent = 'TRACK DATABASE';
-            n.fileText.textContent = typed(ctx.file, local, 0.06, 0.38);
-            n.file.style.opacity = n.scan.style.opacity;
-            n.flash.style.opacity = String(ctx.flashPeak * 0.92 * smooth(progress(local, 0.42, 0.66)) * (1 - smooth(progress(local, 0.7, 1.1))));
-            return 1;
-        }
-        n.veil.setAttribute('opacity', String(0.72 * smooth(progress(local, 0, 0.1)) * (1 - smooth(progress(local, 0.4, 0.75)))));
-        const r = keys([[0, 160], [0.4, 520]], local);
-        const sweep = keys([[0, 360], [0.4, 40]], local) * DEG;
-        const start = keys([[0, -90], [0.4, 160]], local) * DEG;
-        n.outer.setAttribute('d', arc(r, start, sweep));
-        n.white.setAttribute('d', '');
+        const releaseAt = entering ? TRANSIT.enterRelease : TRANSIT.exitRelease;
+        if (!ctx.released && t >= releaseAt) { ctx.released = true; ctx.release?.(); }
         n.innerA.setAttribute('d', ''); n.innerB.setAttribute('d', '');
+        let r, sweep, start;
+        if (entering) {
+            n.veil.setAttribute('opacity', String(0.38 * smooth(progress(t, 0, 0.15))));
+            r = keys([[0, 640], [0.2, 300], [0.45, 168], [0.7, 160]], t);
+            sweep = keys([[0, 30], [0.25, 220], [0.5, 360]], t) * DEG;
+            start = keys([[0, 200], [0.5, -90]], t) * DEG;
+            n.white.setAttribute('d', arc(r * 0.9, start + Math.PI * 0.8, 50 * DEG));
+            n.scan.style.opacity = String(smooth(progress(t, 0, 0.08)));
+            n.fileLabel.textContent = 'TRACK DATABASE';
+            n.fileText.textContent = typed(ctx.file, t, 0.04, 0.34);
+            n.flash.style.opacity = String(smooth(progress(t, 0.34, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.08, TRANSIT.enter))));
+            // 白场盖严之后，遮罩和圆环一起撤掉，白场退去时只剩舞台。
+            if (t >= releaseAt) { n.veil.setAttribute('opacity', '0'); n.scan.style.opacity = '0'; }
+        } else {
+            n.flash.style.opacity = String(smooth(progress(t, 0, releaseAt)) * (1 - smooth(progress(t, releaseAt + 0.04, 0.6))));
+            n.veil.setAttribute('opacity', String(t < releaseAt ? 0 : 0.3 * (1 - smooth(progress(t, 0.4, 0.75)))));
+            r = keys([[releaseAt, 160], [0.62, 520]], t);
+            sweep = keys([[releaseAt, 360], [0.62, 40]], t) * DEG;
+            start = keys([[releaseAt, -90], [0.62, 160]], t) * DEG;
+            n.white.setAttribute('d', '');
+            n.scan.style.opacity = String(t < releaseAt ? 0 : 1 - smooth(progress(t, 0.42, 0.7)));
+            n.fileLabel.textContent = 'RETURN';
+            n.fileText.textContent = typed('ARCHIVE', t, releaseAt, releaseAt + 0.16);
+        }
+        n.outer.setAttribute('d', arc(r, start, sweep));
         n.cap.setAttribute('cx', (CX + Math.cos(start + sweep) * r).toFixed(2));
         n.cap.setAttribute('cy', (CY + Math.sin(start + sweep) * r).toFixed(2));
-        n.scan.style.opacity = String(1 - smooth(progress(local, 0.2, 0.45)));
-        n.fileLabel.textContent = 'RETURN';
-        n.fileText.textContent = typed('ARCHIVE', local, 0, 0.2);
         n.file.style.opacity = n.scan.style.opacity;
-        n.flash.style.opacity = String(ctx.flashPeak * 0.7 * smooth(progress(local, 0, 0.14)) * (1 - smooth(progress(local, 0.2, 0.55))));
         return 1;
     };
 
@@ -318,13 +344,28 @@
         };
         const namePromise = loadName();
 
+        // 调试用：?introSlow=10 让过场慢 10 倍，方便逐帧看舞台什么时候露出来。
+        let timeScale = 1;
+        try { timeScale = 1 / Math.max(1, Number(new URLSearchParams(global.location.search).get('introSlow')) || 1); } catch (e) { /* 正常速度 */ }
+
         const count = () => (Array.isArray(app?.playlist) ? app.playlist.length : 0);
         const flashPeak = () => parseFloat(getComputedStyle(document.body).getPropertyValue('--mi-flash-peak')) || 1;
+
+        // 舞台「按住」：进场时舞台先不显示，退场时舞台先不消失，等白场盖严再放开。
+        const HOLD = ['mi-stage-hold-enter', 'mi-stage-hold-exit'];
+        const releaseStage = () => {
+            if (!HOLD.some((c) => document.body.classList.contains(c))) return;
+            // 放开的那一下不要再走舞台自己的 0.38 秒淡入淡出，白场后面直接换好。
+            document.body.classList.add('mi-stage-snap');
+            document.body.classList.remove(...HOLD);
+            requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('mi-stage-snap')));
+        };
 
         const stop = (instant = false) => {
             if (!current) return;
             const run = current;
             current = null;
+            releaseStage();
             cancelAnimationFrame(run.raf);
             run.detach();
             document.body.classList.remove('music-intro-playing');
@@ -349,7 +390,7 @@
             document.body.appendChild(root);
             if (!transit) dropCover();
             const nodes = buildScene(root);
-            const ctx = { name: userName, count, flashPeak: flashPeak(), direction: kind, file: extra.file || '' };
+            const ctx = { name: userName, count, flashPeak: flashPeak(), direction: kind, file: extra.file || '', release: releaseStage, released: false };
             const render = kind === 'full' ? renderFull : kind === 'short' ? renderShort : renderTransit;
             const length = kind === 'full' ? FULL.end : kind === 'short' ? SHORT.end : TRANSIT[kind];
 
@@ -377,10 +418,10 @@
             const t0 = performance.now();
             const tick = (now) => {
                 if (current !== run) return;
-                const t = fixed ?? (now - t0) / 1000;
+                const t = fixed ?? (now - t0) / 1000 * timeScale;
                 const opacity = render(nodes, t, ctx);
                 root.style.opacity = String(opacity);
-                if (fixed == null && t >= length) { current = null; run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
+                if (fixed == null && t >= length) { current = null; releaseStage(); run.detach(); document.body.classList.remove('music-intro-playing'); root.remove(); run.done?.(); return; }
                 run.raf = requestAnimationFrame(tick);
             };
             run.raf = requestAnimationFrame(tick);
@@ -407,24 +448,34 @@
         // ---------- 进出舞台：只看 body 上的类，不碰舞台代码 ----------
         let wasStage = document.body.classList.contains('music-stage-active');
         let enteringTimer = 0;
+        const transit = (direction) => {
+            if (reducedMotion()) return null;
+            if (current && !current.root.classList.contains('is-transit')) return null; // 开场还没放完就不叠过场
+            if (direction === 'enter') {
+                // 档案页据此把选中卡抬起来并继续画；舞台照常加载，只是先不露出来。
+                document.body.classList.add('music-stage-entering');
+                clearTimeout(enteringTimer);
+                enteringTimer = setTimeout(() => document.body.classList.remove('music-stage-entering'), TRANSIT.enter * 1000 / timeScale);
+                const track = app?.playlist?.[app.currentTrackIndex];
+                const file = global.MusicTrackSpecs?.fileNumber?.(track) || 'TRK-0000';
+                const run = start('enter', { file: `FILE NUMBER: ${file}` });
+                document.body.classList.remove('mi-stage-hold-exit');
+                document.body.classList.add('mi-stage-hold-enter');
+                return run;
+            }
+            document.body.classList.remove('music-stage-entering');
+            const run = start('exit');
+            document.body.classList.remove('mi-stage-hold-enter');
+            document.body.classList.add('mi-stage-hold-exit');
+            return run;
+        };
+        // 舞台的 enter()/exit() 是同步改 body 类的；MutationObserver 在同一轮里、首帧绘制之前回调，
+        // 所以在这里按住舞台，第一帧画出来的仍是档案页（退场时仍是舞台）。
         const onBody = () => {
             const isStage = document.body.classList.contains('music-stage-active');
             if (isStage === wasStage) return;
             wasStage = isStage;
-            if (reducedMotion()) return;
-            if (current && !current.root.classList.contains('is-transit')) return; // 开场还没放完就不叠过场
-            if (isStage) {
-                // 档案页据此把选中卡抬起来；和舞台加载同时进行，不额外等待。
-                document.body.classList.add('music-stage-entering');
-                clearTimeout(enteringTimer);
-                enteringTimer = setTimeout(() => document.body.classList.remove('music-stage-entering'), TRANSIT.enter * 1000);
-                const track = app?.playlist?.[app.currentTrackIndex];
-                const file = global.MusicTrackSpecs?.fileNumber?.(track) || 'TRK-0000';
-                start('enter', { file: `FILE NUMBER: ${file}` });
-            } else {
-                document.body.classList.remove('music-stage-entering');
-                start('exit');
-            }
+            transit(isStage ? 'enter' : 'exit');
         };
         const bodyObserver = new MutationObserver(onBody);
         bodyObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
@@ -434,6 +485,8 @@
             replay: () => playIntro('full'),
             playShort: () => playIntro('short'),
             skip: () => stop(),
+            /** 进出舞台过场；舞台进出时会自动调用，一般不需要手动调。 */
+            transit,
             /** 截图/调试：把某一段固定在第 t 秒。 */
             freeze: (kind, t, extra = {}) => start(kind, { ...extra, at: t }),
             get playing() { return current ? current.root.dataset.intro : null; }
