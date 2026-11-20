@@ -263,3 +263,18 @@ body.music-fl-low .mtst { backdrop-filter: none; -webkit-backdrop-filter: none; 
   box-shadow: var(--mf-glow);
   scale: 1.02; /* 用单独的 scale：拖动时位置由行内的 translateY 管，两者叠加 */
 }
+
+/* ───────── 抽屉里的滑杆：手一靠近，细线鼓成一管液体 ─────────
+ * 平时是 4px 的细线；悬停或键盘聚焦时上下鼓到 8px，按住拖动时再鼓到 10px，
+ * 滑块周围透出一圈强调色的柔光。键盘聚焦的提示画在滑块上，不再框住整条。只动高度和位置，不碰 JS 写的填充比例和滑块位置。 */
+#music-dock-root .md-sld-tr { transition: top .28s cubic-bezier(.34, 1.4, .5, 1), height .28s cubic-bezier(.34, 1.4, .5, 1); }
+#music-dock-root .md-sld:is(:hover, :focus-visible) .md-sld-tr { top: 8px; height: 8px; }
+#music-dock-root .md-sld.md-held .md-sld-tr { top: 7px; height: 10px; }
+#music-dock-root .md-sld-kn { transition: transform .2s cubic-bezier(.34, 1.4, .5, 1), box-shadow .2s ease; }
+#music-dock-root .md-sld.md-held .md-sld-kn {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 0 0 5px color-mix(in srgb, var(--mf-tint) 22%, transparent), 0 2px 8px rgba(0, 0, 0, .3);
+}
+#music-dock-root .md-sld:focus-visible:not(#messageInput) { outline: none; }
+#music-dock-root .md-sld:focus-visible .md-sld-kn { box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 0 0 3px var(--mf-ink); }
+body.music-reduce-motion #music-dock-root :is(.md-sld-tr, .md-sld-kn) { transition: none; }
