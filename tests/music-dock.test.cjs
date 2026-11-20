@@ -335,3 +335,57 @@ test('controls tab offers the window-wide reduce-motion setting and follows outs
         window.close();
     }
 });
+
+test('window keymap: space without repeat, seek, track and volume keys, help, input and archive guards', () => {
+    const { window, doc, app, dock, calls } = setup();
+    try {
+        const key = (k, extra = {}, target = doc.body) => {
+            const e = new window.KeyboardEvent('keydown', { key: k, code: extra.code || (k === ' ' ? 'Space' : ''), bubbles: true, cancelable: true, ...extra });
+            target.dispatchEvent(e);
+            return e.defaultPrevented;
+        };
+        const later = [];
+        doc.addEventListener('keydown', (e) => later.push(e.key)); // 档案页这种在冒泡阶段的监听
+
+        assert.equal(key(' '), true);
+        assert.equal(calls.pop(), 'play');
+        key(' ', { repeat: true });
+        key(' ');
+        assert.equal(calls.length, 0, 'holding space does not toggle again');
+        doc.dispatchEvent(new window.KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
+        key(' ');
+        assert.equal(calls.pop(), 'play');
+        assert.ok(!later.includes(' '), 'handled keys do not reach later listeners');
+
+        app.lastKnownCurrentTime = 50; app.lastStateUpdateTime = Date.now();
+        key('ArrowRight');
+        assert.deepEqual(calls.pop(), ['seek', 55]);
+        key('ArrowLeft', { shiftKey: true });
+        assert.equal(calls.pop(), 'prev');
+        key('ArrowUp', { ctrlKey: true });
+        assert.deepEqual(calls.pop(), ['volume', '0.55']);
+
+        app.archiveView = { mode: 'archive' };
+        later.length = 0;
+        key('ArrowRight');
+        assert.equal(calls.length, 0, 'archive keeps the arrow keys for picking songs');
+        assert.deepEqual(later, ['ArrowRight']);
+        key('ArrowRight', { shiftKey: true });
+        assert.equal(calls.pop(), 'next', 'shift+arrow still switches tracks on the archive page');
+
+        const field = doc.createElement('input');
+        doc.body.appendChild(field);
+        key(' ', {}, field); key('m', {}, field); key('?', {}, field);
+        assert.equal(calls.length, 0, 'single keys in a text field are left for typing');
+
+        key('?');
+        const help = doc.querySelector('.md-keys');
+        assert.ok(help && !help.hidden);
+        assert.ok(help.textContent.includes('按住不会连续切换'));
+        key('Escape');
+        assert.ok(help.hidden);
+    } finally {
+        dock.destroy();
+        window.close();
+    }
+});

@@ -1150,22 +1150,120 @@
             if (state.panelOpen) placeMarks(el.pnl);
         });
 
-        // M：静音 / 恢复（输入框里打字时不算）。
-        const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')) && !(t.type === 'range' || t.type === 'checkbox' || t.type === 'button'));
-        listen(document, 'keydown', (event) => {
-            if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
-            if ((event.key === 'm' || event.key === 'M') && !typingTarget(event.target)) {
-                event.preventDefault();
-                toggleMute();
-                if (state.expanded || el.cap.classList.contains('md-ex')) flashVolume();
+        // ───────── 全窗口键位 ─────────
+        // 在 document 的捕获阶段统一处理，处理了就 preventDefault，档案页等后面的监听看到就不再重复处理。
+        // 焦点在输入框里时单键一律不管（打字优先）；有弹窗开着时也不管。
+        // 档案页显示时方向键留给它选歌，快进快退只在舞台和经典视图里用 ←/→。
+        const KEYMAP = [
+            ['空格', '播放 / 暂停（按住不会连续切换）'],
+            ['← / →', '快退 / 快进 5 秒（档案页里方向键用来选歌）'],
+            ['Shift + ← / →', '上一首 / 下一首'],
+            ['Ctrl + ↑ / ↓', '音量 +5% / −5%'],
+            ['M', '静音 / 恢复'],
+            ['Ctrl + K', '命令面板：搜歌、歌单和操作'],
+            ['Ctrl + L', '档案页里定位到正在播放的那首'],
+            ['L', '档案页里打开 / 收起目录'],
+            ['/', '档案页里检索'],
+            ['?', '打开这张快捷键表'],
+            ['Esc', '关闭面板、命令面板或这张表']
+        ];
+        const typingTarget = (t) => Boolean(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '')));
+        const modalOpen = () => [app.playlistDialog, app.playlistEditModal, app.lyricsFetchModal].some((m) => m?.classList?.contains('visible'))
+            || document.body.classList.contains('music-intro-playing');
+        const archiveShown = () => !stageActive() && !document.body.classList.contains('music-stage-active')
+            && app.archiveView?.mode === 'archive';
+        let helpEl = null;
+        const helpOpen = () => Boolean(helpEl && !helpEl.hidden);
+        const closeHelp = () => {
+            if (!helpOpen()) return;
+            helpEl.classList.remove('md-open');
+            helpEl.hidden = true;
+        };
+        const openHelp = () => {
+            if (!helpEl) {
+                helpEl = document.createElement('div');
+                helpEl.className = 'md-keys';
+                helpEl.innerHTML = `<div class="md-keys-scrim" data-keys="close"></div>`
+                    + `<section class="md-keys-box" role="dialog" aria-modal="true" aria-label="快捷键" tabindex="-1">`
+                    + `<header><b>快捷键</b><button class="md-ib md-m" type="button" data-keys="close" aria-label="关闭">${icon('x', 16)}</button></header>`
+                    + `<dl>${KEYMAP.map(([k, v]) => `<dt>${k.split(' ').map((part) => (/^[+/]$/.test(part) ? `<i>${part}</i>` : `<kbd>${escapeHtml(part)}</kbd>`)).join('')}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>`
+                    + `<footer>焦点在输入框里时，单个按键只用来打字。</footer></section>`;
+                host.appendChild(helpEl);
+                helpEl.addEventListener('click', (event) => { if (event.target.closest('[data-keys="close"]')) closeHelp(); });
             }
-        });
+            closePop(); setQuick(false);
+            helpEl.hidden = false;
+            requestAnimationFrame(() => helpEl.classList.add('md-open'));
+            helpEl.querySelector('.md-keys-box').focus({ preventScroll: true });
+        };
+        const seekBy = (delta) => {
+            const d = duration();
+            if (!(d > 0)) return;
+            app.seekTo?.(Math.min(Math.max(0, d - 0.5), Math.max(0, currentTime() + delta)));
+            kickProgress();
+        };
+        let spaceHeld = false;
+        listen(document, 'keyup', (event) => { if (event.code === 'Space') spaceHeld = false; }, true);
+        listen(global, 'blur', () => { spaceHeld = false; });
+        listen(document, 'keydown', (event) => {
+            if (event.defaultPrevented || state.destroyed) return;
+            const t = event.target;
+            if (t?.closest?.('.md-cmd')) return; // 命令面板自己处理
+            if (helpOpen()) {
+                if (event.key === 'Escape' || event.key === '?') { event.preventDefault(); event.stopPropagation(); closeHelp(); }
+                return;
+            }
+            if (typingTarget(t) || modalOpen()) return;
+            const key = event.key;
+            const mod = event.ctrlKey || event.metaKey;
+            const take = () => { event.preventDefault(); event.stopPropagation(); };
+
+            if (event.code === 'Space' && !mod && !event.altKey) {
+                // 焦点在按钮上时空格就是按那个按钮，不再额外切一次
+                if (t?.closest?.('button, [role="button"], a[href], [role="slider"]')) return;
+                take();
+                if (event.repeat || spaceHeld) return; // 按住不连发
+                spaceHeld = true;
+                if (app.isPlaying) app.pauseTrack?.(); else app.playTrack?.();
+                return;
+            }
+            if (event.altKey) return;
+            if (mod && !event.shiftKey && (key === 'ArrowUp' || key === 'ArrowDown')) {
+                take();
+                setVolume(Math.round((readVolume() + (key === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100);
+                flashVolume();
+                return;
+            }
+            if (mod) return;
+            if (event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+                take();
+                if (event.repeat) return;
+                showPreview(null);
+                slideTitle(key === 'ArrowLeft' ? -1 : 1);
+                if (key === 'ArrowLeft') app.prevTrack?.(); else app.nextTrack?.();
+                return;
+            }
+            if (!event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+                if (archiveShown()) return; // 档案页里留给选歌
+                if (t?.closest?.('[role="slider"], [role="tablist"], .md-seg, .md-ql')) return;
+                take();
+                seekBy(key === 'ArrowLeft' ? -5 : 5);
+                return;
+            }
+            if ((key === 'm' || key === 'M') && !event.repeat) {
+                take();
+                toggleMute();
+                flashVolume();
+                return;
+            }
+            if (key === '?') { take(); openHelp(); }
+        }, true);
 
         // ───────── 命令面板 ─────────
         const palette = typeof global.createMusicDockPalette === 'function'
             ? global.createMusicDockPalette(app, {
                 host, icon, escapeHtml, trackTitle, trackArtist,
-                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute,
+                openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute, openHelp,
                 closeOthers: () => { closePop(); setQuick(false); }
             })
             : null;
@@ -1239,6 +1337,7 @@
             openSheet,
             closeSheet,
             openPalette: (text) => palette?.open(text),
+            openShortcuts: () => openHelp(),
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },
@@ -1247,6 +1346,7 @@
                 state.destroyed = true;
                 closeSheet();
                 palette?.destroy();
+                helpEl?.remove();
                 global.MusicToast?.clear();
                 for (const id of timers) clearTimeout(id);
                 timers.clear();

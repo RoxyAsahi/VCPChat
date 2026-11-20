@@ -86,7 +86,7 @@
     };
 
     function createMusicDockPalette(app, deps) {
-        const { host, icon, escapeHtml, trackTitle, trackArtist, openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute, closeOthers } = deps;
+        const { host, icon, escapeHtml, trackTitle, trackArtist, openPanel, openSheet, toggleStage, cycleMode, setVolume, readVolume, toggleMute, openHelp, closeOthers } = deps;
 
         const root = document.createElement('div');
         root.className = 'md-cmd';
@@ -146,6 +146,7 @@
                 ...(typeof global.MusicIntro?.replay === 'function'
                     ? [{ id: 'intro', group: '外观', icon: 'clapperboard', title: '播放完整开场', words: 'intro opening replay 开场 过场 动画 kaichang', run: () => global.MusicIntro.replay() }]
                     : []),
+                ...(openHelp ? [{ id: 'shortcuts', group: '帮助', icon: 'command', title: '快捷键', hint: '?', words: 'keys shortcuts help 快捷键 按键 帮助 kuaijiejian', run: () => openHelp() }] : []),
                 { id: 'theme', group: '外观', icon: light ? 'moon' : 'sun', title: light ? '切到深色' : '切到浅色', words: 'theme dark light 深色 浅色 主题 zhuti', run: () => { app.applyTheme?.(light ? 'dark' : 'light'); app.stageHost?.updateTheme?.(); } }
             ];
         };
