@@ -50,7 +50,7 @@ const FAKE = ({ n, light }) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.addInitScript(FAKE, { n: N, light });
-    await page.goto(url);
+    await page.goto(url, { timeout: 90000 });
     await page.waitForFunction(() => window.app?.archiveView || document.querySelector('.archive-hud'), null, { timeout: 20000 }).catch(() => {});
     await page.waitForTimeout(2500);
     const tag = light ? 'light' : 'dark';
