@@ -38,6 +38,7 @@ body {
   --ar-muted: #a6b0b1;
   --ar-line: #536166;
   --ar-accent: #c5a16b;
+  --ar-accent-text: var(--ar-accent);  /* 强调色当文字用时取这个：浅色下原色对纸面不够 4.5:1 */
   --ar-rule: #536166;
   --ar-square: #e0e3dc;
   --ar-hover: #2a363b;
@@ -124,6 +125,7 @@ body.light-theme {
   --ar-muted: #625f58;  /* 在 --ar-field 上 4.75:1，小字过 AA */
   --ar-line: #aaa59a;
   --ar-accent: #9b7247;
+  --ar-accent-text: #7f5b34;
   --ar-rule: #504b41;
   --ar-square: #282a24;
   --ar-hover: #e4d5c1;

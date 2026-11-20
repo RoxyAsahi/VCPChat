@@ -164,7 +164,7 @@ body.music-stage-active #custom-title-bar {
 }
 
 #semantic-search-btn.active {
-    color: var(--ar-accent);
+    color: var(--ar-accent-text);
 }
 
 /* 导入：一行小字，「IMPORT 本地 ／ 云端导入」，不再是两个实心按钮 */
@@ -213,7 +213,7 @@ body.music-stage-active #custom-title-bar {
 .sidebar-action-btns #add-folder-btn:hover,
 .sidebar-action-btns #add-webdav-btn:hover {
     background: transparent;
-    color: var(--ar-accent);
+    color: var(--ar-accent-text);
     filter: none;
 }
 
@@ -1421,8 +1421,8 @@ body.light-theme .dialog-btn.cancel {
 }
 
 .dialog-btn.confirm:hover {
-    background: var(--ar-accent);
-    border-color: var(--ar-accent);
+    background: var(--ar-accent-text);
+    border-color: var(--ar-accent-text);
 }
 
 .dialog-btn:disabled,
