@@ -188,7 +188,8 @@ body.music-reduce-motion .archive-scan-bar i { transition: none; }
 #music-archive-view.is-empty .archive-hint { display: none; }
 
 /* 窄窗口（宽度不到 1500 个设计像素）：只留标题、档案说明、计数和歌单切换 */
-.archive-hud.narrow .archive-nav > [data-act="search"], .archive-hud.narrow .archive-nav > [data-act="save"], .archive-hud.narrow .archive-nav > [data-act="lyrics"], .archive-hud.narrow .archive-hint, .archive-hud.narrow .archive-powered,
+.archive-hud.narrow .archive-nav > [data-act="search"] .archive-key { display: none; }
+.archive-hud.narrow .archive-nav > [data-act="save"], .archive-hud.narrow .archive-nav > [data-act="lyrics"], .archive-hud.narrow .archive-hint, .archive-hud.narrow .archive-powered,
 .archive-hud.narrow .archive-rows, .archive-hud.narrow .archive-footer > span:nth-child(3), .archive-hud.narrow .archive-queue { display: none; }
 .archive-hud.narrow .archive-callout, .archive-hud.narrow .archive-empty { left: 59px; top: 300px; width: calc(100% - 59px); }
 .archive-hud.narrow .archive-summary { width: calc(100% - 118px); }
