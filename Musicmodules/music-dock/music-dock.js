@@ -100,13 +100,14 @@
       <div class="md-sp-sec"><div class="md-sp-k">当前舞台</div><div class="md-pop-g" role="listbox" aria-label="选择舞台" data-md="sp-modes"></div></div>
     </div>
   </div>
+  <div class="md-sp md-fxp" data-md="fxpage" hidden>
+    <div class="md-sp-hd"><button class="md-ib md-m" type="button" data-md="fx-back" aria-label="返回" title="返回">${icon('chevron-left', 18)}</button><b>音效设置</b><span class="md-sp-cur" data-md="fx-cur"></span></div>
+    <div class="md-fx-sc" data-md="fx-scroll"><div class="md-fx-h md-fx-out"><span class="md-fx-n">01</span><b>输出</b></div></div>
+  </div>
   <div class="md-dockrow"><div class="md-seg md-seg-l" data-md="tabs" role="tablist"></div></div>
 </section>
 <div class="md-drbg" aria-hidden="true"></div>
-<section class="md-sheet" role="dialog" aria-label="音效设置" aria-hidden="true">
-  <div class="md-sheet-hd"><b>音效设置</b><button class="md-ib md-m" type="button" data-md="sheet-close" aria-label="关闭音效设置">${icon('x', 17)}</button></div>
-  <div class="md-sheet-body"></div>
-</section>`;
+`;
 
         const $ = (sel) => host.querySelector(sel);
         const $$ = (sel) => Array.from(host.querySelectorAll(sel));
@@ -147,9 +148,10 @@
             spCur: $('[data-md="sp-cur"]'),
             spScroll: $('[data-md="sp-scroll"]'),
             spModes: $('[data-md="sp-modes"]'),
-            sheet: $('.md-sheet'),
-            sheetBody: $('.md-sheet-body'),
-            sheetClose: $('[data-md="sheet-close"]')
+            fx: $('[data-md="fxpage"]'),
+            fxBack: $('[data-md="fx-back"]'),
+            fxCur: $('[data-md="fx-cur"]'),
+            fxScroll: $('[data-md="fx-scroll"]')
         };
 
         const state = {
@@ -1232,7 +1234,9 @@
             el.pnl.scrollTop = 0;
             el.spBack.focus({ preventScroll: true });
         }
+        // 关掉面板里的子页（舞台调制或音效设置），回到页签内容。
         function closePop() {
+            closeSheet();
             if (!state.subOpen) return;
             state.subOpen = false;
             el.sp.hidden = true;
@@ -1251,42 +1255,58 @@
             renderStageModes();
         });
 
-        // 完整音效设置：把原来的设置卡片整块搬进来，关掉时放回原处（事件和引用都不变）。
+        // 音效设置子页：控制页「音频效果器」或音质页的按钮点进来。原来的音效卡片整块搬进来（appendChild，不重建），
+        // 回到页签或关掉面板时放回原处，事件和引用都不变。
         const dspCard = document.querySelector('.settings-container');
         const dspHome = dspCard ? { parent: dspCard.parentNode, next: dspCard.nextSibling } : null;
+        let fxFrom = null;
+        const fxSummary = () => {
+            const text = dspCard?.querySelector('[data-acoustic-summary]')?.textContent?.trim();
+            el.fxCur.textContent = text || '';
+        };
         function openSheet() {
             if (!dspCard || state.sheetOpen) return;
             closePop();
+            if (!state.panelOpen) openPanel();
+            fxFrom = state.tab;
             state.sheetOpen = true;
-            el.sheetBody.appendChild(dspCard);
-            el.sheet.classList.add('md-open');
-            el.sheet.setAttribute('aria-hidden', 'false');
+            el.fxScroll.appendChild(dspCard);
+            fxSummary();
+            el.fx.hidden = false;
+            el.pnl.classList.add('md-sub');
+            el.fxScroll.scrollTop = 0;
+            el.pnl.scrollTop = 0;
             document.body.classList.add('music-dock-sheet-open');
+            el.fxBack.focus({ preventScroll: true });
         }
         function closeSheet() {
             if (!state.sheetOpen) return;
             state.sheetOpen = false;
-            el.sheet.classList.remove('md-open');
-            el.sheet.setAttribute('aria-hidden', 'true');
+            el.fx.hidden = true;
+            if (!state.subOpen) el.pnl.classList.remove('md-sub');
             document.body.classList.remove('music-dock-sheet-open');
             if (dspHome?.parent) dspHome.parent.insertBefore(dspCard, dspHome.next && dspHome.next.parentNode === dspHome.parent ? dspHome.next : null);
-            if (state.panelOpen && state.tab === '音质') renderBody();
         }
-        listen(el.sheetClose, 'click', closeSheet);
+        const backFromFx = () => {
+            closeSheet();
+            if (fxFrom && fxFrom !== state.tab) { state.tab = fxFrom; renderTabs(); }
+            renderBody();
+            el.body.querySelector('[data-act="fx"]')?.focus({ preventScroll: true });
+        };
+        listen(el.fxBack, 'click', backFromFx);
+        if (dspCard) listen(dspCard, 'change', () => { if (state.sheetOpen) fxSummary(); });
 
         listen(document, 'pointerdown', (event) => {
             const t = event.target;
             if (t.closest?.('.md-cmd')) return;
-            if (state.sheetOpen && !el.sheet.contains(t) && !t.closest?.('[data-act="fx"], [data-q="fx"]')
-                && !t.closest?.('.custom-select-dropdown, select, option')) closeSheet();
             if (state.panelOpen && !el.pnl.contains(t) && !el.hdl.contains(t)
-                && !t.closest?.('.custom-select-dropdown')
-                && !el.sheet.contains(t) && !el.quick.contains(t) && !t.closest?.('.md-cap')) closePanel();
+                && !t.closest?.('.custom-select-dropdown, select, option, [data-q="fx"]')
+                && !el.quick.contains(t) && !t.closest?.('.md-cap')) closePanel();
         }, true);
         listen(document, 'keydown', (event) => {
             if (event.key !== 'Escape' || event.target?.closest?.('.md-cmd') || palette?.isOpen) return;
             if (state.subOpen) { closePop(); renderBody(); el.body.querySelector('[data-act="scene-pick"]')?.focus({ preventScroll: true }); event.stopPropagation(); }
-            else if (state.sheetOpen) { closeSheet(); event.stopPropagation(); }
+            else if (state.sheetOpen) { backFromFx(); event.stopPropagation(); }
             else if (state.panelOpen) { closePanel(); el.handle.focus(); event.stopPropagation(); }
         }, true);
 
@@ -1536,6 +1556,8 @@
             openShortcuts: () => openHelp(),
             openStageSettings: () => openStagePage(),
             get stageSettingsOpen() { return state.subOpen; },
+            get soundSettingsOpen() { return state.sheetOpen; },
+            get tab() { return state.tab; },
             closePalette: () => palette?.close(),
             get panelOpen() { return state.panelOpen; },
             get expanded() { return state.expanded; },

@@ -118,9 +118,17 @@ test('dock drives the existing player methods and keeps the old slider as the vo
         assert.equal(doc.querySelector('.md-qh span').textContent, '1', 'upcoming count leaves out the playing track');
 
         dock.openSheet();
-        assert.equal(doc.getElementById('dsp').parentElement.className, 'md-sheet-body');
-        dock.closeSheet();
+        assert.equal(doc.getElementById('dsp').parentElement.dataset.md, 'fx-scroll', 'sound settings move into the drawer subpage');
+        assert.equal(doc.querySelector('[data-md="fxpage"]').hidden, false);
+        assert.ok(doc.querySelector('.md-pnl').classList.contains('md-sub'));
+        doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(doc.getElementById('dsp').parentElement.className, 'main-content', 'Esc goes back and returns the card');
+        assert.equal(dock.panelOpen, true, 'first Esc only leaves the subpage');
+        assert.equal(dock.tab, '播放列表', 'back returns to the tab it came from');
+        dock.openSheet();
+        doc.querySelector('[data-md="fx-back"]').click();
         assert.equal(doc.getElementById('dsp').parentElement.className, 'main-content');
+        assert.equal(doc.querySelector('[data-md="fxpage"]').hidden, true);
 
         doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert.equal(dock.panelOpen, false);
