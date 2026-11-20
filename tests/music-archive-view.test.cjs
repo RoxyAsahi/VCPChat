@@ -121,17 +121,18 @@ test('目录里回车只播放不进播放页；→ 进播放页；Esc 先清空
     f.close();
 });
 
-test('L 开关目录并记住；阵列里换选中，目录高亮跟着走', () => {
+test('LIST 按钮开关目录并记住；阵列里换选中，目录高亮跟着走', () => {
     const f = fixture();
     f.view.setListOpen(false);
-    f.key('l');
+    const btn = f.w.document.querySelector('[data-act="list"]');
+    btn.click();
     assert.ok(!f.view.list.el.hidden);
     assert.equal(f.w.localStorage.getItem('musicArchiveList'), '1');
     f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown');
     const on = f.view.list.el.querySelector('.archive-list-row.on');
     assert.ok(on);
     assert.match(on.textContent, /Song 3/);
-    f.key('L');
+    btn.click();
     assert.ok(f.view.list.el.hidden);
     assert.equal(f.w.localStorage.getItem('musicArchiveList'), '0');
     f.close();
@@ -411,5 +412,35 @@ test('目录排序菜单：换成按歌手排，阵列按歌手首字母重排�
     kd('ArrowDown'); kd('Enter');
     assert.equal(f.view.sort, 'duration');
     assert.equal(f.text('cat'), '时长未知');
+    f.close();
+});
+
+test('在档案页直接打字：打开目录、聚焦检索框并带入这个字；输入法组字时不抢', async () => {
+    const f = fixture();
+    f.view.setListOpen(false);
+    const input = f.view.list.input;
+    f.key('a', { isComposing: true });
+    f.key('Process', { keyCode: 229 });
+    assert.ok(f.view.list.el.hidden);
+    assert.equal(input.value, '');
+    f.key('2');
+    assert.ok(!f.view.list.el.hidden);
+    assert.equal(f.w.document.activeElement, input);
+    assert.equal(input.value, '2');
+    assert.equal(f.w.localStorage.getItem('musicArchiveList'), '0'); // 打字打开的不改用户「收起」的设置
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(f.view.list.query, '2');
+    assert.equal(f.view.debug().selected, 2); // 第一条结果直接选中
+    // 已有检索词时，回到阵列再打字是新的检索
+    input.blur();
+    f.key('9');
+    assert.equal(input.value, '9');
+    // 空格、修饰键、方向键不进检索框
+    input.blur();
+    f.key(' ', { code: 'Space' });
+    f.key('k', { ctrlKey: true });
+    f.key('ArrowDown');
+    assert.equal(input.value, '9');
+    assert.ok(f.calls.some((c) => c[0] === 'play'));
     f.close();
 });

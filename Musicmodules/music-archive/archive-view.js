@@ -25,7 +25,7 @@
         <div class="archive-hud" data-ref="hud">
             <header class="archive-brand" aria-hidden="true"><h1>VCP MUSIC</h1><div>ACOUSTIC INFORMATION</div><p><span>ARCHIVE</span><b>OS</b></p></header>
             <nav class="archive-nav">
-                <button type="button" data-act="list" data-ref="listBtn" title="档案目录（L）" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST <span class="archive-key">L</span></button>
+                <button type="button" data-act="list" data-ref="listBtn" title="档案目录" aria-pressed="false"><span class="archive-glyph-list" aria-hidden="true"></span> LIST</button>
                 <button type="button" data-act="search" title="检索曲目（/）"><span class="archive-glyph-search"></span> ARCHIVE INDEX <span class="archive-key">/</span></button>
                 <button type="button" data-act="save" title="把选中的曲目加入歌单">＋ SAVED <span data-ref="savedN">00</span></button>
                 <button type="button" data-act="now" title="定位当前播放（Ctrl+L）" aria-label="定位当前播放"><span class="archive-glyph-now">◷</span></button>
@@ -48,7 +48,7 @@
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
                 <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks" role="slider" aria-label="在这一列里的位置（可拖动）"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
-                <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索 <span>／</span> L 目录</div>
+                <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> 直接打字检索</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
                 <footer class="archive-footer"><span><i class="archive-status-light"></i> SESSION AUTHORIZED</span><span class="archive-queue" title="正在播放的这一组">QUEUE <b data-ref="queue">全部曲目</b></span><span><span data-ref="files">0000</span> FILES <i>／</i> <span data-ref="clock">00:00:00</span></span><button type="button" data-act="classic" title="切换到经典列表视图">CLASSIC VIEW ↗</button></footer>
             </div>
@@ -534,6 +534,17 @@
             }
         };
 
+        const composing = (e) => e.isComposing || e.key === 'Process' || e.keyCode === 229;
+        const typeIntoSearch = (e) => {
+            if (!list || composing(e) || typeof e.key !== 'string') return false;
+            // 只接可见的单个字符；空格留给播放暂停
+            if ([...e.key].length !== 1 || /\s/.test(e.key) || /[\u0000-\u001f\u007f]/.test(e.key)) return false;
+            e.preventDefault();
+            stopInertia();
+            if (!listOpen()) setListOpen(true, { persist: false });
+            list.typeInto(e.key);
+            return true;
+        };
         const openSearch = () => {
             if (!list) return;
             if (!listOpen()) setListOpen(true);
@@ -865,7 +876,9 @@
                 e.preventDefault(); playSelected(); return;
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
-            if (e.key === 'l' || e.key === 'L') { e.preventDefault(); setListOpen(!listOpen()); return; }
+            // 直接打字：打开目录、聚焦检索框并带入这个字（不用先按 /）。
+            // 输入法正在组字（isComposing / Process / 229）时不抢，让输入法把字交给它自己的输入框
+            if (typeIntoSearch(e)) return;
             if (e.key === 'Home' || e.key === 'End') {
                 e.preventDefault();
                 const col = column();
