@@ -536,6 +536,13 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-detail-spec { margin-left: auto; border: 1px solid var(--ar-accent); color: var(--ar-accent-text, var(--ar-accent)); padding: 2px 7px; font-size: 11px; letter-spacing: 1px; }
 .archive-detail-album { margin-top: 22px; font-size: 16px; color: var(--ar-ink-2, var(--ar-muted)); min-height: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-detail-card h2 { margin: 10px 0 0; font-size: 40px; line-height: 1.15; font-weight: 750; letter-spacing: .3px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.archive-detail-titlerow { display: flex; align-items: flex-start; gap: 16px; }
+.archive-detail-titlerow h2 { flex: 1; min-width: 0; }
+.archive-detail-like { flex-shrink: 0; margin-top: 12px; width: 46px; height: 46px; display: grid; place-items: center; font-size: 24px; line-height: 1; border: 1px solid var(--ar-line, var(--ar-rule)); color: var(--ar-ink); transition: background .2s, color .2s, border-color .2s, transform .2s var(--mt-ease, ease); }
+.archive-detail-like:hover { background: var(--ar-hover); }
+.archive-detail-like:active { transform: scale(.92); }
+.archive-detail-like[aria-pressed="true"] { color: var(--ar-accent-text, var(--ar-accent)); border-color: var(--ar-accent); }
+.archive-detail-like[hidden] { display: none; }
 .archive-detail-artist { margin-top: 10px; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-detail-actions { margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 24px; border-bottom: 1px solid var(--ar-rule); }
 .archive-detail-actions > button { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 15px; border: 1px solid var(--ar-line, var(--ar-rule)); transition: background .2s, color .2s, border-color .2s; white-space: nowrap; }
