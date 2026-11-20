@@ -751,8 +751,10 @@
                 root.classList.add('is-detail');
                 refs.detail.removeAttribute('inert');
                 refs.detail.setAttribute('aria-hidden', 'false');
+                syncDetailRoom();
                 state.scene?.setDetail(true);
                 state.scene?.setHover(null);
+                refs.tip.classList.remove('on');
             }
             renderDetail();
             refs.dPlay.focus({ preventScroll: true });
@@ -1242,9 +1244,16 @@
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
             state.scene?.resize(w, h);
+            syncDetailRoom(sc);
             syncLyrics();
             updateLabelMask();
             kick();
+        };
+        // 资料卡左边那块空地给场景，取出的卡整张放在里面（offsetLeft 不受滑入动画的位移影响）
+        const syncDetailRoom = (sc = hudScale(root.clientHeight || global.innerHeight)) => {
+            const card = refs.detail?.querySelector('.archive-detail-card');
+            if (!card || !state.scene?.setDetailRoom) return;
+            state.scene.setDetailRoom(card.offsetLeft * sc);
         };
         // 说明块（档案号、曲名、ACCESS FILE）下面的卡不印标题
         const updateLabelMask = () => {
