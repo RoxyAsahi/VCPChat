@@ -852,7 +852,11 @@
         boxes.add([0, 0.09, kerbZ], [260, 0.18, 0.18], 0, 6, '#5a5753');
         for (let x = -128; x < east[0]; x += 16) {
             // Tall street lamps on the far kerb, leaning over the road.
-            const px = x + range(-1, 1), pz = south[1] + 0.4;
+            let px = x + range(-1, 1);
+            const pz = south[1] + 0.4;
+            // Keep clear of the elevated line's piers (every 18 m on the far kerb).
+            const pierOff = ((px + 330) % 18 + 18) % 18;
+            if (pierOff < 2.2 || pierOff > 15.8) px += pierOff < 9 ? 2.6 - pierOff : 18 - pierOff + 2.6;
             pipe([px, 0, pz], [px, 7.4, pz], 0.09, 7, '#3a3d40');
             pipe([px, 7.4, pz], [px, 7.6, pz - 2.2], 0.06, 7, '#3a3d40');
             boxes.add([px, 7.5, pz - 2.4], [0.35, 0.12, 0.7], 0, 0, '#2a2c2e');
@@ -1719,12 +1723,24 @@
             };
             const A = byId('A') || alleys[0], B = byId('B') || alleys[1];
             const covered = bridges.filter(b => b.alley === A?.id || b.alley === B?.id);
-            // Through a covered stretch of a main alley, tubes overhead.
-            const under = covered[Math.floor(covered.length / 2)];
+            // Through a covered stretch of a main alley, tubes overhead: the one nearest the
+            // middle of the block, walking in towards the centre, with a lamp where it starts.
+            const centreOf = b => Math.hypot((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+            const under = covered.slice().sort((p, q) => centreOf(p) - centreOf(q))[0];
             if (under) {
                 const a = byId(under.alley);
                 const mid = a.axis === 'x' ? (under.x0 + under.x1) / 2 : (under.z0 + under.z1) / 2;
-                run('alley-under', a, mid - 9, mid + 7, { lift: 0.3, phase: 'verse', duration: 10 });
+                const inward = mid > 0 ? -1 : 1;
+                const s0 = mid - inward * 9, s1 = mid + inward * 7;
+                for (const [s, side] of [[s0 + inward * 1.5, 1], [mid, -1], [s1 - inward * 2, 1]]) {
+                    const p = along(a, s, side * (a.w / 2 - 0.12), 2.75);
+                    const yaw = a.axis === 'x' ? 0 : Math.PI / 2;
+                    const tone = side > 0 ? LAMP_TONES[0] : LAMP_TONES[2];
+                    boxes.add(p, [1.1, 0.05, 0.06], yaw, 5, new T.Color(tone[0], tone[1], tone[2]));
+                    lamp([p[0], p[1] - 0.1, p[2]], tone, 1.1, 5.5);
+                }
+                boxes.build();
+                run('alley-under', a, s0, s1, { lift: 0.3, phase: 'verse', duration: 10 });
             }
             if (A) {
                 run('alley-walk', A, -34, -18, { lift: t => 0.4 + 0.8 * Math.sin(t * Math.PI), phase: 'verse', duration: 10 });
@@ -1732,7 +1748,7 @@
                 run('alley-puddle', A, 22, 12, { y: 0.45, lift: 1.4, fov: 62, phase: 'interlude', duration: 10 });
                 // The long take: a hand's breadth over the water, steadily on for sixteen metres,
                 // the alley's screen and tubes sliding past in the puddles.
-                run('alley-glide', A, -10, 6, { y: t => 0.36 + 0.08 * t, lift: t => 1.0 + 0.4 * t, ahead: 9, fov: 60, phase: 'interlude', duration: 12 });
+                run('alley-glide', A, -10, 6, { y: t => 0.36 + 0.08 * t, lift: t => 1.0 + 0.4 * t, ahead: 9, fov: 60, phase: 'prechorus', duration: 12 });
             }
             if (B) run('alley-cross', B, 38, 24, { lift: 0.6, phase: 'prechorus', duration: 9 });
             // A narrow side alley, dim and close.
