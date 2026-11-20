@@ -46,7 +46,7 @@
             </div>
             <div class="archive-bottom">
                 <div class="archive-counter"><span class="archive-tiny">ARCHIVE / SELECT</span><div><span data-ref="selN" class="archive-roll"></span><i>/</i><span class="archive-count-total" data-ref="selT"></span></div></div>
-                <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
+                <div class="archive-rows"><button type="button" data-act="up" aria-label="上一首">↑</button><div class="archive-ticks" data-ref="ticks" role="slider" aria-label="在这一列里的位置（可拖动）"></div><button type="button" data-act="down" aria-label="下一首">↓</button></div>
                 <div class="archive-lanes"><button type="button" data-act="left" aria-label="上一个歌单">←</button><div><span>COLUMN <span data-ref="colN" class="archive-roll"></span> / <span data-ref="colT"></span></span><strong data-ref="colName"></strong></div><button type="button" data-act="right" aria-label="下一个歌单">→</button></div>
                 <div class="archive-hint">← → 切换歌单 <span>／</span> ↑ ↓ 前后曲目 <span>／</span> ENTER 播放 <span>／</span> / 检索 <span>／</span> L 目录</div>
                 <div class="archive-powered" aria-hidden="true">POWERED BY <b>VCP</b><i></i></div>
@@ -172,19 +172,41 @@
             });
         };
 
+        /*
+         * 位置条：刻度均匀铺满整列（歌多于 12 首时每格代表一段），竖线游标停在当前位置；
+         * 可以点、可以拖，拖的时候游标上方显示首字母和第几首。
+         */
+        const ticksReady = () => {
+            if (refs.ticks.dataset.ready) return;
+            refs.ticks.dataset.ready = '1';
+            refs.ticks.innerHTML = Array.from({ length: TICKS }, () => '<span></span>').join('')
+                + '<i class="archive-ticks-cursor"></i><b class="archive-ticks-tip" aria-hidden="true"></b>';
+        };
+        const tickTip = (r) => {
+            const col = column();
+            const index = col ? col.items[r] : -1;
+            const g = index >= 0 && searchIndex ? searchIndex.group(index) : '';
+            const letter = g ? (IndexLib.groupName(g) || g) : '';
+            return (letter ? letter + ' · ' : '') + pad(r + 1, 3);
+        };
         const renderTicks = (count, current) => {
+            ticksReady();
             const n = Math.min(count, TICKS);
-            // 歌曲多于 12 首时，刻度是当前位置附近的一段窗口
-            const start = count <= TICKS ? 0 : Math.max(0, Math.min(count - TICKS, current - Math.floor(TICKS / 2)));
-            if (refs.ticks.childElementCount !== n) {
-                refs.ticks.innerHTML = Array.from({ length: n }, () => '<button type="button"></button>').join('');
-            }
-            [...refs.ticks.children].forEach((b, i) => {
-                const r = start + i;
-                b.dataset.row = r;
-                b.classList.toggle('on', r === current);
-                b.setAttribute('aria-label', `第 ${r + 1} 首`);
+            const frac = count > 1 ? current / (count - 1) : 0;
+            const nearest = n > 1 ? Math.round(frac * (n - 1)) : 0;
+            const marks = refs.ticks.querySelectorAll('span');
+            marks.forEach((m, i) => {
+                const shown = i < n;
+                m.hidden = !shown;
+                if (!shown) return;
+                m.style.left = `calc(${n > 1 ? i / (n - 1) : 0} * (100% - 14px))`;
+                m.classList.toggle('on', i === nearest);
             });
+            refs.ticks.style.setProperty('--pos', String(frac));
+            refs.ticks.setAttribute('aria-valuemin', '1');
+            refs.ticks.setAttribute('aria-valuemax', String(Math.max(1, count)));
+            refs.ticks.setAttribute('aria-valuenow', String(count ? current + 1 : 0));
+            refs.ticks.querySelector('.archive-ticks-tip').textContent = count ? tickTip(current) : '';
         };
 
         const renderHud = (force = false) => {
@@ -607,6 +629,57 @@
 
         const wheelRows = Model.createWheel(60);
         const wheelLanes = Model.createWheel(90);
+        // 列里跳到第几首（0 起），保持在当前视野附近那一圈
+        const goRow = (target, opts) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (!count) return;
+            const current = Model.wrap(state.row, count);
+            if (target !== current) select(state.lane, state.row + (target - current), opts);
+        };
+        // 滚轮惯性：松手后按衰减的速度再走几格
+        const inertia = Model.createInertia();
+        let inertiaTimer = 0, inertiaRaf = 0;
+        const stopInertia = () => { inertia.stop(); clearTimeout(inertiaTimer); if (inertiaRaf) cancelAnimationFrame(inertiaRaf); inertiaRaf = 0; };
+        const glide = (now) => {
+            inertiaRaf = 0;
+            if (state.destroyed || !isShown()) { inertia.stop(); return; }
+            const n = inertia.tick(now / 1000);
+            if (n) { state.scene?.touch(); select(state.lane, state.row + n, { pulse: false }); }
+            if (inertia.active) inertiaRaf = requestAnimationFrame(glide);
+        };
+        const releaseWheel = () => {
+            if (inertia.release(performance.now() / 1000) && !inertiaRaf) inertiaRaf = requestAnimationFrame(glide);
+        };
+
+        // 位置条：按下就跳，拖着走，松开停
+        let scrubbing = null;
+        const scrubTo = (clientX) => {
+            const col = column();
+            const count = col ? col.items.length : 0;
+            if (!count) return;
+            const rect = refs.ticks.getBoundingClientRect();
+            const usable = Math.max(1, rect.width - 14);
+            goRow(Model.rowAtFraction((clientX - rect.left - 7) / usable, count), { pulse: false });
+        };
+        refs.ticks.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            stopInertia();
+            state.scene?.touch();
+            scrubbing = e.pointerId;
+            refs.ticks.setPointerCapture?.(e.pointerId);
+            refs.ticks.classList.add('is-scrubbing');
+            scrubTo(e.clientX);
+        });
+        refs.ticks.addEventListener('pointermove', (e) => { if (scrubbing === e.pointerId) scrubTo(e.clientX); });
+        const endScrub = (e) => {
+            if (scrubbing !== e.pointerId) return;
+            scrubbing = null;
+            refs.ticks.classList.remove('is-scrubbing');
+        };
+        refs.ticks.addEventListener('pointerup', endScrub);
+        refs.ticks.addEventListener('pointercancel', endScrub);
         root.addEventListener('wheel', (e) => {
             if (e.target.closest && e.target.closest('input')) return;
             e.preventDefault();
@@ -618,7 +691,14 @@
                 if (n) select(state.lane + n, state.row);
             } else {
                 const n = wheelRows(e.deltaY * unit, e.timeStamp);
-                if (n) select(state.lane, state.row + n);
+                if (n) {
+                    select(state.lane, state.row + n);
+                    if (!reducedMotion()) {
+                        inertia.push(n, performance.now() / 1000);
+                        clearTimeout(inertiaTimer);
+                        inertiaTimer = setTimeout(releaseWheel, 90);
+                    }
+                }
             }
         }, { passive: false });
 
@@ -650,16 +730,9 @@
                 e.stopPropagation();
                 return;
             }
-            const tick = e.target.closest('.archive-ticks button');
-            if (tick) {
-                const col = column();
-                const count = col ? col.items.length : 0;
-                const current = count ? Model.wrap(state.row, count) : 0;
-                select(state.lane, state.row + (Number(tick.dataset.row) - current));
-            }
         });
         // 别让档案页的点击把右键菜单立刻关掉
-        root.addEventListener('mousedown', () => state.scene?.touch());
+        root.addEventListener('mousedown', () => { stopInertia(); state.scene?.touch(); });
         returnBtn?.addEventListener('click', () => setMode('archive'));
 
         const modalOpen = () => Boolean(document.querySelector('#lyrics-fetch-modal.visible, #playlist-dialog.visible, #playlist-edit-modal.visible, .music-modal-overlay.visible, .dialog-overlay.visible, #track-context-menu.visible'));
@@ -668,6 +741,7 @@
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
             if (modalOpen() || e.altKey || e.ctrlKey || e.metaKey) return;
+            stopInertia();
             const next = Model.step({ lane: state.lane, row: state.row }, e.key);
             if (next) { e.preventDefault(); state.scene?.touch(); select(next.lane, next.row); return; }
             if (e.key === 'Enter') {
@@ -676,7 +750,12 @@
             }
             if (e.key === '/') { e.preventDefault(); openSearch(); return; }
             if (e.key === 'l' || e.key === 'L') { e.preventDefault(); setListOpen(!listOpen()); return; }
-            if (e.key === 'Home') { e.preventDefault(); goToPlaying(); return; }
+            if (e.key === 'Home' || e.key === 'End') {
+                e.preventDefault();
+                const col = column();
+                if (col && col.items.length) goRow(e.key === 'Home' ? 0 : col.items.length - 1);
+                return;
+            }
             if (e.code === 'Space' && tag !== 'BUTTON') {
                 e.preventDefault();
                 app.isPlaying ? app.pauseTrack?.() : app.playTrack?.();
@@ -725,6 +804,7 @@
             state.destroyed = true;
             clearInterval(clockTimer);
             clearTimeout(state.coverTimer);
+            stopInertia();
             if (state.raf) cancelAnimationFrame(state.raf);
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('visibilitychange', onVisibility);

@@ -128,7 +128,7 @@
     /* 键盘方向 → 选中格的变化。阵列在两个方向都循环。 */
     const KEY_STEPS = Object.freeze({
         ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-        PageUp: [0, -8], PageDown: [0, 8]
+        PageUp: [0, -10], PageDown: [0, 10]
     });
 
     const step = (selection, key) => {
@@ -151,12 +151,56 @@
         };
     };
 
+    /*
+     * 滚轮惯性：快速连续滚动松手后再滑一段，越快滑得越远，按指数衰减停下。
+     * push(格数, 秒) 记下每次滚动走的格数；滚轮停了调 release(秒)；之后每帧 tick(秒) 返回这一帧该再走几格。
+     * 触控板自带的惯性尾巴速度很低，不会再叠一段。
+     */
+    const createInertia = ({ tau = 0.22, minSpeed = 8, window = 0.16, maxSpeed = 70 } = {}) => {
+        let samples = [];
+        let v = 0, pos = 0, last = 0, gliding = false;
+        return {
+            push(rows, t) {
+                gliding = false; v = 0; pos = 0;
+                samples.push([t, rows]);
+                samples = samples.filter((sample) => t - sample[0] <= window);
+            },
+            release(t) {
+                if (!samples.length) return false;
+                const total = samples.reduce((sum, sample) => sum + sample[1], 0);
+                const span = Math.max(0.06, t - samples[0][0]);
+                samples = [];
+                const speed = total / span;
+                if (Math.abs(speed) < minSpeed) return false;
+                v = Math.max(-maxSpeed, Math.min(maxSpeed, speed));
+                pos = 0; last = t; gliding = true;
+                return true;
+            },
+            tick(t) {
+                if (!gliding) return 0;
+                const dt = Math.max(0, Math.min(0.05, t - last));
+                last = t;
+                v *= Math.exp(-dt / tau);
+                pos += v * dt;
+                const n = Math.trunc(pos);
+                pos -= n;
+                if (Math.abs(v) < minSpeed / 3) gliding = false;
+                return n;
+            },
+            stop() { gliding = false; samples = []; },
+            get active() { return gliding; }
+        };
+    };
+
+    /* 拖动/点击位置条：横向比例 → 列里第几首 */
+    const rowAtFraction = (fraction, count) => (count > 0 ? Math.round(Math.max(0, Math.min(1, fraction)) * (count - 1)) : 0);
+
     /* 两次 build 之间列结构有没有变（决定要不要重建 HUD 和保持选中） */
     const signature = (columns) => columns.map((c) => c.id + ':' + c.items.length).join('|');
 
     const api = Object.freeze({
         wrap, normalizePath, stripExtension, buildColumns, search, searchColumn,
-        fileCode, cellTrack, locate, step, createWheel, signature
+        fileCode, cellTrack, locate, step, createWheel, createInertia, rowAtFraction, signature
     });
 
     if (typeof module === 'object' && module.exports) module.exports = api;

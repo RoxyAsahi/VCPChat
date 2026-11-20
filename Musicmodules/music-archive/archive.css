@@ -112,11 +112,16 @@ body.music-stage-active.music-stage-entering #music-archive-view { opacity: 1; }
 .archive-rows { position: absolute; left: 504px; bottom: 131px; display: flex; align-items: center; gap: 33px; }
 .archive-rows > button, .archive-lanes button { width: 46px; height: 46px; font-size: 28px; transition: background .3s; display: grid; place-items: center; }
 .archive-rows > button:hover, .archive-lanes button:hover { background: var(--ar-hover); }
-.archive-ticks { display: flex; align-items: center; gap: 12px; }
-.archive-ticks button { width: 14px; height: 40px; position: relative; }
-.archive-ticks button::before { content: ""; position: absolute; left: 6px; top: 14px; width: 2px; height: 12px; background: var(--ar-line); transition: height .4s, background .4s, top .4s; }
-.archive-ticks button.on::before { height: 33px; top: 3px; background: var(--ar-sel, var(--ar-ink)); }
-.archive-ticks button:hover::before { height: 24px; top: 8px; background: var(--ar-accent); }
+/* 位置条：刻度铺满整列，竖线游标停在当前位置，可点可拖 */
+.archive-ticks { position: relative; width: 300px; height: 40px; cursor: pointer; touch-action: none; pointer-events: auto; }
+.archive-ticks > span { position: absolute; top: 0; width: 14px; height: 40px; }
+.archive-ticks > span::before { content: ""; position: absolute; left: 6px; top: 14px; width: 2px; height: 12px; background: var(--ar-line); transition: height .4s, background .4s, top .4s; }
+.archive-ticks:hover > span::before { height: 16px; top: 12px; }
+.archive-ticks-cursor { position: absolute; top: 3px; left: calc(var(--pos, 0) * (100% - 14px) + 6px); width: 2px; height: 33px; background: var(--ar-sel, var(--ar-ink)); transition: left .35s var(--mt-ease, ease); }
+.archive-ticks.is-scrubbing .archive-ticks-cursor { transition: none; background: var(--ar-accent); }
+.archive-ticks-tip { position: absolute; bottom: 46px; left: calc(var(--pos, 0) * (100% - 14px) + 7px); transform: translateX(-50%); font-size: 12px; font-weight: 600; letter-spacing: 1.2px; white-space: nowrap; color: var(--ar-ink); opacity: 0; transition: opacity .2s; pointer-events: none; font-variant-numeric: tabular-nums; }
+.archive-ticks:hover .archive-ticks-tip, .archive-ticks.is-scrubbing .archive-ticks-tip { opacity: 1; }
+.archive-ticks.is-scrubbing .archive-ticks-tip { transition: none; }
 .archive-lanes { position: absolute; left: 1005px; bottom: 131px; display: flex; align-items: center; gap: 24px; }
 .archive-lanes button { font-size: 24px; }
 .archive-lanes > div { display: grid; gap: 7px; min-width: 140px; max-width: 420px; }
@@ -185,7 +190,7 @@ body.music-archive-off:not(.music-stage-active) .archive-return { display: block
 
 @media (prefers-reduced-motion: reduce) {
     .archive-rule { animation: none; }
-    .archive-roll .d > span, .archive-bottom, .archive-cover { transition: none; }
+    .archive-roll .d > span, .archive-bottom, .archive-cover, .archive-ticks-cursor, .archive-ticks-tip { transition: none; }
 }
 
 /* ═════════ 左侧档案目录：字浮在场景上，不做面板 ═════════ */

@@ -183,13 +183,17 @@ test('输入框里打字不触发档案页快捷键', () => {
     f.close();
 });
 
-test('空格切换播放暂停；Home 回到正在播放', () => {
+test('空格切换播放暂停；Home/End 到这一列第一首和最后一首，PageDown 走 10 首', () => {
     const f = fixture();
     f.key(' ', { code: 'Space' });
     assert.deepEqual(f.calls, [['play']]);
     f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown');
     f.key('Home');
     assert.equal(f.view.debug().selected, 0);
+    f.key('End');
+    assert.equal(f.view.debug().selected, 29);
+    f.key('Home'); f.key('PageDown');
+    assert.equal(f.view.debug().selected, 10);
     f.close();
 });
 
@@ -276,5 +280,43 @@ test('有最近播放和收藏时排在最前面', () => {
     });
     const cols = f.view.debug().columns;
     assert.deepEqual(JSON.parse(JSON.stringify(cols.slice(0, 2).map((c) => [c.id, c.n]))), [['recent', 2], ['favorite', 1]]);
+    f.close();
+});
+
+test('位置条：按下跳到对应位置，拖着走，提示首字母和第几首', () => {
+    const f = fixture({ tracks: LIB, playlists: [] });
+    const bar = f.w.document.querySelector('[data-ref="ticks"]');
+    bar.getBoundingClientRect = () => ({ left: 100, top: 0, width: 314, height: 40, right: 414, bottom: 40 });
+    bar.setPointerCapture = () => {};
+    const ev = (type, x) => {
+        const e = new f.w.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, button: 0 });
+        Object.defineProperty(e, 'pointerId', { value: 1 });
+        bar.dispatchEvent(e);
+    };
+    const n = f.view.debug().columns[0].n; // A 列
+    ev('pointerdown', 107 + 300);           // 最右边
+    assert.equal(f.text('selN').length >= 2, true);
+    assert.equal(bar.getAttribute('aria-valuenow'), String(n));
+    assert.ok(bar.classList.contains('is-scrubbing'));
+    ev('pointermove', 107);                 // 拖回最左
+    assert.equal(bar.getAttribute('aria-valuenow'), '1');
+    assert.match(bar.querySelector('.archive-ticks-tip').textContent, /^A · 001$/);
+    ev('pointerup', 107);
+    assert.ok(!bar.classList.contains('is-scrubbing'));
+    f.close();
+});
+
+test('滚轮快速滚动松手后会再滑几格', async () => {
+    const f = fixture({ n: 200 });
+    const root = f.w.document.getElementById('music-archive-view');
+    for (let k = 0; k < 6; k++) {
+        root.dispatchEvent(new f.w.WheelEvent('wheel', { deltaY: 60, bubbles: true, cancelable: true }));
+        await new Promise((r) => setTimeout(r, 15));
+    }
+    const start = 0;
+    const afterWheel = f.view.debug().row;
+    assert.equal(afterWheel - start, 6);
+    await new Promise((r) => setTimeout(r, 900));
+    assert.ok(f.view.debug().row > afterWheel, `停在第 ${f.view.debug().row} 行`);
     f.close();
 });

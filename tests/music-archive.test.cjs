@@ -60,7 +60,7 @@ test('方向键和翻页键的步进', () => {
     const s = { lane: 2, row: 5 };
     assert.deepEqual(M.step(s, 'ArrowUp'), { lane: 2, row: 4 });
     assert.deepEqual(M.step(s, 'ArrowLeft'), { lane: 1, row: 5 });
-    assert.deepEqual(M.step(s, 'PageDown'), { lane: 2, row: 13 });
+    assert.deepEqual(M.step(s, 'PageDown'), { lane: 2, row: 15 });
     assert.equal(M.step(s, 'a'), null);
 });
 
@@ -86,4 +86,32 @@ test('几千首歌建列也很快', () => {
 test('档案号至少三位', () => {
     assert.equal(M.fileCode(0), '001');
     assert.equal(M.fileCode(1233), '1234');
+});
+
+test('滚轮惯性：快速滚动松手后再滑一段，慢慢滚不滑', () => {
+    const fast = M.createInertia();
+    for (let k = 0; k < 6; k++) fast.push(1, k * 0.02);   // 0.1 秒走 6 格
+    assert.equal(fast.release(0.12), true);
+    let extra = 0;
+    for (let t = 0.13; t < 2; t += 1 / 60) extra += fast.tick(t);
+    assert.ok(extra >= 6 && extra <= 30, `滑了 ${extra} 格`);
+    assert.equal(fast.active, false);
+    const slow = M.createInertia();
+    slow.push(1, 0); slow.push(1, 0.15);
+    assert.equal(slow.release(0.3), false);
+    assert.equal(slow.tick(0.31), 0);
+    const back = M.createInertia();
+    for (let k = 0; k < 6; k++) back.push(-1, k * 0.02);
+    back.release(0.12);
+    let neg = 0;
+    for (let t = 0.13; t < 2; t += 1 / 60) neg += back.tick(t);
+    assert.ok(neg < 0);
+});
+
+test('位置条：比例换算成列里的第几首', () => {
+    assert.equal(M.rowAtFraction(0, 300), 0);
+    assert.equal(M.rowAtFraction(1, 300), 299);
+    assert.equal(M.rowAtFraction(0.5, 3), 1);
+    assert.equal(M.rowAtFraction(-1, 10), 0);
+    assert.equal(M.rowAtFraction(0.3, 0), 0);
 });

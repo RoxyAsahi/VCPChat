@@ -76,6 +76,10 @@
         return '#';
     };
 
+    // 组内排序：数字按数值比（Song 2 在 Song 10 前面）
+    const COLLATE = typeof Intl !== 'undefined' ? new Intl.Collator('en', { numeric: true, sensitivity: 'base' }).compare
+        : (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
     const FIELDS = [['title', 3], ['artist', 2], ['album', 1]];
 
     const createIndex = (tracks, { pinyin = null } = {}) => {
@@ -182,7 +186,7 @@
                 prev.groups.push(...cur.groups); prev.items.push(...cur.items); runs.splice(k, 1);
             }
         }
-        const byTitle = (a, b) => { const ka = index.sortKey(a), kb = index.sortKey(b); return ka < kb ? -1 : ka > kb ? 1 : a - b; };
+        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
         return runs.map(({ groups: gs, items }) => {
             const first = gs[0], lastG = gs[gs.length - 1];
             const single = gs.length === 1;
@@ -212,7 +216,7 @@
         const head = (label, key, n) => rows.push({ type: 'head', label, key, n });
         const push = (i, ctx) => { rows.push({ type: 'track', i, ctx }); count++; };
         const allCtx = (i) => (columnOfGroup ? columnOfGroup(index.group(i)) : 'all');
-        const byTitle = (a, b) => { const ka = index.sortKey(a), kb = index.sortKey(b); return ka < kb ? -1 : ka > kb ? 1 : a - b; };
+        const byTitle = (a, b) => COLLATE(index.sortKey(a), index.sortKey(b)) || a - b;
 
         if (kind === 'recent') {
             const pool = recent.filter((i) => i >= 0 && i < list.length);
