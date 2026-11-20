@@ -1229,6 +1229,7 @@
             updatePlaying(true);
         };
 
+        const NARROW_W = 1300, MID_W = 1720;
         const hudScale = (h) => Math.max(h / DESIGN_H, MIN_SCALE);
         const resize = () => {
             const w = root.clientWidth || global.innerWidth;
@@ -1239,7 +1240,9 @@
             refs.hud.style.transform = `scale(${sc})`;
             refs.hud.classList.toggle('short', h / sc < 900);
             const wasNarrow = refs.hud.classList.contains('narrow');
-            refs.hud.classList.toggle('narrow', w / sc < 1500);
+            // 窄：只留阵列和说明块；中等（笔记本常见的 1280×800 就在这档）：目录照常开着，说明块挪到目录右边
+            refs.hud.classList.toggle('narrow', w / sc < NARROW_W);
+            refs.hud.classList.toggle('mid', w / sc >= NARROW_W && w / sc < MID_W);
             if (list && wasNarrow !== isNarrow() && listPref !== '1' && listPref !== '0') applyListDefault();
             const safe = parseFloat(getComputedStyle(document.body).getPropertyValue('--music-dock-safe-bottom')) || 0;
             refs.hud.style.setProperty('--archive-dock-lift', Math.round(safe / sc) + 'px');
