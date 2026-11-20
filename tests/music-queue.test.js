@@ -218,6 +218,81 @@ test('session: saves track, time, context and manual queue, and restores them by
     assert.equal(next.loads.length, 0, 'restoring does not start playback');
 });
 
+// 重启后恢复（#14）：照 music.js 启动时的顺序走一遍——先定位到上次那首和进度（不播放），
+// 侧栏初始化完再恢复上下文和手动队列。
+function restart(prev, { mode = 'repeat', drop = null } = {}) {
+    const next = setup({ mode, count: prev.playlist.length });
+    for (const key of ['musicSession', 'musicSessionTime']) {
+        const value = prev.context.localStorage.getItem(key);
+        if (value != null) next.context.localStorage.setItem(key, value);
+    }
+    if (drop != null) next.app.playlist.splice(drop, 1);
+    const calls = [];
+    next.app.renderPlaylist = () => {};
+    next.app.loadTrack = (index, andPlay) => { calls.push(['load', index, andPlay]); next.app.currentTrackIndex = index; next.app.playIntent = andPlay === true; };
+    next.app.seekTo = (time) => { calls.push(['seek', time]); next.app.lastKnownCurrentTime = time; };
+    next.app.playTrack = () => calls.push(['play']);
+    const resume = next.app.sessionStartPoint();
+    if (resume) {
+        next.app.loadTrack(resume.index, false);
+        if (resume.time > 1 && !next.app.playIntent) next.app.seekTo(resume.time);
+    }
+    next.app.currentFilteredTracks = null; // 侧栏初始化会清掉当前列表
+    next.app.applySessionQueue();
+    return { ...next, calls, resume };
+}
+const upNext = (app) => { const up = app.getUpNext(); return { manual: titles(up.manual), context: titles(up.context) }; };
+
+test('session restart: three queued tracks plus a context come back in the same order, paused, within a second of the old position', () => {
+    const first = setup({ count: 8 });
+    const { app, playlist } = first;
+    app.currentFilteredTracks = [playlist[1], playlist[3], playlist[5], playlist[7], playlist[0]];
+    app.filteredPlaylistSource = { type: 'playlist', id: 'p1', name: '通勤' };
+    app.currentTrackIndex = 3;
+    app.queueAdd(playlist[2]);
+    app.queueAdd(playlist[6]);
+    app.queueAdd(playlist[4]);
+    app.lastKnownCurrentTime = 127.3;
+    app.saveSession();                 // 每 5 秒一次的整份会话
+    app.lastKnownCurrentTime = 131.84; // 又放了几秒，只有每秒的进度记录跟上了
+    app.saveSessionTime();
+    const before = upNext(app);
+    assert.deepEqual(before, { manual: ['t2', 't6', 't4'], context: ['t5', 't7', 't0', 't1'] });
+
+    const next = restart(first);
+    assert.deepEqual(upNext(next.app), before, 'manual queue and context order are identical');
+    assert.equal(next.app.playlist[next.app.currentTrackIndex].title, 't3');
+    assert.equal(next.app.filteredPlaylistSource.id, 'p1');
+    assert.deepEqual(next.calls.filter(c => c[0] !== 'seek'), [['load', 3, false]], 'the track is loaded without playing, and nothing else starts playback');
+    assert.ok(!next.app.playIntent && !next.app.isPlaying, 'restoring never autoplays');
+    const seek = next.calls.find(c => c[0] === 'seek');
+    assert.ok(seek && Math.abs(seek[1] - 131.84) <= 1, `position ${seek && seek[1]} is within a second of 131.84`);
+
+    // 进度记录是别的歌的（刚切歌还没存整份会话）：不拿来用
+    first.context.localStorage.setItem('musicSessionTime', JSON.stringify({ track: 'C:/m/6.flac', time: 9, at: Date.now() + 1000 }));
+    assert.equal(restart(first).resume.time, 127.3);
+});
+
+test('session restart: shuffle keeps its dealt order, and reshuffles only when the context changed size', () => {
+    const first = setup({ mode: 'shuffle', count: 8 });
+    const { app, playlist } = first;
+    app.currentFilteredTracks = [playlist[1], playlist[3], playlist[5], playlist[7], playlist[0], playlist[2]];
+    app.currentTrackIndex = 3;
+    app.queueAdd(playlist[6]);
+    const before = upNext(app); // 这一步洗牌
+    assert.equal(before.context.length, 5);
+    app.saveSession();
+
+    const next = restart(first, { mode: 'shuffle' });
+    assert.deepEqual(upNext(next.app), before, 'the shuffled order survives the restart');
+
+    // 曲库里少了一首上下文里的歌：存的下标对不上了，重洗，但每首还是恰好出现一次
+    const smaller = restart(first, { mode: 'shuffle', drop: 7 });
+    const after = upNext(smaller.app);
+    assert.deepEqual(after.manual, ['t6']);
+    assert.deepEqual([...after.context].sort(), ['t0', 't1', 't2', 't5']);
+});
+
 test('session: a whole-library context is stored as null and a missing track gives no start point', () => {
     const { app, context } = setup();
     app.currentTrackIndex = 1;

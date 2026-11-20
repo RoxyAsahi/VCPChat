@@ -622,29 +622,48 @@ function setupPlayer(app) {
 
     // ───────── 重启恢复：队列、上下文、进度 ─────────
     // 和「上次那首」「播放模式」一样存在 localStorage：
-    // { v, track, time, context: 路径数组或 null（整个曲库）, source, manual: 路径数组 }。
+    // { v, track, time, context: 路径数组或 null（整个曲库）, source, manual: 路径数组, shuffle: 随机顺序或 null }。
     // 只恢复，不自动播放。
+    // 整份会话每 5 秒存一次（上下文可能有几千条路径）；进度另外用一个很小的键每秒存一次，
+    // 这样即使窗口不是正常关掉的，回来时进度也只差一秒以内。
     const SESSION_KEY = 'musicSession';
+    const SESSION_TIME_KEY = 'musicSessionTime';
+    const sessionTime = () => Math.max(0, Math.round((Number(app.lastKnownCurrentTime) || 0) * 10) / 10);
+    app.saveSessionTime = () => {
+        const track = app.playlist?.[app.currentTrackIndex];
+        if (track) writeStore(SESSION_TIME_KEY, { track: track.path, time: sessionTime(), at: Date.now() });
+    };
     const pathsOf = (list) => (list || []).map(t => t && t.path).filter(Boolean);
     app.saveSession = () => {
         const track = app.playlist?.[app.currentTrackIndex];
         if (!track) return;
         const context = app.currentFilteredTracks && app.currentFilteredTracks !== app.playlist ? pathsOf(app.currentFilteredTracks) : null;
+        const activeList = app.currentFilteredTracks || app.playlist;
+        // 随机模式下把洗好的顺序也存下来（存的是上下文列表里的下标），重启后「接下来」还是同一个顺序。
+        const shuffled = app.playModes?.[app.currentPlayMode] === 'shuffle' && app.lastShuffleList === activeList && app.shuffleQueue?.length;
         const session = {
             v: 1,
             track: track.path,
-            time: Math.max(0, Math.round((Number(app.lastKnownCurrentTime) || 0) * 10) / 10),
+            time: sessionTime(),
             context,
             source: app.filteredPlaylistSource ? { ...app.filteredPlaylistSource } : null,
             manual: pathsOf(app.manualQueue),
+            shuffle: shuffled ? { size: activeList.length, order: Array.from(app.shuffleQueue) } : null,
             savedAt: Date.now()
         };
         try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (error) { /* 存不下就算了 */ }
+        app.saveSessionTime();
     };
     app.readSession = () => {
         try {
             const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-            return session && session.v === 1 ? session : null;
+            if (!session || session.v !== 1) return null;
+            // 每秒存的进度比整份会话新，而且还是同一首：用它。
+            const tick = readStore(SESSION_TIME_KEY, null);
+            if (tick && tick.track === session.track && Number(tick.at) >= Number(session.savedAt || 0) && Number.isFinite(Number(tick.time))) {
+                session.time = Math.max(0, Number(tick.time));
+            }
+            return session;
         } catch (error) { return null; }
     };
     const byPathMap = () => {
@@ -664,6 +683,13 @@ function setupPlayer(app) {
                 app.filteredPlaylistSource = session.source && typeof session.source === 'object' ? session.source : null;
                 try { app.renderPlaylist?.(list); } catch (error) { /* 旧列表只是同步显示 */ }
             }
+        }
+        // 随机顺序：只有上下文列表和存的时候一样长（没有歌被删掉）才接着用，否则让它重洗。
+        const activeList = app.currentFilteredTracks || app.playlist;
+        const order = session.shuffle && Array.isArray(session.shuffle.order) ? session.shuffle.order : null;
+        if (order && session.shuffle.size === activeList.length && order.every(i => Number.isInteger(i) && i >= 0 && i < activeList.length)) {
+            app.shuffleQueue = order.slice();
+            app.lastShuffleList = activeList;
         }
         if (Array.isArray(session.manual)) {
             app.manualQueue = session.manual.map(p => lookup(map, p)).filter(Boolean);
@@ -685,9 +711,14 @@ function setupPlayer(app) {
         sessionTimer = setTimeout(() => { sessionTimer = null; app.saveSession(); }, 1000);
     };
     app.scheduleSessionSave = scheduleSessionSave;
-    // 播放中每 5 秒记一次进度。
+    // 播放中每秒记一次进度（小键），每 5 秒存一次整份会话。
     if (typeof setInterval === 'function') {
-        const sessionTick = setInterval(() => { if (app.isPlaying) app.saveSession(); }, 5000);
+        let ticks = 0;
+        const sessionTick = setInterval(() => {
+            if (!app.isPlaying) return;
+            ticks += 1;
+            if (ticks % 5 === 0) app.saveSession(); else app.saveSessionTime();
+        }, 1000);
         sessionTick?.unref?.();
     }
     try {
