@@ -219,3 +219,18 @@ body.music-reduce-motion :is(.archive-list-search, .sidebar-actions .search-wrap
 }
 .mtst .mtst-act { border-radius: 9999px; }
 body.music-fl-low .mtst { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* ───────── 档案筛选：选中的那一项下面有一道液态的线 ─────────
+ * 位置由 archive-list.js 量好、用 MusicFluid.slide 流过去；这里只管样子：一道圆头的细线，颜色从强调色里透出来。 */
+.archive-list-kinds { position: relative; }
+.archive-kind-mark {
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  width: 0;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--mf-tint);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--mf-tint) 55%, transparent);
+  pointer-events: none;
+}
