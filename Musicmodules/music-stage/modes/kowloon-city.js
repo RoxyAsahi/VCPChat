@@ -763,6 +763,10 @@
         const pipeGeo = new T.CylinderGeometry(1, 1, 1, 6, 1, true);
         const pipeMesh = instanced('kowloon-pipes', pipeGeo, propMaterial(3), pipes);
 
+        // 屋顶上的东西不进积水倒影：倒影里看不清，却要再画一遍几十万三角面。
+        // 第 3 层是“只给主相机看”的层，巷道模块的镜像相机会关掉它，manager 保证主相机开着。
+        const VIEW_ONLY_LAYER = 3;
+        [antennaMesh, shackMesh, tankMesh, dishMesh, crateMesh, railMesh].forEach(m => m && m.layers.set(VIEW_ONLY_LAYER));
         const meshes = [shell, cageMesh, acMesh, awningMesh, poleMesh, clothMesh, shackMesh, tankMesh, antennaMesh, railMesh, pipeMesh, dishMesh, crateMesh].filter(Boolean);
 
         // ---------- 天上：低飞进场的客机、远处高楼顶的航空障碍灯 ----------
@@ -827,6 +831,7 @@
         disposables.push(beaconMat);
         const beacons = new T.Points(beaconGeo, beaconMat);
         beacons.frustumCulled = false;
+        beacons.layers.set(3);
         group.add(beacons);
 
         const bulbGeo = new T.BufferGeometry();
@@ -845,6 +850,7 @@
         const bulbs = new T.Points(bulbGeo, bulbMat);
         bulbs.name = 'kowloon-roof-bulbs';
         bulbs.frustumCulled = false;
+        bulbs.layers.set(3);
         group.add(bulbs);
 
         // 给巷道线程滴水用：空调机的位置。
