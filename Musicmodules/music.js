@@ -380,6 +380,34 @@ document.addEventListener('DOMContentLoaded', () => {
             app.ws = null;
             app.connectWebSocket();
         }
+        recoverAfterEngineRestart(endpoint.state);
+    };
+    // 引擎用着用着崩了又被重启：新引擎里什么都没加载。把那首歌重新加载回去、跳回原来的位置，
+    // 原来在放就接着放。只认「就绪过 → 断了 → 又就绪」，窗口刚打开时的启动过程不算。
+    let engineSeenReady = false;
+    let engineLost = false;
+    const recoverAfterEngineRestart = (state) => {
+        if (state === 'ready') {
+            const lost = engineLost;
+            engineSeenReady = true;
+            engineLost = false;
+            if (!lost) return;
+            const track = app.playlist[app.currentTrackIndex];
+            app.engineTrackPath = null;
+            if (!track) return;
+            const wasPlaying = app.isPlaying === true || app.playIntent === true;
+            const resumeAt = Math.max(0, Number(app.lastKnownCurrentTime) || 0);
+            const index = app.currentTrackIndex;
+            app.skipHistoryOnce = true;
+            // 先加载、跳到原位置再播，不从头响一下。
+            Promise.resolve(app.loadTrack(index, false)).then(async () => {
+                if (app.currentTrackIndex !== index || app.engineTrackPath !== track.path) return; // 期间换了歌
+                if (resumeAt > 1) await app.seekTo(resumeAt);
+                if (wasPlaying && app.currentTrackIndex === index) app.playTrack();
+            }).catch(error => console.warn('[Music] Reload after engine restart failed:', error));
+        } else if (engineSeenReady && (state === 'failed' || state === 'starting' || state === 'stopped')) {
+            engineLost = true;
+        }
     };
     const refreshAudioEngineEndpoint = async () => {
         if (!app.api?.getAudioEngineEndpoint) return;
@@ -1191,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', () => {
         app.api.onMusicScanComplete((data) => {
             clearTimeout(scanBatchTimer); scanBatchTimer = 0; scanKnownPaths = null;
             // 途中先接上去的曲目按读完的先后排着，这里让它们回到磁盘顺序。
-            const addedDuringScan = scanAddedPaths; scanAddedPaths = null;
+            const addedDuringScan = scanAddedPaths;
             const playingPath = app.playlist[app.currentTrackIndex]?.path;
             app.loadingIndicator.style.display = 'none';
             // data may be { tracks, folderPath } (new format) or plain array (legacy)
@@ -1207,9 +1235,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const updatedPlaylist = [];
             const handledPaths = new Set();
+            // 这次扫描途中先接上去的曲目：先从原位置拿掉，下面按磁盘顺序放回（用同一个对象）。
+            // 同时在扫的另一个文件夹接上去的不归这次管，留在原处。
+            const appended = new Map();
 
             for (const track of app.playlist) {
-                if (addedDuringScan?.has(track.path)) continue;
+                if (addedDuringScan?.has(track.path) && scannedPaths.has(track.path)) {
+                    appended.set(track.path, track);
+                    addedDuringScan.delete(track.path);
+                    continue;
+                }
                 if (scannedPaths.has(track.path)) {
                     // 已有的曲目原地更新信息，保住对象本身：歌单视图、队列、播放历史都拿着它。
                     Object.assign(track, scannedMap.get(track.path));
@@ -1228,10 +1263,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add brand-new tracks that weren't in the existing playlist
             for (const track of newPlaylist) {
                 if (!handledPaths.has(track.path)) {
-                    updatedPlaylist.push(track);
+                    const early = appended.get(track.path);
+                    updatedPlaylist.push(early ? Object.assign(early, track) : track);
                 }
             }
 
+            if (scanAddedPaths && !scanAddedPaths.size) scanAddedPaths = null;
             app.playlist = updatedPlaylist;
             if (playingPath) {
                 const at = updatedPlaylist.findIndex(t => t.path === playingPath);

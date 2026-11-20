@@ -38,10 +38,12 @@
         const audio = { energy: 0, impact: 0, vocal: 0, spectrum: new Float32Array(24) };
         const palette = () => services?.app?.stagePalette || {};
         const dayLens = {};
+        // The settings as drawn: the chosen tier, less what the frame rate made it drop.
+        const drawn = () => renderScale.config(mode.config);
         const options = () => ({
             ...(mode.config.modes?.diorama || {}),
             animationIntensity: mode.config.animationIntensity ?? 1,
-            reducedMotion: Boolean(reduced?.matches), aspect: width / height, quality: mode.config.quality
+            reducedMotion: Boolean(reduced?.matches), aspect: width / height, quality: drawn().quality
         });
         const renderFallback = frame => {
             fallback.hidden = false;
@@ -119,7 +121,7 @@
             // the GPU can rest. Playing: no more often than the tier's rate.
             const still = !frame.isPlaying && lastTime !== null
                 && R.finiteNumber(frame.playbackTime) === lastTime;
-            if (!force && !dirty && (still || !cap.take(performance.now(), mode.config.quality))) return;
+            if (!force && !dirty && (still || !cap.take(performance.now(), drawn().quality))) return;
             dirty = false;
             const nextIdentity = frame.track?.path || frame.track?.title || 'last-train';
             const nextDuration = R.finiteNumber(frame.duration, R.finiteNumber(frame.track?.duration));
@@ -177,6 +179,11 @@
             const time = R.finiteNumber(frame.playbackTime);
             const dt = lastTime === null ? 0 : time - lastTime;
             const seek = lastTime === null || dt < 0 || dt > 0.5;
+            // The same song starting over (single-track repeat, or played again
+            // from its end): come down from the sky into its opening rather
+            // than cutting from the last shot straight back to the first.
+            if (dt < 0 && !leaving && time < 3 && Number.isFinite(compiledDuration)
+                && lastTime > compiledDuration - 12) arriving = 1e-6;
             // Freeze all live modulation, not just the camera, on repeated or paused frames.
             if (seek || frame.isPlaying && dt > 0) {
                 const live = onset.update(frame);
@@ -213,6 +220,8 @@
             // Up to the sky on the way out of a song, down from it on the way
             // into the next. Not inside the saloon: there the sky is a ceiling.
             const outdoors = 1 - R.clamp(pose.cabinView || 0);
+            // Opening inside the saloon: no sky to come down from; the dissolve does it.
+            if (arriving && outdoors < 0.5) arriving = 0;
             // Advance by drawn frames, at most a thirtieth of a second each, so
             // the rebuild's long first frame cannot swallow the move.
             const now = performance.now();
@@ -231,8 +240,8 @@
                 camera.updateProjectionMatrix();
             }
             // Cabin window foreground: derived from gaze vs. track heading, never from history.
-            world.updateCabin?.(camera, pose, track, width / height, mode.config);
-            world.update(timeline, track, pose, settings.reducedMotion ? 0 : time, mode.config, audio);
+            world.updateCabin?.(camera, pose, track, width / height, drawn());
+            world.update(timeline, track, pose, settings.reducedMotion ? 0 : time, drawn(), audio);
             // Exposure: analytic chapter swell + low-frequency breathing (frozen on pause).
             const moving = !settings.reducedMotion && (settings.motionAmount ?? 1) > 0
                 && (settings.animationIntensity ?? 1) > 0;
@@ -244,10 +253,10 @@
                 ? Math.max(0, (height - width / 2.39) / 2) * (1 - pose.state.openness * 0.75) : 0;
             // Lyrics stay clear of the frame edge and of the letterbox bars.
             lyrics.update(time, settings, audio, camera, { x: 0.94, y: Math.max(0.5, 0.95 - 2 * bars / height) });
-            events.update(time, settings, mode.config.quality, palette(), audio);
+            events.update(time, settings, drawn().quality, palette(), audio);
             letterbox.style.setProperty('--diorama-bar', `${bars}px`);
             fallback.hidden = true;
-            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(mode.config.quality))) resize();
+            if (frame.isPlaying && renderScale.tick(performance.now(), cap.aim(drawn().quality))) resize();
             renderer.info.reset();
             world.renderReflection(renderer, camera);
             // By day the paper-white sky is brighter than the lens's usual
@@ -257,7 +266,7 @@
             const tuned = mode.config.modes?.diorama || {};
             const lens = Object.assign(dayLens, tuned, {
                 threshold: palette().light ? 1.4 : tuned.threshold ?? 0.82, cabin: pose.cabinView || 0 });
-            if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config, lens);
+            if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, drawn(), lens);
             else renderer.render(scene, camera);
             // Read back now: once this task ends the drawing buffer is gone.
             if (leaving) veil.capture(renderer.domElement);
@@ -349,6 +358,8 @@
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
         mode.updateConfig = config => {
+            // A tier picked by hand starts the automatic stepping down afresh.
+            if (config?.quality !== mode.config.quality) renderScale.reset();
             baseConfig(config);
             // The canvas is antialiased only when the lens is off; that is fixed
             // when the context is made, so a change of tier rebuilds it.
@@ -365,6 +376,8 @@
         const resume = mode.resume;
         mode.resume = () => { resume(); cap.reset(); if (latest) update(latest, true); };
         // The layers hold nothing to describe until shaders are warm and the first frame has run.
+        // For the settings: how far below the chosen tier it is drawing (cheap, polled).
+        mode.getDegrade = () => ({ steps: renderScale.steps, quality: drawn().quality });
         mode.getDebugSnapshot = () => ({
             initialized, fallbackMode, rebuilds,
             ...(initialized ? { ...world?.snapshot(), ...lyrics?.snapshot(), ...events?.snapshot(camera) } : null),
@@ -373,6 +386,8 @@
             acts: timeline?.acts.map(a => ({ kind: a.kind, start: a.start, end: a.end })),
             cutsCount: timeline?.cuts.length || 0, rhythmSource: timeline?.rhythmSource,
             pixelRatio: renderer?.getPixelRatio(), renderScale: renderScale.factor,
+            degradeSteps: renderScale.steps, drawnQuality: drawn().quality,
+            handover: leaving ? 'leaving' : arriving ? 'arriving' : null,
             drawCalls: renderer?.info.render.calls, triangles: renderer?.info.render.triangles,
             geometries: renderer?.info.memory.geometries, textures: renderer?.info.memory.textures,
             programs: renderer?.info.programs?.length, canvasSmoothing,

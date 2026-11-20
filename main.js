@@ -607,6 +607,29 @@ function toggleDevToolsForWindow(focusedWindow) {
 // Now uses the Rust native audio engine instead of Python
 let audioEngineStartPromise = null;
 
+// 引擎在用着的时候崩了（音乐窗口开着）：一秒后自动重启，音乐窗口收到「就绪」后会重新加载那首歌、
+// 回到原来的位置。五分钟内最多自动重启三次，再崩就停下，由窗口顶部的提示说明原因。
+const AUDIO_ENGINE_RESTART_WINDOW_MS = 5 * 60 * 1000;
+const AUDIO_ENGINE_RESTART_LIMIT = 3;
+let audioEngineRestarts = [];
+let audioEngineRestartTimer = null;
+function scheduleAudioEngineRestart() {
+    const musicWindow = musicHandlers.getMusicWindow?.();
+    if (!musicWindow || musicWindow.isDestroyed() || app.isQuitting) return false;
+    const now = Date.now();
+    audioEngineRestarts = audioEngineRestarts.filter(at => now - at < AUDIO_ENGINE_RESTART_WINDOW_MS);
+    if (audioEngineRestarts.length >= AUDIO_ENGINE_RESTART_LIMIT) return false;
+    audioEngineRestarts.push(now);
+    clearTimeout(audioEngineRestartTimer);
+    audioEngineRestartTimer = setTimeout(() => {
+        audioEngineRestartTimer = null;
+        if (app.isQuitting) return;
+        console.warn('[Main] Restarting the audio engine after an unexpected exit.');
+        startAudioEngine().catch(err => console.error('[Main] Audio engine restart failed:', err?.message || err));
+    }, 1000);
+    return true;
+}
+
 function startAudioEngine() {
     // --- Uniqueness Check ---
     if (audioEngineProcess && !audioEngineProcess.killed && audioEngineEndpoint.getStatus().state === 'ready') {
@@ -668,7 +691,10 @@ function startAudioEngine() {
                     if (wasStopping) {
                         audioEngineEndpoint.markStopped();
                     } else if (wasReady) {
-                        audioEngineEndpoint.markFailed(`音频引擎意外退出（${describeAudioEngineExit(code, signal)}），重新打开音乐窗口会再启动一次。`);
+                        const restarting = scheduleAudioEngineRestart();
+                        audioEngineEndpoint.markFailed(restarting
+                            ? `音频引擎意外退出（${describeAudioEngineExit(code, signal)}），正在重新启动…`
+                            : `音频引擎意外退出（${describeAudioEngineExit(code, signal)}），重新打开音乐窗口会再启动一次。`);
                     }
                 });
                 child.on('error', (err) => {

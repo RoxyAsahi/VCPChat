@@ -406,6 +406,31 @@ body.light-theme #lyrics-list li:hover {
     font-weight: 500;
 }
 
+/* 间奏等待点：平时不占位置；间奏期间出现在下一句上方，三个点按间奏进度依次亮起 */
+#lyrics-list li .lyric-gap {
+    display: none;
+    gap: 7px;
+    height: 10px;
+    margin-bottom: 6px;
+}
+#lyrics-list li.gap-on .lyric-gap { display: flex; }
+#lyrics-list li .lyric-gap i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.22;
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+#lyrics-list li.gap-on { opacity: 0.85; }
+#lyrics-list li.gap-on .lyric-gap i:nth-child(1) { opacity: calc(0.22 + 0.78 * clamp(0, var(--gap-progress, 0) * 3, 1)); }
+#lyrics-list li.gap-on .lyric-gap i:nth-child(2) { opacity: calc(0.22 + 0.78 * clamp(0, var(--gap-progress, 0) * 3 - 1, 1)); }
+#lyrics-list li.gap-on .lyric-gap i:nth-child(3) { opacity: calc(0.22 + 0.78 * clamp(0, var(--gap-progress, 0) * 3 - 2, 1)); }
+#lyrics-list li.active.gap-rest { opacity: 0.55 !important; transform: scale(1); }
+@media (prefers-reduced-motion: reduce) {
+    #lyrics-list li .lyric-gap i { transition: none; }
+}
+
 #lyrics-list .no-lyrics {
     font-size: 1.2em;
     color: var(--music-text-secondary);

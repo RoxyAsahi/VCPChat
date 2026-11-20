@@ -195,3 +195,37 @@ test('a wobbling duration does not rebuild the diorama song', () => {
     assert.doesNotMatch(manager, /compiledDuration !== nextDuration/);
     dom.window.close();
 });
+
+test('3D stages step down pixels, then a tier, and only get pixels back on their own', () => {
+    const dom = createDom();
+    const { MusicStageModeUtils: U } = loadStage(dom);
+    const scale = U.createRenderScale();
+    const config = { quality: 'standard', modes: {} };
+    let now = 1000;
+    // Feed frames at a steady interval until the ladder moves (or give up).
+    const run = (interval, aim, limit = 400) => {
+        for (let i = 0; i < limit; i++) {
+            now += interval;
+            if (scale.tick(now, aim)) return true;
+        }
+        return false;
+    };
+    assert.equal(scale.config(config), config, 'nothing dropped: the same settings object');
+    // 30 fps against a 60 fps cap: fewer pixels first, twice, before any effect goes.
+    assert.ok(run(33, 16.7)); assert.ok(run(33, 16.7));
+    assert.equal(scale.steps, 2);
+    assert.equal(scale.quality('standard'), 'standard');
+    assert.ok(scale.factor < 0.75);
+    // Still slow: the tier below (no lens, 30 fps cap).
+    assert.ok(run(33, 16.7));
+    assert.equal(scale.quality('standard'), 'energy-saving');
+    assert.equal(scale.config(config).quality, 'energy-saving');
+    assert.equal(scale.config(config), scale.config(config), 'derived settings are stable between frames');
+    // Holding 30 fps under the 30 fps cap is fine: no further drop, and the tier is not retried.
+    assert.equal(run(33, 33.3, 3000), false);
+    assert.equal(scale.steps, 3);
+    // Picking a tier again starts from the top.
+    scale.reset();
+    assert.equal(scale.steps, 0);
+    assert.equal(scale.quality('ultimate'), 'ultimate');
+});
