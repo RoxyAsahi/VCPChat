@@ -3304,3 +3304,20 @@ body.music-stage-active #custom-title-bar,
 .music-stage-settings-toggle:focus-visible .music-stage-settings-toggle-pulse {
     animation-play-state: running;
 }
+
+/* The last picture of the old song, dissolving over the new one (createHandoverVeil). */
+.stage-handover-veil {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    /* Over the scene's canvas, under its text fallback and letterbox. */
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    display: none;
+}
+
+.stage-handover-veil.is-showing {
+    display: block;
+}

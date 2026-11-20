@@ -22,6 +22,16 @@
         // Something other than the clock changed since the last drawn frame.
         let dirty = true, canvasSmoothing = null;
         const cap = U.createFrameCap();
+        // Song handover (host: songHandover). While the host waits for the new
+        // song's lyrics the old journey runs on, the camera tilting up to the
+        // sky and the words put away; the new journey then opens tilted up
+        // and settles down into its first shot, the old sky dissolving into
+        // the new. `leaving` holds the old song's last frame and when it went.
+        const veil = U.createHandoverVeil(mode.root);
+        // arriving: progress 0..1 of the settle into the new song (0 = none).
+        let leaving = null, arriving = 0, tiltClock = 0, revealPending = false;
+        const LEAVE_TILT_S = 1.1, ARRIVE_TILT_S = 1.8, TILT_ANGLE = 0.95;
+        const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
         const Optics = () => global.MusicStageDioramaOptics;
         const wantsCanvasSmoothing = () => !(Optics()?.active(mode.config) ?? false);
         const onset = R.createAudioOnset();
@@ -128,6 +138,12 @@
                 recompile = true;
                 onset.reset();
                 lastTime = null;
+                if (leaving) {
+                    leaving = null;
+                    arriving = 1e-6;
+                    lyrics.setVisible(true);
+                    revealPending = true;
+                }
             }
             if (nextPalette !== paletteKey) {
                 world.setPalette(palette());
@@ -194,6 +210,22 @@
             camera.up.set(0, 1, 0);
             camera.lookAt(pose.look.x, pose.look.y, pose.look.z);
             camera.rotateZ(pose.roll);
+            // Up to the sky on the way out of a song, down from it on the way
+            // into the next. Not inside the saloon: there the sky is a ceiling.
+            const outdoors = 1 - R.clamp(pose.cabinView || 0);
+            // Advance by drawn frames, at most a thirtieth of a second each, so
+            // the rebuild's long first frame cannot swallow the move.
+            const now = performance.now();
+            const step = Math.min(1 / 30, Math.max(0, (now - (tiltClock || now)) / 1000));
+            tiltClock = leaving || arriving ? now : 0;
+            if (leaving) leaving.tilt = Math.min(1, (leaving.tilt || 0) + step / LEAVE_TILT_S);
+            if (arriving) arriving = Math.min(1, arriving + step / ARRIVE_TILT_S);
+            const tilt = leaving ? ease(leaving.tilt) : arriving ? 1 - ease(arriving) : 0;
+            if (tilt > 0 && outdoors > 0) {
+                camera.position.y += tilt * outdoors * 1.6;
+                camera.rotateX(tilt * outdoors * TILT_ANGLE);
+            }
+            if (arriving >= 1) arriving = 0;
             if (camera.fov !== pose.fov) {
                 camera.fov = pose.fov;
                 camera.updateProjectionMatrix();
@@ -227,6 +259,10 @@
                 threshold: palette().light ? 1.4 : tuned.threshold ?? 0.82, cabin: pose.cabinView || 0 });
             if (optics) optics.render(renderer, scene, camera, settings.reducedMotion ? 0 : time, mode.config, lens);
             else renderer.render(scene, camera);
+            // Read back now: once this task ends the drawing buffer is gone.
+            if (leaving) veil.capture(renderer.domElement);
+            // Dissolve once the new song's first picture is really there.
+            else if (revealPending) { revealPending = false; veil.reveal(1000); }
             lastTime = time;
         };
         const initialize = () => {
@@ -284,7 +320,32 @@
             });
             return initializing;
         };
-        mode.updateFrame = frame => update(frame);
+        mode.updateFrame = frame => {
+            // The host moved on without a new song after all (skipped back): just carry on.
+            if (leaving && (frame.track?.path || frame.track?.title || 'last-train') === identity
+                && frame.lines === source) {
+                leaving = null;
+                arriving = 1e-6;
+                lyrics?.setVisible(true);
+            }
+            update(frame);
+        };
+        // Host: the next song is coming. Returns true when this mode shows the
+        // way there itself; the host then sends holdFrame until it is ready.
+        mode.beginSongHandover = () => {
+            if (!initialized || !latest || lastTime === null) return false;
+            if (!leaving) leaving = { since: performance.now(), frame: latest, time: lastTime };
+            lyrics.setVisible(false);
+            return true;
+        };
+        // The old journey running on while the host waits for the new song.
+        mode.holdFrame = frame => {
+            if (!leaving || !initialized) return;
+            const elapsed = (performance.now() - leaving.since) / 1000;
+            const held = { ...leaving.frame, audio: frame.audio, isPlaying: true,
+                playbackTime: leaving.time + elapsed };
+            update(held);
+        };
         mode.resize = () => { resize(); if (latest && initialized) update(latest, true); };
         const baseConfig = mode.updateConfig;
         mode.updateConfig = config => {
@@ -318,6 +379,7 @@
             signSpectrum: Array.from(audio.spectrum)
         });
         mode.scope.add(() => {
+            veil.destroy();
             global.clearTimeout(settleTimer);
             global.clearTimeout(contextTimer);
             disposeGraphics();

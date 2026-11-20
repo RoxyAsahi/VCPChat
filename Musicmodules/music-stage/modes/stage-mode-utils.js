@@ -284,8 +284,51 @@
         }
     };
 
+    /*
+     * A dissolve for a 3D mode handing over to the next song. The scene can
+     * only be read back right after it is drawn, so `capture` is called after
+     * each frame drawn while the old song is going; `reveal` then puts the
+     * last of those over the new scene and lets it dissolve. One 2D canvas at
+     * drawing-buffer size, emptied again once it has faded.
+     */
+    const createHandoverVeil = (root) => {
+        const veil = createElement('canvas', 'stage-handover-veil');
+        veil.setAttribute('aria-hidden', 'true');
+        veil.width = 1; veil.height = 1;
+        root.appendChild(veil);
+        let context = null, captured = false, timer = 0;
+        const empty = () => { veil.width = 1; veil.height = 1; captured = false; };
+        return {
+            get captured() { return captured; },
+            capture(source) {
+                if (!source || !source.width) return;
+                if (veil.width !== source.width || veil.height !== source.height) {
+                    veil.width = source.width; veil.height = source.height;
+                    context = null;
+                }
+                context = context || veil.getContext('2d', { alpha: false });
+                if (!context) return;
+                try { context.drawImage(source, 0, 0); captured = true; } catch { captured = false; }
+            },
+            reveal(duration = 900) {
+                global.clearTimeout(timer);
+                if (!captured) return;
+                veil.style.transition = 'none';
+                veil.style.opacity = '1';
+                veil.classList.add('is-showing');
+                void veil.offsetWidth;
+                veil.style.transition = `opacity ${duration}ms cubic-bezier(0.33, 0, 0.2, 1)`;
+                veil.style.opacity = '0';
+                timer = global.setTimeout(() => { veil.classList.remove('is-showing'); empty(); }, duration + 60);
+            },
+            cancel() { global.clearTimeout(timer); veil.classList.remove('is-showing'); empty(); },
+            destroy() { global.clearTimeout(timer); empty(); veil.remove(); }
+        };
+    };
+
     global.MusicStageModeUtils = Object.freeze({
         createRenderScale,
+        createHandoverVeil,
         createFrameCap, durationChanged,
         precompile,
         tier,

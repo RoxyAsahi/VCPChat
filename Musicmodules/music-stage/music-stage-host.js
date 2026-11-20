@@ -1059,6 +1059,8 @@
         // on the song they have until the new one is ready, fade out softly,
         // rebuild unseen and come back out of the same blur.
         const SONG_LEAVE_MS = 360;
+        // Long enough for an in-world handover to have turned away from the old song.
+        const SONG_TILT_MS = 900;
         const LYRICS_WAIT_MS = 2000;
         const SCENE_MODES = new Set(['diorama', 'tunnel', 'kowloon']);
         const linesIds = new WeakMap();
@@ -1096,14 +1098,21 @@
             const now = performance.now();
             const newSong = identity !== state.committedIdentity;
             if (!handover || handover.newSong !== newSong) {
-                state.handover = { since: handover?.since ?? now, newSong };
-                instance.root.classList.add('is-song-leaving');
+                // A mode that can show the way to the next song in its own world
+                // does (镜台 tilts up to the sky and dissolves); the rest fade.
+                const inWorld = handover?.inWorld ?? Boolean(instance.beginSongHandover?.());
+                state.handover = { since: handover?.since ?? now, newSong, inWorld };
+                if (!inWorld) instance.root.classList.add('is-song-leaving');
                 state.stats.songHandovers = (state.stats.songHandovers || 0) + 1;
             }
             const waited = now - state.handover.since;
             // A new song waits for its words, or until it is clearly playing without them.
             const ready = !newSong || frame.lines?.length > 0 || waited >= LYRICS_WAIT_MS;
-            if (waited < SONG_LEAVE_MS || !ready) return false;
+            const leaveMs = state.handover.inWorld ? SONG_TILT_MS : SONG_LEAVE_MS;
+            if (waited < leaveMs || !ready) {
+                if (state.handover.inWorld) instance.holdFrame?.(frame);
+                return false;
+            }
             state.handover = null;
             state.committedSong = key;
             state.committedIdentity = identity;
@@ -1559,7 +1568,7 @@
                     leavingModeId: state.leaving?.instance.id || null,
                     songHandover: state.handover ? (state.handover.newSong ? 'new-song' : 'new-lyrics') : null,
                     modeRootChildren: elements.modeRoot.childElementCount,
-                    canvasCount: elements.modeRoot.querySelectorAll('canvas').length,
+                    canvasCount: elements.modeRoot.querySelectorAll('canvas:not(.stage-handover-veil)').length,
                     ...state.stats,
                     mode: state.modeInstance?.getDebugSnapshot?.() || null
                 };
