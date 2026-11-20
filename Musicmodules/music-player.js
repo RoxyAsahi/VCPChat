@@ -519,6 +519,28 @@ function setupPlayer(app) {
         queueChanged();
     };
 
+    // 撤销一次入队：before 是入队前队列的样子（queueSnapshot() 取的），tracks 是这次加进去的歌。
+    // 原来不在队列里的拿掉；原来就在队列里、只是被挪了位置的，放回原来排在谁后面的位置，不拿掉。
+    // 撤销前已经放掉（不在队列里了）的不再加回来，入队之后别处的改动也不动。
+    app.queueSnapshot = () => app.manualQueue.slice();
+    app.queueRevert = (tracks, before) => {
+        const touched = new Set((tracks || []).filter(t => app.manualQueue.includes(t)));
+        if (!touched.size) return;
+        const rest = app.manualQueue.filter(t => !touched.has(t));
+        for (const t of before || []) {
+            if (!touched.has(t)) continue;
+            const at = before.indexOf(t);
+            let after = -1;
+            for (let k = at - 1; k >= 0; k--) {
+                const i = rest.indexOf(before[k]);
+                if (i !== -1) { after = i; break; }
+            }
+            rest.splice(after + 1, 0, t);
+        }
+        app.manualQueue = rest;
+        queueChanged();
+    };
+
     // ───────── 从某一组点播 ─────────
     // 档案页的列、目录分组、经典列表都走这一个入口：把「看到的这一组、按看到的顺序」设成上下文队列，再放其中一首。
     // list 为空或就是整个曲库原顺序时记为 null（= 整个曲库）。origin 记下是从哪来的（如 'classic'），

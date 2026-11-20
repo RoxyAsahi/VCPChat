@@ -428,3 +428,32 @@ test('media session: seekto seeks the engine, position is reported on jumps and 
     app.syncMediaPosition(true);
     assert.equal(positions.at(-1), null);
 });
+
+test('undoing a queue add puts back tracks that were already queued instead of dropping them', () => {
+    const { app, playlist } = setup({ count: 8 });
+    const names = () => JSON.parse(JSON.stringify(app.manualQueue.map(t => t.title)));
+    app.queueAdd(playlist[1]); app.queueAdd(playlist[2]); app.queueAdd(playlist[3]);
+
+    // 批量「下一首播放」：2 本来排第二，这次被挪到最前；5、6 是新加的
+    let before = app.queueSnapshot();
+    const added = [playlist[6], playlist[5], playlist[2]].map(t => app.queuePlayNext(t));
+    assert.deepEqual(names(), ['t2', 't5', 't6', 't1', 't3']);
+    app.queueRevert(added, before);
+    assert.deepEqual(names(), ['t1', 't2', 't3'], 'new ones go, the moved one returns to its old place');
+
+    // 批量「加入队列」：1 本来在最前，被挪到最后
+    before = app.queueSnapshot();
+    const tail = [playlist[1], playlist[7]].map(t => app.queueAdd(t));
+    assert.deepEqual(names(), ['t2', 't3', 't1', 't7']);
+    // 撤销前用户自己又排了一首，撤销不动它
+    app.queueAdd(playlist[4]);
+    app.queueRevert(tail, before);
+    assert.deepEqual(names(), ['t1', 't2', 't3', 't4']);
+
+    // 撤销前那首已经放掉了：不会被加回来
+    before = app.queueSnapshot();
+    const one = [app.queuePlayNext(playlist[0])];
+    app.manualQueue.shift();
+    app.queueRevert(one, before);
+    assert.deepEqual(names(), ['t1', 't2', 't3', 't4']);
+});

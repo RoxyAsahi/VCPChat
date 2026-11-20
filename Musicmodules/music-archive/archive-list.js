@@ -830,11 +830,14 @@
             const fn = next ? app.queuePlayNext : app.queueAdd;
             if (typeof fn !== 'function') return;
             const list = indices.map((i) => tracks()[i]).filter(Boolean);
+            const before = typeof app.queueSnapshot === 'function' ? app.queueSnapshot() : (app.manualQueue || []).slice();
             // 「下一首播放」是插到队首：倒着插，听的时候才是选中的顺序
             const queued = (next ? list.slice().reverse() : list).map((t) => fn(t)).filter(Boolean);
             if (!queued.length) return;
             toast(`${next ? '下一首播放' : '已加入队列'}：${queued.length} 首`, { label: '撤销', run: () => {
-                for (const t of queued) { const at = (app.manualQueue || []).indexOf(t); if (at !== -1) app.queueRemove?.(at); }
+                // 本来就在队列里的那几首放回原位，不跟着一起拿掉
+                if (typeof app.queueRevert === 'function') { app.queueRevert(queued, before); return; }
+                for (const t of queued) { if (before.includes(t)) continue; const at = (app.manualQueue || []).indexOf(t); if (at !== -1) app.queueRemove?.(at); }
             } });
         };
         const removeFromPlaylistBatch = (scope, indices) => {
