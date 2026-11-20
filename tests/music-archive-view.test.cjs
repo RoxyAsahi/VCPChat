@@ -1,11 +1,11 @@
-/* 档案页的交互（没有 WebGL 时只剩文字层，交互仍然可用）：键盘、检索、播放进舞台、经典视图。 */
+/* 档案页的交互（没有 WebGL 时只剩文字层，交互仍然可用）：键盘、目录与检索、播放进舞台、经典视图。 */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
 const read = (p) => fs.readFileSync(p, 'utf8');
-const SCRIPTS = ['model', 'scene', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
+const SCRIPTS = ['model', 'scene', 'index', 'list', 'view'].map((n) => read(`Musicmodules/music-archive/archive-${n}.js`));
 
 const open = [];
 test.afterEach(() => { while (open.length) open.pop()(); });
@@ -77,29 +77,96 @@ test('已经在放的那首再按回车只进播放页，不重新加载', () =>
     f.close();
 });
 
-test('「/」打开检索，结果成为第一列，Esc 关掉后回到原来的列', () => {
+const listEl = (f, name) => f.w.document.querySelector(`.archive-list [data-l="${name}"]`);
+const listKey = (f, target, k, extra = {}) => target.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...extra }));
+
+test('「/」打开目录并聚焦检索框；输入即筛，第一条自动选中，阵列跟过去', () => {
     const f = fixture();
-    f.key('ArrowRight');
+    f.view.setListOpen(false);
     f.key('/');
-    const input = f.w.document.querySelector('[data-ref="searchInput"]');
+    const input = listEl(f, 'input');
     assert.equal(f.w.document.activeElement, input);
+    assert.ok(f.w.document.querySelector('.archive-hud').classList.contains('list-open'));
     input.value = 'Song 1';
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    assert.equal(f.text('cat'), '检索：Song 1');
-    assert.equal(f.view.debug().columns[0].id, 'search');
-    assert.equal(f.view.debug().columns[0].n, 11); // Song 1, 10..19
-    f.key('Escape');
-    assert.equal(f.view.debug().columns[0].id, 'all');
+    listKey(f, input, 'Shift'); // 任意按键都会先把输入框里的词刷进去
+    assert.equal(f.view.list.count, 17); // 每个词都要命中：Song 1、10–19，以及专辑 A1 里的
+    assert.equal(f.view.debug().selected, 1);
+    listKey(f, input, 'ArrowDown');
+    assert.equal(f.view.debug().selected, 10);
+    assert.equal(f.text('ftitle'), 'Song 10');
+    f.close();
+});
+
+test('目录里回车只播放不进播放页；→ 进播放页；Esc 先清空再离开', () => {
+    const f = fixture();
+    f.view.setListOpen(true);
+    f.view.list.focusSearch();
+    const input = listEl(f, 'input');
+    input.value = 'Song 7';
+    listKey(f, input, 'Enter');
+    assert.deepEqual(f.calls, [['load', 7, null]]); // 全部曲目列：队列就是整个曲库
+    f.calls.length = 0;
+    f.app.isPlaying = true;
+    input.setSelectionRange(input.value.length, input.value.length);
+    listKey(f, input, 'ArrowRight');
+    assert.deepEqual(f.calls, [['stage']]); // 已经在放这首了，只进播放页
+    listKey(f, input, 'Escape');
+    assert.equal(input.value, '');
+    assert.equal(f.view.list.count, 30);
+    listKey(f, input, 'Escape');
+    assert.notEqual(f.w.document.activeElement, input);
+    f.close();
+});
+
+test('L 开关目录并记住；阵列里换选中，目录高亮跟着走', () => {
+    const f = fixture();
+    f.view.setListOpen(false);
+    f.key('l');
+    assert.ok(!f.view.list.el.hidden);
+    assert.equal(f.w.localStorage.getItem('musicArchiveList'), '1');
+    f.key('ArrowDown'); f.key('ArrowDown'); f.key('ArrowDown');
+    const on = f.view.list.el.querySelector('.archive-list-row.on');
+    assert.ok(on);
+    assert.match(on.textContent, /Song 3/);
+    f.key('L');
+    assert.ok(f.view.list.el.hidden);
+    assert.equal(f.w.localStorage.getItem('musicArchiveList'), '0');
+    f.close();
+});
+
+test('目录单击只选中，双击播放；歌单分类里的歌在阵列里落到那一列', () => {
+    const f = fixture();
+    f.view.setListOpen(true);
+    f.view.list.setKind('playlist');
+    const rows = [...f.view.list.el.querySelectorAll('.archive-list-row')];
+    assert.equal(rows.length, 3);
+    rows[1].dispatchEvent(new f.w.MouseEvent('click', { bubbles: true }));
+    assert.equal(f.text('cat'), '夜间散步');
+    assert.equal(f.view.debug().selected, 7);
+    assert.deepEqual(f.calls, []);
+    rows[1].dispatchEvent(new f.w.MouseEvent('dblclick', { bubbles: true }));
+    assert.deepEqual(f.calls, [['load', 7, 3]]);
+    f.close();
+});
+
+test('歌手分类按名字分组；切换分类会记住', () => {
+    const f = fixture();
+    f.view.setListOpen(true);
+    f.view.list.setKind('artist');
+    const heads = [...f.view.list.el.querySelectorAll('.archive-list-group')].map((n) => n.querySelector('span').textContent);
+    assert.deepEqual(heads, ['Aki', 'Ren']);
+    assert.equal(f.w.localStorage.getItem('musicArchiveListKind'), 'artist');
     f.close();
 });
 
 test('输入框里打字不触发档案页快捷键', () => {
     const f = fixture();
     f.key('/');
-    const input = f.w.document.querySelector('[data-ref="searchInput"]');
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    input.dispatchEvent(new f.w.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+    const input = listEl(f, 'input');
+    listKey(f, input, 'l');
+    listKey(f, input, ' ', { code: 'Space' });
     assert.deepEqual(f.calls, []);
+    assert.ok(!f.view.list.el.hidden);
     f.close();
 });
 
