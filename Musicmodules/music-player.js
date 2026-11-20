@@ -529,12 +529,22 @@ function setupPlayer(app) {
         try { document.dispatchEvent(new CustomEvent('music-queue-change')); } catch (error) { /* 没有 DOM 时忽略 */ }
     };
     // 引擎的预载槽已经按旧队列填过了，就按新队列重填一次。
+    // 播放模式、曲库或歌单变了也要重填：引擎是自己无缝切进预载的那首的，界面来不及拦。
+    // 新队列里没有该预载的（比如只剩一首）就把旧的预载撤掉，免得接着放一首已经移除的歌。
     const refreshPreload = () => {
         const current = app.playlist[app.currentTrackIndex];
         if (!current || app.preloadIssuedFor !== current.path) return;
         if (app.isPreloadingNext) { setTimeout(refreshPreload, 600); return; }
-        app.handleNeedsPreload();
+        // 引擎的预载槽一旦解码好就不再接受新的 queue_next，所以先撤掉旧的再重填。
+        app.preloadIssuedFor = null;
+        Promise.resolve(app.api?.cancelMusicPreload?.())
+            .then(() => {
+                if (app.playlist[app.currentTrackIndex] !== current) return; // 这期间已经换歌，换歌自己会重新预载
+                return app.handleNeedsPreload();
+            })
+            .catch((error) => console.warn('[Music.js] Refreshing preload failed:', error?.message || error));
     };
+    app.refreshPreload = refreshPreload;
     const queueChanged = () => { announceQueue(); refreshPreload(); };
     const resolveTrack = (ref) => {
         if (ref == null) return null;
@@ -1073,7 +1083,9 @@ function setupPlayer(app) {
             } finally {
                 setTimeout(() => { app.isPreloadingNext = false; }, 500);
             }
+            return true;
         }
+        return false;
     };
 
     app.pollState = async () => {
@@ -1207,7 +1219,18 @@ function setupPlayer(app) {
     };
 
     const syncTrackIndexByPath = app.syncTrackIndexByPath;
+    const sameFile = (a, b) => {
+        const x = app.normalizePathForCompare(a), y = app.normalizePathForCompare(b);
+        return Boolean(x && y) && (x === y || x.split('/').pop() === y.split('/').pop());
+    };
     app.syncTrackIndexByPath = (path) => {
+        // 引擎无缝切进了一首曲库里已经没有的歌（预载之后被移除，重填又没赶上）：
+        // 界面没法显示它，直接按现在的队列切到下一首，不让声音和界面对不上。
+        if (path && !app.playlist.some(t => sameFile(t.path, path))) {
+            console.warn('[Music.js] Engine switched to a track no longer in the library, moving on:', path);
+            app.nextTrack();
+            return;
+        }
         // 无缝切进了队列里的下一首：在当前索引变之前把它从手动层取出来，记下上下文位置。
         const queued = manualHead();
         if (queued && path && app.normalizePathForCompare(queued.path) === app.normalizePathForCompare(path)) beginManual(queued);

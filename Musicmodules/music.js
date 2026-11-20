@@ -1061,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     app.renderPlaylist(app.currentFilteredTracks);
                 }
                 app.archiveView?.refresh?.();
+                app.refreshPreload?.();
             };
             refresh();
             notify(`已从歌单「${pl.name}」移除`, { label: '撤销', run: () => { if (!pl.tracks.includes(track.path)) { pl.tracks.splice(Math.min(at, pl.tracks.length), 0, track.path); refresh(); } } });
@@ -1089,6 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             app.api?.saveMusicPlaylist?.(app.playlist);
             app.archiveView?.refresh?.();
+            if (!wasCurrent) app.refreshPreload?.();
             notify(`已从曲库列表移除「${name}」`, { label: '撤销', run: () => {
                 if (app.playlist.includes(track)) return;
                 const at = Math.min(index, app.playlist.length);
@@ -1102,6 +1104,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (app.currentFilteredTracks && view) app.renderPlaylist(app.currentFilteredTracks); else app.renderPlaylist();
                 app.api?.saveMusicPlaylist?.(app.playlist);
                 app.archiveView?.refresh?.();
+                app.refreshPreload?.();
             } });
         };
         app.removeTrackInScope = (index, scope = app.contextMenuScope) => {
@@ -1470,6 +1473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(PLAY_MODE_STORAGE_KEY, app.playModes[app.currentPlayMode]);
         app.updateModeButton();
         if (app.wnpAdapter) app.wnpAdapter.sendUpdate();
+        app.refreshPreload?.();
     };
 
     app.updateModeButton = () => {
