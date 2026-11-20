@@ -61,8 +61,7 @@
 
         // 第二段：我们自己的记号（细圆 + 五根音轨竖条）和身份核验
         n.mark = el('g', { opacity: 0, transform: 'translate(0 0)' }, svg);
-        n.markRing = el('circle', { cx: 330, cy: 300, r: 46, class: 'mi-stroke', 'stroke-width': 2.2, pathLength: 1, 'stroke-dasharray': '0 1', transform: 'rotate(-90 330 300)' }, n.mark);
-        n.markBars = [-2, -1, 0, 1, 2].map((i) => el('rect', { x: 330 + i * 11 - 2, y: 300, width: 4, height: 0, class: 'mi-block' }, n.mark));
+        n.markParts = buildMark(n.mark, 330, 300, 46, 2.2);
         n.markWord = el('text', { x: 262, y: 382, 'font-size': 17, 'font-weight': 700, 'letter-spacing': '3' }, n.mark);
         n.brand = [
             el('text', { x: 262, y: 404, 'font-size': 9, 'letter-spacing': '2.2', class: 'mi-muted', opacity: 0 }, n.mark),
@@ -84,6 +83,8 @@
         n.innerA = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.innerB = el('path', { class: 'mi-stroke', 'stroke-width': 1 }, n.scanRings);
         n.dots = [0, 1].map(() => el('circle', { r: 2.6, class: 'mi-block' }, n.scanRings));
+        // 环收拢到位后，在环里画出记号的七条测地线：扫描环就是记号的圆周。
+        n.scanGeo = Array.from({ length: 7 }, () => el('path', { class: 'mi-stroke', 'stroke-width': 1, opacity: '.4', pathLength: 1, 'stroke-dasharray': '0 1' }, n.scanRings));
         n.cap = el('circle', { r: 3, class: 'mi-block' }, n.scanRings);
         // 核心点放在字的上方，不压字。
         n.core = el('circle', { cx: CX, cy: CY - 30, r: 0, class: 'mi-block' }, n.scan);
@@ -100,12 +101,8 @@
         n.welcomeName.textContent = 'VCP MUSIC';
         n.welcomeRule = el('rect', { x: CX - 128, y: 330, width: 0, height: 2, class: 'mi-block' }, n.welcomeInner);
         n.welcomeSub = el('text', { x: CX, y: 352, 'text-anchor': 'middle', 'font-size': 10, 'letter-spacing': '2.6', class: 'mi-muted' }, n.welcomeInner);
-        n.welcomeMark = el('g', { transform: `translate(${CX} 392) scale(.38)` }, n.welcomeInner);
-        el('circle', { cx: 0, cy: 0, r: 46, class: 'mi-stroke', 'stroke-width': 5 }, n.welcomeMark);
-        [-2, -1, 0, 1, 2].forEach((i) => {
-            const h = [24, 44, 62, 40, 20][i + 2];
-            el('rect', { x: i * 11 - 2, y: -h / 2, width: 4, height: h, class: 'mi-block' }, n.welcomeMark);
-        });
+        n.welcomeMark = el('g', {}, n.welcomeInner);
+        buildMark(n.welcomeMark, CX, 394, 17.5, 1.6);
 
         // 进出舞台：档案号
         n.file = el('g', { opacity: 0 }, svg);
@@ -123,6 +120,29 @@
         if (!node.textContent) return 0;
         try { return node.getComputedTextLength(); } catch (e) { return node.textContent.length * 9; }
     };
+
+    // ---------- VCP Music 记号：庞加莱圆盘 ----------
+    // 双曲平面的圆盘模型：圆周是无穷远，测地线是与圆周正交的圆弧。七条测地线隔一个点相连成七瓣（七声音阶），
+    // 里面再套一层缩小的同样结构。
+    const geodesic = (cx, cy, R, a, b) => {
+        const h = (b - a) / 2, m = (a + b) / 2;
+        const d = R / Math.cos(h), r = R * Math.tan(h);
+        const p1 = `${(cx + R * Math.cos(a)).toFixed(2)},${(cy + R * Math.sin(a)).toFixed(2)}`;
+        const p2 = `${(cx + R * Math.cos(b)).toFixed(2)},${(cy + R * Math.sin(b)).toFixed(2)}`;
+        return `M${p1}A${r.toFixed(2)},${r.toFixed(2)} 0 0 0 ${p2}`;
+    };
+    const buildMark = (parent, cx, cy, R, width) => {
+        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
+        const ring = el('circle', { cx, cy, r: R, class: 'mi-stroke', 'stroke-width': width, pathLength: 1, transform: `rotate(-90 ${cx} ${cy})` }, parent);
+        const outer = [], inner = [];
+        for (let k = 0; k < 7; k++) {
+            outer.push(el('path', { d: geodesic(cx, cy, R, off + k * step, off + (k + 2) * step), class: 'mi-stroke', 'stroke-width': (width * 0.62).toFixed(2), pathLength: 1 }, parent));
+            inner.push(el('path', { d: geodesic(cx, cy, R * 0.52, off + (k + 1) * step, off + (k + 3) * step), class: 'mi-stroke', 'stroke-width': (width * 0.45).toFixed(2), opacity: '.55', pathLength: 1 }, parent));
+        }
+        const core = el('circle', { cx, cy, r: width * 1.5, class: 'mi-block' }, parent);
+        return { ring, outer, inner, core };
+    };
+    const drawStroke = (node, p) => node.setAttribute('stroke-dasharray', `${p.toFixed(4)} ${(1 - p + 0.0001).toFixed(4)}`);
 
     // ---------- 扫描环（开场与短版共用） ----------
     // local 是扫描段内的秒数；speed 把同一条轨迹压快（短版 1.5 倍）。
@@ -144,6 +164,12 @@
         n.dots.forEach((dot, i) => {
             dot.setAttribute('cx', (CX + Math.cos(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
             dot.setAttribute('cy', (CY + Math.sin(orbit + i * Math.PI) * innerR * 0.86).toFixed(2));
+        });
+        const step = Math.PI * 2 / 7, off = -Math.PI / 2;
+        n.scanGeo.forEach((path, i) => {
+            const p = easeOut(progress(t, 1.05 + i * 0.05, 1.4 + i * 0.05));
+            path.setAttribute('d', p > 0 ? geodesic(CX, CY, r, off + i * step, off + (i + 2) * step) : '');
+            drawStroke(path, p);
         });
         const capA = outerStart + outerSweep;
         n.cap.setAttribute('cx', (CX + Math.cos(capA) * r).toFixed(2));
@@ -180,14 +206,12 @@
 
         // 记号描线、音轨竖条升起、文字
         n.mark.style.opacity = t >= 2.2 && t < FULL.scan ? '1' : '0';
-        const draw = easeOut(progress(t, 2.2, 2.9));
-        n.markRing.setAttribute('stroke-dasharray', `${draw.toFixed(4)} ${(1 - draw + 0.0001).toFixed(4)}`);
-        const heights = [24, 44, 62, 40, 20];
-        n.markBars.forEach((bar, i) => {
-            const h = heights[i] * easeOut(progress(t, 2.7 + i * 0.07, 3.1 + i * 0.07));
-            bar.setAttribute('height', h.toFixed(2));
-            bar.setAttribute('y', (300 - h / 2).toFixed(2));
-        });
+        // 先画圆周（无穷远），再一条一条画出七条测地线，最后内层和中心点
+        const mp = n.markParts;
+        drawStroke(mp.ring, easeOut(progress(t, 2.2, 2.75)));
+        mp.outer.forEach((path, i) => drawStroke(path, easeOut(progress(t, 2.6 + i * 0.07, 2.95 + i * 0.07))));
+        mp.inner.forEach((path, i) => drawStroke(path, easeOut(progress(t, 3.0 + i * 0.04, 3.3 + i * 0.04))));
+        mp.core.setAttribute('opacity', t >= 3.3 ? '1' : '0');
         n.markWord.textContent = typed('VCP · MUSIC', t, 3.0, 3.45);
         n.brand.forEach((line, i) => {
             const p = easeOut(progress(t, 3.3 + i * 0.08, 3.85 + i * 0.08));
