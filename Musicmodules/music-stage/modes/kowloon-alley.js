@@ -595,9 +595,9 @@
             props.push(record);
             return record;
         };
-        const boxes = pool('box', new T.BoxGeometry(1, 1, 1), 6500);
-        const cylinders = pool('cylinder', new T.CylinderGeometry(1, 1, 1, 7, 1, true), 2600);
-        const lumps = pool('lump', new T.IcosahedronGeometry(1, 0), 900);
+        const boxes = pool('box', new T.BoxGeometry(1, 1, 1), 7800);
+        const cylinders = pool('cylinder', new T.CylinderGeometry(1, 1, 1, 7, 1, true), 3000);
+        const lumps = pool('lump', new T.IcosahedronGeometry(1, 0), 1200);
         // Pipe from a to b with radius r.
         const up = new T.Vector3(0, 1, 0), va = new T.Vector3(), vb = new T.Vector3(), q = new T.Quaternion();
         const pm = new T.Matrix4(), ps = new T.Vector3();
@@ -725,7 +725,7 @@
                 const h = range(3, 3.8);
                 boxes.add([x, h, z], [1.2, 0.05, 0.06], yaw, 5, new T.Color(tone[0], tone[1], tone[2]));
                 boxes.add([x, h + 0.05, z], [1.26, 0.03, 0.12], yaw, 0, '#2a2c2e');
-                lamp([x, h - 0.1, z], tone, tone === LAMP_TONES[2] ? 1.35 : 1.0, 5, rand() < 0.12 ? 1 : 0);
+                lamp([x, h - 0.1, z], tone, tone === LAMP_TONES[2] ? 1.15 : 1.0, 5, rand() < 0.12 ? 1 : 0);
             }
             // Cables over the alley: bundles crossing, a few running along it.
             for (let d = range(0.5, 2); d < run.length; d += range(1.2, 3.2)) {
@@ -840,6 +840,12 @@
         /* ------------- the street outside: lamps, poles, kerbs, stalls ------------- */
         const { south, east } = streets;
         const kerbZ = south[0] + 2.5;
+        // The front gate stands in the mouth of the main north-south alley; its market
+        // runs along the pavement either side and a little way into the alley.
+        const gateAlley = (layout.ALLEYS || []).find(a => a.id === 'B' && a.axis === 'z') || { c: -14, w: 2.2 };
+        const GATE = { x: gateAlley.c, z: south[0] + 1.2, half: 3.6,
+            market: [gateAlley.c - 13, gateAlley.c + 12], inner: south[0] - 10 };
+        const inGate = (x, z) => x > GATE.market[0] - 1 && x < GATE.market[1] + 1 && z > GATE.inner - 0.5 && z < south[0] + 4;
         boxes.add([0, 0.08, south[0] + 1.25], [260, 0.16, 2.5], 0, 6, '#3a3836');
         boxes.add([0, 0.08, south[1] + 1.25], [260, 0.16, 2.5], 0, 6, '#3a3836');
         boxes.add([east[0] + 1.25, 0.08, -25], [2.5, 0.16, 170], 0, 6, '#3a3836');
@@ -871,13 +877,16 @@
             // A street stall or a parked hand-cart every other block.
             if (rand() < 0.5) {
                 const sx = x + range(2, 6), sz = south[0] + 1.3;
-                boxes.add([sx, 0.5, sz], [1.8, 1.0, 0.9], 0, 0, pick(['#6a6a60', '#4a5a6a', '#7a5a3a']));
-                boxes.add([sx, 2.2, sz + 0.2], [2.4, 0.04, 1.6], 0, 3, pick(TARP), -0.12);
-                pipe([sx - 1.1, 0, sz + 0.9], [sx - 1.1, 2.3, sz + 0.9], 0.03, 7, '#555');
-                pipe([sx + 1.1, 0, sz + 0.9], [sx + 1.1, 2.3, sz + 0.9], 0.03, 7, '#555');
-                const tone = pick(LAMP_TONES);
-                lumps.add([sx, 2.0, sz + 0.3], [0.08, 0.1, 0.08], 0, 5, new T.Color(tone[0], tone[1], tone[2]));
-                lamp([sx, 1.9, sz + 0.3], tone, 1.5, 6.5);
+                const paint = pick(['#6a6a60', '#4a5a6a', '#7a5a3a']), tarp = pick(TARP), tone = pick(LAMP_TONES);
+                // The market under the gate has its own stalls.
+                if (!inGate(sx, sz)) {
+                    boxes.add([sx, 0.5, sz], [1.8, 1.0, 0.9], 0, 0, paint);
+                    boxes.add([sx, 2.2, sz + 0.2], [2.4, 0.04, 1.6], 0, 3, tarp, -0.12);
+                    pipe([sx - 1.1, 0, sz + 0.9], [sx - 1.1, 2.3, sz + 0.9], 0.03, 7, '#555');
+                    pipe([sx + 1.1, 0, sz + 0.9], [sx + 1.1, 2.3, sz + 0.9], 0.03, 7, '#555');
+                    lumps.add([sx, 2.0, sz + 0.3], [0.08, 0.1, 0.08], 0, 5, new T.Color(tone[0], tone[1], tone[2]));
+                    lamp([sx, 1.9, sz + 0.3], tone, 1.5, 6.5);
+                }
             }
         }
         for (let z = -100; z < south[0]; z += 18) {
@@ -924,6 +933,153 @@
                     }
                 }
             });
+        }
+
+        /* ------------- the front gate and its market ------------- */
+        const gateLamps = [];
+        {
+            const gr = mulberry(hash(`${seedText}:gate`));
+            const gRange = (a, b) => a + (b - a) * gr();
+            const gPick = list => list[Math.floor(gr() * list.length) % list.length];
+            const { x: gx, z: gz, half } = GATE;
+            const LACQUER = '#4a1a16', DARK = '#2a1412';
+            // Two pillars on plinths, a pair of beams, a plaque, a tiled roof with upturned corners.
+            for (const side of [-1, 1]) {
+                const px = gx + side * half;
+                boxes.add([px, 0.3, gz], [0.95, 0.6, 0.95], 0, 6, '#4a4743');
+                boxes.add([px, 3.6, gz], [0.5, 6.6, 0.5], 0, 0, LACQUER);
+                // Small side bays, lower, the way such gates widen at the foot.
+                const sx = gx + side * (half + 1.5);
+                boxes.add([sx, 0.25, gz], [0.7, 0.5, 0.7], 0, 6, '#4a4743');
+                boxes.add([sx, 2.4, gz], [0.36, 4.3, 0.36], 0, 0, LACQUER);
+                boxes.add([gx + side * (half + 0.75), 4.55, gz], [2.0, 0.28, 0.36], 0, 0, DARK);
+                boxes.add([gx + side * (half + 0.75), 4.9, gz], [2.5, 0.1, 1.0], 0, 6, '#2a2624');
+                boxes.add([gx + side * (half + 0.75), 5.08, gz + 0.22], [2.4, 0.08, 0.6], 0, 6, '#33302c', 0.5);
+                boxes.add([gx + side * (half + 0.75), 5.08, gz - 0.22], [2.4, 0.08, 0.6], 0, 6, '#33302c', -0.5);
+            }
+            boxes.add([gx, 4.4, gz], [half * 2 + 0.6, 0.32, 0.42], 0, 0, DARK);
+            boxes.add([gx, 5.7, gz], [half * 2 + 1.2, 0.46, 0.5], 0, 0, LACQUER);
+            // Brackets under the eave.
+            for (let bx = -half - 0.4; bx <= half + 0.41; bx += 0.55) {
+                boxes.add([gx + bx, 6.05, gz], [0.22, 0.24, 0.7], 0, 0, DARK);
+            }
+            // The plaque: a dark board in a lit frame; the lettering is the signs' business.
+            boxes.add([gx, 5.05, gz + 0.24], [2.6, 0.95, 0.08], 0, 0, '#121214');
+            boxes.add([gx, 5.55, gz + 0.29], [2.7, 0.04, 0.04], 0, 5, '#ffb060');
+            boxes.add([gx, 4.55, gz + 0.29], [2.7, 0.04, 0.04], 0, 5, '#ffb060');
+            boxes.add([gx - 1.33, 5.05, gz + 0.29], [0.04, 1.0, 0.04], 0, 5, '#ffb060');
+            boxes.add([gx + 1.33, 5.05, gz + 0.29], [0.04, 1.0, 0.04], 0, 5, '#ffb060');
+            // Roof: eave slab, two pitched planes, a ridge, corners turned up.
+            boxes.add([gx, 6.25, gz], [half * 2 + 2.6, 0.16, 1.9], 0, 6, '#24201e');
+            boxes.add([gx, 6.62, gz + 0.45], [half * 2 + 2.2, 0.12, 1.1], 0, 6, '#2e2a27', 0.55);
+            boxes.add([gx, 6.62, gz - 0.45], [half * 2 + 2.2, 0.12, 1.1], 0, 6, '#2e2a27', -0.55);
+            boxes.add([gx, 6.95, gz], [half * 2 + 2.4, 0.18, 0.2], 0, 6, '#1e1b19');
+            for (const side of [-1, 1]) {
+                boxes.add([gx + side * (half + 1.55), 6.4, gz], [0.7, 0.1, 1.9], 0, 6, '#24201e', 0, side * 0.35);
+                boxes.add([gx + side * (half + 1.25), 7.12, gz], [0.5, 0.14, 0.14], 0, 6, '#1e1b19', 0, -side * 0.6);
+            }
+            // A cold tube along the underside of the lower beam, red lanterns either side of the way.
+            boxes.add([gx, 4.2, gz + 0.1], [half * 2 - 0.6, 0.05, 0.05], 0, 5, '#4ae6ff');
+            gateLamps.push([[gx, 4.05, gz + 0.3], [0.3, 0.9, 1.0], 1.3, 6.5]);
+            for (const side of [-1, 1]) {
+                const lx = gx + side * (half - 1.1);
+                pipe([lx, 4.25, gz + 0.05], [lx, 3.75, gz + 0.05], 0.008, 7, '#222');
+                lumps.add([lx, 3.5, gz + 0.05], [0.24, 0.3, 0.24], 0, 5, '#ff5a32');
+                gateLamps.push([[lx, 3.4, gz + 0.3], [1.0, 0.38, 0.2], 1.1, 5.5]);
+            }
+            // The market: tarps on poles along the pavement, skipping the gate's own bay.
+            const TARPS = ['#5a1c18', '#6a4a1c', '#1c3a50', '#24442a', '#4a2444', '#4a4a44'];
+            for (let x = GATE.market[0]; x < GATE.market[1]; ) {
+                const w = gRange(2.2, 3.2);
+                const cx = x + w / 2;
+                x += w + 0.1;
+                if (Math.abs(cx - gx) < half + 2.2) continue;
+                const depth = gRange(2.6, 3.2), h = gRange(2.75, 3.05);
+                boxes.add([cx, h, south[0] + depth / 2 + 0.1], [w, 0.03, depth], 0, 3, gPick(TARPS), -0.14 + gRange(-0.04, 0.04));
+                pipe([cx - w / 2 + 0.1, 0, south[0] + depth], [cx - w / 2 + 0.1, h - 0.15, south[0] + depth], 0.025, 7, '#555');
+                pipe([cx + w / 2 - 0.1, 0, south[0] + depth], [cx + w / 2 - 0.1, h - 0.15, south[0] + depth], 0.025, 7, '#555');
+                // A counter of goods against the shopfront, bulbs on a wire.
+                boxes.add([cx, 0.45, south[0] + 0.55], [w * 0.85, 0.9, 0.7], 0, gPick([0, 4, 6]), gPick(CRATE));
+                for (let i = 0; i < 4; i++) {
+                    boxes.add([cx + gRange(-w * 0.35, w * 0.35), 0.98 + gr() * 0.25, south[0] + gRange(0.35, 0.75)],
+                        [gRange(0.25, 0.45), gRange(0.12, 0.25), gRange(0.2, 0.35)], gRange(-0.2, 0.2), gPick([4, 8]), gPick(CRATE));
+                }
+                const tone = gPick([LAMP_TONES[0], LAMP_TONES[1], LAMP_TONES[1], LAMP_TONES[3]]);
+                for (let i = 0; i < 3; i++) {
+                    lumps.add([cx - w / 3 + i * w / 3, h - 0.32, south[0] + 1.3], [0.05, 0.065, 0.05], 0, 5, new T.Color(tone[0], tone[1], tone[2]));
+                }
+                gateLamps.push([[cx, h - 0.45, south[0] + 1.3], tone, 1.2, 5]);
+                if (gr() < 0.4) steamSources.push([cx + gRange(-0.5, 0.5), 1.0, south[0] + 0.6, gRange(3, 5)]);
+            }
+            // Into the alley: tarps strung wall to wall over the first stretch, bulbs between.
+            const aw = gateAlley.w ?? 2.2;
+            for (let z = south[0] - 0.6; z > GATE.inner; z -= gRange(1.8, 2.4)) {
+                boxes.add([gx, gRange(2.9, 3.15), z], [aw + 0.3, 0.03, gRange(1.4, 1.9)], gRange(-0.06, 0.06), 3, gPick(TARPS), gRange(-0.12, 0.12));
+                lumps.add([gx + gRange(-0.4, 0.4), 2.7, z - 0.9], [0.05, 0.065, 0.05], 0, 5, '#ffcf8a');
+                if (gr() < 0.5) gateLamps.push([[gx, 2.6, z - 0.9], LAMP_TONES[1], 0.9, 4]);
+                // Goods stacked against the walls on both sides.
+                for (const side of [-1, 1]) {
+                    if (gr() < 0.4) continue;
+                    boxes.add([gx + side * (aw / 2 - 0.25), 0.3, z - gRange(0, 1.2)], [0.4, 0.6, 0.6], gRange(-0.2, 0.2), 4, gPick(CRATE));
+                }
+            }
+        }
+        gateLamps.forEach(l => lamp(...l));
+
+        /* ------------- hand-carts and goods by the doors ------------- */
+        const cart = (x, z, yaw, cr) => {
+            const c = Math.cos(yaw), s0 = Math.sin(yaw);
+            const loc = (lx, lz) => [x + lx * c + lz * s0, z - lx * s0 + lz * c];
+            const [bx, bz] = loc(0, 0);
+            boxes.add([bx, 0.72, bz], [1.3, 0.08, 0.72], yaw, 0, cr.paint);
+            boxes.add([bx, 0.86, bz], [1.3, 0.22, 0.04], yaw, 0, cr.paint);
+            for (const side of [-1, 1]) {
+                const [wx, wz] = loc(0.15, side * 0.4);
+                cylinders.add([wx, 0.32, wz], [0.32, 0.05, 0.32], yaw, 7, '#151515', Math.PI / 2);
+                const [hx, hz] = loc(-0.95, side * 0.3);
+                const [ex, ez] = loc(-0.55, side * 0.3);
+                pipe([ex, 0.74, ez], [hx, 0.95, hz], 0.02, 7, '#3a3a38');
+                const [lx, lz] = loc(0.55, side * 0.3);
+                pipe([lx, 0, lz], [lx, 0.7, lz], 0.02, 7, '#3a3a38');
+            }
+            for (let i = 0; i < cr.load; i++) {
+                const [gx2, gz2] = loc(cr.r() * 0.8 - 0.4, cr.r() * 0.4 - 0.2);
+                boxes.add([gx2, 0.88 + i * 0.12, gz2], [0.38, 0.22, 0.3], yaw + cr.r() * 0.4 - 0.2, cr.r() < 0.5 ? 4 : 8, cr.goods());
+            }
+        };
+        {
+            const cr0 = mulberry(hash(`${seedText}:carts`));
+            const cRange = (a, b) => a + (b - a) * cr0();
+            const cPick = list => list[Math.floor(cr0() * list.length) % list.length];
+            const opts = () => ({ paint: cPick(['#3a3430', '#4a3a2a', '#2e3a44', '#5a4a3a']), load: 1 + Math.floor(cr0() * 4), r: cr0, goods: () => cPick(CRATE) });
+            runs.forEach(run => {
+                const yaw = Math.atan2(run.dir[0], run.dir[1]) - Math.PI / 2;
+                for (let d = cRange(6, 20); d < run.length - 3; d += cRange(22, 40)) {
+                    if (run.width < 1.6 || cr0() > 0.55) continue;
+                    const side = cr0() < 0.5 ? -1 : 1;
+                    const [x, z] = wallAt(run, d / run.length, side, 0.55);
+                    if (inGate(x, z)) continue;
+                    cart(x, z, yaw + (cr0() - 0.5) * 0.2, opts());
+                }
+                // Goods piled by doorways: crates, sacks, a few bundles.
+                for (let d = cRange(3, 10); d < run.length - 2; d += cRange(9, 16)) {
+                    if (cr0() > 0.6) continue;
+                    const side = cr0() < 0.5 ? -1 : 1;
+                    const [x, z] = wallAt(run, d / run.length, side, 0.3);
+                    const n = 2 + Math.floor(cr0() * 4);
+                    for (let i = 0; i < n; i++) {
+                        const [ox, oz] = [cRange(-0.4, 0.4) * run.dir[0], cRange(-0.4, 0.4) * run.dir[1]];
+                        if (cr0() < 0.35) lumps.add([x + ox, 0.18 + (i > 2 ? 0.3 : 0), z + oz], [0.28, 0.2, 0.22], cr0() * 6, 4, cPick(['#8a7a5a', '#6a5a40', '#9a9070']));
+                        else boxes.add([x + ox, 0.17 + Math.floor(i / 2) * 0.32, z + oz], [cRange(0.35, 0.5), 0.32, cRange(0.3, 0.45)], yaw + cRange(-0.3, 0.3), 4, cPick(CRATE));
+                    }
+                }
+            });
+            // A few carts on the street, outside the market.
+            for (let i = 0; i < 8; i++) {
+                const x = cRange(-95, 90), z = cRange(south[0] + 3, south[0] + 4.5);
+                if (inGate(x, z)) continue;
+                cart(x, z, cRange(-0.3, 0.3), opts());
+            }
         }
 
         /* ------------- under the built-over stretches ------------- */
@@ -1287,6 +1443,167 @@
         steam.visible = steamSources.length > 0;
         root.add(steam);
 
+        /* ------------- people: dark figures under lit umbrellas ------------- */
+        // One instanced mesh. Each figure walks a stretch of alley or pavement and back;
+        // legs swing in the vertex shader; umbrellas open while it rains and take the
+        // colour of whatever sign is nearest.
+        const WALKERS = { 'energy-saving': 32, standard: 64, ultimate: 96 };
+        const MAX_WALKERS = 96;
+        const walkerGeometry = keep(new T.InstancedBufferGeometry());
+        {
+            const pos = [], nor = [], part = [];
+            const m4 = new T.Matrix4(), nm = new T.Matrix3();
+            const add = (geo, id, matrix) => {
+                const g = geo.index ? geo.toNonIndexed() : geo;
+                g.applyMatrix4(matrix);
+                const P = g.attributes.position, N = g.attributes.normal;
+                for (let i = 0; i < P.count; i++) {
+                    pos.push(P.getX(i), P.getY(i), P.getZ(i));
+                    nor.push(N.getX(i), N.getY(i), N.getZ(i));
+                    part.push(id);
+                }
+                g.dispose(); if (g !== geo) geo.dispose();
+            };
+            const at = (x, y, z, sx = 1, sy = 1, sz = 1, rx = 0) => m4.compose(new T.Vector3(x, y, z),
+                new T.Quaternion().setFromEuler(new T.Euler(rx, 0, 0)), new T.Vector3(sx, sy, sz));
+            // Legs hang from the hip (y 0.82) so the shader can swing them about it.
+            add(new T.BoxGeometry(0.12, 0.82, 0.14), 1, at(-0.09, 0.41, 0));
+            add(new T.BoxGeometry(0.12, 0.82, 0.14), 2, at(0.09, 0.41, 0));
+            // A long coat, a bag on one hip, a head.
+            add(new T.CylinderGeometry(0.19, 0.25, 0.92, 8, 1, false), 0, at(0, 1.05, 0, 1, 1, 0.68));
+            add(new T.BoxGeometry(0.1, 0.26, 0.24), 0, at(-0.27, 0.9, 0));
+            add(new T.SphereGeometry(0.11, 7, 5), 0, at(0, 1.62, 0.01));
+            // The umbrella: shaft from the hand, a shallow canopy.
+            add(new T.CylinderGeometry(0.012, 0.012, 0.95, 4, 1, true), 4, at(0.14, 1.55, 0.06));
+            add(new T.ConeGeometry(0.58, 0.26, 10, 1, true), 3, at(0.1, 2.08, 0.06));
+            walkerGeometry.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+            walkerGeometry.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+            walkerGeometry.setAttribute('part', new T.Float32BufferAttribute(part, 1));
+            void nm;
+        }
+        {
+            const wr = mulberry(hash(`${seedText}:walkers`));
+            const wRange = (a, b) => a + (b - a) * wr();
+            const paths = [];
+            const total = runs.reduce((sum, r) => sum + (r.length > 8 ? r.length : 0), 0);
+            const alleyRun = () => {
+                let k = wr() * total;
+                for (const r of runs) { if (r.length <= 8) continue; k -= r.length; if (k <= 0) return r; }
+                return runs[0];
+            };
+            // Gate traffic first so even the fewest figures include it, then the rest mixed.
+            for (let i = 0; i < 4; i++) {
+                const lat = wRange(-0.25, 0.25);
+                paths.push([GATE.x + lat, south[0] + wRange(3, 8), GATE.x + lat * 0.5, south[0] - wRange(14, 30)]);
+            }
+            while (paths.length < MAX_WALKERS) {
+                if (wr() < 0.32) {
+                    // The pavement by the shops, or out in the road where the market spills.
+                    const z = wr() < 0.6 ? wRange(south[0] + 1.9, south[0] + 2.3) : wRange(south[0] + 3.2, south[0] + 9.3);
+                    const x0 = wRange(-100, 85), len = wRange(18, 50);
+                    paths.push([x0, z, x0 + len, z + wRange(-0.3, 0.3)]);
+                } else {
+                    const r = alleyRun();
+                    if (!r || !runs.length) break;
+                    const len = Math.min(r.length - 1, wRange(8, 28));
+                    const t0 = wRange(0, Math.max(0, r.length - len)) / r.length, t1 = t0 + len / r.length;
+                    const lat = wRange(-0.22, 0.22) * r.width;
+                    const p0 = [mix(r.a[0], r.b[0], t0) + r.normal[0] * lat, mix(r.a[1], r.b[1], t0) + r.normal[1] * lat];
+                    const p1 = [mix(r.a[0], r.b[0], t1) + r.normal[0] * lat, mix(r.a[1], r.b[1], t1) + r.normal[1] * lat];
+                    paths.push([p0[0], p0[1], p1[0], p1[1]]);
+                }
+            }
+            // Shuffle all but the gate's, so any prefix is spread over the whole block.
+            for (let i = paths.length - 1; i > 4; i--) {
+                const j = 4 + Math.floor(wr() * (i - 3));
+                [paths[i], paths[j]] = [paths[j], paths[i]];
+            }
+            const UMBRELLA = ['#1a1c20', '#1a1c20', '#2a2e36', '#b8bcc0', '#a02a24', '#24508a', '#b09030', '#2e7070'];
+            const path = new Float32Array(MAX_WALKERS * 4), motion = new Float32Array(MAX_WALKERS * 4), tint = new Float32Array(MAX_WALKERS * 3);
+            const c = new T.Color();
+            paths.slice(0, MAX_WALKERS).forEach((p, i) => {
+                path.set(p, i * 4);
+                motion.set([wRange(0.7, 1.25), wr(), wr() < 0.78 ? 1 : 0, wr()], i * 4);
+                c.set(UMBRELLA[Math.floor(wr() * UMBRELLA.length) % UMBRELLA.length]);
+                tint.set([c.r, c.g, c.b], i * 3);
+            });
+            walkerGeometry.setAttribute('path', new T.InstancedBufferAttribute(path, 4));
+            walkerGeometry.setAttribute('motion', new T.InstancedBufferAttribute(motion, 4));
+            walkerGeometry.setAttribute('tint', new T.InstancedBufferAttribute(tint, 3));
+            walkerGeometry.instanceCount = WALKERS.standard;
+        }
+        const walkerMat = keep(new T.ShaderMaterial({
+            fog: true, side: T.DoubleSide,
+            uniforms: T.UniformsUtils.merge([T.UniformsLib.fog, {}]),
+            vertexShader: `attribute float part;attribute vec4 path,motion;attribute vec3 tint;
+                uniform float time,rain;uniform vec3 hemiSky;
+                ${LIGHT_DECL}
+                varying vec3 vN,vW,vTint;varying float vPart;
+                #include <fog_pars_vertex>
+                void main(){
+                    vec2 a=path.xy,b=path.zw;float len=max(length(b-a),0.5);
+                    float s=fract(time*motion.x/(2.0*len)+motion.y);
+                    float u=s<0.5?s*2.0:2.0-2.0*s;
+                    vec2 dir=(b-a)/len*(s<0.5?1.0:-1.0);
+                    vec2 at=mix(a,b,u);
+                    vec3 fw=vec3(dir.x,0.0,dir.y),rt=vec3(dir.y,0.0,-dir.x);
+                    float stride=time*motion.x*4.2+motion.w*40.0;
+                    vec3 p=position,n=normal;
+                    float h=0.94+motion.w*0.12;
+                    if(part>0.5&&part<2.5){
+                        // Legs swing about the hip.
+                        float sw=sin(stride)*(part<1.5?0.42:-0.42);
+                        float c=cos(sw),sn=sin(sw);float y=p.y-0.82;
+                        p=vec3(p.x,0.82+y*c-p.z*sn,y*sn+p.z*c);
+                        n=vec3(n.x,n.y*c-n.z*sn,n.y*sn+n.z*c);
+                    }
+                    float open=motion.z*smoothstep(0.03,0.15,rain);
+                    // Furled when the rain stops: the canopy folds down the shaft.
+                    if(part>2.5&&part<3.5){p.xz=mix(vec2(0.14,0.06),p.xz,max(open,0.08));p.y=mix(1.62,p.y,max(open,0.3));}
+                    if(part>2.5&&motion.z<0.5)p=vec3(0.0,0.9,0.0);
+                    p.y=p.y*h+abs(sin(stride))*0.025;
+                    // Never walk through the lens: a figure the camera is about to pass steps out of frame.
+                    float clear=smoothstep(0.9,1.7,distance(cameraPosition.xz,at));
+                    p.xz*=clear;p.y*=clear;
+                    vec3 w=vec3(at.x,0.0,at.y)+rt*p.x+fw*p.z+vec3(0.0,p.y,0.0);
+                    vN=normalize(rt*n.x+fw*n.z+vec3(0.0,n.y,0.0));vW=w;vTint=tint;vPart=part;
+                    vec4 mvPosition=viewMatrix*vec4(w,1.0);gl_Position=projectionMatrix*mvPosition;
+                    #include <fog_vertex>
+                }`,
+            fragmentShader: `uniform vec3 hemiSky;uniform float wet;
+                ${LIGHT_DECL}
+                varying vec3 vN,vW,vTint;varying float vPart;
+                #include <fog_pars_fragment>
+                void main(){
+                    vec3 n=normalize(vN);
+                    bool canopy=vPart>2.5&&vPart<3.5;
+                    vec3 alb=canopy?vTint:vec3(0.035,0.037,0.042);
+                    vec3 V=normalize(cameraPosition-vW);
+                    vec3 col=alb*hemiSky*0.5;
+                    vec3 rim=vec3(0.0);
+                    for(int i=0;i<${MAX_LIGHTS};i++){
+                        if(i>=uLightCount)break;
+                        vec3 d=uLightPos[i]-vW;float l=length(d);
+                        float f=max(0.0,1.0-l/uLightRad[i]);f*=f;
+                        vec3 L=d/max(l,1e-3);
+                        // A canopy glows through from either side; a body only catches its edge.
+                        float k=canopy?(abs(dot(n,L))*0.6+0.15):max(dot(n,L),0.0);
+                        col+=alb*uLightCol[i]*f*k*(canopy?0.75:1.0);
+                        float edge=pow(1.0-abs(dot(n,V)),3.0);
+                        rim+=uLightCol[i]*f*edge*max(dot(L,-V)+0.4,0.0);
+                    }
+                    col+=rim*(canopy?0.15:0.35)*(0.6+0.4*wet);
+                    gl_FragColor=vec4(col,1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
+                    #include <fog_fragment>
+                }`
+        }));
+        Object.assign(walkerMat.uniforms, { time: shared.time, rain: shared.rain, wet: shared.wetness, hemiSky: shared.hemiSky, ...lightSet });
+        const walkers = new T.Mesh(walkerGeometry, walkerMat);
+        walkers.name = 'kowloonWalkers'; walkers.frustumCulled = false;
+        root.add(walkers);
+
         /* ------------- rain hitting the ground near the camera ------------- */
         const SPLASHES = 1400;
         const splashGeometry = keep(new T.InstancedBufferGeometry());
@@ -1398,7 +1715,7 @@
                     const lift = typeof opts.lift === 'function' ? opts.lift(t) : opts.lift ?? 0.5;
                     look.push(along(a, s + dir * (opts.ahead ?? 8), sway * 0.5, y + lift));
                 }
-                rigs.push({ id, points, look, fov: opts.fov ?? 58 });
+                rigs.push({ id, points, look, fov: opts.fov ?? 58, phase: opts.phase || 'verse', duration: opts.duration ?? 10 });
             };
             const A = byId('A') || alleys[0], B = byId('B') || alleys[1];
             const covered = bridges.filter(b => b.alley === A?.id || b.alley === B?.id);
@@ -1407,17 +1724,20 @@
             if (under) {
                 const a = byId(under.alley);
                 const mid = a.axis === 'x' ? (under.x0 + under.x1) / 2 : (under.z0 + under.z1) / 2;
-                run('alley-under', a, mid - 9, mid + 7, { lift: 0.3 });
+                run('alley-under', a, mid - 9, mid + 7, { lift: 0.3, phase: 'verse', duration: 10 });
             }
             if (A) {
-                run('alley-walk', A, -34, -18, { lift: t => 0.4 + 0.8 * Math.sin(t * Math.PI) });
+                run('alley-walk', A, -34, -18, { lift: t => 0.4 + 0.8 * Math.sin(t * Math.PI), phase: 'verse', duration: 10 });
                 // Low over the water, so what hangs overhead is seen again in it.
-                run('alley-puddle', A, 22, 12, { y: 0.45, lift: 1.4, fov: 62 });
+                run('alley-puddle', A, 22, 12, { y: 0.45, lift: 1.4, fov: 62, phase: 'interlude', duration: 10 });
+                // The long take: a hand's breadth over the water, steadily on for sixteen metres,
+                // the alley's screen and tubes sliding past in the puddles.
+                run('alley-glide', A, -10, 6, { y: t => 0.36 + 0.08 * t, lift: t => 1.0 + 0.4 * t, ahead: 9, fov: 60, phase: 'interlude', duration: 12 });
             }
-            if (B) run('alley-cross', B, 38, 24, { lift: 0.6 });
+            if (B) run('alley-cross', B, 38, 24, { lift: 0.6, phase: 'prechorus', duration: 9 });
             // A narrow side alley, dim and close.
             const side = byId('N') || alleys.find(a => a.w < 2);
-            if (side) run('alley-narrow', side, -8, 4, { fov: 62, lift: 0.3 });
+            if (side) run('alley-narrow', side, -8, 4, { fov: 62, lift: 0.3, phase: 'verse', duration: 9 });
             // Rising out of the main crossing, looking up through the cables.
             if (A && B) {
                 const x = B.c, z = A.c, points = [], look = [];
@@ -1426,17 +1746,22 @@
                     points.push([x + 0.3, mix(1.6, 24, e), z + 0.3 - e * 0.6]);
                     look.push([x + 6 - e * 4, mix(5, 40, e), z - 2 + e * 1.5]);
                 }
-                rigs.push({ id: 'alley-rise', points, look, fov: 64 });
+                rigs.push({ id: 'alley-rise', points, look, fov: 64, phase: 'chorus', duration: 10 });
             }
-            // From the pavement into the mouth of the main north-south alley.
+            // From the street, through the gate and the market, into the main north-south alley.
             if (B && B.axis === 'z') {
                 const points = [], look = [];
-                for (let i = 0; i <= 12; i++) {
-                    const t = i / 12;
-                    points.push([B.c + mix(3.5, 0, Math.min(1, t * 1.6)), mix(2.1, 1.7, t), mix(streets.south[0] + 5, B.to - 12, t)]);
-                    look.push([B.c, mix(3.8, 2.4, t), mix(streets.south[0] - 6, B.to - 24, t)]);
+                const z0 = streets.south[0] + 9.5, z1 = streets.south[0] - 12;
+                for (let i = 0; i <= 14; i++) {
+                    const t = i / 14;
+                    const z = mix(z0, z1, t);
+                    const bob = Math.sin(t * Math.PI * 9) * 0.025;
+                    points.push([B.c + 2.2 * (1 - smooth(0, 0.5, t)), 1.72 + bob, z]);
+                    // Up at the gate's plaque on the way in, down to eye level once under the tarps.
+                    const up = 1 - smooth(0.25, 0.6, t);
+                    look.push([B.c + 0.6 * (1 - smooth(0, 0.5, t)), mix(1.9, 4.2, up), z - mix(8, 14, up)]);
                 }
-                rigs.push({ id: 'street-enter', points, look, fov: 54 });
+                rigs.push({ id: 'street-enter', points, look, fov: 56, phase: 'prechorus', duration: 12 });
             }
         }
 
@@ -1702,6 +2027,7 @@
 
         const setTier = tier => {
             tierName = (typeof tier === 'string' ? tier : tier?.name) || 'standard';
+            walkerGeometry.instanceCount = WALKERS[tierName] ?? WALKERS.standard;
             reflectionOn = tierName !== 'energy-saving' && options.reflections !== false;
         };
         setTier(ctx.tier || tierName);
@@ -1723,7 +2049,7 @@
                 lamps: lamps.length, lightsUsed: lightUniforms.uLightCount.value, drips: DRIPS,
                 cables: cableCount, garments: laundryCount,
                 instances: Object.fromEntries(props.map(p => [p.mesh.name, p.count])),
-                fogDensity: fog.density, rigs: rigs.map(r => r.id)
+                fogDensity: fog.density, walkers: walkerGeometry.instanceCount, rigs: rigs.map(r => r.id)
             };
         };
 
@@ -1735,7 +2061,8 @@
             // The alley's own lamps, for anything else that wants their light.
             lights: () => lamps.map(l => ({ position: l.position, color: l.color, intensity: l.intensity * dayDim,
                 radius: l.radius, flicker: l.flicker, flickerValue: flickerOf(l, lastTime) })),
-            cameraRigs: () => rigs.map(r => ({ id: r.id, points: r.points.map(p => p.slice()), look: r.look.map(p => p.slice()), fov: r.fov })),
+            cameraRigs: () => rigs.map(r => ({ id: r.id, points: r.points.map(p => p.slice()), look: r.look.map(p => p.slice()), fov: r.fov,
+                phase: r.phase, duration: r.duration })),
             layers: { viewOnly: LAYER_VIEW_ONLY, floor: LAYER_FLOOR },
             // Lightning brightness now, 0..1 (0 when no strike), for anything that flashes with it.
             flash: () => shared.flash.value,
