@@ -923,8 +923,14 @@
                 const on = seg.querySelector('button.md-on');
                 const mark = seg.querySelector('.md-mk');
                 if (!on || !mark) continue;
-                mark.style.left = `${on.offsetLeft}px`;
-                mark.style.width = `${on.offsetWidth}px`;
+                // 底部页签的标记是字下面一道短线，只跟字一样宽
+                const label = seg.closest('.md-dockrow') ? on.querySelector('span') : null;
+                const to = label && label.offsetWidth
+                    ? { left: on.offsetLeft + label.offsetLeft + label.offsetWidth * 0.2, width: label.offsetWidth * 0.6 }
+                    : { left: on.offsetLeft, width: on.offsetWidth };
+                const key = `md-seg:${seg.dataset.act || seg.dataset.md || ''}`;
+                if (global.MusicFluid?.slide && key !== 'md-seg:') global.MusicFluid.slide(mark, to, { key });
+                else { mark.style.left = `${to.left}px`; mark.style.width = `${to.width}px`; }
             }
         };
 

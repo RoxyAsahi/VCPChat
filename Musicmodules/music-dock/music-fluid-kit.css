@@ -63,3 +63,42 @@ body.music-fl-low :is(.mf-glass, .context-menu, .context-submenu, .archive-batch
 .mf-goo { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; overflow: visible; }
 .mf-budding { opacity: 0 !important; filter: blur(4px); transition: none !important; }
 body.music-reduce-motion .context-menu { transition: opacity .12s linear; transform: none; filter: none; }
+
+/* ───────── 抽屉里的分段开关和底部页签：选中标记像液体流过去（MusicFluid.slide） ─────────
+ * 分段开关里那块是一小团奶白玻璃；底部页签下是一道短短的实心线，代替原来的 1px 细线。 */
+#music-dock-root .md-seg .md-mk { transition: none; }
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) .md-mk {
+  background: var(--mf-fill);
+  border-radius: 9999px;
+  box-shadow: var(--mf-glow);
+}
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) { border-radius: 9999px; }
+#music-dock-root .md-pnl .md-seg:not(.md-dockrow .md-seg) button { border-radius: 9999px; }
+#music-dock-root .md-dockrow .md-mk {
+  display: block;
+  top: auto;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--md-t1);
+  box-shadow: none;
+}
+#music-dock-root .md-dockrow .md-seg button.md-on::after { display: none; }
+
+/* ───────── 搜索面板（Ctrl+K）：同一层玻璃，从播放条顶边长出来 ─────────
+ * 液体由 MusicFluid.bud 画；原来用 CSS 缩放做的鼓出和细颈在能画液体时让开，不能画时（节能、降低动态）仍按原样。 */
+#music-dock-root .md-cmd .md-cmd-box,
+#music-dock-root .md-cmd.md-open .md-cmd-box {
+  border: 0;
+  border-radius: 26px;
+  background:
+    radial-gradient(120% 60% at 50% 115%, color-mix(in srgb, var(--mf-tint) 16%, transparent), transparent 62%),
+    var(--mf-fill);
+  box-shadow: var(--mf-glow);
+  color: var(--mf-ink);
+}
+#music-dock-root .md-cmd-list { padding: 6px; }
+#music-dock-root .md-cmd-row { border-radius: 14px; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box { transform: none; filter: none; opacity: 1; transition: none; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd .md-cmd-box::after { display: none; }
+body:not(.music-fl-low):not(.music-reduce-motion) #music-dock-root .md-cmd:not(.md-open) .md-cmd-box { opacity: 0; }
