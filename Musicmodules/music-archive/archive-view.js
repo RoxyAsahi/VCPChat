@@ -48,7 +48,7 @@
                 <div class="archive-detail-card">
                     <div class="archive-detail-head"><b data-ref="dNo"></b><span data-ref="dWhere"></span><span data-ref="dSpec" class="archive-detail-spec"></span></div>
                     <div class="archive-detail-album" data-ref="dAlbum"></div>
-                    <h2 data-ref="dTitle"></h2>
+                    <div class="archive-detail-titlerow"><h2 data-ref="dTitle"></h2><button type="button" class="archive-detail-like" data-act="d-like" data-ref="dLike" aria-pressed="false" title="喜欢" aria-label="喜欢" hidden><span aria-hidden="true">♡</span></button></div>
                     <div class="archive-detail-artist" data-ref="dArtist"></div>
                     <div class="archive-detail-actions">
                         <button type="button" class="is-primary" data-act="d-play" data-ref="dPlay"><i aria-hidden="true">▶</i><span data-ref="dPlayText">播放</span></button>
@@ -717,6 +717,15 @@
             refs.dPath.textContent = remote ? '云端曲目' : String(t.path || '—');
             refs.dPath.title = String(t.path || '');
             refs.dArtistBtn.disabled = !t.artist;
+            const canLike = typeof app.toggleLike === 'function' && typeof app.isLiked === 'function';
+            refs.dLike.hidden = !canLike;
+            if (canLike) {
+                const liked = Boolean(app.isLiked(t));
+                refs.dLike.setAttribute('aria-pressed', String(liked));
+                refs.dLike.title = liked ? '取消喜欢' : '喜欢';
+                refs.dLike.setAttribute('aria-label', refs.dLike.title);
+                refs.dLike.firstChild.textContent = liked ? '♥' : '♡';
+            }
             // 没有的信息整格不显示，不放占位横线
             for (const k of ['dAlbum2', 'dDur', 'dFmt']) refs[k].parentElement.hidden = refs[k].textContent === '—';
             const playingThis = index === app.currentTrackIndex && (app.isPlaying || app.playIntent);
@@ -1491,6 +1500,12 @@
                         break;
                     }
                     case 'detail-close': closeDetail(); break;
+                    case 'd-like': {
+                        const t = selectedTrack();
+                        if (t && typeof app.toggleLike === 'function') app.toggleLike(t);
+                        renderDetail();
+                        break;
+                    }
                     case 'd-play': {
                         const index = selectedIndex();
                         if (index < 0) break;
@@ -1615,6 +1630,8 @@
         global.addEventListener('resize', onResize);
         const onVisibility = () => { if (!document.hidden) { state.lastDraw = 0; kick(); } };
         document.addEventListener('visibilitychange', onVisibility);
+        const onLikeChange = () => { if (detailOpen) renderDetail(); };
+        document.addEventListener('music-like-change', onLikeChange);
         // 主题（light-theme）、舞台进出（music-stage-active）、底栏高度（body 上的变量）都挂在 body 上
         let lastBodyClass = document.body.className;
         const bodyObserver = new MutationObserver(() => {
@@ -1679,6 +1696,7 @@
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('keydown', onEscCapture, true);
             document.removeEventListener('visibilitychange', onVisibility);
+            document.removeEventListener('music-like-change', onLikeChange);
             global.removeEventListener('resize', onResize);
             bodyObserver.disconnect();
             if (typeof unsubscribeQuality === 'function') unsubscribeQuality();

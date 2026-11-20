@@ -1414,6 +1414,30 @@ test('取出详情：点标题打开，↑↓ 换曲目详情留着，资料卡�
     f.close();
 });
 
+test('取出详情里的「喜欢」：有喜欢功能才显示，点了切换状态，外面改了也跟着变', () => {
+    const f = fixture();
+    const doc = f.w.document;
+    f.view.openDetail();
+    const like = doc.querySelector('[data-act="d-like"]');
+    f.view.closeDetail();
+    f.view.openDetail();
+    assert.ok(like.hidden, '没有 app.toggleLike 时不显示');
+    const liked = new Set();
+    f.app.isLiked = (t) => liked.has(t.path);
+    f.app.toggleLike = (t) => { if (liked.has(t.path)) liked.delete(t.path); else liked.add(t.path); };
+    f.view.closeDetail();
+    f.view.openDetail();
+    assert.equal(like.hidden, false);
+    assert.equal(like.getAttribute('aria-pressed'), 'false');
+    like.click();
+    assert.equal(like.getAttribute('aria-pressed'), 'true');
+    assert.equal(like.title, '取消喜欢');
+    liked.clear();
+    doc.dispatchEvent(new f.w.Event('music-like-change'));
+    assert.equal(like.getAttribute('aria-pressed'), 'false', '别处取消喜欢后资料卡跟着变');
+    f.close();
+});
+
 test('首页文字：没有装饰用的英文，左上是当前分组名和首数', () => {
     const f = fixture();
     const hud = f.w.document.querySelector('.archive-hud').textContent;

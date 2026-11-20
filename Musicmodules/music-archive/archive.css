@@ -315,10 +315,12 @@ body.light-theme .archive-list { --glow: .85; }
 .archive-list:hover .archive-list-thumb, .archive-list.grabbing .archive-list-thumb, .archive-list.thumbing .archive-list-thumb { opacity: 1; }
 .archive-list-thumb:hover::after, .archive-list.thumbing .archive-list-thumb::after { opacity: .8; left: 4px; width: 5px; }
 /* 拖歌经过底栏胶囊时盖在胶囊上的两格落点：左「下一首播放」，右「加入队列」 */
-.archive-cap-drop { position: fixed; z-index: 902; display: grid; grid-template-columns: 1fr 1fr; border-radius: 999px; overflow: hidden; pointer-events: none; background: rgba(var(--ar-paper-rgb), .9); border: 1px dashed var(--ar-ink); backdrop-filter: blur(6px); animation: archive-cap-drop-in .16s var(--mt-ease, ease) both; }
-.archive-cap-drop span { display: grid; place-items: center; font-size: 13px; letter-spacing: .4px; color: var(--ar-muted); transition: color .12s, background-color .12s; }
-.archive-cap-drop span + span { border-left: 1px dashed var(--ar-rule); }
-.archive-cap-drop span.drop-over { color: var(--ar-paper, #fff); background: var(--ar-ink); }
+.archive-cap-drop { position: fixed; z-index: 902; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; pointer-events: none; animation: archive-cap-drop-in .16s var(--mt-ease, ease) both; }
+/* 外观用共用玻璃 .mf-glass（music-fluid-kit.css）；这里只把圆角改成胶囊形 */
+.archive-cap-drop.mf-glass { border-radius: 999px; }
+.archive-cap-drop span { display: grid; place-items: center; font-size: 13px; letter-spacing: .4px; color: var(--mf-ink2, var(--ar-muted)); transition: color .12s, background-color .12s; }
+.archive-cap-drop span + span { box-shadow: inset 1px 0 0 var(--mf-rule, var(--ar-rule)); }
+.archive-cap-drop span.drop-over { color: var(--mf-ink, var(--ar-ink)); background: color-mix(in srgb, var(--mf-ink, #888) 12%, transparent); font-weight: 600; }
 @keyframes archive-cap-drop-in { from { opacity: 0; transform: scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .archive-cap-drop { animation: none; } }
 .archive-drag-ghost { position: fixed; left: 0; top: 0; z-index: 901; max-width: 240px; padding: 5px 10px; font-family: var(--mt-font-archive, inherit); font-size: 12px; letter-spacing: .4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ar-ink); background: rgba(var(--ar-paper-rgb), .96); border: 1px solid var(--ar-ink); pointer-events: none; }
@@ -548,6 +550,13 @@ body.music-reduce-motion .archive-lyrics-track p.on::after { animation: none; }
 .archive-detail-spec { margin-left: auto; border: 1px solid var(--ar-accent); color: var(--ar-accent-text, var(--ar-accent)); padding: 2px 7px; font-size: 11px; letter-spacing: 1px; }
 .archive-detail-album { margin-top: 22px; font-size: 16px; color: var(--ar-ink-2, var(--ar-muted)); min-height: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-detail-card h2 { margin: 10px 0 0; font-size: 40px; line-height: 1.15; font-weight: 750; letter-spacing: .3px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.archive-detail-titlerow { display: flex; align-items: flex-start; gap: 16px; }
+.archive-detail-titlerow h2 { flex: 1; min-width: 0; }
+.archive-detail-like { flex-shrink: 0; margin-top: 12px; width: 46px; height: 46px; display: grid; place-items: center; font-size: 24px; line-height: 1; border: 1px solid var(--ar-line, var(--ar-rule)); color: var(--ar-ink); transition: background .2s, color .2s, border-color .2s, transform .2s var(--mt-ease, ease); }
+.archive-detail-like:hover { background: var(--ar-hover); }
+.archive-detail-like:active { transform: scale(.92); }
+.archive-detail-like[aria-pressed="true"] { color: var(--ar-accent-text, var(--ar-accent)); border-color: var(--ar-accent); }
+.archive-detail-like[hidden] { display: none; }
 .archive-detail-artist { margin-top: 10px; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .archive-detail-actions { margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 24px; border-bottom: 1px solid var(--ar-rule); }
 .archive-detail-actions > button { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 15px; border: 1px solid var(--ar-line, var(--ar-rule)); transition: background .2s, color .2s, border-color .2s; white-space: nowrap; }
