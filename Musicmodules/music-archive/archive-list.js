@@ -927,6 +927,7 @@
             const w = menu.offsetWidth || 240, h = menu.offsetHeight || 300;
             menu.style.left = Math.max(8, Math.min(x, (global.innerWidth || 1600) - w - 10)) + 'px';
             menu.style.top = Math.max(8, Math.min(y, (global.innerHeight || 900) - h - 10)) + 'px';
+            global.MusicFluid?.bud(menu, { x, y });
             const items = () => [...menu.querySelectorAll('[data-batch]')];
             const run = (b) => {
                 const act = b.dataset.batch;
@@ -1118,6 +1119,7 @@
             paintSort();
             r.sortMenu.hidden = false;
             r.sortBtn.setAttribute('aria-expanded', 'true');
+            global.MusicFluid?.bud(r.sortMenu, r.sortBtn);
             document.addEventListener('pointerdown', outside, true);
             (r.sortMenu.querySelector('[aria-checked="true"]') || r.sortMenu.querySelector('[data-sort]')).focus();
         };
